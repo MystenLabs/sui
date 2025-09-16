@@ -109,7 +109,7 @@ Example implementation.
 Write the function so the main processing path does the heavy work, while early-exit paths return quickly. Keep the following in mind:
 
   - Both external or native functions can change in the future, potentially resulting in different costs compared to when you conducted your tests.
-  - Use [`profile-transaction`](../../../references/cli/client.mdx#profile-a-transaction) to benchmark the costs of a transaction.
+  - [Profile the transaction](../../../references/cli/trace-analysis.mdx#profile-a-transaction) to benchmark the costs of a transaction.
   - UIDs generated and deleted on the same transaction do not count towards the limit on generated or deleted UIDs. 
 
 ## Use (non-public) `entry` functions

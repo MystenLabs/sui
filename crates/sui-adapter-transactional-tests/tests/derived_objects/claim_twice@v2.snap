@@ -26,5 +26,5 @@ gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 
 
 task 4, line 37:
 //# run a::m::derive_object --sender A --args object(2,0) 0
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::derived_object::claim (function index 0) at offset 20, Abort Code: 13835058231375822849
+Error: Transaction Effects Status: Move Abort in sui::derived_object::claim (function index 0) at offset 20 at line 41 with clever code 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 0, instruction: 20, function_name: Some("claim") }, 13835058231375822849), source: Some(VMError { major_status: ABORTED, sub_status: Some(13835058231375822849), message: Some("sui::derived_object::claim at offset 20"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("derived_object") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 20)] }), command: Some(0) } }

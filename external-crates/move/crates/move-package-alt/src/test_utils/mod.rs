@@ -171,16 +171,6 @@ impl ProjectBuilder {
 }
 
 impl Project {
-    /// Returns the SHAs of the commits in the repository. Panics if this is not a git project
-    /// repository.
-    pub fn commits(&self) -> Vec<String> {
-        let repo = self.open();
-        git::commits(&repo)
-            .into_iter()
-            .map(|c| c.id().to_string())
-            .collect()
-    }
-
     /// Root of the project
     pub fn root(&self) -> PathBuf {
         self.root.clone()
@@ -221,16 +211,6 @@ impl Project {
     pub fn uncomment_root_manifest(&self) {
         let contents = self.read_file("Move.toml").replace("#", "");
         fs::write(self.root().join("Move.toml"), contents).unwrap();
-    }
-
-    pub fn add_tag(&self, name: &str) {
-        let repo = self.open();
-        git::tag(&repo, name);
-    }
-
-    fn open(&self) -> git2::Repository {
-        git2::Repository::open(self.root.clone())
-            .unwrap_or_else(|_| panic!("failed to open git repository at {}", self.root.display()))
     }
 }
 

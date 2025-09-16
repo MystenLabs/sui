@@ -98,7 +98,10 @@ static_symbols!(
     "development",
     "party_transfer",
     "derived_object",
-    "claim"
+    "claim",
+    "coin_registry",
+    "new_currency",
+    "test"
 );
 
 /// The global, unique cache of strings.

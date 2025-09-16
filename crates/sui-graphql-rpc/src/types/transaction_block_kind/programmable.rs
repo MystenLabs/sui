@@ -450,7 +450,7 @@ impl TransactionInput {
             }),
 
             // TODO(address-balances): Add support for balance withdraws.
-            N::BalanceWithdraw(_) => todo!("BalanceWithdraw is not supported for GraphQL"),
+            N::FundsWithdrawal(_) => todo!("FundsWithdrawal is not supported for GraphQL"),
         }
     }
 }

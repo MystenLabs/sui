@@ -17,6 +17,7 @@ use sui_indexer_alt_reader::{
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
+use sui_types::gas_coin::GasCoin;
 
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -30,6 +31,7 @@ use test_cluster::{TestCluster, TestClusterBuilder};
 
 // Unified struct for all GraphQL transaction effects parsing
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct TransactionEffects {
     status: String,
     checkpoint: Option<serde_json::Value>,
@@ -133,6 +135,22 @@ impl GraphQlTestCluster {
         self.cancel.cancel();
         let _ = self.handle.await;
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObjectChangeNode {
+    id_created: bool,
+    id_deleted: bool,
+    input_state: Option<ObjectState>,
+    output_state: Option<ObjectState>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObjectState {
+    version: u64,
+    as_move_object: Option<Value>,
 }
 
 async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> GraphQlTestCluster {
@@ -518,4 +536,132 @@ async fn test_execute_transaction_unchanged_consensus_objects() {
     assert!(object.version > 0, "Version should be greater than 0");
 
     graphql_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_execute_transaction_object_changes_input_output() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+
+    // Create a transfer transaction that will modify objects
+    let recipient = SuiAddress::random_for_testing_only();
+    let signed_tx =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient), Some(1_000_000))
+            .await;
+    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
+                    effects {
+                        digest
+                        status
+                        objectChanges {
+                            nodes {
+                                idCreated
+                                idDeleted
+                                inputState {
+                                    version
+                                    asMoveObject {
+                                        contents {
+                                            type {
+                                                repr
+                                            }
+                                        }
+                                    }
+                                }
+                                outputState {
+                                    version
+                                    asMoveObject {
+                                        contents {
+                                            type {
+                                                repr
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    errors
+                }
+            }
+        "#,
+            json!({
+                "txData": tx_bytes.encoded(),
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    let effects: TransactionEffects = serde_json::from_value(
+        result
+            .pointer("/data/executeTransaction/effects")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+
+    // Verify the transaction succeeded
+    assert_eq!(effects.status, "SUCCESS");
+
+    // Use pointer to navigate to object changes and deserialize directly
+    let object_changes_value = result
+        .pointer("/data/executeTransaction/effects/objectChanges/nodes")
+        .unwrap();
+    let nodes: Vec<ObjectChangeNode> =
+        serde_json::from_value(object_changes_value.clone()).unwrap();
+
+    // There are 2 objects (gas coin + newly created coin)
+    assert_eq!(nodes.len(), 2);
+
+    // Filter out the gas object (modified, has both input and output states)
+    let gas_coin = nodes
+        .iter()
+        .find(|node| !node.id_created && !node.id_deleted)
+        .unwrap();
+    let input_state = gas_coin.input_state.as_ref().unwrap();
+    let output_state = gas_coin.output_state.as_ref().unwrap();
+    let input_move_obj = input_state.as_move_object.as_ref().unwrap();
+    let output_move_obj = output_state.as_move_object.as_ref().unwrap();
+    let input_type = input_move_obj
+        .pointer("/contents/type/repr")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let output_type = output_move_obj
+        .pointer("/contents/type/repr")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let sui_coin_type = GasCoin::type_().to_canonical_string(true);
+
+    // Gas coin versions: 1 → 2 (modified for gas payment)
+    assert_eq!(input_state.version, 1);
+    assert_eq!(output_state.version, 2);
+
+    // Both should be SUI coins
+    assert_eq!(input_type, sui_coin_type);
+    assert_eq!(output_type, sui_coin_type);
+
+    // Filter out the newly created coin (created for recipient)
+    let created_coin = nodes.iter().find(|node| node.id_created).unwrap();
+    let created_output = created_coin.output_state.as_ref().unwrap();
+
+    // Created coin should only have output state
+    assert!(created_coin.input_state.is_none());
+    assert!(created_coin.output_state.is_some());
+    assert_eq!(created_output.version, 2);
+
+    // Created object should be SUI coins
+    let created_move_obj = created_output.as_move_object.as_ref().unwrap();
+    let created_type = created_move_obj
+        .pointer("/contents/type/repr")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(created_type, sui_coin_type);
 }

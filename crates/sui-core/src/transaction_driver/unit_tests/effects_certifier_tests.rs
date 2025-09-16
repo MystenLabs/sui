@@ -107,7 +107,9 @@ impl AuthorityAPI for MockAuthority {
 
         let maybe_response = {
             let responses = responses.lock().unwrap();
-            responses.get(&wait_request.transaction_digest).cloned()
+            responses
+                .get(&wait_request.transaction_digest.unwrap())
+                .cloned()
         };
 
         if let Some(response) = maybe_response {
@@ -124,7 +126,7 @@ impl AuthorityAPI for MockAuthority {
             // to ensure the timeout is triggered.
             sleep(Duration::from_secs(30)).await;
             Err(SuiError::TransactionNotFound {
-                digest: wait_request.transaction_digest,
+                digest: wait_request.transaction_digest.unwrap(),
             })
         }
     }

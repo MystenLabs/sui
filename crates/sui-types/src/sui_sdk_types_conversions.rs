@@ -1035,7 +1035,7 @@ impl From<crate::messages_checkpoint::CheckpointCommitment> for CheckpointCommit
                 }
             }
             crate::messages_checkpoint::CheckpointCommitment::CheckpointArtifactsDigest(digest) => {
-                Self::CheckpointArtifactsDigest {
+                Self::CheckpointArtifacts {
                     digest: digest.into(),
                 }
             }
@@ -1163,7 +1163,7 @@ impl From<crate::transaction::CallArg> for Input {
                     ObjectReference::new(id.into(), version.value(), digest.into()),
                 ),
             },
-            crate::transaction::CallArg::BalanceWithdraw(_) => {
+            crate::transaction::CallArg::FundsWithdrawal(_) => {
                 // TODO(address-balances): Add support for balance withdraws.
                 todo!("Convert balance withdraw reservation to sdk Input")
             }
@@ -1462,7 +1462,10 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 stored_execution_time_observations,
             ) => Self::StoreExecutionTimeObservations(stored_execution_time_observations.into()),
             crate::transaction::EndOfEpochTransactionKind::AccumulatorRootCreate => {
-                Self::AccumulatorRootCreate
+                todo!("AccumulatorRootCreate needs to be added to sdk")
+            }
+            crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
+                Self::CoinRegistryCreate
             }
         }
     }

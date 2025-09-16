@@ -1,0 +1,102 @@
+
+```sh
+Sui keystore tool
+
+Usage: sui keytool [OPTIONS] <COMMAND>
+
+Commands:
+  update-alias
+          Update an old alias to a new one. If a new alias is not provided, a random one will be
+          generated
+  convert
+          Convert private key in Hex or Base64 to new format (Bech32 encoded 33 byte flag || private
+          key starting with "suiprivkey"). Hex private key format import and export are both
+          deprecated in Sui Wallet and Sui CLI Keystore. Use `sui keytool import` if you wish to
+          import a key to Sui Keystore
+  decode-or-verify-tx
+          Given a Base64 encoded transaction bytes, decode its components. If a signature is
+          provided, verify the signature against the transaction and output the result
+  decode-multi-sig
+          Given a Base64 encoded MultiSig signature, decode its components. If tx_bytes is passed
+          in, verify the multisig
+  generate
+          Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1} with
+          optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0
+          for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be { word12 | word15 |
+          word18 | word21 | word24} default to word12 if not specified
+  import
+          Add a new key to Sui CLI Keystore using either the input mnemonic phrase or a Bech32
+          encoded 33-byte `flag || privkey` starting with "suiprivkey", the key scheme flag {ed25519
+          | secp256k1 | secp256r1} and an optional derivation path, default to m/44'/784'/0'/0'/0'
+          for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
+          Supports mnemonic phrase of word length 12, 15, 18, 21, 24. Set an alias for the key with
+          the --alias flag. If no alias is provided, the tool will automatically generate one
+  export
+          Output the private key of the given key identity in Sui CLI Keystore as Bech32 encoded
+          string starting with `suiprivkey`
+  list
+          List all keys by its Sui address, Base64 encoded public key, key scheme name in
+          sui.keystore
+  load-keypair
+          This reads the content at the provided file path. The accepted format can be [enum
+          SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
+          (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag ||
+          privkey`, the network keypair, worker keypair, protocol keypair as Base64 encoded
+          `privkey`
+  multi-sig-address
+          To MultiSig Sui Address. Pass in a list of all public keys `flag || pk` in Base64. See
+          `keytool list` for example public keys
+  multi-sig-combine-partial-sig
+          Provides a list of participating signatures (`flag || sig || pk` encoded in Base64),
+          threshold, a list of all public keys and a list of their weights that define the MultiSig
+          address. Returns a valid MultiSig signature and its sender address. The result can be used
+          as signature field for `sui client execute-signed-tx`. The sum of weights of all
+          signatures must be >= the threshold
+  multi-sig-combine-partial-sig-legacy
+          
+  show
+          Read the content at the provided file path. The accepted format can be [enum SuiKeyPair]
+          (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair` (Base64 encoded
+          `privkey`). It prints its Base64 encoded public key and the key scheme flag
+  sign
+          Create signature using the private key for the given address (or its alias) in sui
+          keystore. Any signature commits to a [struct IntentMessage] consisting of the Base64
+          encoded of the BCS serialized transaction bytes itself and its intent. If intent is
+          absent, default will be used
+  sign-kms
+          Creates a signature by leveraging AWS KMS. Pass in a key-id to leverage Amazon KMS to sign
+          a message and the base64 pubkey. Generate PubKey from pem using MystenLabs/base64pemkey
+          Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded of the
+          BCS serialized transaction bytes itself and its intent. If intent is absent, default will
+          be used
+  unpack
+          This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It outputs
+          the keypair into a file at the current directory where the address is the filename, and
+          prints out its Sui address, Base64 encoded public key, the key scheme, and the key scheme
+          flag
+  zk-login-sign-and-execute-tx
+          Given the max_epoch, generate an OAuth url, ask user to paste the redirect with id_token,
+          call salt server, then call the prover server, create a test transaction, use the
+          ephemeral key to sign and execute it by assembling to a serialized zkLogin signature
+  zk-login-enter-token
+          A workaround to the above command because sometimes token pasting does not work (for
+          Facebook). All the inputs required here are printed from the command above
+  zk-login-sig-verify
+          Given a zkLogin signature, parse it if valid. If `bytes` provided, parse it as either as
+          TransactionData or PersonalMessage based on `intent_scope`. It verifies the zkLogin
+          signature based its latest JWK fetched. Example request: sui keytool zk-login-sig-verify
+          --sig $SERIALIZED_ZKLOGIN_SIG --bytes $BYTES --intent-scope 0 --network devnet
+          --curr-epoch 10
+  zk-login-insecure-sign-personal-message
+          TESTING ONLY: Generate a fixed ephemeral key and its JWT token with test issuer. Produce a
+          zklogin signature for the given data and max epoch. e.g. sui keytool
+          zk-login-insecure-sign-personal-message --data "hello" --max-epoch 5
+  help
+          Print this message or the help of the given subcommand(s)
+
+Options:
+      --keystore-path <KEYSTORE_PATH>  
+      --json                           Return command outputs in json format
+  -h, --help                           Print help
+  -V, --version                        Print version
+```

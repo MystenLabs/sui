@@ -20,6 +20,8 @@ mod get_epoch;
 mod get_object;
 mod get_transaction;
 
+mod v2;
+
 #[derive(Clone)]
 pub struct KvRpcServer {
     chain_id: ChainIdentifier,

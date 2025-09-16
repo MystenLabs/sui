@@ -79,7 +79,7 @@ async fn get_object() {
     } = client
         .get_object(
             GetObjectRequest::new(&id)
-                .with_version(1)
+                .with_version(1u64)
                 .with_read_mask(FieldMask::from_str("object_id,version")),
         )
         .await
@@ -173,15 +173,15 @@ async fn batch_get_objects() {
         .into_inner();
 
     assert_eq!(
-        objects[0].object().unwrap().object_id,
+        objects[0].object().object_id,
         Some("0x1".parse::<Address>().unwrap().to_string())
     );
     assert_eq!(
-        objects[1].object().unwrap().object_id,
+        objects[1].object().object_id,
         Some("0x2".parse::<Address>().unwrap().to_string())
     );
     assert_eq!(
-        objects[2].object().unwrap().object_id,
+        objects[2].object().object_id,
         Some("0x3".parse::<Address>().unwrap().to_string())
     );
 }

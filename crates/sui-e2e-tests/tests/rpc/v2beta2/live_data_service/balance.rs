@@ -3,15 +3,12 @@
 
 use std::path::PathBuf;
 use sui_macros::sim_test;
-use sui_move_build::BuildConfig;
-use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+use sui_rpc::client::Client;
 use sui_rpc::proto::sui::rpc::v2beta2::{ExecutedTransaction, GasCostSummary};
 use sui_rpc::proto::sui::rpc::v2beta2::{GetBalanceRequest, ListBalancesRequest};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{
-    Argument, CallArg, Command, ObjectArg, TransactionData, TransactionKind,
-};
+use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
 use sui_types::{base_types::SuiAddress, Identifier};
 use test_cluster::TestClusterBuilder;
 const SUI_COIN_TYPE: &str =
@@ -80,50 +77,19 @@ async fn test_custom_coin_balance() {
     // Publish trusted coin package
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "rpc", "data", "trusted_coin"]);
-    let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
-    let compiled_modules_bytes = compiled_package.get_package_bytes(false);
-    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
-    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(address)
-        .await
-        .unwrap()
-        .unwrap();
+    let (package_id_obj, transaction) =
+        super::super::publish_package(&test_cluster, address, path).await;
+    let package_id = package_id_obj.to_string();
 
-    let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(compiled_modules_bytes, dependencies);
-    let ptb = builder.finish();
-    let gas_data = sui_types::transaction::GasData {
-        payment: vec![(gas_object.0, gas_object.1, gas_object.2)],
-        owner: address,
-        price: gas_price,
-        budget: 100_000_000,
-    };
-
-    let kind = TransactionKind::ProgrammableTransaction(ptb);
-    let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
-    let txn = test_cluster.wallet.sign_transaction(&tx_data).await;
-
-    let (transaction, publish_gas_used) = execute_transaction(&test_cluster, &txn).await;
-
-    // Extract package ID from changed objects
-    let package_id = transaction
+    let gas_summary = transaction
         .effects
         .as_ref()
         .unwrap()
-        .changed_objects
-        .iter()
-        .find_map(|o| {
-            use sui_rpc::proto::sui::rpc::v2beta2::changed_object::OutputObjectState;
-            if o.output_state == Some(OutputObjectState::PackageWrite as i32) {
-                o.object_id.clone()
-            } else {
-                None
-            }
-        })
+        .gas_used
+        .as_ref()
         .unwrap();
+    let publish_gas_used = calculate_gas_used(gas_summary);
 
     // Get treasury cap object from changed objects
     let treasury_cap = transaction
@@ -142,6 +108,7 @@ async fn test_custom_coin_balance() {
 
     // Mint some coins
     let mint_amount = 1_000_000; // 10 TRUSTED (with 2 decimals)
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
     let gas_object = test_cluster
         .wallet
         .get_one_gas_object_owned_by_address(address)
@@ -214,6 +181,7 @@ async fn test_custom_coin_balance() {
     let coin = &coins.data[0];
 
     // Build and execute split-and-transfer transaction
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
     let gas_object = test_cluster
         .wallet
         .get_one_gas_object_owned_by_address(address)
@@ -259,6 +227,7 @@ async fn test_custom_coin_balance() {
     // Test that address_3 returns 0 balance for the TRUSTED coin (not error since coin exists)
     let address_2 = test_cluster.get_address_2();
     let balance_response = grpc_client
+        .live_data_client()
         .get_balance({
             let mut message = GetBalanceRequest::default();
             message.owner = Some(address_2.to_string());
@@ -308,19 +277,13 @@ async fn test_multiple_concurrent_balance_changes() {
     let signed_tx_2 = test_cluster.wallet.sign_transaction(&tx_2).await;
 
     // Submit all transactions concurrently
-    let channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
-        .unwrap()
-        .connect()
-        .await
-        .unwrap();
+    let mut client_0 = Client::new(test_cluster.rpc_url().to_owned()).unwrap();
+    let mut client_1 = Client::new(test_cluster.rpc_url().to_owned()).unwrap();
+    let mut client_2 = Client::new(test_cluster.rpc_url().to_owned()).unwrap();
 
-    let mut channel_0 = channel.clone();
-    let mut channel_1 = channel.clone();
-    let mut channel_2 = channel;
-
-    let future_0 = super::super::execute_transaction(&mut channel_0, &signed_tx_0);
-    let future_1 = super::super::execute_transaction(&mut channel_1, &signed_tx_1);
-    let future_2 = super::super::execute_transaction(&mut channel_2, &signed_tx_2);
+    let future_0 = super::super::execute_transaction(&mut client_0, &signed_tx_0);
+    let future_1 = super::super::execute_transaction(&mut client_1, &signed_tx_1);
+    let future_2 = super::super::execute_transaction(&mut client_2, &signed_tx_2);
 
     // Wait for all transactions to complete
     let (result_0, result_1, result_2) = tokio::join!(future_0, future_1, future_2);
@@ -401,6 +364,7 @@ async fn test_fresh_address_with_no_coins() {
 
     // Get balance for SUI
     let response = grpc_client
+        .live_data_client()
         .get_balance({
             let mut message = GetBalanceRequest::default();
             message.owner = Some(fresh_address.to_string());
@@ -416,6 +380,7 @@ async fn test_fresh_address_with_no_coins() {
 
     // List all balances for fresh address
     let list_response = grpc_client
+        .live_data_client()
         .list_balances({
             let mut message = ListBalancesRequest::default();
             message.owner = Some(fresh_address.to_string());
@@ -438,7 +403,7 @@ async fn test_invalid_requests() {
     // Test with missing owner
     let mut request = GetBalanceRequest::default();
     request.coin_type = Some(SUI_COIN_TYPE.to_string());
-    let result = grpc_client.get_balance(request).await;
+    let result = grpc_client.live_data_client().get_balance(request).await;
     assert!(result.is_err(), "Expected error for missing owner");
     let error = result.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
@@ -451,6 +416,7 @@ async fn test_invalid_requests() {
     // Test with missing coin type - should error
     let address = test_cluster.get_address_0();
     let result = grpc_client
+        .live_data_client()
         .get_balance({
             let mut message = GetBalanceRequest::default();
             message.owner = Some(address.to_string());
@@ -468,6 +434,7 @@ async fn test_invalid_requests() {
 
     // Test with invalid address format
     let result = grpc_client
+        .live_data_client()
         .get_balance({
             let mut message = GetBalanceRequest::default();
             message.owner = Some("not_a_hex_address".to_string());
@@ -486,6 +453,7 @@ async fn test_invalid_requests() {
 
     // Test with invalid coin type format
     let result = grpc_client
+        .live_data_client()
         .get_balance({
             let mut message = GetBalanceRequest::default();
             message.owner = Some(address.to_string());
@@ -506,6 +474,7 @@ async fn test_invalid_requests() {
     let fake_coin_type =
         "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef::fakecoin::FAKECOIN";
     let result = grpc_client
+        .live_data_client()
         .get_balance({
             let mut message = GetBalanceRequest::default();
             message.owner = Some(address.to_string());
@@ -524,6 +493,7 @@ async fn test_invalid_requests() {
 
     // Test ListBalancesRequest with missing owner
     let result = grpc_client
+        .live_data_client()
         .list_balances(ListBalancesRequest::default())
         .await;
     assert!(
@@ -540,6 +510,7 @@ async fn test_invalid_requests() {
 
     // Test corrupted page token
     let result = grpc_client
+        .live_data_client()
         .list_balances({
             let mut message = ListBalancesRequest::default();
             message.owner = Some(address.to_string());
@@ -557,12 +528,8 @@ fn calculate_gas_used(gas_summary: &GasCostSummary) -> u64 {
         - gas_summary.storage_rebate.unwrap_or(0)
 }
 
-async fn get_grpc_client(
-    test_cluster: &test_cluster::TestCluster,
-) -> LiveDataServiceClient<tonic::transport::Channel> {
-    LiveDataServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap()
+async fn get_grpc_client(test_cluster: &test_cluster::TestCluster) -> Client {
+    Client::new(test_cluster.rpc_url().to_owned()).unwrap()
 }
 
 /// Execute a transaction and return both the transaction and the gas used
@@ -570,12 +537,8 @@ async fn execute_transaction(
     test_cluster: &test_cluster::TestCluster,
     txn: &sui_types::transaction::Transaction,
 ) -> (ExecutedTransaction, u64) {
-    let mut channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
-        .unwrap()
-        .connect()
-        .await
-        .unwrap();
-    let transaction = super::super::execute_transaction(&mut channel, txn).await;
+    let mut client = Client::new(test_cluster.rpc_url().to_owned()).unwrap();
+    let transaction = super::super::execute_transaction(&mut client, txn).await;
     let gas_summary = transaction
         .effects
         .as_ref()
@@ -667,13 +630,14 @@ async fn split_and_transfer_coin(
 }
 
 async fn verify_balances(
-    grpc_client: &mut LiveDataServiceClient<tonic::transport::Channel>,
+    grpc_client: &mut Client,
     address: SuiAddress,
     expected_balances: &[(&str, u64)],
 ) {
     // Verify each balance using get_balance
     for (coin_type, expected_balance) in expected_balances {
         let balance = grpc_client
+            .live_data_client()
             .get_balance({
                 let mut message = GetBalanceRequest::default();
                 message.owner = Some(address.to_string());
@@ -697,6 +661,7 @@ async fn verify_balances(
 
     // Also verify using list_balances
     let list_response = grpc_client
+        .live_data_client()
         .list_balances({
             let mut message = ListBalancesRequest::default();
             message.owner = Some(address.to_string());

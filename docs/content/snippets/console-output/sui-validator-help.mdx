@@ -1,0 +1,33 @@
+
+```sh
+A tool for validators and validator candidates
+
+Usage: sui validator [OPTIONS] [COMMAND]
+
+Commands:
+  make-validator-info               
+  become-candidate                  
+  join-committee                    
+  leave-committee                   
+  display-metadata                  
+  update-metadata                   
+  update-gas-price                  Update gas price that is used to calculate Reference Gas
+                                        Price
+  report-validator                  Report or un-report a validator
+  serialize-payload-pop             Serialize the payload that is used to generate Proof of
+                                        Possession. This is useful to take the payload offline for
+                                        an Authority protocol keypair to sign
+  display-gas-price-update-raw-txn  Print out the serialized data of a transaction that sets the
+                                        gas price quote for a validator
+  register-bridge-committee         Sui native bridge committee member registration
+  update-bridge-committee-node-url  Update sui native bridge committee node url
+  help                              Print this message or the help of the given subcommand(s)
+
+Options:
+      --client.config <CONFIG>  Sets the file storing the state of our user accounts (an empty one
+                                will be created if missing)
+      --json                    Return command outputs in json format
+  -y, --yes                     
+  -h, --help                    Print help
+  -V, --version                 Print version
+```

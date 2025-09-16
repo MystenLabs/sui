@@ -11,6 +11,7 @@ use async_graphql::{
 };
 use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
+use futures::future::try_join_all;
 use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_reader::{
     consistent_reader::{self, ConsistentReader},
@@ -28,6 +29,7 @@ use sui_types::{
         SequenceNumber, SuiAddress as NativeSuiAddress, TransactionDigest, VersionDigest,
     },
     digests::ObjectDigest,
+    dynamic_field::DynamicFieldType,
     object::Object as NativeObject,
     transaction::GenesisObject,
 };
@@ -53,12 +55,12 @@ use super::{
     address::Address,
     balance::{self, Balance},
     coin_metadata::CoinMetadata,
-    dynamic_field::DynamicField,
+    dynamic_field::{DynamicField, DynamicFieldName},
     move_object::MoveObject,
     move_package::MovePackage,
-    object_filter::{ObjectFilter, Validator as OFValidator},
+    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
-    transaction::Transaction,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };
 
 /// Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
@@ -123,6 +125,16 @@ use super::{
         name = "storage_rebate",
         ty = "Result<Option<BigInt>, RpcError<Error>>",
         desc = "The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object."
+    ),
+    field(
+        name = "received_transactions",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<CTransaction>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<CTransaction>"),
+        arg(name = "filter", ty = "Option<TransactionFilter>"),
+        ty = "Result<Option<Connection<String, Transaction>>, RpcError>",
+        desc = "The transactions that sent objects to this object."
     )
 )]
 pub(crate) enum IObject {
@@ -276,6 +288,110 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<String>, RpcError> {
         self.super_.default_suins_name(ctx).await
+    }
+
+    /// Access a dynamic field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic field with that name could not be found attached to this object.
+    pub(crate) async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>, RpcError<Error>> {
+        DynamicField::by_name(
+            ctx,
+            self.super_.scope.clone(),
+            self.super_.address.into(),
+            DynamicFieldType::DynamicField,
+            name,
+        )
+        .await
+        .map_err(upcast)
+    }
+
+    /// Dynamic fields owned by this object.
+    pub(crate) async fn dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CLive>,
+        last: Option<u64>,
+        before: Option<CLive>,
+    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Object", "dynamicFields");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let dynamic_fields = DynamicField::paginate(
+            ctx,
+            self.super_.scope.clone(),
+            self.super_.address.into(),
+            page,
+        )
+        .await?;
+
+        Ok(Some(dynamic_fields))
+    }
+
+    /// Access a dynamic object field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic object field with that name could not be found attached to this object.
+    pub(crate) async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>, RpcError<Error>> {
+        DynamicField::by_name(
+            ctx,
+            self.super_.scope.clone(),
+            self.super_.address.into(),
+            DynamicFieldType::DynamicObject,
+            name,
+        )
+        .await
+        .map_err(upcast)
+    }
+
+    /// Access dynamic fields on an object using their types and BCS-encoded names.
+    ///
+    /// Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+    pub(crate) async fn multi_get_dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DynamicFieldName>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
+        try_join_all(keys.into_iter().map(|key| {
+            DynamicField::by_name(
+                ctx,
+                self.super_.scope.clone(),
+                self.super_.address.into(),
+                DynamicFieldType::DynamicField,
+                key,
+            )
+        }))
+        .await
+        .map_err(upcast)
+    }
+
+    /// Access dynamic object fields on an object using their types and BCS-encoded names.
+    ///
+    /// Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+    pub(crate) async fn multi_get_dynamic_object_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DynamicFieldName>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
+        try_join_all(keys.into_iter().map(|key| {
+            DynamicField::by_name(
+                ctx,
+                self.super_.scope.clone(),
+                self.super_.address.into(),
+                DynamicFieldType::DynamicObject,
+                key,
+            )
+        }))
+        .await
+        .map_err(upcast)
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -450,6 +566,36 @@ impl Object {
         };
 
         Ok(Some(BigInt::from(object.storage_rebate)))
+    }
+
+    /// The transactions that sent objects to this object
+    pub(crate) async fn received_transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("IObject", "receivedTransactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Create filter for transactions that affected this object's address
+        let address_filter = TransactionFilter {
+            affected_address: Some(self.super_.address.into()),
+            ..Default::default()
+        };
+
+        // Intersect with user-provided filter
+        let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        Transaction::paginate(ctx, self.super_.scope.clone(), page, filter)
+            .await
+            .map(Some)
     }
 }
 
@@ -970,10 +1116,19 @@ impl Object {
                     return Ok(None);
                 };
 
-                Ok(kv_loader
-                    .load_one_object(self.super_.address.into(), version.into())
-                    .await
-                    .context("Failed to fetch object contents")?)
+                // Check execution context cache first and return if available
+                if let Some(cached_object) = self
+                    .super_
+                    .scope
+                    .execution_output_object(self.super_.address.into(), version.into())
+                {
+                    Ok(Some(cached_object.clone()))
+                } else {
+                    Ok(kv_loader
+                        .load_one_object(self.super_.address.into(), version.into())
+                        .await
+                        .context("Failed to fetch object contents")?)
+                }
             })
             .await
     }

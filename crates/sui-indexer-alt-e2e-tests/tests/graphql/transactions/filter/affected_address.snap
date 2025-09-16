@@ -50,7 +50,7 @@ task 9, line 41:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 10, lines 43-69:
+task 10, lines 43-70:
 //# run-graphql
 Response: {
   "data": {
@@ -98,6 +98,28 @@ Response: {
             }
           }
         },
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "FWhG55VRbd5R18idh5VwGhmALvjCSDsm8whBEoVeVvpr",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5,
+                "digest": "JBuK9Poczpwt2beck9eXbum6KNYiJSLfhR24BGQdMsMv"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsA_sentByC": {
+      "pageInfo": {
+        "startCursor": "Ng==",
+        "endCursor": "Ng==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
         {
           "cursor": "Ng==",
           "node": {

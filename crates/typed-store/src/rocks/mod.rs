@@ -386,6 +386,14 @@ impl Database {
         ret
     }
 
+    #[cfg(tidehunter)]
+    pub fn start_relocation(&self) -> anyhow::Result<()> {
+        if let Storage::TideHunter(db) = &self.storage {
+            db.start_relocation()?;
+        }
+        Ok(())
+    }
+
     pub fn compact_range_cf<K: AsRef<[u8]>>(
         &self,
         cf_name: &str,

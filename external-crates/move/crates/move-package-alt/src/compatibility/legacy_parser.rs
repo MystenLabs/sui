@@ -5,21 +5,18 @@
 use crate::{
     compatibility::{
         LegacyBuildInfo, LegacySubstOrRename, LegacySubstitution, LegacyVersion,
-        find_module_name_for_package,
+        find_module_name_for_package, legacy_lockfile::try_load_legacy_lockfile_publications,
     },
     errors::FileHandle,
-    package::{EnvironmentName, paths::PackagePath},
+    package::paths::PackagePath,
     schema::{
         DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
-        ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, PackageName,
-        ParsedManifest, PublishAddresses, PublishedID,
+        ManifestGitDependency, OnChainDepInfo, PackageMetadata, PackageName, ParsedManifest,
+        PublishAddresses,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
-use move_core_types::{
-    account_address::{AccountAddress, AccountAddressParseError},
-    identifier::Identifier,
-};
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde_spanned::Spanned;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -28,9 +25,13 @@ use std::{
 use toml::Value as TV;
 use tracing::debug;
 
-use super::legacy::{LegacyData, LegacyEnvironment};
+use super::{legacy::LegacyData, parse_address_literal};
 
 const EMPTY_ADDR_STR: &str = "_";
+
+/// For packages that do not have a name defined, we are using a predefined name
+/// to be able to identify their status.
+pub(crate) const NO_NAME_LEGACY_PACKAGE_NAME: &str = "unnamed_legacy_package";
 
 pub const PACKAGE_NAME: &str = "package";
 const BUILD_NAME: &str = "build";
@@ -68,7 +69,7 @@ pub struct LegacyPackageMetadata {
 /// the unsupported sections: `[addresses]`, `[dev-addresses]`, or `[dev-dependencies]`. Although
 /// these fields are not technically required in the old system, we want to process manifests that
 /// don't have them using the modern parser.
-pub fn try_load_legacy(
+pub fn try_load_legacy_manifest(
     path: &PackagePath,
     default_env: &Environment,
 ) -> Option<(FileHandle, ParsedManifest)> {
@@ -95,66 +96,6 @@ pub fn try_load_legacy(
     parse_source_manifest(parsed, path, default_env)
         .ok()
         .map(|parsed| (file_handle, parsed))
-}
-
-fn parse_legacy_lockfile_addresses(
-    path: &PackagePath,
-) -> Result<BTreeMap<EnvironmentName, LegacyEnvironment>> {
-    // we do not want to error if the lockfile does not exist.
-    let file_contents = std::fs::read_to_string(path.lockfile_path())?;
-
-    let toml_val = toml::from_str::<TV>(&file_contents)?;
-
-    let Some(lockfile) = toml_val.as_table() else {
-        bail!(
-            "Lockfile is malformed. Expected a table at the top level, but found a {}",
-            file_contents
-        );
-    };
-
-    let mut publish_info = BTreeMap::new();
-
-    // Extract the environments as a table.
-    let Some(envs) = lockfile.get("env").and_then(|v| v.as_table()) else {
-        return Ok(publish_info);
-    };
-
-    for (name, data) in envs {
-        let env_name = name.to_string();
-        let env_table = data.as_table().unwrap();
-
-        let chain_id = env_table
-            .get("chain-id")
-            .map(|v| v.as_str().unwrap_or_default().to_string());
-        let original_id = env_table
-            .get("original-published-id")
-            .map(|v| parse_address_literal(v.as_str().unwrap_or_default()).unwrap());
-        let latest_id = env_table
-            .get("latest-published-id")
-            .map(|v| parse_address_literal(v.as_str().unwrap_or_default()).unwrap());
-
-        let published_version = env_table
-            .get("published-version")
-            .map(|v| v.as_str().unwrap_or_default().to_string());
-
-        if let (Some(chain_id), Some(original_id), Some(latest_id), Some(published_version)) =
-            (chain_id, original_id, latest_id, published_version)
-        {
-            publish_info.insert(
-                env_name,
-                LegacyEnvironment {
-                    addresses: PublishAddresses {
-                        original_id: OriginalID(original_id),
-                        published_at: PublishedID(latest_id),
-                    },
-                    chain_id,
-                    version: published_version,
-                },
-            );
-        }
-    }
-
-    Ok(publish_info)
 }
 
 fn parse_move_manifest_string(manifest_string: &str) -> Result<TV> {
@@ -208,7 +149,8 @@ fn parse_source_manifest(
                 .context("Error parsing '[dev-dependencies]' section of manifest")?
                 .unwrap_or_default();
 
-            let modern_name = derive_modern_name(&addresses, path)?;
+            let modern_name = derive_modern_name(&addresses, path)?
+                .unwrap_or(PackageName::new(NO_NAME_LEGACY_PACKAGE_NAME).expect("Cannot fail"));
             let new_name = temporary_spanned(modern_name.clone());
 
             let original_id = addresses.get(modern_name.as_str()).copied().flatten();
@@ -255,6 +197,11 @@ fn parse_source_manifest(
                 None
             };
 
+            // We create a normalized legacy name, to make sure we can always use a package
+            // as an Identifier.
+            let normalized_legacy_name =
+                normalize_legacy_name_to_identifier(metadata.legacy_name.as_str())?;
+
             Ok(ParsedManifest {
                 package: PackageMetadata {
                     name: new_name,
@@ -275,9 +222,11 @@ fn parse_source_manifest(
 
                 legacy_data: Some(LegacyData {
                     legacy_name: metadata.legacy_name,
+                    normalized_legacy_name,
                     named_addresses: programmatic_addresses,
                     manifest_address_info,
-                    legacy_environments: parse_legacy_lockfile_addresses(path).unwrap_or_default(),
+                    legacy_publications: try_load_legacy_lockfile_publications(path)
+                        .unwrap_or_default(),
                 }),
                 dep_replacements: BTreeMap::new(),
             })
@@ -343,7 +292,7 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
                 .unwrap_or("legacy".to_string());
 
             Ok(LegacyPackageMetadata {
-                legacy_name: name,
+                legacy_name: name.clone(),
                 edition,
                 published_at,
                 unrecognized_fields: table.into_iter().collect(),
@@ -357,18 +306,26 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
     }
 }
 
+/// Given a "legacy" string, we produce an Identifier that is as "consistent"
+/// as possible.
+fn normalize_legacy_name_to_identifier(name: &str) -> Result<Identifier> {
+    // We could also, potentially, hash the String into a valid identifier,
+    // but these cases are super rare so "readability" is probably better for us.
+    Identifier::new(name.replace("-", "__").replace(" ", "____")).map_err(|_| {
+        anyhow!(
+            "Failed to convert legacy name {} to a normalized identifier",
+            name
+        )
+    })
+}
+
 fn parse_dependencies(tval: TV) -> Result<BTreeMap<PackageName, DefaultDependency>> {
     match tval {
         TV::Table(table) => {
             let mut deps = BTreeMap::new();
 
             for (dep_name, dep) in table.into_iter() {
-                // TODO(manos): This could fail if we have names that are not `Identifier` compatible.
-                // Though this is a super rare case, we'll probably not handle it more complex until we need to.
-                // TODO: we need to support whitespace and decide if that's how we need to keep
-                // this working
-                let dep_name = dep_name.replace("-", "___");
-                let dep_name_ident = PackageName::new(dep_name)?;
+                let dep_name_ident = normalize_legacy_name_to_identifier(&dep_name)?;
                 let dep = parse_dependency(dep)?;
                 deps.insert(dep_name_ident, dep);
             }
@@ -443,14 +400,6 @@ fn parse_addresses(tval: TV) -> Result<BTreeMap<Identifier, Option<AccountAddres
             x.type_str()
         ),
     }
-}
-
-// Safely parses address for both the 0x and non prefixed hex format.
-fn parse_address_literal(address_str: &str) -> Result<AccountAddress, AccountAddressParseError> {
-    if !address_str.starts_with("0x") {
-        return AccountAddress::from_hex(address_str);
-    }
-    AccountAddress::from_hex_literal(address_str)
 }
 
 fn parse_external_resolver(resolver_val: &TV) -> Result<ExternalDependency> {
@@ -760,7 +709,7 @@ fn get_manifest_address_info(
 fn derive_modern_name(
     addresses: &BTreeMap<Identifier, Option<AccountAddress>>,
     path: &PackagePath,
-) -> Result<PackageName> {
+) -> Result<Option<PackageName>> {
     debug!("Address to derve modern name from: {:?}", addresses);
     // Find all the addresses with 0x0.
     let zero_addresses = addresses
@@ -771,17 +720,9 @@ fn derive_modern_name(
         .map(|(name, _)| name)
         .collect::<Vec<_>>();
 
-    // If we have multiple, we cannot continue as this is not allowed.
-    if zero_addresses.len() > 1 {
-        bail!(
-            "Multiple 0x0 addresses found. This is not allowed. Duplicate names found: {:?}",
-            zero_addresses
-        );
-    }
-
     // If we have a single 0x0 address, we can use it as the name safely.
     if zero_addresses.len() == 1 {
-        Ok(PackageName::new(zero_addresses[0].to_string())?)
+        Ok(Some(PackageName::new(zero_addresses[0].to_string())?))
     } else {
         find_module_name_for_package(path)
     }
@@ -789,6 +730,8 @@ fn derive_modern_name(
 
 #[cfg(test)]
 mod tests {
+    use crate::schema::{OriginalID, PublishedID};
+
     use super::*;
 
     #[test]
@@ -855,5 +798,20 @@ mod tests {
         let published_at = Some("invalid_address".to_string());
         let result = get_manifest_address_info(original_id, published_at);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn normalize_legacy_names() {
+        let names = vec![
+            ("foo", "foo"),
+            ("foo-bar", "foo__bar"),
+            ("foo bar", "foo____bar"),
+            ("is_normal", "is_normal"),
+        ];
+
+        for (name, expected) in names {
+            let identifier = normalize_legacy_name_to_identifier(name).unwrap();
+            assert_eq!(identifier.to_string(), expected);
+        }
     }
 }

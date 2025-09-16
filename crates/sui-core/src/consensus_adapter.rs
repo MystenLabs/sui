@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::net::IpAddr;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -18,6 +19,7 @@ use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
+use mysten_common::debug_fatal;
 use mysten_metrics::{
     spawn_monitored_task, GaugeGuard, InflightGuardFutureExt, LATENCY_SEC_BUCKETS,
 };
@@ -372,7 +374,7 @@ impl ConsensusAdapter {
             if transaction.is_end_of_publish() {
                 info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
             }
-            self.submit_unchecked(&[transaction], epoch_store, None);
+            self.submit_unchecked(&[transaction], epoch_store, None, None);
         }
     }
 
@@ -620,16 +622,26 @@ impl ConsensusAdapter {
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
-        self.submit_batch(&[transaction], lock, epoch_store, tx_consensus_position)
+        self.submit_batch(
+            &[transaction],
+            lock,
+            epoch_store,
+            tx_consensus_position,
+            submitter_client_addr,
+        )
     }
 
+    // Submits the provided transactions to consensus in a batched fashion. The `transactions` vector can be also empty in case of a ping check.
+    // In this case the system will simulate a transaction submission to consensus and return the consensus position.
     pub fn submit_batch(
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
         if transactions.len() > 1 {
             // When batching multiple transactions, ensure they are all of the same kind
@@ -667,8 +679,16 @@ impl ConsensusAdapter {
             }
         }
 
-        epoch_store.insert_pending_consensus_transactions(transactions, lock)?;
-        Ok(self.submit_unchecked(transactions, epoch_store, tx_consensus_position))
+        if !transactions.is_empty() {
+            epoch_store.insert_pending_consensus_transactions(transactions, lock)?;
+        }
+
+        Ok(self.submit_unchecked(
+            transactions,
+            epoch_store,
+            tx_consensus_position,
+            submitter_client_addr,
+        ))
     }
 
     /// Performs weakly consistent checks on internal buffers to quickly
@@ -689,6 +709,7 @@ impl ConsensusAdapter {
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
         let async_stage = self
@@ -697,6 +718,7 @@ impl ConsensusAdapter {
                 transactions.to_vec(),
                 epoch_store.clone(),
                 tx_consensus_position,
+                submitter_client_addr,
             )
             .in_current_span();
         // Number of these tasks is weakly limited based on `num_inflight_transactions`.
@@ -710,6 +732,7 @@ impl ConsensusAdapter {
         transactions: Vec<ConsensusTransaction>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) {
         // When epoch_terminated signal is received all pending submit_and_wait_inner are dropped.
         //
@@ -727,6 +750,7 @@ impl ConsensusAdapter {
                 transactions,
                 &epoch_store,
                 tx_consensus_position,
+                submitter_client_addr,
             ))
             .await
             .ok(); // result here indicates if epoch ended earlier, we don't care about it
@@ -738,10 +762,39 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        mut tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        submitter_client_addr: Option<IpAddr>,
     ) {
         if transactions.is_empty() {
+            // If transactions are empty, then we attempt to ping consensus and simulate a transaction submission to consensus.
+            // We intentionally do not wait for the block status, as we are only interested in the consensus position and return it immediately.
+            debug!("Performing a ping check, pinging consensus to get a consensus position in next block");
+            let (consensus_positions, _status_waiter) = self
+                .submit_inner(&transactions, epoch_store, &[], "ping", false)
+                .await;
+
+            if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
+                let _ = tx_consensus_positions.send(consensus_positions);
+            } else {
+                debug_fatal!("Ping check must have a consensus position channel");
+            }
             return;
+        }
+
+        // Record submitted transactions early for DoS protection
+        if epoch_store.protocol_config().mysticeti_fastpath() {
+            for transaction in &transactions {
+                if let ConsensusTransactionKind::UserTransaction(tx) = &transaction.kind {
+                    let amplification_factor = (tx.data().transaction_data().gas_price()
+                        / epoch_store.reference_gas_price().max(1))
+                    .max(1);
+                    epoch_store.submitted_transaction_cache.record_submitted_tx(
+                        tx.digest(),
+                        amplification_factor as u32,
+                        submitter_client_addr,
+                    );
+                }
+            }
         }
 
         // If tx_consensus_positions channel is provided, the caller is looking for a
@@ -977,6 +1030,7 @@ impl ConsensusAdapter {
                 None,
                 epoch_store,
                 None,
+                None,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             } else {
@@ -1000,6 +1054,7 @@ impl ConsensusAdapter {
     ) -> (Vec<ConsensusPosition>, BlockStatusReceiver) {
         let ack_start = Instant::now();
         let mut retries: u32 = 0;
+        let is_dkg = !transactions.is_empty() && transactions[0].kind.is_dkg();
 
         let (consensus_positions, status_waiter) = loop {
             let span = debug_span!("client_submit");
@@ -1012,9 +1067,7 @@ impl ConsensusAdapter {
                 Err(err) => {
                     // This can happen during reconfig, or when consensus has full internal buffers
                     // and needs to back pressure, so retry a few times before logging warnings.
-                    if retries > 30
-                        || (retries > 3 && (is_soft_bundle || !transactions[0].kind.is_dkg()))
-                    {
+                    if retries > 30 || (retries > 3 && (is_soft_bundle || !is_dkg)) {
                         warn!(
                             "Failed to submit transactions {transaction_keys:?} to consensus: {err:?}. Retry #{retries}"
                         );
@@ -1025,7 +1078,7 @@ impl ConsensusAdapter {
                         .inc();
                     retries += 1;
 
-                    if transactions[0].kind.is_dkg() {
+                    if is_dkg {
                         // Shorter delay for DKG messages, which are time-sensitive and happen at
                         // start-of-epoch when submit errors due to active reconfig are likely.
                         time::sleep(Duration::from_millis(100)).await;
@@ -1225,6 +1278,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
                 None,
                 epoch_store,
                 None,
+                None,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             } else {
@@ -1375,7 +1429,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        self.submit_batch(transactions, None, epoch_store, None)
+        self.submit_batch(transactions, None, epoch_store, None, None)
             .map(|_| ())
     }
 

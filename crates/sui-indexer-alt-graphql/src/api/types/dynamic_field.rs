@@ -36,9 +36,9 @@ use super::{
     move_type::MoveType,
     move_value::MoveValue,
     object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, Validator as OFValidator},
+    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
-    transaction::Transaction,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };
 
 pub(crate) struct DynamicField {
@@ -149,6 +149,8 @@ impl DynamicField {
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic field with that name could not be found attached to this object.
     pub(crate) async fn dynamic_field(
         &self,
         ctx: &Context<'_>,
@@ -174,12 +176,24 @@ impl DynamicField {
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic object field with that name could not be found attached to this object.
     pub(crate) async fn dynamic_object_field(
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>, RpcError> {
         self.super_.dynamic_object_field(ctx, name).await
+    }
+
+    /// Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+    ///
+    /// Both these operations require the object to have both the `key` and `store` abilities.
+    pub(crate) async fn has_public_transfer(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<bool>, RpcError> {
+        self.super_.has_public_transfer(ctx).await
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -317,6 +331,21 @@ impl DynamicField {
         ctx: &Context<'_>,
     ) -> Result<Option<BigInt>, RpcError> {
         self.super_.storage_rebate(ctx).await
+    }
+
+    /// The transactions that sent objects to this object.
+    pub(crate) async fn received_transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        self.super_
+            .received_transactions(ctx, first, after, last, before, filter)
+            .await
     }
 
     /// The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.

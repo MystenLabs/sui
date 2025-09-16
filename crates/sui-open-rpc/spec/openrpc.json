@@ -1297,6 +1297,7 @@
               "maxSupportedProtocolVersion": "96",
               "protocolVersion": "6",
               "featureFlags": {
+                "abstract_size_in_object_runtime": false,
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
                 "additional_consensus_digest_indirect_state": false,
@@ -1310,6 +1311,7 @@
                 "ban_entry_init": false,
                 "better_adapter_type_resolution_errors": false,
                 "bridge": false,
+                "cancel_for_failed_dkg_early": false,
                 "check_for_init_during_upgrade": false,
                 "commit_root_state_digest": false,
                 "consensus_batched_block_sync": false,
@@ -1323,6 +1325,7 @@
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
+                "correct_gas_payment_limit_check": false,
                 "debug_fatal_on_move_invariant_violation": false,
                 "dependency_linkage_error": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
@@ -1333,6 +1336,7 @@
                 "enable_accumulators": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
+                "enable_coin_registry": false,
                 "enable_effects_v2": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
@@ -1366,6 +1370,7 @@
                 "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
                 "normalize_ptb_arguments": false,
+                "object_runtime_charge_cache_load_gas": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "passkey_auth": false,
@@ -1394,6 +1399,7 @@
                 "type_tags_in_object_runtime": false,
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
+                "use_mfp_txns_in_load_initial_object_debts": false,
                 "validate_identifier_inputs": false,
                 "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,
@@ -8779,7 +8785,7 @@
             "required": [
               "reservation",
               "type",
-              "typeParam",
+              "typeArg",
               "withdrawFrom"
             ],
             "properties": {
@@ -8789,11 +8795,11 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "balanceWithdraw"
+                  "fundsWithdrawal"
                 ]
               },
-              "typeParam": {
-                "$ref": "#/components/schemas/SuiWithdrawTypeParam"
+              "typeArg": {
+                "$ref": "#/components/schemas/SuiWithdrawalTypeArg"
               },
               "withdrawFrom": {
                 "$ref": "#/components/schemas/SuiWithdrawFrom"
@@ -8885,7 +8891,8 @@
               "RandomnessStateCreate",
               "CoinDenyListStateCreate",
               "StoreExecutionTimeObservations",
-              "AccumulatorRootCreate"
+              "AccumulatorRootCreate",
+              "CoinRegistryCreate"
             ]
           },
           {
@@ -10454,7 +10461,7 @@
           "sender"
         ]
       },
-      "SuiWithdrawTypeParam": {
+      "SuiWithdrawalTypeArg": {
         "oneOf": [
           {
             "type": "object",

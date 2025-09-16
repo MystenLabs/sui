@@ -1,0 +1,58 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-15:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4962800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-18:
+//# programmable --sender A --inputs @A
+//> P::M::new();
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 20:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 22-37:
+//# run-graphql
+Response: {
+  "data": {
+    "coinHasPublicTransfer": {
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+            "abilities": [
+              "STORE",
+              "KEY"
+            ]
+          }
+        },
+        "hasPublicTransfer": true
+      }
+    },
+    "fooDoesNot": {
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x133f390eae854c57b1ad00a0b6f642edc12e601c0d8eb61596ce309894aa57da::M::Foo",
+            "abilities": [
+              "KEY"
+            ]
+          }
+        },
+        "hasPublicTransfer": false
+      }
+    }
+  }
+}

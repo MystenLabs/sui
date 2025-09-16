@@ -25,9 +25,9 @@ use super::{
     move_type::MoveType,
     move_value::MoveValue,
     object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, Validator as OFValidator},
+    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
-    transaction::Transaction,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };
 
 #[derive(Clone)]
@@ -53,13 +53,18 @@ pub(crate) struct MoveObject {
         name = "dynamic_field",
         arg(name = "name", ty = "DynamicFieldName"),
         ty = "Result<Option<DynamicField>, RpcError<object::Error>>",
-        desc = "Access a dynamic field on an object using its type and BCS-encoded name.",
+        desc = "Access a dynamic field on an object using its type and BCS-encoded name.\n\nReturns `null` if a dynamic field with that name could not be found attached to this object.",
     ),
     field(
         name = "dynamic_object_field",
         arg(name = "name", ty = "DynamicFieldName"),
         ty = "Result<Option<DynamicField>, RpcError<object::Error>>",
-        desc = "Access a dynamic object field on an object using its type and BCS-encoded name.",
+        desc = "Access a dynamic object field on an object using its type and BCS-encoded name.\n\nReturns `null` if a dynamic object field with that name could not be found attached to this object.",
+    ),
+    field(
+        name = "has_public_transfer",
+        ty = "Result<Option<bool>, RpcError>",
+        desc = "Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.\n\nBoth these operations require the object to have both the `key` and `store` abilities.",
     ),
     field(
         name = "multi_get_dynamic_fields",
@@ -174,6 +179,8 @@ impl MoveObject {
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic field with that name could not be found attached to this object.
     pub(crate) async fn dynamic_field(
         &self,
         ctx: &Context<'_>,
@@ -217,6 +224,8 @@ impl MoveObject {
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
+    ///
+    /// Returns `null` if a dynamic object field with that name could not be found attached to this object.
     pub(crate) async fn dynamic_object_field(
         &self,
         ctx: &Context<'_>,
@@ -231,6 +240,28 @@ impl MoveObject {
             name,
         )
         .await
+    }
+
+    /// Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+    ///
+    /// Both these operations require the object to have both the `key` and `store` abilities.
+    pub(crate) async fn has_public_transfer(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<bool>, RpcError> {
+        let Some(native) = self.native(ctx).await?.as_ref() else {
+            return Ok(None);
+        };
+
+        let type_ = MoveType::from_native(
+            native.type_().clone().into(),
+            self.super_.super_.scope.clone(),
+        );
+
+        Ok(type_
+            .abilities_impl()
+            .await?
+            .map(|s| s.has_key() && s.has_store()))
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -383,6 +414,21 @@ impl MoveObject {
         ctx: &Context<'_>,
     ) -> Result<Option<BigInt>, RpcError> {
         self.super_.storage_rebate(ctx).await
+    }
+
+    /// The transactions that sent objects to this object.
+    pub(crate) async fn received_transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        self.super_
+            .received_transactions(ctx, first, after, last, before, filter)
+            .await
     }
 }
 

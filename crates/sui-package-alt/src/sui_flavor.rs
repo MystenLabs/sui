@@ -68,12 +68,13 @@ pub struct BuildParams {
     edition: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+/// Note: Every field should be optional, and the system can
+/// pick sensible defaults (or error out) if fields are missing.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct PublishedMetadata {
-    pub toolchain_version: String,
-    pub build_config: BuildParams,
-    pub upgrade_capability: AccountAddress,
-    pub version: u64,
+    pub toolchain_version: Option<String>,
+    pub build_config: Option<BuildParams>,
+    pub upgrade_capability: Option<AccountAddress>,
 }
 
 impl MoveFlavor for SuiFlavor {

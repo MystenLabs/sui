@@ -4,6 +4,7 @@
 //# init --protocol-version 51 --addresses test=0x0 --accounts A --simulator
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module test::fake {
     use sui::coin;
 

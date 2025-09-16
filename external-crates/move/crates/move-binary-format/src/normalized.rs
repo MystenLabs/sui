@@ -746,6 +746,11 @@ impl<S: Hash + Eq> Module<S> {
             && map_keyed_equivalent(functions, &other.functions, |f1, f2| f1.equivalent(f2))
             && vec_ordered_equivalent(constants, &other.constants, |c1, c2| c1.equivalent(c2))
     }
+
+    #[cfg(test)]
+    pub(crate) fn extend_table_signatures(&mut self, signatures: Vec<Signature<S>>) {
+        self.tables.signatures.extend(signatures);
+    }
 }
 
 impl<S> Constant<S> {

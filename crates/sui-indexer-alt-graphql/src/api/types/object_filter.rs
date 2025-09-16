@@ -27,7 +27,9 @@ pub(crate) struct ObjectFilter {
     /// This field is required if `ownerKind` is "ADDRESS" or "OBJECT". If provided without `ownerKind`, `ownerKind` defaults to "ADDRESS".
     pub owner: Option<SuiAddress>,
 
-    /// Filter on the object's type. The filter can be one of:
+    /// Filter on the object's type.
+    ///
+    /// The filter can be one of:
     ///
     /// - A package address: `0x2`,
     /// - A module: `0x2::coin`,
@@ -37,12 +39,12 @@ pub(crate) struct ObjectFilter {
 }
 
 #[derive(Default)]
-pub(crate) struct Validator {
+pub(crate) struct ObjectFilterValidator {
     /// Whether to allow an empty filter on input.
     allow_empty: bool,
 }
 
-impl Validator {
+impl ObjectFilterValidator {
     /// Create a validator that allows empty filters.
     pub(crate) fn allows_empty() -> Self {
         Self { allow_empty: true }
@@ -67,7 +69,7 @@ impl ObjectFilter {
     }
 }
 
-impl CustomValidator<ObjectFilter> for Validator {
+impl CustomValidator<ObjectFilter> for ObjectFilterValidator {
     fn check(&self, filter: &ObjectFilter) -> Result<(), InputValueError<ObjectFilter>> {
         match filter {
             ObjectFilter {

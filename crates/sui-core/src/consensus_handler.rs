@@ -61,6 +61,7 @@ use crate::{
     execution_cache::ObjectCacheRead,
     execution_scheduler::{ExecutionScheduler, SchedulingSource},
     scoring_decision::update_low_scoring_authorities,
+    traffic_controller::{policies::TrafficTally, TrafficController},
 };
 
 pub struct ConsensusHandlerInitializer {
@@ -134,6 +135,7 @@ impl ConsensusHandlerInitializer {
             self.state.metrics.clone(),
             self.throughput_calculator.clone(),
             self.backpressure_manager.subscribe(),
+            self.state.traffic_controller.clone(),
         )
     }
 
@@ -544,6 +546,8 @@ pub struct ConsensusHandler<C> {
     additional_consensus_state: AdditionalConsensusState,
 
     backpressure_subscriber: BackpressureSubscriber,
+
+    traffic_controller: Option<Arc<TrafficController>>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -560,6 +564,7 @@ impl<C> ConsensusHandler<C> {
         metrics: Arc<AuthorityMetrics>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_subscriber: BackpressureSubscriber,
+        traffic_controller: Option<Arc<TrafficController>>,
     ) -> Self {
         // Recover last_consensus_stats so it is consistent across validators.
         let mut last_consensus_stats = epoch_store
@@ -592,6 +597,7 @@ impl<C> ConsensusHandler<C> {
                 commit_rate_estimate_window_size,
             ),
             backpressure_subscriber,
+            traffic_controller,
         }
     }
 
@@ -776,12 +782,57 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 let author = block.author.value();
                 // TODO: consider only messages within 1~3 rounds of the leader?
                 self.last_consensus_stats.stats.inc_num_messages(author);
+
+                // Set the "ping" transaction status for this block. This is necessary as there might be some ping requests waiting for the ping transaction to be finalized.
+                self.epoch_store.set_consensus_tx_status(
+                    ConsensusPosition::ping(epoch, block),
+                    ConsensusTxStatus::Finalized,
+                );
+
                 for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
                     let position = ConsensusPosition {
                         epoch,
                         block,
                         index: tx_index as TransactionIndex,
                     };
+
+                    // Transaction has appeared in consensus output, we can increment the submission count
+                    // for this tx for DoS protection.
+                    if self.epoch_store.protocol_config().mysticeti_fastpath() {
+                        if let ConsensusTransactionKind::UserTransaction(tx) =
+                            &parsed.transaction.kind
+                        {
+                            let digest = tx.digest();
+                            if let Some((spam_weight, submitter_client_addrs)) = self
+                                .epoch_store
+                                .submitted_transaction_cache
+                                .increment_submission_count(digest)
+                            {
+                                if let Some(ref traffic_controller) = self.traffic_controller {
+                                    debug!(
+                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to {} client addresses",
+                                        submitter_client_addrs.len()
+                                    );
+
+                                    // Apply spam weight to all client addresses that submitted this transaction
+                                    for addr in submitter_client_addrs {
+                                        traffic_controller.tally(TrafficTally::new(
+                                            Some(addr),
+                                            None,
+                                            None,
+                                            spam_weight.clone(),
+                                        ));
+                                    }
+                                } else {
+                                    warn!(
+                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} for {} client addresses (traffic controller not configured)",
+                                        submitter_client_addrs.len()
+                                    );
+                                }
+                            }
+                        }
+                    }
+
                     if parsed.rejected {
                         if parsed.transaction.kind.is_user_transaction() {
                             self.epoch_store
@@ -951,7 +1002,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let end_of_publish = ConsensusTransaction::new_end_of_publish(self.epoch_store.name);
         if let Err(err) =
             self.consensus_adapter
-                .submit(end_of_publish, None, &self.epoch_store, None)
+                .submit(end_of_publish, None, &self.epoch_store, None, None)
         {
             warn!(
                 "Error when sending EndOfPublish message from ConsensusHandler: {:?}",
@@ -1409,6 +1460,12 @@ impl ConsensusBlockHandler {
             .collect::<Vec<_>>();
         let mut executable_transactions = vec![];
         for (block, transactions) in parsed_transactions.into_iter() {
+            // Set the "ping" transaction status for this block. This is ncecessary as there might be some ping requests waiting for the ping transaction to be certified.
+            self.epoch_store.set_consensus_tx_status(
+                ConsensusPosition::ping(epoch, block),
+                ConsensusTxStatus::FastpathCertified,
+            );
+
             for (txn_idx, parsed) in transactions.into_iter().enumerate() {
                 let position = ConsensusPosition {
                     epoch,
@@ -1629,6 +1686,7 @@ mod tests {
             metrics,
             Arc::new(throughput_calculator),
             backpressure_manager.subscribe(),
+            state.traffic_controller.clone(),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -2121,6 +2179,7 @@ mod tests {
             metrics,
             Arc::new(throughput),
             backpressure.subscribe(),
+            state.traffic_controller.clone(),
         );
 
         handler.handle_consensus_commit(commit).await;

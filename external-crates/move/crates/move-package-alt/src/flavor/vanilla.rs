@@ -27,7 +27,7 @@ pub fn default_environment() -> Environment {
 #[derive(Debug)]
 pub struct Vanilla;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct PublishedMetadata {
     #[serde(default)]

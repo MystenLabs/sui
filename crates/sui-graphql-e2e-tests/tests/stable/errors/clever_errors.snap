@@ -14,57 +14,57 @@ gas summary: computation_cost: 1000000, storage_cost: 10784400,  storage_rebate:
 
 task 2, line 94:
 //# run P0::m::callU8
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU8 (function index 0) at offset 1, Abort Code: 13906834307487367169
+Error: Transaction Effects Status: Move Abort in P0::m::callU8 (function index 0) at offset 1 at line 31
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("callU8") }, 13906834307487367169), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834307487367169), message: Some("P0::m::callU8 at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
 
 task 3, line 96:
 //# run P0::m::callU16
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU16 (function index 1) at offset 1, Abort Code: 13906834320372400131
+Error: Transaction Effects Status: Move Abort in P0::m::callU16 (function index 1) at offset 1 at line 34
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("callU16") }, 13906834320372400131), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834320372400131), message: Some("P0::m::callU16 at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
 
 task 4, line 98:
 //# run P0::m::callU32
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU32 (function index 2) at offset 1, Abort Code: 13906834333257433093
+Error: Transaction Effects Status: Move Abort in P0::m::callU32 (function index 2) at offset 1 at line 37
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 2, instruction: 1, function_name: Some("callU32") }, 13906834333257433093), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834333257433093), message: Some("P0::m::callU32 at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 1)] }), command: Some(0) } }
 
 task 5, line 100:
 //# run P0::m::callU64
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU64 (function index 3) at offset 1, Abort Code: 13906834346142466055
+Error: Transaction Effects Status: Move Abort in P0::m::callU64 (function index 3) at offset 1 at line 40
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 3, instruction: 1, function_name: Some("callU64") }, 13906834346142466055), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834346142466055), message: Some("P0::m::callU64 at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(0) } }
 
 task 6, line 102:
 //# run P0::m::callU128
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU128 (function index 4) at offset 1, Abort Code: 13906834359027499017
+Error: Transaction Effects Status: Move Abort in P0::m::callU128 (function index 4) at offset 1 at line 43
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 4, instruction: 1, function_name: Some("callU128") }, 13906834359027499017), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834359027499017), message: Some("P0::m::callU128 at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(0) } }
 
 task 7, line 104:
 //# run P0::m::callU256
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU256 (function index 5) at offset 1, Abort Code: 13906834371912531979
+Error: Transaction Effects Status: Move Abort in P0::m::callU256 (function index 5) at offset 1 at line 46
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 5, instruction: 1, function_name: Some("callU256") }, 13906834371912531979), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834371912531979), message: Some("P0::m::callU256 at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(5), 1)] }), command: Some(0) } }
 
 task 8, line 106:
 //# run P0::m::callAddress
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callAddress (function index 6) at offset 1, Abort Code: 13906834384797696015
+Error: Transaction Effects Status: Move Abort in P0::m::callAddress (function index 6) at offset 1 at line 49
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 6, instruction: 1, function_name: Some("callAddress") }, 13906834384797696015), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834384797696015), message: Some("P0::m::callAddress at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 1)] }), command: Some(0) } }
 
 task 9, line 108:
 //# run P0::m::callString
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callString (function index 7) at offset 1, Abort Code: 13906834397682728977
+Error: Transaction Effects Status: Move Abort in P0::m::callString (function index 7) at offset 1 at line 52
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 7, instruction: 1, function_name: Some("callString") }, 13906834397682728977), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834397682728977), message: Some("P0::m::callString at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 1)] }), command: Some(0) } }
 
 task 10, line 110:
 //# run P0::m::callU64vec
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU64vec (function index 8) at offset 1, Abort Code: 13906834410567761939
+Error: Transaction Effects Status: Move Abort in P0::m::callU64vec (function index 8) at offset 1 at line 55
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 8, instruction: 1, function_name: Some("callU64vec") }, 13906834410567761939), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834410567761939), message: Some("P0::m::callU64vec at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
 
 task 11, line 112:
 //# run P0::m::callStringWithCode
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callStringWithCode (function index 9) at offset 1, Abort Code: 13835339779368288277
+Error: Transaction Effects Status: Move Abort in P0::m::callStringWithCode (function index 9) at offset 1 at line 58 with clever code 1
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 9, instruction: 1, function_name: Some("callStringWithCode") }, 13835339779368288277), source: Some(VMError { major_status: ABORTED, sub_status: Some(13835339779368288277), message: Some("P0::m::callStringWithCode at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(9), 1)] }), command: Some(0) } }
 
 task 12, line 114:
 //# run P0::m::callNoCodeOrConst
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callNoCodeOrConst (function index 10) at offset 1, Abort Code: 13906834440631353343
+Error: Transaction Effects Status: Move Abort in P0::m::callNoCodeOrConst (function index 10) at offset 1 at line 61
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 10, instruction: 1, function_name: Some("callNoCodeOrConst") }, 13906834440631353343), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834440631353343), message: Some("P0::m::callNoCodeOrConst at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 1)] }), command: Some(0) } }
 
 task 13, line 116:
@@ -74,7 +74,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 14, line 118:
 //# run P0::m::assertLineNo
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::assertLineNo (function index 12) at offset 1, Abort Code: 13906834466401157119
+Error: Transaction Effects Status: Move Abort in P0::m::assertLineNo (function index 12) at offset 1 at line 67
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 12, instruction: 1, function_name: Some("assertLineNo") }, 13906834466401157119), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834466401157119), message: Some("P0::m::assertLineNo at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 1)] }), command: Some(0) } }
 
 task 15, line 120:
@@ -191,47 +191,47 @@ gas summary: computation_cost: 1000000, storage_cost: 10913600,  storage_rebate:
 
 task 18, line 226:
 //# run P0::m::callU8
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU8 (function index 0) at offset 1, Abort Code: 13906834874423050241
+Error: Transaction Effects Status: Move Abort in P0::m::callU8 (function index 0) at offset 1 at line 163
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("callU8") }, 13906834874423050241), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834874423050241), message: Some("fake(1,0)::m::callU8 at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
 
 task 19, line 228:
 //# run P0::m::callU16
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU16 (function index 1) at offset 1, Abort Code: 13906834887308083203
+Error: Transaction Effects Status: Move Abort in P0::m::callU16 (function index 1) at offset 1 at line 166
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("callU16") }, 13906834887308083203), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834887308083203), message: Some("fake(1,0)::m::callU16 at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
 
 task 20, line 230:
 //# run P0::m::callU32
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU32 (function index 2) at offset 1, Abort Code: 13906834900193116165
+Error: Transaction Effects Status: Move Abort in P0::m::callU32 (function index 2) at offset 1 at line 169
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 2, instruction: 1, function_name: Some("callU32") }, 13906834900193116165), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834900193116165), message: Some("fake(1,0)::m::callU32 at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 1)] }), command: Some(0) } }
 
 task 21, line 232:
 //# run P0::m::callU64
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU64 (function index 3) at offset 1, Abort Code: 13906834913078149127
+Error: Transaction Effects Status: Move Abort in P0::m::callU64 (function index 3) at offset 1 at line 172
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 3, instruction: 1, function_name: Some("callU64") }, 13906834913078149127), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834913078149127), message: Some("fake(1,0)::m::callU64 at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(0) } }
 
 task 22, line 234:
 //# run P0::m::callU128
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU128 (function index 4) at offset 1, Abort Code: 13906834925963182089
+Error: Transaction Effects Status: Move Abort in P0::m::callU128 (function index 4) at offset 1 at line 175
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 4, instruction: 1, function_name: Some("callU128") }, 13906834925963182089), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834925963182089), message: Some("fake(1,0)::m::callU128 at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(0) } }
 
 task 23, line 236:
 //# run P0::m::callU256
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU256 (function index 5) at offset 1, Abort Code: 13906834938848215051
+Error: Transaction Effects Status: Move Abort in P0::m::callU256 (function index 5) at offset 1 at line 178
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 5, instruction: 1, function_name: Some("callU256") }, 13906834938848215051), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834938848215051), message: Some("fake(1,0)::m::callU256 at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(5), 1)] }), command: Some(0) } }
 
 task 24, line 238:
 //# run P0::m::callAddress
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callAddress (function index 6) at offset 1, Abort Code: 13906834951733379087
+Error: Transaction Effects Status: Move Abort in P0::m::callAddress (function index 6) at offset 1 at line 181
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 6, instruction: 1, function_name: Some("callAddress") }, 13906834951733379087), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834951733379087), message: Some("fake(1,0)::m::callAddress at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 1)] }), command: Some(0) } }
 
 task 25, line 240:
 //# run P0::m::callString
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callString (function index 7) at offset 1, Abort Code: 13906834964618412049
+Error: Transaction Effects Status: Move Abort in P0::m::callString (function index 7) at offset 1 at line 184
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 7, instruction: 1, function_name: Some("callString") }, 13906834964618412049), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834964618412049), message: Some("fake(1,0)::m::callString at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 1)] }), command: Some(0) } }
 
 task 26, line 242:
 //# run P0::m::callU64vec
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU64vec (function index 8) at offset 1, Abort Code: 13906834977503445011
+Error: Transaction Effects Status: Move Abort in P0::m::callU64vec (function index 8) at offset 1 at line 187
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 8, instruction: 1, function_name: Some("callU64vec") }, 13906834977503445011), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834977503445011), message: Some("fake(1,0)::m::callU64vec at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
 
 task 27, line 244:
@@ -241,7 +241,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 28, line 246:
 //# run P0::m::assertLineNo
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::assertLineNo (function index 12) at offset 1, Abort Code: 13906835033336840191
+Error: Transaction Effects Status: Move Abort in P0::m::assertLineNo (function index 12) at offset 1 at line 199
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 12, instruction: 1, function_name: Some("assertLineNo") }, 13906835033336840191), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906835033336840191), message: Some("fake(1,0)::m::assertLineNo at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 1)] }), command: Some(0) } }
 
 task 29, line 248:

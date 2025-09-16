@@ -14,17 +14,17 @@ gas summary: computation_cost: 1000000, storage_cost: 4187600,  storage_rebate: 
 
 task 2, line 36:
 //# run P0::m::t_a
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::t_a (function index 0) at offset 1, Abort Code: 13906834264537694207
+Error: Transaction Effects Status: Move Abort in P0::m::t_a (function index 0) at offset 1 at line 20
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("t_a") }, 13906834264537694207), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834264537694207), message: Some("P0::m::t_a at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
 
 task 3, line 38:
 //# run P0::m::t_calls_a
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::t_calls_a (function index 1) at offset 1, Abort Code: 13906834277422596095
+Error: Transaction Effects Status: Move Abort in P0::m::t_calls_a (function index 1) at offset 1 at line 23
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("t_calls_a") }, 13906834277422596095), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834277422596095), message: Some("P0::m::t_calls_a at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
 
 task 4, line 40:
 //# run P0::m::t_const_assert
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::t_const_assert (function index 2) at offset 1, Abort Code: 13906834212998086657
+Error: Transaction Effects Status: Move Abort in P0::m::t_const_assert (function index 2) at offset 1 at line 9
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 2, instruction: 1, function_name: Some("t_const_assert") }, 13906834212998086657), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834212998086657), message: Some("P0::m::t_const_assert at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 1)] }), command: Some(0) } }
 
 task 5, line 42:

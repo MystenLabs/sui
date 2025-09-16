@@ -32,10 +32,12 @@ members = [
 aes-gcm = "0.8.0"
 anyhow = "1.0.52"
 append-only-vec = "0.1.7"
+aquamarine = "0.6.0"
 arbitrary = { version = "1.1.7", features = ["derive", "derive_arbitrary"] }
 async-trait = "0.1.42"
 bcs = "0.1.4"
 better_any = "0.1.1"
+bimap = "0.6.2"
 bitvec = "0.19.4"
 byteorder = "1.4.3"
 bytes = "1.0.1"
@@ -183,6 +185,7 @@ move-package-alt-compilation = { path = "crates/move-package-alt-compilation" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-regex-borrow-graph = { path = "crates/move-regex-borrow-graph" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
+move-stackless-bytecode-2 = { path = "crates/move-stackless-bytecode-2" }
 move-stdlib = { path = "crates/move-stdlib" }
 move-stdlib-natives = { path = "crates/move-stdlib-natives" }
 move-symbol-pool = { path = "crates/move-symbol-pool" }

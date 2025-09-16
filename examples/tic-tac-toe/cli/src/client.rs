@@ -70,7 +70,7 @@ impl Client {
             );
         };
 
-        let wallet = WalletContext::new(&config, None, None)?;
+        let wallet = WalletContext::new(&config)?;
         Ok(Self {
             wallet,
             package: conn.package_id,
@@ -304,7 +304,7 @@ impl Client {
     /// Returns the ID for the Game that was created on success.
     pub async fn new_owned_game(&mut self, opponent_key: PublicKey) -> Result<ObjectID> {
         let player = self.wallet.active_address()?;
-        let player_key = self.wallet.config.keystore.get_key(&player)?.public();
+        let player_key = self.wallet.config.keystore.export(&player)?.public();
 
         // The opponent's address can be derived from their public key, but not vice versa.
         let opponent = SuiAddress::from(&opponent_key);
@@ -364,7 +364,7 @@ impl Client {
         );
 
         let data = self.build_tx_data(player, builder.finish()).await?;
-        let tx = self.wallet.sign_transaction(&data);
+        let tx = self.wallet.sign_transaction(&data).await;
         self.execute_transaction(tx).await?;
         Ok(())
     }
@@ -445,7 +445,7 @@ impl Client {
         );
 
         let data = self.build_tx_data(player, builder.finish()).await?;
-        let tx = self.wallet.sign_transaction(&data);
+        let tx = self.wallet.sign_transaction(&data).await;
         self.execute_transaction(tx).await?;
         Ok(())
     }
@@ -479,7 +479,7 @@ impl Client {
         );
 
         let data = self.build_tx_data(player, builder.finish()).await?;
-        let tx = self.wallet.sign_transaction(&data);
+        let tx = self.wallet.sign_transaction(&data).await;
         let SuiTransactionBlockResponse {
             object_changes: Some(object_changes),
             ..
@@ -552,7 +552,7 @@ impl Client {
 
     /// Execute a PTB, expecting it to create a shared or owned Game, and return its ObjectID.
     async fn execute_for_game(&self, data: TransactionData) -> Result<ObjectID> {
-        let tx = self.wallet.sign_transaction(&data);
+        let tx = self.wallet.sign_transaction(&data).await;
         let SuiTransactionBlockResponse {
             object_changes: Some(object_changes),
             ..
@@ -619,17 +619,13 @@ impl Client {
         let tx_kind = TransactionKind::ProgrammableTransaction(tx);
 
         // Gas Estimation
-        let tx_data = client
-            .transaction_builder()
-            .tx_data_for_dry_run(
-                sender,
-                tx_kind.clone(),
-                max_budget,
-                gas_price,
-                /* gas_payment */ None,
-                /* gas_sponsor */ None,
-            )
-            .await;
+        let tx_data = TransactionData::new_with_gas_coins(
+            tx_kind.clone(),
+            sender,
+            vec![],
+            max_budget,
+            gas_price,
+        );
 
         let DryRunTransactionBlockResponse { effects, .. } = client
             .read_api()
@@ -709,6 +705,7 @@ impl Client {
             .config
             .keystore
             .sign_secure(&sender, &data, Intent::sui_transaction())
+            .await
             .context("Signing transaction")?
             .into();
 

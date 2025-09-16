@@ -34,14 +34,14 @@ const EDITION_NAME: &str = "edition";
 const PACKAGE_NAME: &str = "package";
 
 #[derive(Debug)]
-pub struct BuildPlan<F: MoveFlavor> {
-    root_pkg: RootPackage<F>,
+pub struct BuildPlan<'a, F: MoveFlavor> {
+    root_pkg: &'a RootPackage<F>,
     compiler_vfs_root: Option<VfsPath>,
     build_config: BuildConfig,
 }
 
-impl<F: MoveFlavor> BuildPlan<F> {
-    pub fn create(root_pkg: RootPackage<F>, build_config: &BuildConfig) -> PackageResult<Self> {
+impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
+    pub fn create(root_pkg: &'a RootPackage<F>, build_config: &BuildConfig) -> PackageResult<Self> {
         Ok(Self {
             root_pkg,
             build_config: build_config.clone(),
@@ -78,7 +78,7 @@ impl<F: MoveFlavor> BuildPlan<F> {
         let compiled = build_all::<W, F>(
             writer,
             self.compiler_vfs_root.clone(),
-            &self.root_pkg,
+            self.root_pkg,
             &self.build_config,
             |compiler| {
                 let compiler = compiler.add_save_hook(&program_info_hook);
@@ -166,7 +166,7 @@ impl<F: MoveFlavor> BuildPlan<F> {
             writer,
             None,
             &self.build_config,
-            &self.root_pkg,
+            self.root_pkg,
             |compiler| compiler.generate_migration_patch(&root_name),
         )?;
         let migration = match res {

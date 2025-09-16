@@ -8,6 +8,7 @@ use crate::effects::{
 };
 use crate::object::Object;
 use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
+
 use bytes::Bytes;
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
@@ -222,6 +223,7 @@ pub struct HandleCertificateRequestV3 {
 
 #[derive(Clone, prost::Message)]
 pub struct RawSubmitTxRequest {
+    /// The transactions to be submitted. When the vector is empty, then this is treated as a ping request.
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub transactions: Vec<Bytes>,
 
@@ -261,10 +263,18 @@ pub enum RawValidatorSubmitStatus {
     Rejected(RawRejectedStatus),
 }
 
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, prost::Enumeration)]
+#[repr(i32)]
+pub enum RawPingType {
+    FastPath = 0,
+    Consensus = 1,
+}
+
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsRequest {
-    #[prost(bytes = "bytes", tag = "1")]
-    pub transaction_digest: Bytes,
+    /// The transaction's digest. If it's a ping request, then this will practically be ignored.
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub transaction_digest: Option<Bytes>,
 
     /// If provided, wait for the consensus position to execute and wait for fastpath outputs of the transaction,
     /// in addition to waiting for finalized effects.
@@ -276,6 +286,10 @@ pub struct RawWaitForEffectsRequest {
     /// including the effects content, events, input objects, and output objects.
     #[prost(bool, tag = "3")]
     pub include_details: bool,
+
+    /// Set when this is a ping request, to differentiate between fastpath and consensus pings.
+    #[prost(enumeration = "RawPingType", optional, tag = "4")]
+    pub ping_type: Option<i32>,
 }
 
 #[derive(Clone, prost::Message)]

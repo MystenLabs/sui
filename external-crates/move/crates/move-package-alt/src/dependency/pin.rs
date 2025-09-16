@@ -2,13 +2,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, fmt, path::PathBuf};
 
 use path_clean::PathClean;
 
 use crate::{
     dependency::{ResolvedDependency, resolve::Resolved},
-    errors::{FileHandle, PackageResult},
+    errors::{FileHandle, PackageResult, fmt_truncated},
     flavor::MoveFlavor,
     git::{GitCache, GitError, GitTree},
     schema::{
@@ -158,18 +158,6 @@ impl PinnedDependencyInfo {
         matches!(self.0.dep_info, Pinned::Root)
     }
 
-    /// Return a duplicate of `self` with a new `rename-from` field
-    pub fn with_rename_from(mut self, name: PackageName) -> Self {
-        self.0.rename_from = Some(name);
-        self
-    }
-
-    /// Set the `override = true` field on this dependency
-    pub fn with_override(mut self, is_override: bool) -> Self {
-        self.0.is_override = is_override;
-        self
-    }
-
     /// Return the absolute path to the directory that this package would be fetched into, without
     /// actually fetching it
     pub fn unfetched_path(&self) -> PathBuf {
@@ -261,6 +249,27 @@ impl From<Pinned> for LockfileDependencyInfo {
             }),
             Pinned::OnChain(on_chain) => Self::OnChain(on_chain),
             Pinned::Root => Self::Root(RootDepInfo { root: true }),
+        }
+    }
+}
+
+impl fmt::Display for PinnedDependencyInfo {
+    // TODO: this is maybe misguided; we should perhaps only display manifest dependencies?
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.0.dep_info {
+            Pinned::Local(_local) => write!(
+                f,
+                r#"{{ local = {:?} }}"#,
+                _local.relative_path_from_root_package
+            ),
+            Pinned::Git(git) => {
+                let repo = fmt_truncated(git.inner.repo_url(), 8, 12);
+                let path = git.inner.path_in_repo().to_string_lossy();
+                let rev = fmt_truncated(git.inner.sha(), 6, 2);
+                write!(f, r#"{{ git = "{repo}", path = "{path}", rev = "{rev}" }}"#)
+            }
+            Pinned::OnChain(_on_chain) => write!(f, "{{ on-chain = true }}"),
+            Pinned::Root => write!(f, "{{ local = \".\" }}"),
         }
     }
 }
@@ -393,10 +402,11 @@ mod tests {
     #[test(tokio::test)]
     #[ignore] // TODO
     async fn git_partial_sha() {
-        let git_project = git::new("git_project", |project| project.file("dummy.txt", "dummy"));
+        let git_project =
+            git::new("git_project", |project| project.file("dummy.txt", "dummy")).await;
 
         let repo = "child.git"; // TODO: get repo from git_project
-        let sha = git_project.commits().remove(0);
+        let sha = git_project.commits().await.remove(0);
 
         let dep = new_git(repo, Some(&sha[0..12]), "");
         let pinned = dep.pin().await.unwrap_as_git();
@@ -425,6 +435,31 @@ mod tests {
     #[ignore]
     async fn git_no_rev() {
         todo!()
+    }
+
+    // Displaying pinned deps //////////////////////////////////////////////////////////////////////
+
+    #[test]
+    fn display_local() {
+        let dep = new_pinned_local_from("Move.lock", "foo/bar");
+        assert_snapshot!(format!("{dep}"), @r###"{ local = "foo/bar" }"###);
+    }
+
+    #[test]
+    fn display_git() {
+        let dep = new_pinned_git_from(
+            "Move.lock",
+            "https://foo.git.com/org/repo.git",
+            "ac4911261dd71cac55cf5bf2dd3288f3a12f2563",
+            "foo/bar/baz",
+        );
+        assert_snapshot!(format!("{dep}"), @r###"{ git = "https://...org/repo.git", path = "foo/bar/baz", rev = "ac4911...63" }"###);
+    }
+
+    #[test]
+    fn display_root() {
+        let dep = new_pinned_root("Move.lock");
+        assert_snapshot!(format!("{dep}"), @r###"{ local = "." }"###);
     }
 
     // Test infrastructure /////////////////////////////////////////////////////////////////////////

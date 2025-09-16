@@ -106,7 +106,7 @@ pub(crate) enum Error {
     Resolve(#[from] ResolverError),
 }
 
-/// Represents concrete types (no type parameters, no references).
+/// Represents instances of concrete types (no type parameters, no references).
 #[Object]
 impl MoveType {
     /// Flat representation of the type signature, as a displayable string.
@@ -131,25 +131,7 @@ impl MoveType {
 
     /// The abilities this concrete type has. Returns no abilities if the type is invalid.
     async fn abilities(&self) -> Result<Option<Vec<MoveAbility>>, RpcError> {
-        let Ok(tag) = self.native.to_type_tag() else {
-            return Ok(None);
-        };
-
-        let set = self
-            .scope
-            .package_resolver()
-            .abilities(tag)
-            .await
-            .map_err(|err| {
-                internal_resolution_error(err, || {
-                    format!(
-                        "Error calculating abilities for {}",
-                        self.native.to_canonical_display(/* with_prefix */ true)
-                    )
-                })
-            })?;
-
-        Ok(Some(abilities(set)))
+        Ok(self.abilities_impl().await?.map(abilities))
     }
 }
 
@@ -269,6 +251,15 @@ impl MoveType {
         }
     }
 
+    /// Construct a `MoveType` directly from a `TypeInput`. Use this when you already have a
+    /// `TypeInput` (which is MoveType's internal representation) and don't want conversion to fail.
+    pub(crate) fn from_input(input: TypeInput, scope: Scope) -> Self {
+        Self {
+            native: input,
+            scope,
+        }
+    }
+
     /// Get the native `TypeTag` for this type, if it is valid.
     pub(crate) fn to_type_tag(&self) -> Option<TypeTag> {
         self.native.to_type_tag().ok()
@@ -295,6 +286,29 @@ impl MoveType {
             })?;
 
         Ok(Some(layout))
+    }
+
+    /// Get the abilities for this type, if it is valid.
+    pub(crate) async fn abilities_impl(&self) -> Result<Option<AbilitySet>, RpcError> {
+        let Some(tag) = self.to_type_tag() else {
+            return Ok(None);
+        };
+
+        let set = self
+            .scope
+            .package_resolver()
+            .abilities(tag)
+            .await
+            .map_err(|err| {
+                internal_resolution_error(err, || {
+                    format!(
+                        "Error calculating abilities for {}",
+                        self.native.to_canonical_display(/* with_prefix */ true)
+                    )
+                })
+            })?;
+
+        Ok(Some(set))
     }
 }
 

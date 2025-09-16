@@ -88,12 +88,26 @@ task 12, line 42:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 13, lines 44-64:
+task 13, lines 44-66:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
     "object": {
       "address": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
+      "dynamicField": {
+        "name": {
+          "type": {
+            "repr": "u64"
+          },
+          "json": "42"
+        },
+        "value": {
+          "type": {
+            "repr": "u64"
+          },
+          "json": "999"
+        }
+      },
       "asMoveObject": {
         "dynamicField": {
           "name": {
@@ -114,12 +128,29 @@ Response: {
   }
 }
 
-task 14, lines 66-86:
+task 14, lines 68-90:
 //# run-graphql --cursors bcs(43u64)
 Response: {
   "data": {
     "object": {
       "address": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
+      "dynamicField": {
+        "name": {
+          "type": {
+            "repr": "u64"
+          },
+          "json": "43"
+        },
+        "value": {
+          "type": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+          },
+          "json": {
+            "balance": "100",
+            "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497"
+          }
+        }
+      },
       "asMoveObject": {
         "dynamicField": {
           "name": {
@@ -132,7 +163,10 @@ Response: {
             "type": {
               "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
             },
-            "bcs": "54TI4YoZZ4X9XCQvChY2VIMXesDBm9wx7EU4SznoJJdkAAAAAAAAAA=="
+            "json": {
+              "balance": "100",
+              "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497"
+            }
           }
         }
       }
@@ -140,12 +174,33 @@ Response: {
   }
 }
 
-task 15, lines 88-113:
+task 15, lines 92-119:
 //# run-graphql --cursors bcs(44u64)
 Response: {
   "data": {
     "object": {
       "address": "0x3129d37b70d881020c3293a8875a555c0e0df81841a167ba52ec963d56a9b182",
+      "dynamicObjectField": {
+        "name": {
+          "type": {
+            "repr": "u64"
+          },
+          "json": "44"
+        },
+        "value": {
+          "address": "0x9db0db4cb1b8de097d8b0d50cd4bc3d142a20c329438af3629aacc32132c42d8",
+          "version": 9,
+          "contents": {
+            "type": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+            },
+            "json": {
+              "balance": "200",
+              "id": "0x9db0db4cb1b8de097d8b0d50cd4bc3d142a20c329438af3629aacc32132c42d8"
+            }
+          }
+        }
+      },
       "asMoveObject": {
         "dynamicObjectField": {
           "name": {
@@ -173,7 +228,7 @@ Response: {
   }
 }
 
-task 16, lines 115-137:
+task 16, lines 121-143:
 //# run-graphql
 Response: {
   "data": {
@@ -181,7 +236,7 @@ Response: {
   }
 }
 
-task 17, lines 139-150:
+task 17, lines 145-156:
 //# run-graphql
 Response: {
   "data": {
@@ -192,7 +247,7 @@ Response: {
   }
 }
 
-task 18, lines 152-158:
+task 18, lines 158-164:
 //# run-graphql
 Response: {
   "data": {
@@ -200,7 +255,7 @@ Response: {
   }
 }
 
-task 19, lines 160-172:
+task 19, lines 166-178:
 //# run-graphql
 Response: {
   "data": {
@@ -222,7 +277,7 @@ Response: {
   }
 }
 
-task 20, lines 174-190:
+task 20, lines 180-196:
 //# run-graphql
 Response: {
   "data": {
@@ -281,7 +336,7 @@ Response: {
   }
 }
 
-task 21, lines 192-210:
+task 21, lines 198-220:
 //# run-graphql --cursors bcs(42u64) bcs(43u64) bcs(45u64)
 Response: {
   "data": {
@@ -289,6 +344,9 @@ Response: {
       "nodes": [
         {
           "version": 2,
+          "df42": null,
+          "df43": null,
+          "df45": null,
           "asMoveObject": {
             "df42": null,
             "df43": null,
@@ -297,6 +355,16 @@ Response: {
         },
         {
           "version": 7,
+          "df42": {
+            "name": {
+              "json": "42"
+            },
+            "value": {
+              "json": "999"
+            }
+          },
+          "df43": null,
+          "df45": null,
           "asMoveObject": {
             "df42": {
               "name": {
@@ -312,6 +380,26 @@ Response: {
         },
         {
           "version": 8,
+          "df42": {
+            "name": {
+              "json": "42"
+            },
+            "value": {
+              "json": "999"
+            }
+          },
+          "df43": {
+            "name": {
+              "json": "43"
+            },
+            "value": {
+              "json": {
+                "balance": "100",
+                "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497"
+              }
+            }
+          },
+          "df45": null,
           "asMoveObject": {
             "df42": {
               "name": {
@@ -337,6 +425,36 @@ Response: {
         },
         {
           "version": 10,
+          "df42": {
+            "name": {
+              "json": "42"
+            },
+            "value": {
+              "json": "999"
+            }
+          },
+          "df43": {
+            "name": {
+              "json": "43"
+            },
+            "value": {
+              "json": {
+                "balance": "100",
+                "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497"
+              }
+            }
+          },
+          "df45": {
+            "name": {
+              "json": "45"
+            },
+            "value": {
+              "json": {
+                "balance": "300",
+                "id": "0x35c792c185e1133d9942f8fb6149433944092148f980d990b0d100f9f9f83103"
+              }
+            }
+          },
           "asMoveObject": {
             "df42": {
               "name": {
@@ -375,12 +493,22 @@ Response: {
   }
 }
 
-task 22, lines 212-231:
+task 22, lines 222-246:
 //# run-graphql --cursors bcs(42u64) bcs(43u64) bcs(45u64)
 Response: {
   "data": {
     "atCp1": {
       "version": 7,
+      "df42": {
+        "name": {
+          "json": "42"
+        },
+        "value": {
+          "json": "999"
+        }
+      },
+      "df43": null,
+      "df45": null,
       "asMoveObject": {
         "df42": {
           "name": {
@@ -396,6 +524,26 @@ Response: {
     },
     "atCp2": {
       "version": 8,
+      "df42": {
+        "name": {
+          "json": "42"
+        },
+        "value": {
+          "json": "999"
+        }
+      },
+      "df43": {
+        "name": {
+          "json": "43"
+        },
+        "value": {
+          "json": {
+            "balance": "100",
+            "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497"
+          }
+        }
+      },
+      "df45": null,
       "asMoveObject": {
         "df42": {
           "name": {
@@ -421,6 +569,36 @@ Response: {
     },
     "atCp3": {
       "version": 10,
+      "df42": {
+        "name": {
+          "json": "42"
+        },
+        "value": {
+          "json": "999"
+        }
+      },
+      "df43": {
+        "name": {
+          "json": "43"
+        },
+        "value": {
+          "json": {
+            "balance": "100",
+            "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497"
+          }
+        }
+      },
+      "df45": {
+        "name": {
+          "json": "45"
+        },
+        "value": {
+          "json": {
+            "balance": "300",
+            "id": "0x35c792c185e1133d9942f8fb6149433944092148f980d990b0d100f9f9f83103"
+          }
+        }
+      },
       "asMoveObject": {
         "df42": {
           "name": {

@@ -10,6 +10,7 @@ default-run = "move-package-alt"
 [dependencies]
 anyhow.workspace = true
 append-only-vec.workspace = true
+bimap.workspace = true
 clap.workspace = true
 codespan-reporting.workspace = true
 derive-where.workspace = true
@@ -35,15 +36,14 @@ toml.workspace = true
 toml_edit.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+heck.workspace = true
+walkdir.workspace = true
 
 [dev-dependencies]
-git2 = "0.20.2"
+aquamarine.workspace = true
 datatest-stable.workspace = true
 insta.workspace = true
 test-log.workspace = true
-url.workspace = true
-walkdir.workspace = true
-heck.workspace = true
 
 [[bin]]
 name = "mock-resolver"

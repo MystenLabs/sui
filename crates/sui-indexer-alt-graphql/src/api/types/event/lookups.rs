@@ -14,7 +14,10 @@ use sui_types::{digests::TransactionDigest, event::Event as NativeEvent};
 
 use crate::{error::RpcError, pagination::Page, scope::Scope};
 
-use super::{filter::tx_ev_bounds, CEvent, Event, EventCursor};
+use super::{
+    filter::{tx_ev_bounds, EventFilter},
+    CEvent, Event, EventCursor,
+};
 
 /// The page of Event cursors and Events emitted from transactions with cursors and limits with overhead applied.
 ///
@@ -25,6 +28,7 @@ pub(crate) async fn events_from_sequence_numbers(
     ctx: &Context<'_>,
     page: &Page<CEvent>,
     tx_sequence_numbers: &[u64],
+    filter: &EventFilter,
 ) -> Result<Vec<(EventCursor, Event)>, RpcError> {
     let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
     let kv_loader: &KvLoader = ctx.data()?;
@@ -56,6 +60,7 @@ pub(crate) async fn events_from_sequence_numbers(
         tx_sequence_numbers,
         &sequence_to_digest,
         &digest_to_events,
+        filter,
     )?;
 
     if !page.is_from_front() {
@@ -72,6 +77,7 @@ fn tx_events_paginated(
     tx_sequence_numbers: &[u64],
     sequence_to_digest: &HashMap<TxDigestKey, StoredTxDigest>,
     digest_to_events: &HashMap<TransactionDigest, TransactionEventsContents>,
+    filter: &EventFilter,
 ) -> Result<Vec<(EventCursor, Event)>, RpcError> {
     let mut results = Vec::new();
     let limit = page.limit_with_overhead();
@@ -101,6 +107,10 @@ fn tx_events_paginated(
                 tx_sequence_number: tx_seq_num,
                 ev_sequence_number: ev_seq_num as u64,
             };
+
+            if !filter.matches(&native_events[ev_seq_num]) {
+                continue;
+            }
 
             let event = Event {
                 scope: scope.clone(),

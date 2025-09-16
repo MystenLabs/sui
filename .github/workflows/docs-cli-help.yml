@@ -1,0 +1,97 @@
+name: Generate Sui CLI Help Snippets
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 8 * * *" # nightly 08:00 UTC
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sui-help
+  cancel-in-progress: false
+
+jobs:
+  build-help:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Determine latest Sui release tag
+        id: release
+        run: |
+          TAG=$(curl -s https://api.github.com/repos/MystenLabs/sui/releases \
+            | jq -r 'map(select(.tag_name | startswith("testnet-")))[0].tag_name')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Restore cached Sui binary
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/sui/${{ steps.release.outputs.tag }}/sui
+          key: sui-${{ runner.os }}-${{ steps.release.outputs.tag }}
+
+      - name: Download Sui CLI if cache miss
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release.outputs.tag }}"
+          mkdir -p ".cache/sui/${TAG}"
+          URL="https://github.com/MystenLabs/sui/releases/download/${TAG}/sui-linux-x86_64"
+          echo "Downloading $URL"
+          curl -L -o ".cache/sui/${TAG}/sui" "$URL"
+          chmod +x ".cache/sui/${TAG}/sui"
+
+      - name: Generate MDX snippets (sh fenced)
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release.outputs.tag }}"
+          BIN=".cache/sui/${TAG}/sui"
+          OUT_DIR="docs/content/snippets/console-output"
+          mkdir -p "$OUT_DIR"
+
+          gen() { # gen <filename> <command...>
+            local file="$1"; shift
+            { echo '```sh'; "$BIN" "$@"; echo '```'; } > "$OUT_DIR/$file"
+            echo " - $OUT_DIR/$file"
+          }
+
+          echo "Generating help snippets from $BIN"
+
+          gen "sui-help.mdx" --help
+          gen "sui-client-help.mdx" client --help
+          gen "sui-client-call-help.mdx" client call --help
+          gen "sui-client-ptb-help.mdx" client ptb --help
+          gen "sui-replay-help.mdx" replay --help
+          gen "sui-keytool-sign-help.mdx" keytool sign --help
+          gen "sui-keytool-help.mdx" keytool --help
+          gen "sui-move-help.mdx" move --help
+          gen "sui-move-build-help.mdx" move build --help
+          gen "sui-validator-help.mdx" validator --help
+          gen "sui-validator-report-validator-help.mdx" validator report-validator --help
+
+      - name: Diff guard
+        id: diff
+        run: |
+          if git diff --quiet docs/content/snippets/console-output/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Changes detected."
+          fi
+
+      - name: Commit & push changes
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/content/snippets/console-output/*.mdx
+          git commit -m "chore(ci): update Sui CLI help snippets (${{ steps.release.outputs.tag }})"
+          git push

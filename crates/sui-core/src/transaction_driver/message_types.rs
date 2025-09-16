@@ -10,7 +10,7 @@ use sui_types::{
     error::SuiError,
     messages_consensus::ConsensusPosition,
     messages_grpc::{
-        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectedStatus,
+        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawPingType, RawRejectedStatus,
         RawSubmitTxRequest, RawSubmitTxResponse, RawSubmitTxResult, RawValidatorSubmitStatus,
         RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
     },
@@ -177,7 +177,7 @@ pub struct QuorumTransactionResponse {
 }
 
 pub(crate) struct WaitForEffectsRequest {
-    pub transaction_digest: TransactionDigest,
+    pub transaction_digest: Option<TransactionDigest>,
     /// If consensus position is provided, waits in the server handler for the transaction in it to execute,
     /// either in fastpath outputs or finalized.
     /// If it is not provided, only waits for finalized effects of the transaction in the server handler,
@@ -186,9 +186,29 @@ pub(crate) struct WaitForEffectsRequest {
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
     pub include_details: bool,
+    /// If this is a ping request, then this is the type of ping.
+    pub ping: Option<PingType>,
 }
 
-#[derive(Clone)]
+#[derive(PartialEq)]
+pub(crate) enum PingType {
+    // Testing the time that it takes for the block of the ping transaction to appear as certified via the FastPath.
+    FastPath,
+    // Testing the time that it takes for the block of the ping transaction to appear as certified via the Consensus.
+    // This is useful when want to test the end to end latency from when a block is proposed up to when it comes out of consensus as certified.
+    Consensus,
+}
+
+impl PingType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PingType::FastPath => "fastpath",
+            PingType::Consensus => "consensus",
+        }
+    }
+}
+
+#[derive(Default, Clone)]
 pub struct ExecutedData {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
@@ -239,24 +259,58 @@ impl fmt::Debug for WaitForEffectsResponse {
     }
 }
 
+impl From<RawPingType> for PingType {
+    fn from(value: RawPingType) -> Self {
+        match value {
+            RawPingType::FastPath => PingType::FastPath,
+            RawPingType::Consensus => PingType::Consensus,
+        }
+    }
+}
+
+impl From<PingType> for RawPingType {
+    fn from(value: PingType) -> Self {
+        match value {
+            PingType::FastPath => RawPingType::FastPath,
+            PingType::Consensus => RawPingType::Consensus,
+        }
+    }
+}
+
 impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
     type Error = SuiError;
 
     fn try_from(value: RawWaitForEffectsRequest) -> Result<Self, Self::Error> {
-        let transaction_digest = bcs::from_bytes(&value.transaction_digest).map_err(|err| {
-            SuiError::GrpcMessageDeserializeError {
-                type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
-                error: err.to_string(),
-            }
-        })?;
+        let transaction_digest = if let Some(transaction_digest) = value.transaction_digest {
+            Some(bcs::from_bytes(&transaction_digest).map_err(|err| {
+                SuiError::GrpcMessageDeserializeError {
+                    type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
+                    error: err.to_string(),
+                }
+            })?)
+        } else {
+            None
+        };
         let consensus_position = match value.consensus_position {
             Some(cp) => Some(cp.as_ref().try_into()?),
             None => None,
         };
+        let ping = value
+            .ping_type
+            .map(|p| {
+                RawPingType::try_from(p).map(PingType::from).map_err(|e| {
+                    SuiError::GrpcMessageDeserializeError {
+                        type_info: "RawWaitForEffectsRequest.ping".to_string(),
+                        error: e.to_string(),
+                    }
+                })
+            })
+            .transpose()?;
         Ok(Self {
             consensus_position,
             transaction_digest,
             include_details: value.include_details,
+            ping,
         })
     }
 }
@@ -380,20 +434,31 @@ impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
     type Error = SuiError;
 
     fn try_from(value: WaitForEffectsRequest) -> Result<Self, Self::Error> {
-        let transaction_digest = bcs::to_bytes(&value.transaction_digest)
-            .map_err(|err| SuiError::GrpcMessageSerializeError {
-                type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
-                error: err.to_string(),
-            })?
-            .into();
+        let transaction_digest = if let Some(transaction_digest) = value.transaction_digest {
+            Some(
+                bcs::to_bytes(&transaction_digest)
+                    .map_err(|err| SuiError::GrpcMessageSerializeError {
+                        type_info: "RawWaitForEffectsRequest.transaction_digest".to_string(),
+                        error: err.to_string(),
+                    })?
+                    .into(),
+            )
+        } else {
+            None
+        };
         let consensus_position = match value.consensus_position {
             Some(cp) => Some(cp.into_raw()?),
             None => None,
         };
+        let ping_type = value.ping.map(|p| {
+            let raw: RawPingType = p.into();
+            raw.into()
+        });
         Ok(Self {
             consensus_position,
             transaction_digest,
             include_details: value.include_details,
+            ping_type,
         })
     }
 }

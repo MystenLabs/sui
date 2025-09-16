@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use futures::future;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::ident_str;
 use rand::rngs::OsRng;
-use std::path::PathBuf;
-use std::sync::Arc;
 use sui_config::node::RunWithRange;
-use sui_core::transaction_driver::QuorumTransactionResponse;
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
 use sui_json_rpc_types::{
     EventPage, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
@@ -31,6 +31,7 @@ use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{FullObjectRef, ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::TransactionInfoRequest;
@@ -720,10 +721,6 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         node.transaction_orchestrator()
             .expect("Fullnode should have transaction orchestrator toggled on.")
     });
-    let mut rx = fullnode.with(|node| {
-        node.subscribe_to_transaction_orchestrator_effects()
-            .expect("Fullnode should have transaction orchestrator toggled on.")
-    });
 
     let txn_count = 4;
     let mut txns = batch_make_transfer_transactions(context, txn_count).await;
@@ -736,42 +733,36 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     // Test WaitForLocalExecution
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
-    let res = transaction_orchestrator
+    let (response, is_executed_locally) = transaction_orchestrator
         .execute_transaction_block(
-            ExecuteTransactionRequestV3::new_v2(txn),
+            ExecuteTransactionRequestV3 {
+                transaction: txn,
+                include_events: true,
+                include_input_objects: true,
+                include_output_objects: true,
+                include_auxiliary_data: true,
+            },
             ExecuteTransactionRequestType::WaitForLocalExecution,
             None,
         )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
-
-    let (
-        tx,
-        QuorumTransactionResponse {
-            effects: finalized_effects,
-            events: txn_events,
-            ..
-        },
-    ) = rx.recv().await.unwrap().unwrap();
-    let (response, is_executed_locally) = res;
-    assert_eq!(*tx.digest(), digest);
-    assert_eq!(
-        response.effects.effects.digest(),
-        finalized_effects.effects.digest()
-    );
+    assert_eq!(*response.effects.effects.transaction_digest(), digest);
     assert!(is_executed_locally);
-    assert_eq!(
-        response.events.unwrap_or_default().digest(),
-        txn_events.unwrap_or_default().digest()
-    );
+    assert!(response.events.is_none());
+    assert!(response.input_objects.is_some());
+    assert!(response.output_objects.is_some());
+    assert!(response.auxiliary_data.is_none());
     // verify that the node has sequenced and executed the txn
-    fullnode.state().get_executed_transaction_and_effects(digest, kv_store.clone()).await
+    let (local_txn, local_effects) = fullnode.state().get_executed_transaction_and_effects(digest, kv_store.clone()).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
+    assert_eq!(*local_txn.digest(), digest);
+    assert_eq!(local_effects.digest(), response.effects.effects.digest());
 
     // Test WaitForEffectsCert
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
-    let res = transaction_orchestrator
+    let (response, is_executed_locally) = transaction_orchestrator
         .execute_transaction_block(
             ExecuteTransactionRequestV3::new_v2(txn),
             ExecuteTransactionRequestType::WaitForEffectsCert,
@@ -779,33 +770,23 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
-
-    let (
-        tx,
-        QuorumTransactionResponse {
-            effects: finalized_effects,
-            events: txn_events,
-            ..
-        },
-    ) = rx.recv().await.unwrap().unwrap();
-    let (response, is_executed_locally) = res;
-    assert_eq!(*tx.digest(), digest);
-    assert_eq!(
-        response.effects.effects.digest(),
-        finalized_effects.effects.digest()
-    );
-    assert_eq!(
-        txn_events.unwrap_or_default().digest(),
-        response.events.unwrap_or_default().digest()
-    );
+    assert_eq!(*response.effects.effects.transaction_digest(), digest);
+    assert!(response.input_objects.is_none());
+    assert!(response.output_objects.is_none());
+    assert!(response.auxiliary_data.is_none());
     assert!(!is_executed_locally);
+
+    // wait for local execution
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects("", &[digest])
+        .notify_read_executed_effects("test_full_node_transaction_orchestrator_basic", &[digest])
         .await;
-    fullnode.state().get_executed_transaction_and_effects(digest, kv_store).await
+    // verify that the node has sequenced and executed the txn
+    let (local_txn, local_effects) = fullnode.state().get_executed_transaction_and_effects(digest, kv_store).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
+    assert_eq!(*local_txn.digest(), digest);
+    assert_eq!(local_effects.digest(), response.effects.effects.digest());
 
     Ok(())
 }
@@ -820,9 +801,6 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
     let node_handle = test_cluster.swarm.validator_node_handles().pop().unwrap();
     node_handle.with(|node| {
         assert!(node.transaction_orchestrator().is_none());
-        assert!(node
-            .subscribe_to_transaction_orchestrator_effects()
-            .is_err());
     });
 }
 
@@ -1184,10 +1162,6 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
         node.transaction_orchestrator()
             .expect("Fullnode should have transaction orchestrator toggled on.")
     });
-    let mut rx = fullnode.with(|node| {
-        node.subscribe_to_transaction_orchestrator_effects()
-            .expect("Fullnode should have transaction orchestrator toggled on.")
-    });
 
     let tx_data = TransactionData::new_move_call(
         sender,
@@ -1205,7 +1179,7 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
         to_sender_signed_transaction(tx_data, context.config.keystore.export(&sender).unwrap());
 
     let digest = *tx.digest();
-    let _res = transaction_orchestrator
+    let res = transaction_orchestrator
         .execute_transaction_block(
             ExecuteTransactionRequestV3::new_v2(tx),
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1213,16 +1187,15 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
-    println!("res: {:?}", _res);
+    let response = res.0;
+    assert_eq!(*response.effects.effects.transaction_digest(), digest);
+    assert!(response.input_objects.is_none());
+    assert!(response.output_objects.is_none());
+    assert!(response.auxiliary_data.is_none());
 
-    let (
-        _tx,
-        QuorumTransactionResponse {
-            effects: _finalized_effects,
-            events: _txn_events,
-            ..
-        },
-    ) = rx.recv().await.unwrap().unwrap();
+    let is_executed_locally = res.1;
+    assert!(is_executed_locally);
+
     Ok(())
 }
 

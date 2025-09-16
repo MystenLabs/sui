@@ -1,5 +1,5 @@
 ---
-title: GraphQL for Sui RPC (Alpha)
+title: GraphQL for Sui RPC (Beta)
 beta: devnet, testnet, mainnet
 description: Use GraphQL to make Sui RPC calls. This feature is currently in Beta. 
 keywords: [ graphql, graphql headers, x-sui-rpc-version, x-sui-rpc-show-usage, variables, fragments, pagination, graphql limits, make rpc call, sui rpc calls ]
@@ -14,6 +14,7 @@ Jump to the following sections for more details:
 - [Fragments](#fragments)
 - [Pagination](#pagination)
 - [Limits](#limits)
+- [Retention](#retention)
 
 For more details on GraphQL fundamentals, see the introductory documentation from [GraphQL](https://graphql.org/learn/) and [GitHub](https://docs.github.com/en/graphql/guides/introduction-to-graphql).
 
@@ -22,6 +23,16 @@ For more details on GraphQL fundamentals, see the introductory documentation fro
 <ImportContent source="data-serving-msg.mdx" mode="snippet" />
 
 <ImportContent source="data-serving-gql-alpha.mdx" mode="snippet" />
+
+:::
+
+:::caution
+
+Switch any apps that still use the GraphQL Alpha endpoints (`https://sui-mainnet.mystenlabs.com/graphql`, `https://sui-testnet.mystenlabs.com/graphql`, and `https://sui-devnet.mystenlabs.com/graphql`) to the GraphQL Beta endpoints as soon as possible to avoid disruption of service.
+
+- GraphQL Beta Mainnet: https://graphql.mainnet.sui.io/graphql
+- GraphQL Beta Testnet: https://graphql.testnet.sui.io/graphql
+- GraphQL Beta Devnet: https://graphql.devnet.sui.io/graphql
 
 :::
 
@@ -35,7 +46,7 @@ The service accepts the following optional headers:
 By default, each request returns the service's version in the response header: `x-sui-rpc-version`.
 
 ```sh
-$ curl -i -X POST https://sui-mainnet.mystenlabs.com/graphql \
+$ curl -i -X POST https://graphql.testnet.sui.io/graphql\
      --header 'x-sui-rpc-show-usage: true'                 \
      --header 'Content-Type: application/json'             \
      --data '{
@@ -46,28 +57,35 @@ $ curl -i -X POST https://sui-mainnet.mystenlabs.com/graphql \
 The response for the previous request looks similar to the following:
 
 ```sh
-HTTP/2 200
+HTTP/2 200 
 content-type: application/json
-content-length: 159
-x-sui-rpc-version: 2024.1.0
-date: Tue, 30 Jan 2024 23:50:43 GMT
+content-length: 179
+x-sui-rpc-version: 1.56.1-
+vary: origin, access-control-request-method, access-control-request-headers
+access-control-allow-origin: *
+date: Tue, 09 Sep 2025 23:34:04 GMT
 via: 1.1 google
 alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
 
 {
-  "data": {
-    "epoch": {
-      "referenceGasPrice": "1000"
-    }
+  "data": { 
+    "epoch": { 
+      "referenceGasPrice": "1000" 
+    } 
   },
   "extensions": {
     "usage": {
-      "inputNodes": 2,
-      "outputNodes": 2,
-      "depth": 2,
-      "variables": 0,
-      "fragments": 0,
-      "queryPayload": 37
+      "input": { 
+        "nodes": 2, 
+        "depth": 2 
+      },
+      "payload": { 
+        "query_payload_size": 67, 
+        "tx_payload_size": 0 
+      },
+      "output": { 
+        "nodes": 2 
+      }
     }
   }
 }
@@ -161,19 +179,25 @@ fragment MoveValueFields on MoveValue {
   type {
     repr
   }
-  data
+  json
   bcs
 }
 ```
 
 ## Pagination
 
-GraphQL supports queries that fetch multiple kinds of data, potentially nested. For example, the following query retrieves the first 20 transaction blocks (along with the digest, the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific transaction block at epoch `97`.
+GraphQL supports queries that fetch multiple kinds of potentially nested data. For example, the following query retrieves the first 10 transactions in epoch `97` along with the:
+
+- Digest
+- Sender's address
+- Gas object returned after paying for the transaction
+- Gas price
+- Gas budget
 
 ```graphql
 query {
-  epoch(id: 97) {
-    transactionBlocks(first: 10) {
+  epoch(epochId: 97) {
+    transactions(first: 10) {
       pageInfo {
         hasNextPage
         endCursor
@@ -225,24 +249,11 @@ Cursors are used to bound results from below (with `after`) and above (with `bef
 
 #### Consistency
 
-Cursors also guarantee **consistent** pagination. If the first paginated query reads the state of the network at checkpoint `X`, then a future call to fetch the next page of results using the cursors returned by the first query continues to read from the network at checkpoint `X`, even if data for future checkpoints is now available.
+Cursors for queries that paginate live objects also guarantee **consistent** pagination. 
+
+If a paginated query reads the state of the network at a specific checkpoint (i.e., checkpoint `X`), the query returns cursors that can be used by subsequent requests. When a future call fetches the next page of results, it uses the previous query's cursors and continues reading from the network as it existed at checkpoint `X`, even if newer checkpoints are available. Currently, the available range offers roughly 1 hour to finish pagination.
 
 This property requires that cursors that are used together (for example when supplying an `after` and `before` bound) are fixed on the same checkpoint, otherwise the query produces an error.
-
-#### Available range
-
-The GraphQL service does not support consistent pagination for arbitrarily old cursors. A cursor can grow stale, if the checkpoint it is from is no longer in the **available range**. You can query the upper- and lower-bounds of that range as follows:
-
-```graphql
-{
-  availableRange {
-    first { sequenceNumber }
-    last { sequenceNumber }
-  }
-}
-```
-
-The results are the first and last checkpoint for which pagination continues to work and produce a consistent result. At the time of writing the available range offers a 5- to 15-minute buffer period to finish pagination.
 
 ### Page limits
 
@@ -279,10 +290,9 @@ In addition to rate limits, queries are also validated against a number of rules
     maxQueryDepth
     maxQueryNodes
     maxOutputNodes
-    maxDbQueryCost
     defaultPageSize
     maxPageSize
-    requestTimeoutMs
+    queryTimeoutMs
     maxQueryPayloadSize
     maxTypeArgumentDepth
     maxTypeArgumentWidth
@@ -292,8 +302,25 @@ In addition to rate limits, queries are also validated against a number of rules
 }
 ```
 
+## Retention
+
+Different queries are subject to their own retention policies. For example, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination may be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned. You can query the upper- and lower-bounds of that range for your query as follows:
+
+```graphql
+{
+  serviceConfig {
+    retention(type: "Query", field: "transactions", filter: "affectedAddress") {
+      first { sequenceNumber }
+      last { sequenceNumber }
+    }
+  }
+}
+```
+
+The results are the first and last checkpoint for which pagination continues to work and produce a consistent result.
+
 ## Related links
 
 <RelatedLink to="/guides/developer/getting-started/graphql-rpc.mdx" />
-<RelatedLink to="/guides/developer/advanced/graphql-migration.mdx" />
 <RelatedLink to="/references/sui-graphql.mdx" />
+<RelatedLink to="/concepts/graphql-indexer" />
