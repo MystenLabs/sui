@@ -301,11 +301,11 @@ pub fn merge_configs_with_presence(
     }
     // Get default config from clap (any name can be used as first
     // element of the vector to represent the command/program name).
-    let default_config = ReplayConfigStable::parse_from(&["dummy"]);
+    let default_config = ReplayConfigStable::parse_from(["dummy"]);
     ReplayConfigStable {
-        digest: cli_config.digest.or_else(|| toml_config.digest),
+        digest: cli_config.digest.or(toml_config.digest),
 
-        digests_path: cli_config.digests_path.or_else(|| toml_config.digests_path),
+        digests_path: cli_config.digests_path.or(toml_config.digests_path),
 
         terminate_early: if is_cli_flag_present(
             cli_arg_matches,
@@ -326,7 +326,7 @@ pub fn merge_configs_with_presence(
             default_config.trace
         },
 
-        output_dir: cli_config.output_dir.or_else(|| toml_config.output_dir),
+        output_dir: cli_config.output_dir.or(toml_config.output_dir),
 
         show_effects: if is_cli_flag_present(
             cli_arg_matches,
