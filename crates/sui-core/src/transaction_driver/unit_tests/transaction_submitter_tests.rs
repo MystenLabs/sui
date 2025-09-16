@@ -317,7 +317,6 @@ async fn test_submit_transaction_with_amplification() {
             .submit_transaction(
                 &authority_aggregator,
                 &client_monitor,
-                tx_digest,
                 TxType::SingleWriter,
                 amplification_factor,
                 raw_request,
@@ -370,7 +369,6 @@ async fn test_submit_transaction_with_amplification() {
             .submit_transaction(
                 &authority_aggregator,
                 &client_monitor,
-                tx_digest,
                 TxType::SingleWriter,
                 amplification_factor,
                 raw_request,
@@ -423,7 +421,6 @@ async fn test_submit_transaction_with_amplification() {
             .submit_transaction(
                 &authority_aggregator,
                 &client_monitor,
-                tx_digest,
                 TxType::SingleWriter,
                 amplification_factor,
                 raw_request,
@@ -489,7 +486,6 @@ async fn test_submit_transaction_with_amplification() {
             .submit_transaction(
                 &authority_aggregator,
                 &client_monitor,
-                tx_digest,
                 TxType::SingleWriter,
                 amplification_factor,
                 raw_request,
@@ -553,7 +549,6 @@ async fn test_submit_transaction_invalid_input() {
         .submit_transaction(
             &authority_aggregator,
             &client_monitor,
-            tx_digest,
             TxType::SingleWriter,
             amplification_factor,
             raw_request,

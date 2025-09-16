@@ -294,12 +294,12 @@ async fn test_successful_certified_effects() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             submit_tx_result,
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -334,12 +334,12 @@ async fn test_successful_certified_effects() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             submit_tx_result,
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -398,12 +398,12 @@ async fn test_transaction_rejected_non_retriable() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -464,12 +464,12 @@ async fn test_transaction_rejected_retriable() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -536,12 +536,12 @@ async fn test_transaction_rejected_with_conflicts() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -598,12 +598,12 @@ async fn test_transaction_expired() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -682,12 +682,12 @@ async fn test_mixed_rejected_and_expired() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -724,12 +724,12 @@ async fn test_mixed_rejected_and_expired() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -816,12 +816,12 @@ async fn test_mixed_rejected_reasons() {
             .get_certified_finalized_effects(
                 &authority_aggregator,
                 &client_monitor,
-                &tx_digest,
+                Some(tx_digest),
                 TxType::SingleWriter,
                 *name,
                 SubmitTxResult::Submitted { consensus_position },
                 &options,
-                false,
+                None,
             )
             .await;
 
@@ -867,12 +867,12 @@ async fn test_mixed_rejected_reasons() {
             .get_certified_finalized_effects(
                 &authority_aggregator,
                 &client_monitor,
-                &tx_digest,
+                Some(tx_digest),
                 TxType::SingleWriter,
                 *name,
                 SubmitTxResult::Submitted { consensus_position },
                 &options,
-                false,
+                None,
             )
             .await;
 
@@ -916,12 +916,12 @@ async fn test_mixed_rejected_reasons() {
             .get_certified_finalized_effects(
                 &authority_aggregator,
                 &client_monitor,
-                &tx_digest,
+                Some(tx_digest),
                 TxType::SingleWriter,
                 *name,
                 SubmitTxResult::Submitted { consensus_position },
                 &options,
-                false,
+                None,
             )
             .await;
 
@@ -968,12 +968,12 @@ async fn test_mixed_rejected_reasons() {
             .get_certified_finalized_effects(
                 &authority_aggregator,
                 &client_monitor,
-                &tx_digest,
+                Some(tx_digest),
                 TxType::SingleWriter,
                 *name,
                 SubmitTxResult::Submitted { consensus_position },
                 &options,
-                false,
+                None,
             )
             .await;
 
@@ -1016,12 +1016,12 @@ async fn test_mixed_rejected_reasons() {
             .get_certified_finalized_effects(
                 &authority_aggregator,
                 &client_monitor,
-                &tx_digest,
+                Some(tx_digest),
                 TxType::SingleWriter,
                 *name,
                 SubmitTxResult::Submitted { consensus_position },
                 &options,
-                false,
+                None,
             )
             .await;
 
@@ -1102,12 +1102,12 @@ async fn test_forked_execution() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -1193,12 +1193,12 @@ async fn test_aborted_with_multiple_effects() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -1289,12 +1289,12 @@ async fn test_full_effects_retry_loop() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -1377,12 +1377,12 @@ async fn test_full_effects_digest_mismatch() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 
@@ -1453,12 +1453,12 @@ async fn test_request_retrier_exhaustion() {
         .get_certified_finalized_effects(
             &authority_aggregator,
             &client_monitor,
-            &tx_digest,
+            Some(tx_digest),
             TxType::SingleWriter,
             *name,
             SubmitTxResult::Submitted { consensus_position },
             &options,
-            false,
+            None,
         )
         .await;
 

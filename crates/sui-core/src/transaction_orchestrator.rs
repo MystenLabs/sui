@@ -579,9 +579,7 @@ where
 
         let td_response = td
             .drive_transaction(
-                SubmitTxRequest {
-                    transaction: request.transaction.clone(),
-                },
+                SubmitTxRequest::new_transaction(request.transaction.clone()),
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
                 },

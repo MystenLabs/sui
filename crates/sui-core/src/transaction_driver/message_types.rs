@@ -19,9 +19,26 @@ use sui_types::{
     transaction::Transaction,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct SubmitTxRequest {
-    pub transaction: Transaction,
+    pub transaction: Option<Transaction>,
+    pub ping: Option<PingType>,
+}
+
+impl SubmitTxRequest {
+    pub fn new_transaction(transaction: Transaction) -> Self {
+        Self {
+            transaction: Some(transaction),
+            ping: None,
+        }
+    }
+
+    pub fn new_ping(ping: PingType) -> Self {
+        Self {
+            transaction: None,
+            ping: Some(ping),
+        }
+    }
 }
 
 impl SubmitTxRequest {
@@ -190,13 +207,22 @@ pub(crate) struct WaitForEffectsRequest {
     pub ping: Option<PingType>,
 }
 
-#[derive(PartialEq)]
-pub(crate) enum PingType {
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum PingType {
     // Testing the time that it takes for the block of the ping transaction to appear as certified via the FastPath.
     FastPath,
     // Testing the time that it takes for the block of the ping transaction to appear as certified via the Consensus.
     // This is useful when want to test the end to end latency from when a block is proposed up to when it comes out of consensus as certified.
     Consensus,
+}
+
+impl PingType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PingType::FastPath => "fastpath",
+            PingType::Consensus => "consensus",
+        }
+    }
 }
 
 #[derive(Clone)]

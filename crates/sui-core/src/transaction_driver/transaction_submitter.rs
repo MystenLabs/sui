@@ -7,10 +7,7 @@ use std::{
 };
 
 use futures::stream::{FuturesUnordered, StreamExt};
-use sui_types::{
-    base_types::AuthorityName, digests::TransactionDigest, error::SuiError,
-    messages_grpc::RawSubmitTxRequest,
-};
+use sui_types::{base_types::AuthorityName, error::SuiError, messages_grpc::RawSubmitTxRequest};
 use tokio::time::timeout;
 use tracing::instrument;
 
@@ -46,12 +43,11 @@ impl TransactionSubmitter {
         Self { metrics }
     }
 
-    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"))]
     pub(crate) async fn submit_transaction<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
-        tx_digest: &TransactionDigest,
         tx_type: TxType,
         amplification_factor: u64,
         raw_request: RawSubmitTxRequest,

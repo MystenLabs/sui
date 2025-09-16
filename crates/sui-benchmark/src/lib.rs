@@ -360,11 +360,9 @@ impl LocalValidatorAggregatorProxy {
         let response = self
             .td
             .drive_transaction(
-                SubmitTxRequest {
-                    transaction: tx.clone(),
-                },
+                SubmitTxRequest::new_transaction(tx.clone()),
                 SubmitTransactionOptions::default(),
-                Some(Duration::from_secs(60)),
+                Some(Duration::from_secs(60))
             )
             .await?;
         Ok(ExecutionEffects::FinalizedTransactionEffects(

@@ -10,8 +10,6 @@ mod transaction_submitter;
 
 /// Exports
 pub use error::TransactionDriverError;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt as _;
 pub use message_types::*;
 pub use metrics::*;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -33,7 +31,7 @@ use sui_types::{
 };
 use tokio::{
     task::JoinSet,
-    time::{interval, sleep, timeout},
+    time::{interval, sleep},
 };
 use tracing::instrument;
 use transaction_submitter::*;
@@ -47,7 +45,6 @@ use crate::{
         OperationFeedback, OperationType, TxType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
-use strum::IntoEnumIterator;
 use sui_config::NodeConfig;
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
@@ -139,105 +136,37 @@ where
                         .map(|client| (*name, client.clone()))
                 });
 
-            for (name, client) in clients {
-                let metrics = self_clone.metrics.clone();
-                let display_name = self_clone
-                    .authority_aggregator
-                    .load()
-                    .get_display_name(&name);
-                let options = SubmitTransactionOptions::default();
-                let delay_ms = rand::thread_rng().gen_range(0..MAX_DELAY_BETWEEN_REQUESTS_MS);
+            for (name, _client) in clients {
+                for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
+                    let display_name = self_clone
+                        .authority_aggregator
+                        .load()
+                        .get_display_name(&name);
+                    let options = SubmitTransactionOptions::default();
+                    let delay_ms = rand::thread_rng().gen_range(0..MAX_DELAY_BETWEEN_REQUESTS_MS);
+                    let self_clone = self_clone.clone();
 
-                let self_clone = self_clone.clone();
-                let auth_agg = auth_agg.clone();
+                    let task = async move {
+                        // Add some random delay to the task to avoid all tasks running at the same time
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                        let start_time = Instant::now();
 
-                let task = async move {
-                    // Add some random delay to the task to avoid all tasks running at the same time
-                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
-                    let start_time = Instant::now();
+                        let ping = if tx_type == TxType::SingleWriter {
+                            PingType::FastPath
+                        } else {
+                            PingType::Consensus
+                        };
 
-                    // Submit the ping transaction to the validator.
-                    let submit_txn_result = match self_clone
-                        .submitter
-                        .submit_transaction_once(
-                            client.clone(),
-                            &RawSubmitTxRequest {
-                                transactions: vec![],
-                                soft_bundle: false,
-                            },
-                            &options,
-                            &self_clone.client_monitor,
-                            name,
-                            display_name.clone(),
-                        )
-                        .await
-                    {
-                        Ok(submit_txn_result) => submit_txn_result,
-                        Err(e) => {
-                            tracing::info!(
-                                "Failed to submit ping transaction to validator {}: {}",
-                                display_name.clone(),
-                                e
-                            );
-                            return Err(TransactionDriverError::Internal {
-                                error: e.to_string(),
-                            });
-                        }
-                    };
-
-                    // Wait for quorum effects using EffectsCertifier for each transaction type. Run those as independent futures
-                    // to avoid sequential delays distorting the latency measurements.
-                    let mut requests = FuturesUnordered::new();
-                    for tx_type in TxType::iter() {
-                        let self_clone = self_clone.clone();
-                        let submit_txn_result = submit_txn_result.clone();
-                        let options = options.clone();
-                        let auth_agg = auth_agg.clone();
-
-                        requests.push(async move {
-                            let result = self_clone
-                                .certifier
-                                .get_certified_finalized_effects(
-                                    &auth_agg,
-                                    &self_clone.client_monitor,
-                                    &TransactionDigest::ZERO,
-                                    tx_type,
-                                    name,
-                                    submit_txn_result,
-                                    &options,
-                                    true,
-                                )
-                                .await;
-
-                            if let Err(err) = result {
-                                Err((tx_type, err))
-                            } else {
-                                Ok(tx_type)
-                            }
-                        });
-                    }
-
-                    while let Some(result) = requests.next().await {
-                        match result {
-                            Ok(tx_type) => {
-                                self_clone.client_monitor.record_interaction_result(
-                                    OperationFeedback {
-                                        authority_name: name,
-                                        display_name: auth_agg.get_display_name(&name),
-                                        operation: if tx_type == TxType::SingleWriter {
-                                            OperationType::FastPath
-                                        } else {
-                                            OperationType::Consensus
-                                        },
-                                        result: Ok(start_time.elapsed()),
-                                    },
-                                );
-
-                                metrics
-                                    .ping_latency
-                                    .with_label_values(&[&display_name, tx_type.as_str()])
-                                    .observe(start_time.elapsed().as_secs_f64());
-
+                        // Now send a ping transaction to the chosen validator for the provided tx type
+                        match self_clone
+                            .drive_transaction(
+                                SubmitTxRequest::new_ping(ping),
+                                options,
+                                Some(TASK_TIMEOUT),
+                            )
+                            .await
+                        {
+                            Ok(_) => {
                                 tracing::debug!(
                                     "Ping transaction to validator {} for tx type {} completed end to end in {} seconds",
                                     display_name,
@@ -245,16 +174,14 @@ where
                                     start_time.elapsed().as_secs_f64()
                                 );
                             }
-                            Err((tx_type, err)) => {
+                            Err(err) => {
                                 tracing::info!("Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}", tx_type.as_str(), display_name, err);
                             }
                         }
-                    }
+                    };
 
-                    Ok(())
-                };
-
-                tasks.spawn(timeout(TASK_TIMEOUT, task));
+                    tasks.spawn(task);
+                }
             }
 
             while let Some(result) = tasks.join_next().await {
@@ -265,37 +192,55 @@ where
         }
     }
 
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
+    /// Drives transaction to submission and effects certification. If ping is provided, then the requested will be treated as a ping transaction.
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.as_ref().map(|t| t.digest()), ping = ?request.ping))]
     pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        let tx_digest = request.transaction.digest();
-        let tx_type = if request.transaction.is_consensus_tx() {
-            TxType::SharedObject
+        // To determine the tx type, give priority to the provided ping type (if present).
+        // Also, for ping requests, the amplification factor is always 1.
+        let (tx_type, tx_digest, amplification_factor) = if let Some(ping) = request.ping {
+            let tx_type = if ping == PingType::FastPath {
+                TxType::SingleWriter
+            } else {
+                TxType::SharedObject
+            };
+            (tx_type, None, 1)
         } else {
-            TxType::SingleWriter
+            let transaction = request.transaction.as_ref().unwrap();
+
+            let tx_type = if transaction.is_consensus_tx() {
+                TxType::SharedObject
+            } else {
+                TxType::SingleWriter
+            };
+
+            let gas_price = transaction.transaction_data().gas_price();
+            let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
+            let amplification_factor = gas_price / reference_gas_price.max(1);
+            if amplification_factor == 0 {
+                return Err(TransactionDriverError::ValidationFailed {
+                    error: UserInputError::GasPriceUnderRGP {
+                        gas_price,
+                        reference_gas_price,
+                    }
+                    .to_string(),
+                });
+            }
+            (tx_type, Some(*transaction.digest()), amplification_factor)
         };
 
-        let gas_price = request.transaction.transaction_data().gas_price();
-        let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
-        let amplification_factor = gas_price / reference_gas_price.max(1);
-        if amplification_factor == 0 {
-            return Err(TransactionDriverError::ValidationFailed {
-                error: UserInputError::GasPriceUnderRGP {
-                    gas_price,
-                    reference_gas_price,
-                }
-                .to_string(),
-            });
-        }
-
+        let ping_label = request.ping.as_ref().map(|p| p.as_str()).unwrap_or("none");
         let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
 
-        self.metrics.total_transactions_submitted.inc();
+        self.metrics
+            .total_transactions_submitted
+            .with_label_values(&[tx_type.as_str(), ping_label])
+            .inc();
 
         const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
         // Exponential backoff with jitter to prevent thundering herd on retries
@@ -315,7 +260,7 @@ where
                         amplification_factor,
                         raw_request.clone(),
                         &options,
-                        false,
+                        request.ping,
                     )
                     .await
                 {
@@ -323,12 +268,12 @@ where
                         let settlement_finality_latency = timer.elapsed().as_secs_f64();
                         self.metrics
                             .settlement_finality_latency
-                            .with_label_values(&[tx_type.as_str()])
+                            .with_label_values(&[tx_type.as_str(), ping_label])
                             .observe(settlement_finality_latency);
                         // Record the number of retries for successful transaction
                         self.metrics
                             .transaction_retries
-                            .with_label_values(&["success"])
+                            .with_label_values(&["success", tx_type.as_str(), ping_label])
                             .observe(attempts as f64);
                         return Ok(resp);
                     }
@@ -337,7 +282,7 @@ where
                             // Record the number of retries for failed transaction
                             self.metrics
                                 .transaction_retries
-                                .with_label_values(&["failure"])
+                                .with_label_values(&["failure", tx_type.as_str(), ping_label])
                                 .observe(attempts as f64);
                             tracing::info!("Failed to finalize transaction with non-retriable error after {} attempts: {}", attempts, e);
                             return Err(e);
@@ -383,18 +328,13 @@ where
     #[instrument(level = "error", skip_all, err)]
     async fn drive_transaction_once(
         &self,
-        tx_digest: &TransactionDigest,
+        tx_digest: Option<TransactionDigest>,
         tx_type: TxType,
         amplification_factor: u64,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
-        ping: bool,
+        ping: Option<PingType>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        debug_assert!(
-            ping || !raw_request.transactions.is_empty(),
-            "Only ping requests can have empty transactions"
-        );
-
         let auth_agg = self.authority_aggregator.load();
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
@@ -405,7 +345,6 @@ where
             .submit_transaction(
                 &auth_agg,
                 &self.client_monitor,
-                tx_digest,
                 tx_type,
                 amplification_factor,
                 raw_request,
