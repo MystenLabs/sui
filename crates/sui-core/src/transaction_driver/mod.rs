@@ -24,7 +24,7 @@ use arc_swap::ArcSwap;
 use effects_certifier::*;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
-use rand::{seq::SliceRandom, Rng};
+use rand::Rng;
 use sui_types::{
     base_types::AuthorityName, committee::EpochId, digests::TransactionDigest,
     error::UserInputError, messages_grpc::RawSubmitTxRequest, transaction::TransactionDataAPI as _,
@@ -120,23 +120,17 @@ where
 
             let auth_agg = self.authority_aggregator.load().clone();
 
-            // Get the validators by their total score
-            let mut clients_by_total_score = self
-                .client_monitor
-                .validators_by_total_score(&auth_agg.committee);
+            for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
+                let clients = self.client_monitor.select_shuffled_preferred_validators(
+                    &auth_agg.committee,
+                    0,
+                    tx_type,
+                );
+                let k = auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR;
+                let clients = clients[k..].to_vec();
 
-            // Order the clients by their total score in score descending order
-            clients_by_total_score.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-            // Now keep only the clients after the first K as anything before should be already used on the retrier
-            let k = auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR;
-            let clients_by_total_score = clients_by_total_score[k..].to_vec();
-            let clients = clients_by_total_score
-                .choose_multiple(&mut rand::thread_rng(), clients_by_total_score.len() / 2)
-                .map(|(name, _)| *name);
-
-            for name in clients {
-                for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
+                // Now keep only the clients after the first K as anything before should be already used on the retrier
+                for name in clients {
                     let display_name = auth_agg.get_display_name(&name);
                     let delay_ms = rand::thread_rng().gen_range(0..MAX_DELAY_BETWEEN_REQUESTS_MS);
                     let self_clone = self.clone();
