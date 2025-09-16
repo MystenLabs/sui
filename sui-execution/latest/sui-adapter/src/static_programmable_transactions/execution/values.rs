@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
 use move_core_types::account_address::AccountAddress;
-// TODO(vm-rewrite): Use the correct BaseHeap instead of MachineHeap
-use move_vm_runtime::execution::interpreter::locals as fix_me_locals;
+use move_vm_runtime::execution::interpreter::locals::{BaseHeap as VMBaseHeap, BaseHeapId};
 use move_vm_runtime::shared::views::ValueVisitor;
 use move_vm_runtime::{
     execution::values::{self, Struct, VMValueCast, Value as VMValue, VectorSpecialization},
@@ -34,7 +35,10 @@ pub enum ByteValue {
 pub struct Local<'a>(&'a mut Locals, u16);
 
 /// A set of memory locations that can be borrowed or moved from. Used for inputs and results
-pub struct Locals(fix_me_locals::StackFrame);
+pub struct Locals {
+    heap: VMBaseHeap,
+    locations: BTreeMap<u16, BaseHeapId>,
+}
 
 #[derive(Debug)]
 pub struct Value(VMValue);
@@ -48,32 +52,30 @@ impl Locals {
         let values = values.into_iter();
         let n = values.len();
         assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
-        let mut locals = fix_me_locals::MachineHeap::new();
-        // If the value is None, we leave the local invalid
-        let values = values
-            .map(|v| {
-                if let Some(v) = v {
-                    v.0
-                } else {
-                    VMValue::invalid()
-                }
-            })
-            .collect::<Vec<_>>();
-        let frame = locals
-            .allocate_stack_frame(values, n)
-            .map_err(iv("allocate stack frame"))?;
-        Ok(Self(frame))
+        // TODO(vm-rewrite): Look into not allocation invalid memory slots ahead of time. For now
+        // we do this for ease, but we should be able to optimize this further.
+        let mut heap = VMBaseHeap::new();
+        let mut locations = BTreeMap::new();
+        for (i, v) in values.enumerate() {
+            let alloc_idx = match v {
+                Some(v) => heap.allocate_value(v.0),
+                // If the value is None, we leave the local invalid
+                None => heap.allocate_value(VMValue::invalid()),
+            };
+            locations.insert(i as u16, alloc_idx);
+        }
+        Ok(Self { heap, locations })
     }
 
     pub fn new_invalid(n: usize) -> Result<Self, ExecutionError> {
         assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
-        let mut locals = fix_me_locals::MachineHeap::new();
-        let values = (0..n).map(|_| VMValue::invalid()).collect::<Vec<_>>();
-        Ok(Self(
-            locals
-                .allocate_stack_frame(values, n)
-                .map_err(iv("allocate stack frame"))?,
-        ))
+        let mut heap = VMBaseHeap::new();
+        let mut locations = BTreeMap::new();
+        for i in 0..n {
+            let alloc_idx = heap.allocate_value(VMValue::invalid());
+            locations.insert(i as u16, alloc_idx);
+        }
+        Ok(Self { heap, locations })
     }
 
     pub fn local(&mut self, index: u16) -> Result<Local, ExecutionError> {
@@ -82,46 +84,65 @@ impl Locals {
 }
 
 impl Local<'_> {
+    fn to_resolved_location(&self) -> Result<BaseHeapId, ExecutionError> {
+        self.0
+            .locations
+            .get(&self.1)
+            .copied()
+            .ok_or_else(|| make_invariant_violation!("local index {} out of bounds", self.1))
+    }
+
     /// Does the local contain a value?
     pub fn is_invalid(&self) -> Result<bool, ExecutionError> {
         self.0
-            .0
-            .is_invalid(self.1 as usize)
+            .heap
+            .is_invalid(self.to_resolved_location()?)
             .map_err(iv("out of bounds"))
     }
 
     pub fn store(&mut self, value: Value) -> Result<(), ExecutionError> {
-        self.0
+        let val: values::Reference = self
             .0
-            .store_loc(self.1 as usize, value.0)
-            .map_err(iv("store loc"))
+            .heap
+            .borrow_loc(self.to_resolved_location()?)
+            .map_err(iv("store loc"))?
+            .cast()
+            .map_err(iv("cast to reference"))?;
+        val.write_ref(value.0).map_err(iv("store loc"))?;
+        Ok(())
     }
 
     /// Move the value out of the local
     pub fn move_(&mut self) -> Result<Value, ExecutionError> {
         assert_invariant!(!self.is_invalid()?, "cannot move invalid local");
-        Ok(Value(
-            self.0.0.move_loc(self.1 as usize).map_err(iv("move loc"))?,
-        ))
+        self.0
+            .heap
+            .take_loc(self.to_resolved_location()?)
+            .map_err(iv("move loc"))
+            .map(Value)
     }
 
     /// Copy the value out in the local
     pub fn copy(&self) -> Result<Value, ExecutionError> {
         assert_invariant!(!self.is_invalid()?, "cannot copy invalid local");
-        Ok(Value(
-            self.0.0.copy_loc(self.1 as usize).map_err(iv("copy loc"))?,
-        ))
+        let val: values::Reference = self
+            .0
+            .heap
+            .borrow_loc(self.to_resolved_location()?)
+            .map_err(iv("copy loc"))?
+            .cast()
+            .map_err(iv("cast to reference"))?;
+        val.read_ref().map_err(iv("copy loc")).map(Value)
     }
 
     /// Borrow the local, creating a reference to the value
     pub fn borrow(&mut self) -> Result<Value, ExecutionError> {
         assert_invariant!(!self.is_invalid()?, "cannot borrow invalid local");
-        Ok(Value(
-            self.0
-                .0
-                .borrow_loc(self.1 as usize)
-                .map_err(iv("borrow loc"))?,
-        ))
+        self.0
+            .heap
+            .borrow_loc(self.to_resolved_location()?)
+            .map_err(iv("borrow loc"))
+            .map(Value)
     }
 
     pub fn move_if_valid(&mut self) -> Result<Option<Value>, ExecutionError> {
