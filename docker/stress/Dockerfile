@@ -14,6 +14,8 @@ COPY external-crates external-crates
 RUN cargo build --profile ${PROFILE} --bin stress
 
 FROM rust:1.85-bullseye
+ARG PROFILE=release
+ARG GIT_REVISION
 COPY --from=builder /sui/target/${PROFILE}/stress /usr/local/bin
 
 RUN apt-get update && apt-get -y --no-install-recommends install wget=1.21-1+deb11u1 \
