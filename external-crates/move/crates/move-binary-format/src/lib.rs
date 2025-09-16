@@ -128,32 +128,6 @@ impl fmt::Display for IndexKind {
     }
 }
 
-// TODO: is this outdated?
-/// Represents the kind of a signature token.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum SignatureTokenKind {
-    /// Any sort of owned value that isn't an array (Integer, Bool, Struct etc).
-    Value,
-    /// A reference.
-    Reference,
-    /// A mutable reference.
-    MutableReference,
-}
-
-impl fmt::Display for SignatureTokenKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use SignatureTokenKind::*;
-
-        let desc = match self {
-            Value => "value",
-            Reference => "reference",
-            MutableReference => "mutable reference",
-        };
-
-        f.write_str(desc)
-    }
-}
-
 /// A macro which should be preferred in critical runtime paths for unwrapping an option
 /// if a `PartialVMError` is expected. In debug mode, this will panic. Otherwise
 /// we return an Err.
