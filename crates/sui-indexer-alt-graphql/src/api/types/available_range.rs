@@ -76,20 +76,58 @@ impl AvailableRange {
     }
 }
 
+/// Maps GraphQL query components to watermark pipeline names.
+///
+/// Determines which watermark pipelines are relevant for a given GraphQL query.
+/// The pipeline names are used to query watermark data to determine the
+/// checkpoint sequence range (available range) for which data is available.
+///
 fn pipeline(type_: &str, field: &str, filter: Option<&str>) -> &'static [&'static str] {
     match (type_, field, filter) {
+        // Transaction queries
+        ("Query", "transaction", None) => &["tx_digests"],
         ("Query", "transactions", None) => &["tx_digests"],
-        ("Query", "checkpoint", None) => &["cp_sequence_numbers"],
-        ("Query", "transactions", Some("function")) => &["tx_digests"],
-        ("Query", "transactions", Some("kind")) => &["tx_digests"],
         ("Query", "transactions", Some("affectedAddress")) => {
             &["tx_digests", "tx_affected_addresses"]
         }
         ("Query", "transactions", Some("affectedObject")) => &["tx_digests", "tx_affected_objects"],
-        ("Query", "checkpoints", None) => &["cp_sequence_numbers", "tx_digests"],
+        ("Query", "transactions", Some("function")) => &["tx_digests", "tx_calls"],
+        ("Query", "transactions", Some("kind")) => &[
+            "tx_digests",
+            "tx_kinds",
+            "tx_affected_addresses",
+            "tx_affected_objects",
+        ],
+        ("Query", "transactions", Some("sentAddress")) => &[
+            "tx_digests",
+            "tx_affected_addresses",
+            "tx_affected_objects",
+            "tx_calls",
+        ],
+        (_, "transactions", f) => pipeline("Query", "transactions", f),
+
+        // Checkpoint queries
+        ("Query", "checkpoints", _) => &["cp_sequence_numbers"],
+        ("Query", "checkpoint", None) => pipeline("Query", "checkpoints", None),
+        (_, "checkpoints", f) => pipeline("Query", "checkpoints", f),
+
+        // Event queries
         ("Query", "events", None) => &["ev_struct_inst", "ev_emit_mod"],
         ("Query", "events", Some("module")) => &["ev_emit_mod"],
         ("Query", "events", Some("type")) => &["ev_emit_mod"],
+        ("Query", "events", Some("sender")) => pipeline("Query", "events", None),
+        (_, "events", f) => pipeline("Query", "events", f),
+
+        // Epoch queries
+        ("Query", "epochs", _) => &["cp_sequence_numbers"],
+        ("Query", "epoch", _) => pipeline("Query", "epochs", None),
+        (_, "epochs", f) => pipeline("Query", "epoch", f),
+
+        // Object and package queries
+        ("Query", "objectVersions", _) => &["obj_versions"],
+        ("Query", "packages", _) => &["cp_sequence_numbers"],
+
+        // Default case
         _ => &[],
     }
 }
