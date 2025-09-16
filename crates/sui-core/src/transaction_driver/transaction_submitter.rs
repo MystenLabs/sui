@@ -21,7 +21,7 @@ use crate::{
             TransactionRequestError,
         },
         request_retrier::RequestRetrier,
-        SubmitTransactionOptions, SubmitTxResult, TransactionDriverMetrics,
+        PingType, SubmitTransactionOptions, SubmitTxResult, TransactionDriverMetrics,
     },
     validator_client_monitor::{OperationFeedback, OperationType, TxType, ValidatorClientMonitor},
 };
@@ -52,6 +52,7 @@ impl TransactionSubmitter {
         amplification_factor: u64,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
+        ping: Option<PingType>,
     ) -> Result<(AuthorityName, SubmitTxResult), TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -70,6 +71,7 @@ impl TransactionSubmitter {
         );
         let mut retries = 0;
         let mut requests = FuturesUnordered::new();
+        let ping_label = ping.as_ref().map(|p| p.as_str()).unwrap_or("none");
 
         // This loop terminates when there are enough (f+1) non-retriable errors when submitting the transaction,
         // or all feasible targets returned errors or timed out.
@@ -134,7 +136,10 @@ impl TransactionSubmitter {
                         .submit_transaction_retries
                         .observe(retries as f64);
                     let elapsed = start_time.elapsed().as_secs_f64();
-                    self.metrics.submit_transaction_latency.observe(elapsed);
+                    self.metrics
+                        .submit_transaction_latency
+                        .with_label_values(&[tx_type.as_str(), ping_label])
+                        .observe(elapsed);
 
                     return Ok((name, result));
                 }

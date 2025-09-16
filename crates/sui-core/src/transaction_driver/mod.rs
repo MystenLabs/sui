@@ -24,7 +24,7 @@ use arc_swap::ArcSwap;
 use effects_certifier::*;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
-use rand::Rng;
+use rand::{seq::SliceRandom, Rng};
 use sui_types::{
     base_types::AuthorityName, committee::EpochId, digests::TransactionDigest,
     error::UserInputError, messages_grpc::RawSubmitTxRequest, transaction::TransactionDataAPI as _,
@@ -128,10 +128,12 @@ where
             // Order the clients by their total score in score descending order
             clients_by_total_score.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-            // Now keep only the clients after the first K as those being used on the retrier, and at least half of the committee.
-            let k = (auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR)
-                .max(auth_agg.committee.num_members() / 2);
-            let clients = clients_by_total_score[k..].iter().map(|(name, _)| *name);
+            // Now keep only the clients after the first K as anything before should be already used on the retrier
+            let k = auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR;
+            let clients_by_total_score = clients_by_total_score[k..].to_vec();
+            let clients = clients_by_total_score
+                .choose_multiple(&mut rand::thread_rng(), clients_by_total_score.len() / 2)
+                .map(|(name, _)| *name);
 
             for name in clients {
                 for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
@@ -345,6 +347,7 @@ where
                 amplification_factor,
                 raw_request,
                 options,
+                ping,
             )
             .await?;
 

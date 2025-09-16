@@ -321,6 +321,7 @@ async fn test_submit_transaction_with_amplification() {
                 amplification_factor,
                 raw_request,
                 &options,
+                None,
             )
             .await;
 
@@ -373,6 +374,7 @@ async fn test_submit_transaction_with_amplification() {
                 amplification_factor,
                 raw_request,
                 &options,
+                None,
             )
             .await;
 
@@ -425,6 +427,7 @@ async fn test_submit_transaction_with_amplification() {
                 amplification_factor,
                 raw_request,
                 &options,
+                None,
             )
             .await;
 
@@ -490,6 +493,7 @@ async fn test_submit_transaction_with_amplification() {
                 amplification_factor,
                 raw_request,
                 &options,
+                None,
             )
             .await;
 
@@ -553,6 +557,7 @@ async fn test_submit_transaction_invalid_input() {
             amplification_factor,
             raw_request,
             &options,
+            None,
         )
         .await;
 
