@@ -66,7 +66,7 @@ impl TransactionSubmitter {
             authority_aggregator,
             client_monitor,
             tx_type,
-            options.allowed_validator_list.clone(),
+            options.allowed_validators.clone(),
         );
         let mut retries = 0;
         let mut requests = FuturesUnordered::new();

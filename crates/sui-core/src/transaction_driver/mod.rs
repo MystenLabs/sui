@@ -55,7 +55,7 @@ pub struct SubmitTransactionOptions {
 
     /// When submitting a transaction, only the validators in the allowed validator list can be used to submit the transaction to.
     /// When the allowed validator list is empty, any validator can be used.
-    pub allowed_validator_list: Vec<AuthorityName>,
+    pub allowed_validators: Vec<AuthorityName>,
 }
 
 pub struct TransactionDriver<A: Clone> {
@@ -155,7 +155,7 @@ where
                             .drive_transaction(
                                 SubmitTxRequest::new_ping(ping),
                                 SubmitTransactionOptions {
-                                    allowed_validator_list: vec![name],
+                                    allowed_validators: vec![name],
                                     ..Default::default()
                                 },
                                 Some(PING_REQUEST_TIMEOUT),

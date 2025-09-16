@@ -25,7 +25,7 @@ pub(crate) const TOP_K_VALIDATORS_DENOMINATOR: usize = 3;
 /// 1. Retry against all validators until the operation succeeds.
 /// 2. If non‑retriable errors from a quorum of validators are returned, the operation should fail permanently.
 ///
-/// When an `allowed_validator_list` is provided, only the validators in the list will be used to submit the transaction to.
+/// When an `allowed_validators` is provided, only the validators in the list will be used to submit the transaction to.
 /// When the allowed validator list is empty, any validator can be used an then the validators are selected based on their scores.
 ///
 /// This component helps to manager this retry pattern.
@@ -40,10 +40,10 @@ impl<A: Clone> RequestRetrier<A> {
         auth_agg: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_type: TxType,
-        allowed_validator_list: Vec<AuthorityName>,
+        allowed_validators: Vec<AuthorityName>,
     ) -> Self {
-        let selected_validators = if !allowed_validator_list.is_empty() {
-            allowed_validator_list
+        let selected_validators = if !allowed_validators.is_empty() {
+            allowed_validators
         } else {
             client_monitor.select_shuffled_preferred_validators(
                 &auth_agg.committee,
