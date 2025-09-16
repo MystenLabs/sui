@@ -760,7 +760,7 @@ mod sim_only_tests {
 
         // expect_upgrade_succeeded only waits for fullnode to reconfigure - validator can actually be
         // slower than fullnode if it wasn't one of the signers of the final checkpoint.
-        sleep(Duration::from_secs(10)).await;
+        sleep(Duration::from_secs(3)).await;
 
         let node_handle = first.get_node_handle().expect("node should be running");
         // The dissenting node receives the correct framework via state sync and completes the upgrade
