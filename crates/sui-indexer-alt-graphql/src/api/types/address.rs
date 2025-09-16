@@ -23,7 +23,7 @@ use super::{
     move_package::MovePackage,
     name_service::address_to_name,
     object::{self, Object, ObjectKey},
-    object_filter::{ObjectFilter, Validator as OFValidator},
+    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     transaction::{
         filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
         CTransaction, Transaction,

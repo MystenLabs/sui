@@ -36,7 +36,7 @@ use super::{
         move_type::{self, MoveType},
         name_service::name_to_address,
         object::{self, Object, ObjectKey, VersionFilter},
-        object_filter::{ObjectFilter, Validator as OFValidator},
+        object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::{

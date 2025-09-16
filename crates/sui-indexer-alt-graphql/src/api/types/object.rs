@@ -58,7 +58,7 @@ use super::{
     dynamic_field::{DynamicField, DynamicFieldName},
     move_object::MoveObject,
     move_package::MovePackage,
-    object_filter::{ObjectFilter, Validator as OFValidator},
+    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
     transaction::{filter::TransactionFilter, CTransaction, Transaction},
 };

@@ -39,12 +39,12 @@ pub(crate) struct ObjectFilter {
 }
 
 #[derive(Default)]
-pub(crate) struct Validator {
+pub(crate) struct ObjectFilterValidator {
     /// Whether to allow an empty filter on input.
     allow_empty: bool,
 }
 
-impl Validator {
+impl ObjectFilterValidator {
     /// Create a validator that allows empty filters.
     pub(crate) fn allows_empty() -> Self {
         Self { allow_empty: true }
@@ -69,7 +69,7 @@ impl ObjectFilter {
     }
 }
 
-impl CustomValidator<ObjectFilter> for Validator {
+impl CustomValidator<ObjectFilter> for ObjectFilterValidator {
     fn check(&self, filter: &ObjectFilter) -> Result<(), InputValueError<ObjectFilter>> {
         match filter {
             ObjectFilter {
