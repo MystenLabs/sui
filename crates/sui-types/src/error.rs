@@ -288,6 +288,9 @@ pub enum UserInputError {
 
     #[error("Invalid wait for effects request: {error}")]
     InvalidWaitForEffectsRequest { error: String },
+
+    #[error("Transaction not valid during this epoch: {valid_epoch}")]
+    TransactionNotValidDuringThisEpoch { valid_epoch: u64 },
 }
 
 #[derive(

@@ -99,15 +99,13 @@ public fun destroy_zero<T>(balance: Balance<T>) {
 }
 
 /// Send a `Balance` to an address's funds accumulator.
-public(package) fun send_funds<T>(balance: Balance<T>, recipient: address) {
+public fun send_funds<T>(balance: Balance<T>, recipient: address) {
     sui::funds_accumulator::add_impl(balance, recipient);
 }
 
 /// Redeem a `Withdrawal<Balance<T>>` to get the underlying `Balance<T>` from an address's funds
 /// accumulator.
-public(package) fun redeem_funds<T>(
-    withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
-): Balance<T> {
+public fun redeem_funds<T>(withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>): Balance<T> {
     withdrawal.redeem()
 }
 
