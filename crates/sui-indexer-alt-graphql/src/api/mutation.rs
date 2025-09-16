@@ -21,6 +21,9 @@ pub enum TransactionInputError {
 
     #[error("Invalid signature format in signature {index}: {err}")]
     InvalidSignatureFormat { index: usize, err: FastCryptoError },
+
+    #[error("Invalid JSON transaction data: {0}")]
+    InvalidTransactionJson(serde_json::Error),
 }
 use crate::{
     api::types::{execution_result::ExecutionResult, transaction_effects::TransactionEffects},

@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use async_graphql::{connection::Connection, Context, Object, Result};
+use anyhow::{anyhow, Context as _};
+use async_graphql::{connection::Connection, Context, Object, OneofObject, Result};
 use futures::future::try_join_all;
 use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
+use sui_rpc::proto::sui::rpc::v2beta2 as proto;
 use sui_types::{digests::ChainIdentifier, transaction::TransactionData};
 
 use crate::{
@@ -46,6 +47,18 @@ use super::{
         zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
     },
 };
+
+/// Input for simulating a transaction, supporting both BCS and JSON formats.
+#[derive(OneofObject)]
+pub enum SimulateTransactionData {
+    /// BCS-encoded transaction data (Base64-encoded).
+    Bcs(Base64),
+    /// JSON-encoded transaction following the proto `Transaction` message schema.
+    ///
+    /// The JSON structure must conform to the protobuf message defined in
+    /// `sui-apis/proto/sui/rpc/v2beta2/transaction.proto`.
+    Json(String),
+}
 
 #[derive(Default)]
 pub struct Query {
@@ -560,27 +573,52 @@ impl Query {
 
     /// Simulate a transaction to preview its effects without executing it on chain.
     ///
-    /// - `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
+    /// Accepts either BCS-encoded transaction data or a JSON representation that can be partially resolved.
     ///
     /// Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
     async fn simulate_transaction(
         &self,
         ctx: &Context<'_>,
-        transaction_data_bcs: Base64,
+        data: SimulateTransactionData,
     ) -> Result<SimulationResult, RpcError<TransactionInputError>> {
         let fullnode_client: &FullnodeClient = ctx.data()?;
 
-        // Parse transaction data from BCS
-        let tx_data: TransactionData = {
-            let bytes: &Vec<u8> = &transaction_data_bcs.0;
-            bcs::from_bytes(bytes)
-                .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionBcs(err)))?
+        let proto_tx = match data {
+            SimulateTransactionData::Bcs(bcs_data) => {
+                // Parse BCS to get TransactionData first
+                let bytes: &Vec<u8> = &bcs_data.0;
+                let tx_data: TransactionData = bcs::from_bytes(bytes).map_err(|err| {
+                    bad_user_input(TransactionInputError::InvalidTransactionBcs(err))
+                })?;
+
+                // Create proto with BCS
+                let mut proto = proto::Transaction::default();
+                proto.bcs = Some(proto::Bcs::serialize(&tx_data).map_err(|err| {
+                    bad_user_input(TransactionInputError::InvalidTransactionBcs(err))
+                })?);
+                proto
+            }
+            SimulateTransactionData::Json(json_str) => {
+                // Parse JSON directly to proto::Transaction
+                serde_json::from_str(&json_str).map_err(|err| {
+                    bad_user_input(TransactionInputError::InvalidTransactionJson(err))
+                })?
+            }
         };
 
-        // Simulate transaction - no signatures needed
-        match fullnode_client.simulate_transaction(tx_data.clone()).await {
+        // Simulate transaction using proto
+        match fullnode_client.simulate_transaction(proto_tx).await {
             Ok(response) => {
                 let scope = self.scope(ctx)?;
+                let tx_data = response
+                    .transaction
+                    .as_ref()
+                    .and_then(|executed_tx| executed_tx.transaction.as_ref())
+                    .and_then(|tx| tx.bcs.as_ref())
+                    .ok_or_else(|| anyhow!("Missing transaction or BCS in simulation response"))?
+                    .deserialize()
+                    .context("Failed to deserialize transaction from response")?;
+
                 SimulationResult::from_simulation_response(scope, response, tx_data).map_err(upcast)
             }
             Err(GrpcExecutionError(status)) => Ok(SimulationResult {
