@@ -210,7 +210,7 @@ pub struct ValidatorServiceMetrics {
     pub handle_soft_bundle_certificates_size_bytes: Histogram,
     pub handle_transaction_consensus_latency: Histogram,
     pub handle_submit_transaction_consensus_latency: HistogramVec,
-    pub handle_wait_for_effects_ping_latency: Histogram,
+    pub handle_wait_for_effects_ping_latency: HistogramVec,
 
     handle_submit_transaction_latency: HistogramVec,
     handle_submit_transaction_bytes: HistogramVec,
@@ -330,9 +330,10 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            handle_wait_for_effects_ping_latency: register_histogram_with_registry!(
+            handle_wait_for_effects_ping_latency: register_histogram_vec_with_registry!(
                 "validator_service_handle_wait_for_effects_ping_latency",
                 "Latency of handling a ping request for wait_for_effects",
+                &["req_type"],
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -1500,6 +1501,7 @@ impl ValidatorService {
         let _metrics_guard = self
             .metrics
             .handle_wait_for_effects_ping_latency
+            .with_label_values(&[ping.as_str()])
             .start_timer();
 
         consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;

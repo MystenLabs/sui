@@ -199,6 +199,15 @@ pub(crate) enum PingType {
     Consensus,
 }
 
+impl PingType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PingType::FastPath => "fastpath",
+            PingType::Consensus => "consensus",
+        }
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct ExecutedData {
     pub effects: TransactionEffects,
