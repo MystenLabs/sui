@@ -1,15 +1,16 @@
+FROM rust:1.85-bullseye AS builder
 ARG PROFILE=release
 ARG GIT_REVISION
-
-FROM rust:1.85-bullseye AS builder
 ENV GIT_REVISION=$GIT_REVISION
-WORKDIR /sui
-RUN apt-get update && apt-get install -y cmake clang
+WORKDIR "$WORKDIR/sui"
+RUN apt-get update && apt-get install -y cmake clang libpq5 libpq-dev
+
 COPY Cargo.toml Cargo.lock ./
 COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
+
 RUN cargo build --profile ${PROFILE} --bin stress
 
 FROM rust:1.85-bullseye
