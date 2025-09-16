@@ -2,6 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulators::balance_checks;
+use crate::accumulators::coin_reservation::CoinReservationResolver;
+use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
@@ -917,6 +920,7 @@ pub struct AuthorityState {
     /// The database
     input_loader: TransactionInputLoader,
     execution_cache_trait_pointers: ExecutionCacheTraitPointers,
+    coin_reservation_resolver: CoinReservationResolver,
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
@@ -1022,6 +1026,14 @@ impl AuthorityState {
             &receiving_objects_refs,
             &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
+        )?;
+
+        let withdraws =
+            tx_data.process_funds_withdrawals_for_signing(&self.coin_reservation_resolver)?;
+
+        balance_checks::check_balances_available(
+            &self.execution_cache_trait_pointers.object_store,
+            &withdraws,
         )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
@@ -2038,6 +2050,7 @@ impl AuthorityState {
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
+        let sender = transaction_data.sender();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
         let early_execution_error = get_early_execution_error(
             &tx_digest,
@@ -2051,6 +2064,14 @@ impl AuthorityState {
         };
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
+        let num_commands_original = kind.num_commands();
+        let kind = rewrite_transaction_for_coin_reservations(
+            &self.coin_reservation_resolver,
+            sender,
+            kind,
+        );
+        let command_offset = kind.num_commands().saturating_sub(num_commands_original);
 
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
@@ -2077,6 +2098,9 @@ impl AuthorityState {
                 tx_digest,
                 &mut None,
             );
+
+        let timings = timings.into_iter().skip(command_offset).collect();
+        effects.rewrite_failure_command_index(command_offset);
 
         if let Some(expected_effects_digest) = expected_effects_digest
             && effects.digest() != expected_effects_digest
@@ -3597,6 +3621,10 @@ impl AuthorityState {
                 .expect("Failed to initialize fork recovery state")
         });
 
+        let coin_reservation_resolver = CoinReservationResolver::new(
+            execution_cache_trait_pointers.child_object_resolver.clone(),
+        );
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3604,6 +3632,7 @@ impl AuthorityState {
             epoch_store: ArcSwap::new(epoch_store.clone()),
             input_loader,
             execution_cache_trait_pointers,
+            coin_reservation_resolver,
             indexes,
             rpc_index,
             subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),

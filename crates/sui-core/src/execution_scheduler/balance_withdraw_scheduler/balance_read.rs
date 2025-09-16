@@ -48,6 +48,15 @@ impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
     }
 }
 
+impl AccountBalanceRead for &Arc<dyn ObjectStore + Send + Sync> {
+    fn get_latest_account_balance(
+        &self,
+        account_id: &AccumulatorObjId,
+    ) -> Option<(u128, SequenceNumber)> {
+        AccumulatorValue::load_latest_by_id(self.as_ref(), *account_id).expect("read cannot fail")
+    }
+}
+
 // Mock implementation of a balance account book for testing.
 // Allows setting the balance for a given account at different accumulator versions.
 #[cfg(test)]

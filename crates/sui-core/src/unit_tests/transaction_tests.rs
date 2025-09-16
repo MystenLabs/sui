@@ -38,9 +38,9 @@ use crate::authority::authority_tests::{call_move_, create_gas_objects, publish_
 use crate::consensus_test_utils::make_consensus_adapter_for_test;
 use crate::consensus_test_utils::setup_consensus_handler_for_testing;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
+use sui_types::{SUI_SYSTEM_PACKAGE_ID, coin_reservation};
 
 use sui_macros::sim_test;
 macro_rules! assert_matches {
@@ -2546,4 +2546,144 @@ async fn test_shared_object_v2_denied() {
 
     // Clean up
     drop(server_handle);
+}
+
+// Ensure that we reject coin reservation refs when address balances are not enabled
+#[tokio::test]
+async fn test_coin_reservation_rejected_address_balance_withdraw_not_enabled() {
+    let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    coin_reservation_rejected_impl(
+        protocol_config,
+        0,
+        "Address balance withdraw is not enabled",
+    )
+    .await;
+}
+
+// Ensure that we reject coin reservation refs when coin reservation backward compatibility layer is not enabled
+#[tokio::test]
+async fn test_coin_reservation_rejected_coin_reservation_not_enabled() {
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.enable_accumulators_for_testing();
+    coin_reservation_rejected_impl(
+        protocol_config,
+        0,
+        "coin reservation backward compatibility layer is not enabled",
+    )
+    .await;
+}
+
+// Ensure that we reject coin reservation refs when coin reservation backward compatibility layer is not enabled
+#[tokio::test]
+async fn test_coin_reservation_invalid_epoch() {
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.enable_accumulators_for_testing();
+    protocol_config.enable_coin_reservation_for_testing();
+    coin_reservation_rejected_impl(
+        protocol_config,
+        1,
+        "Transaction not valid during this epoch: 1",
+    )
+    .await;
+}
+
+async fn coin_reservation_rejected_impl(
+    protocol_config: ProtocolConfig,
+    valid_epoch: u64,
+    expected_error: &str,
+) {
+    telemetry_subscribers::init_for_testing();
+
+    // Set up sender and recipient
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+
+    // Create objects for the sender
+    let input_object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+
+    let state = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+    state
+        .insert_genesis_object(Object::with_id_owner_for_testing(input_object_id, sender))
+        .await;
+    state
+        .insert_genesis_object(Object::with_id_owner_for_testing(gas_object_id, sender))
+        .await;
+
+    let server = AuthorityServer::new_for_test(state.clone());
+    let _metrics = server.metrics.clone();
+    let server_handle = server.spawn_for_test().await.unwrap();
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        state.config.network_key_pair().public().to_owned(),
+    )
+    .await
+    .unwrap();
+
+    // Get reference gas price and objects
+    let rgp = state.reference_gas_price_for_testing().unwrap();
+    let gas_object = state.get_object(&gas_object_id).await.unwrap();
+
+    let coin_reservation_object_id = ObjectID::random();
+    let coin_res_objref = coin_reservation::encode_object_ref(
+        coin_reservation_object_id,
+        SequenceNumber::new(),
+        valid_epoch,
+        1000,
+    )
+    .unwrap();
+
+    // Try to transfer a coin reservation object
+    let transfer_transaction = init_transfer_transaction(
+        |_| {}, // no pre-sign mutations
+        sender,
+        &sender_key,
+        recipient,
+        FullObjectRef::from_fastpath_ref(coin_res_objref),
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    // Execute the transaction
+    let err = client
+        .handle_transaction(transfer_transaction.clone(), Some(make_socket_addr()))
+        .await
+        .unwrap_err()
+        .to_string();
+    dbg!(&err);
+    assert!(err.contains(expected_error));
+
+    let input_object = state.get_object(&input_object_id).await.unwrap();
+
+    // Use a coin reservation ref as the gas object
+    let transfer_transaction = init_transfer_transaction(
+        |_| {}, // no pre-sign mutations
+        sender,
+        &sender_key,
+        recipient,
+        input_object.compute_full_object_reference(),
+        coin_res_objref,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    // Execute the transaction
+    let err = client
+        .handle_transaction(transfer_transaction.clone(), Some(make_socket_addr()))
+        .await
+        .unwrap_err()
+        .to_string();
+    dbg!(&err);
+    assert!(err.contains(expected_error));
+}
+
+#[tokio::test]
+async fn test_coin_reservation_invalid_id_rejected() {
+    todo!("test that we reject coin reservations that don't specify a valid object id");
 }
