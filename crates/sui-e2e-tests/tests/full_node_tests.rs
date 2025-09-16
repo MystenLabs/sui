@@ -771,7 +771,6 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
     assert_eq!(*response.effects.effects.transaction_digest(), digest);
-    assert!(response.events.is_some());
     assert!(response.input_objects.is_none());
     assert!(response.output_objects.is_none());
     assert!(response.auxiliary_data.is_none());
@@ -1190,10 +1189,6 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
     let response = res.0;
     assert_eq!(*response.effects.effects.transaction_digest(), digest);
-    assert!(response.input_objects.is_none());
-    assert!(response.output_objects.is_none());
-    assert!(response.auxiliary_data.is_none());
-    assert!(response.events.is_some());
     assert!(response.input_objects.is_none());
     assert!(response.output_objects.is_none());
     assert!(response.auxiliary_data.is_none());

@@ -296,6 +296,7 @@ where
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
         let include_output_objects = request.include_output_objects;
+        let include_auxiliary_data = request.include_auxiliary_data;
 
         // Track whether TD is being used for this transaction
         let using_td = Arc::new(AtomicBool::new(false));
@@ -388,7 +389,22 @@ where
                     match result {
                         Ok(resp) => {
                             // First success gets returned.
-                            debug!(?tx_digest, "Execution succeeded, returning response");
+                            debug!("Execution succeeded, returning response");
+                            let QuorumTransactionResponse {
+                                effects,
+                                events,
+                                input_objects,
+                                output_objects,
+                                auxiliary_data,
+                            } = resp;
+                            // Filter fields based on request flags.
+                            let resp = QuorumTransactionResponse {
+                                effects,
+                                events: if include_events { events } else { None },
+                                input_objects: if include_input_objects { input_objects } else { None },
+                                output_objects: if include_output_objects { output_objects } else { None },
+                                auxiliary_data: if include_auxiliary_data { auxiliary_data } else { None },
+                            };
                             break Ok((resp, false));
                         }
                         Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator) => {
@@ -432,18 +448,14 @@ where
                                 } else {
                                     None
                                 };
-
                                 let input_objects = include_input_objects
                                     .then(|| self.validator_state.get_transaction_input_objects(&effects))
                                     .transpose()
                                     .map_err(QuorumDriverError::QuorumDriverInternalError)?;
-
-
                                 let output_objects = include_output_objects
                                     .then(|| self.validator_state.get_transaction_output_objects(&effects))
                                     .transpose()
                                     .map_err(QuorumDriverError::QuorumDriverInternalError)?;
-
                                 let response = QuorumTransactionResponse {
                                     effects: FinalizedEffects {
                                         effects,
@@ -499,7 +511,7 @@ where
         result
     }
 
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?verified_transaction.digest()))]
+    #[instrument(level = "error", skip_all)]
     async fn execute_transaction_impl(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -605,7 +617,7 @@ where
         }
     }
 
-    #[instrument(level = "error", skip_all, err(level = "info"), fields(tx_digest = ?request.transaction.digest()))]
+    #[instrument(level = "error", skip_all, err(level = "info"))]
     async fn submit_with_transaction_driver(
         &self,
         td: &Arc<TransactionDriver<A>>,
@@ -705,7 +717,12 @@ where
         })
     }
 
-    #[instrument(name = "tx_orchestrator_wait_for_finalized_tx_executed_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
+    #[instrument(
+        name = "tx_orchestrator_wait_for_finalized_tx_executed_locally_with_timeout",
+        level = "debug",
+        skip_all,
+        err(level = "info")
+    )]
     async fn wait_for_finalized_tx_executed_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
         transaction: &Transaction,
@@ -723,10 +740,7 @@ where
         } else {
             metrics.local_execution_latency_single_writer.start_timer()
         };
-        debug!(
-            ?tx_digest,
-            "Waiting for finalized tx to be executed locally."
-        );
+        debug!("Waiting for finalized tx to be executed locally.");
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
             validator_state
