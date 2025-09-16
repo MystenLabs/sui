@@ -255,7 +255,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         let runtime_signature = vm
             .function_information(&runtime_id, name.as_ident_str(), &loaded_type_arguments)
             .map_err(|e| {
-                if e.major_status() == StatusCode::FUNCTION_RESOLUTION_FAILURE {
+                if e.major_status() == StatusCode::EXTERNAL_RESOLUTION_REQUEST_ERROR {
                     ExecutionError::new_with_source(
                         ExecutionErrorKind::FunctionNotFound,
                         format!(
@@ -677,8 +677,13 @@ fn convert_vm_error(
                 "Linkage should be set anywhere where runtime errors may occur in order to resolve abort locations to package IDs"
             );
             linkage.and_then(|linkage| {
+                let remapped_id = linkage
+                    .0
+                    .linkage
+                    .get(&(*id.address()).into())
+                    .map(|new_id| ModuleId::new((*new_id).into(), id.name().to_owned()))?;
                 let state_view = LinkedDataStore::new(linkage, store);
-                state_view.get_module(id).ok().and_then(|module| {
+                state_view.get_module(&remapped_id).ok().and_then(|module| {
                     let binary_config = to_binary_config(protocol_config);
                     let module =
                         CompiledModule::deserialize_with_config(&module?, &binary_config).ok()?;

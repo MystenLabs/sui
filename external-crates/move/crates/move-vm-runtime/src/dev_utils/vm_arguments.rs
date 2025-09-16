@@ -41,6 +41,15 @@ pub struct ValueFrame {
 // -------------------------------------------------------------------------------------------------
 
 impl ValueFrame {
+    pub fn empty() -> Self {
+        Self {
+            heap: BaseHeap::new(),
+            heap_mut_refs: BTreeMap::new(),
+            heap_imm_refs: BTreeMap::new(),
+            values: vec![],
+        }
+    }
+
     pub fn serialized_call(
         vm: &mut MoveVM<'_>,
         runtime_id: &ModuleId,
@@ -51,12 +60,7 @@ impl ValueFrame {
         tracer: Option<&mut MoveTraceBuilder>,
         bypass_declared_entry_check: bool,
     ) -> VMResult<Self> {
-        let mut frame = Self {
-            heap: BaseHeap::new(),
-            heap_mut_refs: BTreeMap::new(),
-            heap_imm_refs: BTreeMap::new(),
-            values: vec![],
-        };
+        let mut frame = Self::empty();
         let fun = vm.find_function(runtime_id, function_name, &ty_args)?;
         let arg_types = fun
             .parameters

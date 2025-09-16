@@ -710,16 +710,20 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .collect::<Result<Vec<_>, _>>()?;
         let data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
         let link_context = linkage.linkage_context();
-        let vm = self
+        let mut vm = self
             .env
             .vm
-            .make_vm(data_store, link_context)
+            .make_vm_with_native_extensions(
+                data_store,
+                link_context,
+                self.native_extensions.clone(),
+            )
             .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
         self.execute_function_bypass_visibility_with_vm(
-            &vm,
+            &mut vm,
             runtime_id,
             function_name,
-            &ty_args,
+            ty_args,
             args,
             linkage,
             tracer,
@@ -729,30 +733,26 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     // TODO(vm-rewrite): Need to update the function call to pass deserialized args to the VM.
     fn execute_function_bypass_visibility_with_vm(
         &mut self,
-        _vm: &MoveVM<'env>,
-        _runtime_id: &ModuleId,
-        _function_name: &IdentStr,
-        _ty_args: &[VMType],
-        _args: Vec<CtxValue>,
-        _linkage: &ExecutableLinkage,
-        _tracer: Option<&mut MoveTraceBuilder>,
+        vm: &mut MoveVM<'env>,
+        runtime_id: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<VMType>,
+        args: Vec<CtxValue>,
+        linkage: &ExecutableLinkage,
+        tracer: Option<&mut MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
-        // let gas_status = self.gas_charger.move_gas_status_mut();
-        // let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
-        // let values = vm
-        //     .execute_function_with_values_bypass_visibility(
-        //         runtime_id,
-        //         function_name,
-        //         ty_args,
-        //         args.into_iter().map(|v| v.0.into()).collect(),
-        //         &mut data_store,
-        //         &mut SuiGasMeter(gas_status),
-        //         &mut self.native_extensions,
-        //         tracer,
-        //     )
-        //     .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
-        // Ok(values.into_iter().map(|v| CtxValue(v.into())).collect())
-        todo!()
+        let gas_status = self.gas_charger.move_gas_status_mut();
+        let values = vm
+            .execute_function_bypass_visibility(
+                runtime_id,
+                function_name,
+                ty_args,
+                args.into_iter().map(|v| v.0.into()).collect(),
+                &mut SuiGasMeter(gas_status),
+                tracer,
+            )
+            .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
+        Ok(values.into_iter().map(|v| CtxValue(v.into())).collect())
     }
 
     //
@@ -839,7 +839,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     fn init_modules(
         &mut self,
-        vm: MoveVM<'env>,
+        mut vm: MoveVM<'env>,
         package_id: ObjectID,
         modules: &[CompiledModule],
         linkage: &ExecutableLinkage,
@@ -868,10 +868,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 vec![CtxValue(tx_context)]
             };
             let return_values = self.execute_function_bypass_visibility_with_vm(
-                &vm,
+                &mut vm,
                 &module.self_id(),
                 INIT_FN_NAME,
-                &[],
+                vec![],
                 args,
                 linkage,
                 trace_builder_opt.as_deref_mut(),
