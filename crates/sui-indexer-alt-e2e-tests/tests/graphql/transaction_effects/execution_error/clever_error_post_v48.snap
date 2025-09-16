@@ -20,7 +20,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6338400,  storage_rebate: 
 
 task 3, line 33:
 //# run test::clever_error_post_v48::test_new_error --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::clever_error_post_v48::test_new_error (function index 1) at offset 1, Abort Code: 13906834286012661763
+Error: Transaction Effects Status: Move Abort in test::clever_error_post_v48::test_new_error (function index 1) at offset 1 at line 26
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("clever_error_post_v48") }, function: 1, instruction: 1, function_name: Some("test_new_error") }, 13906834286012661763), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834286012661763), message: Some("fake(1,0)::clever_error_post_v48::test_new_error at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("clever_error_post_v48") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
 
 task 4, line 35:

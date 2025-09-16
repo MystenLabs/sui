@@ -159,7 +159,8 @@ impl ExecutionError {
 
         // Resolve the module ID for Move aborts to ensure we use the correct package version
         // when resolving clever errors later. This is only necessary before version 48.
-        resolve_module_id_for_move_abort(scope, &mut native_error, *command, programmable_tx).await;
+        resolve_module_id_for_move_abort(scope, &mut native_error, *command, programmable_tx)
+            .await?;
 
         Ok(Some(Self {
             native: native_error,
@@ -289,7 +290,7 @@ async fn resolve_module_id_for_move_abort(
     native_error: &mut ExecutionFailureStatus,
     command: Option<usize>,
     programmable_tx: Option<&ProgrammableTransaction>,
-) {
+) -> Result<(), anyhow::Error> {
     use sui_types::execution_status::MoveLocationOpt;
     use sui_types::transaction::Command;
 
@@ -299,30 +300,44 @@ async fn resolve_module_id_for_move_abort(
         ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(Some(
             MoveLocation { module, .. },
         ))) => module,
-        _ => return,
+        _ => return Ok(()),
     };
 
     // We need both a command index and a programmable transaction to resolve
     let Some(command_idx) = command else {
-        return;
+        return Ok(());
     };
     let Some(ptb) = programmable_tx else {
-        return;
+        return Ok(());
     };
 
     // Find the Move call command that caused this abort
     let Some(Command::MoveCall(ptb_call)) = ptb.commands.get(command_idx) else {
-        return;
+        return Ok(());
     };
 
     let module_new = module.clone();
 
-    // Try to resolve runtime module ID to storage package ID, ignore any errors
-    if let Ok(resolved_module) = scope
+    // Try to resolve runtime module ID to storage package ID
+    // Only ignore LinkageNotFound errors (expected for protocol v48+)
+    // Treat all other errors as internal errors
+    match scope
         .package_resolver()
         .resolve_module_id(module_new, ptb_call.package.into())
         .await
     {
-        *module = resolved_module;
+        Ok(resolved_module) => {
+            *module = resolved_module;
+        }
+        Err(sui_package_resolver::error::Error::LinkageNotFound(_)) => {
+            // Expected for protocol v48+, ignore
+        }
+        Err(e) => {
+            return Err(
+                anyhow::Error::from(e).context("Failed to resolve module ID for execution error")
+            );
+        }
     }
+
+    Ok(())
 }
