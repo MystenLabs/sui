@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.5.3",
+    "@docusaurus/plugin-content-docs": "^3.8.0",
     "@docusaurus/remark-plugin-npm2yarn": "3.1.1",
     "@docusaurus/theme-common": "3.1.1",
     "@emotion/react": "^11.11.4",
