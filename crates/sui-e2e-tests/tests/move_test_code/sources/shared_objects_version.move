@@ -14,7 +14,7 @@ public fun create_counter(ctx: &mut TxContext) {
             id: object::new(ctx),
             value: 0,
         },
-        tx_context::sender(ctx),
+        ctx.sender(),
     )
 }
 

@@ -20,7 +20,7 @@ public fun start(ctx: &mut TxContext) {
     let c = B { id: object::new(ctx) };
 
     transfer::share_object(c);
-    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(a, ctx.sender());
     transfer::public_transfer(b, a_address);
 }
 
@@ -32,5 +32,5 @@ public fun receiver(parent: &mut A, x: Receiving<B>) {
 
 public fun deleter(parent: &mut A, x: Receiving<B>) {
     let B { id } = transfer::receive(&mut parent.id, x);
-    object::delete(id);
+    id.delete();
 }
