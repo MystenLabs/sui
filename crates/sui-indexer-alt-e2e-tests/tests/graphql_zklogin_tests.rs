@@ -78,6 +78,7 @@ impl FullCluster {
                 graphql_config: GraphQlConfig {
                     zklogin: ZkLoginConfig {
                         env: ZkLoginEnv::Test,
+                        ..Default::default()
                     },
                     ..Default::default()
                 },
