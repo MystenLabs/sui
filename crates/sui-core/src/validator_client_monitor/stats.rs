@@ -21,9 +21,9 @@ use tracing::debug;
 //    report is more critical than a submit report in terms of failures status.
 
 /// Size of the moving window for reliability measurements
-const RELIABILITY_MOVING_WINDOW_SIZE: usize = 50;
+const RELIABILITY_MOVING_WINDOW_SIZE: usize = 70;
 /// Size of the moving window for latency measurements
-const LATENCY_MOVING_WINDOW_SIZE: usize = 50;
+const LATENCY_MOVING_WINDOW_SIZE: usize = 70;
 
 /// Complete client-observed statistics for validator interactions.
 ///

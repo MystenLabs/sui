@@ -40,7 +40,6 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
-    transaction_driver::request_retrier::TOP_K_VALIDATORS_DENOMINATOR,
     validator_client_monitor::{
         OperationFeedback, OperationType, TxType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
@@ -126,8 +125,6 @@ where
                     0,
                     tx_type,
                 );
-                let k = auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR;
-                let clients = clients[k..].to_vec();
 
                 // Now keep only the clients after the first K as anything before should be already used on the retrier
                 for name in clients {
