@@ -51,7 +51,10 @@ use sui_types::{
 };
 use sui_types::{
     effects::TransactionEffects,
-    messages_grpc::{RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse},
+    messages_grpc::{
+        ExecutedData, RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
+        SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
+    },
 };
 use sui_types::{
     effects::TransactionEffectsAPI, executable_transaction::VerifiedExecutableTransaction,
@@ -69,6 +72,7 @@ use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, error_span, info, instrument, Instrument};
 
+use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
@@ -78,9 +82,6 @@ use crate::{
     checkpoints::CheckpointStore,
     execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
-    transaction_driver::{
-        ExecutedData, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
-    },
     transaction_outputs::TransactionOutputs,
 };
 use crate::{
@@ -88,9 +89,9 @@ use crate::{
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
     traffic_controller::{parse_ip, policies::TrafficTally, TrafficController},
 };
-use crate::{consensus_adapter::ConnectionMonitorStatusForTests, transaction_driver::PingType};
 use nonempty::{nonempty, NonEmpty};
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
+use sui_types::messages_grpc::PingType;
 use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]

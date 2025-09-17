@@ -17,8 +17,8 @@ use sui_core::{
         QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
     transaction_driver::{
-        choose_transaction_driver_percentage, SubmitTransactionOptions, SubmitTxRequest,
-        TransactionDriver, TransactionDriverMetrics,
+        choose_transaction_driver_percentage, SubmitTransactionOptions, TransactionDriver,
+        TransactionDriverMetrics,
     },
     validator_client_monitor::ValidatorClientMetrics,
 };
@@ -28,7 +28,6 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::EffectsFinalityInfo;
 use sui_types::quorum_driver_types::FinalizedEffects;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
@@ -51,6 +50,10 @@ use sui_types::{digests::ChainIdentifier, gas::GasCostSummary};
 use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     execution_status::ExecutionFailureStatus,
+};
+use sui_types::{
+    messages_grpc::SubmitTxRequest,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
