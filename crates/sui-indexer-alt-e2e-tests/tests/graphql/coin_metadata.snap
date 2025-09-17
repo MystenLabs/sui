@@ -89,7 +89,7 @@ Response: {
       "symbol": "SUI",
       "description": "",
       "iconUrl": null,
-      "supply": "10000000000"
+      "supply": "10000000000000000000"
     }
   }
 }
