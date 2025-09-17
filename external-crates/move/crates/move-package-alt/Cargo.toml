@@ -20,6 +20,7 @@ itertools.workspace = true
 jsonrpc.workspace = true
 move-command-line-common.workspace = true
 move-core-types.workspace = true
+named-lock.workspace = true
 once_cell.workspace = true
 path-clean.workspace = true
 petgraph.workspace = true
@@ -38,6 +39,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 heck.workspace = true
 walkdir.workspace = true
+whoami.workspace = true
 
 [dev-dependencies]
 aquamarine.workspace = true

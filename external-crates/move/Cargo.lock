@@ -2599,6 +2599,7 @@ dependencies = [
  "jsonrpc",
  "move-command-line-common",
  "move-core-types",
+ "named-lock",
  "once_cell",
  "path-clean",
  "petgraph",
@@ -2617,6 +2618,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "walkdir",
+ "whoami",
 ]
 
 [[package]]
