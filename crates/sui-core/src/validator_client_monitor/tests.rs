@@ -161,7 +161,7 @@ mod client_stats_tests {
             vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         assert_eq!(all_stats.len(), 2);
 
         // Validator 1 should have higher score
@@ -220,7 +220,7 @@ mod client_stats_tests {
         );
 
         // Should be excluded (score 0)
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         let score = *all_stats.get(&validator).unwrap();
         assert_eq!(score, 0.0);
 
@@ -228,7 +228,7 @@ mod client_stats_tests {
         sleep(Duration::from_millis(150)).await;
 
         // Should be included again (score > 0)
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         let score = *all_stats.get(&validator).unwrap();
         assert!(score > 0.0);
     }
@@ -282,68 +282,16 @@ mod client_stats_tests {
             0.1
         );
 
-        // Second update uses EMA
+        // Second update calculates arithmetic mean of the moving window
         stats.update_average_latency(OperationType::Submit, Duration::from_millis(200));
         let latency = stats
             .average_latencies
             .get(&OperationType::Submit)
             .unwrap()
             .get();
-        // With decay factor 0.9, new value = 0.1 * 0.9 + 0.2 * (1 - 0.9) = 0.09 + 0.02 = 0.11
-        assert!((latency - 0.11).abs() < 0.001);
-    }
 
-    #[tokio::test]
-    async fn test_global_stats_update() {
-        let config = ValidatorClientMonitorConfig::default();
-        let mut stats = ClientObservedStats::new(config);
-
-        // First update sets initial value
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(100));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.1); // 100ms = 0.1s
-
-        // Update with higher latency - should immediately jump to new max
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(300));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.3); // 300ms = 0.3s
-
-        // Update with lower latency - should apply decay
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(100));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        // With decay factor 0.99: 0.3 * 0.99 + 0.1 * (1 - 0.99) = 0.297 + 0.001 = 0.298
-        assert!((max_latency.get() - 0.298).abs() < 0.001);
-
-        // Another lower update to verify continued decay
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(50));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        // With decay factor 0.99: 0.298 * 0.99 + 0.05 * (1 - 0.99) = 0.29502 + 0.0005 = 0.29552
-        assert!((max_latency.get() - 0.29552).abs() < 0.001);
-
-        // Update with higher latency again - should jump to new max
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(500));
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.5); // 500ms = 0.5s
+        // With MovingWindow: (0.1 + 0.2) / 2 = 0.15
+        assert!((latency - 0.15).abs() < 0.001);
     }
 
     #[tokio::test]
@@ -372,7 +320,7 @@ mod client_stats_tests {
             vec![(validator, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         // Should have a partial score even with only one operation type
         let score = *all_stats.get(&validator).unwrap();
         assert!(score > 0.0);
@@ -423,79 +371,11 @@ mod client_stats_tests {
             .unwrap()
             .reliability
             .get();
-        // With decay factor 0.5: 1.0 * 0.5 + 0.0 * 0.5 = 0.5
-        assert_eq!(new_reliability, 0.5);
+        assert!((new_reliability - (2.0 / 3.0)).abs() < 1e-10);
     }
 
     #[tokio::test]
-    async fn test_global_max_latency_with_multiple_validators() {
-        let config = ValidatorClientMonitorConfig::default();
-        let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
-
-        let validators = create_test_validator_names(3);
-
-        // Validator 1: 100ms latency
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validators[0],
-                display_name: validators[0].concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(100)),
-            },
-            &metrics,
-        );
-
-        // Check global max is 100ms
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.1);
-
-        // Validator 2: 50ms latency (lower, should apply decay)
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validators[1],
-                display_name: validators[1].concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(50)),
-            },
-            &metrics,
-        );
-
-        // Max should decay towards 50ms
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        // 0.1 * 0.99 + 0.05 * (1 - 0.99) = 0.099 + 0.0005 = 0.0995
-        assert!((max_latency.get() - 0.0995).abs() < 0.001);
-
-        // Validator 3: 200ms latency (higher, should immediately become new max)
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validators[2],
-                display_name: validators[2].concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(200)),
-            },
-            &metrics,
-        );
-
-        // Max should jump to 200ms
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap();
-        assert_eq!(max_latency.get(), 0.2);
-    }
-
-    #[tokio::test]
-    async fn test_decay_factor_differences() {
+    async fn test_moving_window_average_differences() {
         let config = ValidatorClientMonitorConfig::default();
         let mut stats = ClientObservedStats::new(config);
         let metrics = create_test_metrics();
@@ -524,14 +404,6 @@ mod client_stats_tests {
             .get();
         assert_eq!(validator_latency, 0.1);
 
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap()
-            .get();
-        assert_eq!(max_latency, 0.1);
-
         // Update with lower value (50ms)
         stats.record_interaction_result(
             OperationFeedback {
@@ -543,7 +415,7 @@ mod client_stats_tests {
             &metrics,
         );
 
-        // Validator latency should decay faster (factor 0.1)
+        // Validator latency should average now at 75ms
         let validator_latency = stats
             .validator_stats
             .get(&validator)
@@ -552,24 +424,7 @@ mod client_stats_tests {
             .get(&OperationType::Submit)
             .unwrap()
             .get();
-        // old * decay + new * (1-decay) = 0.1 * 0.9 + 0.05 * (1 - 0.9) = 0.09 + 0.005 = 0.095
-        assert!((validator_latency - 0.095).abs() < 0.001);
-
-        // Max latency should decay slower (factor 0.01)
-        let max_latency = stats
-            .global_stats
-            .max_latencies
-            .get(&OperationType::Submit)
-            .unwrap()
-            .get();
-        // Since new value (0.05) is less than current (0.1), we apply decay
-        // old * decay + new * (1-decay) = 0.1 * 0.99 + 0.05 * (1 - 0.99) = 0.099 + 0.0005 = 0.0995
-        assert!((max_latency - 0.0995).abs() < 0.001);
-
-        // Since max decays slower, it should be closer to the original value than validator average
-        // validator_latency = 0.055, max_latency = 0.0505
-        // Actually validator average went lower, so this assertion was wrong
-        // Let's just verify both decayed correctly
+        assert!((validator_latency - 0.075).abs() < 1e-10);
     }
 
     #[tokio::test]
@@ -641,7 +496,7 @@ mod client_stats_tests {
             vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         // Validator 1 should have higher score due to fast effects (high weight)
         let score1 = *all_stats.get(&validator1).unwrap();
         let score2 = *all_stats.get(&validator2).unwrap();
@@ -696,7 +551,8 @@ mod client_monitor_tests {
         monitor.force_update_cached_scores();
 
         // Select validators with k=2
-        let selected = monitor.select_shuffled_preferred_validators(&committee, 2);
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 2, TxType::SingleWriter);
         assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
 
         // The first 2 positions should contain the best two validators (but shuffled)
@@ -743,7 +599,8 @@ mod client_monitor_tests {
         monitor.force_update_cached_scores();
 
         // Select validators with k=3
-        let selected = monitor.select_shuffled_preferred_validators(&committee, 3);
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 3, TxType::SingleWriter);
 
         // Should return all 5 validators
         assert_eq!(selected.len(), 5);
@@ -800,7 +657,8 @@ mod client_monitor_tests {
         monitor.force_update_cached_scores();
 
         // Should still select validators from the provided committee
-        let selected = monitor.select_shuffled_preferred_validators(&other_committee, 2);
+        let selected =
+            monitor.select_shuffled_preferred_validators(&other_committee, 2, TxType::SingleWriter);
         assert_eq!(selected.len(), 3); // Should return all 3 validators from other_committee
         for validator in &selected {
             assert!(other_committee.authority_exists(validator));
@@ -835,11 +693,64 @@ mod client_monitor_tests {
         monitor.force_update_cached_scores();
 
         // Request more validators than available
-        let selected = monitor.select_shuffled_preferred_validators(&committee, 5);
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 5, TxType::SingleWriter);
         // Should return all available validators
         assert_eq!(selected.len(), 2);
         assert!(selected.contains(&validators[0]));
         assert!(selected.contains(&validators[1]));
+    }
+
+    // Testing the select_shuffled_preferred_validators both for the single writer and shared object tx types.
+    #[tokio::test]
+    async fn test_validator_selection_shared_object_tx_type() {
+        let auth_agg = get_authority_aggregator(4);
+        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+
+        let committee = auth_agg.committee.clone();
+        let validators = committee.names().cloned().collect::<Vec<_>>();
+
+        // Record different performance per operation type for each validator
+        for (i, validator) in validators.iter().enumerate() {
+            monitor.record_interaction_result(OperationFeedback {
+                authority_name: *validator,
+                display_name: auth_agg.get_display_name(validator),
+                operation: OperationType::FastPath,
+                result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
+            });
+        }
+
+        for (i, validator) in validators.iter().rev().enumerate() {
+            monitor.record_interaction_result(OperationFeedback {
+                authority_name: *validator,
+                display_name: auth_agg.get_display_name(validator),
+                operation: OperationType::Consensus,
+                result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
+            });
+        }
+
+        // Force update cached scores (in production this happens in the health check loop)
+        monitor.force_update_cached_scores();
+
+        // Select validators with k=2 for the shared object tx type
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 2, TxType::SingleWriter);
+        assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
+
+        // The first 2 positions should contain the best two validators (but shuffled)
+        let top_2_positions: HashSet<_> = selected.iter().take(2).cloned().collect();
+        assert!(top_2_positions.contains(&validators[0])); // Best performer
+        assert!(top_2_positions.contains(&validators[1])); // Second best
+
+        // Select the validators with k=2 for the single writer tx type
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 2, TxType::SharedObject);
+        assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
+
+        // The first 2 positions should contain the best two validators (but shuffled)
+        let top_2_positions: HashSet<_> = selected.iter().take(2).cloned().collect();
+        assert!(top_2_positions.contains(&validators[2])); // Best performer
+        assert!(top_2_positions.contains(&validators[3])); // Second best
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

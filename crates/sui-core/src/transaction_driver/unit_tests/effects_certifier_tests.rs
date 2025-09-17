@@ -8,11 +8,10 @@ use crate::{
         effects_certifier::EffectsCertifier, error::TransactionDriverError,
         metrics::TransactionDriverMetrics, SubmitTransactionOptions,
     },
-    validator_client_monitor::ValidatorClientMonitor,
+    validator_client_monitor::{TxType, ValidatorClientMonitor},
 };
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
-use mysten_metrics::TxType;
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,

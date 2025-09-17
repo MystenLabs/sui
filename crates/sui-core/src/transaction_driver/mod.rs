@@ -19,7 +19,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
-use mysten_metrics::{monitored_future, TxType};
+use mysten_metrics::monitored_future;
 use parking_lot::Mutex;
 use sui_types::{
     committee::EpochId, digests::TransactionDigest, error::UserInputError,
@@ -34,7 +34,9 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
-    validator_client_monitor::{ValidatorClientMetrics, ValidatorClientMonitor},
+    validator_client_monitor::{
+        OperationFeedback, OperationType, TxType, ValidatorClientMetrics, ValidatorClientMonitor,
+    },
 };
 use sui_config::NodeConfig;
 
@@ -226,6 +228,7 @@ where
         let auth_agg = self.authority_aggregator.load();
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
+        let start_time = Instant::now();
 
         let (name, submit_txn_result) = self
             .submitter
@@ -233,6 +236,7 @@ where
                 &auth_agg,
                 &self.client_monitor,
                 tx_digest,
+                tx_type,
                 amplification_factor,
                 request,
                 options,
@@ -240,7 +244,8 @@ where
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
-        self.certifier
+        let result = self
+            .certifier
             .get_certified_finalized_effects(
                 &auth_agg,
                 &self.client_monitor,
@@ -250,7 +255,22 @@ where
                 submit_txn_result,
                 options,
             )
-            .await
+            .await;
+
+        if result.is_ok() {
+            self.client_monitor
+                .record_interaction_result(OperationFeedback {
+                    authority_name: name,
+                    display_name: auth_agg.get_display_name(&name),
+                    operation: if tx_type == TxType::SingleWriter {
+                        OperationType::FastPath
+                    } else {
+                        OperationType::Consensus
+                    },
+                    result: Ok(start_time.elapsed()),
+                });
+        }
+        result
     }
 
     fn enable_reconfig(

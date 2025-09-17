@@ -4,6 +4,7 @@
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::validator_client_monitor::stats::ClientObservedStats;
+use crate::validator_client_monitor::TxType;
 use crate::validator_client_monitor::{
     metrics::ValidatorClientMetrics, OperationFeedback, OperationType,
 };
@@ -12,6 +13,7 @@ use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::{sync::Arc, time::Instant};
+use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
 use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
@@ -31,13 +33,13 @@ use tracing::{debug, info, warn};
 /// - Handles epoch changes by cleaning up stale validator data
 ///
 /// The monitor runs a background task for health checks and uses
-/// exponential moving averages to smooth client-side measurements.
+/// moving averages to smooth client-side measurements.
 pub struct ValidatorClientMonitor<A: Clone> {
     config: ValidatorClientMonitorConfig,
     metrics: Arc<ValidatorClientMetrics>,
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
-    cached_scores: RwLock<Option<HashMap<AuthorityName, f64>>>,
+    cached_scores: RwLock<HashMap<TxType, HashMap<AuthorityName, f64>>>,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -59,7 +61,7 @@ where
             metrics,
             client_stats: RwLock::new(ClientObservedStats::new(config)),
             authority_aggregator,
-            cached_scores: RwLock::new(None),
+            cached_scores: RwLock::new(HashMap::new()),
         });
 
         let monitor_clone = monitor.clone();
@@ -166,19 +168,30 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     fn update_cached_scores(&self) {
         let authority_agg = self.authority_aggregator.load();
         let committee = &authority_agg.committee;
+        let mut cached_scores = self.cached_scores.write();
 
-        let score_map = self.client_stats.read().get_all_validator_stats(committee);
+        for tx_type in TxType::iter() {
+            let score_map = self
+                .client_stats
+                .read()
+                .get_all_validator_stats(committee, tx_type);
 
-        for (validator, score) in score_map.iter() {
-            debug!("Validator {}: score {}", validator, score);
-            let display_name = authority_agg.get_display_name(validator);
-            self.metrics
-                .performance_score
-                .with_label_values(&[&display_name])
-                .set(*score);
+            for (validator, score) in score_map.iter() {
+                debug!(
+                    "Validator {}, tx type {}: score {}",
+                    validator,
+                    tx_type.as_str(),
+                    score
+                );
+                let display_name = authority_agg.get_display_name(validator);
+                self.metrics
+                    .performance_score
+                    .with_label_values(&[&display_name, tx_type.as_str()])
+                    .set(*score);
+            }
+
+            cached_scores.insert(tx_type, score_map);
         }
-
-        *self.cached_scores.write() = Some(score_map);
     }
 
     /// Record client-observed interaction result with a validator.
@@ -193,6 +206,8 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             OperationType::Submit => "submit",
             OperationType::Effects => "effects",
             OperationType::HealthCheck => "health_check",
+            OperationType::FastPath => "fast_path",
+            OperationType::Consensus => "consensus",
         };
 
         match feedback.result {
@@ -225,6 +240,9 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// is called, and we need to maintain an invariant that the selected
     /// validators are always in the committee passed in.
     ///
+    /// Also the tx type is passed in so that we can select validators based on their respective scores
+    /// for the transaction type.
+    ///
     /// We shuffle the top k validators to avoid the same validator being selected
     /// too many times in a row and getting overloaded.
     ///
@@ -235,11 +253,12 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         &self,
         committee: &Committee,
         k: usize,
-        // TODO: Pass in the operation type so that we can select validators based on the operation type.
+        tx_type: TxType,
     ) -> Vec<AuthorityName> {
         let mut rng = rand::thread_rng();
 
-        let Some(cached_scores) = self.cached_scores.read().clone() else {
+        let cached_scores = self.cached_scores.read();
+        let Some(cached_scores) = cached_scores.get(&tx_type) else {
             let mut validators: Vec<_> = committee.names().cloned().collect();
             validators.shuffle(&mut rng);
             return validators;
@@ -249,7 +268,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         // an out-of-date committee.
         let mut validator_with_scores: Vec<_> = committee
             .names()
-            .map(|v| (*v, cached_scores.get(v).copied().unwrap_or(0.0)))
+            .map(|v| (*v, cached_scores.get(v).cloned().unwrap_or(0.0)))
             .collect();
         validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 

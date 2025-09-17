@@ -28,7 +28,7 @@ use crate::{
         request_retrier::RequestRetrier,
         SubmitTransactionOptions, TransactionDriverMetrics,
     },
-    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
+    validator_client_monitor::{OperationFeedback, OperationType, TxType, ValidatorClientMonitor},
 };
 
 #[cfg(test)]
@@ -54,6 +54,7 @@ impl TransactionSubmitter {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
+        tx_type: TxType,
         amplification_factor: u64,
         request: SubmitTxRequest,
         options: &SubmitTransactionOptions,
@@ -67,7 +68,7 @@ impl TransactionSubmitter {
             .submit_amplification_factor
             .observe(amplification_factor as f64);
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
+        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, tx_type);
         let mut retries = 0;
         let mut request_rpcs = FuturesUnordered::new();
 
