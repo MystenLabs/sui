@@ -12,7 +12,7 @@ use crate::{
     replay_txn::replay_transaction,
 };
 use anyhow::{anyhow, bail};
-use clap::{ArgAction, Parser, ValueEnum};
+use clap::{Parser, ValueEnum};
 use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
 use std::{
@@ -118,68 +118,13 @@ pub struct ReplayConfigStable {
 /// (same as ReplayConfigStable but with default values set)
 #[derive(Parser, Clone, Debug)]
 pub struct ReplayConfigStableInternal {
-    /// Transaction digest to replay
-    #[arg(long = "digest", short)]
     pub digest: Option<String>,
-
-    /// File containing a list of digests, one per line
-    #[arg(long = "digests-path")]
     pub digests_path: Option<PathBuf>,
-
-    /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
-    #[arg(long = "terminate-early", default_value = "false")]
     pub terminate_early: bool,
-
-    /// Whether to trace the transaction execution. Generated traces will be saved in the output
-    /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
-    #[arg(long = "trace", default_value = "false")]
     pub trace: bool,
-
-    /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`
-    #[arg(long = "output-dir", short)]
     pub output_dir: Option<PathBuf>,
-
-    /// Show transaction effects.
-    #[arg(long = "show-effects", short = 'e', action = ArgAction::Set, default_value = "true")]
     pub show_effects: bool,
-
-    /// Whether existing artifacts that were generated from a previous replay of the transaction
-    /// should be overwritten or an error raised if they already exist.
-    #[arg(long = "overwrite", default_value = "false")]
     pub overwrite: bool,
-}
-
-/// Returns the name of the ReplayConfigStable field as a string
-/// (will fail at compile time if field names change)
-macro_rules! stable_config_field_name {
-    ($field:ident) => {{
-        // Create the struct and immediately forget it to avoid destructor
-        let config = ReplayConfigStableInternal::new_const();
-        let _ = config.$field;
-        std::mem::forget(config);
-        stringify!($field)
-    }};
-}
-
-impl ReplayConfigStableInternal {
-    const fn new_const() -> Self {
-        Self {
-            digest: None,
-            digests_path: None,
-            terminate_early: false,
-            trace: false,
-            output_dir: None,
-            show_effects: true,
-            overwrite: false,
-        }
-    }
-
-    /// Names of fields whose presence on the command-line or in the config
-    /// file we have to check (will fail at compile time if field names change)
-    pub const TERMINATE_EARLY_FIELD_NAME: &'static str = stable_config_field_name!(terminate_early);
-    pub const TRACE_FIELD_NAME: &'static str = stable_config_field_name!(trace);
-    pub const SHOW_EFFECTS_FIELD_NAME: &'static str = stable_config_field_name!(show_effects);
-    pub const OVERWRITE_FIELD_NAME: &'static str = stable_config_field_name!(overwrite);
 }
 
 #[derive(Debug, Deserialize, Default)]
