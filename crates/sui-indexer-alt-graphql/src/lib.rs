@@ -188,6 +188,12 @@ where
             cancel,
         } = self;
 
+        if with_ide {
+            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
+            router = router.route("/graphql", get(graphiql));
+        } else {
+            info!("Skipping GraphiQL IDE setup");
+        }
         router = router
             .layer(Extension(schema.finish()))
             .layer(axum::middleware::from_fn_with_state(
@@ -200,13 +206,6 @@ where
                     .allow_origin(cors::Any)
                     .allow_headers(cors::Any),
             );
-
-        if with_ide {
-            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
-            router = router.route("/graphql", get(graphiql));
-        } else {
-            info!("Skipping GraphiQL IDE setup");
-        }
 
         info!("Starting GraphQL service on {rpc_listen_address}");
         let listener = TcpListener::bind(rpc_listen_address)
