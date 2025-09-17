@@ -5,9 +5,8 @@ use crate::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::AuthorityAPI,
     transaction_driver::{
-        error::TransactionDriverError, message_types::SubmitTxResult,
-        metrics::TransactionDriverMetrics, transaction_submitter::TransactionSubmitter,
-        SubmitTransactionOptions,
+        error::TransactionDriverError, metrics::TransactionDriverMetrics,
+        transaction_submitter::TransactionSubmitter, SubmitTransactionOptions,
     },
     validator_client_monitor::ValidatorClientMonitor,
 };
@@ -33,10 +32,10 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, RawSubmitTxResult, RawWaitForEffectsRequest,
-        RawWaitForEffectsResponse, SystemStateRequest, TransactionInfoRequest,
-        TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
+        SubmitTxResponse, SubmitTxResult, SystemStateRequest, TransactionInfoRequest,
+        TransactionInfoResponse, ValidatorHealthRequest, ValidatorHealthResponse,
+        WaitForEffectsRequest, WaitForEffectsResponse,
     },
     sui_system_state::SuiSystemState,
     transaction::{CertifiedTransaction, Transaction},
@@ -86,9 +85,9 @@ impl MockAuthority {
 impl AuthorityAPI for MockAuthority {
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         self.submission_count.fetch_add(1, Ordering::Relaxed);
 
         let response_delay = *self.response_delays.lock().unwrap();
@@ -96,8 +95,9 @@ impl AuthorityAPI for MockAuthority {
             sleep(delay).await;
         }
 
+        let raw_request = request.into_raw()?;
         // Use 1st transaction in batch for response.
-        let maybe_response = match request.transactions.first() {
+        let maybe_response = match raw_request.transactions.first() {
             Some(tx_bytes) => {
                 let tx: Transaction =
                     bcs::from_bytes(tx_bytes).map_err(|e| SuiError::GenericAuthorityError {
@@ -112,18 +112,9 @@ impl AuthorityAPI for MockAuthority {
 
         if let Some(response) = maybe_response {
             match response {
-                Ok(result) => {
-                    let raw_result: RawSubmitTxResult =
-                        result
-                            .try_into()
-                            .map_err(|_| SuiError::GenericAuthorityError {
-                                error: "Failed to convert result".to_string(),
-                            })?;
-                    let raw_response = RawSubmitTxResponse {
-                        results: vec![raw_result],
-                    };
-                    Ok(raw_response)
-                }
+                Ok(result) => Ok(SubmitTxResponse {
+                    results: vec![result],
+                }),
                 Err(e) => Err(e),
             }
         } else {
@@ -134,24 +125,17 @@ impl AuthorityAPI for MockAuthority {
                 epoch: 0,
             };
             let result = SubmitTxResult::Submitted { consensus_position };
-            let raw_result: RawSubmitTxResult =
-                result
-                    .try_into()
-                    .map_err(|_| SuiError::GenericAuthorityError {
-                        error: "Failed to convert result".to_string(),
-                    })?;
-            let raw_response = RawSubmitTxResponse {
-                results: vec![raw_result],
-            };
-            Ok(raw_response)
+            Ok(SubmitTxResponse {
+                results: vec![result],
+            })
         }
     }
 
     async fn wait_for_effects(
         &self,
-        _request: RawWaitForEffectsRequest,
+        _request: WaitForEffectsRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
+    ) -> Result<WaitForEffectsResponse, SuiError> {
         unimplemented!();
     }
 
@@ -224,9 +208,9 @@ impl AuthorityAPI for MockAuthority {
 
     async fn validator_health(
         &self,
-        _request: sui_types::messages_grpc::RawValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
-        Ok(sui_types::messages_grpc::RawValidatorHealthResponse::default())
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        Ok(ValidatorHealthResponse::default())
     }
 }
 
@@ -250,7 +234,7 @@ fn create_test_authority_aggregator_with_rgp(
     (aggregator, mock_authorities)
 }
 
-fn create_test_raw_request(gas_price: u64) -> RawSubmitTxRequest {
+fn create_test_submit_request(gas_price: u64) -> SubmitTxRequest {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 
@@ -263,10 +247,7 @@ fn create_test_raw_request(gas_price: u64) -> RawSubmitTxRequest {
 
     let tx = Transaction::from_data_and_signer(tx_data, vec![&keypair]);
 
-    RawSubmitTxRequest {
-        transactions: vec![bcs::to_bytes(&tx).unwrap().into()],
-        soft_bundle: false,
-    }
+    SubmitTxRequest { transaction: tx }
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -292,14 +273,13 @@ async fn test_submit_transaction_with_amplification() {
         }
 
         let gas_price = reference_gas_price;
-        let raw_request = create_test_raw_request(gas_price);
-        let tx: Transaction = bcs::from_bytes(&raw_request.transactions[0]).unwrap();
-        let tx_digest = tx.digest();
+        let request = create_test_submit_request(gas_price);
+        let tx_digest = *request.transaction.digest();
 
         // Set up successful response from all authorities
         for mock_authority in &mock_authorities {
             mock_authority.set_submit_response(
-                *tx_digest,
+                tx_digest,
                 Ok(SubmitTxResult::Submitted {
                     consensus_position: ConsensusPosition {
                         block: BlockRef::MIN,
@@ -317,9 +297,9 @@ async fn test_submit_transaction_with_amplification() {
             .submit_transaction(
                 &authority_aggregator,
                 &client_monitor,
-                tx_digest,
+                &tx_digest,
                 amplification_factor,
-                raw_request,
+                request,
                 &options,
             )
             .await;
@@ -342,14 +322,13 @@ async fn test_submit_transaction_with_amplification() {
         }
 
         let gas_price = reference_gas_price * 3;
-        let raw_request = create_test_raw_request(gas_price);
-        let tx: Transaction = bcs::from_bytes(&raw_request.transactions[0]).unwrap();
-        let tx_digest = tx.digest();
+        let request = create_test_submit_request(gas_price);
+        let tx_digest = *request.transaction.digest();
 
         // Set up successful response from all authorities
         for mock_authority in &mock_authorities {
             mock_authority.set_submit_response(
-                *tx_digest,
+                tx_digest,
                 Ok(SubmitTxResult::Submitted {
                     consensus_position: ConsensusPosition {
                         block: BlockRef::MIN,
@@ -369,9 +348,9 @@ async fn test_submit_transaction_with_amplification() {
             .submit_transaction(
                 &authority_aggregator,
                 &client_monitor,
-                tx_digest,
+                &tx_digest,
                 amplification_factor,
-                raw_request,
+                request,
                 &options,
             )
             .await;
@@ -394,14 +373,13 @@ async fn test_submit_transaction_with_amplification() {
         }
 
         let gas_price = reference_gas_price * 100; // Very high gas price
-        let raw_request = create_test_raw_request(gas_price);
-        let tx: Transaction = bcs::from_bytes(&raw_request.transactions[0]).unwrap();
-        let tx_digest = tx.digest();
+        let request = create_test_submit_request(gas_price);
+        let tx_digest = *request.transaction.digest();
 
         // Set up successful response from all authorities
         for mock_authority in &mock_authorities {
             mock_authority.set_submit_response(
-                *tx_digest,
+                tx_digest,
                 Ok(SubmitTxResult::Submitted {
                     consensus_position: ConsensusPosition {
                         block: BlockRef::MIN,
@@ -421,9 +399,9 @@ async fn test_submit_transaction_with_amplification() {
             .submit_transaction(
                 &authority_aggregator,
                 &client_monitor,
-                tx_digest,
+                &tx_digest,
                 amplification_factor,
-                raw_request,
+                request,
                 &options,
             )
             .await;
@@ -450,22 +428,21 @@ async fn test_submit_transaction_with_amplification() {
         }
 
         let gas_price = reference_gas_price * 4;
-        let raw_request = create_test_raw_request(gas_price);
-        let tx: Transaction = bcs::from_bytes(&raw_request.transactions[0]).unwrap();
-        let tx_digest = tx.digest();
+        let request = create_test_submit_request(gas_price);
+        let tx_digest = *request.transaction.digest();
 
         // Set up successful response from all authorities
         for (i, mock_authority) in mock_authorities.iter().enumerate() {
             if i < 2 {
                 mock_authority.set_submit_response(
-                    *tx_digest,
+                    tx_digest,
                     Err(SuiError::ValidatorOverloadedRetryAfter {
                         retry_after_secs: 1,
                     }),
                 );
             } else {
                 mock_authority.set_submit_response(
-                    *tx_digest,
+                    tx_digest,
                     Ok(SubmitTxResult::Submitted {
                         consensus_position: ConsensusPosition {
                             block: BlockRef::MIN,
@@ -486,9 +463,9 @@ async fn test_submit_transaction_with_amplification() {
             .submit_transaction(
                 &authority_aggregator,
                 &client_monitor,
-                tx_digest,
+                &tx_digest,
                 amplification_factor,
-                raw_request,
+                request,
                 &options,
             )
             .await;
@@ -525,14 +502,13 @@ async fn test_submit_transaction_invalid_input() {
 
     // Transaction with 2x RGP for amplification factor = 2
     let gas_price = reference_gas_price * 2;
-    let raw_request = create_test_raw_request(gas_price);
-    let tx: Transaction = bcs::from_bytes(&raw_request.transactions[0]).unwrap();
-    let tx_digest = tx.digest();
+    let request = create_test_submit_request(gas_price);
+    let tx_digest = *request.transaction.digest();
 
     // Set up all authorities to return non-retriable errors
     for mock_authority in &mock_authorities {
         mock_authority.set_submit_response(
-            *tx_digest,
+            tx_digest,
             Err(SuiError::UserInputError {
                 error: UserInputError::ObjectVersionUnavailableForConsumption {
                     provided_obj_ref: random_object_ref(),
@@ -549,9 +525,9 @@ async fn test_submit_transaction_invalid_input() {
         .submit_transaction(
             &authority_aggregator,
             &client_monitor,
-            tx_digest,
+            &tx_digest,
             amplification_factor,
-            raw_request,
+            request,
             &options,
         )
         .await;

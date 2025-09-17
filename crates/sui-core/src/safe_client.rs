@@ -4,7 +4,6 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::transaction_driver::{ExecutedData, SubmitTxResponse, WaitForEffectsResponse};
 use prometheus::core::GenericCounter;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
@@ -20,9 +19,11 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-    ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, RawWaitForEffectsRequest,
-    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
+    ExecutedData, HandleCertificateRequestV3, HandleCertificateResponseV2,
+    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
+    SubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionStatus,
+    ValidatorHealthRequest, ValidatorHealthResponse, VerifiedObjectInfoResponse,
+    WaitForEffectsRequest, WaitForEffectsResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::object::Object;
@@ -316,31 +317,27 @@ where
     /// Submit a transaction for certification and execution.
     pub async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         client_addr: Option<SocketAddr>,
     ) -> Result<SubmitTxResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
-            .authority_client
+        self.authority_client
             .submit_transaction(request, client_addr)
-            .await?;
-        response.try_into()
+            .await
     }
 
     /// Wait for effects of a transaction that has been submitted to the network
     /// through the `submit_transaction` API.
     pub async fn wait_for_effects(
         &self,
-        request: RawWaitForEffectsRequest,
+        request: WaitForEffectsRequest,
         client_addr: Option<SocketAddr>,
     ) -> Result<WaitForEffectsResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
+        let wait_for_effects_resp = self
             .authority_client
             .wait_for_effects(request, client_addr)
             .await?;
-
-        let wait_for_effects_resp = WaitForEffectsResponse::try_from(response)?;
 
         match &wait_for_effects_resp {
             WaitForEffectsResponse::Executed {
@@ -702,25 +699,8 @@ where
     #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn validator_health(
         &self,
-        request: sui_types::messages_grpc::ValidatorHealthRequest,
-    ) -> Result<sui_types::messages_grpc::ValidatorHealthResponse, SuiError> {
-        // Convert typed request to raw for gRPC
-        let raw_request = request.try_into().map_err(|e| {
-            sui_types::error::SuiError::GrpcMessageSerializeError {
-                type_info: "ValidatorHealthRequest".to_string(),
-                error: format!("Failed to convert to raw request: {}", e),
-            }
-        })?;
-
-        // Call the raw gRPC interface
-        let raw_response = self.authority_client.validator_health(raw_request).await?;
-
-        // Convert raw response back to typed
-        raw_response.try_into().map_err(|e| {
-            sui_types::error::SuiError::GrpcMessageDeserializeError {
-                type_info: "RawValidatorHealthResponse".to_string(),
-                error: format!("Failed to convert from raw response: {}", e),
-            }
-        })
+        request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        self.authority_client.validator_health(request).await
     }
 }
