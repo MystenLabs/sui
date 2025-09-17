@@ -232,7 +232,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             .insert(self.environment.name().clone(), BTreeMap::from(&self.graph));
     }
 
-    /// The name of the root package
+    /// The id of the root package (TODO: perhaps this method is poorly named; check where it's
+    /// used and decide if they should be using `id` or `display_name`)
     pub fn name(&self) -> &PackageID {
         self.package_graph().root_package_info().id()
     }
@@ -524,7 +525,7 @@ pkg_b = { local = "../pkg_b" }"#,
                 .contains_key(DEFAULT_ENV_NAME)
         );
 
-        assert_eq!(root.name(), &PackageName::new("graph").unwrap());
+        assert_eq!(root.name(), &PackageID::from("graph"));
     }
 
     #[test(tokio::test)]

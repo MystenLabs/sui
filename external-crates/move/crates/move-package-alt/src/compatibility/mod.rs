@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 use regex::Regex;
 use tracing::debug;
