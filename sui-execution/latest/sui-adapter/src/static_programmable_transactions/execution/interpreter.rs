@@ -115,7 +115,7 @@ where
     // for expensive invariant checks
     let wrapped_object_containers = object_runtime!(context)?.wrapped_object_containers();
     // We record the generated object IDs for expensive invariant checks
-    let generated_object_ids = object_runtime.generated_object_ids();
+    let generated_object_ids = object_runtime!(context)?.generated_object_ids();
 
     // apply changes
     let finished = context.finish::<Mode>();

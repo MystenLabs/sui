@@ -5,11 +5,13 @@ use std::collections::VecDeque;
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, u256::U256, vm_status::StatusCode};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
-    values::{Struct, Value},
+use move_vm_runtime::{
+    execution::{
+        values::{Struct, Value},
+        Type,
+    },
+    native_charge_gas_early_exit,
+    natives::functions::{NativeContext, NativeResult},
 };
 use smallvec::smallvec;
 use sui_types::base_types::ObjectID;

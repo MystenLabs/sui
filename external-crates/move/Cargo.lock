@@ -144,7 +144,7 @@ dependencies = [
  "proc-macro-error2",
  "proc-macro2",
  "quote",
- "syn 2.0.98",
+ "syn 2.0.100",
 ]
 
 [[package]]
@@ -937,6 +937,12 @@ name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
+
+[[package]]
+name = "difference"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 
 [[package]]
 name = "digest"
@@ -2383,7 +2389,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 4.5.28",
+ "clap 4.5.32",
  "datatest-stable",
  "move-abstract-interpreter",
  "move-binary-format",
@@ -2630,7 +2636,7 @@ dependencies = [
  "append-only-vec",
  "aquamarine",
  "bimap",
- "clap 4.5.28",
+ "clap 4.5.32",
  "codespan-reporting",
  "datatest-stable",
  "derive-where",

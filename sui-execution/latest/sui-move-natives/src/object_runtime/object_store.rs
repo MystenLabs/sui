@@ -326,15 +326,16 @@ impl Inner<'_> {
     ) -> PartialVMResult<
         ObjectResult<CacheMetadata<(MoveObjectType, GlobalValue, ObjectFingerprint)>>,
     > {
-        // we copy the reference to the protocol config ahead of time for lifetime reasons
-        let protocol_config = self.protocol_config;
         // retrieve the object from storage if it exists
         let (cache_info, obj) = match self.get_or_fetch_object_from_store(parent, child)? {
             None => {
                 return Ok(ObjectResult::Loaded((
-                    child_move_type.clone(),
-                    GlobalValue::empty(),
-                    ObjectFingerprint::none(),
+                    CacheInfo::Cached,
+                    (
+                        child_move_type.clone(),
+                        GlobalValue::empty(),
+                        ObjectFingerprint::none(),
+                    ),
                 )))
             }
             Some(obj) => obj,

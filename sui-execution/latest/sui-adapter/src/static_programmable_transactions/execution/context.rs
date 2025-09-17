@@ -59,6 +59,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     SUI_FRAMEWORK_ADDRESS, TypeTag,
     accumulator_event::AccumulatorEvent,
+    accumulator_root::AccumulatorObjId,
     base_types::{
         MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR, SequenceNumber,
         SuiAddress, TxContext,
@@ -1682,6 +1683,8 @@ pub fn finish(
     deleted_object_ids: IndexSet<ObjectID>,
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     accumulator_events: Vec<MoveAccumulatorEvent>,
+    settlement_input_sui: u64,
+    settlement_output_sui: u64,
 ) -> Result<ExecutionResults, ExecutionError> {
     // Before finishing, ensure that any shared object taken by value by the transaction is either:
     // 1. Mutated (and still has a shared ownership); or
@@ -1807,7 +1810,10 @@ pub fn finish(
                     value,
                 };
 
-                AccumulatorEvent::new(accum_event.accumulator_id, write)
+                AccumulatorEvent::new(
+                    AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
+                    write,
+                )
             }
         })
         .collect();
@@ -1822,6 +1828,8 @@ pub fn finish(
         deleted_object_ids: deleted_object_ids.into_iter().collect(),
         user_events,
         accumulator_events,
+        settlement_input_sui,
+        settlement_output_sui,
     }))
 }
 
