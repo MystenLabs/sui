@@ -29,6 +29,7 @@ jobs:
               "push_to_dockerhub": true,
               "build_arm64": false,
               "graphql_rpc": true,
-              "indexer_alt": true
+              "indexer_alt": true,
+              "stress": true
             }
 
