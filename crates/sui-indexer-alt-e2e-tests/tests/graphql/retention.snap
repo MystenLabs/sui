@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 10 tasks
+processed 7 tasks
 
 init:
 A: object(0,0)
@@ -11,26 +11,14 @@ task 1, line 6:
 Checkpoint created: 1
 
 task 2, line 8:
-//# advance-epoch
-Epoch advanced: 1
-
-task 3, line 10:
-//# advance-epoch
-Epoch advanced: 2
+//# create-checkpoint
+Checkpoint created: 2
 
 task 4, line 12:
 //# create-checkpoint
-Checkpoint created: 4
+Checkpoint created: 3
 
-task 5, line 14:
-//# advance-epoch
-Epoch advanced: 3
-
-task 7, line 18:
-//# create-checkpoint
-Checkpoint created: 6
-
-task 8, lines 20-36:
+task 5, lines 14-30:
 //# run-graphql
 Response: {
   "data": {
@@ -40,14 +28,14 @@ Response: {
           "sequenceNumber": 0
         },
         "last": {
-          "sequenceNumber": 6
+          "sequenceNumber": 3
         }
       }
     }
   }
 }
 
-task 9, lines 38-50:
+task 6, lines 32-44:
 //# run-graphql
 Response: {
   "data": {
@@ -57,7 +45,7 @@ Response: {
           "sequenceNumber": 0
         },
         "last": {
-          "sequenceNumber": 6
+          "sequenceNumber": 3
         }
       }
     }
