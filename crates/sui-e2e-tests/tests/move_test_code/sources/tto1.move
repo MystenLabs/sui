@@ -3,6 +3,8 @@
 
 module move_test_code::tto;
 
+use sui::transfer::Receiving;
+
 public struct A has key, store {
     id: UID,
 }
