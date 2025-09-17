@@ -263,6 +263,7 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 // Version 96: Enable authority capabilities v2.
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
 //             Create Coin Registry object
+//             Enable checkpoint artifacts digest in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
