@@ -368,6 +368,7 @@ impl CheckpointSummary {
         end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
         randomness_rounds: Vec<RandomnessRound>,
+        checkpoint_commitments: Vec<CheckpointCommitment>,
     ) -> CheckpointSummary {
         let content_digest = *transactions.digest();
 
@@ -392,7 +393,7 @@ impl CheckpointSummary {
             end_of_epoch_data,
             timestamp_ms,
             version_specific_data,
-            checkpoint_commitments: Default::default(),
+            checkpoint_commitments,
         }
     }
 
@@ -966,6 +967,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -1001,6 +1003,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             0,
+            Vec::new(),
             Vec::new(),
         );
 
@@ -1043,6 +1046,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -1082,6 +1086,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             100,
+            Vec::new(),
             Vec::new(),
         )
     }

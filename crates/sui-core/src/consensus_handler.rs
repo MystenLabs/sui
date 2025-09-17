@@ -2100,6 +2100,7 @@ mod tests {
                 None,       // end_of_epoch_data
                 0,          // timestamp
                 Vec::new(), // randomness_rounds
+                Vec::new(), // checkpoint_artifact_digests
             );
             SignedCheckpointSummary::new(epoch, summary, &*state.secret, state.name)
         };

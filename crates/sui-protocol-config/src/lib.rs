@@ -263,6 +263,7 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 // Version 96: Enable authority capabilities v2.
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
 //             Create Coin Registry object
+//             Enable checkpoint artifacts digest in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -789,6 +790,10 @@ struct FeatureFlags {
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
+
+    // Enable including checkpoint artifacts digest in the summary.
+    #[serde(skip_serializing_if = "is_false")]
+    include_checkpoint_artifacts_digest_in_summary: bool,
 
     // If true, use MFP txns in load initial object debts.
     #[serde(skip_serializing_if = "is_false")]
@@ -2220,6 +2225,11 @@ impl ProtocolConfig {
     pub fn consensus_checkpoint_signature_key_includes_digest(&self) -> bool {
         self.feature_flags
             .consensus_checkpoint_signature_key_includes_digest
+    }
+
+    pub fn include_checkpoint_artifacts_digest_in_summary(&self) -> bool {
+        self.feature_flags
+            .include_checkpoint_artifacts_digest_in_summary
     }
 
     pub fn use_mfp_txns_in_load_initial_object_debts(&self) -> bool {
@@ -4017,6 +4027,11 @@ impl ProtocolConfig {
                     cfg.max_transactions_per_checkpoint = Some(20_000);
                 }
                 96 => {
+                    // Enable artifacts digest in devnet.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags
+                            .include_checkpoint_artifacts_digest_in_summary = true;
+                    }
                     cfg.feature_flags.correct_gas_payment_limit_check = true;
                     cfg.feature_flags.authority_capabilities_v2 = true;
                     cfg.feature_flags.use_mfp_txns_in_load_initial_object_debts = true;
