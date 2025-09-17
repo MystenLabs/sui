@@ -289,7 +289,7 @@ mod client_stats_tests {
             .get(&OperationType::Submit)
             .unwrap()
             .get();
-        println!("latency: {}", latency);
+        
         // With MovingWindow: (0.1 + 0.2) / 2 = 0.15
         assert!((latency - 0.15).abs() < 0.001);
     }

@@ -76,12 +76,12 @@ mod tests {
         let mut window = MovingWindow::new(0.0, 3);
 
         window.add_value(1.0);
-        assert_eq!(window.get(), 1.0);
-        assert_eq!(window.len(), 1);
+        assert_eq!(window.get(), 0.5);
+        assert_eq!(window.len(), 2);
 
         window.add_value(2.0);
-        assert_eq!(window.get(), 1.5);
-        assert_eq!(window.len(), 2);
+        assert_eq!(window.get(), 1.0);
+        assert_eq!(window.len(), 3);
 
         window.add_value(3.0);
         assert_eq!(window.get(), 2.0);
