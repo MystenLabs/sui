@@ -72,17 +72,20 @@ pub struct LegacyPackageMetadata {
 pub fn try_load_legacy_manifest(
     path: &PackagePath,
     default_env: &Environment,
-) -> Option<(FileHandle, ParsedManifest)> {
+) -> anyhow::Result<Option<(FileHandle, ParsedManifest)>> {
     let Ok(file_handle) = FileHandle::new(path.manifest_path()) else {
-        return None;
+        debug!("failed to load legacy file");
+        return Ok(None);
     };
 
     let Ok(parsed) = parse_move_manifest_string(file_handle.source()) else {
-        return None;
+        debug!("failed to parse manifest as toml");
+        return Ok(None);
     };
 
     let TV::Table(ref table) = parsed else {
-        return None;
+        debug!("parsed manifest was not a table");
+        return Ok(None);
     };
 
     let has_legacy_fields = [ADDRESSES_NAME, DEV_ADDRESSES_NAME, DEV_DEPENDENCY_NAME]
@@ -90,12 +93,14 @@ pub fn try_load_legacy_manifest(
         .any(|key| table.contains_key(key));
 
     if !has_legacy_fields {
-        return None;
+        debug!("manifest didn't have legacy fields");
+        return Ok(None);
     }
 
-    parse_source_manifest(parsed, path, default_env)
-        .ok()
-        .map(|parsed| (file_handle, parsed))
+    debug!("parsing legacy manifest");
+    let manifest = parse_source_manifest(parsed, path, default_env)?;
+    debug!("successfully parsed");
+    Ok(Some((file_handle, manifest)))
 }
 
 fn parse_move_manifest_string(manifest_string: &str) -> Result<TV> {
