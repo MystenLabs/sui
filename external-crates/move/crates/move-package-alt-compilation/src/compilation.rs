@@ -204,7 +204,12 @@ pub fn build_for_driver<W: Write, T, F: MoveFlavor>(
 
     debug!("Package paths {:#?}", package_paths);
 
-    writeln!(w, "{} {}", "BUILDING".bold().green(), root_pkg.name())?;
+    writeln!(
+        w,
+        "{} {}",
+        "BUILDING".bold().green(),
+        root_pkg.display_name()
+    )?;
 
     let lint_level = build_config.lint_flag.get();
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
@@ -349,7 +354,7 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
     let mut package_paths: Vec<PackagePaths> = vec![];
     // let cwd = std::env::current_dir()?;
     for pkg in packages.into_iter() {
-        let name: Symbol = pkg.name().as_str().into();
+        let name: Symbol = pkg.display_name().into();
 
         if !pkg.is_root() {
             writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
