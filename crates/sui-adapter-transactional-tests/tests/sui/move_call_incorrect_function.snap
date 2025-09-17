@@ -11,7 +11,7 @@ gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 
 
 task 2, lines 16-18:
 //# run 0x242::M::create
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000242 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000242
 
 task 3, line 19:
 //# run Test::M::foo

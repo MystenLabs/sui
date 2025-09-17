@@ -41,10 +41,12 @@ pub(crate) fn convert_datatype(
             let proto_fields = fields
                 .iter()
                 .enumerate()
-                .map(|(pos, (name, sig))| FieldDescriptor {
-                    name: Some(name.clone()),
-                    position: Some(pos as u32),
-                    r#type: Some(convert_open_signature_body(sig)),
+                .map(|(pos, (name, sig))| {
+                    let mut message = FieldDescriptor::default();
+                    message.name = Some(name.clone());
+                    message.position = Some(pos as u32);
+                    message.r#type = Some(convert_open_signature_body(sig));
+                    message
                 })
                 .collect();
             (DatatypeKind::Struct, proto_fields, vec![])
@@ -59,22 +61,22 @@ pub(crate) fn convert_datatype(
         }
     };
 
-    DatatypeDescriptor {
-        type_name: Some(format!(
-            "{}::{}::{}",
-            package_id.to_canonical_string(true),
-            module_name,
-            datatype_name
-        )),
-        defining_id: Some(data_def.defining_id.to_canonical_string(true)),
-        module: Some(module_name.to_string()),
-        name: Some(datatype_name.to_string()),
-        abilities,
-        type_parameters,
-        kind: Some(kind as i32),
-        fields,
-        variants,
-    }
+    let mut message = DatatypeDescriptor::default();
+    message.type_name = Some(format!(
+        "{}::{}::{}",
+        package_id.to_canonical_string(true),
+        module_name,
+        datatype_name
+    ));
+    message.defining_id = Some(data_def.defining_id.to_canonical_string(true));
+    message.module = Some(module_name.to_string());
+    message.name = Some(datatype_name.to_string());
+    message.abilities = abilities;
+    message.type_parameters = type_parameters;
+    message.kind = Some(kind as i32);
+    message.fields = fields;
+    message.variants = variants;
+    message
 }
 
 pub(crate) fn convert_module(
@@ -114,12 +116,11 @@ pub(crate) fn convert_module(
         functions.push(descriptor);
     }
 
-    Ok(Module {
-        name: Some(module_name.to_string()),
-        datatypes,
-        functions,
-        contents: None,
-    })
+    let mut message = Module::default();
+    message.name = Some(module_name.to_string());
+    message.datatypes = datatypes;
+    message.functions = functions;
+    Ok(message)
 }
 
 pub(crate) fn convert_function(function_name: &str, func_def: &FunctionDef) -> FunctionDescriptor {
@@ -132,9 +133,10 @@ pub(crate) fn convert_function(function_name: &str, func_def: &FunctionDef) -> F
     let type_parameters = func_def
         .type_params
         .iter()
-        .map(|abilities| TypeParameter {
-            constraints: convert_ability_set(*abilities),
-            is_phantom: None,
+        .map(|abilities| {
+            let mut message = TypeParameter::default();
+            message.constraints = convert_ability_set(*abilities);
+            message
         })
         .collect();
 
@@ -149,21 +151,21 @@ pub(crate) fn convert_function(function_name: &str, func_def: &FunctionDef) -> F
         .map(convert_open_signature)
         .collect();
 
-    FunctionDescriptor {
-        name: Some(function_name.to_string()),
-        visibility: Some(visibility as i32),
-        is_entry: Some(func_def.is_entry),
-        type_parameters,
-        parameters,
-        returns,
-    }
+    let mut message = FunctionDescriptor::default();
+    message.name = Some(function_name.to_string());
+    message.visibility = Some(visibility as i32);
+    message.is_entry = Some(func_def.is_entry);
+    message.type_parameters = type_parameters;
+    message.parameters = parameters;
+    message.returns = returns;
+    message
 }
 
 fn convert_type_parameter(tp: &DatatypeTyParameter) -> TypeParameter {
-    TypeParameter {
-        constraints: convert_ability_set(tp.constraints),
-        is_phantom: Some(tp.is_phantom),
-    }
+    let mut message = TypeParameter::default();
+    message.constraints = convert_ability_set(tp.constraints);
+    message.is_phantom = Some(tp.is_phantom);
+    message
 }
 
 fn convert_ability_set(abilities: MoveAbilitySet) -> Vec<i32> {
@@ -190,18 +192,20 @@ fn convert_variant(position: usize, variant: &VariantDef) -> VariantDescriptor {
         .signatures
         .iter()
         .enumerate()
-        .map(|(pos, (name, sig))| FieldDescriptor {
-            name: Some(name.clone()),
-            position: Some(pos as u32),
-            r#type: Some(convert_open_signature_body(sig)),
+        .map(|(pos, (name, sig))| {
+            let mut message = FieldDescriptor::default();
+            message.name = Some(name.clone());
+            message.position = Some(pos as u32);
+            message.r#type = Some(convert_open_signature_body(sig));
+            message
         })
         .collect();
 
-    VariantDescriptor {
-        name: Some(variant.name.clone()),
-        position: Some(position as u32),
-        fields,
-    }
+    let mut message = VariantDescriptor::default();
+    message.name = Some(variant.name.clone());
+    message.position = Some(position as u32);
+    message.fields = fields;
+    message
 }
 
 fn convert_open_signature(sig: &sui_package_resolver::OpenSignature) -> OpenSignature {
@@ -210,10 +214,10 @@ fn convert_open_signature(sig: &sui_package_resolver::OpenSignature) -> OpenSign
         sui_package_resolver::Reference::Mutable => Reference::Mutable as i32,
     });
 
-    OpenSignature {
-        reference,
-        body: Some(convert_open_signature_body(&sig.body)),
-    }
+    let mut message = OpenSignature::default();
+    message.reference = reference;
+    message.body = Some(convert_open_signature_body(&sig.body));
+    message
 }
 
 fn convert_open_signature_body(
@@ -250,10 +254,10 @@ fn convert_open_signature_body(
         }
     };
 
-    OpenSignatureBody {
-        r#type: Some(type_enum as i32),
-        type_name,
-        type_parameter_instantiation: type_params,
-        type_parameter: type_param_idx,
-    }
+    let mut message = OpenSignatureBody::default();
+    message.r#type = Some(type_enum as i32);
+    message.type_name = type_name;
+    message.type_parameter_instantiation = type_params;
+    message.type_parameter = type_param_idx;
+    message
 }

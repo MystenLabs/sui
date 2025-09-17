@@ -2200,7 +2200,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
         assert_matches!(
             response.unwrap_err(),
             SuiError::UserInputError {
-                error: UserInputError::TooManyTransactionsInSoftBundle { .. },
+                error: UserInputError::TooManyTransactionsInBatch { .. },
             }
         );
     }
@@ -2481,7 +2481,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
         assert_matches!(
             response.unwrap_err(),
             SuiError::UserInputError {
-                error: UserInputError::SoftBundleTooLarge {
+                error: UserInputError::TotalTransactionSizeTooLargeInBatch {
                     size: 25116,
                     limit: 5000
                 },
@@ -2516,4 +2516,51 @@ fn sender_signed_data_serialized_intent() {
     txn.inner_mut().intent_message.intent.scope = IntentScope::TransactionEffects;
     let e = bcs::to_bytes(txn.inner()).unwrap_err();
     assert!(e.to_string().contains("invalid Intent for Transaction"));
+}
+
+#[test]
+fn test_gas_payment_limit_check() {
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.set_correct_gas_payment_limit_check_for_testing(false);
+    protocol_config.set_max_gas_payment_objects_for_testing(1);
+
+    let recipient = dbg_addr(2);
+
+    let (sender, _): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+    let input_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+    let input_object_ref = input_object.compute_full_object_reference();
+
+    // need to construct tx before authority, so we have to hardcode rgp
+    let rgp = 1000;
+
+    let data = TransactionData::new_transfer(
+        recipient,
+        input_object_ref,
+        sender,
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    // 1 < 1 is false
+    protocol_config.set_correct_gas_payment_limit_check_for_testing(false);
+    protocol_config.set_max_gas_payment_objects_for_testing(1);
+    assert!(data
+        .validity_check(&protocol_config)
+        .unwrap_err()
+        .to_string()
+        .contains("maximum number of gas payment objects"));
+
+    // 1 < 2 is true
+    protocol_config.set_correct_gas_payment_limit_check_for_testing(false);
+    protocol_config.set_max_gas_payment_objects_for_testing(2);
+    assert!(data.validity_check(&protocol_config).is_ok());
+
+    // 1 <= 1 is true
+    protocol_config.set_correct_gas_payment_limit_check_for_testing(true);
+    protocol_config.set_max_gas_payment_objects_for_testing(1);
+    assert!(data.validity_check(&protocol_config).is_ok());
 }

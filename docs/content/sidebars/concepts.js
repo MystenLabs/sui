@@ -30,6 +30,7 @@ const concepts = [
 						items: [
 							'concepts/object-ownership/address-owned',
 							'concepts/object-ownership/immutable',
+							'concepts/object-ownership/party',
 							'concepts/object-ownership/shared',
 							'concepts/object-ownership/wrapped',
 						],
@@ -41,7 +42,9 @@ const concepts = [
 							type: 'doc',
 							id: 'concepts/transfers',
 						},
-						items: ['concepts/transfers/custom-rules', 'concepts/transfers/transfer-to-object'],
+						items: ['concepts/transfers/custom-rules', 
+								'concepts/transfers/transfer-policies',
+							    'concepts/transfers/transfer-to-object'],
 					},
 					'concepts/versioning',
 				],
@@ -76,7 +79,9 @@ const concepts = [
 						},
 						items: ['concepts/dynamic-fields/tables-bags'],
 					},
-					'concepts/sui-move-concepts/conventions',
+					'concepts/sui-move-concepts/derived-objects',
+					'concepts/sui-move-concepts/conventions'
+					
 				],
 			},
 			{
@@ -93,20 +98,21 @@ const concepts = [
 				],
 			},
 			'concepts/grpc-overview',
-			'concepts/graphql-rpc',
-			'concepts/archival-store',
 			'concepts/gaming'
 		],
 	},
 	{ 
 		type: 'category',
-		label: 'Custom Indexing Framework',
+		label: 'GraphQL and Indexer Framework',
 		link: {
 			type: 'doc',
-			id: 'concepts/custom-indexing-framework',
+			id: 'concepts/graphql-indexer',
 		},
 		items: [
-			'concepts/custom-indexer/pipeline-architecture'
+			'concepts/graphql-rpc',
+			'concepts/custom-indexing-framework',
+			'concepts/custom-indexer/pipeline-architecture',
+			'concepts/archival-store'
 		]
 	},
 	{

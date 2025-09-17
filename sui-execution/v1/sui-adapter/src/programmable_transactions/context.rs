@@ -762,6 +762,9 @@ mod checked {
                 user_events,
                 // no accumulator events for v1
                 accumulator_events: vec![],
+                // no settlement input/output for v1
+                settlement_input_sui: 0,
+                settlement_output_sui: 0,
             }))
         }
 
@@ -1206,7 +1209,7 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
-            CallArg::BalanceWithdraw(_) => {
+            CallArg::FundsWithdrawal(_) => {
                 unreachable!("Impossible to hit BalanceWithdraw in v1")
             }
         })

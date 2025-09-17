@@ -17,7 +17,10 @@ use sui_types::{
     effects::TransactionEffectsAPI as _,
     error::SuiError,
     messages_consensus::ConsensusPosition,
-    messages_grpc::RawWaitForEffectsRequest,
+    messages_grpc::{
+        ExecutedData, RawWaitForEffectsRequest, SubmitTxResult, WaitForEffectsRequest,
+        WaitForEffectsResponse,
+    },
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::time::{sleep, timeout};
@@ -36,8 +39,7 @@ use crate::{
         },
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
-        ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
-        WaitForEffectsRequest, WaitForEffectsResponse,
+        QuorumTransactionResponse, SubmitTransactionOptions,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -66,7 +68,8 @@ impl EffectsCertifier {
         tx_type: TxType,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
-        submit_txn_resp: SubmitTxResponse,
+        // Guaranteed to be not the Rejected variant.
+        submit_txn_result: SubmitTxResult,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
@@ -75,9 +78,10 @@ impl EffectsCertifier {
         // When consensus position is provided, wait for finalized and fastpath outputs at the validators' side.
         // Otherwise, only wait for finalized effects.
         // Skip the first attempt to get full effects if it is already provided.
-        let (consensus_position, full_effects) = match submit_txn_resp {
-            SubmitTxResponse::Submitted { consensus_position } => (Some(consensus_position), None),
-            SubmitTxResponse::Executed {
+
+        let (consensus_position, full_effects) = match submit_txn_result {
+            SubmitTxResult::Submitted { consensus_position } => (Some(consensus_position), None),
+            SubmitTxResult::Executed {
                 effects_digest,
                 details,
                 fast_path,
@@ -87,6 +91,14 @@ impl EffectsCertifier {
                 // But if it is not set, continuing to get full effects and certify the digest are still correct.
                 None => (None, None),
             },
+            SubmitTxResult::Rejected { error } => {
+                return Err(TransactionDriverError::Internal {
+                    error: format!(
+                        "Unexpected submission error in get_certified_finalized_effects(): {}",
+                        error
+                    ),
+                });
+            }
         };
 
         let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
@@ -129,8 +141,6 @@ impl EffectsCertifier {
 
         // Retry until there is a valid full effects that matches the certified digest, or all targets
         // have been attempted.
-        //
-        // TODO(fastpath): send backup requests to get full effects before timeout or failure.
         loop {
             let display_name = authority_aggregator.get_display_name(&current_target);
             match full_effects_result {
@@ -204,16 +214,16 @@ impl EffectsCertifier {
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            transaction_digest: *tx_digest,
+        let request = WaitForEffectsRequest {
+            transaction_digest: Some(*tx_digest),
             consensus_position,
             include_details: true,
-        })
-        .unwrap();
+            ping: None,
+        };
 
         match timeout(
             WAIT_FOR_EFFECTS_TIMEOUT,
-            client.wait_for_effects(raw_request.clone(), options.forwarded_client_addr),
+            client.wait_for_effects(request, options.forwarded_client_addr),
         )
         .await
         {
@@ -272,9 +282,10 @@ impl EffectsCertifier {
             .collect::<Vec<_>>();
         let committee = authority_aggregator.committee.clone();
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            transaction_digest: *tx_digest,
+            transaction_digest: Some(*tx_digest),
             consensus_position,
             include_details: false,
+            ping: None,
         })
         .unwrap();
 
@@ -556,8 +567,9 @@ impl EffectsCertifier {
             .map(jitter);
         // This loop should only retry errors that are retriable without new submission.
         for (attempt, delay) in backoff.enumerate() {
+            let request: WaitForEffectsRequest = raw_request.clone().try_into().unwrap();
             let result = client
-                .wait_for_effects(raw_request.clone(), options.forwarded_client_addr)
+                .wait_for_effects(request, options.forwarded_client_addr)
                 .await;
             match result {
                 Ok(response) => {

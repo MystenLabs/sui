@@ -6,7 +6,7 @@ use crate::parser::lexer::{TOK_COUNT, Tok};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-use super::ast::{ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER};
+use super::ast::{ENTRY_MODIFIER, EXTEND_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER};
 
 #[derive(Clone, Debug)]
 pub struct TokenSet {
@@ -34,6 +34,14 @@ const MEMBER_VISIBILITY_TOKENS: &[Tok] = &[Tok::Public];
 
 const MEMBER_MODIFIER_TOKENS: &[Tok] = &[Tok::Native];
 
+pub static MODULE_START_SET: Lazy<TokenSet> = Lazy::new(|| {
+    let mut token_set = TokenSet::new();
+    token_set.add_identifier(EXTEND_MODIFIER);
+    token_set.add(Tok::Module);
+    token_set.add(Tok::Spec);
+    token_set
+});
+
 pub static MODULE_MEMBER_OR_MODULE_START_SET: Lazy<TokenSet> = Lazy::new(|| {
     let mut token_set = TokenSet::new();
     token_set.add_all(MODULE_MEMBER_TOKENS);
@@ -42,7 +50,8 @@ pub static MODULE_MEMBER_OR_MODULE_START_SET: Lazy<TokenSet> = Lazy::new(|| {
     token_set.add_identifier(MACRO_MODIFIER);
     token_set.add_identifier(ENTRY_MODIFIER);
     token_set.add_identifier(NATIVE_MODIFIER);
-    token_set.add(Tok::Module);
+    // Add module starts
+    token_set.union(&MODULE_START_SET);
     // both a member and module can be annotated
     token_set.add(Tok::NumSign);
     token_set

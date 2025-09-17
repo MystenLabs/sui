@@ -14,6 +14,7 @@ module test::regulated_coin1 {
 
     public struct REGULATED_COIN1 has drop {}
 
+    #[allow(deprecated_usage)]
     fun init(otw: REGULATED_COIN1, ctx: &mut TxContext) {
         let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
             otw,
@@ -38,6 +39,7 @@ module test::regulated_coin2 {
 
     public struct REGULATED_COIN2 has drop {}
 
+    #[allow(deprecated_usage)]
     fun init(otw: REGULATED_COIN2, ctx: &mut TxContext) {
         let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
             otw,

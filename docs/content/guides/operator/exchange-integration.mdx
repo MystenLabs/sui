@@ -132,9 +132,9 @@ Sui is a DAG-based blockchain and uses checkpoints for node synchronization and 
 ### Checkpoint API operations
 
 Sui Checkpoint API operations include:
- - [sui_getCheckpoint](/sui-api-ref#sui_getCheckpoint) - Retrieves the specified checkpoint.
- - [sui_getLatestCheckpointSequenceNumber](/sui-api-ref#sui_getLatestCheckpointSequenceNumber) - Retrieves the sequence number of the most recently executed checkpoint.
- - [sui_getCheckpoints](/sui-api-ref#sui_getCheckpoints) - Retrieves a paginated list of checkpoints that occurred during the specified interval. Pending a future release.
+ - [`sui_getCheckpoint`](/sui-api-ref#sui_getCheckpoint): Retrieves the specified checkpoint.
+ - [`sui_getLatestCheckpointSequenceNumber`](/sui-api-ref#sui_getLatestCheckpointSequenceNumber): Retrieves the sequence number of the most recently executed checkpoint.
+ - [`sui_getCheckpoints`](/sui-api-ref#sui_getCheckpoints): Retrieves a paginated list of checkpoints that occurred during the specified interval. Pending a future release.
 
 ## SUI balance transfer
 
@@ -148,16 +148,13 @@ To transfer a specific amount of SUI, you need a SUI token worth that specific a
 
 Sui supports the following API operations related to transferring SUI between addresses:
 
- - [sui_transferObject](/sui-api-ref#sui_transferObject)
-   Because SUI tokens are objects, you can transfer SUI tokens just like any other object. This method requires a gas token, and is useful in niche cases only.
+ - [`sui_transferObject`](/sui-api-ref#sui_transferObject): Because SUI tokens are objects, you can transfer SUI tokens just like any other object. This method requires a gas token, and is useful in niche cases only.
 
- - [sui_payAllSui](/sui-api-ref#sui_payAllSui)
-   This method accepts an array of SUI token IDs. It merges all existing tokens into one, deducts the gas fee, then sends the merged token to the recipient address.
+ - [`sui_payAllSui`](/sui-api-ref#sui_payAllSui): This method accepts an array of SUI token IDs. It merges all existing tokens into one, deducts the gas fee, then sends the merged token to the recipient address.
 
    The method is especially useful if you want to transfer all SUI from an address. To merge together all coins for an address, set the recipient as the same address. This is a native Sui method and does not produce additional on-chain transaction objects for the internal merge operation.
 
- - [sui_paySui](/sui-api-ref#sui_paySui)
-   This operation accepts an array of SUI token IDs, an array of amounts, and an array of recipient addresses.
+ - [`sui_paySui`](/sui-api-ref#sui_paySui): This operation accepts an array of SUI token IDs, an array of amounts, and an array of recipient addresses.
 
    The amounts and recipients array map one to one. Even if you use only one recipient address, you must include it for each amount in the amount array.
 
@@ -165,11 +162,9 @@ Sui supports the following API operations related to transferring SUI between ad
 
    The benefits of this method include: no gas fees for merging or splitting tokens, and the abstracted token merge and split. The `sui_paySui` operation is a native function, so the merge and split operations are not considered Sui transactions. The gas fees for them match typical transactions on Sui.You can use this operation to split coins in your own address by setting the recipient as your own address. Note that the total value of the input coins must be greater than the total value of the amounts to send.
 
- - [sui_pay](/sui-api-ref#sui_pay)
-   This method is similar to sui_paySui, but it accepts any kind of coin or token instead of only SUI. You must include a gas token, and all of the coins or tokens must be the same type.
+ - [`sui_pay`](/sui-api-ref#sui_pay): This method is similar to sui_paySui, but it accepts any kind of coin or token instead of only SUI. You must include a gas token, and all of the coins or tokens must be the same type.
 
- - [sui_transferSui](/sui-api-ref#sui_transferSui)
-    This method accepts only one SUI token object and an amount to send to the recipient. It uses the same token for gas fees, so the amount to transfer must be strictly less than the value of the SUI token used.
+ - [`sui_transferSui`](/sui-api-ref#sui_transferSui): This method accepts only one SUI token object and an amount to send to the recipient. It uses the same token for gas fees, so the amount to transfer must be strictly less than the value of the SUI token used.
 
 ## Signing transactions
 
@@ -187,74 +182,70 @@ The total voting power in the Sui Network is always 10,000. The voting power of 
 
 Sui supports the following API operations related to staking. You can find the source code in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move) module.
 
- - `request_add_stake`
- Add user stake to a validator's staking pool.
+ - `request_add_stake`: Add user stake to a validator's staking pool.
 
-```move
-public fun request_add_stake(
-   self: &mut SuiSystemState,
-   stake: Coin<SUI>,
-   validator_address: address,
-   ctx: &mut TxContext,
-) {
-   validator_set::request_add_stake(
-       &mut self.validators,
-       validator_address,
-       coin::into_balance(stake),
-       option::none(),
-       ctx,
-   );
-}
-```
+   ```move
+   public fun request_add_stake(
+      self: &mut SuiSystemState,
+      stake: Coin<SUI>,
+      validator_address: address,
+      ctx: &mut TxContext,
+   ) {
+      validator_set::request_add_stake(
+         &mut self.validators,
+         validator_address,
+         coin::into_balance(stake),
+         option::none(),
+         ctx,
+      );
+   }
+   ```
 
- - `request_add_stake_mul_coin`
- Add user stake to a validator's staking pool using multiple coins.
+ - `request_add_stake_mul_coin`: Add user stake to a validator's staking pool using multiple coins.
 
-```move
-public fun request_add_stake_mul_coin(
-   self: &mut SuiSystemState,
-   delegate_stakes: vector<Coin<SUI>>,
-   stake_amount: option::Option<u64>,
-   validator_address: address,
-   ctx: &mut TxContext,
-) {
-   let balance = extract_coin_balance(delegate_stakes, stake_amount, ctx);
-   validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::none(), ctx);
-}
-```
+   ```move
+   public fun request_add_stake_mul_coin(
+      self: &mut SuiSystemState,
+      delegate_stakes: vector<Coin<SUI>>,
+      stake_amount: option::Option<u64>,
+      validator_address: address,
+      ctx: &mut TxContext,
+   ) {
+      let balance = extract_coin_balance(delegate_stakes, stake_amount, ctx);
+      validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::none(), ctx);
+   }
+   ```
 
- - `request_add_stake_with_locked_coin`
- Add user stake to a validator's staking pool using a locked SUI coin.
+ - `request_add_stake_with_locked_coin`: Add user stake to a validator's staking pool using a locked SUI coin.
 
-```move
-public fun request_add_stake_with_locked_coin(
-   self: &mut SuiSystemState,
-   stake: LockedCoin<SUI>,
-   validator_address: address,
-   ctx: &mut TxContext,
-) {
-   let (balance, lock) = locked_coin::into_balance(stake);
-   validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::some(lock), ctx);
-}
-```
+   ```move
+   public fun request_add_stake_with_locked_coin(
+      self: &mut SuiSystemState,
+      stake: LockedCoin<SUI>,
+      validator_address: address,
+      ctx: &mut TxContext,
+   ) {
+      let (balance, lock) = locked_coin::into_balance(stake);
+      validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::some(lock), ctx);
+   }
+   ```
 
- - `request_withdraw_stake`
- Withdraw some portion of a user stake from a validator's staking pool.
+ - `request_withdraw_stake`: Withdraw some portion of a user stake from a validator's staking pool.
 
-```move
-public fun request_withdraw_stake(
-   self: &mut SuiSystemState,
-   delegation: &mut Delegation,
-   staked_sui: &mut StakedSui,
-   principal_withdraw_amount: u64,
-   ctx: &mut TxContext,
-) {
-   validator_set::request_withdraw_stake(
-       &mut self.validators,
-       delegation,
-       staked_sui,
-       principal_withdraw_amount,
-       ctx,
-   );
-}
-```
+   ```move
+   public fun request_withdraw_stake(
+      self: &mut SuiSystemState,
+      delegation: &mut Delegation,
+      staked_sui: &mut StakedSui,
+      principal_withdraw_amount: u64,
+      ctx: &mut TxContext,
+   ) {
+      validator_set::request_withdraw_stake(
+         &mut self.validators,
+         delegation,
+         staked_sui,
+         principal_withdraw_amount,
+         ctx,
+      );
+   }
+   ```

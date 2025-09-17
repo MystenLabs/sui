@@ -172,7 +172,11 @@ fn resolve_unresolved_transaction(
         let max_gas_budget = if payment.is_empty() {
             max_gas_budget
         } else {
-            gas_coins.iter().map(|(_, value)| *value).sum()
+            gas_coins
+                .iter()
+                .map(|(_, value)| *value)
+                .sum::<u64>()
+                .min(max_gas_budget)
         };
         GasData {
             payment,
@@ -695,6 +699,7 @@ fn find_arg_uses(
                 .position(|elem| matches_input_arg(*elem, arg_idx))
                 .map(Some),
             Command::Upgrade(upgrade) => matches_input_arg(upgrade.ticket, arg_idx).then_some(None),
+            _ => None,
         }
         .map(|x| (command, x))
     })

@@ -1,0 +1,12 @@
+[package]
+name = "a"
+edition = "2024.alpha"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+testing = { local = "../test_extension" }
+
+[addresses]
+a = "0xb"
+testing = "0xf"
+std = "0x1"

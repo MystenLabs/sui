@@ -1184,7 +1184,7 @@ mod test {
                 LocalValidatorAggregatorProxy::from_genesis(
                     &genesis,
                     &registry,
-                    Some(test_cluster.fullnode_handle.rpc_url.as_str()),
+                    &test_cluster.fullnode_handle.rpc_url,
                     test_cluster.transaction_driver_percentage(),
                 )
                 .await,

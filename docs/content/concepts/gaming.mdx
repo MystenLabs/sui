@@ -2,8 +2,6 @@
 title: Gaming on Sui
 description: Sui offers features like dynamic NFTs, kiosks, soulbound assets, and on-chain randomness, to provide builders with the tools to create immersive, transparent, and fair gaming experiences.
 keywords: [ gaming, game components, game features, game nfts, soulbound assets, create games on sui, build games on sui, sui Object Display, game economics, kiosk, sui kiosk, token economics ]
-mdx:
-  format: md
 ---
 
 Gaming on Sui leverages blockchain technology to enhance in-game economies, ownership, and interactions. With features like dynamic NFTs, kiosks, soulbound assets, and on-chain randomness, Sui provides builders with the tools to create immersive, transparent, and fair gaming experiences. Players benefit from true asset ownership, decentralized marketplaces, and seamless Web3 integration without compromising usability.
@@ -46,7 +44,7 @@ On Sui, everything is an object and all objects are NFTs. For the purpose of the
 
 You can view an object on Sui as a key-value pair data structure. In Move, the smart contract language of Sui, objects are defined as a `struct`. As an example, consider the game board of a tic-tac-toe game: 
 
-{@inject:  ../../../examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
+<ImportContent source="examples/tic-tac-toe/move/sources/owned.move" mode="code" struct="Game" noComments />
 
 The first key-value pair for any object is `id: address`, which is a unique value of type `UID`. Every object has a different address, which is why every object is an NFT because this mandatory key-value pair sets each object apart and makes it unique.
 
@@ -54,7 +52,7 @@ The first key-value pair for any object is `id: address`, which is a unique valu
 
 Smart contracts contain the functions that create objects. Using the previous example, the function (`new`) that creates the object represented (a digital tic-tac-toe gameboard) provides the values for each attribute. The Sui framework creates the UID that uniquely identifies this particular game.
 
-{@inject:  ../../../examples/tic-tac-toe/move/sources/owned.move#fun=new noComments}
+<ImportContent source="examples/tic-tac-toe/move/sources/owned.move" mode="code" fun="new" noComments />
 
 This is an on-chain action, or transaction. In this case, the transaction is a request to the chain to create an object. You provide the necessary data to the function and pay the gas fee for the computation effort of the network validators. The result is the creation of a new NFT that exists on the Sui blockchain at the address (`id`).
 
@@ -70,13 +68,13 @@ For more information on the computation of gas fees, see [Sui Gas Pricing](./tok
 
 On Sui, you can include one object inside of another (dynamic fields). For example, an object named `Parent` might contain objects of type `Child`. The smart contract can provide the necessary functions to add and remove the child objects from their parents. 
 
-{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#struct=Parent}
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" struct="Parent"/>
 
-{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#struct=Child}
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" struct="Child"/>
 
 The function to add child objects to a parent might resemble the following. In this case, `ofield` is an alias for the `sui::dynamic_object_field` package.
 
-{@inject:  ../../../examples/move/dynamic_fields/sources/example.move#fun=add_child}
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" fun="add_child"/>
 
 You can apply dynamic fields to many use cases. An object named `TicketBooth`, for example, could contain objects of type `ConcertTicket`. An object of type `Car` might have a field named `is_functioning` that is `false` until all necessary objects (`Engine`, `Tires`, `Body`, `Wheel`) are present, at which point it can automatically update its `is_functioning` field to `true`.
 
@@ -462,18 +460,17 @@ By integrating these Sui blockchain features, ArcaneBattles not only enhances th
 
 ## Related links
 
-- [Coin Standard](../standards/coin.mdx): The Sui Coin standard enables you to create a broad range of fungible tokens on the Sui network to satisfy a number of use cases. The Coin standed on Sui is equivalent to the ERC-20 technical standard on Ethereum.
-- [Create Coins and Tokens](../guides/developer/coin.mdx): Learn how to mint coins and tokens on the Sui network.
-- [Create a Non-Fungible Token](../guides/developer/nft.mdx): On Sui, everything is an object. Moreover, everything is a non-fungible token (NFT) as its objects are unique, non-fungible, and owned.
-- [Asset Tokenization](../guides/developer/nft/asset-tokenization.mdx): Learn how to tokenize assets on the Sui blockchain. Asset tokenization refers to the process of representing real-world assets, such as real estate, art, commodities, stocks, or other valuable assets, as digital tokens on the blockchain network.
-- [NFT Rental Example](../guides/developer/nft/nft-rental.mdx): An example using the Kiosk Apps standard that provides the ability for users to rent NFTs according to the rules of a provided policy instead of outright owning them. This approach closely aligns with the ERC-4907 renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
-- [Kiosk](../standards/kiosk.mdx): Kiosk is a decentralized system for commerce applications on Sui. Kiosk is a part of the Sui framework, native to the system, and available to everyone.
-- [Kiosk Apps](../standards/kiosk-apps.mdx): Kiosk apps are a way to extend the functionality of Sui Kiosk while keeping the core functionality intact. You can develop apps to add new features to a kiosk without having to modify the core code or move the assets elsewhere.
-- [zkLogin](../concepts/cryptography/zklogin.mdx): zkLogin is a Sui primitive that enables you to send transactions from a Sui address using an OAuth credential, without publicly linking the two.
-- [Sui Foundation blog](https://blog.sui.io/tag/gaming/): Blog posts from the Sui Foundation with the `gaming` tag.
-- Guides for example games
-    - [Coin Flip](../guides/developer/app-examples/coin-flip.mdx): Learn Sui through a coin flip dApp that covers the full end-to-end flow of building a Sui Move module and connecting it to a React Sui dApp.
-    - [Blackjack](../guides/developer/app-examples/blackjack.mdx): Learn Sui using an example implementation of the popular casino game blackjack.
-    - [Plinko](../guides/developer/app-examples/plinko.mdx): Learn Sui through an example implementation of the popular casino game, Plinko.
-- [Mysticon Legends](https://github.com/MystenLabs/mysticon-legends) repo on GitHub: A blockchain-based game where players collect, train, and battle with mythical creatures called Mysticons.
-- [Web3 Mini Games built on Sui](https://mini-games.sui.io/): A collection of mini games, to inspire the community of Sui.
+<RelatedLink to="/standards/coin.mdx" />
+<RelatedLink to="/guides/developer/coin.mdx" />
+<RelatedLink to="/guides/developer/nft.mdx" />
+<RelatedLink to="/guides/developer/nft/asset-tokenization.mdx" />
+<RelatedLink to="/guides/developer/nft/nft-rental.mdx" />
+<RelatedLink to="/standards/kiosk.mdx" />
+<RelatedLink to="/standards/kiosk-apps.mdx" />
+<RelatedLink to="/concepts/cryptography/zklogin.mdx" />
+<RelatedLink href="https://blog.sui.io/tag/gaming/" label="Sui Foundation blog" desc="Blog posts from the Sui Foundation with the `gaming` tag." />
+<RelatedLink to="/guides/developer/app-examples/coin-flip.mdx" />
+<RelatedLink to="/guides/developer/app-examples/blackjack.mdx" />
+<RelatedLink to="/guides/developer/app-examples/plinko.mdx" />
+<RelatedLink href="https://github.com/MystenLabs/mysticon-legends" label="Mysticon Legends" desc="GitHub repo for a blockchain-based game where players collect, train, and battle with mythical creatures called Mysticons." />
+<RelatedLink href="https://mini-games.sui.io/" label="Web3 Mini Games built on Sui" desc="A collection of mini games, to inspire the community of Sui." />

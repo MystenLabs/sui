@@ -1,0 +1,88 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 6-25:
+//# publish
+created: object(1,0)
+mutated: object(0,3)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 27:
+//# run Test::M1::create --sender A --args 0 @A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 29:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 31:
+//# advance-epoch
+Epoch advanced: 1
+
+task 5, line 33:
+//# run Test::M1::create --sender B --args 1 @A
+created: object(5,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 6, line 35:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, lines 37-62:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionsA": {
+      "pageInfo": {
+        "startCursor": "Mg==",
+        "endCursor": "Mg==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "4HNKX56jo22koiR5KGwVKTS4wuwzKrxroHCeeGaYpuMU",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1,
+                "digest": "Cj5q38QZLxjVbxUY4V9FfiWbPCFr4hAAJBirteUorDXv"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsB": {
+      "pageInfo": {
+        "startCursor": "NA==",
+        "endCursor": "NA==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "2NaVm8WExVGjbVuT2So99qdhY2XNd7RxbKDstDqVE9Qg",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3,
+                "digest": "9PyPNWMz5bmpWuyrW7jiKcFqHH1ErBBVCLyspra3nxoN"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

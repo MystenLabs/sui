@@ -16,9 +16,8 @@ async fn test_get_package_system() {
         .await
         .unwrap();
 
-    let request = GetPackageRequest {
-        package_id: Some("0x3".to_string()),
-    };
+    let mut request = GetPackageRequest::default();
+    request.package_id = Some("0x3".to_string());
 
     let response = service.get_package(request).await.unwrap();
     let package = response.into_inner().package.unwrap();
@@ -33,11 +32,9 @@ async fn test_get_package_not_found() {
         .await
         .unwrap();
 
-    let request = GetPackageRequest {
-        package_id: Some(
-            "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF".to_string(),
-        ),
-    };
+    let mut request = GetPackageRequest::default();
+    request.package_id =
+        Some("0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF".to_string());
 
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
@@ -50,9 +47,8 @@ async fn test_get_package_invalid_hex() {
         .await
         .unwrap();
 
-    let request = GetPackageRequest {
-        package_id: Some("0xINVALID".to_string()),
-    };
+    let mut request = GetPackageRequest::default();
+    request.package_id = Some("0xINVALID".to_string());
 
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
@@ -66,7 +62,7 @@ async fn test_get_package_missing_id() {
         .await
         .unwrap();
 
-    let request = GetPackageRequest { package_id: None };
+    let request = GetPackageRequest::default();
 
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);

@@ -17,11 +17,10 @@ async fn test_get_struct_datatype() {
         .await
         .unwrap();
 
-    let request = GetDatatypeRequest {
-        package_id: Some("0x3".to_string()),
-        module_name: Some("validator_cap".to_string()),
-        name: Some("ValidatorOperationCap".to_string()),
-    };
+    let mut request = GetDatatypeRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = Some("validator_cap".to_string());
+    request.name = Some("ValidatorOperationCap".to_string());
 
     let response = service.get_datatype(request).await.unwrap();
     let datatype = response.into_inner().datatype.unwrap();
@@ -38,11 +37,10 @@ async fn test_get_datatype_not_found() {
         .unwrap();
 
     // Test non-existent datatype
-    let request = GetDatatypeRequest {
-        package_id: Some("0x3".to_string()),
-        module_name: Some("validator_cap".to_string()),
-        name: Some("NonExistentType".to_string()),
-    };
+    let mut request = GetDatatypeRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = Some("validator_cap".to_string());
+    request.name = Some("NonExistentType".to_string());
 
     let error = service.get_datatype(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::Internal);
@@ -60,11 +58,10 @@ async fn test_get_datatype_invalid_package() {
         .unwrap();
 
     // Test invalid package ID
-    let request = GetDatatypeRequest {
-        package_id: Some("invalid_id".to_string()),
-        module_name: Some("validator_cap".to_string()),
-        name: Some("ValidatorOperationCap".to_string()),
-    };
+    let mut request = GetDatatypeRequest::default();
+    request.package_id = Some("invalid_id".to_string());
+    request.module_name = Some("validator_cap".to_string());
+    request.name = Some("ValidatorOperationCap".to_string());
 
     let error = service.get_datatype(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
@@ -80,11 +77,10 @@ async fn test_get_datatype_module_not_found() {
         .unwrap();
 
     // Test non-existent module
-    let request = GetDatatypeRequest {
-        package_id: Some("0x3".to_string()),
-        module_name: Some("non_existent_module".to_string()),
-        name: Some("SomeType".to_string()),
-    };
+    let mut request = GetDatatypeRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = Some("non_existent_module".to_string());
+    request.name = Some("SomeType".to_string());
 
     let error = service.get_datatype(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::Internal);
@@ -99,11 +95,10 @@ async fn test_get_datatype_missing_package_id() {
         .await
         .unwrap();
 
-    let request = GetDatatypeRequest {
-        package_id: None,
-        module_name: Some("validator_cap".to_string()),
-        name: Some("ValidatorOperationCap".to_string()),
-    };
+    let mut request = GetDatatypeRequest::default();
+    request.package_id = None;
+    request.module_name = Some("validator_cap".to_string());
+    request.name = Some("ValidatorOperationCap".to_string());
 
     let error = service.get_datatype(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
@@ -118,11 +113,10 @@ async fn test_get_datatype_missing_module_name() {
         .await
         .unwrap();
 
-    let request = GetDatatypeRequest {
-        package_id: Some("0x3".to_string()),
-        module_name: None,
-        name: Some("ValidatorOperationCap".to_string()),
-    };
+    let mut request = GetDatatypeRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = None;
+    request.name = Some("ValidatorOperationCap".to_string());
 
     let error = service.get_datatype(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
@@ -137,11 +131,10 @@ async fn test_get_datatype_missing_name() {
         .await
         .unwrap();
 
-    let request = GetDatatypeRequest {
-        package_id: Some("0x3".to_string()),
-        module_name: Some("validator_cap".to_string()),
-        name: None,
-    };
+    let mut request = GetDatatypeRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = Some("validator_cap".to_string());
+    request.name = None;
 
     let error = service.get_datatype(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);

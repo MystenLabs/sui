@@ -7,6 +7,8 @@ keywords: [ execute transaction hook, rating app, review app, ConnectButton, cus
 The following documentation goes through an example implementation of a review rating platform for the food service industry on Sui.
 Unlike traditional review rating platforms that often do not disclose the algorithm used to rate reviews, this example uses an algorithm that is published on-chain for everyone to see and verify. The low gas cost of computation on Sui make it financially feasible to submit, score, and order all reviews on-chain.
 
+<ImportContent source="prerequisites.mdx" mode="snippet" />
+
 ## Personas
 
 There are four actors in the typical workflow of the Reviews Rating example.
@@ -461,4 +463,4 @@ Use the `useWalletKit()` hook from the Wallet Kit to retrieve the Sui client ins
 
 ## Related links
 
-[Reviews Rating repository](https://github.com/MystenLabs/sui/tree/main/examples/move/reviews_rating).
+<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/move/reviews_rating" label="Reviews Rating repository" desc="Repo with the Revies Rating codebase." />

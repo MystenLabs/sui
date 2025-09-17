@@ -1,0 +1,25 @@
+
+```sh
+Report or un-report a validator
+
+Usage: sui validator report-validator [OPTIONS] <reportee-address>
+
+Arguments:
+  <reportee-address>  The Sui Address of the validator is being reported or un-reported
+
+Options:
+      --operation-cap-id <operation-cap-id>
+          Optional when sender is reporter validator itself and it holds the Cap object. Required
+          when sender is not the reporter validator itself. Validator's OperationCap ID can be found
+          by using the `display-metadata` subcommand
+      --undo-report <undo-report>
+          If true, undo an existing report [possible values: true, false]
+      --gas-budget <gas-budget>
+          Gas budget for this transaction
+      --json
+          Return command outputs in json format
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```

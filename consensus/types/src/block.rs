@@ -19,6 +19,13 @@ pub type BlockTimestampMs = u64;
 /// Index of a transaction in a block.
 pub type TransactionIndex = u16;
 
+/// The number of reserved transaction indices.
+pub const NUM_RESERVED_TRANSACTION_INDICES: TransactionIndex = 8;
+
+/// The index of the ping transaction. This is a special type of transaction that is used in order to ping consensus and perform ping requests.
+/// We reserve the max index for this transaction.
+pub const PING_TRANSACTION_INDEX: TransactionIndex = TransactionIndex::MAX;
+
 /// `BlockRef` uniquely identifies a `VerifiedBlock` via `digest`. It also contains the slot
 /// info (round and author) so it can be used in logic such as aggregating stakes for a round.
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]

@@ -2,8 +2,6 @@
 title: On-Chain Randomness
 description: Randomness is a valuable tool to simulate chance on chain, but can also expose flaws in your logic. Understanding the vulnerabilities and accounting for them can mitigate the threat exposure for your smart contracts.
 keywords: [ raffle, randomness, random, RandomGenerator, ProtocolConfig, PTB, dice ]
-mdx:
-  format: md
 ---
 
 Generating pseudo-random values in Move is similar to solutions in other languages. A Move function can create a new instance of `RandomGenerator` and use it for generating random values of different types, for example, `generate_u128(&mut generator), generate_u8_in_range(&mut generator, 1, 6)`, or,
@@ -70,11 +68,14 @@ Other limited resources per transaction that you should consider are:
 - Number of UIDs generated, deleted, or transferred.
 
 <details>
+
 <summary>
+
 Complete list of `ProtocolConfig` limits.
+
 </summary>
 
-{@inject: crates/sui-protocol-config/src/lib.rs#struct=ProtocolConfig}
+<ImportContent source="crates/sui-protocol-config/src/lib.rs" mode="code" struct="ProtocolConfig" />
 
 </details>
 
@@ -92,11 +93,14 @@ It's important that the inputs to the second function are fixed and cannot be mo
 Gracefully handle the case in which the second step is never completed. You could accomplish this, for example, by charging a fee in the first step.
 
 <details>
+
 <summary>
+
 Example implementation.
+
 </summary>
 
-{@inject: examples/move/random/random_nft/sources/example.move#fun=reveal_alternative2_step1,reveal_alternative2_step2}
+<ImportContent source="examples/move/random/random_nft/sources/example.move" mode="code" fun="reveal_alternative2_step1,reveal_alternative2_step2" />
 
 </details>
 
@@ -105,7 +109,7 @@ Example implementation.
 Write the function so the main processing path does the heavy work, while early-exit paths return quickly. Keep the following in mind:
 
   - Both external or native functions can change in the future, potentially resulting in different costs compared to when you conducted your tests.
-  - Use [`profile-transaction`](../../../references/cli/client.mdx#profile-a-transaction) to benchmark the costs of a transaction.
+  - [Profile the transaction](../../../references/cli/trace-analysis.mdx#profile-a-transaction) to benchmark the costs of a transaction.
   - UIDs generated and deleted on the same transaction do not count towards the limit on generated or deleted UIDs. 
 
 ## Use (non-public) `entry` functions
@@ -216,7 +220,7 @@ tx.moveCall({
 
 ## Related Links
 
-- [Sui Framework Reference](../../../references/framework): The Sui framework libraries include Move modules that provide the logic for Sui and its standards. A Rust process creates the documentation for the modules directly from comments in the code.
-  - <UnsafeLink href="/references/framework/sui-framework/random">random.move</UnsafeLink>: Documentation for the `random` module.
-- [Raffle example](https://github.com/MystenLabs/sui/blob/main/examples/move/random/raffles): GitHub repo containing a raffle smart contract demonstrating randomness.
-- [Sui Client CLI](/references/cli/client): Sui provides command line tools to interact with the network, its features, and the Move programming language. Individual command groups are referred to as Sui Client CLI, Sui Keytool CLI, Sui Move CLI, and Sui Validator CLI.
+<RelatedLink to="/references/framework" />
+<RelatedLink href="https://docs.sui.io/references/framework/sui_sui/random" label="random.move" desc="Documentation for the `random` module." />
+<RelatedLink href="https://github.com/MystenLabs/sui/blob/main/examples/move/random/raffles" label="Raffle example" desc="GitHub repo containing a raffle smart contract demonstrating randomness." />
+<RelatedLink to="/references/cli/client" />

@@ -370,7 +370,11 @@ impl RunInfo {
         let gas_units_too_low = p2p.gas_price > 0
             && p2p.gas / p2p.gas_price < INSUFFICIENT_GAS_UNITS_THRESHOLD
             || gas_price_greater_than_budget;
-        let too_many_gas_coins = p2p.gas_coins >= PROTOCOL_CONFIG.max_gas_payment_objects();
+        let too_many_gas_coins = if PROTOCOL_CONFIG.correct_gas_payment_limit_check() {
+            p2p.gas_coins > PROTOCOL_CONFIG.max_gas_payment_objects()
+        } else {
+            p2p.gas_coins >= PROTOCOL_CONFIG.max_gas_payment_objects()
+        };
         Self {
             enough_max_gas,
             enough_computation_gas,

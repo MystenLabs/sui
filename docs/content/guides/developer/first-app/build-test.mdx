@@ -2,8 +2,6 @@
 title: Build and Test Packages
 description: Move packages must be built and tested using the terminal interface. 
 keywords: [ move package, move, build move package, test move package, build package, test package, build move, test move ]
-mdx:
-  format: md
 ---
 
 If you followed [Write a Move Package](./write-package.mdx), you have a basic module that you need to build. If you didn't, then either start with that topic or use your package, substituting that information where appropriate.
@@ -51,7 +49,7 @@ Test result: OK. Total tests: 0; passed: 0; failed: 0
 
 To actually test your code, you need to add test functions. Start with adding a basic test function to the `example.move` file, inside the module definition:
 
-{@inject: ../../../../../examples/move/first_package/sources/example.move#first-test}
+<ImportContent source="examples/move/first_package/sources/example.move" mode="code" tag="first-test" />
 
 As the code shows, the unit test function (`test_sword_create()`) creates a dummy instance of the `TxContext` struct and assigns it to `ctx`. The function then creates a sword object using `ctx` to create a unique identifier and assigns `42` to the `magic` parameter and `7` to `strength`. Finally, the test calls the `magic` and `strength` accessor functions to verify that they return correct values.
 
@@ -93,7 +91,7 @@ One of the solutions (as suggested in the error message), is to add the `drop` a
 
 To get the test to work, we will need to use the `transfer` module, which is imported by default. Add the following lines to the end of the test function (after the `assert!` call) to transfer ownership of the `sword` to a freshly created dummy address:
 
-{@inject: ../../../../../examples/move/first_package/sources/example.move#test-dummy noComments}
+<ImportContent source="examples/move/first_package/sources/example.move" mode="code" tag="test-dummy" noComments />
 
 Run the test command again. Now the output shows a single successful test has run:
 
@@ -138,13 +136,13 @@ An instance of the `Scenario` struct contains a per-address object pool emulatin
 
 Update your `example.move` file to include a function callable from Sui that implements `sword` creation. With this in place, you can then add a multi-transaction test that uses the `test_scenario` module to test these new capabilities. Put this functions after the accessors (Part 5 in comments).
 
-{@inject: ../../../../../examples/move/first_package/sources/example.move#fun=sword_create noComments}
+<ImportContent source="examples/move/first_package/sources/example.move" mode="code" fun="sword_create" noComments />
 
 The code of the new functions uses struct creation and Sui-internal modules (`tx_context`) in a way similar to what you have seen in the previous sections. The important part is for the function to have correct signatures.
 
 With the new function included, add another test function to make sure it behaves as expected.
 
-{@inject: ../../../../../examples/move/first_package/sources/example.move#fun=test_sword_transactions}
+<ImportContent source="examples/move/first_package/sources/example.move" mode="code" fun="test_sword_transactions" />
 
 There are some details of the new testing function to pay attention to. The first thing the code does is create some addresses that represent users participating in the testing scenario. The test then creates a scenario by starting the first transaction on behalf of the initial sword owner.
 
@@ -193,15 +191,15 @@ While the `sui move` command does not support publishing explicitly, you can sti
 
 The `init` function for the module in the running example creates a `Forge` object.
 
-{@inject: ../../../../../examples/move/first_package/sources/example.move#fun=init noComments}
+<ImportContent source="examples/move/first_package/sources/example.move" mode="code" fun="init" noComments />
 
 The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a `Forge` object. To test this functionality, add a `new_sword` function to take the forge as a parameter and to update the number of created swords at the end of the function. If this were an actual module, you'd replace the `sword_create` function with `new_sword`. To keep the existing tests from failing, however, we will keep both functions.
 
-{@inject: ../../../../../examples/move/first_package/sources/example.move#fun=new_sword noComments}
+<ImportContent source="examples/move/first_package/sources/example.move" mode="code" fun="new_sword" noComments />
 
 Now, create a function to test the module initialization:
 
-{@inject: ../../../../../examples/move/first_package/sources/example.move#fun=test_module_init}
+<ImportContent source="examples/move/first_package/sources/example.move" mode="code" fun="test_module_init" />
 
 As the new test function shows, the first transaction (explicitly) calls the initializer. The next transaction checks if the `Forge` object has been created and properly initialized. Finally, the admin uses the `Forge` to create a sword and transfer it to the initial owner.
 
@@ -214,11 +212,11 @@ You can refer to the source code for the package (with all the tests and functio
 
 </summary>
 
-{@inject: ../../../../../examples/move/first_package/sources/example.move}
+<ImportContent source="examples/move/first_package/sources/example.move" mode="code" />
 
 </details>
 
 ## Related links
 
-- [Publish a Package](./publish.mdx): Continue the example by publishing your package to the Sui network.
-- [Package Upgrades](../../../concepts/sui-move-concepts/packages.mdx): Upgrading packages published on the Sui network.
+<RelatedLink to="/guides/developer/first-app/publish.mdx" />
+<RelatedLink to="/concepts/sui-move-concepts/packages.mdx" />

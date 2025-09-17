@@ -2,21 +2,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::Object;
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    Context, Object,
+};
+use diesel::{prelude::QueryableByName, sql_types::BigInt};
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_sql_macro::query;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress, digests::TransactionDigest,
     event::Event as NativeEvent,
 };
 
 use crate::{
-    api::scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
+    api::{
+        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
+        types::{
+            event::filter::EventFilter,
+            lookups::{CheckpointBounds, TxBoundsCursor},
+        },
+    },
     error::RpcError,
+    pagination::Page,
     scope::Scope,
 };
 
 use super::{
-    address::Address, move_type::MoveType, move_value::MoveValue, transaction::Transaction,
+    address::Address, move_module::MoveModule, move_package::MovePackage, move_type::MoveType,
+    move_value::MoveValue, transaction::Transaction,
 };
+
+pub(crate) mod filter;
+mod lookups;
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
+pub(crate) struct EventCursor {
+    #[serde(rename = "t")]
+    pub tx_sequence_number: u64,
+    #[serde(rename = "e")]
+    pub ev_sequence_number: u64,
+}
+
+pub(crate) type CEvent = JsonCursor<EventCursor>;
 
 #[derive(Clone)]
 pub(crate) struct Event {
@@ -30,7 +59,6 @@ pub(crate) struct Event {
     pub(crate) timestamp_ms: u64,
 }
 
-// TODO(DVX-1200): Support sendingModule - MoveModule
 #[Object]
 impl Event {
     /// The Move value emitted for this event.
@@ -75,5 +103,91 @@ impl Event {
             self.scope.clone(),
             self.transaction_digest,
         ))
+    }
+
+    /// The module containing the function that was called in the programmable transaction, that resulted in this event being emitted.
+    async fn transaction_module(&self) -> Option<MoveModule> {
+        let package = MovePackage::with_address(self.scope.clone(), self.native.package_id.into());
+        Some(MoveModule::with_fq_name(
+            package,
+            self.native.transaction_module.to_string(),
+        ))
+    }
+}
+
+impl Event {
+    /// Paginates events based on the provided filters and page parameters.
+    ///
+    /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
+    pub(crate) async fn paginate(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CEvent>,
+        filter: EventFilter,
+    ) -> Result<Connection<String, Event>, RpcError> {
+        let mut c = Connection::new(false, false);
+
+        let pg_reader: &PgReader = ctx.data()?;
+
+        // TODO: (henry) Use watermarks once we have a strategy for kv pruning.
+        let reader_lo = 0;
+
+        let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
+            return Ok(c);
+        };
+
+        #[derive(QueryableByName)]
+        struct TxSequenceNumber(
+            #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
+        );
+
+        query += filter.query()?;
+        query += query!(
+            r#" ORDER BY tx_sequence_number {} LIMIT {BigInt}"#,
+            page.order_by_direction(),
+            page.limit_with_overhead() as i64,
+        );
+
+        let mut conn = pg_reader
+            .connect()
+            .await
+            .context("Failed to connect to database")?;
+
+        let tx_sequence_numbers: Vec<u64> = conn
+            .results(query)
+            .await
+            .context("Failed to execute query")?
+            .into_iter()
+            .map(|tx_seq: TxSequenceNumber| tx_seq.0 as u64)
+            .unique()
+            .collect();
+
+        let events = lookups::events_from_sequence_numbers(
+            &scope,
+            ctx,
+            &page,
+            &tx_sequence_numbers,
+            &filter,
+        )
+        .await?;
+
+        let (has_prev, has_next, edges) =
+            page.paginate_results(events, |(cursor, _)| JsonCursor::new(*cursor));
+
+        // Set pagination state
+        c.has_previous_page = has_prev;
+        c.has_next_page = has_next;
+
+        for (cursor, (_, event)) in edges {
+            c.edges.push(Edge::new(cursor.encode_cursor(), event));
+        }
+
+        Ok(c)
+    }
+}
+
+impl TxBoundsCursor for CEvent {
+    fn tx_sequence_number(&self) -> u64 {
+        self.tx_sequence_number
     }
 }

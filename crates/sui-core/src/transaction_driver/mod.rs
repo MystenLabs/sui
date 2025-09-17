@@ -3,16 +3,13 @@
 
 mod effects_certifier;
 mod error;
-mod message_types;
 mod metrics;
 mod request_retrier;
 mod transaction_submitter;
 
 /// Exports
 pub use error::TransactionDriverError;
-pub use message_types::*;
 pub use metrics::*;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
 use std::{
     net::SocketAddr,
@@ -25,9 +22,11 @@ use effects_certifier::*;
 use mysten_metrics::{monitored_future, TxType};
 use parking_lot::Mutex;
 use sui_types::{
-    committee::EpochId, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
+    committee::EpochId, digests::TransactionDigest, error::UserInputError,
+    messages_grpc::SubmitTxRequest, transaction::TransactionDataAPI as _,
 };
 use tokio::{task::JoinSet, time::sleep};
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::instrument;
 use transaction_submitter::*;
 
@@ -45,6 +44,19 @@ pub struct SubmitTransactionOptions {
     /// When forwarding transactions on behalf of a client, this is the client's address
     /// specified for ddos protection.
     pub forwarded_client_addr: Option<SocketAddr>,
+}
+
+#[derive(Clone, Debug)]
+pub struct QuorumTransactionResponse {
+    // TODO(fastpath): Stop using QD types
+    pub effects: sui_types::quorum_driver_types::FinalizedEffects,
+
+    pub events: Option<sui_types::effects::TransactionEvents>,
+    // Input objects will only be populated in the happy path
+    pub input_objects: Option<Vec<sui_types::object::Object>>,
+    // Output objects will only be populated in the happy path
+    pub output_objects: Option<Vec<sui_types::object::Object>>,
+    pub auxiliary_data: Option<Vec<u8>>,
 }
 
 pub struct TransactionDriver<A: Clone> {
@@ -89,18 +101,8 @@ where
         driver
     }
 
-    #[instrument(level = "error", skip_all, err(level = "info"), fields(tx_digest = ?request.transaction.digest()))]
-    pub async fn drive_transaction(
-        &self,
-        request: SubmitTxRequest,
-        options: SubmitTransactionOptions,
-    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        self.drive_transaction_with_timeout(request, options, None)
-            .await
-    }
-
     #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
-    pub async fn drive_transaction_with_timeout(
+    pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
@@ -108,11 +110,24 @@ where
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let tx_type = if request.transaction.is_consensus_tx() {
-            TxType::SingleWriter
-        } else {
             TxType::SharedObject
+        } else {
+            TxType::SingleWriter
         };
-        let raw_request = request.into_raw().unwrap();
+
+        let gas_price = request.transaction.transaction_data().gas_price();
+        let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
+        let amplification_factor = gas_price / reference_gas_price.max(1);
+        if amplification_factor == 0 {
+            return Err(TransactionDriverError::ValidationFailed {
+                error: UserInputError::GasPriceUnderRGP {
+                    gas_price,
+                    reference_gas_price,
+                }
+                .to_string(),
+            });
+        }
+
         let timer = Instant::now();
 
         self.metrics.total_transactions_submitted.inc();
@@ -129,7 +144,13 @@ where
             loop {
                 // TODO(fastpath): Check local state before submitting transaction
                 match self
-                    .drive_transaction_once(tx_digest, tx_type, raw_request.clone(), &options)
+                    .drive_transaction_once(
+                        tx_digest,
+                        tx_type,
+                        amplification_factor,
+                        request.clone(),
+                        &options,
+                    )
                     .await
                 {
                     Ok(resp) => {
@@ -152,6 +173,7 @@ where
                                 .transaction_retries
                                 .with_label_values(&["failure"])
                                 .observe(attempts as f64);
+                            tracing::info!("Failed to finalize transaction with non-retriable error after {} attempts: {}", attempts, e);
                             return Err(e);
                         }
                         tracing::info!(
@@ -175,11 +197,17 @@ where
                     .await
                     .unwrap_or_else(|_| {
                         // Timeout occurred, return with latest retriable error if available
-                        Err(TransactionDriverError::TimeOutWithLastRetriableError {
+                        let e = TransactionDriverError::TimeoutWithLastRetriableError {
                             last_error: latest_retriable_error.map(Box::new),
                             attempts,
                             timeout: duration,
-                        })
+                        };
+                        tracing::info!(
+                            "Transaction timed out after {} attempts. Last error: {}",
+                            attempts,
+                            e
+                        );
+                        Err(e)
                     })
             }
             None => retry_loop.await,
@@ -191,18 +219,22 @@ where
         &self,
         tx_digest: &TransactionDigest,
         tx_type: TxType,
-        raw_request: RawSubmitTxRequest,
+        amplification_factor: u64,
+        request: SubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
+        let amplification_factor =
+            amplification_factor.min(auth_agg.committee.num_members() as u64);
 
-        let (name, submit_txn_resp) = self
+        let (name, submit_txn_result) = self
             .submitter
             .submit_transaction(
                 &auth_agg,
                 &self.client_monitor,
                 tx_digest,
-                raw_request,
+                amplification_factor,
+                request,
                 options,
             )
             .await?;
@@ -215,7 +247,7 @@ where
                 tx_digest,
                 tx_type,
                 name,
-                submit_txn_resp,
+                submit_txn_result,
                 options,
             )
             .await
@@ -256,8 +288,17 @@ where
 }
 
 // Chooses the percentage of transactions to be driven by TransactionDriver.
-pub fn choose_transaction_driver_percentage() -> u8 {
+pub fn choose_transaction_driver_percentage(
+    chain_id: Option<sui_types::digests::ChainIdentifier>,
+) -> u8 {
     // Currently, TD cannot work in mainnet.
+    if let Some(chain_identifier) = chain_id {
+        if chain_identifier.chain() == sui_protocol_config::Chain::Mainnet {
+            return 0;
+        }
+    }
+
+    // TODO(fastpath): Remove this once mfp hits mainnet
     if let Ok(chain) =
         std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME)
     {
@@ -274,12 +315,8 @@ pub fn choose_transaction_driver_percentage() -> u8 {
         }
     }
 
-    // Default to 50% in simtests.
-    if cfg!(msim) {
-        return 50;
-    }
-
-    0
+    // Default to 50% everywhere except mainnet
+    50
 }
 
 // Inner state of TransactionDriver.

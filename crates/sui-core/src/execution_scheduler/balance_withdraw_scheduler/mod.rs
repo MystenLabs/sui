@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use sui_types::{base_types::ObjectID, digests::TransactionDigest};
+use sui_types::{accumulator_root::AccumulatorObjId, digests::TransactionDigest};
 
 mod balance_read;
 mod naive_scheduler;
@@ -44,12 +44,12 @@ pub struct BalanceSettlement {
     /// This is currently unused because the naive scheduler
     /// always load the latest balance during scheduling.
     #[allow(unused)]
-    pub balance_changes: BTreeMap<ObjectID, i128>,
+    pub balance_changes: BTreeMap<AccumulatorObjId, i128>,
 }
 
 /// Details regarding all balance withdraw reservations in a transaction.
 #[derive(Clone, Debug)]
 pub(crate) struct TxBalanceWithdraw {
     pub tx_digest: TransactionDigest,
-    pub reservations: BTreeMap<ObjectID, u64>,
+    pub reservations: BTreeMap<AccumulatorObjId, u64>,
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::*;
+use sui_rpc::proto::sui::rpc::v2beta2 as proto;
 use sui_types::transaction::Argument as NativeArgument;
 
 /// An argument to a programmable transaction command.
@@ -49,6 +50,26 @@ impl From<NativeArgument> for TransactionArgument {
                 cmd: Some(cmd),
                 ix: Some(ix),
             }),
+        }
+    }
+}
+
+impl TryFrom<proto::Argument> for TransactionArgument {
+    type Error = ();
+
+    fn try_from(arg: proto::Argument) -> Result<Self, Self::Error> {
+        use proto::argument::ArgumentKind;
+
+        match arg.kind() {
+            ArgumentKind::Gas => Ok(TransactionArgument::GasCoin(GasCoin { dummy: None })),
+            ArgumentKind::Input => Ok(TransactionArgument::Input(Input {
+                ix: Some(arg.input.unwrap_or_default() as u16),
+            })),
+            ArgumentKind::Result => Ok(TransactionArgument::Result(TxResult {
+                cmd: Some(arg.result.unwrap_or_default() as u16),
+                ix: arg.subresult.map(|subresult| subresult as u16),
+            })),
+            _ => Err(()),
         }
     }
 }

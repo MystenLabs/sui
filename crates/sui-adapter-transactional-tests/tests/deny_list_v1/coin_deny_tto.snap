@@ -161,7 +161,7 @@ gas summary: computation_cost: 1000000, storage_cost: 11415200,  storage_rebate:
 
 task 10, lines 67-69:
 //# run test::regulated_coin::receive_coin --args object(1,0) receiving(1,2) --sender A
-Error: Error checking transaction input objects: AddressDeniedForCoin { address: @A, coin_type: "object(1,1)::regulated_coin::REGULATED_COIN" }
+Error: Error checking transaction input objects: Address @A is denied for coin object(1,1)::regulated_coin::REGULATED_COIN
 
 task 11, lines 70-72:
 //# run sui::coin::deny_list_remove --args object(0x403) object(1,4) @A --type-args test::regulated_coin::REGULATED_COIN --sender A

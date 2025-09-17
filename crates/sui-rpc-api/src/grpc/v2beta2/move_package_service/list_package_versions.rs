@@ -65,10 +65,7 @@ pub fn list_package_versions(
         let (version, storage_id) =
             result.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-        versions.push(PackageVersion {
-            package_id: Some(storage_id.to_canonical_string(true)),
-            version: Some(version),
-        });
+        versions.push(PackageVersion::new(&storage_id.into(), version));
     }
 
     let next_page_token = if versions.len() > page_size {
@@ -86,10 +83,7 @@ pub fn list_package_versions(
         None
     };
 
-    Ok(ListPackageVersionsResponse {
-        versions,
-        next_page_token,
-    })
+    Ok(ListPackageVersionsResponse::new(versions, next_page_token))
 }
 
 fn decode_page_token(page_token: &[u8]) -> Result<PageToken> {

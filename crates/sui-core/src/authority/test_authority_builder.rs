@@ -5,11 +5,12 @@ use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
 use super::ExecutionEnv;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
+use crate::authority::authority_store_pruner::{ObjectsCompactionFilter, PrunerWatermarks};
 use crate::authority::authority_store_tables::{
     AuthorityPerpetualTables, AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::submitted_transaction_cache::SubmittedTransactionCacheMetrics;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
@@ -221,6 +222,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
                     &path.join("store"),
                     Some(perpetual_tables_options),
+                    None,
                 ));
                 // unwrap ok - for testing only.
                 AuthorityStore::open_with_committee_for_testing(
@@ -256,7 +258,10 @@ impl<'a> TestAuthorityBuilder<'a> {
         .unwrap();
         let expensive_safety_checks = self.expensive_safety_checks.unwrap_or_default();
 
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+        let checkpoint_store = CheckpointStore::new(
+            &path.join("checkpoints"),
+            Arc::new(PrunerWatermarks::default()),
+        );
         let backpressure_manager =
             BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
 
@@ -290,6 +295,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .get_highest_executed_checkpoint_seq_number()
                 .unwrap()
                 .unwrap_or(0),
+            Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
         )
         .expect("failed to create authority per epoch store");
         let committee_store = Arc::new(CommitteeStore::new(
@@ -374,6 +380,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             pruner_db,
             policy_config,
             firewall_config,
+            Arc::new(PrunerWatermarks::default()),
         )
         .await;
 

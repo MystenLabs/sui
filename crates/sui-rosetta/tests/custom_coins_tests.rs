@@ -164,7 +164,7 @@ async fn test_custom_coin_balance() {
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
     assert_eq!(
         response.balances[0].currency.clone().metadata.coin_type,
-        "0x2::sui::SUI"
+        "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
     );
     assert_eq!(response.balances[1].value, COIN1_BALANCE as i128);
     assert_eq!(

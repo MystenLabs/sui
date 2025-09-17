@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::object_runtime::ObjectRuntime;
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 use fastcrypto_vdf::class_group::discriminant::DISCRIMINANT_3072;
 use fastcrypto_vdf::class_group::QuadraticForm;
 use fastcrypto_vdf::vdf::wesolowski::DefaultVDF;
@@ -25,9 +25,7 @@ pub const INVALID_INPUT_ERROR: u64 = 0;
 pub const NOT_SUPPORTED_ERROR: u64 = 1;
 
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(context
-        .extensions()
-        .get::<ObjectRuntime>()?
+    Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_vdf())
 }
@@ -60,9 +58,7 @@ pub fn vdf_verify_internal(
     }
 
     // Load the cost parameters from the protocol config
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .vdf_cost_params
         .clone();
 
@@ -130,9 +126,7 @@ pub fn hash_to_input_internal(
     }
 
     // Load the cost parameters from the protocol config
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .vdf_cost_params
         .clone();
 

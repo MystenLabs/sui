@@ -109,12 +109,11 @@ impl ChangeEpochTransaction {
             );
 
             // Create MovePackage directly from native object for efficiency
-            if let Some(package) =
-                MovePackage::from_native_object(self.scope.clone(), native_object)
-            {
-                conn.edges
-                    .push(Edge::new(edge.cursor.encode_cursor(), package));
-            }
+            let package = MovePackage::from_native_object(self.scope.clone(), native_object)
+                .context("Failed to create MovePackage from system package object")?;
+
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), package));
         }
 
         Ok(conn)

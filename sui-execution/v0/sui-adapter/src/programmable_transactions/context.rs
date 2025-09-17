@@ -1215,7 +1215,7 @@ mod checked {
             CallArg::Object(obj_arg) => {
                 load_object_arg(vm, state_view, session, input_object_map, obj_arg)?
             }
-            CallArg::BalanceWithdraw(_) => unreachable!("Impossible to hit BalanceWithdraw in v0"),
+            CallArg::FundsWithdrawal(_) => unreachable!("Impossible to hit BalanceWithdraw in v0"),
         })
     }
 

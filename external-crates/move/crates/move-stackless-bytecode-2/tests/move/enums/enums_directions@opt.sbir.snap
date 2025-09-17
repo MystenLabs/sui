@@ -1,0 +1,123 @@
+---
+source: crates/move-stackless-bytecode-2/tests/tests.rs
+---
+  Module: directions
+    Function: is_horizontal (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        lcl_3 = reg_0
+        reg_1 = ImmBorrow(lcl_3)
+        lcl_2 = reg_1
+        reg_2 = Copy(lcl_2)
+        Switch(reg_2) Case: Up (lbl 6), Case: Down (lbl 11), Case: Left (lbl 16), Case: Right (lbl 23)
+
+      Label LBL_6:
+        reg_3 = Move(lcl_2)
+        Drop(3)
+        lcl_1 = Immediate(false)
+        Jump(LBL_29)
+
+      Label LBL_11:
+        reg_5 = Move(lcl_2)
+        Drop(5)
+        lcl_1 = Immediate(false)
+        Jump(LBL_29)
+
+      Label LBL_16:
+        reg_7 = Move(lcl_2)
+        UnpackVariantImmRef(reg_7)
+        reg_8 = Move(lcl_3)
+        UnpackVariant(reg_8)
+        lcl_1 = Immediate(true)
+        Jump(LBL_29)
+
+      Label LBL_23:
+        reg_10 = Move(lcl_2)
+        UnpackVariantImmRef(reg_10)
+        reg_11 = Move(lcl_3)
+        UnpackVariant(reg_11)
+        lcl_1 = Immediate(true)
+
+      Label LBL_29:
+        reg_13 = Move(lcl_1)
+        Return(reg_13)
+
+
+    Function: is_up (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        lcl_3 = reg_0
+        reg_1 = ImmBorrow(lcl_3)
+        lcl_2 = reg_1
+        reg_2 = Copy(lcl_2)
+        Switch(reg_2) Case: Up (lbl 6), Case: Down (lbl 13), Case: Left (lbl 18), Case: Right (lbl 23)
+
+      Label LBL_6:
+        reg_3 = Move(lcl_2)
+        UnpackVariantImmRef(reg_3)
+        reg_4 = Move(lcl_3)
+        UnpackVariant(reg_4)
+        lcl_1 = Immediate(true)
+        Jump(LBL_27)
+
+      Label LBL_13:
+        reg_6 = Move(lcl_2)
+        Drop(6)
+        lcl_1 = Immediate(false)
+        Jump(LBL_27)
+
+      Label LBL_18:
+        reg_8 = Move(lcl_2)
+        Drop(8)
+        lcl_1 = Immediate(false)
+        Jump(LBL_27)
+
+      Label LBL_23:
+        reg_10 = Move(lcl_2)
+        Drop(10)
+        lcl_1 = Immediate(false)
+
+      Label LBL_27:
+        reg_12 = Move(lcl_1)
+        Return(reg_12)
+
+
+    Function: is_vertical (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        lcl_3 = reg_0
+        reg_1 = ImmBorrow(lcl_3)
+        lcl_2 = reg_1
+        reg_2 = Copy(lcl_2)
+        Switch(reg_2) Case: Up (lbl 6), Case: Down (lbl 13), Case: Left (lbl 20), Case: Right (lbl 25)
+
+      Label LBL_6:
+        reg_3 = Move(lcl_2)
+        UnpackVariantImmRef(reg_3)
+        reg_4 = Move(lcl_3)
+        UnpackVariant(reg_4)
+        lcl_1 = Immediate(true)
+        Jump(LBL_29)
+
+      Label LBL_13:
+        reg_6 = Move(lcl_2)
+        UnpackVariantImmRef(reg_6)
+        reg_7 = Move(lcl_3)
+        UnpackVariant(reg_7)
+        lcl_1 = Immediate(true)
+        Jump(LBL_29)
+
+      Label LBL_20:
+        reg_9 = Move(lcl_2)
+        Drop(9)
+        lcl_1 = Immediate(false)
+        Jump(LBL_29)
+
+      Label LBL_25:
+        reg_11 = Move(lcl_2)
+        Drop(11)
+        lcl_1 = Immediate(false)
+
+      Label LBL_29:
+        reg_13 = Move(lcl_1)
+        Return(reg_13)

@@ -98,33 +98,32 @@ members = [
     "crates/sui-bridge-indexer",
   "crates/sui-bridge-indexer-alt",
   "crates/sui-bridge-schema",
-    "crates/sui-cluster-test",
-    "crates/sui-config",
-    "crates/sui-core",
-    "crates/sui-cost",
-    "crates/sui-data-ingestion",
-    "crates/sui-data-ingestion-core",
-    "crates/sui-deepbook-indexer",
-    "crates/sui-default-config",
-    "crates/sui-display",
-    "crates/sui-e2e-tests",
-    "crates/sui-edge-proxy",
-    "crates/sui-enum-compat-util",
-    "crates/sui-faucet",
-    "crates/sui-field-count",
-    "crates/sui-field-count-derive",
-    "crates/sui-framework",
-    "crates/sui-framework-snapshot",
-    "crates/sui-framework-tests",
-    "crates/sui-genesis-builder",
-    "crates/sui-graphql-e2e-tests",
-    "crates/sui-graphql-rpc",
-    "crates/sui-graphql-rpc-client",
-    "crates/sui-graphql-rpc-headers",
-  "crates/sui-grpc-rosetta",
-    "crates/sui-http",
-    "crates/sui-indexer",
-    "crates/sui-indexer-alt",
+  "crates/sui-cluster-test",
+  "crates/sui-config",
+  "crates/sui-core",
+  "crates/sui-cost",
+  "crates/sui-data-ingestion",
+  "crates/sui-data-ingestion-core",
+  "crates/sui-deepbook-indexer",
+  "crates/sui-default-config",
+  "crates/sui-display",
+  "crates/sui-e2e-tests",
+  "crates/sui-edge-proxy",
+  "crates/sui-enum-compat-util",
+  "crates/sui-faucet",
+  "crates/sui-field-count",
+  "crates/sui-field-count-derive",
+  "crates/sui-framework",
+  "crates/sui-framework-snapshot",
+  "crates/sui-framework-tests",
+  "crates/sui-genesis-builder",
+  "crates/sui-graphql-e2e-tests",
+  "crates/sui-graphql-rpc",
+  "crates/sui-graphql-rpc-client",
+  "crates/sui-graphql-rpc-headers",
+  "crates/sui-http",
+  "crates/sui-indexer",
+  "crates/sui-indexer-alt",
   "crates/sui-indexer-alt-consistent-api",
   "crates/sui-indexer-alt-consistent-store",
     "crates/sui-indexer-alt-e2e-tests",
@@ -169,62 +168,61 @@ members = [
     "crates/sui-proxy",
     "crates/sui-replay",
   "crates/sui-replay-2",
-    "crates/sui-rosetta",
-    "crates/sui-rpc-api",
-    "crates/sui-rpc-benchmark",
-    "crates/sui-rpc-loadgen",
-    "crates/sui-sdk",
-    "crates/sui-security-watchdog",
-    "crates/sui-simulator",
-    "crates/sui-single-node-benchmark",
-    "crates/sui-snapshot",
-    "crates/sui-source-validation",
-    "crates/sui-source-validation-service",
-    "crates/sui-sql-macro",
-    "crates/sui-storage",
-    "crates/sui-surfer",
-    "crates/sui-swarm",
-    "crates/sui-swarm-config",
-    "crates/sui-synthetic-ingestion",
-    "crates/sui-telemetry",
-    "crates/sui-test-transaction-builder",
-    "crates/sui-test-validator",
-    "crates/sui-tls",
-    "crates/sui-tool",
-    "crates/sui-transaction-builder",
-    "crates/sui-transaction-checks",
-    "crates/sui-transactional-test-runner",
-    "crates/sui-types",
-    "crates/sui-upgrade-compatibility-transactional-tests",
-    "crates/sui-verifier-transactional-tests",
-    "crates/suins-indexer",
-    "crates/telemetry-subscribers",
-    "crates/test-cluster",
-    "crates/transaction-fuzzer",
-    "crates/typed-store",
-    "crates/typed-store-derive",
-    "crates/typed-store-error",
-    "crates/typed-store-workspace-hack",
-    "crates/x",
-    "sui-execution",
-    "sui-execution/cut",
-    "sui-execution/latest/sui-adapter",
-    "sui-execution/latest/sui-move-natives",
-    "sui-execution/latest/sui-verifier",
-    "sui-execution/v0/sui-adapter",
-    "sui-execution/v0/sui-move-natives",
-    "sui-execution/v0/sui-verifier",
-    "sui-execution/v1/sui-adapter",
-    "sui-execution/v1/sui-move-natives",
-    "sui-execution/v1/sui-verifier",
-    "sui-execution/v2/sui-adapter",
-    "sui-execution/v2/sui-move-natives",
-    "sui-execution/v2/sui-verifier",
+  "crates/sui-rosetta",
+  "crates/sui-rpc-api",
+  "crates/sui-rpc-benchmark",
+  "crates/sui-rpc-loadgen",
+  "crates/sui-sdk",
+  "crates/sui-security-watchdog",
+  "crates/sui-simulator",
+  "crates/sui-single-node-benchmark",
+  "crates/sui-snapshot",
+  "crates/sui-source-validation",
+  "crates/sui-sql-macro",
+  "crates/sui-storage",
+  "crates/sui-surfer",
+  "crates/sui-swarm",
+  "crates/sui-swarm-config",
+  "crates/sui-synthetic-ingestion",
+  "crates/sui-telemetry",
+  "crates/sui-test-transaction-builder",
+  "crates/sui-test-validator",
+  "crates/sui-tls",
+  "crates/sui-tool",
+  "crates/sui-transaction-builder",
+  "crates/sui-transaction-checks",
+  "crates/sui-transactional-test-runner",
+  "crates/sui-types",
+  "crates/sui-upgrade-compatibility-transactional-tests",
+  "crates/sui-verifier-transactional-tests",
+  "crates/suins-indexer",
+  "crates/telemetry-subscribers",
+  "crates/test-cluster",
+  "crates/transaction-fuzzer",
+  "crates/typed-store",
+  "crates/typed-store-derive",
+  "crates/typed-store-error",
+  "crates/typed-store-workspace-hack",
+  "crates/x",
+  "sui-execution",
+  "sui-execution/cut",
+  "sui-execution/latest/sui-adapter",
+  "sui-execution/latest/sui-move-natives",
+  "sui-execution/latest/sui-verifier",
+  "sui-execution/v0/sui-adapter",
+  "sui-execution/v0/sui-move-natives",
+  "sui-execution/v0/sui-verifier",
+  "sui-execution/v1/sui-adapter",
+  "sui-execution/v1/sui-move-natives",
+  "sui-execution/v1/sui-verifier",
+  "sui-execution/v2/sui-adapter",
+  "sui-execution/v2/sui-move-natives",
+  "sui-execution/v2/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.56.0"
+version = "1.57.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -635,11 +633,11 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46", features = [
-    "experimental",
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3", features = [
+  "experimental",
 ] }
 passkey-types = { version = "0.4.0" }
 passkey-client = { version = "0.4.0" }
@@ -660,11 +658,11 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c794
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "0a15520575a413f41c855609b829a62e4594f890", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "0a15520575a413f41c855609b829a62e4594f890", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "0a15520575a413f41c855609b829a62e4594f890" }
-sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "0a15520575a413f41c855609b829a62e4594f890" }
-sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "0a15520575a413f41c855609b829a62e4594f890" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "12fa49a9459aa91eb426211e5f5063d4b54b8a03", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "12fa49a9459aa91eb426211e5f5063d4b54b8a03", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "12fa49a9459aa91eb426211e5f5063d4b54b8a03" }
+sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "12fa49a9459aa91eb426211e5f5063d4b54b8a03" }
+sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "12fa49a9459aa91eb426211e5f5063d4b54b8a03" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -747,13 +745,11 @@ sui-proxy = { path = "crates/sui-proxy" }
 sui-replay = { path = "crates/sui-replay" }
 sui-replay-2 = { path = "crates/sui-replay-2" }
 sui-rosetta = { path = "crates/sui-rosetta" }
-sui-grpc-rosetta = { path = "crates/sui-grpc-rosetta" }
 sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
 sui-sdk = { path = "crates/sui-sdk" }
 sui-simulator = { path = "crates/sui-simulator" }
 sui-snapshot = { path = "crates/sui-snapshot" }
 sui-source-validation = { path = "crates/sui-source-validation" }
-sui-source-validation-service = { path = "crates/sui-source-validation-service" }
 sui-sql-macro = { path = "crates/sui-sql-macro" }
 sui-storage = { path = "crates/sui-storage" }
 sui-surfer = { path = "crates/sui-surfer" }

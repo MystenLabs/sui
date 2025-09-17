@@ -6,11 +6,11 @@ use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::TransactionDigest,
     dynamic_field::{
-        serialize_dynamic_field, BoundedDynamicFieldID, DynamicFieldKey, DynamicFieldObject,
+        serialize_dynamic_field, BoundedDynamicFieldID, DynamicFieldKey, DynamicFieldObject, Field,
         DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
     },
     error::{SuiError, SuiResult},
-    object::{Object, Owner},
+    object::{MoveObject, Object, Owner},
     storage::{ChildObjectResolver, ObjectStore},
     MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_ADDRESS,
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
@@ -83,8 +83,22 @@ impl MoveTypeTagTrait for U128 {
     }
 }
 
+/// New-type for ObjectIDs that are known to have been properly derived as an Balance accumulator field.
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct AccumulatorObjId(ObjectID);
+
+impl AccumulatorObjId {
+    pub fn new_unchecked(id: ObjectID) -> Self {
+        Self(id)
+    }
+
+    pub fn inner(&self) -> &ObjectID {
+        &self.0
+    }
+}
+
 impl AccumulatorValue {
-    pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> SuiResult<ObjectID> {
+    pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> SuiResult<AccumulatorObjId> {
         if !Balance::is_balance_type(type_) {
             return Err(SuiError::TypeError {
                 error: "only Balance<T> is supported".to_string(),
@@ -92,13 +106,15 @@ impl AccumulatorValue {
         }
 
         let key = AccumulatorKey { owner };
-        Ok(DynamicFieldKey(
-            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            key,
-            AccumulatorKey::get_type_tag(&[type_.clone()]),
-        )
-        .into_unbounded_id()?
-        .as_object_id())
+        Ok(AccumulatorObjId(
+            DynamicFieldKey(
+                SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                key,
+                AccumulatorKey::get_type_tag(&[type_.clone()]),
+            )
+            .into_unbounded_id()?
+            .as_object_id(),
+        ))
     }
 
     pub fn exists(
@@ -126,14 +142,14 @@ impl AccumulatorValue {
     pub fn load_by_id<T>(
         child_object_resolver: &dyn ChildObjectResolver,
         version_bound: Option<SequenceNumber>,
-        id: ObjectID,
+        id: AccumulatorObjId,
     ) -> SuiResult<Option<T>>
     where
         T: Serialize + DeserializeOwned,
     {
         BoundedDynamicFieldID::<AccumulatorKey>::new(
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            id,
+            id.0,
             version_bound.unwrap_or(SequenceNumber::MAX),
         )
         .load_object(child_object_resolver)?
@@ -206,6 +222,28 @@ impl AccumulatorValue {
             Owner::ObjectOwner(SUI_ACCUMULATOR_ROOT_ADDRESS.into()),
             TransactionDigest::genesis_marker(),
         )
+    }
+}
+
+impl TryFrom<&MoveObject> for AccumulatorValue {
+    type Error = SuiError;
+    fn try_from(value: &MoveObject) -> Result<Self, Self::Error> {
+        value
+            .type_()
+            .is_balance_accumulator_field()
+            .then(|| {
+                value
+                    .to_rust::<Field<AccumulatorKey, U128>>()
+                    .map(|f| f.value)
+            })
+            .flatten()
+            .map(Self::U128)
+            .ok_or_else(|| {
+                SuiError::DynamicFieldReadError(format!(
+                    "Dynamic field {:?} is not a AccumulatorValue",
+                    value.id()
+                ))
+            })
     }
 }
 

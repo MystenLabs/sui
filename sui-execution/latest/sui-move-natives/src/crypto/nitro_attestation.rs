@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{get_extension, object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
 use move_vm_runtime::execution::values::VectorSpecialization;
+use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
@@ -47,17 +48,13 @@ macro_rules! native_charge_gas_early_exit_option {
 }
 
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(context
-        .extensions()
-        .get::<ObjectRuntime>()?
+    Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_nitro_attestation())
 }
 
 fn is_upgraded(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(context
-        .extensions()
-        .get::<ObjectRuntime>()?
+    Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_nitro_attestation_upgraded_parsing())
 }
@@ -79,9 +76,7 @@ pub fn load_nitro_attestation_internal(
     let attestation_ref = pop_arg!(args, VectorRef);
     let attestation_bytes = attestation_ref.as_bytes_ref();
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .nitro_attestation_cost_params
         .clone();
 

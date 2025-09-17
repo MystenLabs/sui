@@ -5,15 +5,18 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use consensus_core::BlockStatus;
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::effects::TransactionEffectsAPI as _;
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message as _;
-use sui_types::messages_grpc::RawSubmitTxRequest;
+use sui_types::messages_grpc::{
+    RawSubmitTxRequest, SubmitTxRequest, SubmitTxResponse, SubmitTxResult,
+};
 use sui_types::object::Object;
 use sui_types::transaction::{
     Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
@@ -27,7 +30,6 @@ use crate::authority_server::AuthorityServer;
 use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
 use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
-use crate::transaction_driver::SubmitTxResponse;
 
 use super::AuthorityServerHandle;
 
@@ -53,11 +55,15 @@ impl TestContext {
 
         // Create a server with mocked consensus.
         // This ensures transactions submitted to consensus will get processed.
+        // We add extra mock responses to handle multiple transactions in tests
         let adapter = make_consensus_adapter_for_test(
             authority.clone(),
             HashSet::new(),
             true,
             vec![
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
                 with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
                 with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
             ],
@@ -94,10 +100,8 @@ impl TestContext {
         to_sender_signed_transaction(tx_data, &self.keypair)
     }
 
-    fn build_submit_request(&self, transaction: Transaction) -> RawSubmitTxRequest {
-        RawSubmitTxRequest {
-            transactions: vec![bcs::to_bytes(&transaction).unwrap().into()],
-        }
+    fn build_submit_request(&self, transaction: Transaction) -> SubmitTxRequest {
+        SubmitTxRequest { transaction }
     }
 }
 
@@ -115,13 +119,69 @@ async fn test_submit_transaction_success() {
         .unwrap();
 
     // Verify we got a consensus position back
-    let response: SubmitTxResponse = response.try_into().unwrap();
-    match response {
-        SubmitTxResponse::Submitted { consensus_position } => {
+    assert_eq!(response.results.len(), 1);
+    match &response.results[0] {
+        SubmitTxResult::Submitted { consensus_position } => {
             assert_eq!(consensus_position.index, 0);
         }
         _ => panic!("Expected Submitted response"),
     };
+}
+
+#[tokio::test]
+async fn test_submit_ping_request() {
+    let test_context = TestContext::new().await;
+
+    println!("Case 1. Submitting an empty array of transactions, soft bundle is true.");
+    {
+        let request = RawSubmitTxRequest {
+            transactions: vec![],
+            soft_bundle: true,
+        };
+
+        let response = test_context
+            .client
+            .client()
+            .unwrap()
+            .submit_transaction(request)
+            .await;
+        assert!(response.is_err());
+        assert!(matches!(
+            response.unwrap_err().into(),
+            SuiError::UserInputError {
+                error: UserInputError::InvalidBatchTransaction { .. }
+            }
+        ));
+    }
+
+    println!("Case 2. Submitting an empty array of transactions, soft bundle is false.");
+    {
+        // Submit an empty array of transactions.
+        // The request should explicitly set `ping` to true to indicate a ping check.
+        let request = RawSubmitTxRequest {
+            transactions: vec![],
+            soft_bundle: false,
+        };
+
+        let response = test_context
+            .client
+            .client()
+            .unwrap()
+            .submit_transaction(request)
+            .await
+            .unwrap();
+
+        // Verify we got a consensus position back
+        let response: SubmitTxResponse = response.into_inner().try_into().unwrap();
+        assert_eq!(response.results.len(), 1);
+        match &response.results[0] {
+            SubmitTxResult::Submitted { consensus_position } => {
+                assert_eq!(consensus_position.index, PING_TRANSACTION_INDEX);
+                assert_eq!(consensus_position.block, BlockRef::MIN);
+            }
+            _ => panic!("Expected Submitted response"),
+        };
+    }
 }
 
 #[tokio::test]
@@ -131,9 +191,16 @@ async fn test_submit_transaction_invalid_transaction() {
     // Create an invalid request with malformed transaction bytes
     let request = RawSubmitTxRequest {
         transactions: vec![vec![0xFF, 0xFF, 0xFF].into()],
+        ..Default::default()
     };
 
-    let response = test_context.client.submit_transaction(request, None).await;
+    // Submit request with GRPC client directly.
+    let response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await;
 
     assert!(response.is_err());
 }
@@ -173,9 +240,9 @@ async fn test_submit_transaction_already_executed() {
 
     // Verify we still got a consensus position back, because the transaction has not been committed yet,
     // so we can still sign the same transaction.
-    let response1: SubmitTxResponse = response1.try_into().unwrap();
-    match response1 {
-        SubmitTxResponse::Submitted { consensus_position } => {
+    assert_eq!(response1.results.len(), 1);
+    match &response1.results[0] {
+        SubmitTxResult::Submitted { consensus_position } => {
             assert_eq!(consensus_position.index, 0);
         }
         _ => panic!("Expected Submitted response"),
@@ -199,15 +266,15 @@ async fn test_submit_transaction_already_executed() {
         .await
         .unwrap();
     // Verify we got the full effects back.
-    let response2: SubmitTxResponse = response2.try_into().unwrap();
-    match response2 {
-        SubmitTxResponse::Executed {
+    assert_eq!(response2.results.len(), 1);
+    match &response2.results[0] {
+        SubmitTxResult::Executed {
             effects_digest,
             details,
             fast_path: _,
         } => {
-            let details = details.unwrap();
-            assert_eq!(effects_digest, details.effects.digest());
+            let details = details.as_ref().unwrap();
+            assert_eq!(*effects_digest, details.effects.digest());
             assert_eq!(
                 verified_transaction.digest(),
                 details.effects.transaction_digest()
@@ -289,6 +356,240 @@ async fn test_submit_transaction_gas_object_validation() {
     let transaction = to_sender_signed_transaction(tx_data, &test_context.keypair);
     let request = test_context.build_submit_request(transaction);
 
+    // Because the error comes from validating transaction input, the response should contain SubmitTxResult
+    // with the Rejected variant.
     let response = test_context.client.submit_transaction(request, None).await;
-    assert!(response.is_err());
+    let result: SubmitTxResult = response.unwrap().results.first().unwrap().clone();
+    assert!(matches!(
+        result,
+        SubmitTxResult::Rejected {
+            error: SuiError::UserInputError {
+                error: UserInputError::ObjectNotFound { .. }
+            }
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_submit_batched_transactions() {
+    let test_context = TestContext::new().await;
+
+    let tx1 = test_context.build_test_transaction();
+    let tx2 = test_context.build_test_transaction();
+
+    // Build request with batched transactions.
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        soft_bundle: false,
+    };
+
+    // Submit request with batched transactions, using grpc client directly.
+    let raw_response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    // Verify we got results for both transactions
+    assert_eq!(raw_response.results.len(), 2);
+
+    // Both should be submitted to consensus
+    for result in raw_response.results {
+        match result.inner {
+            Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {
+                // Expected: transactions were submitted to consensus
+            }
+            _ => panic!("Expected Submitted status for all transactions"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_submit_batched_transactions_with_already_executed() {
+    let test_context = TestContext::new().await;
+
+    // Create 1st transaction and execute it
+    let tx1 = test_context.build_test_transaction();
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    let verified_tx1 = VerifiedExecutableTransaction::new_from_checkpoint(
+        VerifiedTransaction::new_unchecked(tx1.clone()),
+        epoch_store.epoch(),
+        1,
+    );
+    test_context
+        .state
+        .try_execute_immediately(
+            &verified_tx1,
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            &epoch_store,
+        )
+        .await
+        .unwrap();
+
+    // Create 2nd transaction (not executed)
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2).await;
+
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
+
+    // Build request with both transactions
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        soft_bundle: false,
+    };
+
+    // Submit both transactions, using grpc client directly.
+    let raw_response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    // Verify we got results for both transactions
+    assert_eq!(raw_response.results.len(), 2);
+
+    // First should be already executed, second should be submitted
+    match &raw_response.results[0].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Executed(_)) => {
+            // Expected: first transaction was already executed
+        }
+        _ => panic!("Expected Executed status for first transaction"),
+    }
+
+    match &raw_response.results[1].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {
+            // Expected: second transaction was submitted to consensus
+        }
+        _ => panic!("Expected Submitted status for second transaction"),
+    }
+}
+
+#[tokio::test]
+async fn test_submit_soft_bundle_transactions() {
+    let test_context = TestContext::new().await;
+
+    let tx1 = test_context.build_test_transaction();
+    let tx2 = test_context.build_test_transaction();
+
+    // Build request with batched transactions.
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        soft_bundle: true,
+    };
+
+    // Submit request with batched transactions, using grpc client directly.
+    let raw_response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    // Verify we got results for both transactions
+    assert_eq!(raw_response.results.len(), 2);
+
+    // Both should be submitted to consensus
+    for result in raw_response.results {
+        match result.inner {
+            Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {
+                // Expected: transactions were submitted to consensus
+            }
+            _ => panic!("Expected Submitted status for all transactions"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_submit_soft_bundle_transactions_with_already_executed() {
+    let test_context = TestContext::new().await;
+
+    // Create 1st transaction and execute it
+    let tx1 = test_context.build_test_transaction();
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    let verified_tx1 = VerifiedExecutableTransaction::new_from_checkpoint(
+        VerifiedTransaction::new_unchecked(tx1.clone()),
+        epoch_store.epoch(),
+        1,
+    );
+    test_context
+        .state
+        .try_execute_immediately(
+            &verified_tx1,
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            &epoch_store,
+        )
+        .await
+        .unwrap();
+
+    // Create 2nd transaction (not executed)
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2).await;
+
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
+
+    // Build request with both transactions
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        soft_bundle: true,
+    };
+
+    // Submit request with batched transactions, using grpc client directly.
+    let error = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap_err()
+        .into();
+
+    // Verify the error is AlreadyExecutedInSoftBundleError.
+    assert!(matches!(
+        error,
+        SuiError::UserInputError {
+            error: UserInputError::AlreadyExecutedInSoftBundleError { .. }
+        }
+    ));
 }

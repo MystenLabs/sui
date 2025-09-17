@@ -81,7 +81,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 L::InputType::Fixed(ty),
             )
         }
-        CallArg::BalanceWithdraw(_) => {
+        CallArg::FundsWithdrawal(_) => {
             // TODO(address-balances): Add support for balance withdraws.
             todo!("Load balance withdraw call arg")
         }

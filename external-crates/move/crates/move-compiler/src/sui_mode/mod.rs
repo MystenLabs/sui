@@ -33,6 +33,9 @@ pub const SUI_ADDR_NAME: Symbol = symbol!("sui");
 pub const OBJECT_MODULE_NAME: Symbol = symbol!("object");
 pub const OBJECT_NEW: Symbol = symbol!("new");
 pub const OBJECT_NEW_UID_FROM_HASH: Symbol = symbol!("new_uid_from_hash");
+pub const DERIVED_OBJECT_MODULE_NAME: Symbol = symbol!("derived_object");
+pub const DERIVED_OBJECT_CLAIM: Symbol = symbol!("claim");
+
 pub const TEST_SCENARIO_MODULE_NAME: Symbol = symbol!("test_scenario");
 pub const TS_NEW_OBJECT: Symbol = symbol!("new_object");
 pub const UID_TYPE_NAME: Symbol = symbol!("UID");
@@ -65,6 +68,10 @@ pub const ACCUMULATOR_CREATE: Symbol = symbol!("create");
 
 pub const EVENT_MODULE_NAME: Symbol = symbol!("event");
 pub const EVENT_FUNCTION_NAME: Symbol = symbol!("emit");
+
+pub const COIN_REGISTRY_MODULE_NAME: Symbol = symbol!("coin_registry");
+pub const DYNAMIC_COIN_CREATION_FUNCTION_NAME: Symbol = symbol!("new_currency");
+pub const COIN_REGISTRY_CREATE: Symbol = symbol!("create");
 
 pub const TRANSFER_MODULE_NAME: Symbol = symbol!("transfer");
 pub const TRANSFER_FUNCTION_NAME: Symbol = symbol!("transfer");
@@ -155,6 +162,13 @@ pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
     /* category */ TYPING,
     /* code */ 9,
     "invalid private transfer call",
+);
+pub const DYNAMIC_COIN_CREATION_CALL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 10,
+    "invalid coin creation call",
 );
 
 // Bridge supported asset

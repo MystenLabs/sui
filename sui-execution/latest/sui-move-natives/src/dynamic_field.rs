@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    abstract_size, charge_cache_or_load_gas, get_extension, get_extension_mut,
     get_nested_struct_field, get_object_id,
     object_runtime::{object_store::ObjectResult, ObjectRuntime},
     NativesCostTable,
@@ -52,7 +53,7 @@ macro_rules! get_or_fetch_object {
             }
         };
 
-        let object_runtime: &mut ObjectRuntime = $context.extensions_mut().get_mut()?;
+        let object_runtime: &mut ObjectRuntime = $crate::get_extension_mut!($context)?;
         object_runtime.get_or_fetch_child_object(
             $parent,
             $child_id,
@@ -88,9 +89,7 @@ pub fn hash_type_and_key(
     assert_eq!(ty_args.len(), 1);
     assert_eq!(args.len(), 2);
 
-    let dynamic_field_hash_type_and_key_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let dynamic_field_hash_type_and_key_cost_params = get_extension!(context, NativesCostTable)?
         .dynamic_field_hash_type_and_key_cost_params
         .clone();
 
@@ -106,7 +105,10 @@ pub fn hash_type_and_key(
 
     // Get size info for costing for derivations, serializations, etc
     let k_ty_size = u64::from(k_ty.size());
-    let k_value_size = u64::from(k.legacy_size());
+    let k_value_size = u64::from(abstract_size(
+        get_extension!(context, ObjectRuntime)?.protocol_config,
+        &k,
+    ));
     native_charge_gas_early_exit!(
         context,
         dynamic_field_hash_type_and_key_cost_params
@@ -169,9 +171,7 @@ pub fn add_child_object(
     assert!(ty_args.len() == 1);
     assert!(args.len() == 2);
 
-    let dynamic_field_add_child_object_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let dynamic_field_add_child_object_cost_params = get_extension!(context, NativesCostTable)?
         .dynamic_field_add_child_object_cost_params
         .clone();
 
@@ -185,7 +185,10 @@ pub fn add_child_object(
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
 
-    let child_value_size = u64::from(child.legacy_size());
+    let child_value_size = u64::from(abstract_size(
+        get_extension!(context, ObjectRuntime)?.protocol_config,
+        &child,
+    ));
     // ID extraction step
     native_charge_gas_early_exit!(
         context,
@@ -229,7 +232,7 @@ pub fn add_child_object(
             * struct_tag_size.into()
     );
 
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     object_runtime.add_child_object(parent, child_id, MoveObjectType::from(tag), child)?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
@@ -259,9 +262,7 @@ pub fn borrow_child_object(
     assert!(ty_args.len() == 1);
     assert!(args.len() == 2);
 
-    let dynamic_field_borrow_child_object_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let dynamic_field_borrow_child_object_cost_params = get_extension!(context, NativesCostTable)?
         .dynamic_field_borrow_child_object_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -288,7 +289,7 @@ pub fn borrow_child_object(
         dynamic_field_borrow_child_object_cost_params
             .dynamic_field_borrow_child_object_type_cost_per_byte
     );
-    let global_value = match global_value_result {
+    let (cache_info, global_value) = match global_value_result {
         ObjectResult::MismatchedType => {
             return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH))
         }
@@ -301,11 +302,18 @@ pub fn borrow_child_object(
         assert!(err.major_status() != StatusCode::MISSING_DATA);
     })?;
 
+    charge_cache_or_load_gas!(context, cache_info);
+
+    let child_ref_size = abstract_size(
+        get_extension!(context, ObjectRuntime)?.protocol_config,
+        &child_ref,
+    );
+
     native_charge_gas_early_exit!(
         context,
         dynamic_field_borrow_child_object_cost_params
             .dynamic_field_borrow_child_object_child_ref_cost_per_byte
-            * u64::from(child_ref.legacy_size()).into()
+            * u64::from(child_ref_size).into()
     );
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child_ref]))
@@ -335,9 +343,7 @@ pub fn remove_child_object(
     assert!(ty_args.len() == 1);
     assert!(args.len() == 2);
 
-    let dynamic_field_remove_child_object_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let dynamic_field_remove_child_object_cost_params = get_extension!(context, NativesCostTable)?
         .dynamic_field_remove_child_object_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -356,12 +362,13 @@ pub fn remove_child_object(
         dynamic_field_remove_child_object_cost_params
             .dynamic_field_remove_child_object_type_cost_per_byte
     );
-    let global_value = match global_value_result {
+    let (cache_info, global_value) = match global_value_result {
         ObjectResult::MismatchedType => {
             return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH))
         }
         ObjectResult::Loaded(gv) => gv,
     };
+
     if !global_value.exists()? {
         return Ok(NativeResult::err(context.gas_used(), E_KEY_DOES_NOT_EXIST));
     }
@@ -369,11 +376,18 @@ pub fn remove_child_object(
         assert!(err.major_status() != StatusCode::MISSING_DATA);
     })?;
 
+    charge_cache_or_load_gas!(context, cache_info);
+
+    let child_size = abstract_size(
+        get_extension!(context, ObjectRuntime)?.protocol_config,
+        &child,
+    );
+
     native_charge_gas_early_exit!(
         context,
         dynamic_field_remove_child_object_cost_params
             .dynamic_field_remove_child_object_child_cost_per_byte
-            * u64::from(child.legacy_size()).into()
+            * u64::from(child_size).into()
     );
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
@@ -398,9 +412,7 @@ pub fn has_child_object(
     assert!(ty_args.is_empty());
     assert!(args.len() == 2);
 
-    let dynamic_field_has_child_object_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let dynamic_field_has_child_object_cost_params = get_extension!(context, NativesCostTable)?
         .dynamic_field_has_child_object_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -410,7 +422,7 @@ pub fn has_child_object(
 
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let has_child = object_runtime.child_object_exists(parent, child_id)?;
     Ok(NativeResult::ok(
         context.gas_used(),
@@ -440,11 +452,10 @@ pub fn has_child_object_with_ty(
     assert!(ty_args.len() == 1);
     assert!(args.len() == 2);
 
-    let dynamic_field_has_child_object_with_ty_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
-        .dynamic_field_has_child_object_with_ty_cost_params
-        .clone();
+    let dynamic_field_has_child_object_with_ty_cost_params =
+        get_extension!(context, NativesCostTable)?
+            .dynamic_field_has_child_object_with_ty_cost_params
+            .clone();
     native_charge_gas_early_exit!(
         context,
         dynamic_field_has_child_object_with_ty_cost_params
@@ -480,12 +491,13 @@ pub fn has_child_object_with_ty(
             * u64::from(tag.abstract_size_for_gas_metering()).into()
     );
 
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-    let has_child = object_runtime.child_object_exists_and_has_type(
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    let (cache_info, has_child) = object_runtime.child_object_exists_and_has_type(
         parent,
         child_id,
         &MoveObjectType::from(tag),
     )?;
+    charge_cache_or_load_gas!(context, cache_info);
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::bool(has_child)],

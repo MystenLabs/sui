@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::object_runtime::ObjectRuntime;
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::{
     bls12381 as bls, FromTrustedByteArray, GroupElement, HashToGroupElement, MultiScalarMul,
@@ -29,34 +29,26 @@ pub const INVALID_INPUT_ERROR: u64 = 1;
 pub const INPUT_TOO_LONG_ERROR: u64 = 2;
 
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(context
-        .extensions()
-        .get::<ObjectRuntime>()?
+    Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_group_ops_native_functions())
 }
 
 fn is_msm_supported(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(context
-        .extensions()
-        .get::<ObjectRuntime>()?
+    Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_group_ops_native_function_msm())
 }
 
 fn is_uncompressed_g1_supported(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(context
-        .extensions()
-        .get::<ObjectRuntime>()?
+    Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .uncompressed_g1_group_elements())
 }
 
 fn v2_native_charge(context: &NativeContext, cost: InternalGas) -> PartialVMResult<InternalGas> {
     Ok(
-        if context
-            .extensions()
-            .get::<ObjectRuntime>()?
+        if get_extension!(context, ObjectRuntime)?
             .protocol_config
             .native_charging_v2()
         {
@@ -241,9 +233,7 @@ pub fn internal_validate(
     let bytes = bytes_ref.as_bytes_ref();
     let group_type = pop_arg!(args, u8);
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
@@ -293,9 +283,7 @@ pub fn internal_add(
     let e1 = e1_ref.as_bytes_ref();
     let group_type = pop_arg!(args, u8);
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
@@ -346,9 +334,7 @@ pub fn internal_sub(
     let e1 = e1_ref.as_bytes_ref();
     let group_type = pop_arg!(args, u8);
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
@@ -399,9 +385,7 @@ pub fn internal_mul(
     let e1 = e1_ref.as_bytes_ref();
     let group_type = pop_arg!(args, u8);
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
@@ -467,9 +451,7 @@ pub fn internal_div(
     let e1 = e1_ref.as_bytes_ref();
     let group_type = pop_arg!(args, u8);
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
@@ -538,9 +520,7 @@ pub fn internal_hash_to(
         return Ok(NativeResult::err(cost, INVALID_INPUT_ERROR));
     }
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
@@ -693,9 +673,7 @@ pub fn internal_multi_scalar_mul(
     let scalars = scalars_ref.as_bytes_ref();
     let group_type = pop_arg!(args, u8);
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
@@ -765,9 +743,7 @@ pub fn internal_pairing(
     let e1 = e1_ref.as_bytes_ref();
     let group_type = pop_arg!(args, u8);
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
@@ -811,9 +787,7 @@ pub fn internal_convert(
     let to_type = pop_arg!(args, u8);
     let from_type = pop_arg!(args, u8);
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
@@ -864,9 +838,7 @@ pub fn internal_sum(
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
         .clone();
 
