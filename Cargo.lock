@@ -15821,7 +15821,6 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "serde_json",
- "shell-words",
  "similar",
  "sui-config",
  "sui-execution",
