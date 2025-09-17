@@ -4,19 +4,13 @@
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
-use sui_rpc::proto::sui::rpc::v2::coin_metadata::MetadataCapState as ProtoMetadataCapState;
 use sui_rpc::proto::sui::rpc::v2::coin_treasury::SupplyState as RpcSupplyState;
-use sui_rpc::proto::sui::rpc::v2::regulated_coin_metadata::CoinRegulatedState as ProtoCoinRegulatedState;
-use sui_rpc::proto::sui::rpc::v2::CoinMetadata;
 use sui_rpc::proto::sui::rpc::v2::CoinTreasury;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoResponse;
-use sui_rpc::proto::sui::rpc::v2::RegulatedCoinMetadata;
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
-use sui_types::coin_registry::{
-    Currency, MetadataCapState, RegulatedState as CurrencyRegulatedState, SupplyState,
-};
+use sui_types::coin_registry::{Currency, RegulatedState as CurrencyRegulatedState, SupplyState};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 const SUI_COIN_TREASURY: CoinTreasury = {
@@ -113,28 +107,7 @@ fn get_coin_info_from_registry(
             ),
         )
     })?;
-    let metadata = {
-        let mut metadata = CoinMetadata::default();
-        metadata.id = Some(Address::from(currency.id.into_bytes()).to_string());
-        metadata.decimals = Some(currency.decimals.into());
-        metadata.name = Some(currency.name);
-        metadata.symbol = Some(currency.symbol);
-        metadata.description = Some(currency.description);
-        metadata.icon_url = Some(currency.icon_url);
-        match &currency.metadata_cap_id {
-            MetadataCapState::Claimed(id) => {
-                metadata.metadata_cap_state = Some(ProtoMetadataCapState::Claimed as i32);
-                metadata.metadata_cap_id = Some(Address::from(*id).to_string());
-            }
-            MetadataCapState::Unclaimed => {
-                metadata.metadata_cap_state = Some(ProtoMetadataCapState::Unclaimed as i32);
-            }
-            MetadataCapState::Deleted => {
-                metadata.metadata_cap_state = Some(ProtoMetadataCapState::Deleted as i32);
-            }
-        }
-        Some(metadata)
-    };
+    let metadata = Some((&currency).into());
 
     let treasury = if sui_types::gas_coin::GAS::is_gas(core_coin_type) {
         Some(SUI_COIN_TREASURY)
@@ -167,32 +140,7 @@ fn get_coin_info_from_registry(
         }
     };
 
-    let regulated_metadata = match &currency.regulated {
-        CurrencyRegulatedState::Regulated {
-            cap,
-            allow_global_pause,
-            variant,
-        } => {
-            let mut regulated = RegulatedCoinMetadata::default();
-            regulated.id = None;
-            regulated.coin_metadata_object = None;
-            regulated.deny_cap_object = Some(Address::from(*cap).to_string());
-            regulated.allow_global_pause = *allow_global_pause;
-            regulated.variant = Some(*variant as u32);
-            regulated.coin_regulated_state = Some(ProtoCoinRegulatedState::Regulated as i32);
-            Some(regulated)
-        }
-        CurrencyRegulatedState::Unregulated => {
-            let mut regulated = RegulatedCoinMetadata::default();
-            regulated.coin_regulated_state = Some(ProtoCoinRegulatedState::Unregulated as i32);
-            Some(regulated)
-        }
-        CurrencyRegulatedState::Unknown => {
-            let mut regulated = RegulatedCoinMetadata::default();
-            regulated.coin_regulated_state = Some(ProtoCoinRegulatedState::Unknown as i32);
-            Some(regulated)
-        }
-    };
+    let regulated_metadata = Some((&currency.regulated).into());
 
     {
         let mut response = GetCoinInfoResponse::default();
@@ -231,16 +179,7 @@ fn get_coin_info_from_index(
                     ),
                 )
             })?
-            .map(|value| {
-                let mut metadata = CoinMetadata::default();
-                metadata.id = Some(Address::from(value.id.id.bytes).to_string());
-                metadata.decimals = Some(value.decimals.into());
-                metadata.name = Some(value.name);
-                metadata.symbol = Some(value.symbol);
-                metadata.description = Some(value.description);
-                metadata.icon_url = value.icon_url;
-                metadata
-            })
+            .map(Into::into)
     } else {
         None
     };
@@ -271,20 +210,9 @@ fn get_coin_info_from_index(
                     ),
                 )
             })?
-            .map(|value| {
-                let mut message = RegulatedCoinMetadata::default();
-                message.id = Some(Address::from(value.id.id.bytes).to_string());
-                message.coin_metadata_object =
-                    Some(Address::from(value.coin_metadata_object.bytes).to_string());
-                message.deny_cap_object =
-                    Some(Address::from(value.deny_cap_object.bytes).to_string());
-                message.coin_regulated_state = Some(ProtoCoinRegulatedState::Regulated as i32);
-                message
-            })
+            .map(Into::into)
     } else {
-        let mut message = RegulatedCoinMetadata::default();
-        message.coin_regulated_state = Some(ProtoCoinRegulatedState::Unknown as i32);
-        Some(message)
+        Some(CurrencyRegulatedState::Unknown.into())
     };
 
     {
@@ -313,9 +241,7 @@ fn get_treasury_cap_info(
     sui_types::coin::TreasuryCap::try_from(obj)
         .ok()
         .map(|treasury| {
-            let mut coin_treasury = CoinTreasury::default();
-            coin_treasury.id = Some(Address::from(treasury.id.id.bytes).to_string());
-            coin_treasury.total_supply = Some(treasury.total_supply.value);
+            let mut coin_treasury: CoinTreasury = treasury.into();
             coin_treasury.supply_state = Some(supply_state.into());
             coin_treasury
         })
