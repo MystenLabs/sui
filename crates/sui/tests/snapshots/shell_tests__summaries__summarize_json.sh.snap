@@ -24,8 +24,8 @@ cat data/move_package/package_summaries/address_mapping.json
 success: true
 exit_code: 0
 ----- stdout -----
-INCLUDING DEPENDENCY std
-INCLUDING DEPENDENCY sui
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
 BUILDING move_package
 
 Summary generation successful. Summaries stored in 'package_summaries'

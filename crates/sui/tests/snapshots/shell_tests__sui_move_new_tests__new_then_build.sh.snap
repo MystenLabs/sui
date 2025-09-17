@@ -17,6 +17,6 @@ exit_code: 0
 ----- stdout -----
 
 ----- stderr -----
-INCLUDING DEPENDENCY std
-INCLUDING DEPENDENCY sui
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
 BUILDING example
