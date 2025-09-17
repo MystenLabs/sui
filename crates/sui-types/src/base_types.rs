@@ -103,7 +103,10 @@ mod accumulator_types_tests;
     JsonSchema,
 )]
 #[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
-pub struct SequenceNumber(u64);
+pub struct Version(u64);
+
+/// alias SequenceNumber for Version
+pub type SequenceNumber = Version;
 
 impl SequenceNumber {
     pub fn one_before(&self) -> Option<SequenceNumber> {
@@ -1410,20 +1413,20 @@ impl TxContext {
     }
 }
 
-// TODO: rename to version
-impl SequenceNumber {
-    pub const MIN: SequenceNumber = SequenceNumber(u64::MIN);
-    pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
-    pub const CANCELLED_READ: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 1);
-    pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
-    pub const RANDOMNESS_UNAVAILABLE: SequenceNumber =
-        SequenceNumber(SequenceNumber::MAX.value() + 3);
-    // Used to represent a sequence number whose value is unknown.
+//  Define Version
+impl Version {
+    pub const MIN: Version = Version(u64::MIN);
+    pub const MAX: Version = Version(0x7fff_ffff_ffff_ffff);
+    pub const CANCELLED_READ: Version = Version(Version::MAX.value() + 1);
+    pub const CONGESTED: Version = Version(Version::MAX.value() + 2);
+    pub const RANDOMNESS_UNAVAILABLE: Version =
+        Version(Version::MAX.value() + 3);
+    // Used to represent a version whose value is unknown.
     // For internal use only. This should never appear on chain.
-    pub const UNKNOWN: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 4);
+    pub const UNKNOWN: Version = Version(Version::MAX.value() + 4);
 
     pub const fn new() -> Self {
-        SequenceNumber(0)
+        Version(0)
     }
 
     pub const fn value(&self) -> u64 {
@@ -1431,7 +1434,7 @@ impl SequenceNumber {
     }
 
     pub const fn from_u64(u: u64) -> Self {
-        SequenceNumber(u)
+        Version(u)
     }
 
     pub fn increment(&mut self) {
@@ -1439,7 +1442,7 @@ impl SequenceNumber {
         self.0 += 1;
     }
 
-    pub fn increment_to(&mut self, next: SequenceNumber) {
+    pub fn increment_to(&mut self, next: Version) {
         debug_assert!(*self < next, "Not an increment: {} to {}", self, next);
         *self = next;
     }
@@ -1449,51 +1452,51 @@ impl SequenceNumber {
         self.0 -= 1;
     }
 
-    pub fn decrement_to(&mut self, prev: SequenceNumber) {
+    pub fn decrement_to(&mut self, prev: Version) {
         debug_assert!(prev < *self, "Not a decrement: {} to {}", self, prev);
         *self = prev;
     }
 
-    /// Returns a new sequence number that is greater than all `SequenceNumber`s in `inputs`,
+    /// Returns a new version that is greater than all `Version`s in `inputs`,
     /// assuming this operation will not overflow.
     #[must_use]
-    pub fn lamport_increment(inputs: impl IntoIterator<Item = SequenceNumber>) -> SequenceNumber {
-        let max_input = inputs.into_iter().fold(SequenceNumber::new(), max);
+    pub fn lamport_increment(inputs: impl IntoIterator<Item = Version>) -> Version {
+        let max_input = inputs.into_iter().fold(Version::new(), max);
 
         // TODO: Ensure this never overflows.
-        // Option 1: Freeze the object when sequence number reaches MAX.
-        // Option 2: Reject tx with MAX sequence number.
+        // Option 1: Freeze the object when version reaches MAX.
+        // Option 2: Reject tx with MAX version.
         // Issue #182.
         assert_ne!(max_input.0, u64::MAX);
 
-        SequenceNumber(max_input.0 + 1)
+        Version(max_input.0 + 1)
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self == &SequenceNumber::CANCELLED_READ
-            || self == &SequenceNumber::CONGESTED
-            || self == &SequenceNumber::RANDOMNESS_UNAVAILABLE
+        self == &Version::CANCELLED_READ
+            || self == &Version::CONGESTED
+            || self == &Version::RANDOMNESS_UNAVAILABLE
     }
 
     pub fn is_valid(&self) -> bool {
-        self < &SequenceNumber::MAX
+        self < &Version::MAX
     }
 }
 
-impl From<SequenceNumber> for u64 {
-    fn from(val: SequenceNumber) -> Self {
+impl From<Version> for u64 {
+    fn from(val: Version) -> Self {
         val.0
     }
 }
 
-impl From<u64> for SequenceNumber {
+impl From<u64> for Version {
     fn from(value: u64) -> Self {
-        SequenceNumber(value)
+        Version(value)
     }
 }
 
-impl From<SequenceNumber> for usize {
-    fn from(value: SequenceNumber) -> Self {
+impl From<Version> for usize {
+    fn from(value: Version) -> Self {
         value.0 as usize
     }
 }
