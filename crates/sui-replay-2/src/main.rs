@@ -4,8 +4,7 @@
 use clap::*;
 use core::panic;
 use sui_replay_2::{
-    handle_replay_config, load_config_file, merge_configs_with_presence, print_effects_or_fork,
-    Config,
+    handle_replay_config, load_config_file, merge_configs, print_effects_or_fork, Config,
 };
 
 // Define the `GIT_REVISION` and `VERSION` consts
@@ -17,15 +16,10 @@ async fn main() -> anyhow::Result<()> {
         .with_env()
         .init();
 
-    // Parse with flag presence detection needed to decide if flags
-    // from the command line or from the config file are used
-    let command = Config::command();
-    let matches = command.get_matches();
-    let config = Config::from_arg_matches(&matches)?;
+    let config = Config::parse();
 
     let file_config = load_config_file()?;
-    let stable_config =
-        merge_configs_with_presence(config.replay_stable, file_config, &Some(matches));
+    let stable_config = merge_configs(config.replay_stable, file_config);
 
     let output_root =
         handle_replay_config(&stable_config, &config.replay_experimental, VERSION).await?;

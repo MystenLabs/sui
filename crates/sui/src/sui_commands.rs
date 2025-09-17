@@ -801,23 +801,7 @@ impl SuiCommand {
 
                 let node = get_replay_node(&context).await?;
                 let file_config = SR2::load_config_file()?;
-
-                // Re-parse replay subcommand to detect flag presence
-                let args: Vec<String> = std::env::args().collect();
-
-                let stable_config = if let Some(replay_args) = extract_replay_subcommand_args(&args)
-                {
-                    let replay_command = SR2::ReplayConfigStable::command();
-                    let matches = replay_command.try_get_matches_from(replay_args).ok();
-
-                    SR2::merge_configs_with_presence(replay_config, file_config, &matches)
-                } else {
-                    if file_config != SR2::TOMLReplayConfigStable::default() {
-                        eprintln!("Found flags in replay config file but they will be ignored as replay command line args cannot be re-parsed");
-                    }
-                    replay_config
-                };
-
+                let stable_config = SR2::merge_configs(replay_config, file_config);
                 let experimental_config = SR2::ReplayConfigExperimental {
                     node,
                     ..Default::default()
@@ -840,19 +824,6 @@ impl SuiCommand {
             }
         }
     }
-}
-
-/// Extract replay subcommand arguments from full command line args.
-/// Returns None if the replay subcommand args cannot be found.
-fn extract_replay_subcommand_args(args: &[String]) -> Option<Vec<String>> {
-    // Find the "replay" subcommand position
-    if let Some(replay_pos) = args.iter().position(|arg| arg == "replay") {
-        // Return "replay" + all args after it
-        let mut result = vec!["replay".to_string()];
-        result.extend(args[(replay_pos + 1)..].iter().cloned());
-        return Some(result);
-    }
-    None
 }
 
 /// Starts a local network with the given configuration.
