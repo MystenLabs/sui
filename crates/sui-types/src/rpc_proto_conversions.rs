@@ -2890,3 +2890,133 @@ impl From<simulate_transaction_request::TransactionChecks>
         }
     }
 }
+
+//
+// Coin-related conversions
+//
+
+impl From<crate::coin_registry::MetadataCapState> for coin_metadata::MetadataCapState {
+    fn from(value: crate::coin_registry::MetadataCapState) -> Self {
+        match value {
+            crate::coin_registry::MetadataCapState::Claimed(_) => {
+                coin_metadata::MetadataCapState::Claimed
+            }
+            crate::coin_registry::MetadataCapState::Unclaimed => {
+                coin_metadata::MetadataCapState::Unclaimed
+            }
+            crate::coin_registry::MetadataCapState::Deleted => {
+                coin_metadata::MetadataCapState::Deleted
+            }
+        }
+    }
+}
+
+impl From<&crate::coin_registry::Currency> for CoinMetadata {
+    fn from(value: &crate::coin_registry::Currency) -> Self {
+        let mut metadata = CoinMetadata::default();
+        metadata.id = Some(sui_sdk_types::Address::from(value.id.into_bytes()).to_string());
+        metadata.decimals = Some(value.decimals.into());
+        metadata.name = Some(value.name.clone());
+        metadata.symbol = Some(value.symbol.clone());
+        metadata.description = Some(value.description.clone());
+        metadata.icon_url = Some(value.icon_url.clone());
+
+        match &value.metadata_cap_id {
+            crate::coin_registry::MetadataCapState::Claimed(id) => {
+                metadata.metadata_cap_state = Some(coin_metadata::MetadataCapState::Claimed as i32);
+                metadata.metadata_cap_id = Some(sui_sdk_types::Address::from(*id).to_string());
+            }
+            crate::coin_registry::MetadataCapState::Unclaimed => {
+                metadata.metadata_cap_state =
+                    Some(coin_metadata::MetadataCapState::Unclaimed as i32);
+            }
+            crate::coin_registry::MetadataCapState::Deleted => {
+                metadata.metadata_cap_state = Some(coin_metadata::MetadataCapState::Deleted as i32);
+            }
+        }
+
+        metadata
+    }
+}
+
+impl From<crate::coin::CoinMetadata> for CoinMetadata {
+    fn from(value: crate::coin::CoinMetadata) -> Self {
+        let mut metadata = CoinMetadata::default();
+        metadata.id = Some(sui_sdk_types::Address::from(value.id.id.bytes).to_string());
+        metadata.decimals = Some(value.decimals.into());
+        metadata.name = Some(value.name);
+        metadata.symbol = Some(value.symbol);
+        metadata.description = Some(value.description);
+        metadata.icon_url = value.icon_url;
+        metadata
+    }
+}
+
+impl From<crate::coin_registry::SupplyState> for coin_treasury::SupplyState {
+    fn from(value: crate::coin_registry::SupplyState) -> Self {
+        match value {
+            crate::coin_registry::SupplyState::Fixed(_) => coin_treasury::SupplyState::Fixed,
+            crate::coin_registry::SupplyState::BurnOnly(_) => coin_treasury::SupplyState::BurnOnly,
+            crate::coin_registry::SupplyState::Unknown => coin_treasury::SupplyState::Unknown,
+        }
+    }
+}
+
+impl From<crate::coin::TreasuryCap> for CoinTreasury {
+    fn from(value: crate::coin::TreasuryCap) -> Self {
+        let mut treasury = CoinTreasury::default();
+        treasury.id = Some(sui_sdk_types::Address::from(value.id.id.bytes).to_string());
+        treasury.total_supply = Some(value.total_supply.value);
+        treasury
+    }
+}
+
+impl From<&crate::coin_registry::RegulatedState> for RegulatedCoinMetadata {
+    fn from(value: &crate::coin_registry::RegulatedState) -> Self {
+        let mut regulated = RegulatedCoinMetadata::default();
+
+        match value {
+            crate::coin_registry::RegulatedState::Regulated {
+                cap,
+                allow_global_pause,
+                variant,
+            } => {
+                regulated.deny_cap_object = Some(sui_sdk_types::Address::from(*cap).to_string());
+                regulated.allow_global_pause = *allow_global_pause;
+                regulated.variant = Some(*variant as u32);
+                regulated.coin_regulated_state =
+                    Some(regulated_coin_metadata::CoinRegulatedState::Regulated as i32);
+            }
+            crate::coin_registry::RegulatedState::Unregulated => {
+                regulated.coin_regulated_state =
+                    Some(regulated_coin_metadata::CoinRegulatedState::Unregulated as i32);
+            }
+            crate::coin_registry::RegulatedState::Unknown => {
+                regulated.coin_regulated_state =
+                    Some(regulated_coin_metadata::CoinRegulatedState::Unknown as i32);
+            }
+        }
+
+        regulated
+    }
+}
+
+impl From<crate::coin_registry::RegulatedState> for RegulatedCoinMetadata {
+    fn from(value: crate::coin_registry::RegulatedState) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<crate::coin::RegulatedCoinMetadata> for RegulatedCoinMetadata {
+    fn from(value: crate::coin::RegulatedCoinMetadata) -> Self {
+        let mut message = RegulatedCoinMetadata::default();
+        message.id = Some(sui_sdk_types::Address::from(value.id.id.bytes).to_string());
+        message.coin_metadata_object =
+            Some(sui_sdk_types::Address::from(value.coin_metadata_object.bytes).to_string());
+        message.deny_cap_object =
+            Some(sui_sdk_types::Address::from(value.deny_cap_object.bytes).to_string());
+        message.coin_regulated_state =
+            Some(regulated_coin_metadata::CoinRegulatedState::Regulated as i32);
+        message
+    }
+}
