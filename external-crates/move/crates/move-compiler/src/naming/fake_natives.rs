@@ -21,7 +21,7 @@ use crate::{
 use move_ir_types::ast as IR;
 use move_symbol_pool::symbol;
 
-/// verify fake native attribute usage usage
+/// verify fake native attribute usage
 pub fn function(
     reporter: &DiagnosticReporter,
     module: ModuleIdent,
