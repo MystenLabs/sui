@@ -281,7 +281,7 @@ pub fn simulate_transaction(
         None
     };
 
-    let outputs = if read_mask.contains("command_outputs") {
+    let outputs = if read_mask.contains(SimulateTransactionResponse::COMMAND_OUTPUTS_FIELD) {
         execution_result
             .into_iter()
             .flatten()
