@@ -312,7 +312,7 @@ public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): Me
     let id = object::new(ctx);
     currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
 
-    if (is_otw) transfer::transfer(currency, coin_registry_id().to_address())
+    if (is_otw) transfer::transfer(currency, object::sui_coin_registry_address())
     else transfer::share_object(currency);
 
     MetadataCap<T> { id }
@@ -586,11 +586,6 @@ public fun total_supply<T>(currency: &Currency<T>): Option<u64> {
 /// Check if coin data exists for the given type T in the registry.
 public fun exists<T>(registry: &CoinRegistry): bool {
     derived_object::exists(&registry.id, CurrencyKey<T>())
-}
-
-/// Return the ID of the system `CoinRegistry` object located at address 0xc.
-public fun coin_registry_id(): ID {
-    @0xc.to_id()
 }
 
 #[allow(unused_function)]
