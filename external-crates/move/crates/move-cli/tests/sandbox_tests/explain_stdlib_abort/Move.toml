@@ -3,4 +3,4 @@ name = "explain_stdlib_abort"
 edition = "2024.beta"
 
 [dependencies]
-MoveStdlib = { local = "../../../../move-stdlib" }
+std = { local = "../../../../move-stdlib" }

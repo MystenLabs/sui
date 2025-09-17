@@ -4,3 +4,6 @@ edition = "2024.beta"
 
 [dependencies]
 MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+random_test_flag_correctness = "0x0"

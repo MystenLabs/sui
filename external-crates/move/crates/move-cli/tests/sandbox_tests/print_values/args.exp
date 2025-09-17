@@ -1,6 +1,6 @@
 Command `sandbox publish`:
 Command `test`:
-INCLUDING DEPENDENCY std
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING print_values
 Running Move unit tests
 [debug] 42

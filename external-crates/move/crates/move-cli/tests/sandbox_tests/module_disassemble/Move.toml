@@ -6,3 +6,5 @@ edition = "2024.beta"
 MoveStdlib = { local = "../../../../move-stdlib" }
 Deps1 = { local = "deps1" }
 Deps2 = { local = "deps2" }
+
+[addresses]
