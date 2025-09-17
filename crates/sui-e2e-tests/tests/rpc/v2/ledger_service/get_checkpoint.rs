@@ -31,6 +31,7 @@ async fn get_checkpoint() {
         signature,
         contents,
         transactions,
+        objects,
         ..
     } = client
         .get_checkpoint(GetCheckpointRequest::default())
@@ -46,6 +47,7 @@ async fn get_checkpoint() {
     assert!(signature.is_none());
     assert!(contents.is_none());
     assert!(transactions.is_empty());
+    assert!(objects.is_none());
 
     // Request all fields
     let Checkpoint {
@@ -55,6 +57,7 @@ async fn get_checkpoint() {
         signature,
         contents,
         transactions,
+        objects,
         ..
     } = client
         .get_checkpoint(
@@ -65,6 +68,7 @@ async fn get_checkpoint() {
                 "signature",
                 "contents",
                 "transactions",
+                "objects",
             ])),
         )
         .await
@@ -79,6 +83,7 @@ async fn get_checkpoint() {
     assert!(signature.is_some());
     assert!(contents.is_some());
     assert!(!transactions.is_empty());
+    assert!(objects.is_some());
 
     // Request by digest
     let response = client
@@ -128,6 +133,7 @@ async fn get_checkpoint() {
         signature,
         contents,
         transactions,
+        objects,
         ..
     } = client
         .get_checkpoint(
@@ -146,6 +152,7 @@ async fn get_checkpoint() {
     assert!(summary.is_none());
     assert!(signature.is_none());
     assert!(contents.is_none());
+    assert!(objects.is_none());
 
     let mut found_transaction = false;
     for ExecutedTransaction {
@@ -153,8 +160,7 @@ async fn get_checkpoint() {
         transaction,
         effects,
         events,
-        input_objects,
-        output_objects,
+        objects,
         signatures,
         checkpoint,
         timestamp,
@@ -169,8 +175,7 @@ async fn get_checkpoint() {
         assert!(transaction.is_none());
         assert!(effects.is_none());
         assert!(events.is_none());
-        assert!(input_objects.is_empty());
-        assert!(output_objects.is_empty());
+        assert!(objects.is_none());
         assert!(signatures.is_empty());
         assert!(checkpoint.is_none());
         assert!(timestamp.is_none());
@@ -187,6 +192,7 @@ async fn get_checkpoint() {
         signature,
         contents,
         transactions,
+        objects,
         ..
     } = client
         .get_checkpoint(
@@ -198,6 +204,7 @@ async fn get_checkpoint() {
                     "signature",
                     "contents",
                     "transactions",
+                    "objects",
                 ]),
             ),
         )
@@ -219,8 +226,7 @@ async fn get_checkpoint() {
         transaction,
         effects,
         events,
-        input_objects,
-        output_objects,
+        objects,
         ..
     } in transactions
     {
@@ -231,27 +237,27 @@ async fn get_checkpoint() {
         }
         assert!(transaction.is_some());
         assert!(effects.is_some());
-        assert!(!input_objects.is_empty());
-        assert!(!output_objects.is_empty());
-
-        for Object {
-            bcs,
-            object_id,
-            version,
-            digest,
-            owner,
-            object_type,
-            ..
-        } in input_objects.iter().chain(output_objects.iter())
-        {
-            assert!(object_id.is_some());
-            assert!(version.is_some());
-            assert!(digest.is_some());
-            assert!(bcs.is_some());
-            assert!(owner.is_some());
-            assert!(object_type.is_some());
-        }
+        assert!(objects.is_none()); // This doesn't get populated by this API
     }
+
+    for Object {
+        bcs,
+        object_id,
+        version,
+        digest,
+        owner,
+        object_type,
+        ..
+    } in objects.unwrap().objects
+    {
+        assert!(object_id.is_some());
+        assert!(version.is_some());
+        assert!(digest.is_some());
+        assert!(bcs.is_some());
+        assert!(owner.is_some());
+        assert!(object_type.is_some());
+    }
+
     // Ensure we found the transaction we used for picking the checkpoint to test against
     assert!(found_transaction);
 }

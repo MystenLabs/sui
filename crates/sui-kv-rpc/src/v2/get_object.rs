@@ -39,7 +39,7 @@ pub(crate) async fn get_object(
     };
     let mut message = Object::default();
     // TODO: support json read mask
-    message.merge(object, &read_mask);
+    message.merge(&object, &read_mask);
     Ok(GetObjectResponse::new(message))
 }
 
@@ -81,7 +81,7 @@ pub(crate) async fn batch_get_objects(
                 if object_key.0 == obj.id() && object_key.1 == obj.version() {
                     let object = objects_iter.next().expect("invariant's checked above");
                     let mut message = Object::default();
-                    message.merge(object, &read_mask);
+                    message.merge(&object, &read_mask);
                     return GetObjectResult::new_object(message);
                 }
             }
