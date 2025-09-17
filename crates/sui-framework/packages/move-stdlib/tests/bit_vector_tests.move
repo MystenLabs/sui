@@ -3,12 +3,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[only]
+#[test_only]
 module std::bit_vector_tests;
 
 use std::bit_vector;
 
-#[only]
+#[test_only]
 fun bitvector_set_unset_of_size(k: u64) {
     let mut bitvector = bit_vector::new(k);
     let mut index = 0;
