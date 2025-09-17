@@ -38,6 +38,28 @@ impl Merge<crate::full_checkpoint_content::CheckpointData> for Checkpoint {
             self.merge(&source.checkpoint_contents, mask);
         }
 
+        if let Some(submask) = mask
+            .subtree(Checkpoint::OBJECTS_FIELD)
+            .and_then(|submask| submask.subtree(ObjectSet::OBJECTS_FIELD))
+        {
+            let set: std::collections::BTreeMap<
+                (crate::base_types::ObjectID, u64),
+                &crate::object::Object,
+            > = source
+                .transactions
+                .iter()
+                .flat_map(|t| t.input_objects.iter().chain(t.output_objects.iter()))
+                .map(|object| ((object.id(), object.version().value()), object))
+                .collect();
+            self.objects = Some(
+                ObjectSet::default().with_objects(
+                    set.into_values()
+                        .map(|o| Object::merge_from(o, &submask))
+                        .collect(),
+                ),
+            );
+        }
+
         if let Some(submask) = mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
             self.transactions = source
                 .transactions
@@ -94,22 +116,6 @@ impl Merge<crate::full_checkpoint_content::CheckpointTransaction> for ExecutedTr
             self.events = source
                 .events
                 .map(|events| TransactionEvents::merge_from(events, &submask));
-        }
-
-        if let Some(submask) = mask.subtree(ExecutedTransaction::INPUT_OBJECTS_FIELD) {
-            self.input_objects = source
-                .input_objects
-                .into_iter()
-                .map(|o| Object::merge_from(o, &submask))
-                .collect();
-        }
-
-        if let Some(submask) = mask.subtree(ExecutedTransaction::OUTPUT_OBJECTS_FIELD) {
-            self.output_objects = source
-                .output_objects
-                .into_iter()
-                .map(|o| Object::merge_from(o, &submask))
-                .collect();
         }
     }
 }
@@ -1559,12 +1565,12 @@ pub const PACKAGE_TYPE: &str = "package";
 
 impl From<crate::object::Object> for Object {
     fn from(value: crate::object::Object) -> Self {
-        Self::merge_from(value, &FieldMaskTree::new_wildcard())
+        Self::merge_from(&value, &FieldMaskTree::new_wildcard())
     }
 }
 
-impl Merge<crate::object::Object> for Object {
-    fn merge(&mut self, source: crate::object::Object, mask: &FieldMaskTree) {
+impl Merge<&crate::object::Object> for Object {
+    fn merge(&mut self, source: &crate::object::Object, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
             let mut bcs = Bcs::serialize(&source).unwrap();
             bcs.name = Some("Object".to_owned());

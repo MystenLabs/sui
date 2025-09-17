@@ -16,6 +16,7 @@ use sui_rpc::proto::sui::rpc::v2::CommandOutput;
 use sui_rpc::proto::sui::rpc::v2::CommandResult;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::Object;
+use sui_rpc::proto::sui::rpc::v2::ObjectSet;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
@@ -256,25 +257,25 @@ pub fn simulate_transaction(
             .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
             .map(|mask| Transaction::merge_from(transaction, &mask));
 
-        message.input_objects = submask
-            .subtree(ExecutedTransaction::INPUT_OBJECTS_FIELD)
+        message.objects = submask
+            .subtree(
+                ExecutedTransaction::path_builder()
+                    .objects()
+                    .objects()
+                    .finish(),
+            )
             .map(|mask| {
-                input_objects
+                let set: std::collections::BTreeMap<_, _> = input_objects
                     .into_iter()
-                    .map(|o| Object::merge_from(o, &mask))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        message.output_objects = submask
-            .subtree(ExecutedTransaction::OUTPUT_OBJECTS_FIELD)
-            .map(|mask| {
-                output_objects
-                    .into_iter()
-                    .map(|o| Object::merge_from(o, &mask))
-                    .collect()
-            })
-            .unwrap_or_default();
+                    .chain(output_objects)
+                    .map(|object| ((object.id(), object.version()), object))
+                    .collect();
+                ObjectSet::default().with_objects(
+                    set.into_values()
+                        .map(|o| Object::merge_from(&o, &mask))
+                        .collect(),
+                )
+            });
 
         Some(message)
     } else {

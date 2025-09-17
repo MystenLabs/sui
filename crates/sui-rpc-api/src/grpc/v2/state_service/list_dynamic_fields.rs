@@ -273,7 +273,7 @@ fn load_dynamic_field(
                 }
 
                 if let Some(submask) = read_mask.subtree(DynamicField::OBJECT_FIELD) {
-                    message.object = Some(Object::merge_from(object, &submask));
+                    message.object = Some(Object::merge_from(&object, &submask));
                 }
             }
         }
