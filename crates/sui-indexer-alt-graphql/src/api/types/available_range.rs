@@ -127,7 +127,48 @@ fn pipeline(type_: &str, field: &str, filter: Option<&str>) -> &'static [&'stati
         ("Query", "objectVersions", _) => &["obj_versions"],
         ("Query", "packages", _) => &["cp_sequence_numbers"],
 
-        // Default case
+        // Default case will result in an AvailableRange with first = 0 and last = checkpoint_viewed_at
         _ => &[],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pipeline_basic_queries() {
+        assert_eq!(pipeline("Query", "transactions", None), &["tx_digests"]);
+        assert_eq!(
+            pipeline("Query", "checkpoints", None),
+            &["cp_sequence_numbers"]
+        );
+        assert_eq!(
+            pipeline("Query", "events", None),
+            &["ev_struct_inst", "ev_emit_mod"]
+        );
+        assert_eq!(pipeline("Query", "epochs", None), &["cp_sequence_numbers"]);
+        assert_eq!(pipeline("Query", "objectVersions", None), &["obj_versions"]);
+    }
+
+    #[test]
+    fn test_pipeline_filtered_queries() {
+        assert_eq!(
+            pipeline("Query", "transactions", Some("affectedAddress")),
+            &["tx_digests", "tx_affected_addresses"]
+        );
+        assert_eq!(
+            pipeline("Query", "events", Some("module")),
+            &["ev_emit_mod"]
+        );
+    }
+
+    #[test]
+    fn test_pipeline_fallback_and_edge_cases() {
+        assert_eq!(
+            pipeline("Transaction", "transactions", None),
+            &["tx_digests"]
+        );
+        assert!(pipeline("InvalidType", "unknownField", None).is_empty());
     }
 }
