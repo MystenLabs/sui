@@ -19,7 +19,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
-use mysten_metrics::{monitored_future, TxType};
+use mysten_metrics::monitored_future;
 use parking_lot::Mutex;
 use sui_types::{
     committee::EpochId, digests::TransactionDigest, error::UserInputError,
@@ -35,7 +35,7 @@ use crate::{
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
     validator_client_monitor::{
-        OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
+        OperationFeedback, OperationType, TxType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
 use sui_config::NodeConfig;
@@ -236,6 +236,7 @@ where
                 &auth_agg,
                 &self.client_monitor,
                 tx_digest,
+                tx_type,
                 amplification_factor,
                 request,
                 options,
@@ -256,13 +257,19 @@ where
             )
             .await;
 
-        self.client_monitor
-            .record_interaction_result(OperationFeedback {
-                authority_name: name,
-                display_name: auth_agg.get_display_name(&name),
-                operation: OperationType::Finalization,
-                result: Ok(start_time.elapsed()),
-            });
+        if result.is_ok() {
+            self.client_monitor
+                .record_interaction_result(OperationFeedback {
+                    authority_name: name,
+                    display_name: auth_agg.get_display_name(&name),
+                    operation: if tx_type == TxType::SingleWriter {
+                        OperationType::FastPath
+                    } else {
+                        OperationType::Consensus
+                    },
+                    result: Ok(start_time.elapsed()),
+                });
+        }
         result
     }
 

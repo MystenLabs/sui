@@ -13,7 +13,7 @@ use crate::{
         aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
         TransactionRequestError,
     },
-    validator_client_monitor::ValidatorClientMonitor,
+    validator_client_monitor::{TxType, ValidatorClientMonitor},
 };
 
 /// Provides the next target validator to retry operations,
@@ -34,10 +34,12 @@ impl<A: Clone> RequestRetrier<A> {
     pub(crate) fn new(
         auth_agg: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
+        tx_type: TxType,
     ) -> Self {
         let selected_validators = client_monitor.select_shuffled_preferred_validators(
             &auth_agg.committee,
             auth_agg.committee.num_members() / 3,
+            tx_type,
         );
         let remaining_clients = selected_validators
             .into_iter()
@@ -144,7 +146,7 @@ mod tests {
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
         let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-        let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
+        let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, TxType::SingleWriter);
 
         for _ in 0..4 {
             retrier.next_target().unwrap();
@@ -164,7 +166,7 @@ mod tests {
         // Add retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
+            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, TxType::SingleWriter);
 
             // 25% stake.
             retrier
@@ -200,7 +202,7 @@ mod tests {
         // Add mix of retriable and non-retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
+            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, TxType::SingleWriter);
 
             // 25% stake retriable error.
             retrier

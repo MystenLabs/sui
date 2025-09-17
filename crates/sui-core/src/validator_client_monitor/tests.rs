@@ -161,7 +161,7 @@ mod client_stats_tests {
             vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         assert_eq!(all_stats.len(), 2);
 
         // Validator 1 should have higher score
@@ -220,7 +220,7 @@ mod client_stats_tests {
         );
 
         // Should be excluded (score 0)
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         let score = *all_stats.get(&validator).unwrap();
         assert_eq!(score, 0.0);
 
@@ -228,7 +228,7 @@ mod client_stats_tests {
         sleep(Duration::from_millis(150)).await;
 
         // Should be included again (score > 0)
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         let score = *all_stats.get(&validator).unwrap();
         assert!(score > 0.0);
     }
@@ -320,7 +320,7 @@ mod client_stats_tests {
             vec![(validator, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         // Should have a partial score even with only one operation type
         let score = *all_stats.get(&validator).unwrap();
         assert!(score > 0.0);
@@ -496,7 +496,7 @@ mod client_stats_tests {
             vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee);
+        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
         // Validator 1 should have higher score due to fast effects (high weight)
         let score1 = *all_stats.get(&validator1).unwrap();
         let score2 = *all_stats.get(&validator2).unwrap();
@@ -551,7 +551,8 @@ mod client_monitor_tests {
         monitor.force_update_cached_scores();
 
         // Select validators with k=2
-        let selected = monitor.select_shuffled_preferred_validators(&committee, 2);
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 2, TxType::SingleWriter);
         assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
 
         // The first 2 positions should contain the best two validators (but shuffled)
@@ -598,7 +599,8 @@ mod client_monitor_tests {
         monitor.force_update_cached_scores();
 
         // Select validators with k=3
-        let selected = monitor.select_shuffled_preferred_validators(&committee, 3);
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 3, TxType::SingleWriter);
 
         // Should return all 5 validators
         assert_eq!(selected.len(), 5);
@@ -655,7 +657,8 @@ mod client_monitor_tests {
         monitor.force_update_cached_scores();
 
         // Should still select validators from the provided committee
-        let selected = monitor.select_shuffled_preferred_validators(&other_committee, 2);
+        let selected =
+            monitor.select_shuffled_preferred_validators(&other_committee, 2, TxType::SingleWriter);
         assert_eq!(selected.len(), 3); // Should return all 3 validators from other_committee
         for validator in &selected {
             assert!(other_committee.authority_exists(validator));
@@ -690,11 +693,64 @@ mod client_monitor_tests {
         monitor.force_update_cached_scores();
 
         // Request more validators than available
-        let selected = monitor.select_shuffled_preferred_validators(&committee, 5);
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 5, TxType::SingleWriter);
         // Should return all available validators
         assert_eq!(selected.len(), 2);
         assert!(selected.contains(&validators[0]));
         assert!(selected.contains(&validators[1]));
+    }
+
+    // Testing the select_shuffled_preferred_validators both for the single writer and shared object tx types.
+    #[tokio::test]
+    async fn test_validator_selection_shared_object_tx_type() {
+        let auth_agg = get_authority_aggregator(4);
+        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+
+        let committee = auth_agg.committee.clone();
+        let validators = committee.names().cloned().collect::<Vec<_>>();
+
+        // Record different performance per operation type for each validator
+        for (i, validator) in validators.iter().enumerate() {
+            monitor.record_interaction_result(OperationFeedback {
+                authority_name: *validator,
+                display_name: auth_agg.get_display_name(validator),
+                operation: OperationType::FastPath,
+                result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
+            });
+        }
+
+        for (i, validator) in validators.iter().rev().enumerate() {
+            monitor.record_interaction_result(OperationFeedback {
+                authority_name: *validator,
+                display_name: auth_agg.get_display_name(validator),
+                operation: OperationType::Consensus,
+                result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
+            });
+        }
+
+        // Force update cached scores (in production this happens in the health check loop)
+        monitor.force_update_cached_scores();
+
+        // Select validators with k=2 for the shared object tx type
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 2, TxType::SingleWriter);
+        assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
+
+        // The first 2 positions should contain the best two validators (but shuffled)
+        let top_2_positions: HashSet<_> = selected.iter().take(2).cloned().collect();
+        assert!(top_2_positions.contains(&validators[0])); // Best performer
+        assert!(top_2_positions.contains(&validators[1])); // Second best
+
+        // Select the validators with k=2 for the single writer tx type
+        let selected =
+            monitor.select_shuffled_preferred_validators(&committee, 2, TxType::SharedObject);
+        assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
+
+        // The first 2 positions should contain the best two validators (but shuffled)
+        let top_2_positions: HashSet<_> = selected.iter().take(2).cloned().collect();
+        assert!(top_2_positions.contains(&validators[2])); // Best performer
+        assert!(top_2_positions.contains(&validators[3])); // Second best
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

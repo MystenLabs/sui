@@ -8,7 +8,7 @@ use crate::{
         error::TransactionDriverError, metrics::TransactionDriverMetrics,
         transaction_submitter::TransactionSubmitter, SubmitTransactionOptions,
     },
-    validator_client_monitor::ValidatorClientMonitor,
+    validator_client_monitor::{TxType, ValidatorClientMonitor},
 };
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
@@ -298,6 +298,7 @@ async fn test_submit_transaction_with_amplification() {
                 &authority_aggregator,
                 &client_monitor,
                 &tx_digest,
+                TxType::SingleWriter,
                 amplification_factor,
                 request,
                 &options,
@@ -349,6 +350,7 @@ async fn test_submit_transaction_with_amplification() {
                 &authority_aggregator,
                 &client_monitor,
                 &tx_digest,
+                TxType::SingleWriter,
                 amplification_factor,
                 request,
                 &options,
@@ -400,6 +402,7 @@ async fn test_submit_transaction_with_amplification() {
                 &authority_aggregator,
                 &client_monitor,
                 &tx_digest,
+                TxType::SingleWriter,
                 amplification_factor,
                 request,
                 &options,
@@ -464,6 +467,7 @@ async fn test_submit_transaction_with_amplification() {
                 &authority_aggregator,
                 &client_monitor,
                 &tx_digest,
+                TxType::SingleWriter,
                 amplification_factor,
                 request,
                 &options,
@@ -526,6 +530,7 @@ async fn test_submit_transaction_invalid_input() {
             &authority_aggregator,
             &client_monitor,
             &tx_digest,
+            TxType::SingleWriter,
             amplification_factor,
             request,
             &options,

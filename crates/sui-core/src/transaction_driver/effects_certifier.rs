@@ -9,7 +9,6 @@ use std::{
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
-use mysten_metrics::TxType;
 use sui_types::{
     base_types::{AuthorityName, ConciseableName as _},
     committee::StakeUnit,
@@ -41,7 +40,7 @@ use crate::{
         request_retrier::RequestRetrier,
         QuorumTransactionResponse, SubmitTransactionOptions,
     },
-    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
+    validator_client_monitor::{OperationFeedback, OperationType, TxType, ValidatorClientMonitor},
 };
 
 #[cfg(test)]
@@ -101,7 +100,7 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
+        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, tx_type);
 
         // Setting this to None at first because if the full effects are already provided,
         // we do not need to record the latency. We track the time in this function instead of inside

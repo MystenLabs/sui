@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMetrics};
+use crate::validator_client_monitor::{
+    OperationFeedback, OperationType, TxType, ValidatorClientMetrics,
+};
 use mysten_common::moving_window::MovingWindow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
@@ -126,11 +128,15 @@ impl ClientObservedStats {
             .set(validator_stats.consecutive_failures as i64);
     }
 
-    /// Get validator scores for all validators in the committee.
+    /// Get validator scores for all validators in the committee for the provided tx type.
     ///
     /// Returns a map of all tracked validators to their scores.
     /// Score is 0 if the validator is excluded or has no stats.
-    pub fn get_all_validator_stats(&self, committee: &Committee) -> HashMap<AuthorityName, f64> {
+    pub fn get_all_validator_stats(
+        &self,
+        committee: &Committee,
+        tx_type: TxType,
+    ) -> HashMap<AuthorityName, f64> {
         let max_latencies = self.calculate_max_latencies(committee);
 
         committee
@@ -145,7 +151,7 @@ impl ClientObservedStats {
                     if is_excluded {
                         0.0
                     } else {
-                        self.calculate_client_score(stats, &max_latencies)
+                        self.calculate_client_score(stats, &max_latencies, tx_type)
                     }
                 } else {
                     0.0
@@ -155,6 +161,9 @@ impl ClientObservedStats {
             .collect()
     }
 
+    /// Calculate the max latencies for each operation type for the provided committee.
+    /// The max latencies are calculated by taking the maximum latency for each operation type
+    /// for each validator in the committee.
     fn calculate_max_latencies(&self, committee: &Committee) -> HashMap<OperationType, f64> {
         let mut max_latencies = HashMap::new();
 
@@ -191,7 +200,7 @@ impl ClientObservedStats {
         max_latencies
     }
 
-    /// Calculate client-observed score for a single validator.
+    /// Calculate client-observed score for a single validator for the provided tx type.
     ///
     /// The score combines reliability and latency metrics as observed by the client,
     /// weighted according to configuration.
@@ -208,6 +217,7 @@ impl ClientObservedStats {
         &self,
         stats: &ValidatorClientStats,
         max_latencies: &HashMap<OperationType, f64>,
+        tx_type: TxType,
     ) -> f64 {
         let mut latency_score = 0.0;
         let mut total_weight = 0.0;
@@ -217,10 +227,17 @@ impl ClientObservedStats {
                 OperationType::Submit => self.config.score_weights.submit_latency_weight,
                 OperationType::Effects => self.config.score_weights.effects_latency_weight,
                 OperationType::HealthCheck => self.config.score_weights.health_check_latency_weight,
-                OperationType::Finalization => {
-                    self.config.score_weights.finalization_latency_weight
-                }
+                OperationType::FastPath => self.config.score_weights.fast_path_latency_weight,
+                OperationType::Consensus => self.config.score_weights.consensus_latency_weight,
             };
+
+            if tx_type == TxType::SingleWriter && op == OperationType::Consensus {
+                continue;
+            }
+
+            if tx_type == TxType::SharedObject && op == OperationType::FastPath {
+                continue;
+            }
 
             // Skip if max latency is missing for this operation
             let Some(max_latency) = max_latencies.get(&op) else {
