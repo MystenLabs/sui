@@ -20,9 +20,11 @@ diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 fastcrypto.workspace = true
 prometheus.workspace = true
+rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+shared-crypto.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

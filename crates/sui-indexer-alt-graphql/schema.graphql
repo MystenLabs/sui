@@ -3256,6 +3256,17 @@ type Query {
 	Fails if the type is malformed, returns `null` if a type mentioned does not exist.
 	"""
 	type(type: String!): MoveType
+	"""
+	Verify a zkLogin signature os from the given `author`.
+	
+	Returns a `ZkLoginVerifyResult` where `success` is `true` and `error` is empty if the signature is valid. If the signature is invalid, `success` is `false` and `error` contains the relevant error message.
+	
+	- `bytes` are either the bytes of a serialized personal message, or `TransactionData`, Base64-encoded.
+	- `signature` is a serialized zkLogin signature, also Base64-encoded.
+	- `intentScope` indicates whether `bytes` are to be parsed as a personal message or `TransactionData`.
+	- `author` is the signer's address.
+	"""
+	verifyZkLoginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
 }
 
 """
@@ -4145,6 +4156,34 @@ input VersionFilter {
 	Filter to versions that are strictly older than this one, defaults to fetching up to the latest version (inclusive).
 	"""
 	beforeVersion: UInt53
+}
+
+"""
+An enum that specifies the intent scope to be used to parse the bytes for signature verification.
+"""
+enum ZkLoginIntentScope {
+	"""
+	Indicates that the bytes are to be parsed as transaction data bytes.
+	"""
+	TRANSACTION_DATA
+	"""
+	Indicates that the bytes are to be parsed as a personal message.
+	"""
+	PERSONAL_MESSAGE
+}
+
+"""
+The result of the zkLogin signature verification.
+"""
+type ZkLoginVerifyResult {
+	"""
+	The error field capture reasons why the signature could not be verified, assuming the inputs are valid and there are no internal errors.
+	"""
+	error: String
+	"""
+	The boolean result of the verification. If true, errors should be empty.
+	"""
+	success: Boolean
 }
 
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

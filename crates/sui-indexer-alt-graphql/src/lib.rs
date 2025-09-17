@@ -372,6 +372,7 @@ pub async fn start_rpc(
         .data(config.limits.pagination())
         .data(config.limits)
         .data(config.name_service)
+        .data(config.zklogin)
         .data(chain_identifier)
         .data(pg_reader)
         .data(consistent_reader)

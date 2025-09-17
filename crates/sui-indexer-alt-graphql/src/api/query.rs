@@ -43,6 +43,7 @@ use super::{
             filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
             CTransaction, Transaction,
         },
+        zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
     },
 };
 
@@ -588,6 +589,33 @@ impl Query {
                 .context("Failed to simulate transaction")
                 .into()),
         }
+    }
+
+    /// Verify a zkLogin signature os from the given `author`.
+    ///
+    /// Returns a `ZkLoginVerifyResult` where `success` is `true` and `error` is empty if the signature is valid. If the signature is invalid, `success` is `false` and `error` contains the relevant error message.
+    ///
+    /// - `bytes` are either the bytes of a serialized personal message, or `TransactionData`, Base64-encoded.
+    /// - `signature` is a serialized zkLogin signature, also Base64-encoded.
+    /// - `intentScope` indicates whether `bytes` are to be parsed as a personal message or `TransactionData`.
+    /// - `author` is the signer's address.
+    async fn verify_zk_login_signature(
+        &self,
+        ctx: &Context<'_>,
+        bytes: Base64,
+        signature: Base64,
+        intent_scope: ZkLoginIntentScope,
+        author: SuiAddress,
+    ) -> Result<ZkLoginVerifyResult, RpcError<zklogin::Error>> {
+        zklogin::verify_signature(
+            ctx,
+            self.scope(ctx)?,
+            bytes,
+            signature,
+            intent_scope,
+            author,
+        )
+        .await
     }
 }
 
