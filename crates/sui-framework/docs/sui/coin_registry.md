@@ -4,7 +4,7 @@ title: Module `sui::coin_registry`
 
 Defines the system object for managing coin data in a central
 registry. This module provides a centralized way to store and manage
-metadata for all coin types in the Sui ecosystem, including their
+metadata for all currencies in the Sui ecosystem, including their
 supply information, regulatory status, and metadata capabilities.
 
 
@@ -185,7 +185,7 @@ Key used to derive addresses when creating <code><a href="../sui/coin_registry.m
 
 Capability object that gates metadata (name, description, icon_url, symbol)
 changes in the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>. It can only be created (or claimed) once, and can
-be deleted to prevent changes to the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> metacurrency.
+be deleted to prevent changes to the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> metadata.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>&lt;<b>phantom</b> T&gt; <b>has</b> key, store
@@ -212,6 +212,8 @@ be deleted to prevent changes to the <code><a href="../sui/coin_registry.md#sui_
 
 ## Struct `Currency`
 
+Currency stores metadata such as name, symbol, decimals, icon_url and description,
+as well as supply states (optional) and regulatory status.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;<b>phantom</b> T&gt; <b>has</b> key
@@ -1085,7 +1087,7 @@ This action is IRREVERSIBLE, and the <code><a href="../sui/coin_registry.md#sui_
 
 ## Function `burn`
 
-Allows burning coins for burn-only currencies
+Burn the <code>Coin</code> if the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> has a <code>BurnOnly</code> supply state.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_burn">burn</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;)
@@ -1110,7 +1112,7 @@ Allows burning coins for burn-only currencies
 
 ## Function `burn_balance`
 
-Lower level function to burn a <code>Balance</code> of a burn-only <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
+Burn the <code>Balance</code> if the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> has a <code>BurnOnly</code> supply state.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_burn_balance">burn_balance</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;)
@@ -1126,7 +1128,7 @@ Lower level function to burn a <code>Balance</code> of a burn-only <code><a href
     <b>assert</b>!(currency.<a href="../sui/coin_registry.md#sui_coin_registry_is_supply_burn_only">is_supply_burn_only</a>(), <a href="../sui/coin_registry.md#sui_coin_registry_ESupplyNotBurnOnly">ESupplyNotBurnOnly</a>);
     match (currency.supply.borrow_mut()) {
         SupplyState::BurnOnly(supply) =&gt; { supply.decrease_supply(<a href="../sui/balance.md#sui_balance">balance</a>); },
-        _ =&gt; <b>abort</b> <a href="../sui/coin_registry.md#sui_coin_registry_EInvariantViolation">EInvariantViolation</a>,
+        _ =&gt; <b>abort</b> <a href="../sui/coin_registry.md#sui_coin_registry_EInvariantViolation">EInvariantViolation</a>, // unreachable
     }
 }
 </code></pre>
@@ -1139,7 +1141,7 @@ Lower level function to burn a <code>Balance</code> of a burn-only <code><a href
 
 ## Function `set_name`
 
-Enables a metadata cap holder to update a coin's name.
+Update the name of the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_set_name">set_name</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, _: &<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">sui::coin_registry::MetadataCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: <a href="../std/string.md#std_string_String">std::string::String</a>)
@@ -1164,7 +1166,7 @@ Enables a metadata cap holder to update a coin's name.
 
 ## Function `set_symbol`
 
-Enables a metadata cap holder to update a coin's symbol.
+Update the symbol of the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_set_symbol">set_symbol</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, _: &<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">sui::coin_registry::MetadataCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: <a href="../std/string.md#std_string_String">std::string::String</a>)
@@ -1190,7 +1192,7 @@ Enables a metadata cap holder to update a coin's symbol.
 
 ## Function `set_description`
 
-Enables a metadata cap holder to update a coin's description.
+Update the description of the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_set_description">set_description</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, _: &<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">sui::coin_registry::MetadataCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>: <a href="../std/string.md#std_string_String">std::string::String</a>)
@@ -1215,7 +1217,7 @@ Enables a metadata cap holder to update a coin's description.
 
 ## Function `set_icon_url`
 
-Enables a metadata cap holder to update a coin's icon URL.
+Update the icon URL of the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_set_icon_url">set_icon_url</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, _: &<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">sui::coin_registry::MetadataCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: <a href="../std/string.md#std_string_String">std::string::String</a>)
@@ -1240,7 +1242,9 @@ Enables a metadata cap holder to update a coin's icon URL.
 
 ## Function `set_treasury_cap_id`
 
-Register the treasury cap ID for a coin type at a later point.
+Register the treasury cap ID for a migrated <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>. All currencies created with
+<code><a href="../sui/coin_registry.md#sui_coin_registry_new_currency">new_currency</a></code> or <code><a href="../sui/coin_registry.md#sui_coin_registry_new_currency_with_otw">new_currency_with_otw</a></code> have their treasury cap ID set during
+initialization.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_set_treasury_cap_id">set_treasury_cap_id</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, cap: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;)
@@ -1265,7 +1269,7 @@ Register the treasury cap ID for a coin type at a later point.
 
 ## Function `migrate_legacy_metadata`
 
-Register <code>CoinMetadata</code> in the <code>Registry</code>. This can happen only once, if the
+Register <code>CoinMetadata</code> in the <code><a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a></code>. This can happen only once, if the
 <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> did not exist yet. Further updates are possible through
 <code><a href="../sui/coin_registry.md#sui_coin_registry_update_from_legacy_metadata">update_from_legacy_metadata</a></code>.
 
@@ -1313,7 +1317,8 @@ Register <code>CoinMetadata</code> in the <code>Registry</code>. This can happen
 
 ## Function `update_from_legacy_metadata`
 
-Update <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> from <code>CoinMetadata</code> as long as the <code><a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a></code> is not claimed.
+Update <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> from <code>CoinMetadata</code> if the <code><a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a></code> is not claimed. After
+the <code><a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a></code> is claimed, updates can only be made through <code>set_*</code> functions.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_update_from_legacy_metadata">update_from_legacy_metadata</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, legacy: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
@@ -1410,7 +1415,7 @@ This is a permissionless operation which can be performed only once.
 
 ## Function `migrate_regulated_state_by_cap`
 
-Allow migrating the regulated state by a <code>DenyCapV2</code> object.
+Mark regulated state by showing the <code>DenyCapV2</code> object for the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_migrate_regulated_state_by_cap">migrate_regulated_state_by_cap</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, cap: &<a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;)
@@ -1521,9 +1526,7 @@ Get the description of the coin.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>&lt;T&gt;(currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;): String {
-    currency.<a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>&lt;T&gt;(currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;): String { currency.<a href="../sui/coin_registry.md#sui_coin_registry_description">description</a> }
 </code></pre>
 
 
@@ -1667,6 +1670,9 @@ Get the treasury cap ID for this coin type, if registered.
 ## Function `deny_cap_id`
 
 Get the deny cap ID for this coin type, if it's a regulated coin.
+Returns <code>None</code> if:
+- The <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> is not regulated;
+- The <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> is migrated from legacy, and its regulated state has not been set;
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_deny_cap_id">deny_cap_id</a>&lt;T&gt;(currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>&gt;
@@ -1858,7 +1864,7 @@ Return the ID of the system <code><a href="../sui/coin_registry.md#sui_coin_regi
 
 ## Function `create`
 
-Create and share the singleton Registry -- this function is
+Create and share the singleton <code><a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a></code> -- this function is
 called exactly once, during the upgrade epoch.
 Only the system address (0x0) can create the registry.
 
