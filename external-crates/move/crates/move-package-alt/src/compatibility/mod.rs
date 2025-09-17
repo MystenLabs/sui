@@ -63,7 +63,7 @@ pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Option<
     );
 
     if names.len() > 1 {
-        bail!("Multiple module names found in the package.");
+        return Ok(None);
     }
 
     let Some(name) = names.iter().next() else {
