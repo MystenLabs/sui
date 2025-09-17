@@ -4,6 +4,7 @@ edition = "2024.beta"
 
 [addresses]
 A = "_"
+foo = "0x0"
 
 [dev-addresses]
 std = "0x1"
