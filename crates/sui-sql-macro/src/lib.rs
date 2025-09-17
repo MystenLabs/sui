@@ -150,7 +150,7 @@ pub fn sql(input: TokenStream) -> TokenStream {
 ///
 /// The format string introduces binders with curly braces. An empty binder interpolates another
 /// query at that position, otherwise the binder is expected to contain a `SqlType` for a value
-/// that will be bound into the query, given a a string which must correspond to a type in the
+/// that will be bound into the query, given a string which must correspond to a type in the
 /// `diesel::sql_types` module. Bound values or queries to interpolate follow in the order matching
 /// their binders in the string:
 ///
