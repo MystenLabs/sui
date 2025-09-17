@@ -1,5 +1,5 @@
 Command `build --json-errors`:
-BUILDING test
+BUILDING Test
 [
   {
     "file": "./sources/m.move",

@@ -3,4 +3,4 @@ name = "Dep"
 edition = "2024.beta"
 
 [addresses]
-A = "_"
+Dep = "0x0"
