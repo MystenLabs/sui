@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
@@ -19,17 +17,21 @@ use sui_types::{
 };
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
+    api::{
+        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
+        types::{
+            event::filter::EventFilter,
+            lookups::{CheckpointBounds, TxBoundsCursor},
+        },
+    },
     error::RpcError,
     pagination::Page,
     scope::Scope,
-    task::watermark::Watermarks,
 };
 
 use super::{
-    address::Address, checkpoint::filter::checkpoint_bounds, lookups::tx_bounds,
-    move_module::MoveModule, move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
-    transaction::Transaction,
+    address::Address, move_module::MoveModule, move_package::MovePackage, move_type::MoveType,
+    move_value::MoveValue, transaction::Transaction,
 };
 
 pub(crate) mod filter;
@@ -121,41 +123,25 @@ impl Event {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CEvent>,
-        filter: filter::EventFilter,
+        filter: EventFilter,
     ) -> Result<Connection<String, Event>, RpcError> {
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
-            return Ok(Connection::new(false, false));
-        };
-
         let mut c = Connection::new(false, false);
+
         let pg_reader: &PgReader = ctx.data()?;
-        let watermarks: &Arc<Watermarks> = ctx.data()?;
 
         // TODO: (henry) Use watermarks once we have a strategy for kv pruning.
         let reader_lo = 0;
-        let global_tx_hi = watermarks.high_watermark().transaction();
 
-        let Some(cp_bounds) = checkpoint_bounds(
-            filter.after_checkpoint.map(u64::from),
-            filter.at_checkpoint.map(u64::from),
-            filter.before_checkpoint.map(u64::from),
-            reader_lo,
-            checkpoint_viewed_at,
-        ) else {
-            return Ok(Connection::new(false, false));
+        let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
+            return Ok(c);
         };
-
-        let tx_bounds = tx_bounds(ctx, &cp_bounds, global_tx_hi, &page, |c| {
-            c.tx_sequence_number
-        })
-        .await?;
 
         #[derive(QueryableByName)]
         struct TxSequenceNumber(
             #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
         );
 
-        let mut query = filter.query(tx_bounds)?;
+        query += filter.query()?;
         query += query!(
             r#" ORDER BY tx_sequence_number {} LIMIT {BigInt}"#,
             page.order_by_direction(),
@@ -197,5 +183,11 @@ impl Event {
         }
 
         Ok(c)
+    }
+}
+
+impl TxBoundsCursor for CEvent {
+    fn tx_sequence_number(&self) -> u64 {
+        self.tx_sequence_number
     }
 }
