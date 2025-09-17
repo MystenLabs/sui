@@ -506,7 +506,10 @@ async fn resolve_transaction_insufficient_gas_with_payment_objects() {
     let executed_tx = client
         .execute_transaction_and_wait_for_checkpoint(request, std::time::Duration::from_secs(10))
         .await
-        .unwrap();
+        .unwrap()
+        .into_inner()
+        .transaction()
+        .to_owned();
 
     // Just get the effects, the helper function already asserts success
     let effects_proto = executed_tx.effects.unwrap();

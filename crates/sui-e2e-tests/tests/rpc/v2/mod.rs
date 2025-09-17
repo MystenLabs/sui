@@ -52,7 +52,10 @@ async fn execute_transaction(
     let transaction = client
         .execute_transaction_and_wait_for_checkpoint(request, Duration::from_secs(10))
         .await
-        .unwrap();
+        .unwrap()
+        .into_inner()
+        .transaction()
+        .to_owned();
 
     // Assert that the txn was successful
     assert!(transaction
