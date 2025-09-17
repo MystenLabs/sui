@@ -3,7 +3,7 @@
 
 use super::error::Result;
 use super::ObjectStore;
-use crate::balance_change::{derive_balance_changes, BalanceChange};
+use crate::balance_change::BalanceChange;
 use crate::base_types::{EpochId, ObjectID, ObjectType, SequenceNumber, SuiAddress};
 use crate::committee::Committee;
 use crate::digests::{
@@ -137,6 +137,11 @@ pub trait ReadStore: ObjectStore {
             .map(|digest| self.get_events(digest))
             .collect()
     }
+
+    fn get_balance_changes(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Option<Vec<BalanceChange>>;
 
     //
     // Extra Checkpoint fetching apis
@@ -317,6 +322,13 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         (*self).multi_get_events(event_digests)
     }
 
+    fn get_balance_changes(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Option<Vec<BalanceChange>> {
+        (*self).get_balance_changes(transaction_digest)
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -421,6 +433,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         (**self).multi_get_events(event_digests)
     }
 
+    fn get_balance_changes(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Option<Vec<BalanceChange>> {
+        (**self).get_balance_changes(transaction_digest)
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -523,6 +542,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         event_digests: &[TransactionDigest],
     ) -> Vec<Option<TransactionEvents>> {
         (**self).multi_get_events(event_digests)
+    }
+
+    fn get_balance_changes(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Option<Vec<BalanceChange>> {
+        (**self).get_balance_changes(transaction_digest)
     }
 
     fn get_full_checkpoint_contents(
@@ -667,6 +693,7 @@ pub struct BalanceInfo {
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct TransactionInfo {
     pub checkpoint: u64,
+    // Deprecated, used balance_changes stored in perpetual_tables
     pub balance_changes: Vec<BalanceChange>,
     pub object_types: HashMap<ObjectID, ObjectType>,
 }
@@ -674,12 +701,12 @@ pub struct TransactionInfo {
 impl TransactionInfo {
     pub fn new(
         _transaction: &TransactionData,
-        effects: &TransactionEffects,
+        _effects: &TransactionEffects,
         input_objects: &[Object],
         output_objects: &[Object],
         checkpoint: u64,
     ) -> TransactionInfo {
-        let balance_changes = derive_balance_changes(effects, input_objects, output_objects);
+        // let balance_changes = derive_balance_changes(effects, input_objects, output_objects);
 
         let object_types = input_objects
             .iter()
@@ -689,7 +716,7 @@ impl TransactionInfo {
 
         TransactionInfo {
             checkpoint,
-            balance_changes,
+            balance_changes: Vec::new(),
             object_types,
         }
     }

@@ -124,7 +124,7 @@ impl StateReader {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn get_transaction_info(
+    fn get_transaction_info(
         &self,
         digest: &sui_types::digests::TransactionDigest,
     ) -> Option<TransactionInfo> {
@@ -149,15 +149,13 @@ impl StateReader {
             events,
         ) = self.get_transaction(digest)?;
 
-        let (checkpoint, balance_changes, object_types) =
+        let balance_changes = self.inner().get_balance_changes(&(digest.into()));
+
+        let (checkpoint, object_types) =
             if let Some(info) = self.get_transaction_info(&(digest.into())) {
-                (
-                    Some(info.checkpoint),
-                    Some(info.balance_changes),
-                    Some(info.object_types),
-                )
+                (Some(info.checkpoint), Some(info.object_types))
             } else {
-                (None, None, None)
+                (None, None)
             };
         let timestamp_ms = if let Some(checkpoint) = checkpoint {
             self.inner()

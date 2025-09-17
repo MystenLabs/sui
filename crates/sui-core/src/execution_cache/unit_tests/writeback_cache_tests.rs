@@ -162,6 +162,7 @@ impl Scenario {
             transaction: Arc::new(tx),
             effects,
             events,
+            balance_changes: Default::default(),
             accumulator_events: Default::default(),
             markers: Default::default(),
             wrapped: Default::default(),

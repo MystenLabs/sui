@@ -646,6 +646,13 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         self.store().get_transaction_events(event_digest)
     }
 
+    fn get_balance_changes(
+        &self,
+        _transaction_digest: &sui_types::digests::TransactionDigest,
+    ) -> Option<Vec<sui_types::balance_change::BalanceChange>> {
+        todo!()
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         _sequence_number: Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,

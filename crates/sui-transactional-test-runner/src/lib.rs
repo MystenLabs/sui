@@ -411,6 +411,13 @@ impl ReadStore for ValidatorWithFullnode {
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()
     }
+
+    fn get_balance_changes(
+        &self,
+        _transaction_digest: &TransactionDigest,
+    ) -> Option<Vec<sui_types::balance_change::BalanceChange>> {
+        todo!()
+    }
 }
 
 impl ObjectStore for ValidatorWithFullnode {

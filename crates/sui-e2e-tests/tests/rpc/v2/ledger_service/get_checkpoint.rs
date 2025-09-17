@@ -219,6 +219,7 @@ async fn get_checkpoint() {
         transaction,
         effects,
         events,
+        balance_changes,
         input_objects,
         output_objects,
         ..
@@ -228,6 +229,7 @@ async fn get_checkpoint() {
         if digest == Some(transaction_digest.to_string()) {
             found_transaction = true;
             assert!(events.is_some());
+            assert!(!balance_changes.is_empty());
         }
         assert!(transaction.is_some());
         assert!(effects.is_some());

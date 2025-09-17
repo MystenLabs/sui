@@ -97,9 +97,10 @@ pub fn get_checkpoint(
                         .then(|| {
                             service
                                 .reader
-                                .get_transaction_info(t.transaction.digest())
-                                .map(|info| {
-                                    info.balance_changes
+                                .inner()
+                                .get_balance_changes(t.transaction.digest())
+                                .map(|balance_changes| {
+                                    balance_changes
                                         .into_iter()
                                         .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
                                         .collect::<Vec<_>>()

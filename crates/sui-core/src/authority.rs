@@ -60,6 +60,7 @@ use std::{
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_types::balance_change::TrackingBackingStore;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionTimeObservationKey;
@@ -1954,10 +1955,12 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
-                self.get_backing_store().as_ref(),
+                &tracking_store, // self.get_backing_store().as_ref(),
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -2062,6 +2065,23 @@ impl AuthorityState {
             );
         });
 
+        let balance_changes = sui_types::balance_change::calculate_balance_changes(
+            certificate.transaction_data(),
+            &effects,
+            &inner_temp_store,
+            epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
+                    &inner_temp_store,
+                    self.get_backing_package_store(),
+                ))),
+            tracking_store,
+        )
+        // For now if we error out while doing balance change calculations just output the error
+        // and produce an empty balance change list.
+        .tap_err(|e| error!(?tx_digest, "unable to calculate balance changes: {e}"))
+        .unwrap_or_default();
+
         // index certificate
         let _ = self
             .post_process_one_tx(certificate, &effects, &inner_temp_store, epoch_store)
@@ -2076,6 +2096,7 @@ impl AuthorityState {
             certificate.clone().into_unsigned(),
             effects,
             inner_temp_store,
+            balance_changes,
         );
 
         let elapsed = prepare_certificate_start_time.elapsed().as_micros() as f64;
@@ -2459,8 +2480,11 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
+
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
-            self.get_backing_store().as_ref(),
+            &tracking_store, // self.get_backing_store().as_ref(),
             protocol_config,
             self.metrics.limits_metrics.clone(),
             false, // expensive_checks
@@ -2479,10 +2503,26 @@ impl AuthorityState {
             checks.disabled(),
         );
 
+        let balance_changes = sui_types::balance_change::calculate_balance_changes(
+            &transaction,
+            &effects,
+            &inner_temp_store,
+            executor.type_layout_resolver(Box::new(PackageStoreWithFallback::new(
+                &inner_temp_store,
+                self.get_backing_package_store(),
+            ))),
+            tracking_store,
+        )
+        // For now if we error out while doing balance change calculations just output the error
+        // and produce an empty balance change list.
+        .tap_err(|e| debug!("unable to calculate balance changes: {e}"))
+        .unwrap_or_default();
+
         Ok(SimulateTransactionResult {
             input_objects: inner_temp_store.input_objects,
             output_objects: inner_temp_store.written,
             events: effects.events_digest().map(|_| inner_temp_store.events),
+            balance_changes,
             effects,
             execution_result,
             mock_gas_id,

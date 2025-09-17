@@ -21,7 +21,6 @@ use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
 use sui_rpc::proto::sui::rpc::v2beta2::TransactionEffects;
 use sui_rpc::proto::sui::rpc::v2beta2::TransactionEvents;
-use sui_types::balance_change::derive_balance_changes;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -163,6 +162,7 @@ pub fn simulate_transaction(
         input_objects,
         output_objects,
         events,
+        balance_changes,
         effects,
         execution_result,
         mock_gas_id: _,
@@ -179,12 +179,7 @@ pub fn simulate_transaction(
 
         message.balance_changes = read_mask
             .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-            .then(|| {
-                derive_balance_changes(&effects, &input_objects, &output_objects)
-                    .into_iter()
-                    .map(Into::into)
-                    .collect()
-            })
+            .then(|| balance_changes.into_iter().map(Into::into).collect())
             .unwrap_or_default();
 
         message.effects = {

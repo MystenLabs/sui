@@ -148,6 +148,8 @@ pub async fn execute_transaction(
         let balance_changes = mask
             .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
             .then(|| {
+                // TODO we need to pipe through balance changes calculated from execution from the
+                // validator
                 derive_balance_changes(&effects, &input_objects, &output_objects)
                     .into_iter()
                     .map(Into::into)

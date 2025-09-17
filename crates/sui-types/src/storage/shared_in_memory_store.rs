@@ -3,6 +3,7 @@
 
 use super::error::Result;
 use super::ObjectStore;
+use crate::balance_change::BalanceChange;
 use crate::base_types::{EpochId, ExecutionData, TransactionDigest};
 use crate::committee::Committee;
 use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
@@ -93,6 +94,13 @@ impl ReadStore for SharedInMemoryStore {
 
     fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.inner().get_transaction_events(digest).cloned()
+    }
+
+    fn get_balance_changes(
+        &self,
+        _transaction_digest: &TransactionDigest,
+    ) -> Option<Vec<BalanceChange>> {
+        todo!()
     }
 
     fn get_latest_checkpoint(&self) -> Result<VerifiedCheckpoint> {
@@ -517,6 +525,13 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
 
     fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.0.get_events(digest)
+    }
+
+    fn get_balance_changes(
+        &self,
+        _transaction_digest: &TransactionDigest,
+    ) -> Option<Vec<BalanceChange>> {
+        todo!()
     }
 
     fn get_latest_checkpoint(&self) -> Result<VerifiedCheckpoint> {

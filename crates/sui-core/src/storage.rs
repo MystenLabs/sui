@@ -12,6 +12,7 @@ use crate::rpc_index::RpcIndexStore;
 use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
@@ -230,6 +231,12 @@ impl ReadStore for RocksDbStore {
             .get_events(digest)
     }
 
+    fn get_balance_changes(&self, digest: &TransactionDigest) -> Option<Vec<BalanceChange>> {
+        self.cache_traits
+            .transaction_cache_reader
+            .get_balance_changes(digest)
+    }
+
     fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
         self.checkpoint_store
             .get_highest_executed_checkpoint()
@@ -446,6 +453,10 @@ impl ReadStore for RestReadStore {
 
     fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.rocks.get_events(digest)
+    }
+
+    fn get_balance_changes(&self, digest: &TransactionDigest) -> Option<Vec<BalanceChange>> {
+        self.rocks.get_balance_changes(digest)
     }
 
     fn get_full_checkpoint_contents(
