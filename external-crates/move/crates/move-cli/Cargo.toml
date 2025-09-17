@@ -52,6 +52,7 @@ move-model-2.workspace = true
 move-trace-format.workspace = true
 treeline.workspace = true
 tokio.workspace = true
+path-clean.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

@@ -18,7 +18,9 @@ use move_package_alt::{
 use move_package_alt_compilation::{
     layout::CompiledPackageLayout, on_disk_package::OnDiskCompiledPackage,
 };
+use path_clean::clean;
 use std::{
+    cmp::max,
     collections::{BTreeMap, HashMap},
     env,
     fmt::Write as FmtWrite,
@@ -102,158 +104,82 @@ fn collect_coverage(
     Ok(coverage_map)
 }
 
-fn determine_package_nest_depth(
-    root_pkg: &RootPackage<Vanilla>,
-    pkg_dir: &Path,
-) -> anyhow::Result<usize> {
-    let mut depth = 0;
-    let packages = root_pkg.packages().unwrap();
-
-    debug!("Package dir: {}", pkg_dir.display());
-
-    // Canonicalize pkg_dir to get absolute path for comparison
-    let pkg_dir_canonical = pkg_dir.canonicalize()?;
-
-    for package in packages {
-        let path = package.path();
-
-        // Get the path of the dependency
-        let dep_path = path.path();
-
-        // Convert to relative path from pkg_dir
-        let relative_path = if dep_path.is_absolute() {
-            // If it's absolute, try to make it relative to pkg_dir
-            match dep_path.strip_prefix(&pkg_dir_canonical) {
-                Ok(rel) => rel.to_path_buf(),
-                Err(_) => {
-                    // If stripping fails, the dependency is outside pkg_dir
-                    // We need to compute how many ".." components are needed
-                    let dep_canonical = dep_path.canonicalize()?;
-
-                    // Find common ancestor and build relative path
-                    let pkg_components: Vec<_> = pkg_dir_canonical.components().collect();
-                    let dep_components: Vec<_> = dep_canonical.components().collect();
-
-                    // Find common prefix length
-                    let common_len = pkg_components
-                        .iter()
-                        .zip(dep_components.iter())
-                        .take_while(|(a, b)| a == b)
-                        .count();
-
-                    // Build relative path
-                    let mut relative = PathBuf::new();
-
-                    // Add ".." for each component we need to go up from pkg_dir
-                    for _ in common_len..pkg_components.len() {
-                        relative.push("..");
-                    }
-
-                    // Add the remaining components from dep path
-                    for component in &dep_components[common_len..] {
-                        relative.push(component);
-                    }
-
-                    relative
-                }
+/// Given a list of paths `paths = [p_1, p_2, p_3, ...], produce another path `result = dir/dir/dir/...`
+/// so that for each `i`, `{result}/{p_i}` cleans to a path with no `..`
+///
+/// For example, if `paths` is  [`foo`, `../bar`, `../../../../baz`], then `make_dir_prefix(paths)`
+/// would be `dir/dir/dir/dir` so that `0/1/2/3/../../../../baz` would clean to `baz`.
+#[allow(unused)]
+fn make_dir_prefix(paths: impl IntoIterator<Item = impl AsRef<Path>>) -> PathBuf {
+    let mut max_depth = 0;
+    for path in paths {
+        let mut depth = 0;
+        for component in clean(path).components() {
+            if component.as_os_str() != ".." {
+                break;
             }
-        } else {
-            // If it's already relative, use it as is
-            dep_path.to_path_buf()
-        };
-
-        let components = relative_path.components().count() + 1;
-        depth = std::cmp::max(depth, components);
+            depth += 1;
+        }
+        max_depth = max(max_depth, depth);
     }
-
-    Ok(depth)
+    let mut result = PathBuf::new();
+    for i in [0..max_depth - 1] {
+        result.push("dir");
+    }
+    result
 }
 
-fn pad_tmp_path(tmp_dir: &Path, pad_amount: usize) -> anyhow::Result<PathBuf> {
-    let mut tmp_dir = tmp_dir.to_path_buf();
-    for i in 0..pad_amount {
-        tmp_dir.push(format!("{}", i));
-    }
-    std::fs::create_dir_all(&tmp_dir)?;
-    Ok(tmp_dir)
-}
-
-// We need to copy dependencies over (transitively) and at the same time keep the paths valid in
-// the package. To do this we compute the resolution graph for all possible dependencies (so in dev
-// mode) and then calculate the nesting under `tmp_dir` the we need to copy the root package so
-// that it, and all its dependencies reside under `tmp_dir` with the same paths as in the original
-// package manifest.
-fn copy_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
-    // Sometimes we run a test that isn't a package for metatests so if there isn't a package we
-    // don't need to nest at all. Resolution graph diagnostics are only needed for CLI commands so
-    // ignore them by passing a vector as the writer.
-    let Ok(root_pkg) =
-        RootPackage::<Vanilla>::load_sync(pkg_dir.to_path_buf(), vanilla::default_environment())
-    else {
-        // Ensure the temp directory exists before returning
-        fs::create_dir_all(tmp_dir)?;
-        return Ok(tmp_dir.to_path_buf());
+/// Copy `pkg_dir` and all of its dependencies into `tmp_dir`, keeping all of the relative
+/// paths the same. This may require copying into a subdirectory of `tmp_dir` if the local paths
+/// start with `..`; the actual subdirectory containing the copied files is returned.
+fn copy_pkg_and_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
+    let paths = match package_paths(pkg_dir) {
+        Ok(paths) => paths,
+        Err(e) => {
+            debug!("couldn't find packages: {e}");
+            [pkg_dir.to_path_buf()].into()
+        }
     };
 
-    // Canonicalize pkg_dir for consistent path operations
-    let pkg_dir_canonical = pkg_dir.canonicalize()?;
-    let package_nest_depth = determine_package_nest_depth(&root_pkg, pkg_dir)?;
+    let prefix = make_dir_prefix(&paths);
 
-    let tmp_dir = pad_tmp_path(tmp_dir, package_nest_depth)?;
+    debug!("copying {paths:?}");
 
-    for package in root_pkg.packages().unwrap() {
-        let source_dep_path = package.path().path();
-
-        // Convert to relative path from pkg_dir (same logic as in determine_package_nest_depth)
-        let relative_path = if source_dep_path.is_absolute() {
-            match source_dep_path.strip_prefix(&pkg_dir_canonical) {
-                Ok(rel) => rel.to_path_buf(),
-                Err(_) => {
-                    // If stripping fails, build relative path with ".." components
-                    let dep_canonical = source_dep_path.canonicalize()?;
-
-                    let pkg_components: Vec<_> = pkg_dir_canonical.components().collect();
-                    let dep_components: Vec<_> = dep_canonical.components().collect();
-
-                    let common_len = pkg_components
-                        .iter()
-                        .zip(dep_components.iter())
-                        .take_while(|(a, b)| a == b)
-                        .count();
-
-                    let mut relative = PathBuf::new();
-
-                    for _ in common_len..pkg_components.len() {
-                        relative.push("..");
-                    }
-
-                    for component in &dep_components[common_len..] {
-                        relative.push(component);
-                    }
-
-                    relative
-                }
-            }
-        } else {
-            source_dep_path.to_path_buf()
-        };
-
-        let dest_dep_path = tmp_dir.join(&relative_path);
-        if !dest_dep_path.exists() {
-            fs::create_dir_all(&dest_dep_path)?;
-        }
-        simple_copy_dir(&dest_dep_path, source_dep_path)?;
+    for path in paths {
+        debug!("cp {:?} {:?}", &path, tmp_dir.join(&prefix).join(&path));
+        simple_copy_dir(&tmp_dir.join(&prefix).join(&path), &path)?;
     }
-    Ok(tmp_dir)
+
+    Ok(tmp_dir.join(prefix).join(pkg_dir))
 }
 
+/// Return the paths to all the packages needed by the package at `pkg_dir` (including itself); if
+/// the package cannot be loaded we just return the package itself. (sometimes we run a test that
+/// isn't a package for metatests so if there isn't a package we don't need to nest at all).
+fn package_paths(pkg_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let rt = tokio::runtime::Runtime::new()?;
+
+    let root_pkg = rt.block_on(RootPackage::<Vanilla>::load(
+        pkg_dir,
+        vanilla::default_environment(),
+    ))?;
+
+    let packages = root_pkg.packages()?;
+
+    Ok(packages
+        .iter()
+        .map(|pkg| pkg.path().path().to_path_buf())
+        .collect())
+}
+
+/// Recursively copy all files in `src` into `dir`
 fn simple_copy_dir(dst: &Path, src: &Path) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
     for entry in fs::read_dir(src)? {
         let src_entry = entry?;
         let src_entry_path = src_entry.path();
         let dst_entry_path = dst.join(src_entry.file_name());
         if src_entry_path.is_dir() {
-            fs::create_dir_all(&dst_entry_path)?;
             simple_copy_dir(&dst_entry_path, &src_entry_path)?;
         } else {
             fs::copy(&src_entry_path, &dst_entry_path)?;
@@ -275,9 +201,9 @@ pub fn run_one(
     // path where we will run the binary
     let exe_dir = args_path.parent().unwrap();
     let temp_dir = if use_temp_dir {
-        // symlink everything in the exe_dir into the temp_dir
+        // copy everything in the exe_dir into the temp_dir
         let dir = tempdir()?;
-        let padded_dir = copy_deps(dir.path(), exe_dir)?;
+        let padded_dir = copy_pkg_and_deps(dir.path(), exe_dir)?;
         simple_copy_dir(&padded_dir, exe_dir)?;
         Some((dir, padded_dir))
     } else {
