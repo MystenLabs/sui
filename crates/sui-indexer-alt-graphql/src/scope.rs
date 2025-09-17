@@ -4,8 +4,10 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_graphql::Context;
+use async_trait::async_trait;
+use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
-use sui_package_resolver::{PackageStore, Resolver};
+use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore, Resolver};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     object::Object as NativeObject,
@@ -49,6 +51,17 @@ pub(crate) struct Scope {
 
     /// Limits for package/type resolution.
     resolver_limits: sui_package_resolver::Limits,
+}
+
+/// A package store that first checks execution context objects before falling back to the inner store.                       
+/// This allows newly published packages in a transaction to be resolved immediately without database queries.                
+#[derive(Clone)]
+struct ExecutionContextPackageStore {
+    /// Objects from the freshly executed transaction, containing any newly published packages.
+    execution_objects: Arc<BTreeMap<(ObjectID, SequenceNumber), NativeObject>>,
+
+    /// The underlying package store (typically database-backed) for packages not in execution context.
+    inner: Arc<dyn PackageStore>,
 }
 
 impl Scope {
@@ -95,11 +108,18 @@ impl Scope {
                 .collect::<BTreeMap<_, _>>(),
         );
 
+        // Wrap the existing package store with ExecutionContextPackageStore
+        // to make newly published packages available for type resolution
+        let package_store: Arc<dyn PackageStore> = Arc::new(ExecutionContextPackageStore {
+            execution_objects: Arc::clone(&execution_objects),
+            inner: self.package_store.clone(),
+        });
+
         Self {
             checkpoint_viewed_at: None,
             root_version: self.root_version,
             execution_objects,
-            package_store: self.package_store.clone(),
+            package_store,
             resolver_limits: self.resolver_limits.clone(),
         }
     }
@@ -159,5 +179,29 @@ impl Scope {
     /// A package resolver with access to the packages known at this scope.
     pub(crate) fn package_resolver(&self) -> Resolver<Arc<dyn PackageStore>> {
         Resolver::new_with_limits(self.package_store.clone(), self.resolver_limits.clone())
+    }
+}
+
+#[async_trait]
+impl PackageStore for ExecutionContextPackageStore {
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>, PackageResolverError> {
+        let object_id = ObjectID::from(id);
+
+        let latest_package = self
+            .execution_objects
+            .range((object_id, SequenceNumber::MIN)..=(object_id, SequenceNumber::MAX))
+            .last()
+            .and_then(|(_, object)| {
+                // Check if this object is actually a package
+                object.data.try_as_package()
+            });
+
+        if let Some(package) = latest_package {
+            // Found the package in execution context, convert it to the Package type
+            return Package::read_from_package(package).map(Arc::new);
+        }
+
+        // Package not found in execution context, fall back to the inner store
+        self.inner.fetch(id).await
     }
 }
