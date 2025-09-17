@@ -312,7 +312,7 @@ public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): Me
     let id = object::new(ctx);
     currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
 
-    if (is_otw) transfer::transfer(currency, object::sui_coin_registry_address().to_address())
+    if (is_otw) transfer::transfer(currency, object::sui_coin_registry_address())
     else transfer::share_object(currency);
 
     MetadataCap<T> { id }
