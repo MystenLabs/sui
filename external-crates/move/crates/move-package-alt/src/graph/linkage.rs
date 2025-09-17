@@ -168,11 +168,6 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             .linkage
             .insert(self.original_id(), (depth, self.clone()));
 
-        let dbg: BTreeMap<_, _> = result
-            .linkage
-            .iter()
-            .map(|(oid, (depth, _))| (oid.clone(), *depth))
-            .collect();
         Ok(result)
     }
 
