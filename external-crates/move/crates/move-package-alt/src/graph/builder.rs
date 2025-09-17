@@ -203,11 +203,16 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // build index to id map
         for node in graph.node_indices() {
             let pkg_node = graph.node_weight(node).expect("node exists");
-            let suffix = name_to_suffix.entry(pkg_node.name().clone()).or_default();
-            let id = if *suffix == 0 {
-                pkg_node.name().to_string()
+            let name = if let Some(legacy_data) = &pkg_node.legacy_data {
+                &legacy_data.normalized_legacy_name
             } else {
-                format!("{}_{suffix}", pkg_node.name())
+                pkg_node.name()
+            };
+            let suffix = name_to_suffix.entry(name.clone()).or_default();
+            let id = if *suffix == 0 {
+                name.to_string()
+            } else {
+                format!("{}_{suffix}", name)
             };
             node_to_id.insert(id, node);
             *suffix += 1;

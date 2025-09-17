@@ -8,7 +8,6 @@ use derive_where::derive_where;
 use indoc::formatdoc;
 use petgraph::visit::EdgeRef;
 use thiserror::Error;
-use tracing::debug;
 
 use crate::{
     flavor::MoveFlavor,
@@ -64,7 +63,6 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .linkage_ignoring_overrides(&LinkageTable::new(), 0)?;
 
         if let Some(conflict) = linkage_result.best_conflict {
-            debug!("selected conflict with level {}", conflict.depth);
             return Err(LinkageError::inconsistent_linkage(
                 &conflict.node,
                 &conflict.conflict,
@@ -117,7 +115,6 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
         overrides: &LinkageTable<'graph, F>,
         depth: u8,
     ) -> LinkageResult<TraversalState<'graph, F>> {
-        debug!("traversing {} at depth {depth}", self.name());
         let mut local_overrides = self.overrides()?;
         for (addr, pkg) in overrides {
             local_overrides.insert(addr.clone(), pkg.clone());
@@ -151,11 +148,6 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
 
                         if old_pkg.node != new_pkg.node {
                             // new conflict
-                            debug!(
-                                "conflict at level {depth}: {} -- {}",
-                                old_pkg.name(),
-                                new_pkg.name()
-                            );
                             let conflict = Conflict {
                                 depth: min_depth,
                                 node: min_pkg.clone(),
@@ -181,7 +173,6 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             .iter()
             .map(|(oid, (depth, _))| (oid.clone(), *depth))
             .collect();
-        debug!("returning from {}\n  {dbg:#?}", self.name());
         Ok(result)
     }
 
@@ -296,10 +287,6 @@ impl LinkageError {
         path: &Vec<(PackageName, PackageInfo<F>)>,
         conflict: usize,
     ) -> Self {
-        debug!(
-            "generating error for {conflict} of {:?}",
-            path.iter().map(|(name, _)| name).collect::<Vec<_>>()
-        );
         let ancestor = path[conflict].1.display_name();
         let referenced_by = if conflict == 0 {
             "".to_string()
