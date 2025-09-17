@@ -5,6 +5,7 @@ module tto::M1;
 
 use sui::coin::Coin;
 use sui::sui::SUI;
+use sui::transfer::Receiving;
 
 public struct A has key, store {
     id: UID,

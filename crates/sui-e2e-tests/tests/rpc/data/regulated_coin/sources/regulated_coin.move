@@ -54,5 +54,5 @@ public fun deny_address(
     address_to_deny: address,
     ctx: &mut TxContext,
 ) {
-    deny_list.add(deny_cap, address_to_deny, ctx);
+    coin::deny_list_v2_add(deny_list, deny_cap, address_to_deny, ctx);
 }
