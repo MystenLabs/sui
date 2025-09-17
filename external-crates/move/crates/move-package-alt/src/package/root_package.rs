@@ -11,6 +11,7 @@ use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
 use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
 use crate::graph::{LinkageTable, PackageInfo};
+use crate::package::package_lock::PackageLock;
 use crate::schema::{
     Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
     Publication, RenderToml,
@@ -88,6 +89,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
     pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
         debug!("Loading RootPackage for {:?}", path.as_ref());
+        let _mutx = PackageLock::lock(); // held until function returns
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
