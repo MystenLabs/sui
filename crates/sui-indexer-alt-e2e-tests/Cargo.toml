@@ -50,6 +50,7 @@ tracing.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 datatest-stable.workspace = true
+insta.workspace = true
 jsonrpsee.workspace = true
 telemetry-subscribers.workspace = true
 tonic.workspace = true
