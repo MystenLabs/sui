@@ -56,7 +56,6 @@ supply information, regulatory status, and metadata capabilities.
 -  [Function `is_regulated`](#sui_coin_registry_is_regulated)
 -  [Function `total_supply`](#sui_coin_registry_total_supply)
 -  [Function `exists`](#sui_coin_registry_exists)
--  [Function `coin_registry_id`](#sui_coin_registry_coin_registry_id)
 -  [Function `create`](#sui_coin_registry_create)
 -  [Macro function `is_ascii_printable`](#sui_coin_registry_is_ascii_printable)
 
@@ -983,7 +982,7 @@ Finalize the coin initialization, returning <code><a href="../sui/coin_registry.
     extra_fields.destroy_empty();
     <b>let</b> id = <a href="../sui/object.md#sui_object_new">object::new</a>(ctx);
     currency.<a href="../sui/coin_registry.md#sui_coin_registry_metadata_cap_id">metadata_cap_id</a> = MetadataCapState::Claimed(id.to_inner());
-    <b>if</b> (is_otw) <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(currency, <a href="../sui/coin_registry.md#sui_coin_registry_coin_registry_id">coin_registry_id</a>().to_address())
+    <b>if</b> (is_otw) <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(currency, <a href="../sui/object.md#sui_object_sui_coin_registry_address">object::sui_coin_registry_address</a>())
     <b>else</b> <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(currency);
     <a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>&lt;T&gt; { id }
 }
@@ -1828,31 +1827,6 @@ Check if coin data exists for the given type T in the registry.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;T&gt;(registry: &<a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>): bool {
     <a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&registry.id, <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyKey">CurrencyKey</a>&lt;T&gt;())
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_coin_registry_coin_registry_id"></a>
-
-## Function `coin_registry_id`
-
-Return the ID of the system <code><a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a></code> object located at address 0xc.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_coin_registry_id">coin_registry_id</a>(): <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_coin_registry_id">coin_registry_id</a>(): ID {
-    @0xc.to_id()
 }
 </code></pre>
 

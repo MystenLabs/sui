@@ -1342,6 +1342,9 @@ sui_accumulator_root_address
 sui_coin_registry_object_id
 	public(package) fun
 	0x2::object
+sui_coin_registry_address
+	public(package) fun
+	0x2::object
 bridge
 	fun
 	0x2::object
@@ -2699,9 +2702,6 @@ total_supply
 	public fun
 	0x2::coin_registry
 exists
-	public fun
-	0x2::coin_registry
-coin_registry_id
 	public fun
 	0x2::coin_registry
 create
