@@ -88,7 +88,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
     pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
-        debug!("Loading RootPackage for {:?}", path.as_ref());
+        debug!(
+            "Loading RootPackage for {:?} (CWD: {:?}",
+            path.as_ref(),
+            std::env::current_dir()
+        );
         let _mutx = PackageLock::lock(); // held until function returns
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
@@ -197,6 +201,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
+        debug!(
+            "creating RootPackage at {:?} (CWD: {:?})",
+            package_path.path(),
+            std::env::current_dir()
+        );
         let lockfile = Self::load_lockfile(&package_path)?;
         let pubs = Self::load_pubfile(&package_path)?;
 
@@ -224,8 +233,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// The name of the root package
-    pub fn name(&self) -> &PackageName {
-        self.package_graph().root_package().name()
+    pub fn name(&self) -> &PackageID {
+        self.package_graph().root_package_info().id()
     }
 
     /// Returns the `display_name` for the root package.

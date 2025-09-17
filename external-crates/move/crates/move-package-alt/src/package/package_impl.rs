@@ -99,7 +99,7 @@ impl<F: MoveFlavor> Package<F> {
         debug!("loading package {:?}", dep_for_self);
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
-        let (file_handle, manifest) = if let Some(result) = try_load_legacy_manifest(&path, env) {
+        let (file_handle, manifest) = if let Some(result) = try_load_legacy_manifest(&path, env)? {
             result
         } else {
             let m = Manifest::read_from_file(path.manifest_path())?;
@@ -139,7 +139,7 @@ impl<F: MoveFlavor> Package<F> {
         };
 
         debug!(
-            "successfully loaded {:?}\n{result:#?}",
+            "successfully loaded {:?}",
             result.dep_for_self.unfetched_path()
         );
         Ok(result)
