@@ -221,7 +221,6 @@ Move.lock
 PinnedDependency:
     ReplacementDependency with additional constraints - see Pinning
 
-<<<<<<< HEAD
 Move.published
     published : EnvironmentName →
         chain-id: EnvironmentID
@@ -754,12 +753,20 @@ The format of an ephemeral publication file is as follows:
 build-env = "mainnet"
 chain-id = "localnet chain ID"
 
-[published.example]
+[[published]]
+source = { root = true }
+published-at = "..."
+original-id = "..."
+upgrade-cap = "..."
+
+[[published]]
+source = { git = "...", rev = "...", path = "..." }
 published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
 original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
 upgrade-cap = "0x000000000000000000000000000000000000000000000000000000000011cc00"
 
-[published.Foo_0]
+[[published]]
+source = { local = "../foo" }
 published-at = "0x0000000000000000000000000000000000000000000000000000000000001234"
 original-id = "0x0000000000000000000000000000000000000000000000000000000000005678"
 upgrade-cap = "0x000000000000000000000000000000000000000000000000000000000022cc00"
@@ -794,10 +801,12 @@ publication file.
    error from the pre-publication checks indicating that the chain id of the dependency is different
    from the current chain ID
 
-We then load the package graph from the lockfile for `build-env` (repinning if necessary). We check
-that all of the dependencies besides the root package are present in `<file>`[^test-pub-mvp]. We then publish the
-root package to the active environment using the addresses from `<file>` instead of their
-published-at addresses. Finally, we update the entry for the root package in `<file>`.
+We then load the package graph from the lockfile for `build-env` (repinning if
+necessary). We then publish the root package to the active environment using
+the addresses from `<file>` instead of their published-at addresses (if an
+entry is missing from the ephemeral file but the real chain ID matches the
+ephemeral chain ID then we can use the real address instead). Finally, we
+update the entry for the root package in `<file>`.
 
 [^test-pub-mvp]: We have a post-mvp proposal to automatically publish dependencies instead of failing if they
     are missing; see "Recursive test-publish; test-upgrade"
