@@ -15777,6 +15777,7 @@ dependencies = [
  "serde",
  "serde_json",
  "similar",
+ "sui-config",
  "sui-execution",
  "sui-framework",
  "sui-json-rpc-types",
@@ -15787,6 +15788,7 @@ dependencies = [
  "telemetry-subscribers",
  "thiserror 1.0.69",
  "tokio",
+ "toml 0.7.4",
  "tracing",
  "zstd 0.12.3+zstd.1.5.2",
 ]

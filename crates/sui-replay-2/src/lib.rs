@@ -12,13 +12,16 @@ use crate::{
     replay_txn::replay_transaction,
 };
 use anyhow::{anyhow, bail};
-use clap::{ArgAction, Parser, ValueEnum};
+use clap::{Parser, ValueEnum};
+use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
 use std::{
+    fs,
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
 };
+use sui_config::sui_config_dir;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain};
 // Disambiguate external tracing crate from local `crate::tracing` module using absolute path.
@@ -37,6 +40,7 @@ pub mod tracing;
 const DEFAULT_OUTPUT_DIR: &str = ".replay";
 const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
 const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
+const CONFIG_FILE_NAME: &str = "replay.toml";
 
 // Arguments to the replay tool.
 // It allows to replay a single transaction by digest or
@@ -58,38 +62,74 @@ pub struct Config {
     pub replay_experimental: ReplayConfigExperimental,
 }
 
-/// Arguments for replay
-#[derive(Parser, Clone, Debug)]
+/// Arguments for replay (used for both CLI and config file)
+#[derive(Parser, Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub struct ReplayConfigStable {
     /// Transaction digest to replay.
-    #[arg(long, short)]
+    #[arg(long = "digest", short)]
     pub digest: Option<String>,
 
     /// File containing a list of digests, one per line.
-    #[arg(long)]
+    #[arg(long = "digests-path")]
     pub digests_path: Option<PathBuf>,
 
     /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
-    #[arg(long, default_value = "false")]
-    pub terminate_early: bool,
+    #[arg(
+        long = "terminate-early",
+        num_args = 0..=1,
+        default_missing_value = "false"
+    )]
+    pub terminate_early: Option<bool>,
 
     /// Whether to trace the transaction execution. Generated traces will be saved in the output
     /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
-    #[arg(long = "trace", default_value = "false")]
-    pub trace: bool,
+    #[arg(
+        long = "trace",
+        num_args = 0..=1,
+        default_missing_value = "false"
+    )]
+    pub trace: Option<bool>,
 
     /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
-    #[arg(long, short)]
+    #[arg(long = "output-dir", short)]
     pub output_dir: Option<PathBuf>,
 
     /// Show transaction effects.
-    #[arg(long, short = 'e',action = ArgAction::Set, default_value = "true")]
-    pub show_effects: bool,
+    #[arg(
+        short = 'e',
+        long = "show-effects",
+        num_args = 0..=1,
+        default_missing_value = "true"
+    )]
+    pub show_effects: Option<bool>,
 
     /// Whether existing artifacts that were generated from a previous replay of the transaction
     /// should be overwritten or an error raised if they already exist.
-    #[arg(long, default_value = "false")]
+    #[arg(
+        long = "overwrite",
+        num_args = 0..=1,
+        default_missing_value = "false"
+    )]
+    pub overwrite: Option<bool>,
+}
+
+/// Arguments for replay used for internal processing
+/// (same as ReplayConfigStable but with default values set)
+#[derive(Parser, Clone, Debug)]
+pub struct ReplayConfigStableInternal {
+    pub digest: Option<String>,
+    pub digests_path: Option<PathBuf>,
+    pub terminate_early: bool,
+    pub trace: bool,
+    pub output_dir: Option<PathBuf>,
+    pub show_effects: bool,
     pub overwrite: bool,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct TOMLConfig {
+    flags: Option<ReplayConfigStable>,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -188,12 +228,90 @@ impl FromStr for Node {
     }
 }
 
+/// Load replay configuration from ~/.sui/sui_config/replay.toml file.
+/// Returns default config (all fields set to None) if file cannot be found or read.
+pub fn load_config_file() -> anyhow::Result<ReplayConfigStable> {
+    let config_dir = match sui_config_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            eprintln!("Cannot locate replay config file: {e}");
+            return Ok(ReplayConfigStable::default());
+        }
+    };
+    let config_file_path = config_dir.join(CONFIG_FILE_NAME);
+
+    if !config_file_path.exists() {
+        return Ok(ReplayConfigStable::default());
+    }
+
+    let content = fs::read_to_string(&config_file_path).map_err(|e| {
+        anyhow!(
+            "Failed to read replay config file '{:?}': {}",
+            config_file_path,
+            e
+        )
+    })?;
+
+    let config: TOMLConfig = toml::from_str(&content).map_err(|e| {
+        anyhow!(
+            "Failed to parse replay config file '{:?}': {}",
+            config_file_path,
+            e
+        )
+    })?;
+
+    config.flags.ok_or_else(|| {
+        anyhow!(
+            "No flags section found in replay config file '{:?}'",
+            config_file_path
+        )
+    })
+}
+
+/// Merge CLI flags and config file flags into a single config. CLI flags take
+/// precedence over config file flags, which take precedence over defaults.
+pub fn merge_configs(
+    cli_config: ReplayConfigStable,
+    file_config: ReplayConfigStable,
+) -> ReplayConfigStableInternal {
+    // Get default config from clap (any name can be used as first
+    // element of the vector to represent the command/program name).
+    let default_config = ReplayConfigStableInternal::parse_from(["dummy"]);
+    ReplayConfigStableInternal {
+        digest: cli_config.digest.or(file_config.digest),
+
+        digests_path: cli_config.digests_path.or(file_config.digests_path),
+
+        terminate_early: cli_config
+            .terminate_early
+            .or(file_config.terminate_early)
+            .unwrap_or(default_config.terminate_early),
+
+        trace: cli_config
+            .trace
+            .or(file_config.trace)
+            .unwrap_or(default_config.trace),
+
+        output_dir: cli_config.output_dir.or(file_config.output_dir),
+
+        show_effects: cli_config
+            .show_effects
+            .or(file_config.show_effects)
+            .unwrap_or(default_config.show_effects),
+
+        overwrite: cli_config
+            .overwrite
+            .or(file_config.overwrite)
+            .unwrap_or(default_config.overwrite),
+    }
+}
+
 pub async fn handle_replay_config(
-    stable_config: &ReplayConfigStable,
+    stable_config: &ReplayConfigStableInternal,
     experimental_config: &ReplayConfigExperimental,
     version: &str,
 ) -> anyhow::Result<PathBuf> {
-    let ReplayConfigStable {
+    let ReplayConfigStableInternal {
         digest,
         digests_path,
         mut terminate_early,
@@ -201,7 +319,7 @@ pub async fn handle_replay_config(
         output_dir,
         show_effects: _, // used in the caller
         overwrite: overwrite_existing,
-    } = stable_config;
+    } = &stable_config;
 
     let ReplayConfigExperimental {
         node,

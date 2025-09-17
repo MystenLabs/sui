@@ -35,11 +35,13 @@ similar.workspace = true
 sui-execution.workspace = true
 sui-framework.workspace = true
 sui-types.workspace = true
+sui-config.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+toml.workspace = true
 tracing.workspace = true
 sui-json-rpc-types.workspace = true
 serde_json.workspace = true
