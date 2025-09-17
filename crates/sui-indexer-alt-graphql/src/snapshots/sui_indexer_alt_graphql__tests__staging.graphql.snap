@@ -4062,7 +4062,7 @@ The result of the zkLogin signature verification.
 """
 type ZkLoginVerifyResult {
 	"""
-	The error field captures any verification error
+	The error field capture reasons why the signature could not be verified, assuming the inputs are valid and there are no internal errors.
 	"""
 	error: String
 	"""

@@ -194,9 +194,9 @@ pub struct WatermarkLayer {
     pub watermark_polling_interval_ms: Option<u64>,
 }
 
-#[derive(Default)]
 pub struct ZkLoginConfig {
     pub env: ZkLoginEnv,
+    pub max_epoch_upper_bound_delta: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -204,6 +204,7 @@ pub struct ZkLoginConfig {
 #[serde(deny_unknown_fields)]
 pub struct ZkLoginLayer {
     pub env: Option<ZkLoginEnv>,
+    pub max_epoch_upper_bound_delta: Option<Option<u64>>,
 }
 
 impl RpcLayer {
@@ -379,6 +380,9 @@ impl ZkLoginLayer {
     pub(crate) fn finish(self, base: ZkLoginConfig) -> ZkLoginConfig {
         ZkLoginConfig {
             env: self.env.unwrap_or(base.env),
+            max_epoch_upper_bound_delta: self
+                .max_epoch_upper_bound_delta
+                .unwrap_or(base.max_epoch_upper_bound_delta),
         }
     }
 }
@@ -440,6 +444,7 @@ impl From<ZkLoginConfig> for ZkLoginLayer {
     fn from(value: ZkLoginConfig) -> Self {
         Self {
             env: Some(value.env),
+            max_epoch_upper_bound_delta: Some(value.max_epoch_upper_bound_delta),
         }
     }
 }
@@ -508,6 +513,17 @@ impl Default for WatermarkConfig {
     fn default() -> Self {
         Self {
             watermark_polling_interval: Duration::from_millis(500),
+        }
+    }
+}
+
+impl Default for ZkLoginConfig {
+    fn default() -> Self {
+        Self {
+            env: ZkLoginEnv::Prod,
+            max_epoch_upper_bound_delta: max_across_protocol(
+                ProtocolConfig::zklogin_max_epoch_upper_bound_delta,
+            ),
         }
     }
 }

@@ -45,7 +45,7 @@ pub(crate) enum ZkLoginIntentScope {
 pub(crate) struct ZkLoginVerifyResult {
     /// The boolean result of the verification. If true, errors should be empty.
     pub success: Option<bool>,
-    /// The error field captures any verification error
+    /// The error field capture reasons why the signature could not be verified, assuming the inputs are valid and there are no internal errors.
     pub error: Option<String>,
 }
 
@@ -123,7 +123,17 @@ pub(crate) async fn verify_signature(
         }
     }
 
-    let params = VerifyParams::new(jwks, vec![], config.env, true, true, true, Some(30), true);
+    let params = VerifyParams::new(
+        jwks,
+        vec![],
+        config.env,
+        true,
+        true,
+        true,
+        config.max_epoch_upper_bound_delta,
+        true,
+    );
+
     Ok(match intent_scope {
         ZkLoginIntentScope::TransactionData => verify(
             sig,
