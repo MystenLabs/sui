@@ -1,3 +1,4 @@
+# TODO: pkg-alt this may be testing something other than _ addresses? reenable and fix. DVX-1365
 [package]
 name = "Foo"
 edition = "2024.beta"
