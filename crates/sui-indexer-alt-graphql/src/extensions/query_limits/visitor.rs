@@ -87,21 +87,20 @@ impl<'r> FieldDriver<'_, 'r> {
     }
 
     /// Find an argument on the current field by its name, and return its fully resolved value if
-    /// it exists, or `None` if it does not. Fails if the argument references a GraphQL variable
-    /// that has not been bound.
+    /// it exists, or `None` if it does not. Missing variables resolve to `null`.
     pub(super) fn resolve_arg(&self, name: &str) -> Option<ConstValue> {
         self.field.node.arguments.iter().find_map(|(n, v)| {
             (n.node.as_str() == name).then_some(self.resolve_val(v.node.clone()))
         })
     }
 
-    /// Return `val` with variables all resolved. Fails if a referenced variable is not found.
+    /// Return `val` with variables all resolved. Missing variables resolve to `null`.
     pub(super) fn resolve_val(&self, val: Value) -> ConstValue {
         let val: Result<_, Infallible> = val.into_const_with(|name| {
             Ok(self
                 .resolve_var(&name)
                 .cloned()
-                .unwrap_or_else(|| ConstValue::Null))
+                .unwrap_or(ConstValue::Null))
         });
 
         match val {
