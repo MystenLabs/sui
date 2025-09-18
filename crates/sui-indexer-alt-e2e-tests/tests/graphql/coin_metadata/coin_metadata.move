@@ -53,6 +53,7 @@ fragment CM on CoinMetadata {
   description
   iconUrl
   supply
+  supplyState
 }
 
 //# programmable --sender A --inputs object(1,2) 100 @A
