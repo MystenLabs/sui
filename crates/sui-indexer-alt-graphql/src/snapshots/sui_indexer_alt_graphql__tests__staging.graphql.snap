@@ -624,6 +624,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	supply: BigInt
 	"""
+	Future behavior of the supply. `null` indicates that the future behavior of the supply is not known because the currency's treasury still exists.
+	"""
+	supplyState: SupplyState
+	"""
 	Symbol for the coin.
 	"""
 	symbol: String
@@ -708,7 +712,7 @@ type CommandResult {
 }
 
 """
-Object is exclusively owned by a single adderss and sequenced via consensis.
+Object is exclusively owned by a single adderss and sequenced via consensus.
 """
 type ConsensusAddressOwner {
 	"""
@@ -3584,6 +3588,20 @@ type StoreExecutionTimeObservationsTransaction {
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 """
 scalar SuiAddress
+
+"""
+Future behavior of a currency's supply.
+"""
+enum SupplyState {
+	"""
+	The supply can only decrease.
+	"""
+	BURN_ONLY
+	"""
+	The supply can neither increase nor decrease.
+	"""
+	FIXED
+}
 
 """
 Details of the system that are decided during genesis.

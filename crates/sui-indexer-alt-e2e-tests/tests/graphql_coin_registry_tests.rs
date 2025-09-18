@@ -32,6 +32,7 @@ query GetCoinMetadata($coinType: String!) {
         description
         iconUrl
         supply
+        supplyState
         symbol
     }
 }
@@ -46,6 +47,7 @@ struct CoinMetadata {
     icon_url: Option<String>,
     supply: Option<String>,
     symbol: String,
+    supply_state: Option<String>,
 }
 
 #[tokio::test]
@@ -69,6 +71,9 @@ async fn test_sui() {
             "10000000000000000000",
         ),
         symbol: "SUI",
+        supply_state: Some(
+            "FIXED",
+        ),
     }
     "###);
 }
@@ -103,6 +108,9 @@ async fn test_fixed_supply() {
             "1000000000",
         ),
         symbol: "FIXED",
+        supply_state: Some(
+            "FIXED",
+        ),
     }
     "###);
 }
@@ -163,6 +171,9 @@ async fn test_dynamic() {
             "1000000000",
         ),
         symbol: "DYNAMIC",
+        supply_state: Some(
+            "FIXED",
+        ),
     }
     "###);
 }
@@ -201,6 +212,9 @@ async fn test_burn_only() {
             "1000000000",
         ),
         symbol: "BURN",
+        supply_state: Some(
+            "BURN_ONLY",
+        ),
     }
     "###);
 
@@ -235,6 +249,9 @@ async fn test_burn_only() {
             "900000000",
         ),
         symbol: "BURN",
+        supply_state: Some(
+            "BURN_ONLY",
+        ),
     }
     "###);
 }
@@ -272,6 +289,7 @@ async fn test_unknown() {
             "1000000000",
         ),
         symbol: "UNKNOWN",
+        supply_state: None,
     }
     "###);
 
@@ -308,6 +326,7 @@ async fn test_unknown() {
             "800000000",
         ),
         symbol: "UNKNOWN",
+        supply_state: None,
     }
     "###);
 
@@ -339,6 +358,7 @@ async fn test_unknown() {
         ),
         supply: None,
         symbol: "UNKNOWN",
+        supply_state: None,
     }
     "###);
 
@@ -372,6 +392,7 @@ async fn test_unknown() {
         ),
         supply: None,
         symbol: "UNKNOWN",
+        supply_state: None,
     }
     "###);
 
@@ -404,6 +425,7 @@ async fn test_unknown() {
             "700000000",
         ),
         symbol: "UNKNOWN",
+        supply_state: None,
     }
     "###);
 }
@@ -436,6 +458,7 @@ async fn test_legacy() {
             "1000000000",
         ),
         symbol: "LEGACY",
+        supply_state: None,
     }
     "###);
 
@@ -470,6 +493,7 @@ async fn test_legacy() {
             "1000000000",
         ),
         symbol: "LEGACY",
+        supply_state: None,
     }
     "###);
 
@@ -504,6 +528,7 @@ async fn test_legacy() {
             "1000000000",
         ),
         symbol: "LEGACY",
+        supply_state: None,
     }
     "###);
 }
