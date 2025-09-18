@@ -101,7 +101,10 @@ impl TestContext {
     }
 
     fn build_submit_request(&self, transaction: Transaction) -> SubmitTxRequest {
-        SubmitTxRequest { transaction }
+        SubmitTxRequest {
+            transaction: Some(transaction),
+            ping: None,
+        }
     }
 }
 
