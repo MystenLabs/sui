@@ -97,7 +97,6 @@ use tabled::{
 };
 
 use move_package_alt::{
-    graph::NamedAddress,
     package::RootPackage,
     schema::{
         Environment, EnvironmentID, EnvironmentName, OriginalID, Publication, PublishAddresses,
@@ -2056,32 +2055,7 @@ pub(crate) async fn compile_package(
     >(&root_pkg, &build_config, &mut writer)
     .unwrap();
 
-    let mut dependency_ids = PackageDependencies {
-        published: BTreeMap::new(),
-        unpublished: BTreeSet::new(),
-        invalid: BTreeMap::new(),
-        conflicting: BTreeMap::new(),
-    };
-
-    let named_addresses = root_pkg
-        .package_graph()
-        .root_package_info()
-        .named_addresses()?;
-
-    for (pkg_name, addr) in named_addresses {
-        match addr {
-            NamedAddress::RootPackage(_) => (),
-            NamedAddress::Unpublished { dummy_addr: _ } => {
-                dependency_ids.unpublished.insert(pkg_name.as_str().into());
-            }
-            NamedAddress::Defined(original_id) => {
-                dependency_ids.published.insert(
-                    pkg_name.as_str().into(),
-                    ObjectID::from_address(original_id.0),
-                );
-            }
-        }
-    }
+    let dependency_ids = PackageDependencies::new(root_pkg)?;
 
     let mut compiled_package = CompiledPackage {
         package,

@@ -34,6 +34,7 @@ use move_core_types::{
 use move_package_alt::{
     compatibility::legacy_parser::{parse_package_info, LegacyPackageMetadata},
     flavor::MoveFlavor,
+    graph::NamedAddress,
     package::RootPackage,
     schema::Environment,
 };
@@ -117,6 +118,37 @@ pub struct PackageDependencies {
     /// Set of dependencies that have conflicting `published-at` addresses. The key refers to
     /// the package, and the tuple refers to the address in the (Move.lock, Move.toml) respectively.
     pub conflicting: BTreeMap<Symbol, (ObjectID, ObjectID)>,
+}
+
+impl PackageDependencies {
+    pub fn new<F: MoveFlavor>(root_pkg: &RootPackage<F>) -> anyhow::Result<Self> {
+        let mut published = BTreeMap::new();
+        let mut unpublished = BTreeSet::new();
+
+        let packages = root_pkg.packages()?;
+
+        for pkg in packages {
+            match pkg.named_address() {
+                NamedAddress::RootPackage(_) => (),
+                NamedAddress::Unpublished { dummy_addr: _ } => {
+                    unpublished.insert(pkg.name().as_str().into());
+                }
+                NamedAddress::Defined(original_id) => {
+                    published.insert(
+                        pkg.name().as_str().into(),
+                        ObjectID::from_address(original_id.0),
+                    );
+                }
+            }
+        }
+
+        Ok(Self {
+            published,
+            unpublished,
+            invalid: BTreeMap::new(),
+            conflicting: BTreeMap::new(),
+        })
+    }
 }
 
 impl BuildConfig {
@@ -257,20 +289,15 @@ impl BuildConfig {
             verify_bytecode(&package, &fn_info)?;
         }
 
-        // TODO fill in the PackageDependencies
-        // let dependency_ids = package.dependency_ids().clone();
-        let dependency_ids = PackageDependencies {
-            published: BTreeMap::new(),
-            unpublished: BTreeSet::new(),
-            invalid: BTreeMap::new(),
-            conflicting: BTreeMap::new(),
-        };
+        let dependency_ids = PackageDependencies::new(&root_pkg)?;
+        let published_at = root_pkg
+            .publication()
+            .map(|p| ObjectID::from_address(p.addresses.published_at.0));
 
         Ok(CompiledPackage {
             package,
             dependency_ids,
-            published_at: None, // TODO fix this once backward compatibility lands
-                                // dependency_graph,
+            published_at,
         })
     }
 }
