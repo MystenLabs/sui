@@ -231,8 +231,8 @@ async fn test_simulate_transaction_basic() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(data: {bcs: $txData}) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -249,7 +249,11 @@ async fn test_simulate_transaction_basic() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -296,8 +300,8 @@ async fn test_simulate_transaction_with_events() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(data: {bcs: $txData}) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -311,7 +315,11 @@ async fn test_simulate_transaction_with_events() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -343,15 +351,19 @@ async fn test_simulate_transaction_input_validation() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(data: {bcs: $txData}) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects { digest }
                     error
                 }
             }
         "#,
             json!({
-                "txData": "invalid_base64!"
+                "txData": {
+                    "bcs": {
+                        "value": "invalid_base64!"
+                    }
+                }
             }),
         )
         .await
@@ -378,8 +390,8 @@ async fn test_simulate_transaction_object_changes() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(data: {bcs: $txData}) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -415,7 +427,11 @@ async fn test_simulate_transaction_object_changes() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -589,8 +605,8 @@ async fn test_simulate_transaction_command_results() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(data: {bcs: $txData}) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects { status }
                     outputs {
                         returnValues {
@@ -619,7 +635,13 @@ async fn test_simulate_transaction_command_results() {
                 }
             }
         "#,
-            json!({ "txData": tx_bytes.encoded() }),
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
         )
         .await
         .unwrap();
@@ -756,8 +778,8 @@ async fn test_simulate_transaction_json_transfer() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txJson: String!) {
-                simulateTransaction(data: {json: $txJson}) {
+            query($txJson: JSON!) {
+                simulateTransaction(transaction: $txJson) {
                     effects {
                         digest
                         status
