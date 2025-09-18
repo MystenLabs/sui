@@ -29,7 +29,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     // Block on the async function
     let env = move_package_alt::flavor::vanilla::default_environment();
     let root_pkg = rt.block_on(async { RootPackage::<Vanilla>::load(pkg_dir, env).await })?;
-    let model = model_builder::build(&mut writer, root_pkg, &config)?;
+    let model = model_builder::build(&mut writer, &root_pkg, &config)?;
 
     let generator = StacklessBytecodeGenerator::from_model(model);
 
