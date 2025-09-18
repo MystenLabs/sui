@@ -359,18 +359,18 @@ impl EffectsCertifier {
                     details: _,
                     fast_path,
                 }) => {
-                    let aggregator = effects_digest_aggregators
-                        .entry(effects_digest)
-                        .or_insert_with(|| StatusAggregator::<()>::new(committee.clone()));
-                    aggregator.insert(name, ());
-
                     if fast_path {
                         if tx_type != TxType::SingleWriter {
-                            tracing::warn!("Fast path is only supported for single writer transactions, tx_digest={tx_digest:?}, name={name}");
+                            tracing::warn!("Fast path is only supported for single writer transactions, name={name}");
                         } else {
                             fast_path_aggregator.insert(name, ());
                         }
                     }
+
+                    let aggregator = effects_digest_aggregators
+                        .entry(effects_digest)
+                        .or_insert_with(|| StatusAggregator::<()>::new(committee.clone()));
+                    aggregator.insert(name, ());
 
                     if aggregator.reached_quorum_threshold() {
                         let quorum_weight = aggregator.total_votes();

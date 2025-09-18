@@ -247,10 +247,7 @@ fn create_test_submit_request(gas_price: u64) -> SubmitTxRequest {
 
     let tx = Transaction::from_data_and_signer(tx_data, vec![&keypair]);
 
-    SubmitTxRequest {
-        transaction: Some(tx),
-        ping: None,
-    }
+    SubmitTxRequest::new_transaction(tx)
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
