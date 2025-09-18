@@ -61,6 +61,8 @@
           nextEpochStake
           nextEpochGasPrice
           nextEpochCommissionRate
+          # todo (ewall) populate atRisk
+          atRisk
         }
       }
     }

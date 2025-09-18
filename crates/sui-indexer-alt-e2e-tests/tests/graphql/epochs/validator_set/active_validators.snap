@@ -6,7 +6,7 @@ processed 2 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-79:
+task 1, lines 6-81:
 //# run-graphql
 Response: {
   "data": {
@@ -76,7 +76,8 @@ Response: {
               "commissionRate": 200,
               "nextEpochStake": "20000000000000000",
               "nextEpochGasPrice": "1000",
-              "nextEpochCommissionRate": 200
+              "nextEpochCommissionRate": 200,
+              "atRisk": 0
             }
           ]
         }
