@@ -57,7 +57,7 @@ fn test_impl(toml_path: &Path, flags: DocgenFlags, test_case: &str) -> datatest_
     let env = move_package_alt::flavor::vanilla::default_environment();
     let root_pkg = rt
         .block_on(async { RootPackage::<Vanilla>::load(toml_path.parent().unwrap(), env).await })?;
-    let model = model_builder::build(&mut w, root_pkg, &config)?;
+    let model = model_builder::build(&mut w, &root_pkg, &config)?;
     let root_doc_template: PathBuf = test_dir.join(ROOT_DOC_TEMPLATE_NAME);
     let root_doc_template = if root_doc_template.is_file() {
         Some(root_doc_template.as_path())

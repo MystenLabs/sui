@@ -960,8 +960,9 @@ fn load_root_pkg<F: MoveFlavor>(
                 tokio::task::block_in_place(|| handle.block_on(RootPackage::<F>::load(path, env)))
             }
             _ => {
+                tokio::runtime::Handle::current().block_on(RootPackage::<F>::load(path, env))
                 // Single-threaded or current-thread runtime, use futures::executor
-                futures::executor::block_on(RootPackage::<F>::load(path, env))
+                // futures::executor::block_on(RootPackage::<F>::load(path, env))
             }
         }
     } else {
