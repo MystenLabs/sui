@@ -71,13 +71,20 @@ impl Processor for TokenTransferHandler {
                     let event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
 
                     // Bridge-specific metrics for token deposits
-                    self.metrics.bridge_events_total
+                    self.metrics
+                        .bridge_events_total
                         .with_label_values(&["token_deposited", "sui"])
                         .inc();
-                    self.metrics.token_transfers_total
-                        .with_label_values(&["sui_to_eth", "deposited", &event.token_type.to_string()])
+                    self.metrics
+                        .token_transfers_total
+                        .with_label_values(&[
+                            "sui_to_eth",
+                            "deposited",
+                            &event.token_type.to_string(),
+                        ])
                         .inc();
-                    self.metrics.token_transfer_gas_used
+                    self.metrics
+                        .token_transfer_gas_used
                         .with_label_values(&["sui_to_eth", "true"])
                         .inc_by(tx.effects.gas_cost_summary().net_gas_usage() as u64);
 
@@ -87,10 +94,12 @@ impl Processor for TokenTransferHandler {
                     let event: MoveTokenTransferApproved = bcs::from_bytes(&ev.contents)?;
 
                     // Bridge committee approval metrics
-                    self.metrics.bridge_events_total
+                    self.metrics
+                        .bridge_events_total
                         .with_label_values(&["transfer_approved", "sui"])
                         .inc();
-                    self.metrics.token_transfers_total
+                    self.metrics
+                        .token_transfers_total
                         .with_label_values(&["eth_to_sui", "approved", "unknown"])
                         .inc();
 
@@ -103,10 +112,12 @@ impl Processor for TokenTransferHandler {
                     let event: MoveTokenTransferClaimed = bcs::from_bytes(&ev.contents)?;
 
                     // Bridge transfer completion metrics
-                    self.metrics.bridge_events_total
+                    self.metrics
+                        .bridge_events_total
                         .with_label_values(&["transfer_claimed", "sui"])
                         .inc();
-                    self.metrics.token_transfers_total
+                    self.metrics
+                        .token_transfers_total
                         .with_label_values(&["eth_to_sui", "claimed", "unknown"])
                         .inc();
 

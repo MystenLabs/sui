@@ -92,10 +92,12 @@ impl Processor for GovernanceActionHandler {
                         let event: UpdateRouteLimitEvent = bcs::from_bytes(&ev.contents)?;
 
                         // Critical bridge limit update metrics
-                        self.metrics.governance_actions_total
+                        self.metrics
+                            .governance_actions_total
                             .with_label_values(&["update_bridge_limit", "sui"])
                             .inc();
-                        self.metrics.bridge_events_total
+                        self.metrics
+                            .bridge_events_total
                             .with_label_values(&["update_route_limit", "sui"])
                             .inc();
 
@@ -106,13 +108,16 @@ impl Processor for GovernanceActionHandler {
                         let event: EmergencyOpEvent = bcs::from_bytes(&ev.contents)?;
 
                         // Critical security event - emergency bridge pause/unpause
-                        self.metrics.bridge_emergency_events_total
+                        self.metrics
+                            .bridge_emergency_events_total
                             .with_label_values(&["emergency_operation", "critical"])
                             .inc();
-                        self.metrics.governance_actions_total
+                        self.metrics
+                            .governance_actions_total
                             .with_label_values(&["emergency_operation", "sui"])
                             .inc();
-                        self.metrics.bridge_pause_status
+                        self.metrics
+                            .bridge_pause_status
                             .with_label_values(&["bridge_main"])
                             .set(if event.frozen { 0 } else { 1 });
 

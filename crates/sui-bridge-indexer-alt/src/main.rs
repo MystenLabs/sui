@@ -83,7 +83,10 @@ async fn main() -> Result<(), anyhow::Error> {
     .await?;
 
     indexer
-        .concurrent_pipeline(TokenTransferHandler::new(bridge_metrics.clone()), Default::default())
+        .concurrent_pipeline(
+            TokenTransferHandler::new(bridge_metrics.clone()),
+            Default::default(),
+        )
         .await?;
 
     indexer
@@ -91,7 +94,10 @@ async fn main() -> Result<(), anyhow::Error> {
         .await?;
 
     indexer
-        .concurrent_pipeline(GovernanceActionHandler::new(bridge_metrics.clone()), Default::default())
+        .concurrent_pipeline(
+            GovernanceActionHandler::new(bridge_metrics.clone()),
+            Default::default(),
+        )
         .await?;
 
     indexer
