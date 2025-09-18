@@ -18,7 +18,7 @@ The key can be an address or object ID, but using a unique value is not required
 
 Claiming the ID of derived objects requires a parent object, but the derived objects are not children of that parent. This is an important distinction because the lack of a hierarchal relationship means that using a derived object as input to a transaction does not require sequential processing through the parent. The derived object is its own entity; the parent only exists to ensure its uniqueness. This relationship provides parallelization that is not possible with parent-child relationships.
 
-If you know the parent ID, you can compute the ID of the derived object through off-chain logic using the [TypeScript](https://github.com/MystenLabs/ts-sdks/blob/642ff2784ffb89b1bce4a43a6ceae91c04486669/packages/typescript/src/utils/derived-objects.ts) or [Rust SDK](https://mystenlabs.github.io/sui/sui_types/derived_object/index.html) helper functions. This functionality means your client logic can treat unclaimed IDs as if they already exist. 
+If you know the parent ID, you can compute the ID of the derived object through off-chain logic using the [TypeScript](https://sdk.mystenlabs.com/typescript/utils/derived_objects) or [Rust SDK](https://mystenlabs.github.io/sui/sui_types/derived_object/index.html) helper functions. This functionality means your client logic can treat unclaimed IDs as if they already exist. 
 
 <details>
 <summary>
@@ -217,6 +217,6 @@ public fun receive_from_vault<T key + store>(
 <RelatedLink to="/concepts/object-ownership" />
 <RelatedLink to="/concepts/transfers/transfer-to-object" />
 <RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/move/profiles" label="Profiles example" desc="An example smart contract that creates profiles using derived objects." />
+<RelatedLink href="https://sdk.mystenlabs.com/typescript/utils/derived_objects" label="TypeScript SDK docs" desc="Documentation for deriving addresses using the TypeScript SDK." />
 <RelatedLink href="https://mystenlabs.github.io/sui/sui_types/derived_object/index.html" label="Rust SDK helper" desc="Helper function for the Rust SDK." />
-<RelatedLink href="https://github.com/MystenLabs/ts-sdks/blob/642ff2784ffb89b1bce4a43a6ceae91c04486669/packages/typescript/src/utils/derived-objects.ts" label="TypeScript SDK helper" desc="Helper function for the TypeScript SDK." />
 <RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/derived_object.move" label="`derived_object` module" desc="The code that defines derived objects on Sui." />
