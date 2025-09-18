@@ -459,6 +459,10 @@ impl<'env> DiagnosticReporter<'env> {
             .unwrap()
             .add_ide_annotation(loc, info);
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.diags.read().unwrap().is_empty()
+    }
 }
 
 impl Diagnostics {

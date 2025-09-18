@@ -33,13 +33,11 @@ pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<G
         })
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(GetPackageResponse {
-        package: Some(Package {
-            storage_id: Some(package_id.to_canonical_string(true)),
-            original_id: Some(package.original_package_id().to_canonical_string(true)),
-            version: Some(package.version().value()),
-            modules,
-            ..Default::default()
-        }),
-    })
+    let mut message = Package::default();
+    message.storage_id = Some(package_id.to_canonical_string(true));
+    message.original_id = Some(package.original_package_id().to_canonical_string(true));
+    message.version = Some(package.version().value());
+    message.modules = modules;
+
+    Ok(GetPackageResponse::new(message))
 }

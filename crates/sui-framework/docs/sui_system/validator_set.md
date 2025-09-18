@@ -99,6 +99,7 @@ title: Module `sui_system::validator_set`
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
+<b>use</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator">sui::funds_accumulator</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
@@ -2798,7 +2799,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
     <b>let</b> <b>mut</b> adjusted_staking_reward_amounts = vector[];
     <b>let</b> <b>mut</b> adjusted_storage_fund_reward_amounts = vector[];
     <b>let</b> length = validators.length();
-    <b>let</b> num_unslashed_validators = length - individual_staking_reward_adjustments.size();
+    <b>let</b> num_unslashed_validators = length - individual_staking_reward_adjustments.length();
     length.do!(|i| {
         <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = &validators[i];
         // Integer divisions will truncate the results. Because of this, we expect that at the end

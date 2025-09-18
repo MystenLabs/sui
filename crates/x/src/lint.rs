@@ -90,6 +90,8 @@ pub fn run(args: Args) -> crate::Result<()> {
             // async-graphql uses an older version of axum, axum-extra
             "axum".to_owned(),
             "axum-extra".to_owned(),
+            // consistent-store uses a newer version of bincode with breaking interface changes
+            "bincode".to_owned(),
         ],
     };
 

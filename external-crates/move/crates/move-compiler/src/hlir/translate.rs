@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram, debug_display, debug_display_verbose, diag,
+    debug_display, debug_display_verbose, diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
     editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
@@ -45,7 +45,7 @@ use std::{
 
 pub const NEW_NAME_DELIM: &str = "#";
 
-fn translate_var(sp!(loc, v_): N::Var) -> H::Var {
+pub(crate) fn translate_var(sp!(loc, v_): N::Var) -> H::Var {
     let N::Var_ {
         name,
         id: depth,
@@ -148,11 +148,7 @@ pub(super) struct Context<'env> {
 }
 
 impl<'env> Context<'env> {
-    pub fn new(
-        env: &'env CompilationEnv,
-        _pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
-        prog: &T::Program,
-    ) -> Self {
+    pub fn new(env: &'env CompilationEnv, prog: &T::Program) -> Self {
         let debug = HLIRDebugFlags {
             match_variant_translation: false,
             function_translation: false,
@@ -311,14 +307,10 @@ impl MatchContext<true> for Context<'_> {
 // Entry
 //**************************************************************************************************
 
-pub fn program(
-    compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
-    prog: T::Program,
-) -> H::Program {
+pub fn program(compilation_env: &CompilationEnv, prog: T::Program) -> H::Program {
     detect_dead_code_analysis(compilation_env, &prog);
 
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
+    let mut context = Context::new(compilation_env, &prog);
     let T::Program {
         modules: tmodules,
         warning_filters_table,
@@ -353,6 +345,7 @@ fn module(
         loc: _,
         warning_filter,
         package_name,
+        named_address_map: _,
         attributes,
         target_kind,
         dependency_order,
@@ -445,12 +438,12 @@ fn function_signature(context: &mut Context, sig: N::FunctionSignature) -> H::Fu
         .parameters
         .into_iter()
         .map(|(mut_, v, tty)| {
-            let ty = single_type(context, tty);
+            let ty = single_type(&context.reporter, tty);
             context.bind_local(mut_, v, ty.clone());
             (mut_, translate_var(v), ty)
         })
         .collect();
-    let return_type = type_(context, sig.return_type);
+    let return_type = type_(&context.reporter, sig.return_type);
     H::FunctionSignature {
         type_parameters,
         parameters,
@@ -533,7 +526,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         value: tvalue,
     } = cdef;
     context.push_warning_filter_scope(warning_filter);
-    let signature = base_type(context, tsignature);
+    let signature = base_type(&context.reporter, tsignature);
     let eloc = tvalue.exp.loc;
     let tseq = {
         let mut v = VecDeque::new();
@@ -596,7 +589,7 @@ fn struct_fields(context: &mut Context, tfields: N::StructFields) -> H::StructFi
     };
     let mut indexed_fields = tfields_map
         .into_iter()
-        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(context, t))))
+        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(&context.reporter, t))))
         .collect::<Vec<_>>();
     indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
     H::StructFields::Defined(indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect())
@@ -645,7 +638,7 @@ fn variant_fields(context: &mut Context, tfields: N::VariantFields) -> Vec<(Fiel
     };
     let mut indexed_fields = tfields_map
         .into_iter()
-        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(context, t))))
+        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(&context.reporter, t))))
         .collect::<Vec<_>>();
     indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
     indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect()
@@ -655,7 +648,7 @@ fn variant_fields(context: &mut Context, tfields: N::VariantFields) -> Vec<(Fiel
 // Types
 //**************************************************************************************************
 
-fn type_name(_context: &Context, sp!(loc, ntn_): N::TypeName) -> H::TypeName {
+fn type_name(sp!(loc, ntn_): N::TypeName) -> H::TypeName {
     use H::TypeName_ as HT;
     use N::TypeName_ as NT;
     let tn_ = match ntn_ {
@@ -672,18 +665,18 @@ fn type_name(_context: &Context, sp!(loc, ntn_): N::TypeName) -> H::TypeName {
 }
 
 fn base_types<R: std::iter::FromIterator<H::BaseType>>(
-    context: &mut Context,
+    reporter: &DiagnosticReporter,
     tys: impl IntoIterator<Item = N::Type>,
 ) -> R {
-    tys.into_iter().map(|t| base_type(context, t)).collect()
+    tys.into_iter().map(|t| base_type(reporter, t)).collect()
 }
 
-fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
+fn base_type(reporter: &DiagnosticReporter, sp!(loc, nb_): N::Type) -> H::BaseType {
     use H::BaseType_ as HB;
     use N::Type_ as NT;
     let b_ = match nb_ {
         NT::Var(_) => {
-            context.add_diag(ice!((
+            reporter.add_diag(ice!((
                 loc,
                 format!(
                     "ICE type inf. var not expanded: {}",
@@ -693,19 +686,19 @@ fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
             return error_base_type(loc);
         }
         NT::Apply(None, _, _) => {
-            context.add_diag(ice!((
+            reporter.add_diag(ice!((
                 loc,
                 format!("ICE kind not expanded: {}", debug_display_verbose!(nb_))
             )));
             return error_base_type(loc);
         }
-        NT::Apply(Some(k), n, nbs) => HB::Apply(k, type_name(context, n), base_types(context, nbs)),
+        NT::Apply(Some(k), n, nbs) => HB::Apply(k, type_name(n), base_types(reporter, nbs)),
         NT::Param(tp) => HB::Param(tp),
         NT::UnresolvedError => HB::UnresolvedError,
         NT::Anything => HB::Unreachable,
         NT::Void => HB::Unreachable,
         NT::Ref(_, _) | NT::Unit | NT::Fun(_, _) => {
-            context.add_diag(ice!((
+            reporter.add_diag(ice!((
                 loc,
                 format!(
                     "ICE base type constraint failed: {}",
@@ -718,7 +711,7 @@ fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
     sp(loc, b_)
 }
 
-fn expected_types(context: &mut Context, loc: Loc, nss: Vec<Option<N::Type>>) -> H::Type {
+fn expected_types(reporter: &DiagnosticReporter, loc: Loc, nss: Vec<Option<N::Type>>) -> H::Type {
     let any = || {
         sp(
             loc,
@@ -727,39 +720,39 @@ fn expected_types(context: &mut Context, loc: Loc, nss: Vec<Option<N::Type>>) ->
     };
     let ss = nss
         .into_iter()
-        .map(|sopt| sopt.map(|s| single_type(context, s)).unwrap_or_else(any))
+        .map(|sopt| sopt.map(|s| single_type(reporter, s)).unwrap_or_else(any))
         .collect::<Vec<_>>();
     H::Type_::from_vec(loc, ss)
 }
 
-fn single_types(context: &mut Context, ss: Vec<N::Type>) -> Vec<H::SingleType> {
-    ss.into_iter().map(|s| single_type(context, s)).collect()
+fn single_types(reporter: &DiagnosticReporter, ss: Vec<N::Type>) -> Vec<H::SingleType> {
+    ss.into_iter().map(|s| single_type(reporter, s)).collect()
 }
 
-fn single_type(context: &mut Context, sp!(loc, ty_): N::Type) -> H::SingleType {
+pub(crate) fn single_type(reporter: &DiagnosticReporter, sp!(loc, ty_): N::Type) -> H::SingleType {
     use H::SingleType_ as HS;
     use N::Type_ as NT;
     let s_ = match ty_ {
-        NT::Ref(mut_, nb) => HS::Ref(mut_, base_type(context, *nb)),
-        _ => HS::Base(base_type(context, sp(loc, ty_))),
+        NT::Ref(mut_, nb) => HS::Ref(mut_, base_type(reporter, *nb)),
+        _ => HS::Base(base_type(reporter, sp(loc, ty_))),
     };
     sp(loc, s_)
 }
 
-fn type_(context: &mut Context, sp!(loc, ty_): N::Type) -> H::Type {
+pub(crate) fn type_(reporter: &DiagnosticReporter, sp!(loc, ty_): N::Type) -> H::Type {
     use H::Type_ as HT;
     use N::{Type_ as NT, TypeName_ as TN};
     let t_ = match ty_ {
         NT::Unit => HT::Unit,
         NT::Apply(None, _, _) => {
-            context.add_diag(ice!((
+            reporter.add_diag(ice!((
                 loc,
                 format!("ICE kind not expanded: {}", debug_display_verbose!(ty_))
             )));
             return error_type(loc);
         }
-        NT::Apply(Some(_), sp!(_, TN::Multiple(_)), ss) => HT::Multiple(single_types(context, ss)),
-        _ => HT::Single(single_type(context, sp(loc, ty_))),
+        NT::Apply(Some(_), sp!(_, TN::Multiple(_)), ss) => HT::Multiple(single_types(reporter, ss)),
+        _ => HT::Single(single_type(reporter, sp(loc, ty_))),
     };
     sp(loc, t_)
 }
@@ -823,7 +816,7 @@ fn tail(
         ty: ref in_type,
         exp: sp!(eloc, e_),
     } = e;
-    let out_type = type_(context, in_type.clone());
+    let out_type = type_(&context.reporter, in_type.clone());
 
     match e_ {
         // -----------------------------------------------------------------------------------------
@@ -1054,22 +1047,24 @@ fn value(
 ) -> H::Exp {
     use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
     use T::UnannotatedExp_ as E;
-
     // we pull outthese cases because it's easier to process them without destructuring `e` first.
     if is_statement(&e) {
         let result = if is_unit_statement(&e) {
             unit_exp(e.exp.loc)
         } else {
-            H::exp(type_(context, e.ty.clone()), sp(e.exp.loc, HE::Unreachable))
+            H::exp(
+                type_(&context.reporter, e.ty.clone()),
+                sp(e.exp.loc, HE::Unreachable),
+            )
         };
         statement(context, block, e);
         return result;
     } else if is_binop(&e) {
-        let out_type = type_(context, e.ty.clone());
+        let out_type = type_(&context.reporter, e.ty.clone());
         let out_exp = process_binops(context, block, out_type, e);
         return maybe_freeze(context, block, expected_type.cloned(), out_exp);
     } else if is_exp_list(&e) {
-        let out_type = type_(context, e.ty.clone());
+        let out_type = type_(&context.reporter, e.ty.clone());
         let eloc = e.exp.loc;
         let out_vec = value_list(context, block, Some(&out_type), e);
         return maybe_freeze(
@@ -1084,7 +1079,7 @@ fn value(
         ty: ref in_type,
         exp: sp!(eloc, e_),
     } = e;
-    let out_type = type_(context, in_type.clone());
+    let out_type = type_(&context.reporter, in_type.clone());
     let make_exp = |exp| H::exp(out_type.clone(), sp(eloc, exp));
 
     let preresult: H::Exp = match e_ {
@@ -1214,7 +1209,7 @@ fn value(
         }
 
         E::VariantMatch(subject, (_module, enum_name), arms) => {
-            let subject_out_type = type_(context, subject.ty.clone());
+            let subject_out_type = type_(&context.reporter, subject.ty.clone());
             let subject = Box::new(value(context, block, Some(&subject_out_type), *subject));
 
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
@@ -1318,8 +1313,9 @@ fn value(
                 parameter_types,
                 method_name: _,
             } = *call;
-            let htys = base_types(context, type_arguments);
-            let expected_type = H::Type_::from_vec(eloc, single_types(context, parameter_types));
+            let htys = base_types(&context.reporter, type_arguments);
+            let expected_type =
+                H::Type_::from_vec(eloc, single_types(&context.reporter, parameter_types));
             let arguments = value_list(context, block, Some(&expected_type), *arguments);
             let call = H::ModuleCall {
                 module,
@@ -1339,7 +1335,7 @@ fn value(
             make_exp(HE::Vector(
                 vec_loc,
                 size,
-                Box::new(base_type(context, *vty)),
+                Box::new(base_type(&context.reporter, *vty)),
                 values,
             ))
         }
@@ -1360,7 +1356,7 @@ fn value(
                 .or_default()
                 .extend(fields.iter().map(|(_, name, _)| *name));
 
-            let base_types = base_types(context, arg_types);
+            let base_types = base_types(&context.reporter, arg_types);
 
             let decl_fields = context.info.struct_fields(&module_ident, &struct_name);
 
@@ -1391,7 +1387,7 @@ fn value(
                 let field_exps = texp_fields
                     .into_iter()
                     .map(|(_, f, _, bt, te)| {
-                        let bt = base_type(context, bt);
+                        let bt = base_type(&context.reporter, bt);
                         fields.push((f, bt.clone()));
                         let t = H::Type_::base(bt);
                         (te, Some(t))
@@ -1416,7 +1412,7 @@ fn value(
                         debug_assert!(context.env.has_errors());
                         break;
                     }
-                    let base_ty = base_type(context, bt);
+                    let base_ty = base_type(&context.reporter, bt);
                     let t = H::Type_::base(base_ty.clone());
                     let field_expr = value(context, block, Some(&t), tf);
                     assert!(fields.get(decl_idx).unwrap().is_none());
@@ -1437,7 +1433,7 @@ fn value(
         }
 
         E::PackVariant(module_ident, enum_name, variant_name, arg_types, fields) => {
-            let base_types = base_types(context, arg_types);
+            let base_types = base_types(&context.reporter, arg_types);
 
             let decl_fields =
                 context
@@ -1471,7 +1467,7 @@ fn value(
                 let field_exps = texp_fields
                     .into_iter()
                     .map(|(_, f, _, bt, te)| {
-                        let bt = base_type(context, bt);
+                        let bt = base_type(&context.reporter, bt);
                         fields.push((f, bt.clone()));
                         let t = H::Type_::base(bt);
                         (te, Some(t))
@@ -1496,7 +1492,7 @@ fn value(
                         debug_assert!(context.env.has_errors());
                         break;
                     }
-                    let base_ty = base_type(context, bt);
+                    let base_ty = base_type(&context.reporter, bt);
                     let t = H::Type_::base(base_ty.clone());
                     let field_expr = value(context, block, Some(&t), tf);
                     debug_assert!(fields.get(decl_idx).unwrap().is_none());
@@ -1574,7 +1570,7 @@ fn value(
             make_exp(HE::Cast(Box::new(new_base), bt))
         }
         E::Annotate(base, rhs_ty) => {
-            let annotated_type = type_(context, *rhs_ty);
+            let annotated_type = type_(&context.reporter, *rhs_ty);
             value(context, block, Some(&annotated_type), *base)
         }
 
@@ -1708,7 +1704,7 @@ fn value_list_items_to_vec(
     for item in items.into_iter() {
         match item {
             T::ExpListItem::Single(te, ts) => {
-                let t = single_type(context, *ts);
+                let t = single_type(&context.reporter, *ts);
                 tys.push(t.clone());
                 tes.push((te, Some(sp(t.loc, HT::Single(t)))));
             }
@@ -1779,7 +1775,7 @@ fn value_list_opt(
         for (item, expected_ty) in items.into_iter().zip(expected_tys) {
             match item {
                 T::ExpListItem::Single(te, ts) => {
-                    let t = single_type(context, *ts);
+                    let t = single_type(&context.reporter, *ts);
                     tys.push(t);
                     item_exprs.push((te, expected_ty));
                 }
@@ -1895,7 +1891,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         }
         E::Loop { name, body, .. } => {
             let name = translate_block_label(name);
-            let out_type = type_(context, ty.clone());
+            let out_type = type_(&context.reporter, ty.clone());
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             context.enter_named_block(name, binders, out_type);
             let (loop_body, has_break) = process_loop_body(context, &name, *body);
@@ -1947,7 +1943,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         //  statements with effects
         // -----------------------------------------------------------------------------------------
         E::Assign(assigns, lvalue_ty, rhs) => {
-            let expected_type = expected_types(context, eloc, lvalue_ty);
+            let expected_type = expected_types(&context.reporter, eloc, lvalue_ty);
             let exp = value(context, block, Some(&expected_type), *rhs);
             make_assignments(context, block, eloc, H::AssignCase::Update, assigns, exp);
         }
@@ -2014,7 +2010,7 @@ fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::Se
                 declare_bind_list(context, &bindings);
             }
             S::Bind(bindings, ty, expr) => {
-                let expected_tys = expected_types(context, sloc, ty);
+                let expected_tys = expected_types(&context.reporter, sloc, ty);
                 let rhs_exp = value(context, block, Some(&expected_tys), *expr);
                 declare_bind_list(context, &bindings);
                 make_assignments(context, block, sloc, H::AssignCase::Let, bindings, rhs_exp);
@@ -2201,7 +2197,7 @@ fn declare_bind(context: &mut Context, sp!(_, bind_): &T::LValue) {
         L::Var {
             var: v, ty, mut_, ..
         } => {
-            let st = single_type(context, *ty.clone());
+            let st = single_type(&context.reporter, *ty.clone());
             context.bind_local(mut_.unwrap(), *v, st)
         }
         L::Unpack(_, _, _, fields) | L::BorrowUnpack(_, _, _, _, fields) => fields
@@ -2258,7 +2254,7 @@ fn assign(
             ..
         } => L::Var {
             var: translate_var(v),
-            ty: Box::new(single_type(context, *st)),
+            ty: Box::new(single_type(&context.reporter, *st)),
             unused_assignment: unused_binding,
         },
         A::Unpack(m, s, tbs, tfields) => {
@@ -2269,7 +2265,7 @@ fn assign(
                 .or_default()
                 .extend(tfields.iter().map(|(_, s, _)| *s));
 
-            let bs = base_types(context, tbs);
+            let bs = base_types(&context.reporter, tbs);
 
             let mut fields = vec![];
             for (decl_idx, f, bt, tfa) in assign_struct_fields(context, &m, &s, tfields) {
@@ -2318,7 +2314,7 @@ fn assign(
             }
         }
         A::UnpackVariant(m, e, v, tbs, tfields) => {
-            let bs = base_types(context, tbs);
+            let bs = base_types(&context.reporter, tbs);
 
             let mut fields = vec![];
             for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
@@ -2331,7 +2327,7 @@ fn assign(
             L::UnpackVariant(e, v, UnpackType::ByValue, loc, bs, fields)
         }
         A::BorrowUnpackVariant(mut_, m, e, v, tbs, tfields) => {
-            let bs = base_types(context, tbs);
+            let bs = base_types(&context.reporter, tbs);
 
             let unpack = if mut_ {
                 UnpackType::ByMutRef
@@ -2365,7 +2361,7 @@ fn assign_struct_fields(
             .into_iter()
             .map(|(f, (_idx, (tbt, tfa)))| {
                 let field = *m.get(&f).unwrap();
-                let base_ty = base_type(context, tbt);
+                let base_ty = base_type(&context.reporter, tbt);
                 (field, f, base_ty, tfa)
             })
             .collect(),
@@ -2373,7 +2369,7 @@ fn assign_struct_fields(
             .into_iter()
             .enumerate()
             .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
-                let base_ty = base_type(context, tbt);
+                let base_ty = base_type(&context.reporter, tbt);
                 (ndx, f, base_ty, tfa)
             })
             .collect(),
@@ -2395,7 +2391,7 @@ fn assign_variant_fields(
             .into_iter()
             .map(|(f, (_idx, (tbt, tfa)))| {
                 let field = *m.get(&f).unwrap();
-                let base_ty = base_type(context, tbt);
+                let base_ty = base_type(&context.reporter, tbt);
                 (field, f, base_ty, tfa)
             })
             .collect(),
@@ -2403,7 +2399,7 @@ fn assign_variant_fields(
             .into_iter()
             .enumerate()
             .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
-                let base_ty = base_type(context, tbt);
+                let base_ty = base_type(&context.reporter, tbt);
                 (ndx, f, base_ty, tfa)
             })
             .collect(),
@@ -2802,7 +2798,7 @@ fn process_binops(
                 op_type,
                 rhs,
             } => {
-                let op_type = freeze_ty(type_(context, *op_type));
+                let op_type = freeze_ty(type_(&context.reporter, *op_type));
                 let mut lhs_block = make_block!();
                 let mut lhs_exp = build_binop(context, &mut lhs_block, op_type.clone(), *lhs);
                 let mut rhs_block = make_block!();
@@ -2957,7 +2953,7 @@ fn needs_freeze(
                         format!("Expected type: {}", debug_display_verbose!(_expected))
                     ),
                 );
-                context.add_diag(diag);
+                context.reporter.add_diag(diag);
             }
             Freeze::NotNeeded
         }

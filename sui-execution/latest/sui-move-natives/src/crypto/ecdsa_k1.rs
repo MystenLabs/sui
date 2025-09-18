@@ -1,3 +1,4 @@
+use crate::get_extension;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::NativesCostTable;
@@ -80,7 +81,7 @@ pub fn ecrecover(
 
     // Load the cost parameters from the protocol config
     let (ecdsa_k1_ecrecover_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>()?;
+        let cost_table: &NativesCostTable = get_extension!(context)?;
         (
             cost_table.ecdsa_k1_ecrecover_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
@@ -159,9 +160,7 @@ pub fn decompress_pubkey(
     debug_assert!(args.len() == 1);
 
     // Load the cost parameters from the protocol config
-    let ecdsa_k1_decompress_pubkey_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let ecdsa_k1_decompress_pubkey_cost_params = get_extension!(context, NativesCostTable)?
         .ecdsa_k1_decompress_pubkey_cost_params
         .clone();
     // Charge the base cost for this oper
@@ -226,7 +225,7 @@ pub fn secp256k1_verify(
 
     // Load the cost parameters from the protocol config
     let (ecdsa_k1_secp256k1_verify_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>()?;
+        let cost_table: &NativesCostTable = get_extension!(context)?;
         (
             cost_table.ecdsa_k1_secp256k1_verify_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,

@@ -49,14 +49,14 @@ impl BlockStoreAPI
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
 #[derive(Clone)]
-pub(crate) struct Linearizer {
+pub struct Linearizer {
     /// In memory block store representing the dag state
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
 }
 
 impl Linearizer {
-    pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+    pub fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
         Self { context, dag_state }
     }
 
@@ -220,10 +220,7 @@ impl Linearizer {
     // This function should be called whenever a new commit is observed. This will
     // iterate over the sequence of committed leaders and produce a list of committed
     // sub-dags.
-    pub(crate) fn handle_commit(
-        &mut self,
-        committed_leaders: Vec<VerifiedBlock>,
-    ) -> Vec<CommittedSubDag> {
+    pub fn handle_commit(&mut self, committed_leaders: Vec<VerifiedBlock>) -> Vec<CommittedSubDag> {
         if committed_leaders.is_empty() {
             return vec![];
         }

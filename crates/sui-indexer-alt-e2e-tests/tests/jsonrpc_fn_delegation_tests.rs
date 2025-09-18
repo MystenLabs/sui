@@ -12,7 +12,6 @@ use sui_indexer_alt_jsonrpc::{
     args::SystemPackageTaskArgs, config::RpcConfig, start_rpc, NodeArgs, RpcArgs,
 };
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
-use sui_json_rpc_types::get_new_package_obj_from_response;
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_swarm_config::genesis_config::AccountConfig;
@@ -36,7 +35,7 @@ impl FnDelegationTestCluster {
     async fn new() -> anyhow::Result<Self> {
         let onchain_cluster = TestClusterBuilder::new()
             .with_num_validators(1)
-            .with_epoch_duration_ms(2000)
+            .with_epoch_duration_ms(300_000) // 5 minutes
             .with_accounts(vec![
                 AccountConfig {
                     address: None,
@@ -103,7 +102,7 @@ impl FnDelegationTestCluster {
             .transfer_sui(Some(1_000), recipient)
             .build();
         let tx_digest = tx.digest().to_string();
-        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx);
+        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx).await;
         let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
         let tx_bytes = tx_bytes.encoded();
         let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
@@ -120,7 +119,7 @@ impl FnDelegationTestCluster {
             .call_request_remove_validator()
             .build();
         let tx_digest = tx.digest().to_string();
-        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx);
+        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx).await;
         let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
         let tx_bytes = tx_bytes.encoded();
         let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
@@ -567,9 +566,7 @@ async fn test_get_balance() {
         .execute_transaction_must_succeed(publish_transaction)
         .await;
 
-    let package_id = get_new_package_obj_from_response(&execution_result)
-        .unwrap()
-        .0;
+    let package_id = execution_result.get_new_package_obj().unwrap().0;
 
     // Test out the specified coin type.
     // Parse the coin type so we have the same string representation as the used by fullnode.

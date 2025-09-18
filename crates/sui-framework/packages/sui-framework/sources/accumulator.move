@@ -7,7 +7,6 @@ use sui::dynamic_field;
 use sui::object::sui_accumulator_root_address;
 
 const ENotSystemAddress: u64 = 0;
-const EInvalidSplitAmount: u64 = 1;
 
 public struct AccumulatorRoot has key {
     id: UID,
@@ -22,54 +21,19 @@ fun create(ctx: &TxContext) {
     })
 }
 
-// === Accumulator address computation ===
-
-/// `Key` is used only for computing the field id of accumulator objects.
-/// `T` is the type of the accumulated value, e.g. `Balance<SUI>`
-public struct Key<phantom T> has copy, drop, store {
-    address: address,
+public(package) fun root_id(accumulator_root: &AccumulatorRoot): &UID {
+    &accumulator_root.id
 }
 
-public(package) fun accumulator_address<T>(address: address): address {
-    let key = Key<T> { address };
-    dynamic_field::hash_type_and_key(sui_accumulator_root_address(), key)
+public use fun root_id as AccumulatorRoot.id;
+
+public(package) fun root_id_mut(accumulator_root: &mut AccumulatorRoot): &mut UID {
+    &mut accumulator_root.id
 }
 
-// === Adding, removing, and mutating accumulator objects ===
+public use fun root_id_mut as AccumulatorRoot.id_mut;
 
-/// Balance object methods
-fun root_has_accumulator<K, V: store>(accumulator_root: &AccumulatorRoot, name: Key<K>): bool {
-    dynamic_field::exists_with_type<Key<K>, V>(&accumulator_root.id, name)
-}
-
-use fun root_has_accumulator as AccumulatorRoot.has_accumulator;
-
-fun root_add_accumulator<K, V: store>(
-    accumulator_root: &mut AccumulatorRoot,
-    name: Key<K>,
-    value: V,
-) {
-    dynamic_field::add(&mut accumulator_root.id, name, value);
-}
-
-use fun root_add_accumulator as AccumulatorRoot.add_accumulator;
-
-fun root_borrow_accumulator_mut<K, V: store>(
-    accumulator_root: &mut AccumulatorRoot,
-    name: Key<K>,
-): &mut V {
-    dynamic_field::borrow_mut<Key<K>, V>(&mut accumulator_root.id, name)
-}
-
-use fun root_borrow_accumulator_mut as AccumulatorRoot.borrow_accumulator_mut;
-
-fun root_remove_accumulator<K, V: store>(accumulator_root: &mut AccumulatorRoot, name: Key<K>): V {
-    dynamic_field::remove<Key<K>, V>(&mut accumulator_root.id, name)
-}
-
-use fun root_remove_accumulator as AccumulatorRoot.remove_accumulator;
-
-// === Settlement storage types and entry points ===
+// === Accumulator value types ===
 
 /// Storage for 128-bit accumulator values.
 ///
@@ -80,50 +44,84 @@ public struct U128 has store {
     value: u128,
 }
 
-/// Called by settlement transactions to ensure that the settlement transaction has a unique
-/// digest.
-#[allow(unused_function)]
-fun settlement_prologue(_epoch: u64, _checkpoint_height: u64, _idx: u64, ctx: &TxContext) {
-    assert!(ctx.sender() == @0x0, ENotSystemAddress);
+public(package) fun create_u128(value: u128): U128 {
+    U128 { value }
 }
 
-#[allow(unused_function)]
-fun settle_u128<T>(
+public(package) fun destroy_u128(u128: U128) {
+    let U128 { value: _ } = u128;
+}
+
+public use fun destroy_u128 as U128.destroy;
+
+public(package) fun update_u128(u128: &mut U128, merge: u128, split: u128) {
+    u128.value = u128.value + merge - split;
+}
+
+public use fun update_u128 as U128.update;
+
+public(package) fun is_zero_u128(u128: &U128): bool {
+    u128.value == 0
+}
+
+public use fun is_zero_u128 as U128.is_zero;
+
+// === Accumulator address computation ===
+
+/// `Key` is used only for computing the field id of accumulator objects.
+/// `T` is the type of the accumulated value, e.g. `Balance<SUI>`
+public struct Key<phantom T> has copy, drop, store {
+    address: address,
+}
+
+public(package) fun accumulator_key<T>(address: address): Key<T> {
+    Key { address }
+}
+
+public(package) fun accumulator_address<T>(address: address): address {
+    let key = Key<T> { address };
+    dynamic_field::hash_type_and_key(sui_accumulator_root_address(), key)
+}
+
+// === Adding, removing, and mutating accumulator objects ===
+
+/// Balance object methods
+public(package) fun root_has_accumulator<K, V: store>(
+    accumulator_root: &AccumulatorRoot,
+    name: Key<K>,
+): bool {
+    dynamic_field::exists_with_type<Key<K>, V>(&accumulator_root.id, name)
+}
+
+public use fun root_has_accumulator as AccumulatorRoot.has_accumulator;
+
+public(package) fun root_add_accumulator<K, V: store>(
     accumulator_root: &mut AccumulatorRoot,
-    owner: address,
-    merge: u128,
-    split: u128,
-    ctx: &TxContext,
+    name: Key<K>,
+    value: V,
 ) {
-    assert!(ctx.sender() == @0x0, ENotSystemAddress);
-    // Merge and split should be netted out prior to calling this function.
-    assert!((merge == 0 ) != (split == 0), EInvalidSplitAmount);
-
-    let name = Key<T> { address: owner };
-
-    if (accumulator_root.has_accumulator<T, U128>(name)) {
-        let is_zero = {
-            let value: &mut U128 = accumulator_root.borrow_accumulator_mut(name);
-            value.value = value.value + merge - split;
-
-            value.value == 0
-        };
-
-        if (is_zero) {
-            let U128 { value: _ } = accumulator_root.remove_accumulator<T, U128>(
-                name,
-            );
-        }
-    } else {
-        // cannot split if the field does not yet exist
-        assert!(split == 0, EInvalidSplitAmount);
-        let value = U128 {
-            value: merge,
-        };
-
-        accumulator_root.add_accumulator(name, value);
-    };
+    dynamic_field::add(&mut accumulator_root.id, name, value);
 }
+
+public use fun root_add_accumulator as AccumulatorRoot.add_accumulator;
+
+public(package) fun root_borrow_accumulator_mut<K, V: store>(
+    accumulator_root: &mut AccumulatorRoot,
+    name: Key<K>,
+): &mut V {
+    dynamic_field::borrow_mut<Key<K>, V>(&mut accumulator_root.id, name)
+}
+
+public use fun root_borrow_accumulator_mut as AccumulatorRoot.borrow_accumulator_mut;
+
+public(package) fun root_remove_accumulator<K, V: store>(
+    accumulator_root: &mut AccumulatorRoot,
+    name: Key<K>,
+): V {
+    dynamic_field::remove<Key<K>, V>(&mut accumulator_root.id, name)
+}
+
+public use fun root_remove_accumulator as AccumulatorRoot.remove_accumulator;
 
 // === Natives for emitting accumulator events ===
 

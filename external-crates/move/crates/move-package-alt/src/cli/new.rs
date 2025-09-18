@@ -14,9 +14,6 @@ use crate::{package::layout::SourcePackageLayout, schema::PackageName};
 use anyhow::Context;
 use clap::Parser;
 
-const MAINNET_CHAIN_ID: &str = "35834a8a";
-const TESTNET_CHAIN_ID: &str = "4c78adac";
-
 /// Build the package
 #[derive(Debug, Clone, Parser)]
 pub struct New {
@@ -61,7 +58,7 @@ public fun init() {{
             name = self.name
         )?;
 
-        self.write_move_toml(&path);
+        self.write_move_toml(&path)?;
         self.write_gitignore(&path)?;
         Ok(())
     }
@@ -92,7 +89,6 @@ public fun init() {{
     fn write_move_toml(&self, path: &Path) -> anyhow::Result<()> {
         let Self { name, path: _ } = self;
 
-        let mut w = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
         let toml_content = r#"# Full documentation for Move.toml can be found at: docs.sui.io
 
 [package]
@@ -102,9 +98,10 @@ edition = "2025"         # use "2024" for Move 2024 edition
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 # flavor = sui
 
-[environments]           # add the environment names and their chain ids here
-mainnet = "{MAINNET_CHAIN_ID}"
-testnet = "{TESTNET_CHAIN_ID}"
+# This section contains custom environments of the form `name = "chain-id"`.
+# In most cases you can leave this blank, since there are `mainnet` and `testnet` environments implicitly available
+[environments]
+# env = "chain-id"
 
 [dependencies]
 # Add your dependencies here or leave empty.

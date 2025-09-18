@@ -4,6 +4,7 @@
 pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
+#[allow(clippy::type_complexity)]
 mod checked {
     use crate::{
         adapter::new_native_extensions,
@@ -56,6 +57,7 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         accumulator_event::AccumulatorEvent,
+        accumulator_root::AccumulatorObjId,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
@@ -109,6 +111,8 @@ mod checked {
         /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
         /// This gets cleared out when new results are pushed, i.e. the end of a command
         borrowed: HashMap<Arg, /* mut */ bool>,
+        /// Set of the by-value shared objects taken in the current command
+        per_command_by_value_shared_objects: BTreeSet<ObjectID>,
     }
 
     /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -207,6 +211,7 @@ mod checked {
                     inner: ResultValue {
                         last_usage_kind: None,
                         value: None,
+                        shared_object_ids: BTreeSet::new(),
                     },
                 }
             };
@@ -218,26 +223,6 @@ mod checked {
                 metrics.clone(),
                 tx_context.clone(),
             );
-
-            // Set the profiler if in CLI
-            #[skip_checked_arithmetic]
-            move_vm_profiler::tracing_feature_enabled! {
-                use move_vm_profiler::GasProfiler;
-                use move_vm_types::gas::GasMeter;
-                use crate::gas_meter::SuiGasMeter;
-
-                let ref_context: &RefCell<TxContext> = tx_context.borrow();
-                let tx_digest = ref_context.borrow().digest();
-                let remaining_gas: u64 = move_vm_types::gas::GasMeter::remaining_gas(&SuiGasMeter(
-                    gas_charger.move_gas_status_mut(),
-                ))
-                        .into();
-                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
-                        &vm.config().profiler_config,
-                        format!("{}", tx_digest),
-                        remaining_gas,
-                    ));
-            }
 
             Ok(Self {
                 protocol_config,
@@ -255,6 +240,7 @@ mod checked {
                 new_packages: vec![],
                 user_events: vec![],
                 borrowed: HashMap::new(),
+                per_command_by_value_shared_objects: BTreeSet::new(),
             })
         }
 
@@ -462,7 +448,7 @@ mod checked {
         /// or if it is an object that cannot be taken by value (shared or immutable)
         pub fn by_value_arg<V: TryFromValue>(
             &mut self,
-            command_kind: CommandKind<'_>,
+            command_kind: CommandKind,
             arg_idx: usize,
             arg: Arg,
         ) -> Result<V, ExecutionError> {
@@ -471,12 +457,16 @@ mod checked {
         }
         fn by_value_arg_<V: TryFromValue>(
             &mut self,
-            command_kind: CommandKind<'_>,
+            command_kind: CommandKind,
             arg: Arg,
         ) -> Result<V, EitherError> {
             let shared_obj_deletion_enabled = self.protocol_config.shared_object_deletion();
+            let per_command_shared_object_transfer_rules = self
+                .protocol_config
+                .per_command_shared_object_transfer_rules();
             let is_borrowed = self.arg_is_borrowed(&arg);
-            let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
+            let (input_metadata_opt, val_opt, shared_object_ids) =
+                self.borrow_mut(arg, UsageKind::ByValue)?;
             let is_copyable = if let Some(val) = val_opt {
                 val.is_copyable()
             } else {
@@ -533,6 +523,13 @@ mod checked {
             } else {
                 val_opt.take().unwrap()
             };
+            if per_command_shared_object_transfer_rules {
+                // Track the shared object ID if `per_command_shared_object_transfer_rules`
+                // is enabled
+                let shared_object_ids = shared_object_ids.clone();
+                self.per_command_by_value_shared_objects
+                    .extend(shared_object_ids);
+            }
             Ok(V::try_from_value(val)?)
         }
 
@@ -550,12 +547,16 @@ mod checked {
                 .map_err(|e| e.into_execution_error(arg_idx))
         }
         fn borrow_arg_mut_<V: TryFromValue>(&mut self, arg: Arg) -> Result<V, EitherError> {
+            let per_command_shared_object_transfer_rules = self
+                .protocol_config
+                .per_command_shared_object_transfer_rules();
             // mutable borrowing requires unique usage
             if self.arg_is_borrowed(&arg) {
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             self.borrowed.insert(arg, /* is_mut */ true);
-            let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowMut)?;
+            let (input_metadata_opt, val_opt, shared_object_ids) =
+                self.borrow_mut(arg, UsageKind::BorrowMut)?;
             let is_copyable = if let Some(val) = val_opt {
                 val.is_copyable()
             } else {
@@ -576,6 +577,29 @@ mod checked {
             } else {
                 val_opt.take().unwrap()
             };
+            if per_command_shared_object_transfer_rules {
+                // track shared object IDs if `per_command_shared_object_transfer_rules`
+                // is enabled--but only for vectors from MakeMoveVec
+                let normalized_arg = match arg {
+                    Arg(Arg_::V2(arg)) => arg,
+                    Arg(Arg_::V1(_)) => {
+                        invariant_violation!(
+                            "v1 should not be used with per_command_shared_object_transfer_rules"
+                        )
+                    }
+                };
+                match normalized_arg {
+                    NormalizedArg::GasCoin | NormalizedArg::Input(_) => (),
+                    NormalizedArg::Result(_, _) => {
+                        // these will be populated only for results from MakeMoveVec, if the
+                        // vector is used mutably, we must assume that it could have been
+                        // taken from the vector
+                        let shared_object_ids = shared_object_ids.clone();
+                        self.per_command_by_value_shared_objects
+                            .extend(shared_object_ids);
+                    }
+                }
+            }
             Ok(V::try_from_value(val)?)
         }
 
@@ -603,7 +627,8 @@ mod checked {
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             self.borrowed.insert(arg, /* is_mut */ false);
-            let (_input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowImm)?;
+            let (_input_metadata_opt, val_opt, _shared_object_ids) =
+                self.borrow_mut(arg, UsageKind::BorrowImm)?;
             if val_opt.is_none() {
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             }
@@ -626,6 +651,9 @@ mod checked {
             arg: Arg,
             value: Value,
         ) -> Result<(), ExecutionError> {
+            let per_command_shared_object_transfer_rules = self
+                .protocol_config
+                .per_command_shared_object_transfer_rules();
             Mode::add_argument_update(self, updates, arg.into(), &value)?;
             let was_mut_opt = self.borrowed.remove(&arg);
             assert_invariant!(
@@ -634,9 +662,28 @@ mod checked {
                 The take+restore is an implementation detail of mutable references"
             );
             // restore is exclusively used for mut
-            let Ok((_, value_opt)) = self.borrow_mut_impl(arg, None) else {
+            let Ok((_, value_opt, shared_object_ids)) = self.borrow_mut_impl(arg, None) else {
                 invariant_violation!("Should be able to borrow argument to restore it")
             };
+            if per_command_shared_object_transfer_rules {
+                let normalized_arg = match arg {
+                    Arg(Arg_::V2(arg)) => arg,
+                    Arg(Arg_::V1(_)) => {
+                        invariant_violation!(
+                            "v1 should not be used with per_command_shared_object_transfer_rules"
+                        )
+                    }
+                };
+                match normalized_arg {
+                    NormalizedArg::GasCoin | NormalizedArg::Input(_) => (),
+                    NormalizedArg::Result(_, _) => {
+                        // these will be populated only for results from MakeMoveVec, if the
+                        // vector is used mutably, we must assume that it could have been
+                        // taken from the vector
+                        shared_object_ids.clear();
+                    }
+                }
+            }
 
             let old_value = value_opt.replace(value);
             assert_invariant!(
@@ -664,12 +711,7 @@ mod checked {
             modules: &[CompiledModule],
             dependencies: impl IntoIterator<Item = &'p MovePackage>,
         ) -> Result<MovePackage, ExecutionError> {
-            MovePackage::new_initial(
-                modules,
-                self.protocol_config.max_move_package_size(),
-                self.protocol_config.move_binary_format_version(),
-                dependencies,
-            )
+            MovePackage::new_initial(modules, self.protocol_config, dependencies)
         }
 
         /// Create a package upgrade from `previous_package` with `new_modules` and `dependencies`
@@ -702,15 +744,45 @@ mod checked {
         }
 
         /// Finish a command: clearing the borrows and adding the results to the result vector
-        pub fn push_command_results(&mut self, results: Vec<Value>) -> Result<(), ExecutionError> {
+        pub fn push_command_results(
+            &mut self,
+            command_kind: CommandKind,
+            mut results: Vec<Value>,
+        ) -> Result<(), ExecutionError> {
             assert_invariant!(
                 self.borrowed.values().all(|is_mut| !is_mut),
                 "all mut borrows should be restored"
             );
             // clear borrow state
             self.borrowed = HashMap::new();
-            self.results
-                .push(results.into_iter().map(ResultValue::new).collect());
+            let results = if self
+                .protocol_config
+                .per_command_shared_object_transfer_rules()
+            {
+                if let CommandKind::MakeMoveVec = command_kind {
+                    // For make MoveVec, we propagate the shared objects taken by value
+                    assert_invariant!(
+                        results.len() == 1,
+                        "MakeMoveVec should return a single result"
+                    );
+                    let mut result = ResultValue::new(results.pop().unwrap());
+                    result.shared_object_ids =
+                        std::mem::take(&mut self.per_command_by_value_shared_objects);
+                    vec![result]
+                } else {
+                    // For all other commands, we check the shared objects taken by value
+                    // are deleted or re-shared
+                    check_shared_object_usage(
+                        self.object_runtime()?,
+                        &self.per_command_by_value_shared_objects,
+                    )?;
+                    self.per_command_by_value_shared_objects.clear();
+                    results.into_iter().map(ResultValue::new).collect()
+                }
+            } else {
+                results.into_iter().map(ResultValue::new).collect()
+            };
+            self.results.push(results);
             Ok(())
         }
 
@@ -777,6 +849,7 @@ mod checked {
                         let ResultValue {
                             last_usage_kind,
                             value,
+                            shared_object_ids: _,
                         } = result_value;
                         match value {
                             None => (),
@@ -846,6 +919,8 @@ mod checked {
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
+                settlement_input_sui,
+                settlement_output_sui,
             } = object_runtime.finish()?;
             assert_invariant!(
                 remaining_events.is_empty(),
@@ -955,6 +1030,8 @@ mod checked {
                 deleted_object_ids,
                 user_events,
                 accumulator_events,
+                settlement_input_sui,
+                settlement_output_sui,
             )
         }
 
@@ -1004,7 +1081,14 @@ mod checked {
             &mut self,
             arg: Arg,
             usage: UsageKind,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
+        ) -> Result<
+            (
+                Option<&InputObjectMetadata>,
+                &mut Option<Value>,
+                &mut BTreeSet<ObjectID>,
+            ),
+            EitherError,
+        > {
             self.borrow_mut_impl(arg, Some(usage))
         }
 
@@ -1014,7 +1098,14 @@ mod checked {
             &mut self,
             arg: Arg,
             update_last_usage: Option<UsageKind>,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
+        ) -> Result<
+            (
+                Option<&InputObjectMetadata>,
+                &mut Option<Value>,
+                &mut BTreeSet<ObjectID>,
+            ),
+            EitherError,
+        > {
             match arg.0 {
                 Arg_::V1(arg) => {
                     assert_invariant!(
@@ -1038,8 +1129,14 @@ mod checked {
             &mut self,
             arg: Argument,
             update_last_usage: Option<UsageKind>,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError>
-        {
+        ) -> Result<
+            (
+                Option<&InputObjectMetadata>,
+                &mut Option<Value>,
+                &mut BTreeSet<ObjectID>,
+            ),
+            CommandArgumentError,
+        > {
             let (metadata, result_value) = match arg {
                 Argument::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
                 Argument::Input(i) => {
@@ -1073,7 +1170,11 @@ mod checked {
             if let Some(usage) = update_last_usage {
                 result_value.last_usage_kind = Some(usage);
             }
-            Ok((metadata, &mut result_value.value))
+            Ok((
+                metadata,
+                &mut result_value.value,
+                &mut result_value.shared_object_ids,
+            ))
         }
 
         // v2 of borrow_mut_impl
@@ -1081,7 +1182,14 @@ mod checked {
             &mut self,
             arg: NormalizedArg,
             update_last_usage: Option<UsageKind>,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), ExecutionError> {
+        ) -> Result<
+            (
+                Option<&InputObjectMetadata>,
+                &mut Option<Value>,
+                &mut BTreeSet<ObjectID>,
+            ),
+            ExecutionError,
+        > {
             let (metadata, result_value) = match arg {
                 NormalizedArg::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
                 NormalizedArg::Input(i) => {
@@ -1089,7 +1197,8 @@ mod checked {
                         .inputs
                         .get_mut(i as usize)
                         .ok_or_else(|| make_invariant_violation!("bounds already checked"))?;
-                    (input_value.object_metadata.as_ref(), &mut input_value.inner)
+                    let metadata = input_value.object_metadata.as_ref();
+                    (metadata, &mut input_value.inner)
                 }
                 NormalizedArg::Result(i, j) => {
                     let result_value = self
@@ -1104,7 +1213,11 @@ mod checked {
             if let Some(usage) = update_last_usage {
                 result_value.last_usage_kind = Some(usage);
             }
-            Ok((metadata, &mut result_value.value))
+            Ok((
+                metadata,
+                &mut result_value.value,
+                &mut result_value.shared_object_ids,
+            ))
         }
 
         pub(crate) fn execute_function_bypass_visibility(
@@ -1267,6 +1380,32 @@ mod checked {
         }
     }
 
+    /// Check for valid shared object usage, either deleted or re-shared, at the end of a command
+    pub fn check_shared_object_usage<'a>(
+        object_runtime: &ObjectRuntime,
+        consumed_shared_objects: impl IntoIterator<Item = &'a ObjectID>,
+    ) -> Result<(), ExecutionError> {
+        for id in consumed_shared_objects {
+            // valid if done deleted or re-shared
+            let is_valid_usage = object_runtime.is_deleted(id)
+                || matches!(
+                    object_runtime.is_transferred(id),
+                    Some(Owner::Shared { .. })
+                );
+            if !is_valid_usage {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                    format!(
+                        "Shared object operation on {} not allowed: \
+                        cannot be frozen, transferred, or wrapped",
+                        id
+                    ),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub fn finish(
         protocol_config: &ProtocolConfig,
         state_view: &dyn ExecutionState,
@@ -1280,6 +1419,8 @@ mod checked {
         deleted_object_ids: IndexSet<ObjectID>,
         user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
         accumulator_events: Vec<MoveAccumulatorEvent>,
+        settlement_input_sui: u64,
+        settlement_output_sui: u64,
     ) -> Result<ExecutionResults, ExecutionError> {
         // Before finishing, ensure that any shared object taken by value by the transaction is either:
         // 1. Mutated (and still has a shared ownership); or
@@ -1290,29 +1431,43 @@ mod checked {
             // of `Shared`.
             if let Some(obj) = written_objects.get(id) {
                 if !obj.is_shared() {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                        Some(
-                            format!(
-                                "Shared object operation on {} not allowed: \
+                    if protocol_config.per_command_shared_object_transfer_rules() {
+                        invariant_violation!(
+                            "There should be no shared objects unaccounted for when \
+                            per_command_shared_object_transfer_rules is enabled"
+                        )
+                    } else {
+                        return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!(
+                                    "Shared object operation on {} not allowed: \
                                      cannot be frozen, transferred, or wrapped",
-                                id
-                            )
-                            .into(),
-                        ),
-                    ));
+                                    id
+                                )
+                                .into(),
+                            ),
+                        ));
+                    }
                 }
             } else {
                 // If it's not in the written objects, the object must have been deleted. Otherwise
                 // it's an error.
                 if !deleted_object_ids.contains(id) {
-                    return Err(ExecutionError::new(
+                    if protocol_config.per_command_shared_object_transfer_rules() {
+                        invariant_violation!(
+                            "There should be no shared objects unaccounted for when \
+                            per_command_shared_object_transfer_rules is enabled"
+                        )
+                    } else {
+                        return Err(ExecutionError::new(
                             ExecutionErrorKind::SharedObjectOperationNotAllowed,
                             Some(
                                 format!("Shared object operation on {} not allowed: \
                                          shared objects used by value must be re-shared if not deleted", id).into(),
                             ),
                         ));
+                    }
                 }
             }
         }
@@ -1330,13 +1485,21 @@ mod checked {
                 debug_fatal!(
                     "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
                 );
-                return Err(ExecutionError::new(
+                if protocol_config.per_command_shared_object_transfer_rules() {
+                    invariant_violation!(
+                        "Shared object operation on {} not allowed: \
+                        transaction with singly owned input object must be sent by the owner",
+                        id,
+                    );
+                } else {
+                    return Err(ExecutionError::new(
                                 ExecutionErrorKind::SharedObjectOperationNotAllowed,
                                 Some(
                                     format!("Shared object operation on {} not allowed: \
                                              transaction with singly owned input object must be sent by the owner", id).into(),
                                 ),
                             ));
+                }
             }
             // If an Owner type is implemented with support for more fine-grained authorization,
             // checks should be performed here. For example, transfers and wraps can be detected
@@ -1385,7 +1548,10 @@ mod checked {
                         value,
                     };
 
-                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+                    AccumulatorEvent::new(
+                        AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
+                        write,
+                    )
                 }
             })
             .collect();
@@ -1400,6 +1566,8 @@ mod checked {
             deleted_object_ids: deleted_object_ids.into_iter().collect(),
             user_events,
             accumulator_events,
+            settlement_input_sui,
+            settlement_output_sui,
         }))
     }
 
@@ -1673,9 +1841,9 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
-            CallArg::BalanceWithdraw(_) => {
+            CallArg::FundsWithdrawal(_) => {
                 // TODO(address-balances): Add support for balance withdraws.
-                todo!("Load balance withdraw call arg")
+                InputValue::new_balance_withdraw()
             }
         })
     }

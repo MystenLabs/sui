@@ -57,3 +57,4 @@ sui-framework-snapshot.workspace = true
 sui-macros.workspace = true
 sui-simulator.workspace = true
 typed-store.workspace = true
+mysten-common.workspace = true

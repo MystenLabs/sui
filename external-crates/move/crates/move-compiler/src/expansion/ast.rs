@@ -102,6 +102,8 @@ pub struct ModuleDefinition {
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
+    /// The named address map used by this module during `expansion`.
+    pub named_address_map: Arc<NamedAddressMap>,
     pub attributes: Attributes,
     pub loc: Loc,
     pub target_kind: P::TargetKind,
@@ -991,6 +993,7 @@ impl AstDebug for Attributes {
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
+            named_address_map: _,
             doc,
             package_name,
             attributes,

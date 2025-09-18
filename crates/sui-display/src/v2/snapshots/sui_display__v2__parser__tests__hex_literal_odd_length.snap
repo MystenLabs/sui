@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{x'123'}\"#)"
+---
+Error: Odd number of characters in hex string "123" at offset 3

@@ -15,6 +15,7 @@ pub mod visitor;
 mod optimize;
 
 use crate::{
+    PreCompiledProgramInfo,
     diagnostics::DiagnosticReporter,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{FunctionSignature, Label, SingleType, Var, Visibility},
@@ -24,10 +25,11 @@ use cfg::*;
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 use optimize::optimize;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 pub struct CFGContext<'a> {
     pub env: &'a CompilationEnv,
+    pub pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
     pub reporter: &'a DiagnosticReporter<'a>,
     pub info: &'a TypingProgramInfo,
     pub package: Option<Symbol>,

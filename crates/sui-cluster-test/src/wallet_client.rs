@@ -25,6 +25,7 @@ impl WalletClient {
         let key = cluster.user_key();
         let address: SuiAddress = key.public().into();
         let wallet_context = new_wallet_context_from_cluster(cluster, key)
+            .await
             .instrument(info_span!("init_wallet_context_for_test_user"));
 
         let rpc_url = String::from(cluster.fullnode_url());
@@ -54,11 +55,12 @@ impl WalletClient {
         &self.fullnode_client
     }
 
-    pub fn sign(&self, txn_data: &TransactionData, desc: &str) -> Signature {
+    pub async fn sign(&self, txn_data: &TransactionData, desc: &str) -> Signature {
         self.get_wallet()
             .config
             .keystore
             .sign_secure(&self.address, txn_data, Intent::sui_transaction())
+            .await
             .unwrap_or_else(|e| panic!("Failed to sign transaction for {}. {}", desc, e))
     }
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::Registry;
+use std::sync::Arc;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2beta2::{
     ledger_service_server::LedgerService, BatchGetObjectsRequest, BatchGetObjectsResponse,
@@ -11,26 +12,34 @@ use sui_rpc::proto::sui::rpc::v2beta2::{
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
-use sui_sdk_types::CheckpointDigest;
+use sui_sdk_types::Digest;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::Message;
+use tokio::sync::RwLock;
+use tokio::time::{sleep, Duration};
+use tracing::error;
 
 mod get_checkpoint;
 mod get_epoch;
 mod get_object;
 mod get_transaction;
 
+mod v2;
+
 #[derive(Clone)]
 pub struct KvRpcServer {
     chain_id: ChainIdentifier,
     client: BigTableClient,
     server_version: Option<ServerVersion>,
+    checkpoint_bucket: Option<String>,
+    cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
 }
 
 impl KvRpcServer {
     pub async fn new(
         instance_id: String,
         app_profile_id: Option<String>,
+        checkpoint_bucket: Option<String>,
         server_version: Option<ServerVersion>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
@@ -49,11 +58,37 @@ impl KvRpcServer {
             .pop()
             .expect("failed to fetch genesis checkpoint from the KV store");
         let chain_id = ChainIdentifier::from(genesis.summary.digest());
-        Ok(Self {
+        let cache = Arc::new(RwLock::new(None));
+
+        let server = Self {
             chain_id,
             client,
             server_version,
-        })
+            checkpoint_bucket,
+            cache,
+        };
+
+        let server_clone = server.clone();
+        tokio::spawn(async move {
+            loop {
+                match get_service_info(
+                    server_clone.client.clone(),
+                    server_clone.chain_id,
+                    server_clone.server_version.clone(),
+                )
+                .await
+                {
+                    Ok(info) => {
+                        let mut cache = server_clone.cache.write().await;
+                        *cache = Some(info);
+                    }
+                    Err(e) => error!("Failed to update service info cache: {:?}", e),
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        });
+
+        Ok(server)
     }
 }
 
@@ -63,6 +98,13 @@ impl LedgerService for KvRpcServer {
         &self,
         _: tonic::Request<GetServiceInfoRequest>,
     ) -> Result<tonic::Response<GetServiceInfoResponse>, tonic::Status> {
+        {
+            let cache = self.cache.read().await;
+            if let Some(cached_info) = cache.as_ref() {
+                return Ok(tonic::Response::new(cached_info.clone()));
+            }
+        }
+        // If no cache available, fetch directly and update cache
         get_service_info(
             self.client.clone(),
             self.chain_id,
@@ -117,10 +159,14 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetCheckpointRequest>,
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
-        get_checkpoint::get_checkpoint(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_checkpoint::get_checkpoint(
+            self.client.clone(),
+            request.into_inner(),
+            self.checkpoint_bucket.clone(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_epoch(
@@ -146,14 +192,14 @@ async fn get_service_info(
     let Some(checkpoint) = client.get_latest_checkpoint_summary().await? else {
         return Err(CheckpointNotFoundError::sequence_number(0).into());
     };
-    Ok(GetServiceInfoResponse {
-        chain_id: Some(CheckpointDigest::new(chain_id.as_bytes().to_owned()).to_string()),
-        chain: Some(chain_id.chain().as_str().into()),
-        epoch: Some(checkpoint.epoch),
-        checkpoint_height: Some(checkpoint.sequence_number),
-        timestamp: Some(timestamp_ms_to_proto(checkpoint.timestamp_ms)),
-        lowest_available_checkpoint: Some(0),
-        lowest_available_checkpoint_objects: Some(0),
-        server: server_version.as_ref().map(ToString::to_string),
-    })
+    let mut message = GetServiceInfoResponse::default();
+    message.chain_id = Some(Digest::new(chain_id.as_bytes().to_owned()).to_string());
+    message.chain = Some(chain_id.chain().as_str().into());
+    message.epoch = Some(checkpoint.epoch);
+    message.checkpoint_height = Some(checkpoint.sequence_number);
+    message.timestamp = Some(timestamp_ms_to_proto(checkpoint.timestamp_ms));
+    message.lowest_available_checkpoint = Some(0);
+    message.lowest_available_checkpoint_objects = Some(0);
+    message.server = server_version.as_ref().map(ToString::to_string);
+    Ok(message)
 }

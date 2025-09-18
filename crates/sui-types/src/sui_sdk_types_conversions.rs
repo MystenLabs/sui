@@ -129,7 +129,7 @@ impl<const T: bool> From<crate::crypto::AuthorityQuorumSignInfo<T>>
         Self {
             epoch,
             signature: Bls12381Signature::from_bytes(signature.as_ref()).unwrap(),
-            bitmap: signers_map,
+            bitmap: Bitmap::from_iter(signers_map),
         }
     }
 }
@@ -148,7 +148,7 @@ impl<const T: bool> From<ValidatorAggregatedSignature>
             epoch,
             signature: crate::crypto::AggregateAuthoritySignature::from_bytes(signature.as_bytes())
                 .unwrap(),
-            signers_map: bitmap,
+            signers_map: roaring::RoaringBitmap::from_iter(bitmap.iter()),
         }
     }
 }
@@ -189,6 +189,7 @@ impl From<Owner> for crate::object::Owner {
                 start_version: start_version.into(),
                 owner: owner.into(),
             },
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -205,27 +206,15 @@ impl From<Address> for crate::base_types::SuiAddress {
     }
 }
 
-impl From<crate::base_types::ObjectID> for ObjectId {
+impl From<crate::base_types::ObjectID> for Address {
     fn from(value: crate::base_types::ObjectID) -> Self {
         Self::new(value.into_bytes())
     }
 }
 
-impl From<ObjectId> for crate::base_types::ObjectID {
-    fn from(value: ObjectId) -> Self {
+impl From<Address> for crate::base_types::ObjectID {
+    fn from(value: Address) -> Self {
         Self::new(value.into_inner())
-    }
-}
-
-impl From<crate::base_types::SuiAddress> for ObjectId {
-    fn from(value: crate::base_types::SuiAddress) -> Self {
-        Self::new(value.to_inner())
-    }
-}
-
-impl From<ObjectId> for crate::base_types::SuiAddress {
-    fn from(value: ObjectId) -> Self {
-        crate::base_types::ObjectID::new(value.into_inner()).into()
     }
 }
 
@@ -368,8 +357,8 @@ pub fn struct_tag_sdk_to_core(
     } = value;
 
     let address = move_core_types::account_address::AccountAddress::new(address.into_inner());
-    let module = move_core_types::identifier::Identifier::new(module.into_inner())?;
-    let name = move_core_types::identifier::Identifier::new(name.into_inner())?;
+    let module = move_core_types::identifier::Identifier::new(module.as_str())?;
+    let name = move_core_types::identifier::Identifier::new(name.as_str())?;
     let type_params = type_params
         .into_iter()
         .map(type_tag_sdk_to_core)
@@ -450,45 +439,45 @@ impl From<StructTag> for crate::type_input::StructInput {
             address: move_core_types::account_address::AccountAddress::new(
                 value.address.into_inner(),
             ),
-            module: value.module.into_inner().into(),
-            name: value.name.into_inner().into(),
+            module: value.module.as_str().into(),
+            name: value.name.as_str().into(),
             type_params: value.type_params.into_iter().map(Into::into).collect(),
         }
     }
 }
 
-impl From<crate::messages_checkpoint::CheckpointDigest> for CheckpointDigest {
-    fn from(value: crate::messages_checkpoint::CheckpointDigest) -> Self {
-        Self::new(value.into_inner())
-    }
-}
-
-impl From<CheckpointDigest> for crate::messages_checkpoint::CheckpointDigest {
-    fn from(value: CheckpointDigest) -> Self {
-        Self::new(value.into_inner())
-    }
-}
-
-impl From<crate::digests::TransactionDigest> for TransactionDigest {
-    fn from(value: crate::digests::TransactionDigest) -> Self {
-        Self::new(value.into_inner())
-    }
-}
-
-impl From<TransactionDigest> for crate::digests::TransactionDigest {
-    fn from(value: TransactionDigest) -> Self {
-        Self::new(value.into_inner())
-    }
-}
-
-impl From<crate::digests::ObjectDigest> for ObjectDigest {
+impl From<crate::digests::ObjectDigest> for Digest {
     fn from(value: crate::digests::ObjectDigest) -> Self {
         Self::new(value.into_inner())
     }
 }
 
-impl From<ObjectDigest> for crate::digests::ObjectDigest {
-    fn from(value: ObjectDigest) -> Self {
+impl From<Digest> for crate::digests::ObjectDigest {
+    fn from(value: Digest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<crate::digests::TransactionDigest> for Digest {
+    fn from(value: crate::digests::TransactionDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<Digest> for crate::digests::TransactionDigest {
+    fn from(value: Digest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<crate::messages_checkpoint::CheckpointDigest> for Digest {
+    fn from(value: crate::messages_checkpoint::CheckpointDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<Digest> for crate::messages_checkpoint::CheckpointDigest {
+    fn from(value: Digest) -> Self {
         Self::new(value.into_inner())
     }
 }
@@ -500,6 +489,18 @@ impl From<crate::digests::Digest> for Digest {
 }
 
 impl From<Digest> for crate::digests::Digest {
+    fn from(value: Digest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<crate::digests::CheckpointArtifactsDigest> for Digest {
+    fn from(value: crate::digests::CheckpointArtifactsDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<Digest> for crate::digests::CheckpointArtifactsDigest {
     fn from(value: Digest) -> Self {
         Self::new(value.into_inner())
     }
@@ -547,48 +548,49 @@ impl From<Bls12381PublicKey> for crate::crypto::AuthorityPublicKeyBytes {
     }
 }
 
-impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
-    fn from(value: UnchangedSharedKind) -> Self {
+impl From<UnchangedConsensusKind> for crate::effects::UnchangedConsensusKind {
+    fn from(value: UnchangedConsensusKind) -> Self {
         match value {
-            UnchangedSharedKind::ReadOnlyRoot { version, digest } => {
+            UnchangedConsensusKind::ReadOnlyRoot { version, digest } => {
                 Self::ReadOnlyRoot((version.into(), digest.into()))
             }
-            UnchangedSharedKind::MutateDeleted { version } => {
+            UnchangedConsensusKind::MutateDeleted { version } => {
                 Self::MutateConsensusStreamEnded(version.into())
             }
-            UnchangedSharedKind::ReadDeleted { version } => {
+            UnchangedConsensusKind::ReadDeleted { version } => {
                 Self::ReadConsensusStreamEnded(version.into())
             }
-            UnchangedSharedKind::Canceled { version } => Self::Cancelled(version.into()),
-            UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
-            UnchangedSharedKind::PerEpochConfigWithSequenceNumber { .. } => todo!(),
+            UnchangedConsensusKind::Canceled { version } => Self::Cancelled(version.into()),
+            UnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig,
+            UnchangedConsensusKind::PerEpochConfigWithSequenceNumber { .. } => todo!(),
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
 
-impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
-    fn from(value: crate::effects::UnchangedSharedKind) -> Self {
+impl From<crate::effects::UnchangedConsensusKind> for UnchangedConsensusKind {
+    fn from(value: crate::effects::UnchangedConsensusKind) -> Self {
         match value {
-            crate::effects::UnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
+            crate::effects::UnchangedConsensusKind::ReadOnlyRoot((version, digest)) => {
                 Self::ReadOnlyRoot {
                     version: version.into(),
                     digest: digest.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::MutateConsensusStreamEnded(version) => {
+            crate::effects::UnchangedConsensusKind::MutateConsensusStreamEnded(version) => {
                 Self::MutateDeleted {
                     version: version.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::ReadConsensusStreamEnded(version) => {
+            crate::effects::UnchangedConsensusKind::ReadConsensusStreamEnded(version) => {
                 Self::ReadDeleted {
                     version: version.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Canceled {
+            crate::effects::UnchangedConsensusKind::Cancelled(version) => Self::Canceled {
                 version: version.into(),
             },
-            crate::effects::UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+            crate::effects::UnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig,
         }
     }
 }
@@ -649,6 +651,7 @@ impl From<TransactionExpiration> for crate::transaction::TransactionExpiration {
         match value {
             TransactionExpiration::None => Self::None,
             TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -669,6 +672,7 @@ impl From<TypeArgumentError> for crate::execution_status::TypeArgumentError {
         match value {
             TypeArgumentError::TypeNotFound => Self::TypeNotFound,
             TypeArgumentError::ConstraintNotSatisfied => Self::ConstraintNotSatisfied,
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -733,6 +737,7 @@ impl From<PackageUpgradeError> for crate::execution_status::PackageUpgradeError 
                 package_id: package_id.into(),
                 ticket_id: ticket_id.into(),
             },
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -751,12 +756,17 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
             crate::execution_status::CommandArgumentError::InvalidValueUsage => Self::InvalidValueUsage,
             crate::execution_status::CommandArgumentError::InvalidObjectByValue => Self::InvalidObjectByValue,
             crate::execution_status::CommandArgumentError::InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
-            crate::execution_status::CommandArgumentError::SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
+            crate::execution_status::CommandArgumentError::SharedObjectOperationNotAllowed => Self::ConsensusObjectOperationNotAllowed,
             crate::execution_status::CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
             crate::execution_status::CommandArgumentError::InvalidTransferObject |
-            crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument => {
-                todo!("New errors need to be added to SDK once stabilized")
+            crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument |
+            crate::execution_status::CommandArgumentError::ArgumentWithoutValue |
+            crate::execution_status::CommandArgumentError::CannotMoveBorrowedValue |
+            crate::execution_status::CommandArgumentError::CannotWriteToExtendedReference |
+            crate::execution_status::CommandArgumentError::InvalidReferenceArgument => {
+                    todo!("New errors need to be added to SDK once stabilized")
             }
+
         }
     }
 }
@@ -786,10 +796,11 @@ impl From<CommandArgumentError> for crate::execution_status::CommandArgumentErro
             CommandArgumentError::InvalidValueUsage => Self::InvalidValueUsage,
             CommandArgumentError::InvalidObjectByValue => Self::InvalidObjectByValue,
             CommandArgumentError::InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
-            CommandArgumentError::SharedObjectOperationNotAllowed => {
+            CommandArgumentError::ConsensusObjectOperationNotAllowed => {
                 Self::SharedObjectOperationNotAllowed
             }
             CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -828,15 +839,18 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::WrittenObjectsTooLarge { current_size, max_size } => Self::WrittenObjectsTooLarge { object_size: current_size, max_object_size:max_size },
             crate::execution_status::ExecutionFailureStatus::CertificateDenied => Self::CertificateDenied,
             crate::execution_status::ExecutionFailureStatus::SuiMoveVerificationTimedout => Self::SuiMoveVerificationTimedout,
-            crate::execution_status::ExecutionFailureStatus::SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
+            crate::execution_status::ExecutionFailureStatus::SharedObjectOperationNotAllowed => Self::ConsensusObjectOperationNotAllowed,
             crate::execution_status::ExecutionFailureStatus::InputObjectDeleted => Self::InputObjectDeleted,
-            crate::execution_status::ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { congested_objects } => Self::ExecutionCanceledDueToSharedObjectCongestion { congested_objects: congested_objects.0.into_iter().map(Into::into).collect() },
+            crate::execution_status::ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { congested_objects } => Self::ExecutionCanceledDueToConsensusObjectCongestion { congested_objects: congested_objects.0.into_iter().map(Into::into).collect() },
             crate::execution_status::ExecutionFailureStatus::AddressDeniedForCoin { address, coin_type } => Self::AddressDeniedForCoin { address: address.into(), coin_type },
             crate::execution_status::ExecutionFailureStatus::CoinTypeGlobalPause { coin_type } => Self::CoinTypeGlobalPause { coin_type },
             crate::execution_status::ExecutionFailureStatus::ExecutionCancelledDueToRandomnessUnavailable => Self::ExecutionCanceledDueToRandomnessUnavailable,
             crate::execution_status::ExecutionFailureStatus::MoveVectorElemTooBig { value_size, max_scaled_size } => Self::MoveVectorElemTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::MoveRawValueTooBig { value_size, max_scaled_size } => Self::MoveRawValueTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::InvalidLinkage => Self::InvalidLinkage,
+            crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
+                todo!("Add InsufficientBalanceForWithdraw to sdk")
+            }
         }
     }
 }
@@ -929,17 +943,17 @@ impl From<ExecutionError> for crate::execution_status::ExecutionFailureStatus {
             },
             ExecutionError::CertificateDenied => Self::CertificateDenied,
             ExecutionError::SuiMoveVerificationTimedout => Self::SuiMoveVerificationTimedout,
-            ExecutionError::SharedObjectOperationNotAllowed => {
+            ExecutionError::ConsensusObjectOperationNotAllowed => {
                 Self::SharedObjectOperationNotAllowed
             }
             ExecutionError::InputObjectDeleted => Self::InputObjectDeleted,
-            ExecutionError::ExecutionCanceledDueToSharedObjectCongestion { congested_objects } => {
-                Self::ExecutionCancelledDueToSharedObjectCongestion {
-                    congested_objects: crate::execution_status::CongestedObjects(
-                        congested_objects.into_iter().map(Into::into).collect(),
-                    ),
-                }
-            }
+            ExecutionError::ExecutionCanceledDueToConsensusObjectCongestion {
+                congested_objects,
+            } => Self::ExecutionCancelledDueToSharedObjectCongestion {
+                congested_objects: crate::execution_status::CongestedObjects(
+                    congested_objects.into_iter().map(Into::into).collect(),
+                ),
+            },
             ExecutionError::AddressDeniedForCoin { address, coin_type } => {
                 Self::AddressDeniedForCoin {
                     address: address.into(),
@@ -967,6 +981,7 @@ impl From<ExecutionError> for crate::execution_status::ExecutionFailureStatus {
                 max_scaled_size,
             },
             ExecutionError::InvalidLinkage => Self::InvalidLinkage,
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -974,7 +989,7 @@ impl From<ExecutionError> for crate::execution_status::ExecutionFailureStatus {
 impl From<crate::execution_status::MoveLocation> for MoveLocation {
     fn from(value: crate::execution_status::MoveLocation) -> Self {
         Self {
-            package: ObjectId::new(value.module.address().into_bytes()),
+            package: Address::new(value.module.address().into_bytes()),
             module: Identifier::new(value.module.name().as_str()).unwrap(),
             function: value.function,
             instruction: value.instruction,
@@ -990,14 +1005,11 @@ impl From<MoveLocation> for crate::execution_status::MoveLocation {
         Self {
             module: move_core_types::language_storage::ModuleId::new(
                 move_core_types::account_address::AccountAddress::new(value.package.into_inner()),
-                move_core_types::identifier::Identifier::new(value.module.into_inner()).unwrap(),
+                move_core_types::identifier::Identifier::new(value.module.as_str()).unwrap(),
             ),
             function: value.function,
             instruction: value.instruction,
-            function_name: value
-                .function_name
-                .map(Identifier::into_inner)
-                .map(Into::into),
+            function_name: value.function_name.map(|ident| ident.as_str().into()),
         }
     }
 }
@@ -1020,6 +1032,11 @@ impl From<crate::messages_checkpoint::CheckpointCommitment> for CheckpointCommit
             crate::messages_checkpoint::CheckpointCommitment::ECMHLiveObjectSetDigest(digest) => {
                 Self::EcmhLiveObjectSet {
                     digest: digest.digest.into(),
+                }
+            }
+            crate::messages_checkpoint::CheckpointCommitment::CheckpointArtifactsDigest(digest) => {
+                Self::CheckpointArtifacts {
+                    digest: digest.into(),
                 }
             }
         }
@@ -1146,7 +1163,7 @@ impl From<crate::transaction::CallArg> for Input {
                     ObjectReference::new(id.into(), version.value(), digest.into()),
                 ),
             },
-            crate::transaction::CallArg::BalanceWithdraw(_) => {
+            crate::transaction::CallArg::FundsWithdrawal(_) => {
                 // TODO(address-balances): Add support for balance withdraws.
                 todo!("Convert balance withdraw reservation to sdk Input")
             }
@@ -1185,6 +1202,7 @@ impl From<Input> for crate::transaction::CallArg {
                     digest.into(),
                 )))
             }
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -1309,8 +1327,8 @@ impl From<MoveCall> for crate::transaction::ProgrammableMoveCall {
     fn from(value: MoveCall) -> Self {
         Self {
             package: value.package.into(),
-            module: value.module.into_inner().into(),
-            function: value.function.into_inner().into(),
+            module: value.module.as_str().into(),
+            function: value.function.as_str().into(),
             type_arguments: value.type_arguments.into_iter().map(Into::into).collect(),
             arguments: value.arguments.into_iter().map(Into::into).collect(),
         }
@@ -1356,6 +1374,7 @@ impl From<Command> for crate::transaction::Command {
                 package.into(),
                 ticket.into(),
             ),
+            _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
 }
@@ -1431,7 +1450,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             }
             crate::transaction::EndOfEpochTransactionKind::BridgeStateCreate(chain_identifier) => {
                 Self::BridgeStateCreate {
-                    chain_id: CheckpointDigest::new(chain_identifier.as_bytes().to_owned()),
+                    chain_id: Digest::new(chain_identifier.as_bytes().to_owned()),
                 }
             }
             crate::transaction::EndOfEpochTransactionKind::BridgeCommitteeInit(sequence_number) => {
@@ -1443,7 +1462,10 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 stored_execution_time_observations,
             ) => Self::StoreExecutionTimeObservations(stored_execution_time_observations.into()),
             crate::transaction::EndOfEpochTransactionKind::AccumulatorRootCreate => {
-                Self::AccumulatorRootCreate
+                todo!("AccumulatorRootCreate needs to be added to sdk")
+            }
+            crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
+                Self::CoinRegistryCreate
             }
         }
     }

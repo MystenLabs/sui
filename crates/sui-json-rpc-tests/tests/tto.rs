@@ -67,7 +67,8 @@ async fn test_indexing_with_tto() {
 
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data().unwrap());
+        .sign_transaction(&transaction_bytes.to_data().unwrap())
+        .await;
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
@@ -144,7 +145,7 @@ async fn test_indexing_with_tto() {
     let kind = TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
 
-    let tx = cluster.wallet.sign_transaction(&tx_data);
+    let tx = cluster.wallet.sign_transaction(&tx_data).await;
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
@@ -265,7 +266,7 @@ async fn test_indexing_with_tto() {
     let kind = TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
 
-    let tx = cluster.wallet.sign_transaction(&tx_data);
+    let tx = cluster.wallet.sign_transaction(&tx_data).await;
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let _tx_response = http_client

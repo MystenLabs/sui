@@ -604,7 +604,7 @@ async fn test_delete_shared_object() {
 
     // assert the shared object was deleted
     let deleted_obj_id = effects.deleted()[0].0;
-    let shared_obj_id = effects.input_shared_objects()[0].id_and_version().0;
+    let shared_obj_id = effects.input_consensus_objects()[0].id_and_version().0;
     assert_eq!(deleted_obj_id, shared_obj_id);
 
     // assert the version of the deleted shared object was incremented
@@ -730,7 +730,7 @@ async fn test_delete_shared_object_immut_mut_mut_interleave() {
 
     // assert the shared object was deleted
     let deleted_obj_id = effects.deleted()[0].0;
-    let shared_obj_id = effects.input_shared_objects()[0].id_and_version().0;
+    let shared_obj_id = effects.input_consensus_objects()[0].id_and_version().0;
     assert_eq!(deleted_obj_id, shared_obj_id);
 
     // assert the version of the deleted shared object was incremented
@@ -833,7 +833,7 @@ async fn test_delete_shared_object_immut_mut_immut_interleave() {
 
     // assert the shared object was deleted
     let deleted_obj_id = effects.deleted()[0].0;
-    let shared_obj_id = effects.input_shared_objects()[0].id_and_version().0;
+    let shared_obj_id = effects.input_consensus_objects()[0].id_and_version().0;
     assert_eq!(deleted_obj_id, shared_obj_id);
 
     // assert the version of the deleted shared object was incremented

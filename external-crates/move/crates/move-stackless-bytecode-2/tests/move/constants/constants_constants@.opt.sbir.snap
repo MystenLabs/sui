@@ -1,0 +1,57 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: constants
+    Function: compute (entry: LBL_0)
+      Label LBL_0:
+        lcl_4 = Immediate(U64(0))
+        lcl_3 = Immediate(U64(0))
+        reg_2 : u64 = Copy(lcl_0)
+        reg_3 : u64 = Constant(Constant { type_: U64, data: [100, 0, 0, 0, 0, 0, 0, 0] })
+        reg_4 : u64 = LessThan(reg_3 : u64, reg_2 : u64)
+        JumpIf(reg_4 : u64, LBL_8, LBL_13)
+
+      Label LBL_8:
+        reg_5 : u64 = Copy(lcl_1)
+        reg_7 : u64 = LessThan(Immediate(U64(10)), reg_5 : u64)
+        lcl_2 = reg_7 : u64
+        Jump(LBL_15)
+
+      Label LBL_13:
+        lcl_2 = Immediate(false)
+
+      Label LBL_15:
+        reg_9 : bool = Move(lcl_2)
+        JumpIf(reg_9 : bool, LBL_17, LBL_32)
+
+      Label LBL_17:
+        reg_10 : u64 = Copy(lcl_3)
+        reg_11 : u64 = Copy(lcl_1)
+        reg_12 : u64 = LessThan(reg_11 : u64, reg_10 : u64)
+        JumpIf(reg_12 : u64, LBL_21, LBL_34)
+
+      Label LBL_21:
+        reg_13 : u64 = Move(lcl_4)
+        reg_14 : u64 = Copy(lcl_0)
+        reg_15 : u64 = Add(reg_14 : u64, reg_13 : u64)
+        reg_16 : u64 = Constant(Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] })
+        reg_17 : u64 = Add(reg_16 : u64, reg_15 : u64)
+        lcl_4 = reg_17 : u64
+        reg_18 : u64 = Move(lcl_3)
+        reg_20 : u64 = Add(Immediate(U64(1)), reg_18 : u64)
+        lcl_3 = reg_20 : u64
+        Jump(LBL_17)
+
+      Label LBL_32:
+        reg_21 : u64 = Constant(Constant { type_: U64, data: [100, 0, 0, 0, 0, 0, 0, 0] })
+        lcl_4 = reg_21 : u64
+
+      Label LBL_34:
+        reg_22 : u64 = Move(lcl_4)
+        reg_23 : u64 = Move(lcl_0)
+        reg_24 : u64 = Multiply(reg_22 : u64, reg_23 : u64)
+        reg_25 : u64 = Move(lcl_1)
+        reg_26 : u64 = Add(reg_25 : u64, reg_24 : u64)
+        reg_27 : u64 = Constant(Constant { type_: U64, data: [0, 0, 0, 0, 0, 0, 0, 0] })
+        reg_28 : u64 = Add(reg_27 : u64, reg_26 : u64)
+        Return(reg_28 : u64)

@@ -7,7 +7,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{EnvironmentName, Package, lockfile::Lockfiles, paths::PackagePath},
-    schema::{Environment, PackageName},
+    schema::{Environment, PackageID, PackageName},
 };
 
 use std::{
@@ -16,16 +16,19 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use bimap::BiBTreeMap;
 use petgraph::graph::{DiGraph, NodeIndex};
 use tokio::sync::OnceCell;
+use tracing::debug;
 
-use super::{PackageGraph, PackageNode};
+use super::{PackageGraph, PackageGraphEdge};
 
 struct PackageCache<F: MoveFlavor> {
     // TODO: better errors; I'm using Option for now because PackageResult doesn't have clone, but
     // it's too much effort to add clone everywhere; we should do this when we update the error
     // infra
     // TODO: would dashmap simplify this?
+    #[allow(clippy::type_complexity)]
     cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<Package<F>>>>>>>,
 }
 
@@ -37,22 +40,6 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     pub fn new() -> Self {
         Self {
             cache: PackageCache::new(),
-        }
-    }
-
-    /// Loads the package graph for `env`. It checks whether the
-    /// resolution graph in the lockfile is up-to-date (i.e., whether any of the
-    /// manifests digests are out of date). If the resolution graph is up-to-date, it is returned.
-    /// Otherwise a new resolution graph is constructed by traversing (only) the manifest files.
-    pub async fn load(
-        &self,
-        path: &PackagePath,
-        env: &Environment,
-    ) -> PackageResult<PackageGraph<F>> {
-        let lockfile = self.load_from_lockfile(path, env).await?;
-        match lockfile {
-            Some(result) => Ok(result),
-            None => self.load_from_manifests(path, env).await,
         }
     }
 
@@ -84,53 +71,80 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         env: &Environment,
         check_digests: bool,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        let Some(lockfile) = Lockfiles::<F>::read_from_dir(path)? else {
+        let Some(lockfile) = Lockfiles::read_from_dir(path)? else {
             return Ok(None);
         };
-
-        let mut inner = DiGraph::new();
-
-        let mut package_nodes = BTreeMap::new();
 
         let Some(pins) = lockfile.pins_for_env(env.name()) else {
             return Ok(None);
         };
 
+        let mut inner = DiGraph::new();
+        let mut package_ids: BiBTreeMap<PackageID, NodeIndex> = BiBTreeMap::new();
+        let mut root_index = None;
+
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
-            let dep = PinnedDependencyInfo::from_pin(lockfile.file(), env.name(), pin);
+            let dep = PinnedDependencyInfo::from_lockfile(lockfile.file(), env.name(), pin)?;
             let package = self.cache.fetch(&dep, env).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
                 return Ok(None);
             }
-            let index = inner.add_node(PackageNode {
-                package,
-                use_env: pin.use_environment.clone().unwrap_or(env.name().clone()),
-            });
-            package_nodes.insert(pkg_id.clone(), index);
-        }
-
-        // Second pass: add edges based on dependencies
-        for (pkg_id, dep_info) in pins.iter() {
-            let from_index = package_nodes.get(pkg_id).unwrap();
-            for (dep_name, dep_id) in dep_info.deps.iter() {
-                if let Some(to_index) = package_nodes.get(dep_id) {
-                    inner.add_edge(*from_index, *to_index, dep_name.clone());
+            let index = inner.add_node(package.clone());
+            package_ids.insert(pkg_id.clone(), index);
+            if dep.is_root() {
+                let old_root = root_index.replace(index);
+                if old_root.is_some() {
+                    return Err(PackageError::Generic(format!(
+                        "Invalid lockfile: there are multiple root nodes in environment {}",
+                        env.name()
+                    )));
                 }
             }
         }
 
-        // TODO(manos): Add a proper error message here -- nothing to expect.
-        let root_idx = inner
-            .node_indices()
-            .find(|pkg| {
-                let node = &inner[*pkg];
-                node.package.is_root()
-            })
-            .expect("A lockfile needs to have a root package");
+        let root_index = root_index.ok_or(PackageError::Generic(
+            "Invalid lockfile: there is no root node".into(),
+        ))?;
 
-        Ok(Some(PackageGraph { inner, root_idx }))
+        debug!("loaded packages from lockfile: {package_ids:?}");
+
+        // Second pass: add edges based on dependencies
+        for (source_id, source_pin) in pins.iter() {
+            let source_index = package_ids.get_by_left(source_id).unwrap();
+            let source_package = inner[*source_index].clone();
+
+            for (dep_name, dep) in source_package.direct_deps() {
+                let target_id = source_pin
+                    .deps
+                    .get(dep_name)
+                    .ok_or(PackageError::Generic(format!(
+                        "Invalid lockfile: package `{source_id}` has a dependency named `{dep_name}` in its manifest, but that dependency is not pinned in the lockfile",
+                    )))?;
+
+                let target_index = package_ids
+                    .get_by_left(target_id)
+                    .ok_or(PackageError::Generic(format!(
+                        "Invalid lockfile: package depends on a package with undefined ID `{target_id}`"
+                    )))?;
+
+                inner.add_edge(
+                    *source_index,
+                    *target_index,
+                    PackageGraphEdge {
+                        name: dep_name.clone(),
+                        dep: dep.clone(),
+                    },
+                );
+            }
+        }
+
+        Ok(Some(PackageGraph {
+            inner,
+            root_index,
+            package_ids,
+        }))
     }
 
     /// Construct a new package graph for `env` by recursively fetching and reading manifest files
@@ -141,27 +155,70 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         path: &PackagePath,
         env: &Environment,
     ) -> PackageResult<PackageGraph<F>> {
-        // TODO: this is wrong - it is ignoring `path`
         let graph = Arc::new(Mutex::new(DiGraph::new()));
-        let visited = Arc::new(Mutex::new(BTreeMap::new()));
         let root = Arc::new(Package::<F>::load_root(path, env).await?);
 
-        let root_idx = self
+        // TODO: should we add `root` to `visited`? we may have a problem if there is a cyclic
+        // dependency involving the root
+
+        let visited = Arc::new(Mutex::new(BTreeMap::new()));
+
+        let root_index = self
             .add_transitive_manifest_deps(root, env, graph.clone(), visited)
             .await?;
 
-        let graph = graph.lock().expect("unpoisoned").map(
-            |_, node| {
-                node.clone()
-                    .expect("add_transitive_packages removes all `None`s before returning")
-            },
-            |_, e| e.clone(),
-        );
+        let inner: DiGraph<Arc<Package<F>>, PackageGraphEdge> =
+            graph.lock().expect("unpoisoned").map(
+                |_, node| {
+                    node.clone()
+                        .expect("add_transitive_packages removes all `None`s before returning")
+                },
+                |_, e| e.clone(),
+            );
 
+        let package_ids = Self::create_ids(&inner);
         Ok(PackageGraph {
-            inner: graph,
-            root_idx,
+            inner,
+            package_ids,
+            root_index,
         })
+    }
+
+    /// Assign unique identifiers to each node. In the case that there is no overlap, the
+    /// identifier should be the same as the package's name.
+    fn create_ids(
+        graph: &DiGraph<Arc<Package<F>>, PackageGraphEdge>,
+    ) -> BiBTreeMap<PackageID, NodeIndex> {
+        let mut name_to_suffix: BTreeMap<PackageName, u8> = BTreeMap::new();
+        let mut node_to_id: BiBTreeMap<PackageID, NodeIndex> = BiBTreeMap::new();
+
+        // TODO: maybe we need to be more deterministic about disambiguation? In particular, the ID
+        // we generate depends on the iteration order, which may be nondeterministic. If we're
+        // exposing this in any way (e.g. using the IDs to index ephemeral addresses) then a switch
+        // could lead to confusion.
+        //
+        // Of course repinning will change these names too, so something more stable might be to
+        // use the inclusion paths as indices (but this may still depend on order?)
+
+        // build index to id map
+        for node in graph.node_indices() {
+            let pkg_node = graph.node_weight(node).expect("node exists");
+            let name = if let Some(legacy_data) = &pkg_node.legacy_data {
+                &legacy_data.normalized_legacy_name
+            } else {
+                pkg_node.name()
+            };
+            let suffix = name_to_suffix.entry(name.clone()).or_default();
+            let id = if *suffix == 0 {
+                name.to_string()
+            } else {
+                format!("{}_{suffix}", name)
+            };
+            node_to_id.insert(id, node);
+            *suffix += 1;
+        }
+
+        node_to_id
     }
 
     /// Adds nodes and edges for the graph rooted at `package` to `graph` and returns the node ID for
@@ -170,11 +227,12 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     ///
     /// `visited` is used to short-circuit refetching - if a node is in `visited` then neither it nor its
     /// dependencies will be readded.
+    #[allow(clippy::type_complexity)] // TODO
     pub async fn add_transitive_manifest_deps(
         &self,
         package: Arc<Package<F>>,
         env: &Environment,
-        graph: Arc<Mutex<DiGraph<Option<PackageNode<F>>, PackageName>>>,
+        graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PackageGraphEdge>>>,
         visited: Arc<Mutex<BTreeMap<(EnvironmentName, PathBuf), NodeIndex>>>,
     ) -> PackageResult<NodeIndex> {
         // return early if node is cached; add empty node to graph and visited list otherwise
@@ -203,21 +261,14 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             );
             let dep_index = Box::pin(future).await?;
 
-            // TODO(manos): re-check the implementation here --  to make sure nothing was missed.
-            // TODO(manos)(2): Do we wanna error for missmatches on legacy packages? Will come on a follow-up.
-            // TODO(manos)(3): Do we wanna rename only for legacy parents, and error out for modern parents?
-            // If we're dealing with legacy packages, we are free to fix the naming in the outgoing edge, to match
-            // our modern system names.
-            let edge_name = if fetched.is_legacy() {
-                fetched.name()
-            } else {
-                name
-            };
-
-            graph
-                .lock()
-                .expect("unpoisoned")
-                .add_edge(index, dep_index, edge_name.clone());
+            graph.lock().expect("unpoisoned").add_edge(
+                index,
+                dep_index,
+                PackageGraphEdge {
+                    name: name.clone(),
+                    dep: dep.clone(),
+                },
+            );
         }
 
         graph
@@ -225,10 +276,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             .expect("unpoisoned")
             .node_weight_mut(index)
             .expect("node was added above")
-            .replace(PackageNode {
-                package,
-                use_env: env.name().clone(),
-            });
+            .replace(package);
 
         Ok(index)
     }
@@ -277,4 +325,9 @@ impl<F: MoveFlavor> PackageCache<F> {
             ))),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO: add a tests with a cyclic dependency involving the root
 }

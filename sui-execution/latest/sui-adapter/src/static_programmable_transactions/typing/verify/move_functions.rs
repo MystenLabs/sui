@@ -3,6 +3,7 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::programmable_transactions::execution::check_private_generics;
+use crate::sp;
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
 use move_binary_format::{CompiledModule, file_format::Visibility};
 use sui_types::{
@@ -81,11 +82,11 @@ impl Context {
 ///    - Can be disabled under certain execution modes
 pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(txn);
-    for (c, result) in &txn.commands {
-        let result_dirties = command::<Mode>(env, &mut context, c, result)
+    for c in &txn.commands {
+        let result_dirties = command::<Mode>(env, &mut context, c)
             .map_err(|e| e.with_command_index(c.idx as usize))?;
         assert_invariant!(
-            result_dirties.len() == result.len(),
+            result_dirties.len() == c.value.result_type.len(),
             "result length mismatch"
         );
         context.results.push(result_dirties);
@@ -96,17 +97,17 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
 fn command<Mode: ExecutionMode>(
     env: &Env,
     context: &mut Context,
-    command: &T::Command,
-    result: &T::ResultType,
+    sp!(_, c): &T::Command,
 ) -> Result<Vec<IsDirty>, ExecutionError> {
-    Ok(match &command.value {
-        T::Command_::MoveCall(call) => move_call::<Mode>(env, context, call, result)?,
-        T::Command_::TransferObjects(objs, recipient) => {
+    let result = &c.result_type;
+    Ok(match &c.command {
+        T::Command__::MoveCall(call) => move_call::<Mode>(env, context, call, result)?,
+        T::Command__::TransferObjects(objs, recipient) => {
             arguments(env, context, objs);
             argument(env, context, recipient);
             vec![]
         }
-        T::Command_::SplitCoins(_, coin, amounts) => {
+        T::Command__::SplitCoins(_, coin, amounts) => {
             let amounts_are_dirty = arguments(env, context, amounts);
             let coin_is_dirty = argument(env, context, coin);
             let is_dirty = amounts_are_dirty || coin_is_dirty;
@@ -115,7 +116,7 @@ fn command<Mode: ExecutionMode>(
             }
             vec![is_dirty; result.len()]
         }
-        T::Command_::MergeCoins(_, target, coins) => {
+        T::Command__::MergeCoins(_, target, coins) => {
             let is_dirty = arguments(env, context, coins);
             argument(env, context, target);
             if is_dirty {
@@ -123,17 +124,17 @@ fn command<Mode: ExecutionMode>(
             }
             vec![]
         }
-        T::Command_::MakeMoveVec(_, args) => {
+        T::Command__::MakeMoveVec(_, args) => {
             let is_dirty = arguments(env, context, args);
             debug_assert_eq!(result.len(), 1);
             vec![is_dirty]
         }
-        T::Command_::Publish(_, _, _) => {
+        T::Command__::Publish(_, _, _) => {
             debug_assert_eq!(Mode::packages_are_predefined(), result.is_empty());
             debug_assert_eq!(!Mode::packages_are_predefined(), result.len() == 1);
             result.iter().map(|_| false).collect::<Vec<_>>()
         }
-        T::Command_::Upgrade(_, _, _, ticket, _) => {
+        T::Command__::Upgrade(_, _, _, ticket, _) => {
             debug_assert_eq!(result.len(), 1);
             let result = vec![false];
             argument(env, context, ticket);
@@ -142,11 +143,11 @@ fn command<Mode: ExecutionMode>(
     })
 }
 
-fn arguments(env: &Env, context: &mut Context, args: &[T::Argument]) -> bool {
+fn arguments(env: &Env, context: &Context, args: &[T::Argument]) -> bool {
     args.iter().any(|arg| argument(env, context, arg))
 }
 
-fn argument(_env: &Env, context: &mut Context, arg: &T::Argument) -> bool {
+fn argument(_env: &Env, context: &Context, arg: &T::Argument) -> bool {
     context.is_dirty(arg)
 }
 

@@ -38,7 +38,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6665200,  storage_rebate: 
 
 task 6, lines 124-128:
 //# run Test::M::child_access_any --sender A --type-args Test::M::Any --args object(4,0) vector[object(5,0)]
-Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(5,0), parent_id: object(5,1) }
+Error: Error checking transaction input objects: Object object(5,0) is owned by object object(5,1). Objects owned by other objects cannot be used as input arguments
 
 task 7, line 130:
 //# run Test::M::mint_another_any --type-args Test::M::Any --sender A --args 42

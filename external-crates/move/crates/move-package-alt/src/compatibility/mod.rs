@@ -1,20 +1,20 @@
 pub mod legacy;
+pub mod legacy_lockfile;
 pub mod legacy_parser;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
-use move_core_types::account_address::AccountAddress;
+use anyhow::Result;
+use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 use regex::Regex;
+use tracing::debug;
 
 use crate::package::layout::SourcePackageLayout;
 use crate::package::paths::PackagePath;
 use crate::schema::PackageName;
 
-pub type LegacyAddressDeclarations = BTreeMap<String, Option<AccountAddress>>;
-pub type LegacyDevAddressDeclarations = BTreeMap<String, AccountAddress>;
 pub type LegacyVersion = (u64, u64, u64);
 pub type LegacySubstitution = BTreeMap<String, LegacySubstOrRename>;
 
@@ -36,7 +36,7 @@ const MODULE_REGEX: &str = r"\bmodule\s+([a-zA-Z_][\w]*)::([a-zA-Z_][\w]*)";
 /// for a given package.
 ///
 /// This helps us when we fail to detect any module name with 0x0 in the Manifest file,
-pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<PackageName> {
+pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Option<PackageName>> {
     let mut files = Vec::new();
     find_files(
         &mut files,
@@ -57,15 +57,28 @@ pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Package
         }
     }
 
+    debug!(
+        "Parsed source for finding module names for package. Names are: {:?}",
+        names
+    );
+
     if names.len() > 1 {
-        bail!("Multiple module names found in the package.");
+        return Ok(None);
     }
 
     let Some(name) = names.iter().next() else {
-        bail!("No module names found in the package.");
+        return Ok(None);
     };
 
-    PackageName::new(name.as_str())
+    Ok(Some(PackageName::new(name.as_str())?))
+}
+
+// Safely parses address for both the 0x and non prefixed hex format.
+fn parse_address_literal(address_str: &str) -> Result<AccountAddress, AccountAddressParseError> {
+    if !address_str.starts_with("0x") {
+        return AccountAddress::from_hex(address_str);
+    }
+    AccountAddress::from_hex_literal(address_str)
 }
 
 /// Find all files matching the extension in a given path.
@@ -95,16 +108,69 @@ fn find_files(files: &mut Vec<PathBuf>, dir: &Path, extension: &str, max_depth: 
 
 // Consider supporting the legacy `address { module {} }` format.
 fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
+    let clean = strip_comments(contents);
     let mut set = HashSet::new();
     // This matches `module a::b {}`, and `module a::b;` cases.
     // In both cases, the match is the 2nd group (so `match.get(1)`)
     let regex = Regex::new(MODULE_REGEX).unwrap();
 
-    for cap in regex.captures_iter(contents) {
+    for cap in regex.captures_iter(&clean) {
         set.insert(cap[1].to_string());
     }
 
-    Ok(set)
+    Ok(set
+        .into_iter()
+        .filter(|name| !is_address_like(name.as_str()))
+        .collect())
+}
+
+fn is_address_like(name: &str) -> bool {
+    (name.starts_with("0x") || name.starts_with("0X")) && AccountAddress::from_hex(name).is_ok()
+}
+
+/// Returns a copy of `source` with all the comments removed.
+fn strip_comments(source: &str) -> String {
+    let mut result = String::new();
+    let mut in_block_doc = false;
+
+    for line in source.lines() {
+        let mut line_cleaned = line.to_string();
+
+        // Catch the `///` case.
+        if let Some(start) = line_cleaned.find("///") {
+            line_cleaned.replace_range(start.., "");
+        }
+
+        // Catch the `//` case.
+        if let Some(start) = line_cleaned.find("//") {
+            line_cleaned.replace_range(start.., "");
+        }
+
+        if in_block_doc {
+            if let Some(end) = line_cleaned.find("*/") {
+                line_cleaned.replace_range(..=end + 1, ""); // remove up to and including */
+                in_block_doc = false;
+            } else {
+                continue; // inside block doc, skip entire line
+            }
+        }
+
+        // Remove any inline doc block comments (multiple if present)
+        while let Some(start) = line_cleaned.find("/*") {
+            if let Some(end) = line_cleaned[start..].find("*/") {
+                line_cleaned.replace_range(start..start + end + 2, "");
+            } else {
+                // Start of multiline doc block; remove to end of line and set flag
+                line_cleaned.replace_range(start.., "");
+                in_block_doc = true;
+                break;
+            }
+        }
+
+        result.push_str(&line_cleaned);
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -144,6 +210,84 @@ mod tests {
                 r" module b {}
             ",
                 set(vec![]),
+            ),
+            (
+                r"
+                /// module yy::ff {
+                ///     module a::b {}
+                /// }
+                module works::perfectly {}
+            ",
+                set(vec!["works"]),
+            ),
+            (
+                r"
+                /* module yy::ff {
+                    module a::b {}
+                }
+                */
+                /// module aa::bb {
+                ///
+                /// }
+                module works::perfectly {}
+            ",
+                set(vec!["works"]),
+            ),
+            (
+                r"
+                /* module aa::bb {} */
+                /* module ee::dd {} */
+                module a::b {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                /*
+                    multi-line comments
+                    module a::b {} */
+                    module works::perfectly {}
+                ",
+                set(vec!["works"]),
+            ),
+            (
+                r"
+                /* module aa::bb {} */ module a::b {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                /* module aa::bb {} */ /* module ee::dd {} */ module a::b {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                   module a::b {} // module bb::aa {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                module a::/* this is odd but
+                it works */b {} // module bb::aa {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                module 0x0::a {}
+                module 0X0::b {}
+                ",
+                set(vec![]),
+            ),
+            (
+                r"
+                module 0x0::a {}
+                module a::b {}
+                ",
+                set(vec!["a"]),
             ),
         ];
 

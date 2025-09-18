@@ -848,9 +848,9 @@ mod tests {
 
     /// In our processing logic, we consider objects that appear as input to the checkpoint but not
     /// in the output as wrapped or deleted. This emits a tombstone row. Meanwhile, the remote store
-    /// containing `CheckpointData` used to include unchanged shared objects in the `input_objects`
-    /// of a `CheckpointTransaction`. Because these read-only shared objects were not modified, they
-    ///were not included in `output_objects`. But that means within our pipeline, these object
+    /// containing `CheckpointData` used to include unchanged consensus objects in the `input_objects`
+    /// of a `CheckpointTransaction`. Because these read-only consensus objects were not modified, they
+    /// were not included in `output_objects`. But that means within our pipeline, these object
     /// states were incorrectly treated as deleted, and thus every transaction read emitted a
     /// tombstone row. This test validates that unless an object appears as an input object from
     /// `tx.effects.object_changes`, we do not consider it within our pipeline.
@@ -858,7 +858,7 @@ mod tests {
     /// Use the checkpoint builder to create a shared object. Then, remove this from the checkpoint,
     /// and replace it with a transaction that takes the shared object as read-only.
     #[tokio::test]
-    async fn test_process_unchanged_shared_object() {
+    async fn test_process_unchanged_consensus_object() {
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
             .create_shared_object(1)

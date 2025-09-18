@@ -62,6 +62,7 @@ pub struct ExecutionCacheTraitPointers {
     pub transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     pub cache_writer: Arc<dyn ExecutionCacheWrite>,
     pub backing_store: Arc<dyn BackingStore + Send + Sync>,
+    pub child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
     pub backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
     pub object_store: Arc<dyn ObjectStore + Send + Sync>,
     pub reconfig_api: Arc<dyn ExecutionCacheReconfigAPI>,
@@ -94,6 +95,7 @@ impl ExecutionCacheTraitPointers {
             transaction_cache_reader: cache.clone(),
             cache_writer: cache.clone(),
             backing_store: cache.clone(),
+            child_object_resolver: cache.clone(),
             backing_package_store: cache.clone(),
             object_store: cache.clone(),
             reconfig_api: cache.clone(),
@@ -245,7 +247,7 @@ pub trait ObjectCacheRead: Send + Sync {
         &self,
         keys: &[InputKey],
         receiving_objects: &HashSet<InputKey>,
-        epoch: &EpochId,
+        epoch: EpochId,
     ) -> Vec<bool> {
         let mut results = vec![false; keys.len()];
         let non_canceled_keys = keys.iter().enumerate().filter(|(idx, key)| {
@@ -289,22 +291,22 @@ pub trait ObjectCacheRead: Send + Sync {
                     .get_object(&id.id())
                     .map(|obj| obj.version() >= **version)
                     .unwrap_or(false)
-                    || self.fastpath_stream_ended_at_version_or_after(id.id(), **version, *epoch);
+                    || self.fastpath_stream_ended_at_version_or_after(id.id(), **version, epoch);
                 results[*idx] = is_available;
             } else {
                 // If the object is an already-removed consensus object, mark it as available if the
                 // version for that object is in the marker table.
                 let is_consensus_stream_ended = self
-                    .get_consensus_stream_end_tx_digest(FullObjectKey::new(**id, **version), *epoch)
+                    .get_consensus_stream_end_tx_digest(FullObjectKey::new(**id, **version), epoch)
                     .is_some();
                 results[*idx] = is_consensus_stream_ended;
             }
         }
 
         package_object_keys.into_iter().for_each(|(idx, id)| {
-            // unwrap is safe since this only errors when the object is not a package,
-            // which is impossible if we have a certificate for execution.
-            results[idx] = self.get_package_object(id).unwrap().is_some();
+            // get_package_object() only errors when the object is not a package, so returning false on error.
+            // Error is possible when this gets called on uncertified transactions.
+            results[idx] = self.get_package_object(id).is_ok_and(|p| p.is_some());
         });
 
         results
@@ -412,7 +414,7 @@ pub trait ObjectCacheRead: Send + Sync {
         &'a self,
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
-        epoch: &'a EpochId,
+        epoch: EpochId,
     ) -> BoxFuture<'a, ()>;
 }
 
@@ -521,6 +523,7 @@ pub trait TransactionCacheRead: Send + Sync {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>>;
 
@@ -533,10 +536,13 @@ pub trait TransactionCacheRead: Send + Sync {
     /// occurring!
     fn notify_read_executed_effects<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffects>> {
         async move {
-            let digests = self.notify_read_executed_effects_digests(digests).await;
+            let digests = self
+                .notify_read_executed_effects_digests(task_name, digests)
+                .await;
             // once digests are available, effects must be present as well
             self.multi_get_effects(&digests)
                 .into_iter()
@@ -630,7 +636,6 @@ pub trait ExecutionCacheReconfigAPI: Send + Sync {
     fn insert_genesis_object(&self, object: Object);
     fn bulk_insert_genesis_objects(&self, objects: &[Object]);
 
-    fn revert_state_update(&self, digest: &TransactionDigest);
     fn set_epoch_start_configuration(&self, epoch_start_config: &EpochStartConfiguration);
 
     fn update_epoch_flags_metrics(&self, old: &[EpochFlag], new: &[EpochFlag]);
@@ -819,10 +824,6 @@ macro_rules! implement_passthrough_traits {
 
             fn bulk_insert_genesis_objects(&self, objects: &[Object]) {
                 self.bulk_insert_genesis_objects_impl(objects)
-            }
-
-            fn revert_state_update(&self, digest: &TransactionDigest) {
-                self.revert_state_update_impl(digest)
             }
 
             fn set_epoch_start_configuration(&self, epoch_start_config: &EpochStartConfiguration) {

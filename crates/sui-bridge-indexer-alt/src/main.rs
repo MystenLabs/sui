@@ -57,6 +57,7 @@ async fn main() -> Result<(), anyhow::Error> {
         cancel.child_token(),
     );
 
+    let metrics_prefix = None;
     let mut indexer = Indexer::new_from_pg(
         database_url,
         db_args,
@@ -70,6 +71,7 @@ async fn main() -> Result<(), anyhow::Error> {
         },
         Default::default(),
         Some(&MIGRATIONS),
+        metrics_prefix,
         metrics.registry(),
         cancel.clone(),
     )

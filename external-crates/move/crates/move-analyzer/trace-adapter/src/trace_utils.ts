@@ -123,6 +123,7 @@ interface JSONTraceFrame {
     is_native: boolean;
     locals_types: JSONTraceType[];
     module: JSONTraceModule;
+    version_id?: string; // introduced in trace v3
     parameters: JSONTraceValue[];
     return_types: JSONTraceType[];
     type_instantiation: string[];
@@ -157,13 +158,13 @@ type JSONTraceLocation = JSONTraceLocalLocation | JSONTraceIndexedLocation | JSO
 
 interface JSONTraceWriteEffect {
     location: JSONTraceLocation;
-    root_value_after_write: JSONTraceRuntimeValue;
+    root_value_after_write: JSONTraceValue;
 }
 
 interface JSONTraceReadEffect {
     location: JSONTraceLocation;
     moved: boolean;
-    root_value_read: JSONTraceRuntimeValue;
+    root_value_read: JSONTraceValue;
 }
 
 interface JSONTracePushEffect {
@@ -470,6 +471,35 @@ export const EXT_EVENT_FRAME_ID = Number.MAX_SAFE_INTEGER - 4;
 
 
 /**
+ * Splits decompressed trace file data into lines without creating a large intermediate string.
+ * This avoids hitting JavaScript's maximum string length limit for large trace files.
+ *
+ * @param decompressed the decompressed buffer containing trace data
+ * @returns array of strings representing lines from the trace file
+ */
+function splitTraceFileLines(decompressed: Uint8Array): string[] {
+    const NEWLINE_BYTE = 0x0A;
+    const decoder = new TextDecoder();
+    const lines: string[] = [];
+
+    let lineStart = 0;
+
+    for (let i = 0; i <= decompressed.length; i++) {
+        if (i === decompressed.length || decompressed[i] === NEWLINE_BYTE) {
+            // end of the buffer or a new line
+            if (i > lineStart) {
+                const lineBytes = decompressed.slice(lineStart, i);
+                const line = decoder.decode(lineBytes).trimEnd();
+                lines.push(line);
+            }
+            lineStart = i + 1;
+        }
+    }
+
+    return lines;
+}
+
+/**
  * Reads a Move VM execution trace from a JSON file.
  *
  * @param traceFilePath path to the trace JSON file.
@@ -490,7 +520,8 @@ export async function readTrace(
 ): Promise<ITrace> {
     const buf = Buffer.from(fs.readFileSync(traceFilePath));
     const decompressed = await decompress(buf);
-    const [header, ...rest] = new TextDecoder().decode(decompressed).trimEnd().split('\n');
+    const lines = splitTraceFileLines(decompressed);
+    const [header, ...rest] = lines;
     const jsonVersion: number = JSON.parse(header).version;
     const jsonEvents: JSONTraceEvent[] = rest.map((line) => {
         return JSON.parse(line);
@@ -551,21 +582,26 @@ export async function readTrace(
                 }
             }
             localLifetimeEnds.set(frame.frame_id, lifetimeEnds);
+            // Trace v3 introduces `version_id` field in frame, which represents
+            // address of the on-chain package version that contains the function.
+            // It is different from `frame.module.address` if the package has been
+            // upgraded.
+            const addr = frame.version_id ? frame.version_id : frame.module.address;
             const modInfo = {
-                addr: frame.module.address,
+                addr: addr,
                 name: frame.module.name
             };
-            const sourceMap = srcDebugInfosModMap.get(JSON.stringify(modInfo));
-            if (!sourceMap) {
-                throw new Error('Source map for module '
+            const debugInfo = srcDebugInfosModMap.get(JSON.stringify(modInfo));
+            if (!debugInfo) {
+                throw new Error('Debug info for module '
                     + modInfo.name
                     + ' in package '
                     + modInfo.addr
                     + ' not found');
             }
-            const srcFunEntry = sourceMap.functions.get(frame.function_name);
+            const srcFunEntry = debugInfo.functions.get(frame.function_name);
             if (!srcFunEntry) {
-                throw new Error('Cannot find function entry in source map for function '
+                throw new Error('Cannot find function entry in debug info for function '
                     + frame.function_name
                     + ' in module '
                     + modInfo.name
@@ -574,8 +610,8 @@ export async function readTrace(
                     + ' when processing OpenFrame event');
             }
 
-            const srcFileHash = sourceMap.fileHash;
-            const optimizedSrcLines = sourceMap.optimizedLines;
+            const srcFileHash = debugInfo.fileHash;
+            const optimizedSrcLines = debugInfo.optimizedLines;
             // there may be no disassembly info
             let bcodeFileHash = undefined;
             let optimizedBcodeLines = undefined;
@@ -605,10 +641,10 @@ export async function readTrace(
                 optimizedSrcLines,
                 optimizedBcodeLines
             });
-            const currentSrcFile = filesMap.get(sourceMap.fileHash);
+            const currentSrcFile = filesMap.get(debugInfo.fileHash);
 
             if (!currentSrcFile) {
-                throw new Error(`Cannot find file with hash: ${sourceMap.fileHash}`);
+                throw new Error(`Cannot find file with hash: ${debugInfo.fileHash}`);
             }
             frameInfoStack.push({
                 ID: frame.frame_id,
@@ -724,17 +760,30 @@ export async function readTrace(
                     : (effect.Read
                         ? effect.Read.location
                         : effect.DataLoad!.location);
-                const loc = processJSONLocation(location, [], localLifetimeEnds);
+                const runtimeLoc = processJSONLocation(location, [], localLifetimeEnds);
                 if (effect.Write) {
                     // DataLoad is essentially a form of a write
                     const value = 'RuntimeValue' in effect.Write.root_value_after_write
                         ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
-                        : traceRefValueFromJSON(effect.Write.root_value_after_write);
+                        : 'globalIndex' in runtimeLoc.loc
+                            // We are writing to a global value here. Global values are
+                            // effectively references that appear "out of thin air" (e.g.,
+                            // are passed as parameters to top level functions). Unlike regular
+                            // references, for the global ones there isn't a natural end to the
+                            // the reference chain ending in a "regular" value - we need to
+                            // create one. When processing the trace, when writing to a global,
+                            // we need the actual value, so that the runtime has a chance to
+                            // store (and update) it accordingly. Failing to do so may result
+                            // in infinite recursion when trying to assign a global (reference)
+                            // to (potentially indexed) self.
+                            ? derefTraceRefValueFromJSON(effect.Write.root_value_after_write)
+                            : traceRefValueFromJSON(effect.Write.root_value_after_write);
+
                     events.push({
                         type: TraceEventKind.Effect,
                         effect: {
                             type: TraceEffectKind.Write,
-                            indexedLoc: loc,
+                            indexedLoc: runtimeLoc,
                             value
                         }
                     });
@@ -745,7 +794,7 @@ export async function readTrace(
                         type: TraceEventKind.Effect,
                         effect: {
                             type: TraceEffectKind.Write,
-                            indexedLoc: loc,
+                            indexedLoc: runtimeLoc,
                             value
                         }
                     });
@@ -1191,7 +1240,7 @@ function processJSONLocation(
  * @returns runtime value.
  * @throws Error with a descriptive error message if conversion has failed.
  */
-function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
+function traceRefValueFromJSON(value: JSONTraceRefValue): IRuntimeRefValue {
     if ('MutRef' in value) {
         const loc = processJSONLocation(value.MutRef.location, []);
         if (!loc) {
@@ -1206,6 +1255,22 @@ function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
         }
         const ret: IRuntimeRefValue = { mutable: false, indexedLoc: loc };
         return ret;
+    }
+}
+
+/**
+ * Converts a JSON trace reference value to a runtime value
+ * representing the value this reference value is referring to.
+ *
+ * @param value JSON trace reference value.
+ * @returns runtime value representing the value this reference value is referring to.
+ * @throws Error with a descriptive error message if conversion has failed.
+ */
+function derefTraceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
+    if ('MutRef' in value) {
+        return traceRuntimeValueFromJSON(value.MutRef.snapshot);
+    } else {
+        return traceRuntimeValueFromJSON(value.ImmRef.snapshot);
     }
 }
 

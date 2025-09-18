@@ -1,0 +1,44 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-9:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5304800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 11-15:
+//# upgrade --package P1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5662000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, line 17:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 19-28:
+//# run-graphql
+Response: {
+  "data": {
+    "package": {
+      "typeOrigins": [
+        {
+          "module": "M",
+          "struct": "S1",
+          "definingId": "0x64f698dbaa0f8a2f061a417a6310dc7787b03e32a2d7429dc6909360731a4e9a"
+        },
+        {
+          "module": "M",
+          "struct": "S2",
+          "definingId": "0xa0ac404709b0d0366e01570209e69c7900a53851544f6937504f911eaf9e2fd3"
+        }
+      ]
+    }
+  }
+}

@@ -132,6 +132,15 @@ fn main() -> Result<()> {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            Method::builder()
+                .name("validator_health")
+                .route_name("ValidatorHealth")
+                .input_type("sui_types::messages_grpc::RawValidatorHealthRequest")
+                .output_type("sui_types::messages_grpc::RawValidatorHealthResponse")
+                .codec_path(prost_codec_path)
+                .build(),
+        )
         .build();
 
     Builder::new()

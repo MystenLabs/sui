@@ -112,6 +112,7 @@ impl QueryTransactionsApiServer for QueryTransactions {
                     config.tx_retry_interval_ms,
                 ));
 
+                let mut retries = 0;
                 for _ in 0..config.tx_retry_count {
                     // Retry only if the error is an invalid params error, which can only be due to
                     // the transaction not being found in the kv store or tx balance changes table.
@@ -120,6 +121,7 @@ impl QueryTransactionsApiServer for QueryTransactions {
                     )) = tx
                     {
                         interval.tick().await;
+                        retries += 1;
                         tx = response::transaction(ctx, *d, &options).await;
                         ctx.metrics()
                             .read_retries
@@ -129,6 +131,11 @@ impl QueryTransactionsApiServer for QueryTransactions {
                         break;
                     }
                 }
+
+                ctx.metrics()
+                    .read_retries_per_request
+                    .with_label_values(&["tx_response"])
+                    .observe(retries as f64);
                 tx
             }
         });

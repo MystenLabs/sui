@@ -8,13 +8,8 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    authority::AuthorityState, authority_client::AuthorityAPI, transaction_driver::SubmitTxResponse,
-};
-use crate::{
-    authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv},
-    execution_scheduler::ExecutionSchedulerAPI,
-};
+use crate::authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv};
+use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
 use mysten_metrics::spawn_monitored_task;
@@ -26,10 +21,7 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     messages_consensus::ConsensusPosition,
-    messages_grpc::{
-        RawSubmitTxRequest, RawSubmitTxResponse, RawWaitForEffectsRequest,
-        RawWaitForEffectsResponse,
-    },
+    messages_grpc::{ValidatorHealthRequest, ValidatorHealthResponse},
     transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
 };
 use sui_types::{
@@ -44,7 +36,9 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
         HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
-        ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        ObjectInfoResponse, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SystemStateRequest,
+        TransactionInfoRequest, TransactionInfoResponse, WaitForEffectsRequest,
+        WaitForEffectsResponse,
     },
     sui_system_state::SuiSystemState,
 };
@@ -77,15 +71,27 @@ pub struct LocalAuthorityClient {
 impl AuthorityAPI for LocalAuthorityClient {
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         if self.fault_config.fail_before_submit_transaction {
             return Err(SuiError::from("Mock error before submit_transaction"));
         }
         let state = self.state.clone();
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let deserialized_transaction = bcs::from_bytes::<Transaction>(&request.transaction)
+
+        let raw_request = request.into_raw()?;
+        // TODO(fastpath): handle multiple transactions.
+        if raw_request.transactions.len() != 1 {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: format!(
+                    "Expected exactly 1 transaction in request, got {}",
+                    raw_request.transactions.len()
+                ),
+            });
+        }
+
+        let deserialized_transaction = bcs::from_bytes::<Transaction>(&raw_request.transactions[0])
             .map_err(|e| SuiError::TransactionDeserializationError {
                 error: e.to_string(),
             })?;
@@ -113,7 +119,18 @@ impl AuthorityAPI for LocalAuthorityClient {
             index: 0,
         };
 
-        SubmitTxResponse::Submitted { consensus_position }.try_into()
+        let submit_result = SubmitTxResult::Submitted { consensus_position };
+        Ok(SubmitTxResponse {
+            results: vec![submit_result],
+        })
+    }
+
+    async fn wait_for_effects(
+        &self,
+        _request: WaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<WaitForEffectsResponse, SuiError> {
+        unimplemented!()
     }
 
     async fn handle_transaction(
@@ -188,14 +205,6 @@ impl AuthorityAPI for LocalAuthorityClient {
         unimplemented!()
     }
 
-    async fn wait_for_effects(
-        &self,
-        _request: RawWaitForEffectsRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
-        unimplemented!()
-    }
-
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
@@ -236,6 +245,17 @@ impl AuthorityAPI for LocalAuthorityClient {
         _request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
         self.state.get_sui_system_state_object_for_testing()
+    }
+
+    async fn validator_health(
+        &self,
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        Ok(ValidatorHealthResponse {
+            last_committed_leader_round: 1000,
+            last_locally_built_checkpoint: 500,
+            ..Default::default()
+        })
     }
 }
 
@@ -292,7 +312,7 @@ impl LocalAuthorityClient {
                     )],
                     &epoch_store,
                 );
-                let effects = state.notify_read_effects(*certificate.digest()).await?;
+                let effects = state.notify_read_effects("", *certificate.digest()).await?;
                 state.sign_effects(effects, &epoch_store)?
             }
         }
@@ -334,6 +354,7 @@ impl LocalAuthorityClient {
     }
 }
 
+// TODO: The way we are passing in and using delay and count is really ugly code. Please fix it.
 #[derive(Clone)]
 pub struct MockAuthorityApi {
     delay: Duration,
@@ -360,10 +381,18 @@ impl AuthorityAPI for MockAuthorityApi {
     /// Submit a new transaction to a Sui or Primary account.
     async fn submit_transaction(
         &self,
-        _request: RawSubmitTxRequest,
+        _request: SubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         unimplemented!();
+    }
+
+    async fn wait_for_effects(
+        &self,
+        _request: WaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<WaitForEffectsResponse, SuiError> {
+        unimplemented!()
     }
 
     /// Initiate a new transaction to a Sui or Primary account.
@@ -397,14 +426,6 @@ impl AuthorityAPI for MockAuthorityApi {
         _request: HandleSoftBundleCertificatesRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
-        unimplemented!()
-    }
-
-    async fn wait_for_effects(
-        &self,
-        _request: RawWaitForEffectsRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
         unimplemented!()
     }
 
@@ -457,6 +478,17 @@ impl AuthorityAPI for MockAuthorityApi {
     ) -> Result<SuiSystemState, SuiError> {
         unimplemented!();
     }
+
+    async fn validator_health(
+        &self,
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        Ok(ValidatorHealthResponse {
+            last_committed_leader_round: 1000,
+            last_locally_built_checkpoint: 500,
+            ..Default::default()
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -472,9 +504,17 @@ pub struct HandleTransactionTestAuthorityClient {
 impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn submit_transaction(
         &self,
-        _request: RawSubmitTxRequest,
+        _request: SubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
+        unimplemented!()
+    }
+
+    async fn wait_for_effects(
+        &self,
+        _request: WaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<WaitForEffectsResponse, SuiError> {
         unimplemented!()
     }
 
@@ -516,14 +556,6 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         unimplemented!()
     }
 
-    async fn wait_for_effects(
-        &self,
-        _request: RawWaitForEffectsRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
-        unimplemented!()
-    }
-
     async fn handle_object_info_request(
         &self,
         _request: ObjectInfoRequest,
@@ -556,6 +588,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
+        unimplemented!()
+    }
+
+    async fn validator_health(
+        &self,
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
         unimplemented!()
     }
 }

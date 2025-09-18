@@ -79,7 +79,7 @@ const SIZE_BUCKETS: &[f64] = &[
 // Because of indirect finalization, the round delay should be at most 3 rounds.
 const ROUND_DELAY_BUCKETS: &[f64] = &[0.0, 0.5, 1.0, 2.0, 3.0, 4.0];
 
-pub(crate) struct Metrics {
+pub struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
     pub(crate) network_metrics: NetworkMetrics,
 }
@@ -94,7 +94,6 @@ pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     })
 }
 
-#[cfg(test)]
 pub(crate) fn test_metrics() -> Arc<Metrics> {
     initialise_metrics(Registry::new())
 }
@@ -210,6 +209,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) round_tracker_last_propagation_delay: IntGauge,
     pub(crate) round_prober_request_errors: IntCounterVec,
     pub(crate) certifier_gc_round: IntGauge,
+    pub(crate) certifier_block_latency: HistogramVec,
     pub(crate) certifier_own_reject_votes: IntCounterVec,
     pub(crate) certifier_output_blocks: IntCounterVec,
     pub(crate) certifier_rejected_transactions: IntCounterVec,
@@ -494,6 +494,13 @@ impl NodeMetrics {
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
                 &["authority", "source", "error"],
+                registry,
+            ).unwrap(),
+            certifier_block_latency: register_histogram_vec_with_registry!(
+                "certifier_block_latency",
+                "The latency of a block being certified by the transaction certifier. The block's authority is the label",
+                &["authority"],
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             certifier_rejected_transactions: register_int_counter_vec_with_registry!(

@@ -29,6 +29,7 @@ futures.workspace = true
 http.workspace = true
 jsonrpsee = { workspace = true, features = ["macros", "server"] }
 pin-project-lite.workspace = true
+pin-project.workspace = true
 prometheus.workspace = true
 schemars.workspace = true
 serde.workspace = true

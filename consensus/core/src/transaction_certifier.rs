@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use consensus_config::Stake;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
@@ -47,7 +47,7 @@ use crate::{
 /// must also be finalized post consensus commit. The reverse is not true though, because
 /// fastpath execution is only a latency optimization, and not required for correctness.
 #[derive(Clone)]
-pub(crate) struct TransactionCertifier {
+pub struct TransactionCertifier {
     // The state of blocks being voted on and certified.
     certifier_state: Arc<RwLock<CertifierState>>,
     // The state of the DAG.
@@ -57,7 +57,7 @@ pub(crate) struct TransactionCertifier {
 }
 
 impl TransactionCertifier {
-    pub(crate) fn new(
+    pub fn new(
         context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
         certified_blocks_sender: UnboundedSender<CertifiedBlocksOutput>,
@@ -148,10 +148,9 @@ impl TransactionCertifier {
                     } else {
                         // Own votes are needed for blocks not yet included in own blocks. They will be
                         // added to proposed blocks together.
-                        let reject_transaction_votes = block_verifier
-                            .verify_and_vote(b.signed_block())
-                            .unwrap_or_else(|e| {
-                                panic!("Failed to verify block during recovery: {}", e)
+                        let reject_transaction_votes =
+                            block_verifier.vote(&b).unwrap_or_else(|e| {
+                                panic!("Failed to vote on block during recovery: {}", e)
                             });
                         (b, reject_transaction_votes)
                     }
@@ -164,10 +163,7 @@ impl TransactionCertifier {
 
     /// Stores own reject votes on input blocks, and aggregates reject votes from the input blocks.
     /// Newly certified blocks are sent to the fastpath output channel.
-    pub(crate) fn add_voted_blocks(
-        &self,
-        voted_blocks: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
-    ) {
+    pub fn add_voted_blocks(&self, voted_blocks: Vec<(VerifiedBlock, Vec<TransactionIndex>)>) {
         let certified_blocks = self.certifier_state.write().add_voted_blocks(voted_blocks);
         self.send_certified_blocks(certified_blocks);
     }
@@ -332,6 +328,8 @@ impl CertifierState {
 
         let mut certified_blocks = vec![];
 
+        let now = self.context.clock.timestamp_utc_ms();
+
         // Update reject votes from the input block.
         for block_votes in voted_block.transaction_votes() {
             if block_votes.block_ref.round <= self.gc_round {
@@ -349,6 +347,23 @@ impl CertifierState {
             // Check if the target block is now certified after including the reject votes.
             // NOTE: votes can already exist for the target block and its transactions.
             if let Some(certified_block) = vote_info.take_certified_output(&self.context) {
+                let authority_name = self
+                    .context
+                    .committee
+                    .authority(certified_block.block.author())
+                    .hostname
+                    .clone();
+                self.context
+                    .metrics
+                    .node_metrics
+                    .certifier_block_latency
+                    .with_label_values(&[&authority_name])
+                    .observe(
+                        Duration::from_millis(
+                            now.saturating_sub(certified_block.block.timestamp_ms()),
+                        )
+                        .as_secs_f64(),
+                    );
                 certified_blocks.push(certified_block);
             }
         }
@@ -371,6 +386,8 @@ impl CertifierState {
             "Proposed block {} not found in certifier state, likely failed to be recovered or gc round is incorrect.",
             proposed_block.reference()
         );
+
+        let now = self.context.clock.timestamp_utc_ms();
 
         // Certify transactions based on the accept votes from the proposed block's parents.
         let mut certified_blocks = vec![];
@@ -410,6 +427,23 @@ impl CertifierState {
                 // Check if the target block is now certified after including the accept votes.
                 if let Some(certified_block) = target_vote_info.take_certified_output(&self.context)
                 {
+                    let authority_name = self
+                        .context
+                        .committee
+                        .authority(certified_block.block.author())
+                        .hostname
+                        .clone();
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .certifier_block_latency
+                        .with_label_values(&[&authority_name])
+                        .observe(
+                            Duration::from_millis(
+                                now.saturating_sub(certified_block.block.timestamp_ms()),
+                            )
+                            .as_secs_f64(),
+                        );
                     certified_blocks.push(certified_block);
                 }
             }

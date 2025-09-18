@@ -194,7 +194,7 @@ mod tests {
         let processor = Arc::new(DataPipeline);
         let (data_tx, data_rx) = mpsc::channel(2);
         let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
-        let metrics = IndexerMetrics::new(&Default::default());
+        let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
 
         // Spawn the processor task
@@ -251,7 +251,7 @@ mod tests {
         let processor = Arc::new(DataPipeline);
         let (data_tx, data_rx) = mpsc::channel(2);
         let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
-        let metrics = IndexerMetrics::new(&Default::default());
+        let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
 
         // Spawn the processor task
@@ -311,7 +311,7 @@ mod tests {
         let processor = Arc::new(ErrorPipeline);
         let (data_tx, data_rx) = mpsc::channel(1);
         let (indexed_tx, mut indexed_rx) = mpsc::channel(1);
-        let metrics = IndexerMetrics::new(&Default::default());
+        let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
 
         // Spawn the processor task
@@ -372,7 +372,7 @@ mod tests {
         let processor = Arc::new(SlowProcessor);
         let (data_tx, data_rx) = mpsc::channel(10);
         let (indexed_tx, mut indexed_rx) = mpsc::channel(10);
-        let metrics = IndexerMetrics::new(&Default::default());
+        let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
 
         // Spawn processor task

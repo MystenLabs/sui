@@ -33,6 +33,7 @@ pub(crate) async fn load_live(
     let mut object = None;
     let config = &ctx.config().objects;
     let mut interval = tokio::time::interval(Duration::from_millis(config.obj_retry_interval_ms));
+    let mut retries = 0;
 
     for _ in 0..=config.obj_retry_count {
         interval.tick().await;
@@ -46,11 +47,17 @@ pub(crate) async fn load_live(
             break;
         }
 
+        retries += 1;
         ctx.metrics()
             .read_retries
             .with_label_values(&["kv_object"])
             .inc();
     }
+
+    ctx.metrics()
+        .read_retries_per_request
+        .with_label_values(&["kv_object"])
+        .observe(retries as f64);
 
     Ok(object)
 }

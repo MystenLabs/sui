@@ -34,7 +34,7 @@ use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
 use sui_types::transaction::{
     GenesisObject, Reservation, SenderSignedData, StoredExecutionTimeObservations, TransactionData,
-    WithdrawFrom, WithdrawTypeParam,
+    WithdrawFrom, WithdrawalTypeArg,
 };
 use sui_types::type_input::{StructInput, TypeInput};
 use sui_types::{
@@ -64,7 +64,7 @@ use sui_types::{
 };
 use sui_types::{
     crypto::{PublicKey, ZkLoginPublicIdentifier},
-    effects::{IDOperation, ObjectIn, ObjectOut, TransactionEffects, UnchangedSharedKind},
+    effects::{IDOperation, ObjectIn, ObjectOut, TransactionEffects, UnchangedConsensusKind},
     utils::DEFAULT_ADDRESS_SEED,
 };
 use typed_store::TypedStoreError;
@@ -202,7 +202,7 @@ fn get_registry() -> Result<Registry> {
         .unwrap();
     tracer.trace_type::<Reservation>(&samples).unwrap();
     tracer.trace_type::<WithdrawFrom>(&samples).unwrap();
-    tracer.trace_type::<WithdrawTypeParam>(&samples).unwrap();
+    tracer.trace_type::<WithdrawalTypeArg>(&samples).unwrap();
     tracer.trace_type::<CallArg>(&samples).unwrap();
     tracer.trace_type::<ObjectArg>(&samples).unwrap();
     tracer.trace_type::<Data>(&samples).unwrap();
@@ -242,7 +242,9 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<IDOperation>(&samples).unwrap();
     tracer.trace_type::<ObjectIn>(&samples).unwrap();
     tracer.trace_type::<ObjectOut>(&samples).unwrap();
-    tracer.trace_type::<UnchangedSharedKind>(&samples).unwrap();
+    tracer
+        .trace_type::<UnchangedConsensusKind>(&samples)
+        .unwrap();
     tracer.trace_type::<AccumulatorValue>(&samples).unwrap();
     tracer.trace_type::<AccumulatorOperation>(&samples).unwrap();
     tracer.trace_type::<TransactionEffects>(&samples).unwrap();

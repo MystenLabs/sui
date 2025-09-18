@@ -74,7 +74,7 @@ pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(
         check_receving_input(receiving)?;
     }
     let context = &mut Context::new(txn);
-    for (c, _t) in commands {
+    for c in commands {
         command(context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
     }
     Ok(())
@@ -218,35 +218,35 @@ pub fn is_valid_receiving(constraint: &Type) -> bool {
 // Object usage
 //**************************************************************************************************
 
-fn command(context: &mut Context, sp!(_, command): &T::Command) -> Result<(), ExecutionError> {
-    match command {
-        T::Command_::MoveCall(mc) => {
+fn command(context: &mut Context, sp!(_, c): &T::Command) -> Result<(), ExecutionError> {
+    match &c.command {
+        T::Command__::MoveCall(mc) => {
             check_obj_usages(context, &mc.arguments)?;
             check_gas_by_values(&mc.arguments)?;
         }
-        T::Command_::TransferObjects(objects, recipient) => {
+        T::Command__::TransferObjects(objects, recipient) => {
             check_obj_usages(context, objects)?;
             check_obj_usage(context, recipient)?;
             // gas can be used by value in TransferObjects
         }
-        T::Command_::SplitCoins(_, coin, amounts) => {
+        T::Command__::SplitCoins(_, coin, amounts) => {
             check_obj_usage(context, coin)?;
             check_obj_usages(context, amounts)?;
             check_gas_by_value(coin)?;
             check_gas_by_values(amounts)?;
         }
-        T::Command_::MergeCoins(_, target, coins) => {
+        T::Command__::MergeCoins(_, target, coins) => {
             check_obj_usage(context, target)?;
             check_obj_usages(context, coins)?;
             check_gas_by_value(target)?;
             check_gas_by_values(coins)?;
         }
-        T::Command_::MakeMoveVec(_, xs) => {
+        T::Command__::MakeMoveVec(_, xs) => {
             check_obj_usages(context, xs)?;
             check_gas_by_values(xs)?;
         }
-        T::Command_::Publish(_, _, _) => (),
-        T::Command_::Upgrade(_, _, _, x, _) => {
+        T::Command__::Publish(_, _, _) => (),
+        T::Command__::Upgrade(_, _, _, x, _) => {
             check_obj_usage(context, x)?;
             check_gas_by_value(x)?;
         }

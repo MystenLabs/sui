@@ -4,7 +4,7 @@
 use crate::{
     compiler_info::CompilerInfo,
     symbols::{
-        compilation::{CompiledPkgInfo, SymbolsComputationData},
+        compilation::{CompiledPkgInfo, ParsedDefinitions, SymbolsComputationData},
         cursor::CursorContext,
         def_info::DefInfo,
         mod_defs::ModuleDefs,
@@ -15,11 +15,10 @@ use crate::{
 
 use im::ordmap::OrdMap;
 use lsp_types::Position;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use move_compiler::{
     expansion::ast::ModuleIdent,
-    parser::ast as P,
     shared::{NamedAddressMap, files::MappedFiles, unique_map::UniqueMap},
     typing::{ast::ModuleDefinition, visitor::TypingVisitorContext},
 };
@@ -36,7 +35,8 @@ pub fn run_parsing_analysis(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &CompiledPkgInfo,
     cursor_context: Option<&mut CursorContext>,
-    parsed_program: &P::Program,
+    parsed_program: &ParsedDefinitions,
+    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
     let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
@@ -46,7 +46,7 @@ pub fn run_parsing_analysis(
         use_defs: UseDefMap::new(),
         current_mod_ident_str: None,
         alias_lengths: BTreeMap::new(),
-        pkg_addresses: &NamedAddressMap::new(),
+        pkg_addresses: Arc::new(NamedAddressMap::new()),
         cursor: cursor_context,
     };
 
@@ -54,6 +54,7 @@ pub fn run_parsing_analysis(
         parsed_program,
         &mut computation_data.mod_use_defs,
         &mut computation_data.mod_to_alias_lengths,
+        typed_mod_named_address_maps,
     );
 }
 

@@ -81,6 +81,5 @@ task 9, lines 65-70:
 //> 2: SplitCoins(Result(1), [Input(0)]);
 //> 3: TransferObjects([Result(2)], Input(2));
 //> 4: t2::o2::share_coin(Result(1));
-created: object(9,0)
-mutated: object(0,0), object(7,0)
-gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)

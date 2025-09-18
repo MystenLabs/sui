@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::epoch_start_sui_system_state::EpochStartValidatorInfoV1;
+use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
+use super::{get_validators_from_table_vec, AdvanceEpochParams, SuiSystemStateTrait};
 use crate::balance::Balance;
 use crate::base_types::{ObjectID, SuiAddress};
 use crate::collection_types::{Bag, Table, TableVec, VecMap, VecSet};
@@ -8,6 +11,7 @@ use crate::committee::{CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::crypto::{verify_proof_of_possession, AuthorityPublicKey, AuthoritySignature};
 use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
 use crate::error::SuiError;
+use crate::gas::GasCostSummary;
 use crate::id::ID;
 use crate::multiaddr::Multiaddr;
 use crate::storage::ObjectStore;
@@ -16,10 +20,6 @@ use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-
-use super::epoch_start_sui_system_state::EpochStartValidatorInfoV1;
-use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
-use super::{get_validators_from_table_vec, AdvanceEpochParams, SuiSystemStateTrait};
 
 const E_METADATA_INVALID_POP: u64 = 0;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
@@ -522,6 +522,15 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
 
     fn safe_mode(&self) -> bool {
         self.safe_mode
+    }
+
+    fn safe_mode_gas_cost_summary(&self) -> GasCostSummary {
+        GasCostSummary {
+            computation_cost: self.safe_mode_computation_rewards.value(),
+            storage_cost: self.safe_mode_storage_rewards.value(),
+            storage_rebate: self.safe_mode_storage_rebates,
+            non_refundable_storage_fee: self.safe_mode_non_refundable_storage_fee,
+        }
     }
 
     fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams) {

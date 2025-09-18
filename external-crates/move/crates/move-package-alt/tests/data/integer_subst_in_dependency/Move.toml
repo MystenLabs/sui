@@ -1,9 +1,0 @@
-[package]
-name = "name"
-edition = "2025"
-
-[environments]
-mainnet = "35834a8a"
-
-[dependencies]
-A = { local = "a", rename-from = { "A" = 1 } }

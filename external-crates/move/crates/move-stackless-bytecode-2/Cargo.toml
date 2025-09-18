@@ -28,5 +28,9 @@ move-stdlib.workspace = true
 datatest-stable.workspace = true
 
 [[test]]
-name = "tests"
+name = "from_source"
+harness = false
+
+[[test]]
+name = "from_bytecode"
 harness = false

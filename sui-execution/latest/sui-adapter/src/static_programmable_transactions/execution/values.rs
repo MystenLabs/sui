@@ -41,14 +41,18 @@ pub struct Value(VMValue);
 impl Locals {
     pub fn new<Items>(values: Items) -> Result<Self, ExecutionError>
     where
-        Items: IntoIterator<Item = Value>,
+        Items: IntoIterator<Item = Option<Value>>,
         Items::IntoIter: ExactSizeIterator,
     {
         let values = values.into_iter();
         let n = values.len();
         assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
         let mut locals = VMLocals::new(n);
-        for (i, value) in values.enumerate() {
+        for (i, value_opt) in values.enumerate() {
+            let Some(value) = value_opt else {
+                // If the value is None, we leave the local invalid
+                continue;
+            };
             locals
                 .store_loc(i, value.0, /* violation check */ true)
                 .map_err(iv("store loc"))?;
@@ -223,7 +227,9 @@ impl Value {
         Ok(Self(vec))
     }
 
-    pub fn tx_context(digest: TransactionDigest) -> Result<Self, ExecutionError> {
+    /// Should be called once at the start of a transaction to populate the location with the
+    /// transaction context.
+    pub fn new_tx_context(digest: TransactionDigest) -> Result<Self, ExecutionError> {
         // public struct TxContext has drop {
         //     sender: address,
         //     tx_hash: vector<u8>,

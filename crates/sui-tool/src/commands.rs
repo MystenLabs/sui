@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(not(tidehunter))]
+use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 use crate::{
-    check_completed_snapshot,
-    db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    download_db_snapshot, download_formal_snapshot, get_latest_available_epoch, get_object,
-    get_transaction_block, make_clients, restore_from_db_checkpoint, ConciseObjectOutput,
-    GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
+    check_completed_snapshot, download_db_snapshot, download_formal_snapshot,
+    get_latest_available_epoch, get_object, get_transaction_block, make_clients,
+    restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode,
+    VerboseObjectOutput,
 };
 use anyhow::Result;
 use consensus_core::storage::{rocksdb_store::RocksDBStore, Store};
@@ -132,6 +133,7 @@ pub enum ToolCommand {
     },
 
     /// Tool to read validator & node db.
+    #[cfg(not(tidehunter))]
     #[command(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
@@ -271,6 +273,10 @@ pub enum ToolCommand {
         /// and output will be reduced to necessary status information.
         #[clap(long = "verbose")]
         verbose: bool,
+        /// Number of retries for failed HTTP requests when downloading snapshot files.
+        /// Defaults to 3 retries. Set to 0 to disable retries.
+        #[clap(long = "max-retries", default_value = "3")]
+        max_retries: usize,
     },
 
     // Restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
@@ -340,6 +346,10 @@ pub enum ToolCommand {
         /// downloaded, and (if --verify is provided) will be verified via committee signature.
         #[clap(long = "all-checkpoints")]
         all_checkpoints: bool,
+        /// Number of retries for failed HTTP requests when downloading snapshot files.
+        /// Defaults to 3 retries. Set to 0 to disable retries.
+        #[clap(long = "max-retries", default_value = "3")]
+        max_retries: usize,
     },
 
     #[clap(name = "replay")]
@@ -576,6 +586,7 @@ impl ToolCommand {
                     get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
                 );
             }
+            #[cfg(not(tidehunter))]
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
                 match cmd {
@@ -680,6 +691,7 @@ impl ToolCommand {
                 latest,
                 verbose,
                 all_checkpoints,
+                max_retries,
             } => {
                 if !verbose {
                     tracing_handle
@@ -812,6 +824,7 @@ impl ToolCommand {
                     network,
                     verify,
                     all_checkpoints,
+                    max_retries,
                 )
                 .await?;
             }
@@ -827,6 +840,7 @@ impl ToolCommand {
                 no_sign_request,
                 latest,
                 verbose,
+                max_retries,
             } => {
                 if !verbose {
                     tracing_handle
@@ -963,6 +977,7 @@ impl ToolCommand {
                     snapshot_store_config,
                     skip_indexes,
                     num_parallel_downloads,
+                    max_retries,
                 )
                 .await?;
             }

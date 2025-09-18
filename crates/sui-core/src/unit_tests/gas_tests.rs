@@ -18,7 +18,10 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{base_types::dbg_addr, crypto::get_key_pair};
+use sui_types::{
+    base_types::{dbg_addr, FullObjectRef},
+    crypto::get_key_pair,
+};
 
 // The cost table is used only to get the max budget available which is not dependent on
 // the gas price
@@ -278,7 +281,9 @@ async fn touch_gas_coins(
             .await
             .unwrap()
             .compute_object_reference();
-        builder.transfer_object(recipient, coin_ref).unwrap();
+        builder
+            .transfer_object(recipient, FullObjectRef::from_fastpath_ref(coin_ref))
+            .unwrap();
     }
     let pt = builder.finish();
     let kind = TransactionKind::ProgrammableTransaction(pt);
@@ -1049,7 +1054,10 @@ async fn execute_transfer_with_price(
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(recipient, object.compute_object_reference())
+            .transfer_object(
+                recipient,
+                FullObjectRef::from_fastpath_ref(object.compute_object_reference()),
+            )
             .unwrap();
         builder.finish()
     };

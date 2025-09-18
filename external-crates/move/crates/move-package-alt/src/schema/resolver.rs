@@ -8,7 +8,7 @@ pub const EXTERNAL_RESOLVE_METHOD: &str = "resolve";
 /// The name of an external resolver
 pub type ResolverName = String;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum ResolverDependencyInfo {
     Local(LocalDepInfo),

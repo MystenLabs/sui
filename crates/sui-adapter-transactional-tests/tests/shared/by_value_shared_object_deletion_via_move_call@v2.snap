@@ -49,9 +49,8 @@ task 6, lines 46-48:
 //# programmable --inputs object(2,0) object(3,0)
 //> 0: t2::o2::id<t2::o2::Obj2>(Input(1));
 //> 1: t2::o2::deleter(Result(0));
-mutated: object(0,0), object(2,0)
-deleted: object(3,0)
-gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
 
 task 7, line 50:
 //# run t2::o2::mint_shared_coin
@@ -81,9 +80,8 @@ task 9, lines 55-61:
 //> 2: TransferObjects([Result(1)], Input(2));
 //> 3: t2::o2::share_coin(Result(0));
 // Try to call public_share_object directly -- this should work because the coin has `store`.
-created: object(9,0)
-mutated: object(0,0), object(7,0)
-gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
 
 task 10, lines 62-66:
 //# programmable --inputs 0 object(7,0) @0x0
@@ -91,6 +89,5 @@ task 10, lines 62-66:
 //> 1: SplitCoins(Result(0), [Input(0)]);
 //> 2: TransferObjects([Result(1)], Input(2));
 //> 3: sui::transfer::public_share_object<sui::coin::Coin<sui::sui::SUI>>(Result(0));
-created: object(10,0)
-mutated: object(0,0), object(7,0)
-gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)

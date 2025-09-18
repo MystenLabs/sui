@@ -33,7 +33,7 @@ Contents: a::m::Inner {
 task 4, line 45:
 //# run a::m::add_dynamic_object_field --sender A --args object(2,0)
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
 
 task 5, line 47:
 //# run a::m::create_shared --sender A

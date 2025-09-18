@@ -13,23 +13,17 @@ use thiserror::Error;
 
 use crate::{
     errors::{FileHandle, Location},
-    schema::{
-        DefaultDependency, PackageMetadata, PackageName, ParsedManifest, ReplacementDependency,
-    },
+    schema::{DefaultDependency, PackageName, ParsedManifest, ReplacementDependency},
 };
 
 use super::*;
 use serde_spanned::Spanned;
-use sha2::{Digest as ShaDigest, Sha256};
-
-const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
 
 // TODO: replace this with something more strongly typed
 pub type Digest = String;
 
 pub struct Manifest {
     inner: ParsedManifest,
-    digest: Digest,
     file_handle: FileHandle,
 }
 
@@ -48,25 +42,16 @@ enum ErrorLocation {
 
 #[derive(Error, Debug)]
 pub enum ManifestErrorKind {
-    #[error("package name cannot be empty")]
-    EmptyPackageName,
-    #[error("unsupported edition '{edition}', expected one of '{valid}'")]
-    InvalidEdition { edition: String, valid: String },
-    #[error("externally resolved dependencies must have exactly one resolver field")]
-    BadExternalDependency,
-    #[error(
-        "dep-replacements.mainnet is invalid because mainnet is not in the [environments] table"
-    )]
-    MissingEnvironment { env: EnvironmentName },
-    #[error(
-        // TODO: add a suggested environment (needs to be part of the flavor)
-        "you must define at least one environment in the [environments] section of `Move.toml`."
-    )]
-    NoEnvironments,
-    #[error("{}", .0.message())]
-    ParseError(#[from] toml_edit::de::Error),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+
+    #[error("{}", .0.message())]
+    ParseError(#[from] toml_edit::de::Error),
+
+    #[error(
+        "Dependency <TODO> must have a `git`, `local`, or `r` field in either the `[dependencies]` or the `[dep-replacements]` section"
+    )]
+    NoDepInfo,
 }
 
 pub type ManifestResult<T> = Result<T, ManifestError>;
@@ -80,17 +65,10 @@ impl Manifest {
 
         let result = Self {
             inner: parsed,
-            digest: format!("{:X}", Sha256::digest(file_handle.source().as_ref())),
             file_handle,
         };
 
-        result.validate_manifest(file_handle)?;
-
         Ok(result)
-    }
-
-    pub fn metadata(&self) -> PackageMetadata {
-        self.inner.package.clone()
     }
 
     pub fn dep_replacements(
@@ -117,53 +95,12 @@ impl Manifest {
             .collect()
     }
 
-    /// The name declared in the `[package]` section
-    pub fn package_name(&self) -> &PackageName {
-        self.inner.package.name.as_ref()
-    }
-
-    /// A digest of the file, suitable for detecting changes
-    pub fn digest(&self) -> &Digest {
-        &self.digest
-    }
-
     pub fn file_handle(&self) -> &FileHandle {
         &self.file_handle
     }
 
-    /// Validate the manifest contents, after deserialization.
-    ///
-    // TODO: add more validation
-    fn validate_manifest(&self, handle: FileHandle) -> ManifestResult<()> {
-        // Are there any environments?
-        if self.environments().is_empty() {
-            return Err(ManifestError::with_file(handle.path())(
-                ManifestErrorKind::NoEnvironments,
-            ));
-        }
-
-        // Do all dep-replacements have valid environments?
-        for (env, entries) in self.inner.dep_replacements.iter() {
-            if !self.environments().contains_key(env) {
-                let span = entries
-                    .first_key_value()
-                    .expect("dep-replacements.<env> only exists if it has a dep")
-                    .1
-                    .span();
-
-                let loc = Location::new(handle, span);
-
-                return Err(ManifestError::with_span(&loc)(
-                    ManifestErrorKind::MissingEnvironment { env: env.clone() },
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn parsed(&self) -> &ParsedManifest {
-        &self.inner
+    pub fn into_parsed(self) -> ParsedManifest {
+        self.inner
     }
 }
 
@@ -174,13 +111,6 @@ impl ManifestError {
         move |e| ManifestError {
             kind: Box::new(e.into()),
             location: ErrorLocation::WholeFile(path.as_ref().to_path_buf()),
-        }
-    }
-
-    fn with_span<T: Into<ManifestErrorKind>>(loc: &Location) -> impl Fn(T) -> Self {
-        move |e| ManifestError {
-            kind: Box::new(e.into()),
-            location: ErrorLocation::AtLoc(loc.clone()),
         }
     }
 
@@ -211,9 +141,62 @@ impl ManifestError {
     }
 }
 
-impl std::fmt::Debug for Manifest {
-    // TODO: not sure we want this
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.inner.fmt(f)
+#[cfg(test)]
+mod tests {
+    // TODO: comprehensive testing
+
+    use tempfile::TempDir;
+    use test_log::test;
+
+    use crate::{flavor::vanilla::default_environment, schema::PackageName};
+
+    use super::{Manifest, ManifestResult};
+
+    /// Create a file containing `contents` and pass it to `Manifest::read_from_file`
+    fn load_manifest(contents: impl AsRef<[u8]>) -> ManifestResult<Manifest> {
+        // TODO: we need a better implementation for this
+        let tempdir = TempDir::new().unwrap();
+        let manifest_path = tempdir.path().join("Move.toml");
+
+        std::fs::write(&manifest_path, contents).expect("write succeeds");
+
+        Manifest::read_from_file(manifest_path)
+    }
+
+    /// The `environments` table may be missing
+    #[test]
+    fn empty_environments_allowed() {
+        let manifest = load_manifest(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+            "#,
+        )
+        .unwrap();
+
+        assert!(manifest.environments().is_empty());
+    }
+
+    /// Environment names in `dep-replacements` must be defined in `environments`
+    #[test]
+    #[ignore] // TODO: this tests new behavior that isn't implemented yet
+    fn dep_replacement_envs_are_declared() {
+        let manifest = load_manifest(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dep-replacements]
+            mainnet.foo = { local = "../foo" }
+            "#,
+        )
+        .unwrap();
+
+        let name = PackageName::new("foo").unwrap();
+        assert!(manifest.dependencies().contains_key(&name));
+        let default_env = default_environment();
+        assert!(!manifest.dep_replacements()[default_env.name()].contains_key(&name));
     }
 }

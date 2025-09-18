@@ -158,7 +158,7 @@ fun test_add_token_price_zero_value() {
         addr,
         false,
         vector[test_token_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string()],
+        vector[type_name::with_defining_ids<TEST_TOKEN>().into_string()],
         vector[0],
     );
 
@@ -174,7 +174,7 @@ fun test_add_token_malformed_1() {
         addr,
         false,
         vector[test_token_id(), eth_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string()],
+        vector[type_name::with_defining_ids<TEST_TOKEN>().into_string()],
         vector[10],
     );
 
@@ -190,7 +190,10 @@ fun test_add_token_malformed_2() {
         addr,
         false,
         vector[test_token_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string(), type_name::get<BTC>().into_string()],
+        vector[
+            type_name::with_defining_ids<TEST_TOKEN>().into_string(),
+            type_name::with_defining_ids<BTC>().into_string(),
+        ],
         vector[10],
     );
 
@@ -206,7 +209,7 @@ fun test_add_token_malformed_3() {
         addr,
         false,
         vector[test_token_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string()],
+        vector[type_name::with_defining_ids<TEST_TOKEN>().into_string()],
         vector[10, 20],
     );
 
@@ -223,7 +226,7 @@ fun test_add_native_token_nop() {
         addr,
         true,
         vector[test_token_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string()],
+        vector[type_name::with_defining_ids<TEST_TOKEN>().into_string()],
         vector[100],
     );
     env.destroy_env();

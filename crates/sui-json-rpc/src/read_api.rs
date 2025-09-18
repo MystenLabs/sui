@@ -1149,6 +1149,7 @@ impl ReadApiServer for ReadApi {
             true,
             true,
             Some(30),
+            true,
         );
         match intent_scope {
             ZkLoginIntentScope::TransactionData => {

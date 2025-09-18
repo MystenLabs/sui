@@ -318,7 +318,7 @@ mod tests {
     /// * `skip_watermark` - Whether to skip sending watermarks to the watermark channel
     async fn setup_test(store: MockStore, skip_watermark: bool) -> TestSetup {
         let config = CommitterConfig::default();
-        let metrics = IndexerMetrics::new(&Default::default());
+        let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
 
         let (batch_tx, batch_rx) = mpsc::channel::<BatchedRows<DataPipeline>>(10);

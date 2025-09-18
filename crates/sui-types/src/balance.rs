@@ -48,10 +48,22 @@ impl Balance {
         }
     }
 
+    pub fn type_tag(type_param: TypeTag) -> TypeTag {
+        TypeTag::Struct(Box::new(Self::type_(type_param)))
+    }
+
     pub fn is_balance(s: &StructTag) -> bool {
         s.address == SUI_FRAMEWORK_ADDRESS
             && s.module.as_ident_str() == BALANCE_MODULE_NAME
             && s.name.as_ident_str() == BALANCE_STRUCT_NAME
+    }
+
+    pub fn is_balance_type(type_param: &TypeTag) -> bool {
+        if let TypeTag::Struct(struct_tag) = type_param {
+            Self::is_balance(struct_tag)
+        } else {
+            false
+        }
     }
 
     pub fn withdraw(&mut self, amount: u64) -> Result<(), ExecutionError> {

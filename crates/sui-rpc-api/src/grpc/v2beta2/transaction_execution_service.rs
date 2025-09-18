@@ -19,7 +19,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
 use sui_rpc::proto::sui::rpc::v2beta2::TransactionEffects;
 use sui_rpc::proto::sui::rpc::v2beta2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2beta2::UserSignature;
-use sui_sdk_types::ObjectId;
+use sui_sdk_types::Address;
 use sui_types::balance_change::derive_balance_changes;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
@@ -35,7 +35,7 @@ impl TransactionExecutionService for RpcService {
             .as_ref()
             .ok_or_else(|| tonic::Status::unimplemented("no transaction executor"))?;
 
-        execute_transaction(executor, request.into_inner())
+        execute_transaction(self, executor, request.into_inner())
             .await
             .map(tonic::Response::new)
             .map_err(Into::into)
@@ -44,8 +44,9 @@ impl TransactionExecutionService for RpcService {
 
 pub const EXECUTE_TRANSACTION_READ_MASK_DEFAULT: &str = "finality";
 
-#[tracing::instrument(skip(executor))]
+#[tracing::instrument(skip(service, executor))]
 pub async fn execute_transaction(
+    service: &RpcService,
     executor: &std::sync::Arc<dyn TransactionExecutor>,
     request: ExecuteTransactionRequest,
 ) -> Result<ExecuteTransactionResponse, RpcError> {
@@ -135,9 +136,9 @@ pub async fn execute_transaction(
                 Finality::QuorumExecuted(())
             }
         };
-        sui_rpc::proto::sui::rpc::v2beta2::TransactionFinality {
-            finality: Some(finality),
-        }
+        let mut message = sui_rpc::proto::sui::rpc::v2beta2::TransactionFinality::default();
+        message.finality = Some(finality);
+        message
     };
 
     let executed_transaction = if let Some(mask) =
@@ -177,7 +178,7 @@ pub async fn execute_transaction(
 
                 if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
                     for changed_object in effects.changed_objects.iter_mut() {
-                        let Ok(object_id) = changed_object.object_id().parse::<ObjectId>() else {
+                        let Ok(object_id) = changed_object.object_id().parse::<Address>() else {
                             continue;
                         };
 
@@ -196,9 +197,11 @@ pub async fn execute_transaction(
                     }
                 }
 
-                if mask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                    for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
-                        let Ok(object_id) = unchanged_shared_object.object_id().parse::<ObjectId>()
+                if mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+                    for unchanged_consensus_object in effects.unchanged_consensus_objects.iter_mut()
+                    {
+                        let Ok(object_id) =
+                            unchanged_consensus_object.object_id().parse::<Address>()
                         else {
                             continue;
                         };
@@ -206,7 +209,7 @@ pub async fn execute_transaction(
                         if let Some(object) =
                             input_objects.iter().find(|o| o.object_id() == object_id)
                         {
-                            unchanged_shared_object.object_type =
+                            unchanged_consensus_object.object_type =
                                 Some(match object.object_type() {
                                     sui_sdk_types::ObjectType::Package => "package".to_owned(),
                                     sui_sdk_types::ObjectType::Struct(struct_tag) => {
@@ -217,58 +220,58 @@ pub async fn execute_transaction(
                     }
                 }
 
+                // Try to render clever error info
+                crate::ledger_service::render_clever_error(service, &mut effects);
+
                 effects
             });
 
-        Some(ExecutedTransaction {
-            digest: mask
-                .contains(ExecutedTransaction::DIGEST_FIELD.name)
-                .then(|| transaction.digest().to_string()),
-            transaction: mask
-                .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
-                .map(|mask| Transaction::merge_from(transaction, &mask)),
-            signatures: mask
-                .subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
-                .map(|mask| {
-                    signatures
-                        .into_iter()
-                        .map(|s| UserSignature::merge_from(s, &mask))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            effects,
-            events,
-            checkpoint: None,
-            timestamp: None,
-            balance_changes,
-            input_objects: mask
-                .subtree(ExecutedTransaction::INPUT_OBJECTS_FIELD.name)
-                .map(|mask| {
-                    input_objects
-                        .into_iter()
-                        .map(|o| Object::merge_from(o, &mask))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            output_objects: mask
-                .subtree(ExecutedTransaction::OUTPUT_OBJECTS_FIELD.name)
-                .map(|mask| {
-                    output_objects
-                        .into_iter()
-                        .map(|o| Object::merge_from(o, &mask))
-                        .collect()
-                })
-                .unwrap_or_default(),
-        })
+        let mut message = ExecutedTransaction::default();
+        message.digest = mask
+            .contains(ExecutedTransaction::DIGEST_FIELD.name)
+            .then(|| transaction.digest().to_string());
+        message.transaction = mask
+            .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
+            .map(|mask| Transaction::merge_from(transaction, &mask));
+        message.signatures = mask
+            .subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
+            .map(|mask| {
+                signatures
+                    .into_iter()
+                    .map(|s| UserSignature::merge_from(s, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
+        message.effects = effects;
+        message.events = events;
+        message.balance_changes = balance_changes;
+        message.input_objects = mask
+            .subtree(ExecutedTransaction::INPUT_OBJECTS_FIELD.name)
+            .map(|mask| {
+                input_objects
+                    .into_iter()
+                    .map(|o| Object::merge_from(o, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
+        message.output_objects = mask
+            .subtree(ExecutedTransaction::OUTPUT_OBJECTS_FIELD.name)
+            .map(|mask| {
+                output_objects
+                    .into_iter()
+                    .map(|o| Object::merge_from(o, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Some(message)
     } else {
         None
     };
 
-    ExecuteTransactionResponse {
-        finality: read_mask
-            .contains(ExecuteTransactionResponse::FINALITY_FIELD.name)
-            .then_some(finality),
-        transaction: executed_transaction,
-    }
-    .pipe(Ok)
+    let mut message = ExecuteTransactionResponse::default();
+    message.finality = read_mask
+        .contains(ExecuteTransactionResponse::FINALITY_FIELD.name)
+        .then_some(finality);
+    message.transaction = executed_transaction;
+    Ok(message)
 }

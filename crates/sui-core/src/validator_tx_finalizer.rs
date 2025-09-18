@@ -213,7 +213,10 @@ where
             _ = tokio::time::sleep(tx_finalization_delay) => {
                 trace!(?tx_digest, "Waking up to finalize transaction");
             }
-            _ = cache_read.notify_read_executed_effects_digests(&digests) => {
+            _ = cache_read.notify_read_executed_effects_digests(
+                "ValidatorTxFinalizer::notify_read_executed_effects_digests",
+                &digests,
+            ) => {
                 trace!(?tx_digest, "Transaction already finalized");
                 return Ok(false);
             }
@@ -304,9 +307,10 @@ mod tests {
     use sui_types::messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
-        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
+        SubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        ValidatorHealthRequest, ValidatorHealthResponse, WaitForEffectsRequest,
+        WaitForEffectsResponse,
     };
     use sui_types::object::Object;
     use sui_types::sui_system_state::SuiSystemState;
@@ -326,10 +330,18 @@ mod tests {
     impl AuthorityAPI for MockAuthorityClient {
         async fn submit_transaction(
             &self,
-            _request: RawSubmitTxRequest,
+            _request: SubmitTxRequest,
             _client_addr: Option<SocketAddr>,
-        ) -> Result<RawSubmitTxResponse, SuiError> {
+        ) -> Result<SubmitTxResponse, SuiError> {
             unimplemented!();
+        }
+
+        async fn wait_for_effects(
+            &self,
+            _request: WaitForEffectsRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<WaitForEffectsResponse, SuiError> {
+            unimplemented!()
         }
 
         async fn handle_transaction(
@@ -390,14 +402,6 @@ mod tests {
             unimplemented!()
         }
 
-        async fn wait_for_effects(
-            &self,
-            _request: RawWaitForEffectsRequest,
-            _client_addr: Option<SocketAddr>,
-        ) -> Result<RawWaitForEffectsResponse, SuiError> {
-            unimplemented!()
-        }
-
         async fn handle_soft_bundle_certificates_v3(
             &self,
             _request: HandleSoftBundleCertificatesRequestV3,
@@ -439,6 +443,17 @@ mod tests {
             _request: SystemStateRequest,
         ) -> Result<SuiSystemState, SuiError> {
             unimplemented!()
+        }
+
+        async fn validator_health(
+            &self,
+            _request: ValidatorHealthRequest,
+        ) -> Result<ValidatorHealthResponse, SuiError> {
+            Ok(ValidatorHealthResponse {
+                last_committed_leader_round: 1000,
+                last_locally_built_checkpoint: 500,
+                ..Default::default()
+            })
         }
     }
 

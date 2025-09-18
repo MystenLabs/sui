@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
+use anyhow::Context;
 use async_graphql::dataloader::Loader;
 use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl};
 use move_core_types::language_storage::StructTag;
@@ -22,12 +23,12 @@ pub struct CoinMetadataKey(pub StructTag);
 #[async_trait::async_trait]
 impl Loader<CoinMetadataKey> for PgReader {
     type Value = StoredObjInfo;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[CoinMetadataKey],
-    ) -> Result<HashMap<CoinMetadataKey, StoredObjInfo>, Self::Error> {
+    ) -> Result<HashMap<CoinMetadataKey, StoredObjInfo>, Error> {
         use obj_info::dsl as o;
 
         let (candidates, newer) = diesel::alias!(obj_info as candidates, obj_info as newer);
@@ -48,7 +49,7 @@ impl Loader<CoinMetadataKey> for PgReader {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let instantiations = keys
             .iter()
@@ -57,7 +58,7 @@ impl Loader<CoinMetadataKey> for PgReader {
                 bcs::to_bytes(&params)
             })
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| Arc::new(Error::Serde(e.into())))?;
+            .context("Failed to serialize coin metadata type parameters")?;
 
         let query = candidates
             .distinct_on(candidates!(package, module, name, instantiation))
@@ -82,7 +83,7 @@ impl Loader<CoinMetadataKey> for PgReader {
             .filter(candidates!(name).eq(COIN_METADATA_STRUCT_NAME.as_str()))
             .filter(candidates!(instantiation).eq_any(&instantiations));
 
-        let obj_info: Vec<StoredObjInfo> = conn.results(query).await.map_err(Arc::new)?;
+        let obj_info: Vec<StoredObjInfo> = conn.results(query).await?;
         let instantiations_to_stored: HashMap<_, _> = obj_info
             .iter()
             .map(|stored| (&stored.instantiation, stored))

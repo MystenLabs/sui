@@ -175,7 +175,7 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "combinable_comparisons",
         "comparison operations condition can be simplified"
-    )
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";

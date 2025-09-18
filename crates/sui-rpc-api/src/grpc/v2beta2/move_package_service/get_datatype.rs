@@ -55,7 +55,5 @@ pub fn get_datatype(
 
     let datatype = convert_datatype(datatype_name, &data_def, &package_id, module_name);
 
-    Ok(GetDatatypeResponse {
-        datatype: Some(datatype),
-    })
+    Ok(GetDatatypeResponse::new(datatype))
 }

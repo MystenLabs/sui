@@ -67,6 +67,7 @@ fn gen_ckpts(
                     None,
                     0,
                     Vec::new(),
+                    Vec::new(),
                 ),
                 k,
                 name,
@@ -149,6 +150,7 @@ async fn test_async_verifier() {
         true,
         Some(30),
         vec![],
+        true,
     ));
 
     let tasks: Vec<_> = (0..32)

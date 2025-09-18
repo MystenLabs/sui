@@ -502,13 +502,9 @@ function findTracedFunctionsFromPath(pkgRoot: string, pkgModules: string[]): str
  * @returns traced function info containing package address, module, and function itself.
  */
 async function getTracedFunctionInfo(traceFilePath: string): Promise<TracedFunctionInfo> {
-    const traceContent = await decompressTraceFile(traceFilePath);
-    if (!traceContent) {
-        throw new Error(`Cannot decompress trace file '${traceFilePath}'`);
-    }
-    const traceLines = traceContent.split('\n');
+    const traceLines = await decompressTraceFile(traceFilePath);
     if (traceLines.length <= 1) {
-        throw new Error(`Empty trace file at '${traceFilePath}':\n'${traceContent}'`);
+        throw new Error(`Empty trace file at '${traceFilePath}`);
     }
     const firstEvent = JSON.parse(traceLines[1]);
     if (!firstEvent) {
@@ -655,14 +651,43 @@ async function pickTraceFileToDebug(
 }
 
 /**
+ * Splits decompressed trace file data into lines without creating a large intermediate string.
+ * This avoids hitting JavaScript's maximum string length limit for large trace files.
+ *
+ * @param decompressed the decompressed buffer containing trace data
+ * @returns array of strings representing lines from the trace file
+ */
+function splitTraceFileLines(decompressed: Uint8Array): string[] {
+    const NEWLINE_BYTE = 0x0A;
+    const decoder = new TextDecoder();
+    const lines: string[] = [];
+
+    let lineStart = 0;
+
+    for (let i = 0; i <= decompressed.length; i++) {
+        if (i === decompressed.length || decompressed[i] === NEWLINE_BYTE) {
+            // end of the buffer or a new line
+            if (i > lineStart) {
+                const lineBytes = decompressed.slice(lineStart, i);
+                const line = decoder.decode(lineBytes).trimEnd();
+                lines.push(line);
+            }
+            lineStart = i + 1;
+        }
+    }
+
+    return lines;
+}
+
+/**
  * Reads and decompresses a trace file.
  * @param traceFilePath path to the trace file.
  * @returns decompressed trace file content as a string.
  */
-async function decompressTraceFile(traceFilePath: string): Promise<string> {
+async function decompressTraceFile(traceFilePath: string): Promise<string[]> {
     const buf = fs.readFileSync(traceFilePath);
     const decompressed = await decompress(buf);
-    return new TextDecoder().decode(decompressed).trimEnd();
+    return splitTraceFileLines(decompressed);
 }
 
 /**
@@ -671,12 +696,11 @@ async function decompressTraceFile(traceFilePath: string): Promise<string> {
  * @param traceFileContent content of the trace file.
  * @returns string representation of the trace file content.
  */
-function trimTraceFileContent(traceFileContent: string): string {
-    const lines = traceFileContent.split('\n');
+function trimTraceFileContent(lines: string[]): string {
     // Max numbers of lines to display, including effects
     const maxLinesWithEffects = 1000;
     if (lines.length <= maxLinesWithEffects) {
-        return traceFileContent;
+        return lines.join('\n');
     }
     // Max number of lines to display without effects
     // (if the number of lines in the trace is greater thatn

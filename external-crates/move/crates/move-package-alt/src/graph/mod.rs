@@ -4,42 +4,53 @@
 
 mod builder;
 mod linkage;
+mod package_info;
 mod rename_from;
 mod to_lockfile;
 
-pub use linkage::LinkageError;
+pub use linkage::{LinkageError, LinkageTable};
+pub use package_info::{NamedAddress, PackageInfo};
 pub use rename_from::RenameError;
 
-use std::sync::Arc;
+use tracing::{debug, warn};
 
+use std::{collections::BTreeMap, sync::Arc};
+
+use crate::schema::Publication;
 use crate::{
     dependency::PinnedDependencyInfo,
     errors::PackageResult,
     flavor::MoveFlavor,
-    package::{EnvironmentName, Package, paths::PackagePath},
-    schema::{Environment, PackageName},
+    package::{Package, paths::PackagePath},
+    schema::{Environment, PackageID, PackageName},
 };
+use bimap::BiBTreeMap;
 use builder::PackageGraphBuilder;
 
-use derive_where::derive_where;
 use petgraph::{
     algo::toposort,
-    graph::{DiGraph, EdgeIndex, NodeIndex},
+    graph::{DiGraph, NodeIndex},
 };
 
-#[derive(Debug)]
-#[derive_where(Clone)]
-pub struct PackageGraph<F: MoveFlavor> {
-    root_idx: NodeIndex,
-    inner: DiGraph<PackageNode<F>, PackageName>,
+#[derive(Debug, Clone)]
+pub struct PackageGraphEdge {
+    name: PackageName,
+    dep: PinnedDependencyInfo,
 }
 
-/// A node in the package graph, containing a [Package] in a particular environment
+/// The graph of all packages. May include multiple versions of "the same" package. Guaranteed to
+/// be a rooted dag
 #[derive(Debug)]
-#[derive_where(Clone)]
-struct PackageNode<F: MoveFlavor> {
-    package: Arc<Package<F>>,
-    use_env: EnvironmentName,
+pub struct PackageGraph<F: MoveFlavor> {
+    /// The root of the dag
+    root_index: NodeIndex,
+
+    /// The mapping between package ids and nodes
+    /// Invariant: the indices in `package_ids` are the same as those in `inner`
+    package_ids: BiBTreeMap<PackageID, NodeIndex>,
+
+    /// The actual nodes and edges of the graph
+    inner: DiGraph<Arc<Package<F>>, PackageGraphEdge>,
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
@@ -48,13 +59,13 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// manifests digests are out of date). If the resolution graph is up-to-date, it is returned.
     /// Otherwise a new resolution graph is constructed by traversing (only) the manifest files.
     pub async fn load(path: &PackagePath, env: &Environment) -> PackageResult<Self> {
-        let package = Package::<F>::load_root(path.path(), env).await?;
-
         let builder = PackageGraphBuilder::<F>::new();
 
         if let Some(graph) = builder.load_from_lockfile(path, env).await? {
+            debug!("successfully loaded lockfile");
             Ok(graph)
         } else {
+            debug!("lockfile was missing or out of date; loading from manifests");
             builder.load_from_manifests(path, env).await
         }
     }
@@ -81,49 +92,45 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
     /// Returns the root package of the graph.
     pub fn root_package(&self) -> &Package<F> {
-        self.inner[self.root_idx].package.as_ref()
+        &self.inner[self.root_index]
     }
 
-    /// Return the dependency corresponding to `edge`
-    pub fn dep_for_edge(&self, edge: EdgeIndex) -> &PinnedDependencyInfo {
-        let (source_index, _) = self
-            .inner
-            .edge_endpoints(edge)
-            .expect("edge is a valid index into the graph");
-
-        self.inner[source_index]
-            .package
-            .direct_deps()
-            .get(&self.inner[edge])
-            .expect("edges in graph come from dependencies, so the dependency must exist")
-    }
-
-    /// Return a list of package names that are topologically sorted
-    pub fn sorted_deps(&self) -> Vec<PackageName> {
-        let sorted = toposort(&self.inner, None).expect("non cyclic directed graph");
-
-        sorted
-            .into_iter()
-            .flat_map(|idx| {
-                self.inner
-                    .node_weight(idx)
-                    .map(|f| f.package.name().clone())
-            })
+    /// Return all packages in the graph, indexed by their package ID
+    pub(crate) fn all_packages(&self) -> BTreeMap<&PackageID, PackageInfo<F>> {
+        self.package_ids
+            .iter()
+            .map(|(id, node)| (id, self.package_info(*node)))
             .collect()
     }
 
-    /// Return the list of dependencies in this package graph
-    pub(crate) fn dependencies(&self) -> Vec<Arc<Package<F>>> {
-        let mut output = vec![];
+    /// Return the list of packages that are in the linkage table, as well as
+    /// the unpublished ones in the package graph.
+    // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
+    // TODO: We probably want a deduplication function, and then we can just use `all_packages` for
+    // this
+    pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+        Ok(self.linkage()?.values().cloned().collect())
+    }
 
-        for (idx, n) in self.inner.node_weights().enumerate() {
-            if NodeIndex::new(idx) == self.root_idx {
+    /// Return the sorted list of dependencies' name
+    pub(crate) fn sorted_deps(&self) -> Vec<&PackageName> {
+        let sorted = toposort(&self.inner, None).expect("to sort the graph");
+        sorted
+            .iter()
+            .flat_map(|x| self.inner.node_weight(*x))
+            .map(|x| x.name())
+            .collect()
+    }
+
+    /// For each entry in `overrides`, override the package publication in `self` for the
+    /// corresponding package ID. Warns if the package ID is unrecognized.
+    pub(crate) fn add_publish_overrides(&mut self, overrides: BTreeMap<PackageID, Publication<F>>) {
+        for (id, publish) in overrides {
+            let Some(index) = self.package_ids.get_by_left(&id) else {
+                warn!("Ignoring unrecognized package identifier `{id}`");
                 continue;
-            }
-
-            output.push(n.package.clone())
+            };
+            self.inner[*index] = Arc::new(self.inner[*index].override_publish(publish));
         }
-
-        output
     }
 }

@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, error::*, SUI_BRIDGE_OBJECT_ID};
-use crate::accumulator_root::derive_balance_account_object_id;
+use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
+use crate::balance::Balance;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
@@ -88,9 +89,10 @@ pub enum CallArg {
     Pure(Vec<u8>),
     // an object
     Object(ObjectArg),
-    // Reservation to withdraw balance. This will be converted into a Withdrawal struct and passed into Move.
-    // It is allowed to have multiple withdraw arguments even for the same balance type.
-    BalanceWithdraw(BalanceWithdrawArg),
+    // Reservation to withdraw balance from a funds a accumulator. This will be converted into a
+    // `sui::funds_accumulator::Withdrawal` struct and passed into Move.
+    // It is allowed to have multiple withdraw arguments even for the same funds type.
+    FundsWithdrawal(FundsWithdrawalArg),
 }
 
 impl CallArg {
@@ -125,24 +127,39 @@ pub enum ObjectArg {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Reservation {
     // Reserve the entire balance.
+    // This is not yet supported.
     EntireBalance,
     // Reserve a specific amount of the balance.
     MaxAmountU64(u64),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum WithdrawTypeParam {
+pub enum WithdrawalTypeArg {
     Balance(TypeInput),
+}
+
+impl WithdrawalTypeArg {
+    pub fn to_type_tag(&self) -> UserInputResult<TypeTag> {
+        match self {
+            WithdrawalTypeArg::Balance(type_param) => {
+                Ok(Balance::type_tag(type_param.to_type_tag().map_err(
+                    |e| UserInputError::InvalidWithdrawReservation {
+                        error: e.to_string(),
+                    },
+                )?))
+            }
+        }
+    }
 }
 
 // TODO(address-balances): Rename all the related structs and enums.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct BalanceWithdrawArg {
-    /// The reservation of the balance to withdraw.
+pub struct FundsWithdrawalArg {
+    /// The reservation of the funds accumulator to withdraw.
     pub reservation: Reservation,
-    /// The type parameter of the balance to withdraw, e.g. `Balance<_>`.
-    pub type_param: WithdrawTypeParam,
-    /// The source of the balance to withdraw.
+    /// The type argument of the funds accumulator to withdraw, e.g. `Balance<_>`.
+    pub type_arg: WithdrawalTypeArg,
+    /// The source of the funds to withdraw.
     pub withdraw_from: WithdrawFrom,
 }
 
@@ -153,19 +170,12 @@ pub enum WithdrawFrom {
     // TODO(address-balances): Add more options here, such as Sponsor, or even multi-party withdraws.
 }
 
-impl BalanceWithdrawArg {
-    pub fn new_with_amount(amount: u64, balance_type: TypeInput) -> Self {
+impl FundsWithdrawalArg {
+    /// Withdraws from `Balance<balance_type>` in the sender's address.
+    pub fn balance_from_sender(amount: u64, balance_type: TypeInput) -> Self {
         Self {
             reservation: Reservation::MaxAmountU64(amount),
-            type_param: WithdrawTypeParam::Balance(balance_type),
-            withdraw_from: WithdrawFrom::Sender,
-        }
-    }
-
-    pub fn new_with_entire_balance(balance_type: TypeInput) -> Self {
-        Self {
-            reservation: Reservation::EntireBalance,
-            type_param: WithdrawTypeParam::Balance(balance_type),
+            type_arg: WithdrawalTypeArg::Balance(balance_type),
             withdraw_from: WithdrawFrom::Sender,
         }
     }
@@ -406,6 +416,7 @@ pub enum EndOfEpochTransactionKind {
     BridgeCommitteeInit(SequenceNumber),
     StoreExecutionTimeObservations(StoredExecutionTimeObservations),
     AccumulatorRootCreate,
+    CoinRegistryCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -451,6 +462,10 @@ impl EndOfEpochTransactionKind {
 
     pub fn new_accumulator_root_create() -> Self {
         Self::AccumulatorRootCreate
+    }
+
+    pub fn new_coin_registry_create() -> Self {
+        Self::CoinRegistryCreate
     }
 
     pub fn new_deny_list_state_create() -> Self {
@@ -511,6 +526,7 @@ impl EndOfEpochTransactionKind {
                 }]
             }
             Self::AccumulatorRootCreate => vec![],
+            Self::CoinRegistryCreate => vec![],
         }
     }
 
@@ -546,6 +562,7 @@ impl EndOfEpochTransactionKind {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
             }
             Self::AccumulatorRootCreate => Either::Right(iter::empty()),
+            Self::CoinRegistryCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -609,6 +626,13 @@ impl EndOfEpochTransactionKind {
                     ));
                 }
             }
+            Self::CoinRegistryCreate => {
+                if !config.enable_coin_registry() {
+                    return Err(UserInputError::Unsupported(
+                        "coin registry not enabled".to_string(),
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -640,7 +664,7 @@ impl CallArg {
             // While we do read accumulator state when processing withdraws,
             // this really happened at scheduling time instead of execution time.
             // Hence we do not need to depend on the accumulator object in withdraws.
-            CallArg::BalanceWithdraw(_) => vec![],
+            CallArg::FundsWithdrawal(_) => vec![],
         }
     }
 
@@ -652,7 +676,7 @@ impl CallArg {
                 ObjectArg::SharedObject { .. } => vec![],
                 ObjectArg::Receiving(obj_ref) => vec![*obj_ref],
             },
-            CallArg::BalanceWithdraw(_) => vec![],
+            CallArg::FundsWithdrawal(_) => vec![],
         }
     }
 
@@ -678,7 +702,7 @@ impl CallArg {
                     }
                 }
             },
-            CallArg::BalanceWithdraw(_) => {}
+            CallArg::FundsWithdrawal(_) => {}
         }
         Ok(())
     }
@@ -1176,7 +1200,7 @@ impl ProgrammableTransaction {
             CallArg::Pure(_)
             | CallArg::Object(ObjectArg::Receiving(_))
             | CallArg::Object(ObjectArg::ImmOrOwnedObject(_))
-            | CallArg::BalanceWithdraw(_) => None,
+            | CallArg::FundsWithdrawal(_) => None,
             CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
@@ -1860,23 +1884,6 @@ impl TransactionData {
 
     pub fn new_transfer(
         recipient: SuiAddress,
-        object_ref: ObjectRef,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-        gas_price: u64,
-    ) -> Self {
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder.transfer_object(recipient, object_ref).unwrap();
-            builder.finish()
-        };
-        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
-    }
-
-    // TODO: Merge with `new_transfer` above and update existing callers.
-    pub fn new_transfer_full(
-        recipient: SuiAddress,
         full_object_ref: FullObjectRef,
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -1885,9 +1892,7 @@ impl TransactionData {
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder
-                .transfer_object_full(recipient, full_object_ref)
-                .unwrap();
+            builder.transfer_object(recipient, full_object_ref).unwrap();
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
@@ -2177,21 +2182,29 @@ pub trait TransactionDataAPI {
 
     fn expiration(&self) -> &TransactionExpiration;
 
-    fn shared_input_objects(&self) -> Vec<SharedInputObject>;
-
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)>;
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
 
+    fn shared_input_objects(&self) -> Vec<SharedInputObject>;
+
     fn receiving_objects(&self) -> Vec<ObjectRef>;
 
-    /// Processes balance withdraws and returns a map from balance account object ID to total reservation.
-    /// This method aggregates all withdraw operations for the same account by merging their reservations.
-    /// Each account object ID is derived from the type parameter of each withdraw operation.
-    fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>>;
+    // Dependency (input, package & receiving) objects that already have a version,
+    // and do not require version assignment from consensus.
+    // Returns move objects, package objects and receiving objects.
+    fn fastpath_dependency_objects(
+        &self,
+    ) -> UserInputResult<(Vec<ObjectRef>, Vec<ObjectID>, Vec<ObjectRef>)>;
 
-    // A cheap way to quickly check if the transaction has balance withdraws.
-    fn has_balance_withdraws(&self) -> bool;
+    /// Processes funds withdraws and returns a map from funds account object ID to total
+    /// reserved amount. This method aggregates all withdraw operations for the same account by
+    /// merging their reservations. Each account object ID is derived from the type parameter of
+    /// each withdraw operation.
+    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
+
+    // A cheap way to quickly check if the transaction has funds withdraws.
+    fn has_funds_withdrawals(&self) -> bool;
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
@@ -2270,10 +2283,6 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self.expiration
     }
 
-    fn shared_input_objects(&self) -> Vec<SharedInputObject> {
-        self.kind.shared_input_objects().collect()
-    }
-
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)> {
         self.kind.move_calls()
     }
@@ -2291,11 +2300,36 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok(inputs)
     }
 
+    fn shared_input_objects(&self) -> Vec<SharedInputObject> {
+        self.kind.shared_input_objects().collect()
+    }
+
     fn receiving_objects(&self) -> Vec<ObjectRef> {
         self.kind.receiving_objects()
     }
 
-    fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>> {
+    fn fastpath_dependency_objects(
+        &self,
+    ) -> UserInputResult<(Vec<ObjectRef>, Vec<ObjectID>, Vec<ObjectRef>)> {
+        let mut move_objects = vec![];
+        let mut packages = vec![];
+        let mut receiving_objects = vec![];
+        self.input_objects()?.iter().for_each(|o| match o {
+            InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                move_objects.push(*object_ref);
+            }
+            InputObjectKind::MovePackage(package_id) => {
+                packages.push(*package_id);
+            }
+            InputObjectKind::SharedMoveObject { .. } => {}
+        });
+        self.receiving_objects().iter().for_each(|object_ref| {
+            receiving_objects.push(*object_ref);
+        });
+        Ok((move_objects, packages, receiving_objects))
+    }
+
+    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
         let mut withdraws = Vec::new();
         // TODO(address-balances): Once we support paying gas using address balances,
         // we add gas reservations here.
@@ -2304,7 +2338,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         // First get all withdraw arguments.
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
             for input in &pt.inputs {
-                if let CallArg::BalanceWithdraw(withdraw) = input {
+                if let CallArg::FundsWithdrawal(withdraw) = input {
                     withdraws.push(withdraw.clone());
                     if withdraws.len() > max_withdraws {
                         return Err(UserInputError::InvalidWithdrawReservation {
@@ -2320,56 +2354,51 @@ impl TransactionDataAPI for TransactionDataV1 {
         // Accumulate all withdraws per account.
         let mut withdraw_map = BTreeMap::new();
         for withdraw in withdraws {
-            if let Reservation::MaxAmountU64(amount) = &withdraw.reservation {
-                // Reserving an amount of 0 is meaningless, and potentially
-                // add various edge cases, which is error prone.
-                if *amount == 0 {
+            let reserved_amount = match &withdraw.reservation {
+                Reservation::MaxAmountU64(amount) => *amount,
+                Reservation::EntireBalance => {
                     return Err(UserInputError::InvalidWithdrawReservation {
-                        error: "Balance withdraw reservation amount must be non-zero".to_string(),
+                        error: "Reserving the entire balance is not supported".to_string(),
                     });
                 }
+            };
+            // Reserving an amount of 0 is meaningless, and potentially
+            // add various edge cases, which is error prone.
+            if reserved_amount == 0 {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: "Balance withdraw reservation amount must be non-zero".to_string(),
+                });
             }
             let WithdrawFrom::Sender = withdraw.withdraw_from;
-            let account_id = derive_balance_account_object_id(self.sender(), withdraw.type_param)
-                .map_err(|e| UserInputError::InvalidWithdrawReservation {
-                error: e.to_string(),
-            })?;
+            let account_id =
+                AccumulatorValue::get_field_id(self.sender(), &withdraw.type_arg.to_type_tag()?)
+                    .map_err(|e| UserInputError::InvalidWithdrawReservation {
+                        error: e.to_string(),
+                    })?;
             let entry = withdraw_map.entry(account_id);
             match entry {
                 Entry::Vacant(vacant) => {
-                    vacant.insert(withdraw.reservation);
+                    vacant.insert(reserved_amount);
                 }
-                Entry::Occupied(mut occupied) => match (occupied.get_mut(), withdraw.reservation) {
-                    (
-                        Reservation::MaxAmountU64(max_amount),
-                        Reservation::MaxAmountU64(cur_reservation),
-                    ) => {
-                        let new_amount = max_amount.checked_add(cur_reservation).ok_or(
-                            UserInputError::InvalidWithdrawReservation {
-                                error: "Balance withdraw reservation overflow".to_string(),
-                            },
-                        )?;
-                        occupied.insert(Reservation::MaxAmountU64(new_amount));
-                    }
-                    _ => {
-                        // For each account, if there is ever a reservation that reserves the entire balance,
-                        // then we cannot have any other reservation for that account.
-                        return Err(UserInputError::InvalidWithdrawReservation {
-                            error: "Reserving entire balance on an account is exclusive"
-                                .to_string(),
-                        });
-                    }
-                },
+                Entry::Occupied(mut occupied) => {
+                    let current_amount = *occupied.get();
+                    let new_amount = current_amount.checked_add(reserved_amount).ok_or(
+                        UserInputError::InvalidWithdrawReservation {
+                            error: "Balance withdraw reservation overflow".to_string(),
+                        },
+                    )?;
+                    occupied.insert(new_amount);
+                }
             }
         }
 
         Ok(withdraw_map)
     }
 
-    fn has_balance_withdraws(&self) -> bool {
+    fn has_funds_withdrawals(&self) -> bool {
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
             for input in &pt.inputs {
-                if matches!(input, CallArg::BalanceWithdraw(_)) {
+                if matches!(input, CallArg::FundsWithdrawal(_)) {
                     return true;
                 }
             }
@@ -2379,8 +2408,18 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         fp_ensure!(!self.gas().is_empty(), UserInputError::MissingGasPayment);
+
+        let gas_len = self.gas().len();
+        let max_gas_objects = config.max_gas_payment_objects() as usize;
+
+        let within_limit = if config.correct_gas_payment_limit_check() {
+            gas_len <= max_gas_objects
+        } else {
+            gas_len < max_gas_objects
+        };
+
         fp_ensure!(
-            self.gas().len() < config.max_gas_payment_objects() as usize,
+            within_limit,
             UserInputError::SizeLimitExceeded {
                 limit: "maximum number of gas payment objects".to_string(),
                 value: config.max_gas_payment_objects().to_string()
@@ -2705,7 +2744,7 @@ impl SenderSignedData {
             return Err(SuiError::TransactionExpired);
         }
 
-        if tx_data.has_balance_withdraws() {
+        if tx_data.has_funds_withdrawals() {
             fp_ensure!(
                 context.config.enable_accumulators()
                     && context.accumulator_object_init_shared_version.is_some(),
@@ -2715,7 +2754,7 @@ impl SenderSignedData {
                     )
                 }
             );
-            tx_data.process_balance_withdraws()?;
+            tx_data.process_funds_withdrawals()?;
         }
 
         // Enforce overall transaction size limit.
@@ -2765,7 +2804,7 @@ impl<S> Envelope<SenderSignedData, S> {
     }
 
     pub fn is_consensus_tx(&self) -> bool {
-        self.transaction_data().has_balance_withdraws()
+        self.transaction_data().has_funds_withdrawals()
             || self.shared_input_objects().next().is_some()
     }
 

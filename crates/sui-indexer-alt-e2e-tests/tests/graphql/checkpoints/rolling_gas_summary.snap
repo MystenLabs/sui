@@ -1,0 +1,272 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 12:
+//# advance-epoch
+Epoch advanced: 1
+
+task 4, lines 14-16:
+//# programmable --sender A --inputs object(1,0) 1
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 5, lines 18-20:
+//# programmable --sender A --inputs object(1,0) 2
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 6, line 22:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, line 24:
+//# advance-epoch
+Epoch advanced: 2
+
+task 9, line 28:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 10, lines 30-53:
+//# run-graphql
+Response: {
+  "data": {
+    "c0": {
+      "sequenceNumber": 0,
+      "epoch": {
+        "epochId": 0
+      },
+      "rollingGasSummary": {
+        "computationCost": 0,
+        "storageCost": 0,
+        "storageRebate": 0,
+        "nonRefundableStorageFee": 0
+      }
+    },
+    "c1": {
+      "sequenceNumber": 1,
+      "epoch": {
+        "epochId": 0
+      },
+      "rollingGasSummary": {
+        "computationCost": 1000000,
+        "storageCost": 1976000,
+        "storageRebate": 0,
+        "nonRefundableStorageFee": 0
+      }
+    },
+    "c2": {
+      "sequenceNumber": 2,
+      "epoch": {
+        "epochId": 0
+      },
+      "rollingGasSummary": {
+        "computationCost": 1000000,
+        "storageCost": 1976000,
+        "storageRebate": 0,
+        "nonRefundableStorageFee": 0
+      }
+    },
+    "c3": {
+      "sequenceNumber": 3,
+      "epoch": {
+        "epochId": 1
+      },
+      "rollingGasSummary": {
+        "computationCost": 2000000,
+        "storageCost": 3952000,
+        "storageRebate": 3912480,
+        "nonRefundableStorageFee": 39520
+      }
+    },
+    "c4": {
+      "sequenceNumber": 4,
+      "epoch": {
+        "epochId": 1
+      },
+      "rollingGasSummary": {
+        "computationCost": 2000000,
+        "storageCost": 3952000,
+        "storageRebate": 3912480,
+        "nonRefundableStorageFee": 39520
+      }
+    },
+    "c5": {
+      "sequenceNumber": 5,
+      "epoch": {
+        "epochId": 2
+      },
+      "rollingGasSummary": {
+        "computationCost": 0,
+        "storageCost": 0,
+        "storageRebate": 0,
+        "nonRefundableStorageFee": 0
+      }
+    },
+    "c6": null,
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 0,
+        "epoch": {
+          "epochId": 0
+        },
+        "rollingGasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
+      {
+        "sequenceNumber": 1,
+        "epoch": {
+          "epochId": 0
+        },
+        "rollingGasSummary": {
+          "computationCost": 1000000,
+          "storageCost": 1976000,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
+      {
+        "sequenceNumber": 2,
+        "epoch": {
+          "epochId": 0
+        },
+        "rollingGasSummary": {
+          "computationCost": 1000000,
+          "storageCost": 1976000,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
+      {
+        "sequenceNumber": 3,
+        "epoch": {
+          "epochId": 1
+        },
+        "rollingGasSummary": {
+          "computationCost": 2000000,
+          "storageCost": 3952000,
+          "storageRebate": 3912480,
+          "nonRefundableStorageFee": 39520
+        }
+      },
+      {
+        "sequenceNumber": 4,
+        "epoch": {
+          "epochId": 1
+        },
+        "rollingGasSummary": {
+          "computationCost": 2000000,
+          "storageCost": 3952000,
+          "storageRebate": 3912480,
+          "nonRefundableStorageFee": 39520
+        }
+      },
+      {
+        "sequenceNumber": 5,
+        "epoch": {
+          "epochId": 2
+        },
+        "rollingGasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
+      null
+    ]
+  }
+}
+
+task 11, lines 55-68:
+//# run-graphql
+Response: {
+  "data": {
+    "c4": {
+      "sequenceNumber": 4,
+      "epoch": {
+        "epochId": 1
+      },
+      "rollingGasSummary": {
+        "computationCost": 2000000,
+        "storageCost": 3952000
+      }
+    },
+    "c5": {
+      "sequenceNumber": 5,
+      "epoch": {
+        "epochId": 2
+      },
+      "rollingGasSummary": {
+        "computationCost": 0,
+        "storageCost": 0
+      }
+    }
+  }
+}
+
+task 12, lines 71-81:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 2,
+        "epoch": {
+          "epochId": 0
+        },
+        "rollingGasSummary": {
+          "computationCost": 1000000,
+          "storageCost": 1976000
+        }
+      },
+      null,
+      {
+        "sequenceNumber": 0,
+        "epoch": {
+          "epochId": 0
+        },
+        "rollingGasSummary": {
+          "computationCost": 0,
+          "storageCost": 0
+        }
+      },
+      {
+        "sequenceNumber": 5,
+        "epoch": {
+          "epochId": 2
+        },
+        "rollingGasSummary": {
+          "computationCost": 0,
+          "storageCost": 0
+        }
+      },
+      null
+    ]
+  }
+}

@@ -39,6 +39,12 @@ pub enum InputArg {
     Object(ObjectArg),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SharedObjectKind {
+    Legacy,
+    Party,
+}
+
 #[derive(Debug)]
 #[cfg_attr(debug_assertions, derive(Clone))]
 pub enum ObjectArg {
@@ -48,6 +54,7 @@ pub enum ObjectArg {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
         mutable: bool,
+        kind: SharedObjectKind,
     },
 }
 

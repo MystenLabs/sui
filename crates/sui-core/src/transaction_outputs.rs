@@ -102,7 +102,7 @@ impl TransactionOutputs {
                         // when it could have been transferred to consensus from `ObjectOwner`, as
                         // its root owner may not have been a fastpath object. However, whether or
                         // not it was technically in the fastpath at the version the marker is
-                        // written, it cetainly is not in the fastpath *anymore*. This is needed
+                        // written, it certainly is not in the fastpath *anymore*. This is needed
                         // to produce the required behavior in `ObjectCacheRead::multi_input_objects_available`
                         // when checking whether receiving objects are available.
                         (

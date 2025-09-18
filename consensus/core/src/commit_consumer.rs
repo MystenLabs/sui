@@ -1,33 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, RwLock};
-use tokio::sync::watch;
+use std::sync::Arc;
 
 use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tracing::{debug, info};
+use tokio::sync::watch;
+use tracing::debug;
 
 use crate::{block::CertifiedBlocksOutput, CommitIndex, CommittedSubDag};
 
+/// Arguments from commit consumer to this consensus instance.
+/// This includes both parameters and components for communications.
 #[derive(Clone)]
-pub struct CommitConsumer {
-    // A channel to output the committed sub dags.
+pub struct CommitConsumerArgs {
+    /// The consumer requests consensus to replay from commit replay_after_commit_index + 1.
+    /// Set to 0 to replay from the start (as commit sequence starts at index = 1).
+    pub(crate) replay_after_commit_index: CommitIndex,
+    /// Index of the last commit that the consumer has processed.  This is useful during
+    /// crash recovery when other components can wait for the consumer to finish processing
+    /// up to this index.
+    pub(crate) consumer_last_processed_commit_index: CommitIndex,
+
+    /// A channel to output the committed sub dags.
     pub(crate) commit_sender: UnboundedSender<CommittedSubDag>,
-    // A channel to output blocks for processing, separated from consensus commits.
-    // In each block output, transactions that are not rejected are considered certified.
+    /// A channel to output blocks for processing, separated from consensus commits.
+    /// In each block output, transactions that are not rejected are considered certified.
     pub(crate) block_sender: UnboundedSender<CertifiedBlocksOutput>,
-    // Index of the last commit that the consumer has processed. This is useful for
-    // crash/recovery so mysticeti can replay the commits from the next index.
-    // First commit in the replayed sequence will have index last_processed_commit_index + 1.
-    // Set 0 to replay from the start (as generated commit sequence starts at index = 1).
-    pub(crate) last_processed_commit_index: CommitIndex,
     // Allows the commit consumer to report its progress.
     monitor: Arc<CommitConsumerMonitor>,
 }
 
-impl CommitConsumer {
+impl CommitConsumerArgs {
     pub fn new(
-        last_processed_commit_index: CommitIndex,
+        replay_after_commit_index: CommitIndex,
+        consumer_last_processed_commit_index: CommitIndex,
     ) -> (
         Self,
         UnboundedReceiver<CommittedSubDag>,
@@ -36,12 +42,16 @@ impl CommitConsumer {
         let (commit_sender, commit_receiver) = unbounded_channel("consensus_commit_output");
         let (block_sender, block_receiver) = unbounded_channel("consensus_block_output");
 
-        let monitor = Arc::new(CommitConsumerMonitor::new(last_processed_commit_index));
+        let monitor = Arc::new(CommitConsumerMonitor::new(
+            replay_after_commit_index,
+            consumer_last_processed_commit_index,
+        ));
         (
             Self {
+                replay_after_commit_index,
+                consumer_last_processed_commit_index,
                 commit_sender,
                 block_sender,
-                last_processed_commit_index,
                 monitor,
             },
             commit_receiver,
@@ -54,68 +64,52 @@ impl CommitConsumer {
     }
 }
 
+/// Helps monitor the progress of the consensus commit handler (consumer).
+///
+/// This component currently has two use usages:
+/// 1. Checking the highest commit index processed by the consensus commit handler.
+///    Consensus components can decide to wait for more commits to be processed before proceeding with
+///    their work.
+/// 2. Waiting for consensus commit handler to finish processing replayed commits.
+///    Current usage is actually outside of consensus.
 pub struct CommitConsumerMonitor {
-    // highest commit that has been handled by Sui
+    // highest commit that has been handled by the consumer.
     highest_handled_commit: watch::Sender<u32>,
 
-    // the highest commit found in local storage at startup
-    highest_observed_commit_at_startup: RwLock<u32>,
+    // At node startup, the last consensus commit processed by the commit consumer from the previous run.
+    // This can be 0 if starting a new epoch.
+    consumer_last_processed_commit_index: CommitIndex,
 }
 
 impl CommitConsumerMonitor {
-    pub(crate) fn new(last_handled_commit: CommitIndex) -> Self {
+    pub(crate) fn new(
+        replay_after_commit_index: CommitIndex,
+        consumer_last_processed_commit_index: CommitIndex,
+    ) -> Self {
         Self {
-            highest_handled_commit: watch::Sender::new(last_handled_commit),
-            highest_observed_commit_at_startup: RwLock::new(0),
+            highest_handled_commit: watch::Sender::new(replay_after_commit_index),
+            consumer_last_processed_commit_index,
         }
     }
 
+    /// Gets the highest commit index processed by the consensus commit handler.
     pub fn highest_handled_commit(&self) -> CommitIndex {
         *self.highest_handled_commit.borrow()
     }
 
+    /// Updates the highest commit index processed by the consensus commit handler.
     pub fn set_highest_handled_commit(&self, highest_handled_commit: CommitIndex) {
         debug!("Highest handled commit set to {}", highest_handled_commit);
         self.highest_handled_commit
             .send_replace(highest_handled_commit);
     }
 
-    pub fn highest_observed_commit_at_startup(&self) -> CommitIndex {
-        *self.highest_observed_commit_at_startup.read().unwrap()
-    }
-
-    pub fn set_highest_observed_commit_at_startup(
-        &self,
-        highest_observed_commit_at_startup: CommitIndex,
-    ) {
-        let highest_handled_commit = self.highest_handled_commit();
-        assert!(
-            highest_observed_commit_at_startup >= highest_handled_commit,
-            "we cannot have handled a commit that we do not know about: {} < {}",
-            highest_observed_commit_at_startup,
-            highest_handled_commit,
-        );
-
-        let mut commit = self.highest_observed_commit_at_startup.write().unwrap();
-
-        assert!(
-            *commit == 0,
-            "highest_known_commit_at_startup can only be set once"
-        );
-        *commit = highest_observed_commit_at_startup;
-
-        info!(
-            "Highest observed commit at startup set to {}",
-            highest_observed_commit_at_startup
-        );
-    }
-
-    pub async fn replay_complete(&self) {
-        let highest_observed_commit_at_startup = self.highest_observed_commit_at_startup();
+    /// Waits for consensus to replay commits until the consumer last processed commit index.
+    pub async fn replay_to_consumer_last_processed_commit_complete(&self) {
         let mut rx = self.highest_handled_commit.subscribe();
         loop {
             let highest_handled = *rx.borrow_and_update();
-            if highest_handled >= highest_observed_commit_at_startup {
+            if highest_handled >= self.consumer_last_processed_commit_index {
                 return;
             }
             rx.changed().await.unwrap();
@@ -129,8 +123,8 @@ mod test {
 
     #[test]
     fn test_commit_consumer_monitor() {
-        let monitor = CommitConsumerMonitor::new(10);
-        assert_eq!(monitor.highest_handled_commit(), 10);
+        let monitor = CommitConsumerMonitor::new(0, 10);
+        assert_eq!(monitor.highest_handled_commit(), 0);
 
         monitor.set_highest_handled_commit(100);
         assert_eq!(monitor.highest_handled_commit(), 100);

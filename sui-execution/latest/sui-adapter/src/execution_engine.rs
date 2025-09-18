@@ -243,6 +243,7 @@ mod checked {
             temporary_store
                 .check_ownership_invariants(
                     &transaction_signer,
+                    &sponsor,
                     &mut gas_charger,
                     &mutable_inputs,
                     is_epoch_change,
@@ -773,6 +774,10 @@ mod checked {
                             assert!(protocol_config.enable_accumulators());
                             builder = setup_accumulator_root_create(builder);
                         }
+                        EndOfEpochTransactionKind::CoinRegistryCreate => {
+                            assert!(protocol_config.enable_coin_registry());
+                            builder = setup_coin_registry_create(builder);
+                        }
                     }
                 }
                 unreachable!(
@@ -1026,7 +1031,6 @@ mod checked {
             let new_vm = new_move_vm(
                 all_natives(/* silent */ true, protocol_config),
                 protocol_config,
-                /* enable_profiler */ None,
             )
             .expect("Failed to create new MoveVM");
             process_system_packages(
@@ -1438,6 +1442,21 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate accumulator_root_create transaction!");
+        builder
+    }
+
+    fn setup_coin_registry_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("coin_registry").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate coin_registry_create transaction!");
         builder
     }
 }

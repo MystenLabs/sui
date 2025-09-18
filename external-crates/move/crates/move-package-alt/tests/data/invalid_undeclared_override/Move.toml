@@ -1,9 +1,0 @@
-[package]
-name = "example"
-edition = "2025"
-
-[environments]
-env = "env"
-
-[dep-replacements]
-mainnet.bar = { git = "https://example.com/bar.git" }

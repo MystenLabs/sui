@@ -11,6 +11,7 @@ open-spec
 # Generated files
 .docusaurus
 .cache-loader
+.generated
 
 # Misc
 .DS_Store
@@ -25,3 +26,7 @@ yarn-error.log*
 package-lock.json
 .vercel
 .env*.local
+
+# Generated awesome-sui files
+static/awesome-sui/
+src/static/awesome-sui/

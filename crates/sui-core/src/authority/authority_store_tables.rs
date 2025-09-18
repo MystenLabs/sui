@@ -5,6 +5,7 @@ use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -169,6 +170,7 @@ impl AuthorityPerpetualTables {
     pub fn open(
         parent_path: &Path,
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
+        _pruner_watermark: Option<Arc<AtomicU64>>,
     ) -> Self {
         let db_options_override = db_options_override.unwrap_or_default();
         let db_options =
@@ -202,14 +204,21 @@ impl AuthorityPerpetualTables {
     }
 
     #[cfg(tidehunter)]
-    pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
+    pub fn open(
+        parent_path: &Path,
+        _: Option<AuthorityPerpetualTablesOptions>,
+        pruner_watermark: Option<Arc<AtomicU64>>,
+    ) -> Self {
+        use crate::authority::authority_store_pruner::apply_relocation_filter;
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, Bytes, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType,
-            ThConfig,
+            default_cells_per_mutex, default_mutex_count, default_value_cache_size, Bytes,
+            Decision, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
         };
-        const MUTEXES: usize = 2 * 1024;
-        const VALUE_CACHE_SIZE: usize = 2_000;
+        let mutexes = default_mutex_count() * 2;
+        let value_cache_size = default_value_cache_size();
+        // effectively disables pruning if not set
+        let pruner_watermark = pruner_watermark.unwrap_or(Arc::new(AtomicU64::new(0)));
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
@@ -230,13 +239,14 @@ impl AuthorityPerpetualTables {
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
+        let epoch_prefix_key = KeyType::prefix_uniform(10, 4);
 
         let configs = vec![
             (
                 "objects".to_string(),
                 ThConfig::new_with_config(
                     32 + 8,
-                    MUTEXES,
+                    mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
                     KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
                 ),
@@ -245,7 +255,7 @@ impl AuthorityPerpetualTables {
                 "owned_object_transaction_locks".to_string(),
                 ThConfig::new_with_config(
                     32 + 8 + 32 + 8,
-                    MUTEXES,
+                    mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
                     bloom_config.clone(),
                 ),
@@ -254,9 +264,11 @@ impl AuthorityPerpetualTables {
                 "transactions".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
-                    KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE),
+                    KeySpaceConfig::new()
+                        .with_value_cache_size(value_cache_size)
+                        .with_relocation_filter(|_, _| Decision::Remove),
                     digest_prefix.clone(),
                 ),
             ),
@@ -264,9 +276,14 @@ impl AuthorityPerpetualTables {
                 "effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
-                    bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
+                    apply_relocation_filter(
+                        bloom_config.clone().with_value_cache_size(value_cache_size),
+                        pruner_watermark.clone(),
+                        |effects: TransactionEffects| effects.executed_epoch(),
+                        false,
+                    ),
                     digest_prefix.clone(),
                 ),
             ),
@@ -274,9 +291,12 @@ impl AuthorityPerpetualTables {
                 "executed_effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
-                    bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
+                    bloom_config
+                        .clone()
+                        .with_value_cache_size(value_cache_size)
+                        .with_relocation_filter(|_, _| Decision::Remove),
                     digest_prefix.clone(),
                 ),
             ),
@@ -284,9 +304,9 @@ impl AuthorityPerpetualTables {
                 "events".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32 + 8,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
-                    KeySpaceConfig::default(),
+                    KeySpaceConfig::default().with_relocation_filter(|_, _| Decision::Remove),
                     digest_prefix.clone(),
                 ),
             ),
@@ -294,9 +314,9 @@ impl AuthorityPerpetualTables {
                 "events_2".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
-                    KeySpaceConfig::default(),
+                    KeySpaceConfig::default().with_relocation_filter(|_, _| Decision::Remove),
                     digest_prefix.clone(),
                 ),
             ),
@@ -304,9 +324,14 @@ impl AuthorityPerpetualTables {
                 "executed_transactions_to_checkpoint".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32,
-                    MUTEXES,
+                    mutexes,
                     uniform_key,
-                    KeySpaceConfig::default(),
+                    apply_relocation_filter(
+                        KeySpaceConfig::default(),
+                        pruner_watermark.clone(),
+                        |(epoch_id, _): (EpochId, CheckpointSequenceNumber)| epoch_id,
+                        false,
+                    ),
                     digest_prefix.clone(),
                 ),
             ),
@@ -332,20 +357,30 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "object_per_epoch_marker_table".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8 + 8,
-                    MUTEXES,
-                    uniform_key,
-                    KeySpaceConfig::new_with_key_offset(8),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
+                    mutexes,
+                    epoch_prefix_key,
+                    apply_relocation_filter(
+                        KeySpaceConfig::default(),
+                        pruner_watermark.clone(),
+                        |(epoch_id, _): (EpochId, ObjectKey)| epoch_id,
+                        true,
+                    ),
                 ),
             ),
             (
                 "object_per_epoch_marker_table_v2".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8 + 8,
-                    MUTEXES,
-                    uniform_key,
-                    KeySpaceConfig::new_with_key_offset(8),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
+                    mutexes,
+                    epoch_prefix_key,
+                    apply_relocation_filter(
+                        KeySpaceConfig::default(),
+                        pruner_watermark.clone(),
+                        |(epoch_id, _): (EpochId, FullObjectKey)| epoch_id,
+                        true,
+                    ),
                 ),
             ),
         ];

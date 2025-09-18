@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 89;
+const MAX_PROTOCOL_VERSION: u64 = 96;
 
 // Record history of protocol version allocations here:
 //
@@ -249,8 +249,21 @@ const MAX_PROTOCOL_VERSION: u64 = 89;
 // Version 88: Update `sui-system` package to use `calculate_rewards` function.
 //             Define the cost for the native Move function `rgp`.
 //             Ignore execution time observations after validator stops accepting certs.
-// Version 89: Standard library improvements.
+// Version 89: Add additional signature checks
+//             Add additional linkage checks
+// Version 90: Standard library improvements.
 //             Enable `debug_fatal` on Move invariant violations.
+//             Enable passkey and passkey inside multisig for mainnet.
+// Version 91: Minor changes in Sui Framework. Include CheckpointDigest in consensus dedup key for checkpoint signatures (V2).
+// Version 92: Disable checking shared object transfer restrictions per command = false
+// Version 93: Enable CheckpointDigest in consensus dedup key for checkpoint signatures.
+// Version 94: Decrease stored observations limit by 10% to stay within system object size limit.
+//             Enable party transfer on mainnet.
+// Version 95: Change type name id base cost to 52, increase max transactions per checkpoint to 20000.
+// Version 96: Enable authority capabilities v2.
+//             Fix bug where MFP transaction shared inputs' debts were not loaded
+//             Create Coin Registry object
+//             Enable checkpoint artifacts digest in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -448,6 +461,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
 
+    // If true, include CheckpointDigest in consensus dedup key for checkpoint signatures (V2).
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_checkpoint_signature_key_includes_digest: bool,
+
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
@@ -535,6 +552,10 @@ struct FeatureFlags {
     // Consensus network to use.
     #[serde(skip_serializing_if = "ConsensusNetwork::is_anemo")]
     consensus_network: ConsensusNetwork,
+
+    // If true, use the correct (<=) comparison for max_gas_payment_objects instead of (<)
+    #[serde(skip_serializing_if = "is_false")]
+    correct_gas_payment_limit_check: bool,
 
     // Set the upper bound allowed for max_epoch in zklogin signature.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -735,6 +756,14 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     record_time_estimate_processed: bool,
 
+    // If true enable additional linkage checks.
+    #[serde(skip_serializing_if = "is_false")]
+    dependency_linkage_error: bool,
+
+    // If true enable additional multisig checks.
+    #[serde(skip_serializing_if = "is_false")]
+    additional_multisig_checks: bool,
+
     // If true, ignore execution time observations after certs are closed.
     #[serde(skip_serializing_if = "is_false")]
     ignore_execution_time_observations_after_certs_closed: bool,
@@ -753,6 +782,38 @@ struct FeatureFlags {
     // If true, include indirect state in the additional consensus digest.
     #[serde(skip_serializing_if = "is_false")]
     additional_consensus_digest_indirect_state: bool,
+
+    // Check for `init` for new modules to a package on upgrade.
+    #[serde(skip_serializing_if = "is_false")]
+    check_for_init_during_upgrade: bool,
+
+    // Check shared object transfer restrictions per command.
+    #[serde(skip_serializing_if = "is_false")]
+    per_command_shared_object_transfer_rules: bool,
+
+    // Enable including checkpoint artifacts digest in the summary.
+    #[serde(skip_serializing_if = "is_false")]
+    include_checkpoint_artifacts_digest_in_summary: bool,
+
+    // If true, use MFP txns in load initial object debts.
+    #[serde(skip_serializing_if = "is_false")]
+    use_mfp_txns_in_load_initial_object_debts: bool,
+
+    // If true, cancel randomness-using txns when DKG has failed *before* doing other congestion checks.
+    #[serde(skip_serializing_if = "is_false")]
+    cancel_for_failed_dkg_early: bool,
+
+    // Enable coin registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_registry: bool,
+
+    // Use abstract size in the object runtime instead the legacy value size.
+    #[serde(skip_serializing_if = "is_false")]
+    abstract_size_in_object_runtime: bool,
+
+    // If true charge for loads into the cache (i.e., fetches from storage) in the object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    object_runtime_charge_cache_load_gas: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1436,6 +1497,7 @@ pub struct ProtocolConfig {
     hash_sha3_256_legacy_min_input_len_cost: Option<u64>,
     type_name_get_base_cost: Option<u64>,
     type_name_get_per_byte_cost: Option<u64>,
+    type_name_id_base_cost: Option<u64>,
 
     string_check_utf8_base_cost: Option<u64>,
     string_check_utf8_per_byte_cost: Option<u64>,
@@ -1855,6 +1917,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_coin_registry(&self) -> bool {
+        self.feature_flags.enable_coin_registry
+    }
+
     pub fn enable_coin_deny_list_v2(&self) -> bool {
         self.feature_flags.enable_coin_deny_list_v2
     }
@@ -1881,6 +1947,10 @@ impl ProtocolConfig {
 
     pub fn consensus_network(&self) -> ConsensusNetwork {
         self.feature_flags.consensus_network
+    }
+
+    pub fn correct_gas_payment_limit_check(&self) -> bool {
+        self.feature_flags.correct_gas_payment_limit_check
     }
 
     pub fn reshare_at_same_initial_version(&self) -> bool {
@@ -2123,6 +2193,14 @@ impl ProtocolConfig {
             .ignore_execution_time_observations_after_certs_closed
     }
 
+    pub fn dependency_linkage_error(&self) -> bool {
+        self.feature_flags.dependency_linkage_error
+    }
+
+    pub fn additional_multisig_checks(&self) -> bool {
+        self.feature_flags.additional_multisig_checks
+    }
+
     pub fn debug_fatal_on_move_invariant_violation(&self) -> bool {
         self.feature_flags.debug_fatal_on_move_invariant_violation
     }
@@ -2134,6 +2212,40 @@ impl ProtocolConfig {
     pub fn additional_consensus_digest_indirect_state(&self) -> bool {
         self.feature_flags
             .additional_consensus_digest_indirect_state
+    }
+
+    pub fn check_for_init_during_upgrade(&self) -> bool {
+        self.feature_flags.check_for_init_during_upgrade
+    }
+
+    pub fn per_command_shared_object_transfer_rules(&self) -> bool {
+        self.feature_flags.per_command_shared_object_transfer_rules
+    }
+
+    pub fn consensus_checkpoint_signature_key_includes_digest(&self) -> bool {
+        self.feature_flags
+            .consensus_checkpoint_signature_key_includes_digest
+    }
+
+    pub fn include_checkpoint_artifacts_digest_in_summary(&self) -> bool {
+        self.feature_flags
+            .include_checkpoint_artifacts_digest_in_summary
+    }
+
+    pub fn use_mfp_txns_in_load_initial_object_debts(&self) -> bool {
+        self.feature_flags.use_mfp_txns_in_load_initial_object_debts
+    }
+
+    pub fn cancel_for_failed_dkg_early(&self) -> bool {
+        self.feature_flags.cancel_for_failed_dkg_early
+    }
+
+    pub fn abstract_size_in_object_runtime(&self) -> bool {
+        self.feature_flags.abstract_size_in_object_runtime
+    }
+
+    pub fn object_runtime_charge_cache_load_gas(&self) -> bool {
+        self.feature_flags.object_runtime_charge_cache_load_gas
     }
 }
 
@@ -2600,6 +2712,7 @@ impl ProtocolConfig {
             hash_sha3_256_legacy_min_input_len_cost: None,
             type_name_get_base_cost: None,
             type_name_get_per_byte_cost: None,
+            type_name_id_base_cost: None,
             string_check_utf8_base_cost: None,
             string_check_utf8_per_byte_cost: None,
             string_is_char_boundary_base_cost: None,
@@ -3844,7 +3957,7 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .ignore_execution_time_observations_after_certs_closed = true;
 
-                    // Disable backwards compatible behavior in exeuction time estimator for
+                    // Disable backwards compatible behavior in execution time estimator for
                     // new protocol version.
                     cfg.feature_flags.per_object_congestion_control_mode =
                         PerObjectCongestionControlMode::ExecutionTimeEstimate(
@@ -3861,10 +3974,69 @@ impl ProtocolConfig {
                         );
                 }
                 89 => {
+                    cfg.feature_flags.dependency_linkage_error = true;
+                    cfg.feature_flags.additional_multisig_checks = true;
+                }
+                90 => {
                     // 100x RGP
                     cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
                     cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
                     cfg.feature_flags.additional_consensus_digest_indirect_state = true;
+                    cfg.feature_flags.accept_passkey_in_multisig = true;
+                    cfg.feature_flags.passkey_auth = true;
+                    cfg.feature_flags.check_for_init_during_upgrade = true;
+
+                    // Enable Mysticeti fastpath handlers on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.mysticeti_fastpath = true;
+                    }
+                }
+                91 => {
+                    cfg.feature_flags.per_command_shared_object_transfer_rules = true;
+                }
+                92 => {
+                    cfg.feature_flags.per_command_shared_object_transfer_rules = false;
+                }
+                93 => {
+                    cfg.feature_flags
+                        .consensus_checkpoint_signature_key_includes_digest = true;
+                }
+                94 => {
+                    // Decrease stored observations limit 20->18 to stay within system object size limit.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 50,
+                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 18,
+                                stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: true,
+                            },
+                        );
+
+                    // Enable party transfer on mainnet.
+                    cfg.feature_flags.enable_party_transfer = true;
+                }
+                95 => {
+                    cfg.type_name_id_base_cost = Some(52);
+
+                    // Reudce the frequency of checkpoint splitting under high TPS.
+                    cfg.max_transactions_per_checkpoint = Some(20_000);
+                }
+                96 => {
+                    // Enable artifacts digest in devnet.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags
+                            .include_checkpoint_artifacts_digest_in_summary = true;
+                    }
+                    cfg.feature_flags.correct_gas_payment_limit_check = true;
+                    cfg.feature_flags.authority_capabilities_v2 = true;
+                    cfg.feature_flags.use_mfp_txns_in_load_initial_object_debts = true;
+                    cfg.feature_flags.cancel_for_failed_dkg_early = true;
+                    cfg.feature_flags.enable_coin_registry = true;
                 }
                 // Use this template when making changes:
                 //
@@ -3882,7 +4054,13 @@ impl ProtocolConfig {
 
         // Simtest specific overrides.
         if cfg!(msim) {
+            // Trigger GC more often.
             cfg.consensus_gc_depth = Some(5);
+
+            // Trigger checkpoint splitting more often.
+            // cfg.max_transactions_per_checkpoint = Some(10);
+            // FIXME: Re-introduce this once we resolve the checkpoint splitting issue
+            // in the quarantine output.
         }
 
         cfg
@@ -3920,7 +4098,7 @@ impl ProtocolConfig {
             max_back_edges_per_function,
             max_back_edges_per_module,
             max_basic_blocks_in_script: None,
-            max_idenfitier_len: self.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
+            max_identifier_len: self.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
             disallow_self_identifier: self.feature_flags.disallow_self_identifier,
             allow_receiving_object_id: self.allow_receiving_object_id(),
             reject_mutable_random_on_entry_functions: self
@@ -4026,6 +4204,10 @@ impl ProtocolConfig {
         self.feature_flags.passkey_auth = val
     }
 
+    pub fn set_enable_party_transfer_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_party_transfer = val
+    }
+
     pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {
         self.feature_flags
             .consensus_distributed_vote_scoring_strategy = val;
@@ -4038,6 +4220,10 @@ impl ProtocolConfig {
     pub fn set_disallow_new_modules_in_deps_only_packages_for_testing(&mut self, val: bool) {
         self.feature_flags
             .disallow_new_modules_in_deps_only_packages = val;
+    }
+
+    pub fn set_correct_gas_payment_limit_check_for_testing(&mut self, val: bool) {
+        self.feature_flags.correct_gas_payment_limit_check = val;
     }
 
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {

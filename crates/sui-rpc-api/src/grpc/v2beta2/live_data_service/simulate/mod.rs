@@ -15,6 +15,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::Bcs;
 use sui_rpc::proto::sui::rpc::v2beta2::CommandOutput;
 use sui_rpc::proto::sui::rpc::v2beta2::CommandResult;
 use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2beta2::Object;
 use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
@@ -97,9 +98,20 @@ pub fn simulate_transaction(
 
     // Perform budgest estimation and gas selection if requested and if TransactionChecks are enabled (it
     // makes no sense to do gas selection if checks are disabled because such a transaction can't
-    // ever be committed to the chain)
+    // ever be committed to the chain).
     if request.do_gas_selection() && checks.enabled() {
-        let budget = {
+        // At this point, the budget on the transaction can be set to one of the following:
+        // - The budget from the request, if specified.
+        // - The total balance of all of the gas payment coins (clamped to the protocol
+        //   MAX_GAS_BUDGET) in the request if the budget was not
+        //   specified but the gas payment coins were specified.
+        // - Protocol MAX_GAS_BUDGET if the request did not specified neither gas payment or budget.
+        //
+        // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
+        // overwrite the resolved budget with the more accurate estimate.
+        if request.transaction().gas_payment().budget.is_none()
+            && request.transaction().bcs_opt().is_none()
+        {
             let simulation_result = executor
                 .simulate_transaction(transaction.clone(), TransactionChecks::Enabled)
                 .map_err(anyhow::Error::from)?;
@@ -108,11 +120,22 @@ pub fn simulate_transaction(
                 simulation_result.effects.gas_cost_summary(),
                 reference_gas_price,
             );
-            transaction.gas_data_mut().budget = estimate;
-            estimate
-        };
 
-        // If the user didn't provide any gas payment we need to do gas selection now
+            // If the request specified gas payment, then transaction.gas_data().budget should have been
+            // resolved to the cumulative balance of those coins. We don't want to return a resolved transaction
+            // where the gas payment can't satisfy the budget, so validate that balance can actually cover the
+            // estimated budget.
+            let gas_balance = transaction.gas_data().budget;
+            if gas_balance < estimate {
+                return Err(RpcError::new(
+                    tonic::Code::InvalidArgument,
+                    format!("Insufficient gas balance to cover estimated transaction cost. \
+                        Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"),
+                ));
+            }
+            transaction.gas_data_mut().budget = estimate;
+        }
+
         if transaction.gas_data().payment.is_empty() {
             let input_objects = transaction
                 .input_objects()
@@ -128,7 +151,7 @@ pub fn simulate_transaction(
             let gas_coins = select_gas(
                 &service.reader,
                 transaction.gas_data().owner,
-                budget,
+                transaction.gas_data().budget,
                 protocol_config.max_gas_payment_objects(),
                 &input_objects,
             )?;
@@ -167,8 +190,56 @@ pub fn simulate_transaction(
         message.effects = {
             let effects = sui_sdk_types::TransactionEffects::try_from(effects)?;
             submask
-                .subtree(ExecutedTransaction::EFFECTS_FIELD.name)
-                .map(|mask| TransactionEffects::merge_from(&effects, &mask))
+                .subtree(ExecutedTransaction::EFFECTS_FIELD)
+                .map(|mask| {
+                    let mut effects = TransactionEffects::merge_from(&effects, &mask);
+
+                    if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
+                        for changed_object in effects.changed_objects.iter_mut() {
+                            let Ok(object_id) = changed_object.object_id().parse::<ObjectID>()
+                            else {
+                                continue;
+                            };
+
+                            if let Some(object) = input_objects
+                                .iter()
+                                .chain(&output_objects)
+                                .find(|o| o.id() == object_id)
+                            {
+                                changed_object.object_type = Some(match object.struct_tag() {
+                                    Some(struct_tag) => struct_tag.to_canonical_string(true),
+                                    None => "package".to_owned(),
+                                });
+                            }
+                        }
+                    }
+
+                    if mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+                        for unchanged_consensus_object in
+                            effects.unchanged_consensus_objects.iter_mut()
+                        {
+                            let Ok(object_id) =
+                                unchanged_consensus_object.object_id().parse::<ObjectID>()
+                            else {
+                                continue;
+                            };
+
+                            if let Some(object) = input_objects.iter().find(|o| o.id() == object_id)
+                            {
+                                unchanged_consensus_object.object_type =
+                                    Some(match object.struct_tag() {
+                                        Some(struct_tag) => struct_tag.to_canonical_string(true),
+                                        None => "package".to_owned(),
+                                    });
+                            }
+                        }
+                    }
+
+                    // Try to render clever error info
+                    crate::ledger_service::render_clever_error(service, &mut effects);
+
+                    effects
+                })
         };
 
         message.events = submask
@@ -185,6 +256,26 @@ pub fn simulate_transaction(
             .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
             .map(|mask| Transaction::merge_from(transaction, &mask));
 
+        message.input_objects = submask
+            .subtree(ExecutedTransaction::INPUT_OBJECTS_FIELD)
+            .map(|mask| {
+                input_objects
+                    .into_iter()
+                    .map(|o| Object::merge_from(o, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        message.output_objects = submask
+            .subtree(ExecutedTransaction::OUTPUT_OBJECTS_FIELD)
+            .map(|mask| {
+                output_objects
+                    .into_iter()
+                    .map(|o| Object::merge_from(o, &mask))
+                    .collect()
+            })
+            .unwrap_or_default();
+
         Some(message)
     } else {
         None
@@ -194,25 +285,26 @@ pub fn simulate_transaction(
         execution_result
             .into_iter()
             .flatten()
-            .map(|(reference_outputs, return_values)| CommandResult {
-                return_values: return_values
+            .map(|(reference_outputs, return_values)| {
+                let mut message = CommandResult::default();
+                message.return_values = return_values
                     .into_iter()
                     .map(|(bcs, ty)| to_command_output(service, None, bcs, ty))
-                    .collect(),
-                mutated_by_ref: reference_outputs
+                    .collect();
+                message.mutated_by_ref = reference_outputs
                     .into_iter()
                     .map(|(arg, bcs, ty)| to_command_output(service, Some(arg), bcs, ty))
-                    .collect(),
+                    .collect();
+                message
             })
             .collect()
     } else {
         Vec::new()
     };
 
-    let response = SimulateTransactionResponse {
-        transaction,
-        outputs,
-    };
+    let mut response = SimulateTransactionResponse::default();
+    response.transaction = transaction;
+    response.outputs = outputs;
     Ok(response)
 }
 
@@ -238,14 +330,11 @@ fn to_command_output(
             .map(Box::new)
         });
 
-    CommandOutput {
-        argument: arg.map(Into::into),
-        value: Some(Bcs {
-            name: Some(ty.to_canonical_string(true)),
-            value: Some(bcs.into()),
-        }),
-        json,
-    }
+    let mut message = CommandOutput::default();
+    message.argument = arg.map(Into::into);
+    message.value = Some(Bcs::from(bcs).with_name(ty.to_canonical_string(true)));
+    message.json = json;
+    message
 }
 
 /// Estimate the gas budget using the gas_cost_summary from a previous DryRun

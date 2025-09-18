@@ -20,10 +20,10 @@
     "eslint": "^8.57.0",
     "line-diff": "^2.1.1",
     "mocha": "10.2.0",
-    "toml": "^3.0.0",
     "typescript": "^5.4.5"
   },
   "dependencies": {
+    "@iarna/toml": "^2.2.5",
     "fzstd": "^0.1.1",
     "lodash.snakecase": "^4.1.1"
   }

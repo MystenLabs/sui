@@ -51,7 +51,7 @@ use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A,
-    gas_algebra::InternalGas,
+    gas_algebra::{AbstractMemorySize, InternalGas},
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value as R,
@@ -66,6 +66,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     values::{Struct, Value},
+    views::{SizeConfig, ValueView},
 };
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -78,6 +79,7 @@ mod config;
 mod crypto;
 mod dynamic_field;
 mod event;
+mod funds_accumulator;
 mod object;
 pub mod object_runtime;
 mod random;
@@ -846,6 +848,9 @@ pub fn make_stdlib_gas_params_for_protocol_config(
                 base: get_gas_cost_or_default!(type_name_get_base_cost_as_option),
                 per_byte: get_gas_cost_or_default!(type_name_get_per_byte_cost_as_option),
             },
+            id: MSN::type_name::IdGasParameters::new(
+                protocol_config.type_name_id_base_cost_as_option(),
+            ),
         },
         MSN::vector::GasParameters {
             empty: MSN::vector::EmptyGasParameters {
@@ -887,6 +892,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "accumulator",
             "emit_withdraw_event",
             make_native!(accumulator::emit_withdraw_event),
+        ),
+        (
+            "accumulator_settlement",
+            "record_settlement_sui_conservation",
+            make_native!(accumulator::record_settlement_sui_conservation),
         ),
         ("address", "from_bytes", make_native!(address::from_bytes)),
         ("address", "to_u256", make_native!(address::to_u256)),
@@ -980,6 +990,16 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(event::get_events_by_type),
         ),
         ("event", "num_events", make_native!(event::num_events)),
+        (
+            "funds_accumulator",
+            "add_to_accumulator_address",
+            make_native!(funds_accumulator::add_to_accumulator_address),
+        ),
+        (
+            "funds_accumulator",
+            "withdraw_from_accumulator_address",
+            make_native!(funds_accumulator::withdraw_from_accumulator_address),
+        ),
         (
             "groth16",
             "verify_groth16_proof_internal",
@@ -1341,6 +1361,54 @@ macro_rules! make_native {
     };
 }
 
+#[macro_export]
+macro_rules! get_extension {
+    ($context: expr, $ext: ty) => {
+        $context.extensions().get::<$ext>()
+    };
+    ($context: expr) => {
+        $context.extensions().get()
+    };
+}
+
+#[macro_export]
+macro_rules! get_extension_mut {
+    ($context: expr, $ext: ty) => {
+        $context.extensions_mut().get_mut::<$ext>()
+    };
+    ($context: expr) => {
+        $context.extensions_mut().get_mut()
+    };
+}
+
+#[macro_export]
+macro_rules! charge_cache_or_load_gas {
+    ($context:ident, $cache_info:expr) => {
+        match $cache_info {
+            $crate::object_runtime::object_store::CacheInfo::Cached => (),
+            $crate::object_runtime::object_store::CacheInfo::Loaded(size) => {
+                let config = get_extension!($context, ObjectRuntime)?.protocol_config;
+                if config.object_runtime_charge_cache_load_gas() {
+                    let cost = size * config.obj_access_cost_read_per_byte() as usize;
+                    native_charge_gas_early_exit!($context, InternalGas::new(cost as u64));
+                }
+            }
+        }
+    };
+}
+
 pub(crate) fn legacy_test_cost() -> InternalGas {
     InternalGas::new(0)
+}
+
+pub(crate) fn abstract_size(protocol_config: &ProtocolConfig, v: &Value) -> AbstractMemorySize {
+    if protocol_config.abstract_size_in_object_runtime() {
+        v.abstract_memory_size(&SizeConfig {
+            include_vector_size: true,
+            traverse_references: false,
+        })
+    } else {
+        // TODO: Remove this (with glee!) in the next execution version cut.
+        v.legacy_size()
+    }
 }

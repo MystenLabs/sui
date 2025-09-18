@@ -12,14 +12,11 @@ use std::{
 };
 
 use anyhow::Context;
-use prometheus::Registry;
 use reqwest::{header::HeaderName, Client};
 use serde_json::{json, Value};
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, Merge, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_e2e_tests::OffchainCluster;
-use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
-use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
+use sui_indexer_alt_e2e_tests::{OffchainCluster, OffchainClusterConfig};
+use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_transactional_test_runner::{
     create_adapter,
     offchain_state::{OffchainStateReader, TestResponse},
@@ -51,8 +48,11 @@ impl OffchainReader {
 impl OffchainStateReader for OffchainReader {
     async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         let indexer = self.cluster.wait_for_indexer(checkpoint, base_timeout);
+        let consistent_store = self
+            .cluster
+            .wait_for_consistent_store(checkpoint, base_timeout);
         let graphql = self.cluster.wait_for_graphql(checkpoint, base_timeout);
-        let _ = join!(indexer, graphql);
+        let _ = join!(indexer, consistent_store, graphql);
     }
 
     async fn wait_for_pruned_checkpoint(&self, _: u64, _: Duration) {
@@ -130,17 +130,9 @@ impl OffchainStateReader for OffchainReader {
 }
 
 async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
-    let cancel = CancellationToken::new();
-    let registry = Registry::new();
-
-    let indexer_args = IndexerArgs::default();
-
     let client_args = ClientArgs {
         local_ingestion_path: Some(config.data_ingestion_path.clone()),
-        remote_store_url: None,
-        rpc_api_url: None,
-        rpc_username: None,
-        rpc_password: None,
+        ..Default::default()
     };
 
     // The test config includes every pipeline, we configure its consistent range using the
@@ -167,18 +159,15 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
         })
         .expect("Failed to create indexer config");
 
-    let jsonrpc_config = JsonRpcConfig::default();
-    let graphql_config = GraphQlConfig::default();
-
     Arc::new(
         OffchainCluster::new(
-            indexer_args,
             client_args,
-            indexer_config,
-            jsonrpc_config,
-            graphql_config,
-            &registry,
-            cancel,
+            OffchainClusterConfig {
+                indexer_config,
+                ..Default::default()
+            },
+            &prometheus::Registry::new(),
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create off-chain cluster"),

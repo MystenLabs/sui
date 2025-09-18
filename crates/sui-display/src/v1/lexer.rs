@@ -224,7 +224,7 @@ mod tests {
         assert_eq!(lexemes, vec![L(T::Text, 0, "foo bar")]);
     }
 
-    /// Escape sequences are all text, but
+    /// Escape sequences are all text, but they will be split into multiple tokens.
     #[test]
     fn test_escapes() {
         let lexer = Lexer::new(r#"foo \b\{ar\}"#);

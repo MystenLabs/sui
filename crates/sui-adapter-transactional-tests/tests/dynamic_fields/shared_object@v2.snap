@@ -27,7 +27,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 
 task 4, line 79:
 //# run test::m::add_field --sender A --args object(2,0) object(3,0)
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
 
 task 5, line 81:
 //# view-object 3,0

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
@@ -18,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::accumulator_root::AccumulatorValue;
 use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
@@ -216,6 +216,10 @@ impl MoveObject {
             .splice(ID_END_INDEX.., timestamp_ms.to_le_bytes());
     }
 
+    pub fn set_contents_unsafe(&mut self, contents: Vec<u8>) {
+        self.contents = contents;
+    }
+
     pub fn is_coin(&self) -> bool {
         self.type_.is_coin()
     }
@@ -362,26 +366,22 @@ impl MoveObject {
 
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
     pub fn get_total_sui(&self, layout_resolver: &mut dyn LayoutResolver) -> Result<u64, SuiError> {
-        let balances = self.get_coin_balances(layout_resolver)?;
-        Ok(balances.get(&GAS::type_tag()).copied().unwrap_or(0))
-    }
-}
-
-// Helpers for extracting Coin<T> balances for all T
-impl MoveObject {
-    /// Get the total balances for all `Coin<T>` embedded in `self`.
-    pub fn get_coin_balances(
-        &self,
-        layout_resolver: &mut dyn LayoutResolver,
-    ) -> Result<BTreeMap<TypeTag, u64>, SuiError> {
-        // Fast path without deserialization.
-        if let Some(type_tag) = self.type_.coin_type_maybe() {
+        if self.type_.is_gas_coin() {
             let balance = self.get_coin_value_unsafe();
-            Ok(if balance > 0 {
-                BTreeMap::from([(type_tag.clone(), balance)])
-            } else {
-                BTreeMap::default()
-            })
+            Ok(balance)
+        } else if self.type_.coin_type_maybe().is_some() {
+            // It's a coin, but its not SUI
+            Ok(0)
+        } else if self.type_.is_sui_balance_accumulator_field() {
+            let value = AccumulatorValue::try_from(self)?;
+            let AccumulatorValue::U128(v) = value;
+            // Well behaved balance types can never have more than their total supply
+            // anywhere, which is 10B for SUI.
+            assert!(
+                v.value <= u64::MAX as u128,
+                "SUI balance cannot exceed u64::MAX"
+            );
+            Ok(v.value as u64)
         } else {
             let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
 
@@ -391,7 +391,11 @@ impl MoveObject {
                     error: e.to_string(),
                 })?;
 
-            Ok(traversal.finish())
+            Ok(traversal
+                .finish()
+                .get(&GAS::type_tag())
+                .copied()
+                .unwrap_or(0))
         }
     }
 }
@@ -689,15 +693,13 @@ impl Object {
     pub fn new_package<'p>(
         modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
-        max_move_package_size: u64,
-        move_binary_format_version: u32,
+        protocol_config: &ProtocolConfig,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(MovePackage::new_initial(
                 modules,
-                max_move_package_size,
-                move_binary_format_version,
+                protocol_config,
                 dependencies,
             )?),
             previous_transaction,
@@ -730,13 +732,7 @@ impl Object {
     ) -> Result<Self, ExecutionError> {
         let dependencies: Vec<_> = dependencies.into_iter().collect();
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
-        Self::new_package(
-            modules,
-            previous_transaction,
-            config.max_move_package_size(),
-            config.move_binary_format_version(),
-            &dependencies,
-        )
+        Self::new_package(modules, previous_transaction, &config, &dependencies)
     }
 
     /// Create a system package which is not subject to size limits. Panics if the object ID is not

@@ -1,0 +1,23 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(\"{ vector[1u8, 2u8, 3u8, foo.bar, baz[42]] \\\n             | vector<u16>[]\n             | vector<u32>\n             | vector< u64 > [10, 11, 12,]\n             | vector <u128,>[ 42u128 ]\n             | vector<u256>[ ] }\")"
+---
+{ vector[
+      1u8,
+      2u8,
+      3u8,
+      foo.bar,
+      baz[42u64],
+  ]
+| vector<u16> []
+| vector<u32> []
+| vector<u64> [
+      10u64,
+      11u64,
+      12u64,
+  ]
+| vector<u128> [
+      42u128,
+  ]
+| vector<u256> []
+}

@@ -27,6 +27,7 @@ impl FaucetClientFactory {
                     .expect("Expect local faucet key for local cluster")
                     .copy();
                 let wallet_context = new_wallet_context_from_cluster(cluster, key)
+                    .await
                     .instrument(info_span!("init_wallet_context_for_faucet"));
 
                 let config = FaucetConfig::default();

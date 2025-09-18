@@ -160,6 +160,7 @@ impl From<Error> for ErrorObjectOwned {
                         )
                     }
                     QuorumDriverError::TimeoutBeforeFinality
+                    | QuorumDriverError::TimeoutBeforeFinalityWithErrors { .. }
                     | QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts { .. } => {
                         ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>)
                     }
@@ -270,6 +271,26 @@ impl From<Error> for ErrorObjectOwned {
                     QuorumDriverError::SystemOverload { .. }
                     | QuorumDriverError::SystemOverloadRetryAfter { .. } => {
                         ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>)
+                    }
+                    QuorumDriverError::TransactionFailed { retriable, details } => {
+                        // TODO(fastpath): Replace with a proper error code
+                        ErrorObject::owned(
+                            if retriable {
+                                TRANSIENT_ERROR_CODE
+                            } else {
+                                TRANSACTION_EXECUTION_CLIENT_ERROR_CODE
+                            },
+                            format!("[MFP experimental]: {details}"),
+                            None::<()>,
+                        )
+                    }
+                    QuorumDriverError::PendingExecutionInTransactionOrchestrator => {
+                        // TODO(fastpath): Remove once traffic is 100% TD
+                        ErrorObject::owned(
+                            TRANSIENT_ERROR_CODE,
+                            "[MFP experimental]: Transaction already being processed in transaction orchestrator (most likely by quorum driver), wait for results",
+                            None::<()>,
+                        )
                     }
                 }
             }

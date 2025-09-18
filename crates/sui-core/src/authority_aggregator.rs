@@ -7,13 +7,14 @@ use crate::authority_client::{
     AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
-use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
-use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard, MonitorCancellation};
-use mysten_network::config::Config;
+#[cfg(test)]
+use crate::test_authority_clients::MockAuthorityApi;
+use futures::StreamExt;
+use mysten_metrics::{spawn_monitored_task, GaugeGuard, MonitorCancellation};
 use std::convert::AsRef;
 use std::net::SocketAddr;
+use sui_authority_aggregation::quorum_map_then_reduce_with_timeout;
 use sui_authority_aggregation::ReduceOutput;
-use sui_authority_aggregation::{quorum_map_then_reduce_with_timeout, AsyncResult};
 use sui_config::genesis::Genesis;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
@@ -21,7 +22,6 @@ use sui_network::{
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
 use sui_types::error::UserInputError;
-use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::quorum_driver_types::{GroupedErrors, QuorumDriverResponse};
@@ -34,7 +34,7 @@ use sui_types::{
     transaction::*,
 };
 use thiserror::Error;
-use tracing::{debug, error, info, instrument, trace, trace_span, warn, Instrument};
+use tracing::{debug, error, instrument, trace, trace_span, warn, Instrument};
 
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
@@ -43,22 +43,22 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
     IntCounterVec, IntGauge, Registry,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::committee::{CommitteeTrait, CommitteeWithNetworkMetadata, StakeUnit};
+use sui_types::committee::{CommitteeWithNetworkMetadata, StakeUnit};
 use sui_types::effects::{
     CertifiedTransactionEffects, SignedTransactionEffects, TransactionEffects, TransactionEvents,
     VerifiedCertifiedTransactionEffects,
 };
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV3, LayoutGenerationOption,
-    ObjectInfoRequest, TransactionInfoRequest,
+    ObjectInfoRequest,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
 
 pub const DEFAULT_RETRIES: usize = 4;
 
@@ -70,11 +70,6 @@ pub mod authority_aggregator_tests;
 pub struct TimeoutConfig {
     pub pre_quorum_timeout: Duration,
     pub post_quorum_timeout: Duration,
-
-    // Timeout used to determine when to start a second "serial" request for
-    // quorum_once_with_timeout. If this is set to zero, then
-    // quorum_once_with_timeout becomes completely parallelized.
-    pub serial_authority_request_interval: Duration,
 }
 
 impl Default for TimeoutConfig {
@@ -82,7 +77,6 @@ impl Default for TimeoutConfig {
         Self {
             pre_quorum_timeout: Duration::from_secs(60),
             post_quorum_timeout: Duration::from_secs(7),
-            serial_authority_request_interval: Duration::from_millis(1000),
         }
     }
 }
@@ -463,6 +457,8 @@ pub struct AuthorityAggregator<A: Clone> {
     /// It's OK for this map to be empty or missing validators, it then defaults
     /// to use concise validator public keys.
     pub validator_display_names: Arc<HashMap<AuthorityName, String>>,
+    /// Reference gas price for the current epoch.
+    pub reference_gas_price: u64,
     /// How to talk to this committee.
     pub authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
     /// Metrics
@@ -477,15 +473,18 @@ pub struct AuthorityAggregator<A: Clone> {
 impl<A: Clone> AuthorityAggregator<A> {
     pub fn new(
         committee: Committee,
+        validator_display_names: Arc<HashMap<AuthorityName, String>>,
+        reference_gas_price: u64,
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: Arc<AuthAggMetrics>,
-        validator_display_names: Arc<HashMap<AuthorityName, String>>,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
             committee: Arc::new(committee),
+            validator_display_names,
+            reference_gas_price,
             authority_clients: create_safe_clients(
                 authority_clients,
                 &committee_store,
@@ -495,69 +494,7 @@ impl<A: Clone> AuthorityAggregator<A> {
             safe_client_metrics_base,
             timeouts,
             committee_store,
-            validator_display_names,
         }
-    }
-
-    /// This function recreates AuthorityAggregator with the given committee.
-    /// It also updates committee store which impacts other of its references.
-    /// When disallow_missing_intermediate_committees is true, it requires the
-    /// new committee needs to be current epoch + 1.
-    /// The function could be used along with `reconfig_from_genesis` to fill in
-    /// all previous epoch's committee info.
-    pub fn recreate_with_net_addresses(
-        &self,
-        committee: CommitteeWithNetworkMetadata,
-        network_config: &Config,
-        disallow_missing_intermediate_committees: bool,
-    ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
-        let network_clients =
-            make_network_authority_clients_with_network_config(&committee, network_config);
-
-        let safe_clients = network_clients
-            .into_iter()
-            .map(|(name, api)| {
-                (
-                    name,
-                    Arc::new(SafeClient::new(
-                        api,
-                        self.committee_store.clone(),
-                        name,
-                        SafeClientMetrics::new(&self.safe_client_metrics_base, name),
-                    )),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-
-        // TODO: It's likely safer to do the following operations atomically, in case this function
-        // gets called from different threads. It cannot happen today, but worth the caution.
-        let new_committee = committee.committee().clone();
-        if disallow_missing_intermediate_committees {
-            fp_ensure!(
-                self.committee.epoch + 1 == new_committee.epoch,
-                SuiError::AdvanceEpochError {
-                    error: format!(
-                        "Trying to advance from epoch {} to epoch {}",
-                        self.committee.epoch, new_committee.epoch
-                    )
-                }
-            );
-        }
-        // This call may return error if this committee is already inserted,
-        // which is fine. We should continue to construct the new aggregator.
-        // This is because there may be multiple AuthorityAggregators
-        // or its containers (e.g. Quorum Drivers)  share the same committee
-        // store and all of them need to reconfigure.
-        let _ = self.committee_store.insert_new_committee(&new_committee);
-        Ok(AuthorityAggregator {
-            committee: Arc::new(new_committee),
-            authority_clients: Arc::new(safe_clients),
-            metrics: self.metrics.clone(),
-            timeouts: self.timeouts.clone(),
-            safe_client_metrics_base: self.safe_client_metrics_base.clone(),
-            committee_store: self.committee_store.clone(),
-            validator_display_names: Arc::new(HashMap::new()),
-        })
     }
 
     pub fn get_client(&self, name: &AuthorityName) -> Option<&Arc<SafeClient<A>>> {
@@ -585,6 +522,13 @@ impl<A: Clone> AuthorityAggregator<A> {
             .into_iter()
             .map(|(k, v)| (k, (*v).clone()))
             .collect()
+    }
+
+    pub fn get_display_name(&self, name: &AuthorityName) -> String {
+        self.validator_display_names
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| name.concise().to_string())
     }
 }
 
@@ -624,10 +568,11 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         let validator_display_names = epoch_start_state.get_authority_names_to_hostnames();
         Self::new_from_committee(
             committee,
+            Arc::new(validator_display_names),
+            epoch_start_state.reference_gas_price(),
             committee_store,
             safe_client_metrics_base,
             auth_agg_metrics,
-            Arc::new(validator_display_names),
         )
     }
 
@@ -648,21 +593,23 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
 
     pub fn new_from_committee(
         committee: CommitteeWithNetworkMetadata,
+        validator_display_names: Arc<HashMap<AuthorityName, String>>,
+        reference_gas_price: u64,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: Arc<AuthAggMetrics>,
-        validator_display_names: Arc<HashMap<AuthorityName, String>>,
     ) -> Self {
         let net_config = default_mysten_network_config();
         let authority_clients =
             make_network_authority_clients_with_network_config(&committee, &net_config);
         Self::new(
             committee.committee().clone(),
+            validator_display_names,
+            reference_gas_price,
             committee_store.clone(),
             authority_clients,
             safe_client_metrics_base,
             auth_agg_metrics,
-            validator_display_names,
             Default::default(),
         )
     }
@@ -672,193 +619,6 @@ impl<A> AuthorityAggregator<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    // Repeatedly calls the provided closure on a randomly selected validator until it succeeds.
-    // Once all validators have been attempted, starts over at the beginning. Intended for cases
-    // that must eventually succeed as long as the network is up (or comes back up) eventually.
-    async fn quorum_once_inner<'a, S, FMap>(
-        &'a self,
-        // try these authorities first
-        preferences: Option<&BTreeSet<AuthorityName>>,
-        // only attempt from these authorities.
-        restrict_to: Option<&BTreeSet<AuthorityName>>,
-        // The async function used to apply to each authority. It takes an authority name,
-        // and authority client parameter and returns a Result<V>.
-        map_each_authority: FMap,
-        timeout_each_authority: Duration,
-        authority_errors: &mut HashMap<AuthorityName, SuiError>,
-    ) -> Result<S, SuiError>
-    where
-        FMap: Fn(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, S, SuiError>
-            + Send
-            + Clone
-            + 'a,
-        S: Send,
-    {
-        let start = tokio::time::Instant::now();
-        let mut delay = Duration::from_secs(1);
-        loop {
-            let authorities_shuffled = self.committee.shuffle_by_stake(preferences, restrict_to);
-            let mut authorities_shuffled = authorities_shuffled.iter();
-
-            type RequestResult<S> = Result<Result<S, SuiError>, tokio::time::error::Elapsed>;
-
-            enum Event<S> {
-                StartNext,
-                Request(AuthorityName, RequestResult<S>),
-            }
-
-            let mut futures = FuturesUnordered::<BoxFuture<'a, Event<S>>>::new();
-
-            let start_req = |name: AuthorityName, client: Arc<SafeClient<A>>| {
-                let map_each_authority = map_each_authority.clone();
-                Box::pin(monitored_future!(async move {
-                    trace!(name=?name.concise(), now = ?tokio::time::Instant::now() - start, "new request");
-                    let map = map_each_authority(name, client);
-                    Event::Request(name, timeout(timeout_each_authority, map).await)
-                }))
-            };
-
-            let schedule_next = || {
-                let delay = self.timeouts.serial_authority_request_interval;
-                Box::pin(monitored_future!(async move {
-                    sleep(delay).await;
-                    Event::StartNext
-                }))
-            };
-
-            // This process is intended to minimize latency in the face of unreliable authorities,
-            // without creating undue load on authorities.
-            //
-            // The fastest possible process from the
-            // client's point of view would simply be to issue a concurrent request to every
-            // authority and then take the winner - this would create unnecessary load on
-            // authorities.
-            //
-            // The most efficient process from the network's point of view is to do one request at
-            // a time, however if the first validator that the client contacts is unavailable or
-            // slow, the client must wait for the serial_authority_request_interval period to elapse
-            // before starting its next request.
-            //
-            // So, this process is designed as a compromise between these two extremes.
-            // - We start one request, and schedule another request to begin after
-            //   serial_authority_request_interval.
-            // - Whenever a request finishes, if it succeeded, we return. if it failed, we start a
-            //   new request.
-            // - If serial_authority_request_interval elapses, we begin a new request even if the
-            //   previous one is not finished, and schedule another future request.
-
-            let name = authorities_shuffled.next().ok_or_else(|| {
-                error!(
-                    ?preferences,
-                    ?restrict_to,
-                    "Available authorities list is empty."
-                );
-                SuiError::from("Available authorities list is empty")
-            })?;
-            futures.push(start_req(*name, self.authority_clients[name].clone()));
-            futures.push(schedule_next());
-
-            while let Some(res) = futures.next().await {
-                match res {
-                    Event::StartNext => {
-                        trace!(now = ?tokio::time::Instant::now() - start, "eagerly beginning next request");
-                        futures.push(schedule_next());
-                    }
-                    Event::Request(name, res) => {
-                        match res {
-                            // timeout
-                            Err(_) => {
-                                debug!(name=?name.concise(), "authority request timed out");
-                                authority_errors.insert(name, SuiError::TimeoutError);
-                            }
-                            // request completed
-                            Ok(inner_res) => {
-                                trace!(name=?name.concise(), now = ?tokio::time::Instant::now() - start,
-                                       "request completed successfully");
-                                match inner_res {
-                                    Err(e) => authority_errors.insert(name, e),
-                                    Ok(res) => return Ok(res),
-                                };
-                            }
-                        };
-                    }
-                }
-
-                if let Some(next_authority) = authorities_shuffled.next() {
-                    futures.push(start_req(
-                        *next_authority,
-                        self.authority_clients[next_authority].clone(),
-                    ));
-                } else {
-                    break;
-                }
-            }
-
-            info!(
-                ?authority_errors,
-                "quorum_once_with_timeout failed on all authorities, retrying in {:?}", delay
-            );
-            sleep(delay).await;
-            delay = std::cmp::min(delay * 2, Duration::from_secs(5 * 60));
-        }
-    }
-
-    /// Like quorum_map_then_reduce_with_timeout, but for things that need only a single
-    /// successful response, such as fetching a Transaction from some authority.
-    /// This is intended for cases in which byzantine authorities can time out or slow-loris, but
-    /// can't give a false answer, because e.g. the digest of the response is known, or a
-    /// quorum-signed object such as a checkpoint has been requested.
-    pub(crate) async fn quorum_once_with_timeout<'a, S, FMap>(
-        &'a self,
-        // try these authorities first
-        preferences: Option<&BTreeSet<AuthorityName>>,
-        // only attempt from these authorities.
-        restrict_to: Option<&BTreeSet<AuthorityName>>,
-        // The async function used to apply to each authority. It takes an authority name,
-        // and authority client parameter and returns a Result<V>.
-        map_each_authority: FMap,
-        timeout_each_authority: Duration,
-        // When to give up on the attempt entirely.
-        timeout_total: Option<Duration>,
-        // The behavior that authorities expect to perform, used for logging and error
-        description: String,
-    ) -> Result<S, SuiError>
-    where
-        FMap: Fn(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, S, SuiError>
-            + Send
-            + Clone
-            + 'a,
-        S: Send,
-    {
-        let mut authority_errors = HashMap::new();
-
-        let fut = self.quorum_once_inner(
-            preferences,
-            restrict_to,
-            map_each_authority,
-            timeout_each_authority,
-            &mut authority_errors,
-        );
-
-        if let Some(t) = timeout_total {
-            timeout(t, fut).await.map_err(|_timeout_error| {
-                if authority_errors.is_empty() {
-                    SuiError::TimeoutError
-                } else {
-                    SuiError::TooManyIncorrectAuthorities {
-                        errors: authority_errors
-                            .iter()
-                            .map(|(a, b)| (*a, b.clone()))
-                            .collect(),
-                        action: description,
-                    }
-                }
-            })?
-        } else {
-            fut.await
-        }
-    }
-
     /// Query the object with highest version number from the authorities.
     /// We stop after receiving responses from 2f+1 validators.
     /// This function is untrusted because we simply assume each response is valid and there are no
@@ -1122,8 +882,9 @@ where
                         }
 
                         // TODO: add more comments to explain each condition.
+                        let object_or_package_not_found_condition = state.object_or_package_not_found_stake >= quorum_threshold && std::env::var("NOT_RETRY_OBJECT_PACKAGE_NOT_FOUND").is_ok();
                         if state.non_retryable_stake >= validity_threshold
-                            || state.object_or_package_not_found_stake >= quorum_threshold // In normal case, object/package not found should be more than f+1
+                            || object_or_package_not_found_condition // In normal case, object/package not found should be more than f+1
                             || state.overloaded_stake >= quorum_threshold {
                             // We have hit an exit condition, f+1 non-retryable err or 2f+1 object not found or overload,
                             // so we no longer consider the transaction state as retryable.
@@ -1769,35 +1530,6 @@ where
 
         Ok(response.effects_cert)
     }
-
-    /// This function tries to get SignedTransaction OR CertifiedTransaction from
-    /// an given list of validators who are supposed to know about it.
-    #[instrument(level = "trace", skip_all, fields(?tx_digest))]
-    pub async fn handle_transaction_info_request_from_some_validators(
-        &self,
-        tx_digest: &TransactionDigest,
-        // authorities known to have the transaction info we are requesting.
-        validators: &BTreeSet<AuthorityName>,
-        timeout_total: Option<Duration>,
-    ) -> SuiResult<PlainTransactionInfoResponse> {
-        self.quorum_once_with_timeout(
-            None,
-            Some(validators),
-            |_authority, client| {
-                Box::pin(async move {
-                    client
-                        .handle_transaction_info_request(TransactionInfoRequest {
-                            transaction_digest: *tx_digest,
-                        })
-                        .await
-                })
-            },
-            Duration::from_secs(2),
-            timeout_total,
-            "handle_transaction_info_request_from_some_validators".to_string(),
-        )
-        .await
-    }
 }
 
 #[derive(Default)]
@@ -1805,6 +1537,7 @@ pub struct AuthorityAggregatorBuilder<'a> {
     network_config: Option<&'a NetworkConfig>,
     genesis: Option<&'a Genesis>,
     committee: Option<Committee>,
+    reference_gas_price: Option<u64>,
     committee_store: Option<Arc<CommitteeStore>>,
     registry: Option<&'a Registry>,
     timeouts_config: Option<TimeoutConfig>,
@@ -1832,6 +1565,12 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         }
     }
 
+    #[cfg(test)]
+    pub fn from_committee_size(committee_size: usize) -> Self {
+        let (committee, _keypairs) = Committee::new_simple_test_committee_of_size(committee_size);
+        Self::from_committee(committee)
+    }
+
     pub fn with_committee_store(mut self, committee_store: Arc<CommitteeStore>) -> Self {
         self.committee_store = Some(committee_store);
         self
@@ -1848,14 +1587,48 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
     }
 
     fn get_network_committee(&self) -> CommitteeWithNetworkMetadata {
-        let genesis = if let Some(network_config) = self.network_config {
-            &network_config.genesis
-        } else if let Some(genesis) = self.genesis {
-            genesis
+        self.get_genesis()
+            .unwrap_or_else(|| panic!("need either NetworkConfig or Genesis."))
+            .committee_with_network()
+    }
+
+    fn get_committee_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String> {
+        if let Some(genesis) = self.get_genesis() {
+            let state = genesis
+                .sui_system_object()
+                .into_genesis_version_for_tooling();
+            state
+                .validators
+                .active_validators
+                .iter()
+                .map(|v| {
+                    let metadata = v.verified_metadata();
+                    let name = metadata.sui_pubkey_bytes();
+
+                    (name, metadata.name.clone())
+                })
+                .collect()
         } else {
-            panic!("need either NetworkConfig or Genesis.");
-        };
-        genesis.committee_with_network()
+            HashMap::new()
+        }
+    }
+
+    fn get_reference_gas_price(&self) -> u64 {
+        self.reference_gas_price.unwrap_or_else(|| {
+            self.get_genesis()
+                .map(|g| g.reference_gas_price())
+                .unwrap_or(1000)
+        })
+    }
+
+    fn get_genesis(&self) -> Option<&Genesis> {
+        if let Some(network_config) = self.network_config {
+            Some(&network_config.genesis)
+        } else if let Some(genesis) = self.genesis {
+            Some(genesis)
+        } else {
+            None
+        }
     }
 
     fn get_committee(&self) -> Committee {
@@ -1885,6 +1658,8 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         authority_clients: BTreeMap<AuthorityName, C>,
     ) -> AuthorityAggregator<C> {
         let committee = self.get_committee();
+        let validator_display_names = self.get_committee_authority_names_to_hostnames();
+        let reference_gas_price = self.get_reference_gas_price();
         let registry = Registry::new();
         let registry = self.registry.unwrap_or(&registry);
         let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
@@ -1898,12 +1673,31 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
 
         AuthorityAggregator::new(
             committee,
+            Arc::new(validator_display_names),
+            reference_gas_price,
             committee_store,
             authority_clients,
             safe_client_metrics_base,
             auth_agg_metrics,
-            Arc::new(HashMap::new()),
             timeouts_config,
         )
+    }
+
+    #[cfg(test)]
+    pub fn build_mock_authority_aggregator(self) -> AuthorityAggregator<MockAuthorityApi> {
+        let committee = self.get_committee();
+        let clients = committee
+            .names()
+            .map(|name| {
+                (
+                    *name,
+                    MockAuthorityApi::new(
+                        Duration::from_millis(100),
+                        Arc::new(std::sync::Mutex::new(30)),
+                    ),
+                )
+            })
+            .collect();
+        self.build_custom_clients(clients)
     }
 }

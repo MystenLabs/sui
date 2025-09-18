@@ -31,7 +31,7 @@ use super::{CombinedDependency, Dependency};
 
 /// A [Dependency<Resolved>] is like a [Dependency<Combined>] except that it no longer has
 /// externally resolved dependencies
-type Resolved = ResolverDependencyInfo;
+pub type Resolved = ResolverDependencyInfo;
 
 pub type ResolverName = String;
 pub type ResolverResult<T> = Result<T, ResolverError>;

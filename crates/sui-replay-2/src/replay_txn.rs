@@ -10,21 +10,26 @@
 //! `get_input_objects_for_replay` is used by the `execution.rs` module but could be moved
 //! in this module and saved in the `ReplayTransaction` instance.
 
+use crate::summary_metrics::{log_replay_metrics, tx_metrics_reset};
 use crate::{
     artifacts::{Artifact, ArtifactManager},
-    data_store::DataStore,
-    execution::{execute_transaction_to_effects, ReplayExecutor},
-    replay_interface::{EpochStore, ObjectKey, ObjectStore, TransactionStore, VersionQuery},
+    execution::{execute_transaction_to_effects, ReplayCacheSummary, ReplayExecutor},
+    replay_interface::{
+        EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
+    },
     tracing::save_trace_output,
 };
 use anyhow::{anyhow, bail, Context};
 use move_trace_format::format::MoveTraceBuilder;
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::time::Instant;
 use sui_types::{base_types::SequenceNumber, TypeTag};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
-    effects::{InputSharedObject, TransactionEffects, TransactionEffectsAPI, UnchangedSharedKind},
+    effects::{
+        InputConsensusObject, TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind,
+    },
     object::Object,
     transaction::{
         CallArg, Command, GasData, InputObjects, ObjectArg, TransactionData, TransactionDataAPI,
@@ -35,10 +40,12 @@ use sui_types::{
     gas::SuiGasStatusAPI,
     transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind},
 };
-use tracing::{debug, trace};
+use tracing::{debug, error, info, info_span, trace};
 
 pub type ObjectVersion = u64;
 pub type PackageVersion = u64;
+
+// moved to summary_metrics.rs
 
 // `ReplayTransaction` contains all the data needed to replay a transaction.
 // The `object_cache` will contain all the objects and packages touched by the transaction.
@@ -55,13 +62,16 @@ pub struct ReplayTransaction {
 //
 // Run a single transaction and print results to stdout
 //
-pub(crate) async fn replay_transaction(
+pub(crate) async fn replay_transaction<S: ReadDataStore>(
     artifact_manager: &ArtifactManager<'_>,
     tx_digest: &str,
-    data_store: &DataStore,
+    data_store: &S,
     trace: bool,
 ) -> anyhow::Result<()> {
-    // load a `ReplayTranaction`
+    let _span = info_span!("replay_tx", tx_digest = %tx_digest).entered();
+    // load a `ReplayTransaction`
+    let total_t0 = Instant::now();
+    tx_metrics_reset();
     let replay_txn = match ReplayTransaction::load(tx_digest, data_store, data_store, data_store) {
         Ok(replay_txn) => replay_txn,
         Err(e) => {
@@ -72,8 +82,10 @@ pub(crate) async fn replay_transaction(
     // replay the transaction
     let mut trace_builder_opt = trace.then(MoveTraceBuilder::new);
 
+    let exec_t0 = Instant::now();
     let (result, context_and_effects) =
         execute_transaction_to_effects(replay_txn, data_store, data_store, &mut trace_builder_opt)?;
+    let exec_ms = exec_t0.elapsed().as_millis();
 
     // TODO: make tracing better abstracted? different tracers?
     if let Some(trace_builder) = trace_builder_opt {
@@ -87,12 +99,15 @@ pub(crate) async fn replay_transaction(
     }
 
     // Save results
-    tracing::info!(
-        "Executed transaction {}: {:?}. Saving artifacts under {}",
-        tx_digest,
-        result,
-        artifact_manager.base_path.display()
+    info!(
+        tx_digest = %tx_digest,
+        result = ?result,
+        output_dir = %artifact_manager.base_path.display(),
+        "Executed transaction",
     );
+
+    let total_ms = total_t0.elapsed().as_millis();
+    log_replay_metrics(tx_digest, total_ms, exec_ms);
 
     artifact_manager
         .member(Artifact::TransactionEffects)
@@ -103,6 +118,18 @@ pub(crate) async fn replay_transaction(
     artifact_manager
         .member(Artifact::TransactionGasReport)
         .serialize_artifact(&context_and_effects.gas_status.gas_usage_report())
+        .transpose()?
+        .unwrap();
+
+    // Save the replay cache summary
+    let cache_summary = ReplayCacheSummary::from_cache(
+        context_and_effects.expected_effects.executed_epoch(),
+        context_and_effects.checkpoint,
+        &context_and_effects.object_cache,
+    );
+    artifact_manager
+        .member(Artifact::ReplayCacheSummary)
+        .serialize_artifact(&cache_summary)
         .transpose()?
         .unwrap();
 
@@ -121,9 +148,9 @@ fn verify_txn_and_save_forked_effects(
     effects: &TransactionEffects,
 ) -> anyhow::Result<()> {
     if effects != expected_effects {
-        tracing::error!(
-            "Transaction effects do not match expected effects for transaction {}. Saving to ",
-            effects.transaction_digest()
+        error!(
+            tx_digest = %effects.transaction_digest(),
+            "Transaction effects do not match expected effects; saving forked effects",
         );
         artifact_manager
             .member(Artifact::ForkedTransactionEffects)
@@ -147,7 +174,7 @@ impl ReplayTransaction {
         epoch_store: &dyn EpochStore,
         object_store: &dyn ObjectStore,
     ) -> Result<Self, anyhow::Error> {
-        debug!("Start load transaction");
+        debug!(op = "load_tx", phase = "start", tx_digest = %tx_digest, "load transaction");
 
         let digest = tx_digest
             .parse()
@@ -155,7 +182,14 @@ impl ReplayTransaction {
 
         //
         // load transaction data and effects
-        let (txn_data, effects, checkpoint) = txn_store.transaction_data_and_effects(tx_digest)?;
+        let transaction_info = txn_store
+            .transaction_data_and_effects(tx_digest)?
+            .ok_or_else(|| {
+                anyhow::anyhow!(format!("Transaction not found for digest: {}", tx_digest))
+            })?;
+        let txn_data = transaction_info.data;
+        let effects = transaction_info.effects;
+        let checkpoint = transaction_info.checkpoint;
 
         //
         // load all objects and packages used by the transaction
@@ -164,13 +198,20 @@ impl ReplayTransaction {
         //
         // instantiate the executor
         let epoch = effects.executed_epoch();
-        let protocol_config = epoch_store
-            .protocol_config(epoch)
-            .unwrap_or_else(|e| panic!("Failed to get protocol config: {:?}", e));
-        let executor =
-            ReplayExecutor::new(protocol_config, None).unwrap_or_else(|e| panic!("{:?}", e));
+        let protocol_config = match epoch_store.protocol_config(epoch) {
+            Ok(Some(pc)) => pc,
+            Ok(None) => {
+                tracing::error!("Protocol config missing for epoch {}", epoch);
+                return Err(anyhow!("Protocol config missing for epoch {}", epoch));
+            }
+            Err(e) => {
+                tracing::error!("Failed to get protocol config for epoch {}: {:?}", epoch, e);
+                return Err(e);
+            }
+        };
+        let executor = ReplayExecutor::new(protocol_config).unwrap_or_else(|e| panic!("{:?}", e));
 
-        debug!("End load transaction");
+        debug!(op = "load_tx", phase = "end", tx_digest = %tx_digest, "load transaction");
 
         Ok(Self {
             digest,
@@ -303,7 +344,7 @@ fn load_objects(
             // REVIEW: a `None` is simply ignored, is that correct?
             continue;
         }
-        let object = object.unwrap();
+        let (object, _version) = object.unwrap();
         let object_id = object.id();
         if let Some(tag) = object.as_inner().struct_tag() {
             packages_from_type_tag(&tag.into(), &mut packages);
@@ -335,9 +376,9 @@ fn load_packages(
             version_query: VersionQuery::AtCheckpoint(checkpoint),
         })
         .collect::<Vec<_>>();
-    debug!("Start load_packages");
+    debug!(op = "load_packages", phase = "start", "load_packages");
     let (objects, packages) = load_objects(&pkg_object_keys, object_store)?;
-    debug!("End load_packages");
+    debug!(op = "load_packages", phase = "end", "load_packages");
     debug_assert!(
         packages.is_empty(),
         "Packages should be empty from packages load, there is no type parameter in packages"
@@ -425,40 +466,40 @@ fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<ObjectKey>, anyh
     Ok(object_keys)
 }
 
-// Get the input shared objects and unchanged shared objects from the transaction effects
+// Get the input shared objects and unchanged consensus objects from the transaction effects
 fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<ObjectKey>, anyhow::Error> {
     let mut object_keys = effects
-        .input_shared_objects()
+        .input_consensus_objects()
         .iter()
-        .map(|input_shared_object| match input_shared_object {
-            InputSharedObject::MutateConsensusStreamEnded(object_id, version)
-            | InputSharedObject::ReadConsensusStreamEnded(object_id, version)
-            | InputSharedObject::Cancelled(object_id, version) => ObjectKey {
+        .map(|input_consensus_object| match input_consensus_object {
+            InputConsensusObject::MutateConsensusStreamEnded(object_id, version)
+            | InputConsensusObject::ReadConsensusStreamEnded(object_id, version)
+            | InputConsensusObject::Cancelled(object_id, version) => ObjectKey {
                 object_id: *object_id,
                 version_query: VersionQuery::Version(version.value()),
             },
-            InputSharedObject::Mutate((object_id, version, _digest))
-            | InputSharedObject::ReadOnly((object_id, version, _digest)) => ObjectKey {
+            InputConsensusObject::Mutate((object_id, version, _digest))
+            | InputConsensusObject::ReadOnly((object_id, version, _digest)) => ObjectKey {
                 object_id: *object_id,
                 version_query: VersionQuery::Version(version.value()),
             },
         })
         .collect::<BTreeSet<_>>();
     effects
-        .unchanged_shared_objects()
+        .unchanged_consensus_objects()
         .iter()
         .for_each(|(obj_id, kind)| match kind {
-            UnchangedSharedKind::ReadOnlyRoot((ver, _digest)) => {
+            UnchangedConsensusKind::ReadOnlyRoot((ver, _digest)) => {
                 object_keys.insert(ObjectKey {
                     object_id: *obj_id,
                     version_query: VersionQuery::Version(ver.value()),
                 });
             }
-            UnchangedSharedKind::MutateConsensusStreamEnded(_)
-            | UnchangedSharedKind::ReadConsensusStreamEnded(_)
-            | UnchangedSharedKind::Cancelled(_)
-            | UnchangedSharedKind::PerEpochConfig => {
-                trace!("Ignored `UnchangedSharedKind`: {:?}", kind);
+            UnchangedConsensusKind::MutateConsensusStreamEnded(_)
+            | UnchangedConsensusKind::ReadConsensusStreamEnded(_)
+            | UnchangedConsensusKind::Cancelled(_)
+            | UnchangedConsensusKind::PerEpochConfig => {
+                trace!("Ignored `UnchangedConsensusKind`: {:?}", kind);
             }
         });
     Ok(object_keys)

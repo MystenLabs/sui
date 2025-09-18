@@ -529,7 +529,7 @@ fn max_identifier_len() {
     let (config, _) = production_config();
     let max_ident = "z".repeat(
         config
-            .max_idenfitier_len
+            .max_identifier_len
             .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize,
     );
     let good_module = leaf_module(&max_ident);
@@ -539,7 +539,7 @@ fn max_identifier_len() {
 
     let max_ident = "z".repeat(
         (config
-            .max_idenfitier_len
+            .max_identifier_len
             .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize)
             / 2,
     );
@@ -550,7 +550,7 @@ fn max_identifier_len() {
 
     let over_max_ident = "z".repeat(
         1 + config
-            .max_idenfitier_len
+            .max_identifier_len
             .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize,
     );
     let bad_module = leaf_module(&over_max_ident);
@@ -563,7 +563,7 @@ fn max_identifier_len() {
 
     let over_max_ident = "zx".repeat(
         1 + config
-            .max_idenfitier_len
+            .max_identifier_len
             .unwrap_or(DEFAULT_MAX_IDENTIFIER_LENGTH) as usize,
     );
     let bad_module = leaf_module(&over_max_ident);

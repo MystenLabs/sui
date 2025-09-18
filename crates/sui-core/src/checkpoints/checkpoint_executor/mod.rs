@@ -31,6 +31,7 @@ use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -45,7 +46,7 @@ use tracing::{debug, info, instrument, warn};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::{AuthorityState, ExecutionEnv};
-use crate::execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper};
+use crate::execution_scheduler::ExecutionScheduler;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::{
     checkpoints::CheckpointStore,
@@ -123,7 +124,7 @@ pub struct CheckpointExecutor {
     checkpoint_store: Arc<CheckpointStore>,
     object_cache_reader: Arc<dyn ObjectCacheRead>,
     transaction_cache_reader: Arc<dyn TransactionCacheRead>,
-    execution_scheduler: Arc<ExecutionSchedulerWrapper>,
+    execution_scheduler: Arc<ExecutionScheduler>,
     global_state_hasher: Arc<GlobalStateHasher>,
     backpressure_manager: Arc<BackpressureManager>,
     config: CheckpointExecutorConfig,
@@ -523,11 +524,11 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, ExecuteTransactions);
 
         {
-            let _metrics_scope = mysten_metrics::monitored_scope(
-                "CheckpointExecutor::notify_read_executed_effects_digests",
-            );
             self.transaction_cache_reader
-                .notify_read_executed_effects_digests(&unexecuted_tx_digests)
+                .notify_read_executed_effects_digests(
+                    "CheckpointExecutor::notify_read_executed_effects_digests",
+                    &unexecuted_tx_digests,
+                )
                 .await;
         }
 
@@ -795,9 +796,18 @@ impl CheckpointExecutor {
                             )
                             .expect("failed to acquire shared version assignments");
 
-                        let env = ExecutionEnv::new()
+                        let mut env = ExecutionEnv::new()
                             .with_assigned_versions(assigned_versions)
                             .with_expected_effects_digest(*expected_fx_digest);
+
+                        // Check if the expected effects indicate insufficient balance
+                        if let ExecutionStatus::Failure {
+                            error: ExecutionFailureStatus::InsufficientBalanceForWithdraw,
+                            ..
+                        } = effects.status()
+                        {
+                            env = env.with_insufficient_balance();
+                        }
 
                         Some((tx_digest, (txn.clone(), env)))
                     }
@@ -869,7 +879,10 @@ impl CheckpointExecutor {
         );
 
         self.transaction_cache_reader
-            .notify_read_executed_effects_digests(&[*change_epoch_tx.digest()])
+            .notify_read_executed_effects_digests(
+                "CheckpointExecutor::notify_read_advance_epoch_tx",
+                &[*change_epoch_tx.digest()],
+            )
             .await;
     }
 

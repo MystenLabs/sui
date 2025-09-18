@@ -1,12 +1,14 @@
 ---
 title: Rules
+description: Rule modules are used to create programmable restrictions that apply any action within a `TokenPolicy`. 
+keywords: [ rule module, token rules, tokenpolicy, rules for tokens, token policies, configuring rules, rule configuration, rule structure, rule compliance, rule regulation, token regulation ]
 ---
 
 Rules are programmable restrictions that you can apply to any action in the [`TokenPolicy`](./token-policy.mdx). They are the tool of compliance, regulation, and enforcement of certain business logic in the closed-loop system.
 
 ## Rule structure
 
-A rule is represented as a witness - a type with a `drop` ability. You can either encode it in your application logic, or include it as part of a separate module for a more modular approach.
+A rule is represented as a type with a `drop` ability. This type is called a witness. You can either encode it in your application logic, or include it as part of a separate module for a more modular approach.
 
 ```move
 /// The Rule type
@@ -118,7 +120,7 @@ public fun remove_rule_config<T, Rule, Config: store>(
 
 Because the configuration has `store`, the token owner can wrap and transfer or store the configuration somewhere else. If the `Config` type has `drop`, the value can be ignored.
 
-## Cheatsheet: Rule configuration API
+## Cheat sheet: Rule configuration API
 
 | Method name                 | Description                              | Notes                                          |
 |-----------------------------|------------------------------------------|------------------------------------------------|

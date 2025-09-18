@@ -1,0 +1,3 @@
+[submodule "docs/submodules/awesome-sui"]
+	path = docs/submodules/awesome-sui
+	url = https://github.com/sui-foundation/awesome-sui.git

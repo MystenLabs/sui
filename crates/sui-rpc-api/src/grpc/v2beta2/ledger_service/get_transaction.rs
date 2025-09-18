@@ -21,8 +21,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::TransactionEffects;
 use sui_rpc::proto::sui::rpc::v2beta2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2beta2::UserSignature;
 use sui_rpc::proto::timestamp_ms_to_proto;
-use sui_sdk_types::TransactionDigest;
-use sui_types::base_types::ObjectID;
+use sui_sdk_types::{Address, Digest};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 pub const READ_MASK_DEFAULT: &str = "digest";
@@ -39,7 +38,7 @@ pub fn get_transaction(
                 .with_description("missing digest")
                 .with_reason(ErrorReason::FieldMissing)
         })?
-        .parse::<TransactionDigest>()
+        .parse::<Digest>()
         .map_err(|e| {
             FieldViolation::new("digest")
                 .with_description(format!("invalid digest: {e}"))
@@ -64,15 +63,15 @@ pub fn get_transaction(
 
     let transaction = transaction_to_response(service, transaction_read, &read_mask);
 
-    Ok(GetTransactionResponse {
-        transaction: Some(transaction),
-    })
+    Ok(GetTransactionResponse::new(transaction))
 }
 
 #[tracing::instrument(skip(service))]
 pub fn batch_get_transactions(
     service: &RpcService,
-    BatchGetTransactionsRequest { digests, read_mask }: BatchGetTransactionsRequest,
+    BatchGetTransactionsRequest {
+        digests, read_mask, ..
+    }: BatchGetTransactionsRequest,
 ) -> Result<BatchGetTransactionsResponse, RpcError> {
     let read_mask = {
         let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
@@ -109,7 +108,7 @@ pub fn batch_get_transactions(
         })
         .collect();
 
-    Ok(BatchGetTransactionsResponse { transactions })
+    Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
 fn transaction_to_response(
@@ -141,11 +140,11 @@ fn transaction_to_response(
         if let Some(object_types) = source.object_types {
             if submask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
                 for changed_object in effects.changed_objects.iter_mut() {
-                    let Ok(object_id) = changed_object.object_id().parse::<ObjectID>() else {
+                    let Ok(object_id) = changed_object.object_id().parse::<Address>() else {
                         continue;
                     };
 
-                    if let Some(ty) = object_types.get(&object_id) {
+                    if let Some(ty) = object_types.get(&object_id.into()) {
                         changed_object.object_type = Some(match ty {
                             sui_types::base_types::ObjectType::Package => "package".to_owned(),
                             sui_types::base_types::ObjectType::Struct(struct_tag) => {
@@ -156,15 +155,15 @@ fn transaction_to_response(
                 }
             }
 
-            if submask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
-                    let Ok(object_id) = unchanged_shared_object.object_id().parse::<ObjectID>()
+            if submask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+                for unchanged_consensus_object in effects.unchanged_consensus_objects.iter_mut() {
+                    let Ok(object_id) = unchanged_consensus_object.object_id().parse::<Address>()
                     else {
                         continue;
                     };
 
-                    if let Some(ty) = object_types.get(&object_id) {
-                        unchanged_shared_object.object_type = Some(match ty {
+                    if let Some(ty) = object_types.get(&object_id.into()) {
+                        unchanged_consensus_object.object_type = Some(match ty {
                             sui_types::base_types::ObjectType::Package => "package".to_owned(),
                             sui_types::base_types::ObjectType::Struct(struct_tag) => {
                                 struct_tag.to_canonical_string(true)
@@ -174,6 +173,9 @@ fn transaction_to_response(
                 }
             }
         }
+
+        // Try to render clever error info
+        render_clever_error(service, &mut effects);
 
         message.effects = Some(effects);
     }
@@ -219,4 +221,61 @@ fn transaction_to_response(
     }
 
     message
+}
+
+pub(crate) fn render_clever_error(service: &RpcService, effects: &mut TransactionEffects) {
+    use sui_rpc::proto::sui::rpc::v2beta2::clever_error;
+    use sui_rpc::proto::sui::rpc::v2beta2::execution_error::ErrorDetails;
+    use sui_rpc::proto::sui::rpc::v2beta2::CleverError;
+    use sui_rpc::proto::sui::rpc::v2beta2::MoveAbort;
+
+    let Some(move_abort) = effects
+        .status
+        .as_mut()
+        .and_then(|status| status.error.as_mut())
+        .and_then(|error| match &mut error.error_details {
+            Some(ErrorDetails::Abort(move_abort)) => Some(move_abort),
+            _ => None,
+        })
+    else {
+        return;
+    };
+
+    fn render(service: &RpcService, move_abort: &MoveAbort) -> Option<CleverError> {
+        let location = move_abort.location.as_ref()?;
+        let abort_code = move_abort.abort_code();
+        let package_id = location.package().parse::<sui_sdk_types::Address>().ok()?;
+        let module = location.module();
+
+        let package = {
+            let object = service.reader.inner().get_object(&package_id.into())?;
+            sui_package_resolver::Package::read_from_object(&object).ok()?
+        };
+
+        let clever_error = package.resolve_clever_error(module, abort_code)?;
+
+        let mut clever_error_message = CleverError::default();
+
+        match clever_error.error_info {
+            sui_package_resolver::ErrorConstants::None => {}
+            sui_package_resolver::ErrorConstants::Rendered {
+                identifier,
+                constant,
+            } => {
+                clever_error_message.constant_name = Some(identifier);
+                clever_error_message.value = Some(clever_error::Value::Rendered(constant));
+            }
+            sui_package_resolver::ErrorConstants::Raw { identifier, bytes } => {
+                clever_error_message.constant_name = Some(identifier);
+                clever_error_message.value = Some(clever_error::Value::Raw(bytes.into()));
+            }
+        }
+
+        clever_error_message.error_code = clever_error.error_code.map(Into::into);
+        clever_error_message.line_number = Some(clever_error.source_line_number.into());
+
+        Some(clever_error_message)
+    }
+
+    move_abort.clever_error = render(service, move_abort);
 }

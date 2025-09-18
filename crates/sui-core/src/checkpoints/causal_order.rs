@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::effects::{InputSharedObject, TransactionEffects};
+use sui_types::effects::{InputConsensusObject, TransactionEffects};
 use sui_types::storage::ObjectKey;
 use tracing::trace;
 
@@ -120,9 +120,9 @@ impl RWLockDependencyBuilder {
         let mut read_version: HashMap<ObjectKey, Vec<TransactionDigest>> = Default::default();
         let mut overwrite_versions: HashMap<TransactionDigest, Vec<ObjectKey>> = Default::default();
         for effect in effects {
-            for kind in effect.input_shared_objects() {
+            for kind in effect.input_consensus_objects() {
                 match kind {
-                    InputSharedObject::ReadOnly(obj_ref) => {
+                    InputConsensusObject::ReadOnly(obj_ref) => {
                         let obj_key = obj_ref.into();
                         // Read only transaction
                         read_version
@@ -130,7 +130,7 @@ impl RWLockDependencyBuilder {
                             .or_default()
                             .push(*effect.transaction_digest());
                     }
-                    InputSharedObject::Mutate(obj_ref) => {
+                    InputConsensusObject::Mutate(obj_ref) => {
                         let obj_key = obj_ref.into();
                         // write transaction
                         overwrite_versions
@@ -138,17 +138,17 @@ impl RWLockDependencyBuilder {
                             .or_default()
                             .push(obj_key);
                     }
-                    InputSharedObject::ReadConsensusStreamEnded(oid, version) => read_version
+                    InputConsensusObject::ReadConsensusStreamEnded(oid, version) => read_version
                         .entry(ObjectKey(oid, version))
                         .or_default()
                         .push(*effect.transaction_digest()),
-                    InputSharedObject::MutateConsensusStreamEnded(oid, version) => {
+                    InputConsensusObject::MutateConsensusStreamEnded(oid, version) => {
                         overwrite_versions
                             .entry(*effect.transaction_digest())
                             .or_default()
                             .push(ObjectKey(oid, version))
                     }
-                    InputSharedObject::Cancelled(..) => (),
+                    InputConsensusObject::Cancelled(..) => (),
                 }
             }
         }
@@ -245,17 +245,17 @@ mod tests {
         let mut e2 = e(d(2), vec![]);
         let mut e3 = e(d(3), vec![]);
         let obj_digest = ObjectDigest::new(Default::default());
-        e5.unsafe_add_input_shared_object_for_testing(InputSharedObject::ReadOnly((
+        e5.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::ReadOnly((
             o(1),
             SequenceNumber::from_u64(1),
             obj_digest,
         )));
-        e2.unsafe_add_input_shared_object_for_testing(InputSharedObject::ReadOnly((
+        e2.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::ReadOnly((
             o(1),
             SequenceNumber::from_u64(1),
             obj_digest,
         )));
-        e3.unsafe_add_input_shared_object_for_testing(InputSharedObject::Mutate((
+        e3.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::Mutate((
             o(1),
             SequenceNumber::from_u64(1),
             obj_digest,

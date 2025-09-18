@@ -192,6 +192,7 @@ impl Move2024PathExpander {
             LN::GlobalAddress(name) => {
                 if let Some(address) = context
                     .named_address_mapping
+                    .clone()
                     .expect("ICE no named address mapping")
                     .get(&name.value)
                 {
@@ -1236,7 +1237,7 @@ impl PathExpander for LegacyPathExpander {
     fn ide_autocomplete_suggestion(&mut self, context: &mut DefnContext, loc: Loc) {
         if context.env.ide_mode() && matches!(context.target_kind, P::TargetKind::Source { .. }) {
             let mut info = AliasAutocompleteInfo::new();
-            for (name, addr) in context.named_address_mapping.unwrap().iter() {
+            for (name, addr) in context.named_address_mapping.clone().unwrap().iter() {
                 info.addresses.insert(*name, *addr);
             }
             for (_, name, (_, mident)) in self.aliases.modules.iter() {

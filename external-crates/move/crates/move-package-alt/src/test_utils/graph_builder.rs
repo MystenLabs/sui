@@ -33,13 +33,16 @@
 //! [TestPackageGraph::add_package] and [TestPackageGraph::add_dep]. These take closures that
 //! customize the generated packages and deps respectively. See [tests::complex] for a complete example.
 
+#![allow(unused)]
+
 use std::{
     collections::BTreeMap,
     convert::identity,
     path::{Path, PathBuf},
 };
 
-use indoc::formatdoc;
+use heck::CamelCase;
+use indoc::{formatdoc, indoc};
 use petgraph::{
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
@@ -51,7 +54,7 @@ use crate::{
         Vanilla,
         vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
     },
-    package::{EnvironmentID, EnvironmentName, paths::PackagePath},
+    package::{EnvironmentID, EnvironmentName, RootPackage, paths::PackagePath},
     schema::{OriginalID, PackageName, PublishAddresses, PublishedID},
     test_utils::{Project, project},
 };
@@ -76,6 +79,17 @@ pub struct PackageSpec {
 
     /// The publications for each environment
     pubs: BTreeMap<EnvironmentName, PubSpec>,
+
+    /// Is the package a legacy package?
+    is_legacy: bool,
+
+    /// ```toml
+    /// name = "MoveStdLib" <-- `legacy_name`
+    ///
+    /// [addresses]
+    /// std = "0x1" <-- `name`
+    /// ```
+    legacy_name: Option<String>,
 }
 
 /// Information used to build an edge in the package graph
@@ -100,6 +114,7 @@ pub struct DepSpec {
 pub struct PubSpec {
     chain_id: EnvironmentID,
     addresses: PublishAddresses,
+    version: u64,
 }
 
 pub struct Scenario {
@@ -122,7 +137,7 @@ impl TestPackageGraph {
     /// Add a dependency to the graph from `a` to `b` for each pair `("a", "b")` in `edges`. The
     /// dependencies will be local dependencies in the `[dependencies]` sections.
     pub fn add_deps(
-        mut self,
+        self,
         edges: impl IntoIterator<Item = (impl AsRef<str>, impl AsRef<str>)>,
     ) -> Self {
         edges.into_iter().fold(self, |graph, (source, target)| {
@@ -145,17 +160,26 @@ impl TestPackageGraph {
         self
     }
 
-    /// `builder.add_published("a", original, published_at)` is shorthand for
+    pub fn add_legacy_packages(mut self, nodes: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        for node in nodes {
+            self = self.add_package(node, |pkg| pkg.set_legacy())
+        }
+        self
+    }
+
+    /// `builder.add_published("a", original, published_at, None)` is shorthand for
     /// ```ignore
-    /// builder.add_package("a", |a| a.publish(original, published_at))
+    /// builder.add_package("a", |a| a.publish(original, published_at, None))
     /// ```
     pub fn add_published(
-        mut self,
+        self,
         node: impl AsRef<str>,
         original_id: OriginalID,
         published_at: PublishedID,
     ) -> Self {
-        self.add_package(node, |package| package.publish(original_id, published_at))
+        self.add_package(node, |package| {
+            package.publish(original_id, published_at, None)
+        })
     }
 
     /// Add a dependency from package `source` to package `target` and customize it using `build`
@@ -187,14 +211,14 @@ impl TestPackageGraph {
             let dir = PathBuf::from(package_id.as_str());
 
             let manifest = &self.format_manifest(*node);
-            let lockfile = &self.format_lockfile(*node);
+            let pubfile = &self.format_pubfile(*node);
 
             debug!("Generated test manifest for {package_id}:\n\n{manifest}");
-            debug!("Generated test lockfile for {package_id}:\n\n{lockfile}");
+            debug!("Generated test pubfile for {package_id}:\n\n{pubfile}");
 
             project = project
                 .file(dir.join("Move.toml"), manifest)
-                .file(dir.join("Move.lock"), lockfile);
+                .file(dir.join("Published.toml"), pubfile);
         }
 
         Scenario {
@@ -204,6 +228,10 @@ impl TestPackageGraph {
 
     /// Return the contents of a `Move.toml` file for the package represented by `node`
     fn format_manifest(&self, node: NodeIndex) -> String {
+        if self.inner[node].is_legacy {
+            return self.format_legacy_manifest(node);
+        }
+
         let mut move_toml = formatdoc!(
             r#"
                 [package]
@@ -236,38 +264,91 @@ impl TestPackageGraph {
         move_toml
     }
 
+    /// Return the contents of a legacy `Move.toml` file for the legacy package represented by
+    /// `node`
+    fn format_legacy_manifest(&self, node: NodeIndex) -> String {
+        let package = &self.inner[node];
+        assert!(package.is_legacy);
+
+        assert!(
+            package.pubs.len() <= 1,
+            "legacy packages may have at most one publication"
+        );
+        let publication = package
+            .pubs
+            .first_key_value()
+            .map(|(env, publication)| publication);
+
+        let published_at = publication
+            .map(|it| format!("published-at = {}", it.addresses.published_at))
+            .unwrap_or_default();
+
+        let mut move_toml = formatdoc!(
+            r#"
+            [package]
+            name = "{}"
+            edition = "2024"
+            {published_at}
+            "#,
+            package
+                .legacy_name
+                .clone()
+                .unwrap_or(package.id.to_camel_case())
+        );
+
+        let mut deps = String::from("\n[dependencies]\n");
+        for edge in self.inner.edges(node) {
+            let dep_spec = edge.weight();
+            let dep_str = self.format_legacy_dep(edge.weight(), &self.inner[edge.target()]);
+            deps.push_str(&dep_str);
+            deps.push('\n');
+        }
+        move_toml.push_str(&deps);
+        move_toml.push('\n');
+
+        // TODO: it would be good to split up `PackageSpec` and `LegacyPackageSpec`, so that we can
+        // add things like additional `[addresses]`
+        move_toml.push_str(&formatdoc!(
+            r#"
+            [addresses]
+            {} = "{}"
+            "#,
+            package.name,
+            publication
+                .map(|it| it.addresses.original_id.to_string())
+                .unwrap_or("0x0".to_string())
+        ));
+
+        move_toml
+    }
+
     /// Return the contents of a `Move.lock` file for the package represented by
-    /// `node`. The lock file will not contain a `pinned` section, only the `published` section
-    ///
-    /// For publications with no published-at and original-id fields, we generate them sequentially
-    /// starting from 1000 (and set them to the same value)
-    fn format_lockfile(&self, node: NodeIndex) -> String {
+    /// `node`.
+    fn format_pubfile(&self, node: NodeIndex) -> String {
         let mut move_lock = String::new();
 
         for (env, publication) in self.inner[node].pubs.iter() {
             let PubSpec {
-                chain_id,
                 addresses:
                     PublishAddresses {
                         original_id,
                         published_at,
                     },
+                version,
+                ..
             } = publication;
 
             move_lock.push_str(&formatdoc!(
                 r#"
                     [published.{env}]
+                    chain-id = "{DEFAULT_ENV_ID}"
                     published-at = "{published_at}"
                     original-id = "{original_id}"
-                    chain-id = "{DEFAULT_ENV_ID}"
-                    toolchain-version = "test-0.0.0"
-                    build-config = {{}}
-
+                    version = {version}
                     "#,
             ));
         }
 
-        debug!("{move_lock}");
         move_lock
     }
 
@@ -304,6 +385,32 @@ impl TestPackageGraph {
 
         format!(r#"{env}{name} = {{ local = "../{path}"{is_override}{rename_from}{use_env} }}"#)
     }
+
+    /// Output the dependency in the form
+    /// `<capitalized-name> = { ... }`, failing if the dependency uses non-legacy features
+    fn format_legacy_dep(&self, dep: &DepSpec, target: &PackageSpec) -> String {
+        // TODO: we could share more code with the non-legacy stuff I think
+        let name = dep.name.as_ref().as_str().to_camel_case();
+        let path = &target.id;
+
+        let is_override = if dep.is_override {
+            ", override = true"
+        } else {
+            ""
+        };
+
+        assert!(
+            dep.rename_from.is_none(),
+            "legacy manifests don't support rename-from"
+        );
+
+        assert!(
+            dep.use_env.is_none(),
+            "legacy manifests don't support use-env"
+        );
+
+        format!(r#"{name} = {{ local = "../{path}"{is_override} }}"#)
+    }
 }
 
 impl PackageSpec {
@@ -313,10 +420,17 @@ impl PackageSpec {
             name: PackageName::new(name.as_ref()).expect("valid package name"),
             pubs: BTreeMap::new(),
             id: name.as_ref().to_string(),
+            is_legacy: false,
+            legacy_name: None,
         }
     }
 
-    pub fn publish(mut self, original_id: OriginalID, published_at: PublishedID) -> Self {
+    pub fn publish(
+        mut self,
+        original_id: OriginalID,
+        published_at: PublishedID,
+        version: Option<u64>,
+    ) -> Self {
         self.pubs.insert(
             DEFAULT_ENV_NAME.to_string(),
             PubSpec {
@@ -325,6 +439,7 @@ impl PackageSpec {
                     original_id,
                     published_at,
                 },
+                version: version.unwrap_or(1),
             },
         );
         self
@@ -339,6 +454,25 @@ impl PackageSpec {
     /// Change this to a git dependency (in its own temporary directory)
     pub fn make_git(mut self) -> Self {
         todo!();
+        self
+    }
+
+    /// Change this package to a legacy package. Legacy packages will produce manfests with
+    /// upper-cased names for the package and the dependency, and will contain an `[addresses]`
+    /// section with a single variable given by the package name.
+    ///
+    /// If the package is published, the `published-at` field will be added and the named-address
+    /// will be set to the original ID; otherwise there will be no published-at field and the
+    /// named address will be set to 0.
+    pub fn set_legacy(mut self) -> Self {
+        self.is_legacy = true;
+        self
+    }
+
+    /// Set the `name` field in the manifest of legacy packages.
+    pub fn set_legacy_name(mut self, name: impl AsRef<str>) -> Self {
+        assert!(self.is_legacy);
+        self.legacy_name = Some(name.as_ref().to_string());
         self
     }
 }
@@ -410,6 +544,7 @@ impl Scenario {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
 
@@ -441,9 +576,9 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("a/Move.lock"), @"");
+        assert_snapshot!(graph.read_file("a/Published.toml"), @"");
 
-        assert_snapshot!(graph.read_file("b/Move.lock"), @"");
+        assert_snapshot!(graph.read_file("b/Published.toml"), @"");
     }
 
     /// Ensure that using all the features of [TestPackageGraph] gives the correct manifests and
@@ -453,8 +588,11 @@ mod tests {
         // TODO: break this into separate tests
         let graph = TestPackageGraph::new(["a", "b"])
             .add_package("c", |c| {
-                c.package_name("c_name")
-                    .publish(OriginalID::from(0xcc00), PublishedID::from(0xcccc))
+                c.package_name("c_name").publish(
+                    OriginalID::from(0xcc00),
+                    PublishedID::from(0xcccc),
+                    None,
+                )
             })
             .add_deps([("b", "c")])
             .add_dep("a", "b", |dep| {
@@ -510,13 +648,53 @@ mod tests {
         [dep-replacements]
         "###);
 
-        assert_snapshot!(graph.read_file("c/Move.lock"), @r###"
+        assert_snapshot!(graph.read_file("c/Published.toml"), @r###"
         [published._test_env]
+        chain-id = "_test_env_id"
         published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
         original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
-        chain-id = "_test_env_id"
-        toolchain-version = "test-0.0.0"
-        build-config = {}
+        version = 1
+        "###);
+    }
+
+    /// Check generation of legacy manifests
+    #[test]
+    fn legacy() {
+        let graph = TestPackageGraph::new(["a", "c"])
+            .add_legacy_packages(["b"])
+            .add_package("d", |d| {
+                d.set_legacy().set_legacy_name("Any").publish(
+                    OriginalID::from(0x4444),
+                    PublishedID::from(0x5555),
+                    None,
+                )
+            })
+            .add_deps([("a", "b"), ("b", "c"), ("c", "d")])
+            .build();
+
+        assert_snapshot!(graph.read_file("b/Move.toml"), @r###"
+        [package]
+        name = "B"
+        edition = "2024"
+
+
+        [dependencies]
+        C = { local = "../c" }
+
+        [addresses]
+        b = "0x0"
+        "###);
+
+        assert_snapshot!(graph.read_file("d/Move.toml"), @r###"
+        [package]
+        name = "Any"
+        edition = "2024"
+        published-at = 0x0000000000000000000000000000000000000000000000000000000000005555
+
+        [dependencies]
+
+        [addresses]
+        d = "0x0000000000000000000000000000000000000000000000000000000000004444"
         "###);
     }
 }

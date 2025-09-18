@@ -171,17 +171,6 @@ impl ProjectBuilder {
 }
 
 impl Project {
-    /// Try to get the git commits in the project, but it will panic if this is not a git
-    /// repository.
-    pub fn commits(&self) -> Vec<String> {
-        let repo = git2::Repository::open(self.root.clone())
-            .unwrap_or_else(|_| panic!("failed to open git repository at {}", self.root.display()));
-        git::commits(&repo)
-            .into_iter()
-            .map(|c| c.id().to_string())
-            .collect()
-    }
-
     /// Root of the project
     pub fn root(&self) -> PathBuf {
         self.root.clone()

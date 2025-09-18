@@ -2,28 +2,33 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::Path};
-
-use super::manifest::Manifest;
-use super::paths::PackagePath;
-use crate::compatibility::legacy_parser::ParsedLegacyPackage;
-use crate::schema::{ImplicitDepMode, ReplacementDependency};
-use crate::{
-    compatibility::{
-        legacy::LegacyData,
-        legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
-    },
-    dependency::{CombinedDependency, PinnedDependencyInfo, pin},
-    errors::{PackageError, PackageResult},
-    flavor::MoveFlavor,
-    package::{lockfile::Lockfiles, manifest::Digest},
-    schema::{
-        Environment, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageMetadata,
-        PackageName, Publication, PublishAddresses, PublishedID,
-    },
+use std::{
+    collections::BTreeMap,
+    path::Path,
+    sync::{LazyLock, Mutex},
 };
 
-const SYSTEM_DEPS_NAMES: [&str; 5] = ["Sui", "MoveStdlib", "Bridge", "DeepBook", "SuiSystem"];
+use derive_where::derive_where;
+use tracing::debug;
+
+use super::compute_digest;
+use super::manifest::Manifest;
+use super::paths::PackagePath;
+use crate::compatibility::legacy::LegacyData;
+use crate::compatibility::legacy_parser::try_load_legacy_manifest;
+use crate::dependency::FetchedDependency;
+use crate::errors::FileHandle;
+use crate::schema::{ParsedManifest, ParsedPublishedFile, Publication, ReplacementDependency};
+use crate::{
+    dependency::{CombinedDependency, PinnedDependencyInfo},
+    errors::{PackageError, PackageResult},
+    flavor::MoveFlavor,
+    package::manifest::Digest,
+    schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
+};
+
+// TODO: is this the right way to handle this?
+static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -32,30 +37,36 @@ pub type EnvironmentID = String;
 pub type AddressInfo = String;
 
 #[derive(Debug)]
+#[derive_where(Clone)]
 pub struct Package<F: MoveFlavor> {
     /// The environment of the loaded package.
     env: EnvironmentName,
+
     /// The digest of the package.
     digest: Digest,
+
     /// The metadata of the package.
     metadata: PackageMetadata,
+
     /// A [`PackagePath`] representing the canonical path to the package directory.
     path: PackagePath,
-    /// (Optional) Publish information for the loaded environment (original-id, published-at and more).
-    publish_data: Option<Publication<F>>,
 
-    /// The way this package should be serialized to the lockfile. Note that this is a dependency
-    /// relative to the root package (in particular, the root package is the only package with
-    /// `source = {local = "."}`
-    source: LockfileDependencyInfo,
+    /// The `Publication` information for the specified network
+    publication: Option<Publication<F>>,
+
+    /// The way this package should be serialized to the lockfile.
+    dep_for_self: PinnedDependencyInfo,
 
     /// Optional legacy information for a supplied package.
-    /// TODO(manos): Make `LegacyData` single environment too, or use multiple types for this.
     pub legacy_data: Option<LegacyData>,
 
     /// The pinned direct dependencies for this package
     /// Note: for legacy packages, this information will be stored in `legacy_data`.
     deps: BTreeMap<PackageName, PinnedDependencyInfo>,
+
+    /// Dummy address that is set during package graph initialization for unpublished addresses
+    // TODO: probably we want to refactor this and have it in published
+    pub dummy_addr: OriginalID,
 }
 
 impl<F: MoveFlavor> Package<F> {
@@ -65,7 +76,8 @@ impl<F: MoveFlavor> Package<F> {
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>, env: &Environment) -> PackageResult<Self> {
         let path = PackagePath::new(path.as_ref().to_path_buf())?;
-        let source = LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() });
+        let root_manifest = FileHandle::new(path.manifest_path())?;
+        let source = PinnedDependencyInfo::root_dependency(root_manifest, env.name().clone());
 
         Self::load_internal(path, source, env).await
     }
@@ -73,106 +85,72 @@ impl<F: MoveFlavor> Package<F> {
     /// Fetch [dep] and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
     pub async fn load(dep: PinnedDependencyInfo, env: &Environment) -> PackageResult<Self> {
-        let path = PackagePath::new(dep.fetch().await?)?;
+        let path = FetchedDependency::fetch(&dep).await?.into();
 
-        Self::load_internal(path, dep.into(), env).await
+        Self::load_internal(path, dep, env).await
     }
 
     /// Loads a package internally, doing a "best" effort to translate an old-style package into the new one.
     async fn load_internal(
         path: PackagePath,
-        source: LockfileDependencyInfo,
+        dep_for_self: PinnedDependencyInfo,
         env: &Environment,
     ) -> PackageResult<Self> {
-        let manifest = Manifest::read_from_file(path.manifest_path());
+        debug!("loading package {:?}", dep_for_self);
+        // try to load a legacy manifest (with an `[addresses]` section)
+        //   - if it fails, load a modern manifest (and return any errors)
+        let (file_handle, manifest) = if let Some(result) = try_load_legacy_manifest(&path, env)? {
+            result
+        } else {
+            let m = Manifest::read_from_file(path.manifest_path())?;
+            (*m.file_handle(), m.into_parsed())
+        };
 
-        // If our "modern" manifest is OK, we load the modern lockfile and return early.
-        if let Ok(manifest) = manifest {
-            // TODO check if the environment IDs match
-            // - if there's multiple keys for the same environment ID, we error
-            // - if there is one key for the environment ID, we use that
-            // - if there is no value with the same environment ID, we error
+        // try to load the address from the modern lockfile
+        //   - if it fails, look in the legacy data
+        //   - if that fails, use a dummy address
+        let publication = Self::load_publication(&path, env.name())?.or_else(|| {
+            manifest
+                .legacy_data
+                .as_ref()
+                .and_then(|legacy| legacy.publication::<F>(env))
+        });
+        let dummy_addr = create_dummy_addr();
 
-            let publish_data = Self::load_published_info_from_lockfile(&path)?;
+        // TODO: try to gather dependencies from the modern lockfile
+        //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
+        //     (adding system deps)
 
-            let implicit_deps =
-                implicit_deps::<F>(env, manifest.parsed().package.implicit_deps, None);
+        let deps = Self::deps_from_manifest(&dep_for_self, &file_handle, &manifest, env).await?;
 
-            // TODO: We should error if there environment is not supported!
-            let combined_deps = CombinedDependency::combine_deps(
-                manifest.file_handle(),
-                env,
-                manifest
-                    .dep_replacements()
-                    .get(env.name())
-                    .unwrap_or(&BTreeMap::new()),
-                &manifest.dependencies(),
-                &implicit_deps,
-            )?;
+        // compute the digest (TODO: this should only compute over the environment specific data)
+        let digest = compute_digest(file_handle.source());
 
-            let deps = pin::<F>(combined_deps, env.id()).await?;
-
-            return Ok(Self {
-                env: env.name().clone(),
-                digest: manifest.digest().to_string(),
-                metadata: manifest.metadata(),
-                path,
-                publish_data: publish_data.get(env.name()).cloned(),
-                source,
-                legacy_data: None,
-                deps,
-            });
-        }
-
-        // If the manifest does not look like a legacy one, we again return early by erroring on the modern errors.
-        if !is_legacy_like(&path) {
-            return Err(PackageError::Manifest(manifest.unwrap_err()));
-        }
-
-        // Here, that means that we're working on legacy package, so we can throw its errors.
-        let legacy_manifest = parse_legacy_manifest_from_file(&path)?;
-        let implicit_deps =
-            implicit_deps::<F>(env, ImplicitDepMode::Legacy, Some(&legacy_manifest));
-
-        let combined_deps = CombinedDependency::combine_deps(
-            &legacy_manifest.file_handle,
-            env,
-            &BTreeMap::new(),
-            &legacy_manifest.deps,
-            &implicit_deps,
-        )?;
-
-        let deps = pin::<F>(combined_deps, env.id()).await?;
-
-        Ok(Self {
+        let result = Self {
             env: env.name().clone(),
-            // TODO: Should we compute this at this point?
-            digest: "".to_string(),
-            metadata: legacy_manifest.metadata,
+            digest,
+            metadata: manifest.package,
             path,
-            publish_data: Default::default(),
-            source,
-            legacy_data: Some(legacy_manifest.legacy_data),
+            publication,
+            dep_for_self,
+            legacy_data: manifest.legacy_data,
             deps,
-        })
+            dummy_addr,
+        };
+
+        debug!(
+            "successfully loaded {:?}",
+            result.dep_for_self.unfetched_path()
+        );
+        Ok(result)
     }
 
-    /// Try to load a lockfile and extract the published information for each environment from it
-    fn load_published_info_from_lockfile(
-        path: &PackagePath,
-    ) -> PackageResult<BTreeMap<EnvironmentName, Publication<F>>> {
-        let lockfile = Lockfiles::<F>::read_from_dir(path)?;
-
-        let publish_data = lockfile
-            .map(|l| l.published().clone())
-            .map(|x| {
-                x.into_iter()
-                    .map(|(env, pub_info)| (env.clone(), pub_info))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        Ok(publish_data)
+    /// Create a copy of this package with the publication information replaced by `publish`
+    pub(crate) fn override_publish(&self, publish: Publication<F>) -> Self {
+        let mut result = self.clone();
+        debug!("updating address to {publish:?}");
+        result.publication = Some(publish);
+        result
     }
 
     /// The path to the root directory of this package. This path is guaranteed to exist
@@ -185,15 +163,27 @@ impl<F: MoveFlavor> Package<F> {
         self.metadata.name.as_ref()
     }
 
+    pub fn display_name(&self) -> &str {
+        if let Some(legacy_data) = self.legacy_data.as_ref() {
+            &legacy_data.legacy_name
+        } else {
+            self.metadata.name.as_ref().as_str()
+        }
+    }
+
     pub fn digest(&self) -> &Digest {
         &self.digest
+    }
+
+    pub fn environment_name(&self) -> &EnvironmentName {
+        &self.env
     }
 
     /// The way this package should be serialized to the root package's lockfile. Note that this is
     /// a dependency relative to the root package (in particular, the root package is the only
     /// package where `dep_for_self()` returns `{local = "."}`
-    pub fn dep_for_self(&self) -> &LockfileDependencyInfo {
-        &self.source
+    pub fn dep_for_self(&self) -> &PinnedDependencyInfo {
+        &self.dep_for_self
     }
 
     pub fn is_legacy(&self) -> bool {
@@ -204,9 +194,7 @@ impl<F: MoveFlavor> Package<F> {
     /// to hold for exactly one package for a valid package graph (see [Self::dep_for_self] for
     /// more information)
     pub fn is_root(&self) -> bool {
-        let result = (self.dep_for_self()
-            == &LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }));
-        result
+        self.dep_for_self().is_root()
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`
@@ -215,51 +203,266 @@ impl<F: MoveFlavor> Package<F> {
         &self.deps
     }
 
-    fn publication(&self) -> Option<&PublishAddresses> {
-        self.publish_data.as_ref().map(|data| &data.addresses)
+    /// Additional flavor-specific information that was recorded when this package was published
+    /// (in the `Move.published` file or the ephemeral publication file if this was created with
+    /// [Self::override_publish]).
+    pub fn publication(&self) -> Option<&Publication<F>> {
+        self.publication.as_ref()
     }
 
     /// Tries to get the `published-at` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    pub fn published_at(&self) -> Option<PublishedID> {
-        self.publication().map(|data| data.published_at.clone())
+    pub fn published_at(&self) -> Option<&PublishedID> {
+        self.publication()
+            .map(|publication| &publication.addresses.published_at)
     }
 
     /// Tries to get the `original-id` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    pub fn original_id(&self) -> Option<OriginalID> {
-        self.publication().map(|data| data.original_id.clone())
+    pub fn original_id(&self) -> Option<&OriginalID> {
+        self.publication()
+            .map(|publication| &publication.addresses.original_id)
+    }
+
+    pub fn metadata(&self) -> &PackageMetadata {
+        &self.metadata
+    }
+
+    /// Read the publication for the given environment from the package pubfile.
+    fn load_publication(
+        path: &PackagePath,
+        env: &EnvironmentName,
+    ) -> PackageResult<Option<Publication<F>>> {
+        let pubfile = path.publications_path();
+
+        let Ok(file) = FileHandle::new(path.publications_path()) else {
+            debug!("unable to load {pubfile:?}");
+            return Ok(None);
+        };
+
+        debug!("parsing\n---\n{}\n---", file.source());
+        let parsed = toml_edit::de::from_str::<ParsedPublishedFile<F>>(file.source())?;
+
+        let Some(publish) = parsed.published.get(env) else {
+            debug!("no entry for {env:?} in {pubfile:?}");
+            return Ok(None);
+        };
+
+        Ok(Some(publish.clone()))
+    }
+
+    /// Compute the direct dependencies for the given environment by combining the default
+    /// dependencies, system dependencies, and dep-replacements from the manifest and then pinning
+    /// the results
+    async fn deps_from_manifest(
+        parent: &PinnedDependencyInfo,
+        file_handle: &FileHandle,
+        manifest: &ParsedManifest,
+        env: &Environment,
+    ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
+        debug!("adding system dependencies");
+        let system_dependencies =
+            Self::system_dependencies(env, manifest.package.system_dependencies.clone())?;
+
+        debug!("combining [dependencies] with [dep-replacements] for {env:?}");
+        let combined_deps = CombinedDependency::combine_deps(
+            file_handle,
+            env,
+            manifest
+                .dep_replacements
+                .get(env.name())
+                .unwrap_or(&BTreeMap::new()),
+            &manifest
+                .dependencies
+                .iter()
+                .map(|(k, v)| (k.as_ref().clone(), v.clone()))
+                .collect(),
+            &system_dependencies,
+        )?;
+
+        debug!("pinning dependencies");
+        PinnedDependencyInfo::pin::<F>(parent, combined_deps, env.id()).await
+    }
+
+    /// Return system dependencies depending on the manifest setup.
+    fn system_dependencies(
+        env: &Environment,
+        system_dependencies: Option<Vec<String>>,
+    ) -> PackageResult<BTreeMap<PackageName, ReplacementDependency>> {
+        if let Some(system_dependencies) = system_dependencies {
+            // Only include the specified system dependencies.
+            let all_flavor_deps = F::system_dependencies(env.id().to_string());
+
+            let mut result = BTreeMap::new();
+
+            for dep in &system_dependencies {
+                let name = PackageName::new(dep.clone())?;
+                if let Some(dep) = all_flavor_deps.get(&name) {
+                    result.insert(name, dep.clone());
+                } else {
+                    return Err(PackageError::Generic(format!(
+                        "Invalid system dependency `{}`; the allowed system dependencies are: [{}]",
+                        dep,
+                        all_flavor_deps
+                            .keys()
+                            .map(|k| k.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )));
+                }
+            }
+            return Ok(result);
+        }
+
+        // If no system dependencies are specified, we include the default system dependencies.
+        Ok(F::default_system_dependencies(env.id().to_string()))
     }
 }
 
-/// Return the implicit deps depending on the implicit dep mode. Note that if `implicit_dep_mode`
-/// is ImplicitDepMode::Legacy, a `legacy_manifest` is required otherwise it will panic.
-// TODO this needs to be moved into a ImplicitDeps trait
-fn implicit_deps<F: MoveFlavor>(
-    env: &Environment,
-    implicit_dep_mode: ImplicitDepMode,
-    legacy_manifest: Option<&ParsedLegacyPackage>,
-) -> BTreeMap<PackageName, ReplacementDependency> {
-    // TODO: is this correct? Do we need to include the git repo? What if somebody names it
-    // differently and specifies a different git repository (e.g., a fork) - is that possible?
-    // e.g., SuiFork = { git = "https://github.com/suifork/sui.git", branch = "main" }
+/// Return a fresh OriginalID
+fn create_dummy_addr() -> OriginalID {
+    let lock = DUMMY_ADDRESSES.lock();
+    let mut dummy_addr = lock.unwrap();
+    *dummy_addr += 1;
+    (*dummy_addr).into()
+}
 
-    match implicit_dep_mode {
-        ImplicitDepMode::Enabled => F::implicit_deps(env.id().to_string()),
-        ImplicitDepMode::Disabled => BTreeMap::new(),
-        ImplicitDepMode::Legacy => {
-            let system_deps_in_legacy_manifest = legacy_manifest
-                .expect("Legacy manifest should be present")
-                .deps
-                .iter()
-                .any(|(name, _)| SYSTEM_DEPS_NAMES.contains(&name.as_str()));
-            // if the legacy manifest has system dependencies, we return an empty map
-            if system_deps_in_legacy_manifest {
-                BTreeMap::new()
-            } else {
-                F::implicit_deps(env.id().to_string())
-            }
+#[cfg(test)]
+mod tests {
+    use move_command_line_common::testing::insta::assert_snapshot;
+
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestFlavor;
+
+    impl MoveFlavor for TestFlavor {
+        type PublishedMetadata = ();
+        type PackageMetadata = ();
+        type AddressInfo = String;
+
+        fn name() -> String {
+            "test".to_string()
         }
-        ImplicitDepMode::Testing => todo!(),
+
+        fn default_environments() -> BTreeMap<String, String> {
+            BTreeMap::new()
+        }
+
+        // Our test flavor has `[foo, bar, baz]` system dependencies.
+        fn system_dependencies(_: String) -> BTreeMap<PackageName, ReplacementDependency> {
+            let mut deps = BTreeMap::new();
+            deps.insert(
+                new_package_name("foo"),
+                ReplacementDependency {
+                    dependency: None,
+                    addresses: None,
+                    use_environment: None,
+                },
+            );
+            deps.insert(
+                new_package_name("bar"),
+                ReplacementDependency {
+                    dependency: None,
+                    addresses: None,
+                    use_environment: None,
+                },
+            );
+
+            deps.insert(
+                new_package_name("baz"),
+                ReplacementDependency {
+                    dependency: None,
+                    addresses: None,
+                    use_environment: None,
+                },
+            );
+
+            deps
+        }
+
+        // In this flavor, only `[foo, bar]` are enabled by default.
+        fn default_system_dependencies(
+            environment: EnvironmentID,
+        ) -> BTreeMap<PackageName, ReplacementDependency> {
+            let default_deps = [new_package_name("foo"), new_package_name("bar")];
+
+            Self::system_dependencies(environment)
+                .into_iter()
+                .filter(|(name, _)| default_deps.contains(name))
+                .collect()
+        }
+    }
+
+    #[test]
+    /// We enable the default system deps.
+    fn test_default_system_dependencies() {
+        let env = test_environment();
+        let implicit_deps = None;
+
+        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
+        let dep_keys: Vec<_> = deps.keys().cloned().collect();
+
+        assert_eq!(dep_keys.len(), 2);
+        assert!(dep_keys.contains(&new_package_name("foo")));
+        assert!(dep_keys.contains(&new_package_name("bar")));
+    }
+
+    #[test]
+    /// We enable system deps, but specifying which ones we want.
+    fn test_explicit_system_deps() {
+        let env = test_environment();
+        let implicit_deps = Some(vec!["foo".to_string()]);
+
+        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
+        let dep_keys: Vec<_> = deps.keys().cloned().collect();
+
+        assert_eq!(dep_keys.len(), 1);
+        assert!(dep_keys.contains(&new_package_name("foo")));
+        assert!(!dep_keys.contains(&new_package_name("bar")));
+    }
+
+    #[test]
+    /// Test that we can also "add" deps that are not in the default list of the flavor.
+    fn test_explicit_deps_with_more_than_default_names() {
+        let env = test_environment();
+        let implicit_deps = Some(vec!["foo".to_string(), "baz".to_string()]);
+
+        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
+        let dep_keys: Vec<_> = deps.keys().cloned().collect();
+
+        assert_eq!(dep_keys.len(), 2);
+        assert!(dep_keys.contains(&new_package_name("foo")));
+        assert!(dep_keys.contains(&new_package_name("baz")));
+    }
+
+    #[test]
+    fn test_explicit_system_deps_with_invalid_names() {
+        let env = test_environment();
+        let implicit_deps = Some(vec!["ignore".to_string(), "foo".to_string()]);
+
+        assert_snapshot!(
+            Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap_err(),
+            @"Invalid system dependency `ignore`; the allowed system dependencies are: [bar, baz, foo]"
+        );
+    }
+
+    #[test]
+    /// We disable system dependencies altogether.
+    fn test_no_system_deps() {
+        let env = test_environment();
+        let implicit_deps = Some(vec![]);
+
+        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
+
+        assert_eq!(deps.len(), 0);
+    }
+
+    fn test_environment() -> Environment {
+        Environment::new("test".to_string(), "test".to_string())
+    }
+
+    fn new_package_name(name: &str) -> PackageName {
+        PackageName::new(name.to_string()).unwrap()
     }
 }

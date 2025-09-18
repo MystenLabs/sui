@@ -19,6 +19,7 @@ pub(crate) async fn get_object(
         object_id,
         version,
         read_mask,
+        ..
     }: GetObjectRequest,
 ) -> Result<GetObjectResponse, RpcError> {
     let (requests, read_mask) =
@@ -38,9 +39,7 @@ pub(crate) async fn get_object(
     let mut message = Object::default();
     // TODO: support json read mask
     message.merge(object, &read_mask);
-    Ok(GetObjectResponse {
-        object: Some(message),
-    })
+    Ok(GetObjectResponse::new(message))
 }
 
 pub(crate) async fn batch_get_objects(
@@ -48,6 +47,7 @@ pub(crate) async fn batch_get_objects(
     BatchGetObjectsRequest {
         requests,
         read_mask,
+        ..
     }: BatchGetObjectsRequest,
 ) -> Result<BatchGetObjectsResponse, RpcError> {
     // only batch requests with `object_id` and `exact_version` are supported by the KV store
@@ -91,5 +91,5 @@ pub(crate) async fn batch_get_objects(
         })
         .collect();
 
-    Ok(BatchGetObjectsResponse { objects })
+    Ok(BatchGetObjectsResponse::new(objects))
 }

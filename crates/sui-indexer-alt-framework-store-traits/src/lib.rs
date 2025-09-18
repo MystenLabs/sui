@@ -9,7 +9,7 @@ use std::time::Duration;
 /// Represents a database connection that can be used by the indexer framework to manage watermark
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
-pub trait Connection: Send + Sync {
+pub trait Connection: Send {
     /// Given a pipeline, return the committer watermark from the `Store`. This is used by the
     /// indexer on startup to determine which checkpoint to resume processing from.
     async fn committer_watermark(

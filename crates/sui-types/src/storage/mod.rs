@@ -42,7 +42,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 pub use shared_in_memory_store::SharedInMemoryStore;
 pub use shared_in_memory_store::SingleCheckpointSharedInMemoryStore;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 pub use write_store::WriteStore;
@@ -229,6 +229,8 @@ pub trait Storage {
     /// Check coin denylist during execution,
     /// and the number of non-gas-coin owners.
     fn check_coin_deny_list(&self, written_objects: &BTreeMap<ObjectID, Object>) -> DenyListResult;
+
+    fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>);
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;

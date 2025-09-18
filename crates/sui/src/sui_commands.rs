@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::{
-    implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands,
+    implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands, USER_AGENT,
 };
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
+use crate::trace_analysis_commands::AnalyzeTraceCommand;
 use crate::validator_commands::SuiValidatorCommand;
 use anyhow::{anyhow, bail, ensure, Context};
 use clap::*;
@@ -55,6 +56,7 @@ use sui_graphql_rpc::{
 
 use move_core_types::account_address::AccountAddress;
 use serde_json::json;
+use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::manage_package::resolve_lock_file_path;
@@ -64,6 +66,8 @@ use sui_move_build::{
     implicit_deps, BuildConfig as SuiBuildConfig, SuiPackageHooks,
 };
 use sui_package_management::system_package_versions::latest_system_packages;
+use sui_protocol_config::Chain;
+use sui_replay_2 as SR2;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -73,6 +77,7 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
+use sui_types::digests::ChainIdentifier;
 use tracing;
 use tracing::info;
 
@@ -363,6 +368,30 @@ pub enum SuiCommand {
     /// Invoke Sui's move-analyzer via CLI
     #[clap(name = "analyzer", hide = true)]
     Analyzer,
+
+    /// Analyze and/or transform a trace file
+    #[clap(name = "analyze-trace")]
+    AnalyzeTrace {
+        /// The path to the trace file to analyze
+        #[arg(long, short)]
+        path: PathBuf,
+
+        /// The output directory for any generated artifacts. Defaults `<cur_dir>`
+        #[arg(long, short)]
+        output_dir: Option<PathBuf>,
+
+        #[clap(subcommand)]
+        command: AnalyzeTraceCommand,
+    },
+
+    #[clap(name = "replay")]
+    ReplayTransaction {
+        #[clap(flatten)]
+        config: SuiEnvConfig,
+
+        #[command(flatten)]
+        replay_config: SR2::ReplayConfigStable,
+    },
 }
 
 impl SuiCommand {
@@ -448,7 +477,8 @@ impl SuiCommand {
             } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
-                let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+                let mut keystore =
+                    Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
                 cmd.execute(&mut keystore).await?.print(!json);
                 Ok(())
             }
@@ -527,7 +557,7 @@ impl SuiCommand {
                         // If they didn't run with `--bytecode` correct this for them but warn them
                         // to let them know that we are changing it.
                         if !s.summary.bytecode {
-                            eprintln!("{}", 
+                            eprintln!("{}",
                                 "[warning] `sui move summary --package-id <object_id>` only supports bytecode summaries. \
                                  Falling back to producing a bytecode-based summary. To not get this warning you can run with `--bytecode`".yellow().bold()
                             );
@@ -708,7 +738,7 @@ impl SuiCommand {
                 );
                 for node_config in network_config.validator_configs() {
                     let account_kp = node_config.account_key_pair.keypair();
-                    context.add_account(None, account_kp.copy());
+                    context.add_account(None, account_kp.copy()).await;
                 }
 
                 let context = context;
@@ -740,7 +770,7 @@ impl SuiCommand {
                         1000000000,
                     )
                     .unwrap();
-                    let signed_tx = context.sign_transaction(&tx);
+                    let signed_tx = context.sign_transaction(&tx).await;
                     tasks.push(context.execute_transaction_must_succeed(signed_tx));
                 }
                 futures::future::join_all(tasks).await;
@@ -749,6 +779,47 @@ impl SuiCommand {
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
                 analyzer::run(implicit_deps(latest_system_packages()));
+                Ok(())
+            }
+            SuiCommand::AnalyzeTrace {
+                path,
+                output_dir,
+                command,
+            } => command.execute(path, output_dir).await,
+            SuiCommand::ReplayTransaction {
+                config,
+                replay_config,
+            } => {
+                let config_path = config
+                    .config
+                    .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                prompt_if_no_config(&config_path, /* accept_defaults */ false).await?;
+                let mut context = WalletContext::new(&config_path)?;
+                if let Some(env_override) = config.env {
+                    context = context.with_env_override(env_override);
+                }
+
+                let node = get_replay_node(&context).await?;
+                let file_config = SR2::load_config_file()?;
+                let stable_config = SR2::merge_configs(replay_config, file_config);
+                let experimental_config = SR2::ReplayConfigExperimental {
+                    node,
+                    ..Default::default()
+                };
+
+                let artifact_path =
+                    SR2::handle_replay_config(&stable_config, &experimental_config, USER_AGENT)
+                        .await?;
+
+                if let Some(digest) = &stable_config.digest {
+                    SR2::print_effects_or_fork(
+                        digest,
+                        &artifact_path,
+                        stable_config.show_effects,
+                        &mut std::io::stdout(),
+                    )?;
+                }
+
                 Ok(())
             }
         }
@@ -1024,11 +1095,16 @@ async fn start(
         if force_regenesis {
             let kp = swarm.config_mut().account_keys.swap_remove(0);
             let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
-            let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+            let mut keystore =
+                Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
             let address: SuiAddress = kp.public().into();
-            keystore.import(None, SuiKeyPair::Ed25519(kp)).unwrap();
+            keystore
+                .import(None, SuiKeyPair::Ed25519(kp))
+                .await
+                .unwrap();
             SuiClientConfig {
                 keystore,
+                external_keys: None,
                 envs: vec![SuiEnv {
                     alias: "localnet".to_string(),
                     rpc: fullnode_url,
@@ -1117,7 +1193,7 @@ async fn genesis(
     if write_config.is_none() && !files.is_empty() {
         if force {
             // check old keystore and client.yaml is compatible
-            let is_compatible = FileBasedKeystore::new(&keystore_path).is_ok()
+            let is_compatible = FileBasedKeystore::load_or_create(&keystore_path).is_ok()
                 && PersistedConfig::<SuiClientConfig>::read(&client_path).is_ok();
             // Keep keystore and client.yaml if they are compatible
             if is_compatible {
@@ -1158,16 +1234,16 @@ async fn genesis(
             if let Some(ips) = benchmark_ips {
                 // Make a keystore containing the key for the genesis gas object.
                 let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
-                let mut keystore = FileBasedKeystore::new(&path)?;
+                let mut keystore = FileBasedKeystore::load_or_create(&path)?;
                 for gas_key in GenesisConfig::benchmark_gas_keys(ips.len()) {
-                    keystore.import(None, gas_key)?;
+                    keystore.import(None, gas_key).await?;
                 }
-                keystore.save()?;
+                keystore.save().await?;
 
                 // Make a new genesis config from the provided ip addresses.
                 GenesisConfig::new_for_benchmarks(&ips)
             } else if keystore_path.exists() {
-                let existing_keys = FileBasedKeystore::new(&keystore_path)?.addresses();
+                let existing_keys = FileBasedKeystore::load_or_create(&keystore_path)?.addresses();
                 GenesisConfig::for_local_testing_with_addresses(existing_keys)
             } else {
                 GenesisConfig::for_local_testing()
@@ -1212,9 +1288,11 @@ async fn genesis(
             .build()
     };
 
-    let mut keystore = FileBasedKeystore::new(&keystore_path)?;
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
     for key in &network_config.account_keys {
-        keystore.import(None, SuiKeyPair::Ed25519(key.copy()))?;
+        keystore
+            .import(None, SuiKeyPair::Ed25519(key.copy()))
+            .await?;
     }
     let active_address = keystore.addresses().pop();
 
@@ -1412,7 +1490,7 @@ async fn prompt_if_no_config(
             }
             .join(SUI_KEYSTORE_FILENAME);
 
-            let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+            let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
             let key_scheme = if accept_defaults {
                 SignatureScheme::ED25519
             } else {
@@ -1422,7 +1500,9 @@ async fn prompt_if_no_config(
                     Err(e) => return Err(anyhow!("{e}")),
                 }
             };
-            let (new_address, phrase, scheme) = keystore.generate(key_scheme, None, None, None)?;
+
+            let (new_address, key_pair, scheme, phrase) = generate_new_key(key_scheme, None, None)?;
+            keystore.import(None, key_pair).await?;
             let alias = keystore.get_alias(&new_address)?;
             println!(
                 "Generated new keypair and alias for address with scheme {:?} [{alias}: {new_address}]",
@@ -1432,6 +1512,7 @@ async fn prompt_if_no_config(
             let alias = env.alias.clone();
             SuiClientConfig {
                 keystore,
+                external_keys: None,
                 envs: vec![env],
                 active_address: Some(new_address),
                 active_env: Some(alias),
@@ -1595,4 +1676,23 @@ pub fn parse_host_port(
     } else {
         format!("{default_host}:{default_port_if_missing}").parse::<SocketAddr>()
     }
+}
+
+/// Get the replay node representing a specific chain (e.g., testnet, mainnet, or custom)
+/// from a given wallet context contining chain identifier string.
+pub async fn get_replay_node(context: &WalletContext) -> Result<SR2::Node, anyhow::Error> {
+    let chain_id = context
+        .get_client()
+        .await?
+        .read_api()
+        .get_chain_identifier()
+        .await?;
+    let err_msg = format!("'{chain_id}' chain identifier is not supported for replay -- only testnet and mainnet are supported currently");
+    let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
+        .ok_or_else(|| anyhow::anyhow!(err_msg.clone()))?;
+    Ok(match chain_id.chain() {
+        Chain::Mainnet => SR2::Node::Mainnet,
+        Chain::Testnet => SR2::Node::Testnet,
+        Chain::Unknown => bail!(err_msg),
+    })
 }

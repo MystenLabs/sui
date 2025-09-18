@@ -138,6 +138,6 @@ async fn test_net_determinism() {
         .sui_node
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[digest])
+        .notify_read_executed_effects("", &[digest])
         .await;
 }

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_macros::nondeterministic;
-use sui_types::base_types::{random_object_ref, ObjectID};
+use sui_types::base_types::{random_object_ref, FullObjectRef, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{AccountKeyPair, AuthorityPublicKeyBytes, Signer};
 use sui_types::effects::{SignedTransactionEffects, TestEffectsBuilder};
@@ -36,6 +36,7 @@ use crate::global_state_hasher::GlobalStateHasher;
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 
+// TODO(fastpath): switch to use MFP flow.
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
@@ -46,7 +47,7 @@ pub async fn send_and_confirm_transaction(
     transaction.validity_check(&epoch_store.tx_validity_check_context())?;
     let transaction = epoch_store.verify_transaction(transaction)?;
     let response = authority
-        .handle_transaction(&epoch_store, transaction.clone())
+        .handle_sign_transaction(&epoch_store, transaction.clone())
         .await?;
     let vote = response.status.into_signed_for_testing();
 
@@ -116,7 +117,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
         WAIT_FOR_TX_TIMEOUT,
         state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[digest]),
+            .notify_read_executed_effects("", &[digest]),
     )
     .await
     {
@@ -133,7 +134,7 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
         WAIT_FOR_TX_TIMEOUT,
         state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&digests),
+            .notify_read_executed_effects("", &digests),
     )
     .await
     {
@@ -224,7 +225,7 @@ pub fn make_transfer_object_transaction(
 ) -> Transaction {
     let data = TransactionData::new_transfer(
         recipient,
-        object_ref,
+        FullObjectRef::from_fastpath_ref(object_ref),
         sender,
         gas_object,
         gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
@@ -274,7 +275,7 @@ pub fn make_dummy_tx(
     Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             receiver,
-            random_object_ref(),
+            FullObjectRef::from_fastpath_ref(random_object_ref()),
             sender,
             random_object_ref(),
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,

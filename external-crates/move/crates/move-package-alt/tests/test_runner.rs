@@ -5,15 +5,13 @@
 use anyhow::bail;
 use move_command_line_common::testing::insta_assert;
 
-use codespan_reporting::term::{self, Config, termcolor::Buffer};
 use move_package_alt::{
-    dependency::{self, CombinedDependency, DependencySet, PinnedDependencyInfo},
-    errors::Files,
+    dependency::{CombinedDependency, PinnedDependencyInfo},
     flavor::{
         Vanilla,
         vanilla::{self, default_environment},
     },
-    package::{RootPackage, lockfile::Lockfiles, manifest::Manifest, paths::PackagePath},
+    package::{RootPackage, manifest::Manifest},
 };
 use std::{collections::BTreeMap, path::Path};
 use tracing::debug;
@@ -21,9 +19,8 @@ use tracing_subscriber::EnvFilter;
 
 /// Resolve the package contained in the same directory as [path], and snapshot a value based
 /// on the extension of [path]:
-///  - ".parsed": the contents of the manifest
-///  - ".locked": the contents of the lockfile
 ///  - ".pinned": the contents of the pinned dependencies
+///  - ".graph_to_lockfile": TODO
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let _ = tracing_subscriber::fmt::fmt()
         .with_env_filter(EnvFilter::from_default_env())
@@ -71,41 +68,10 @@ impl Test<'_> {
     /// Return the value to be snapshotted, based on `self.kind`, as described in [run_test]
     fn output(&self) -> anyhow::Result<String> {
         Ok(match self.kind {
-            "parsed" => {
-                let manifest = Manifest::read_from_file(self.toml_path);
-                let contents = match manifest.as_ref() {
-                    Ok(m) => format!("{:#?}", m),
-                    Err(_) => {
-                        if let Some(e) = manifest.as_ref().err() {
-                            let diagnostic = e.to_diagnostic();
-                            let mut writer = Buffer::no_color();
-                            term::emit(&mut writer, &Config::default(), &Files, &diagnostic)
-                                .unwrap();
-                            let inner = writer.into_inner();
-                            String::from_utf8(inner).unwrap_or_default()
-                        } else {
-                            format!("{}", manifest.unwrap_err())
-                        }
-                    }
-                };
-                contents
-            }
             "graph_to_lockfile" => match run_graph_to_lockfile_test_wrapper(self.toml_path) {
                 Ok(s) => s,
                 Err(e) => e.to_string(),
             },
-            "locked" => {
-                // TODO: this needs to deal with ephemeral environments
-
-                let dir = PackagePath::new(self.toml_path.parent().unwrap().to_path_buf()).unwrap();
-
-                let lockfile = Lockfiles::<Vanilla>::read_from_dir(&dir);
-
-                match lockfile {
-                    Ok(l) => l.unwrap().render_main_lockfile().to_string(),
-                    Err(e) => e.to_string(),
-                }
-            }
             "pinned" => match run_pinning_wrapper(self.toml_path) {
                 Ok(s) => s,
                 Err(e) => e.to_string(),
@@ -136,6 +102,9 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     let manifest = Manifest::read_from_file(input_path).unwrap();
     let env = default_environment();
 
+    // This is the "root's" source.
+    let source = PinnedDependencyInfo::root_dependency(*manifest.file_handle(), env.name().clone());
+
     let deps = CombinedDependency::combine_deps(
         manifest.file_handle(),
         &env,
@@ -146,19 +115,15 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
         &manifest.dependencies(),
         &BTreeMap::new(),
     )?;
-    let mut output = DependencySet::<PinnedDependencyInfo>::new();
     debug!("{deps:?}");
 
     add_bindir();
 
-    let pinned = dependency::pin::<Vanilla>(deps.clone(), env.id())
+    let pinned = PinnedDependencyInfo::pin::<Vanilla>(&source, deps.clone(), env.id())
         .await
         .map_err(|e| e.to_string())?;
-    for (name, dep) in pinned {
-        output.insert(env.name().to_string(), name, dep);
-    }
 
-    Ok(format!("{output:#?}"))
+    Ok(format!("{pinned:#?}"))
 }
 
 fn run_pinning_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
@@ -188,13 +153,7 @@ fn add_bindir() {
 datatest_stable::harness!(
     run_test,
     "tests/data",
-    r".*\.parsed$",
-    run_test,
-    "tests/data",
     r".*\.graph_to_lockfile$",
-    run_test,
-    "tests/data",
-    r".*\.locked$",
     run_test,
     "tests/data",
     r".*\.pinned$",

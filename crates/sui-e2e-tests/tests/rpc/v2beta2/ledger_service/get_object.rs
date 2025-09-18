@@ -9,14 +9,14 @@ use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::Object;
-use sui_sdk_types::ObjectId;
+use sui_sdk_types::Address;
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn get_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let id: ObjectId = "0x5".parse().unwrap();
+    let id: Address = "0x5".parse().unwrap();
 
     let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
@@ -38,11 +38,7 @@ async fn get_object() {
         json,
         ..
     } = client
-        .get_object(GetObjectRequest {
-            object_id: Some(id.to_string()),
-            version: None,
-            read_mask: None,
-        })
+        .get_object(GetObjectRequest::new(&id))
         .await
         .unwrap()
         .into_inner()
@@ -81,11 +77,11 @@ async fn get_object() {
         json,
         ..
     } = client
-        .get_object(GetObjectRequest {
-            object_id: Some(id.to_string()),
-            version: Some(1),
-            read_mask: Some(FieldMask::from_str("object_id,version")),
-        })
+        .get_object(
+            GetObjectRequest::new(&id)
+                .with_version(1u64)
+                .with_read_mask(FieldMask::from_str("object_id,version")),
+        )
         .await
         .unwrap()
         .into_inner()
@@ -108,17 +104,15 @@ async fn get_object() {
     assert!(json.is_none());
 
     let response = client
-        .get_object(GetObjectRequest {
-            object_id: Some(id.to_string()),
-            version: None,
-            read_mask: Some(FieldMask::from_paths([
+        .get_object(
+            GetObjectRequest::new(&id).with_read_mask(FieldMask::from_paths([
                 "object_id",
                 "version",
                 "digest",
                 "bcs",
                 "json",
             ])),
-        })
+        )
         .await
         .unwrap()
         .into_inner()
@@ -164,41 +158,30 @@ async fn batch_get_objects() {
         .await
         .unwrap();
 
-    let BatchGetObjectsResponse { objects } = client
-        .batch_get_objects(BatchGetObjectsRequest {
-            requests: vec![
-                GetObjectRequest {
-                    object_id: Some("0x1".to_owned()),
-                    version: None,
-                    read_mask: None,
-                },
-                GetObjectRequest {
-                    object_id: Some("0x2".to_owned()),
-                    version: None,
-                    read_mask: None,
-                },
-                GetObjectRequest {
-                    object_id: Some("0x3".to_owned()),
-                    version: None,
-                    read_mask: None,
-                },
-            ],
-            read_mask: None,
+    let BatchGetObjectsResponse { objects, .. } = client
+        .batch_get_objects({
+            let mut message = BatchGetObjectsRequest::default();
+            message.requests = vec![
+                GetObjectRequest::new(&Address::from_hex_unwrap("0x1")),
+                GetObjectRequest::new(&Address::from_hex_unwrap("0x2")),
+                GetObjectRequest::new(&Address::from_hex_unwrap("0x3")),
+            ];
+            message
         })
         .await
         .unwrap()
         .into_inner();
 
     assert_eq!(
-        objects[0].object().unwrap().object_id,
-        Some("0x1".parse::<ObjectId>().unwrap().to_string())
+        objects[0].object().object_id,
+        Some("0x1".parse::<Address>().unwrap().to_string())
     );
     assert_eq!(
-        objects[1].object().unwrap().object_id,
-        Some("0x2".parse::<ObjectId>().unwrap().to_string())
+        objects[1].object().object_id,
+        Some("0x2".parse::<Address>().unwrap().to_string())
     );
     assert_eq!(
-        objects[2].object().unwrap().object_id,
-        Some("0x3".parse::<ObjectId>().unwrap().to_string())
+        objects[2].object().object_id,
+        Some("0x3".parse::<Address>().unwrap().to_string())
     );
 }

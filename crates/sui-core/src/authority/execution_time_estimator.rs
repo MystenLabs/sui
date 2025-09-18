@@ -17,7 +17,9 @@ use crate::consensus_adapter::SubmitToConsensus;
 use governor::{clock::MonotonicClock, Quota, RateLimiter};
 use itertools::Itertools;
 use lru::LruCache;
-use mysten_common::{assert_reachable, debug_fatal, in_antithesis, in_test_configuration};
+#[cfg(not(msim))]
+use mysten_common::in_antithesis;
+use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::{random, rngs, thread_rng, Rng, SeedableRng};
 use simple_moving_average::{SingleSumSMA, SMA};
@@ -264,7 +266,12 @@ impl ExecutionTimeObserver {
         let _scope = monitored_scope("ExecutionTimeObserver::record_local_observations");
 
         // Simulate timing in test contexts to trigger congestion control.
-        if in_antithesis() || cfg!(msim) {
+        #[cfg(msim)]
+        let should_inject = self.config.inject_synthetic_execution_time();
+        #[cfg(not(msim))]
+        let should_inject = in_antithesis();
+
+        if should_inject {
             let (generated_timings, generated_duration) = self.generate_test_timings(tx, timings);
             self.record_local_observations_timing(
                 tx,
@@ -494,7 +501,12 @@ impl ExecutionTimeObserver {
     }
 
     fn get_test_duration(&self, key: &ExecutionTimeObservationKey) -> Duration {
-        if !in_test_configuration() {
+        #[cfg(msim)]
+        let should_inject = self.config.inject_synthetic_execution_time();
+        #[cfg(not(msim))]
+        let should_inject = false;
+
+        if !in_test_configuration() && !should_inject {
             panic!("get_test_duration called in non-test configuration");
         }
 

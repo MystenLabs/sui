@@ -661,23 +661,22 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
 
             // TODO: cache received and verified block refs to avoid duplicated work.
-            let reject_txn_votes = block_verifier.verify_and_vote(&signed_block).tap_err(|e| {
-                // TODO: we might want to use a different metric to track the invalid "served" blocks
-                // from the invalid "proposed" ones.
-                let hostname = context.committee.authority(peer_index).hostname.clone();
-                context
-                    .metrics
-                    .node_metrics
-                    .invalid_blocks
-                    .with_label_values(&[&hostname, "synchronizer", e.clone().name()])
-                    .inc();
-                info!("Invalid block received from {}: {}", peer_index, e);
-            })?;
-            let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
+            let (verified_block, reject_txn_votes) = block_verifier
+                .verify_and_vote(signed_block, serialized_block)
+                .tap_err(|e| {
+                    let hostname = context.committee.authority(peer_index).hostname.clone();
+                    context
+                        .metrics
+                        .node_metrics
+                        .invalid_blocks
+                        .with_label_values(&[&hostname, "synchronizer", e.clone().name()])
+                        .inc();
+                    info!("Invalid block received from {}: {}", peer_index, e);
+                })?;
 
             // TODO: improve efficiency, maybe suspend and continue processing the block asynchronously.
             let now = context.clock.timestamp_utc_ms();
-            let drift = verified_block.timestamp_ms().saturating_sub(now) as u64;
+            let drift = verified_block.timestamp_ms().saturating_sub(now);
             if drift > 0 {
                 let peer_hostname = &context
                     .committee
@@ -790,7 +789,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     let mut result = Vec::new();
                     for serialized_block in blocks {
                         let signed_block = bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
-                        block_verifier.verify_and_vote(&signed_block).tap_err(|err|{
+                        let (verified_block, _) = block_verifier.verify_and_vote(signed_block, serialized_block).tap_err(|err|{
                             let hostname = context.committee.authority(authority_index).hostname.clone();
                             context
                                 .metrics
@@ -801,7 +800,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             warn!("Invalid block received from {}: {}", authority_index, err);
                         })?;
 
-                        let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
                         if verified_block.author() != context.own_index {
                             return Err(ConsensusError::UnexpectedLastOwnBlock { index: authority_index, block_ref: verified_block.reference()});
                         }

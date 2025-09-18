@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram, diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
         warning_filters::{
@@ -42,6 +42,7 @@ use crate::{
     shared::{
         ide::{IDEAnnotation, IDEInfo},
         known_attributes::{AttributeKind_, AttributePosition},
+        program_info::ModuleInfo,
         string_utils::{is_pascal_case, is_upper_snake_case},
         unique_map::UniqueMap,
         *,
@@ -63,24 +64,27 @@ use std::{
 //**************************************************************************************************
 
 type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
+type OptAddr = Option<Spanned<Address>>;
+type PkgDef = P::PackageDefinition<P::ModuleDefinition>;
 
 // NB: We carry a few things separately because we need to split them out during path resolution to
 // allow for dynamic behavior during that resolution. This dynamic behavior allows us to reuse the
 // majority of the pass while swapping out how we handle paths and aliases for Move 2024 versus
 // legacy.
 
-pub(super) struct DefnContext<'env, 'map> {
-    pub(super) named_address_mapping: Option<&'map NamedAddressMap>,
+pub(super) struct DefnContext<'env> {
+    pub(super) named_address_mapping: Option<Arc<NamedAddressMap>>,
     pub(super) module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     pub(super) env: &'env CompilationEnv,
     pub(super) address_conflicts: BTreeSet<Symbol>,
     pub(super) current_package: Option<Symbol>,
     pub(super) target_kind: P::TargetKind,
     pub(super) reporter: DiagnosticReporter<'env>,
+    pub(super) module_extensions: BTreeMap<Address, BTreeMap<ModuleName, P::ModuleDefinition>>,
 }
 
-pub(super) struct Context<'env, 'map> {
-    defn_context: DefnContext<'env, 'map>,
+pub(super) struct Context<'env> {
+    defn_context: DefnContext<'env>,
     address: Option<Address>,
     warning_filters_table: Mutex<WarningFiltersTable>,
     // Cached warning filters for all available prefixes. Used by non-source defs
@@ -89,7 +93,7 @@ pub(super) struct Context<'env, 'map> {
     pub path_expander: Option<Box<dyn PathExpander>>,
 }
 
-impl<'env> Context<'env, '_> {
+impl<'env> Context<'env> {
     fn new(
         compilation_env: &'env CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
@@ -109,6 +113,7 @@ impl<'env> Context<'env, '_> {
                 is_root_package: true,
             },
             reporter,
+            module_extensions: BTreeMap::new(),
         };
         Context {
             defn_context,
@@ -119,8 +124,25 @@ impl<'env> Context<'env, '_> {
         }
     }
 
-    fn finish(self) -> WarningFiltersTable {
-        self.warning_filters_table.into_inner().unwrap()
+    /// Hands back the warning filters table and any unused module extension.
+    fn finish(
+        self,
+    ) -> (
+        WarningFiltersTable,
+        BTreeMap<Address, BTreeMap<ModuleName, P::ModuleDefinition>>,
+    ) {
+        let Context {
+            defn_context,
+            warning_filters_table,
+            ..
+        } = self;
+        let DefnContext {
+            module_extensions, ..
+        } = defn_context;
+        (
+            warning_filters_table.into_inner().unwrap(),
+            module_extensions,
+        )
     }
 
     fn env(&self) -> &CompilationEnv {
@@ -325,9 +347,69 @@ impl<'env> Context<'env, '_> {
         self.env()
             .check_feature(self.reporter(), package, feature, loc)
     }
+
+    pub fn set_module_extensions(&mut self, exts: Vec<(OptAddr, PkgDef)>) {
+        for (addr, module) in exts {
+            let Some(addr) = addr else {
+                self.add_diag(diag!(
+                    Declarations::InvalidAddress,
+                    (module.def.name.loc(), "Module extension address is invalid")
+                ));
+                continue;
+            };
+            let P::PackageDefinition {
+                def,
+                package: _,
+                named_address_map: _,
+                target_kind,
+            } = module;
+            let name = def.name;
+            let loc = def.loc;
+
+            // Skip over all extensions that are not defined in the root package
+            if !matches!(
+                target_kind,
+                P::TargetKind::Source {
+                    is_root_package: true
+                }
+            ) {
+                continue;
+            }
+
+            ice_assert!(
+                self.reporter(),
+                def.is_extension,
+                loc,
+                "Module extension to add is not marked as extension"
+            );
+            let addr = self
+                .defn_context
+                .module_extensions
+                .entry(addr.value)
+                .or_default();
+            if let Some(entry) = addr.insert(name, def) {
+                self.add_diag(diag!(
+                    Declarations::DuplicateItem,
+                    (loc, "Duplicate module extension declaration"),
+                    (entry.loc, "Previous declaration here")
+                ));
+            };
+        }
+    }
+
+    pub fn get_module_extension_opt(
+        &mut self,
+        addr: &Address,
+        name: &ModuleName,
+    ) -> Option<P::ModuleDefinition> {
+        let Some(addr_map) = self.defn_context.module_extensions.get_mut(addr) else {
+            return None;
+        };
+        addr_map.remove(name)
+    }
 }
 
-impl DefnContext<'_, '_> {
+impl DefnContext<'_> {
     pub(super) fn add_diag(&self, diag: Diagnostic) {
         self.reporter.add_diag(diag);
     }
@@ -396,18 +478,23 @@ fn unnecessary_alias_error(context: &mut Context, unnecessary: UnnecessaryAlias)
 /// We mark named addresses as having a conflict if there is not a bidirectional mapping between
 /// the name and its value
 fn compute_address_conflicts(
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &P::Program,
 ) -> BTreeSet<Symbol> {
     let mut name_to_addr: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
     let mut addr_to_name: BTreeMap<AccountAddress, BTreeSet<Symbol>> = BTreeMap::new();
-    let all_addrs = prog.named_address_maps.all().iter().chain(
-        pre_compiled_lib
+    let all_addrs =
+        prog.named_address_maps
+            .all()
             .iter()
-            .flat_map(|pre| pre.parser.named_address_maps.all()),
-    );
+            .cloned()
+            .chain(pre_compiled_lib.iter().flat_map(|module_info| {
+                module_info
+                    .iter()
+                    .map(|(_, m)| m.info.named_address_map.clone())
+            }));
     for map in all_addrs {
-        for (n, addr) in map {
+        for (n, addr) in &*map {
             let n = *n;
             let addr = addr.into_inner();
             name_to_addr.entry(n).or_default().insert(addr);
@@ -496,7 +583,7 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: P::Program,
 ) -> E::Program {
     let address_conflicts = compute_address_conflicts(pre_compiled_lib.clone(), &prog);
@@ -512,6 +599,7 @@ pub fn program(
             is_root_package: true,
         },
         reporter,
+        module_extensions: BTreeMap::new(),
     };
 
     let module_members = {
@@ -520,25 +608,21 @@ pub fn program(
             &mut member_computation_context,
             &prog.named_address_maps,
             &mut members,
-            true,
             &prog.source_definitions,
         );
         all_module_members(
             &mut member_computation_context,
             &prog.named_address_maps,
             &mut members,
-            true,
             &prog.lib_definitions,
         );
+
         if let Some(pre_compiled) = pre_compiled_lib.clone() {
-            assert!(pre_compiled.parser.lib_definitions.is_empty());
-            all_module_members(
-                &mut member_computation_context,
-                &pre_compiled.parser.named_address_maps,
-                &mut members,
-                false,
-                &pre_compiled.parser.source_definitions,
-            );
+            for (mident, module_info) in pre_compiled.iter() {
+                if !members.contains_key(mident) {
+                    let _ = members.add(*mident, pre_compiled_member_kinds(&module_info.info));
+                }
+            }
         }
         members
     };
@@ -548,138 +632,265 @@ pub fn program(
     let mut source_module_map = UniqueMap::new();
     let mut lib_module_map = UniqueMap::new();
     let P::Program {
-        named_address_maps,
+        named_address_maps: named_addr_maps,
         source_definitions,
         lib_definitions,
     } = prog;
 
-    let mut context = Context::new(compilation_env, module_members, address_conflicts);
+    let mut ctxt = Context::new(compilation_env, module_members, address_conflicts);
+    let context = &mut ctxt;
 
-    for P::PackageDefinition {
-        package,
-        named_address_map,
-        def,
-        target_kind,
-    } in source_definitions
-    {
-        context.defn_context.target_kind = target_kind;
-        context.defn_context.current_package = package;
-        let named_address_map = named_address_maps.get(named_address_map);
-        if context
-            .env()
-            .supports_feature(package, FeatureGate::Move2024Paths)
-        {
-            let mut path_expander = Move2024PathExpander::new();
+    let (source_defs, source_exts) =
+        into_modules_and_extenions(context, &named_addr_maps, source_definitions);
+    // We currently discard library extensions, as they are not supported
+    let (lib_defs, _lib_exts) =
+        into_modules_and_extenions(context, &named_addr_maps, lib_definitions);
 
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
+    // Add source extensions to the context
+    context.set_module_extensions(source_exts);
 
-            // should never fail
-            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
-                context.add_diag(*diag);
-            }
-
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(path_expander));
-            definition(&mut context, &mut source_module_map, package, def);
-            context.pop_alias_scope(None); // Handle unused addresses in this case
-            context.path_expander = None;
-        } else {
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(LegacyPathExpander::new()));
-            definition(&mut context, &mut source_module_map, package, def);
-            context.path_expander = None;
-        }
+    // Process source modules first, then library modules
+    for (addr, def) in source_defs {
+        definition(context, &mut source_module_map, &named_addr_maps, addr, def);
     }
 
-    for P::PackageDefinition {
-        package,
-        named_address_map,
-        def,
-        target_kind: pkg_def_kind,
-    } in lib_definitions
-    {
-        context.defn_context.target_kind = pkg_def_kind;
-        context.defn_context.current_package = package;
-        let named_address_map = named_address_maps.get(named_address_map);
-        if context
-            .env()
-            .supports_feature(package, FeatureGate::Move2024Paths)
-        {
-            let mut path_expander = Move2024PathExpander::new();
-
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
-            // should never fail
-            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
-                context.add_diag(*diag);
-            }
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(path_expander));
-            definition(&mut context, &mut lib_module_map, package, def);
-            context.pop_alias_scope(None); // Handle unused addresses in this case
-            context.path_expander = None;
-        } else {
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(LegacyPathExpander::new()));
-            definition(&mut context, &mut lib_module_map, package, def);
-            context.path_expander = None;
-        }
+    for (addr, def) in lib_defs {
+        definition(context, &mut lib_module_map, &named_addr_maps, addr, def);
     }
 
     context.defn_context.current_package = None;
 
-    // Finalization
-    //
+    // Merge the library modules into the source modules, checking for duplicates
+
     for (mident, module) in lib_module_map {
         if let Err((mident, old_loc)) = source_module_map.add(mident, module) {
             if !context.env().sources_shadow_deps() {
-                duplicate_module(&mut context, &source_module_map, mident, old_loc)
+                duplicate_module_error(context, &source_module_map, mident, old_loc)
             }
         }
     }
     let module_map = source_module_map;
 
+    // Find primitive definers
     super::primitive_definers::modules(context.env(), pre_compiled_lib, &module_map);
+
+    // Finish up context, and report any unused extensions
+
+    let (warning_filters_table, module_extensions) = ctxt.finish();
+
+    for (addr, pkg) in module_extensions {
+        for (name, ext) in pkg {
+            compilation_env
+                .diagnostic_reporter_at_top_level()
+                .add_diag(diag!(
+                    Declarations::InvalidModule,
+                    (
+                        ext.loc,
+                        format!("Cannot extend unknown module '{addr}::{name}'")
+                    )
+                ));
+        }
+    }
+
+    let warning_filters_table = Arc::new(warning_filters_table);
+
     E::Program {
-        warning_filters_table: Arc::new(context.finish()),
+        warning_filters_table,
         modules: module_map,
     }
 }
 
+// ***********************************************
+// Definitions
+// ***********************************************
+
 fn definition(
     context: &mut Context,
     module_map: &mut UniqueMap<ModuleIdent, E::ModuleDefinition>,
-    package_name: Option<Symbol>,
-    def: P::Definition,
+    named_addr_maps: &NamedAddressMaps,
+    addr: Option<Spanned<Address>>,
+    def: PkgDef,
 ) {
-    let default_aliases = default_aliases(context);
-    context.push_alias_scope(/* unused */ Loc::invalid(), default_aliases);
-    match def {
-        P::Definition::Module(mut m) => {
-            let module_paddr = std::mem::take(&mut m.address);
-            let module_addr = module_paddr.map(|addr| {
-                let address = top_level_address(
+    fn process_module(
+        context: &mut Context,
+        module_map: &mut UniqueMap<ModuleIdent, E::ModuleDefinition>,
+        package_name: Option<Symbol>,
+        addr: Option<Spanned<Address>>,
+        def: P::ModuleDefinition,
+    ) {
+        let default_aliases = default_aliases(context);
+        context.push_alias_scope(/* unused */ Loc::invalid(), default_aliases);
+        module(context, module_map, package_name, addr, def);
+        context.pop_alias_scope(None);
+    }
+
+    let P::PackageDefinition {
+        package,
+        named_address_map,
+        def,
+        target_kind: pkg_def_kind,
+    } = def;
+    context.defn_context.target_kind = pkg_def_kind;
+    context.defn_context.current_package = package;
+    let named_address_map = named_addr_maps.get(named_address_map);
+    if context
+        .env()
+        .supports_feature(package, FeatureGate::Move2024Paths)
+    {
+        let mut path_expander = Move2024PathExpander::new();
+
+        let aliases = named_addr_map_to_alias_map_builder(context, &named_address_map);
+        // should never fail
+        if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
+            context.add_diag(*diag);
+        }
+        context.defn_context.named_address_mapping = Some(named_address_map);
+        context.path_expander = Some(Box::new(path_expander));
+        process_module(context, module_map, package, addr, def);
+        context.pop_alias_scope(None); // Handle unused addresses in this case
+        context.path_expander = None;
+    } else {
+        context.defn_context.named_address_mapping = Some(named_address_map);
+        context.path_expander = Some(Box::new(LegacyPathExpander::new()));
+        process_module(context, module_map, package, addr, def);
+        context.path_expander = None;
+    }
+}
+
+fn check_module_address(
+    context: &mut Context,
+    loc: Loc,
+    addr: Address,
+    m: &mut P::ModuleDefinition,
+) -> Spanned<Address> {
+    let module_address = std::mem::take(&mut m.address);
+    match module_address {
+        Some(other_paddr) => {
+            let other_loc = other_paddr.loc;
+            let other_addr = top_level_address(
+                &mut context.defn_context,
+                /* suggest_declaration */ true,
+                other_paddr,
+            );
+            let msg = if addr == other_addr {
+                "Redundant address specification"
+            } else {
+                "Multiple addresses specified for module"
+            };
+            context.add_diag(diag!(
+                Declarations::DuplicateItem,
+                (other_loc, msg),
+                (loc, "Address previously specified here")
+            ));
+            sp(other_loc, other_addr)
+        }
+        None => sp(loc, addr),
+    }
+}
+
+// This function takes a parsed program apart and (a) discards any address definition forms,
+// translating them into module forms, and (b) organizes modules by if they are extensions or not,
+// ensuring extension modules appear after the non-extension modules.
+//
+// This also does some preprocessing of addresses, ensuring that all modules have the appropriate
+// top-level address to recur with.
+
+fn into_modules_and_extenions(
+    context: &mut Context,
+    named_addr_maps: &NamedAddressMaps,
+    defs: Vec<P::PackageDefinition>,
+) -> (Vec<(OptAddr, PkgDef)>, Vec<(OptAddr, PkgDef)>) {
+    fn into_modules(
+        context: &mut Context,
+        named_addr_maps: &NamedAddressMaps,
+        def: P::PackageDefinition,
+    ) -> Vec<(OptAddr, PkgDef)> {
+        match def {
+            P::PackageDefinition {
+                def: P::Definition::Module(mut def),
+                package,
+                named_address_map,
+                target_kind,
+            } => {
+                let na_map = named_addr_maps.get(named_address_map);
+                let module_addr = std::mem::take(&mut def.address).map(|addr| {
+                    let address = top_level_address_(
+                        &mut context.defn_context,
+                        na_map,
+                        /* suggest_declaration */ true,
+                        addr,
+                    );
+                    sp(addr.loc, address)
+                });
+                let pdef = P::PackageDefinition {
+                    package,
+                    named_address_map,
+                    def,
+                    target_kind,
+                };
+                vec![(module_addr, pdef)]
+            }
+            P::PackageDefinition {
+                package,
+                named_address_map,
+                def:
+                    P::Definition::Address(P::AddressDefinition {
+                        attributes,
+                        loc,
+                        addr,
+                        modules,
+                    }),
+                target_kind,
+            } => {
+                let na_map = named_addr_maps.get(named_address_map);
+                for attr_set in attributes {
+                    for attr in attr_set.value.0 {
+                        if !matches!(
+                            attr.value,
+                            P::Attribute_::Mode { .. } | P::Attribute_::External { .. }
+                        ) {
+                            context.add_diag(diag!(
+                                Attributes::ValueWarning,
+                                (
+                                    attr.loc,
+                                    "Non-'mode' attributes on address blocks are not supported and will be ignored"
+                                )
+                            ));
+                        }
+                    }
+                }
+                let addr = top_level_address_(
                     &mut context.defn_context,
-                    /* suggest_declaration */ true,
+                    na_map,
+                    /* suggest_declaration */ false,
                     addr,
                 );
-                sp(addr.loc, address)
-            });
-            module(context, module_map, package_name, module_addr, m)
-        }
-        P::Definition::Address(a) => {
-            let addr = top_level_address(
-                &mut context.defn_context,
-                /* suggest_declaration */ false,
-                a.addr,
-            );
-            for mut m in a.modules {
-                let module_addr = check_module_address(context, a.loc, addr, &mut m);
-                module(context, module_map, package_name, Some(module_addr), m)
+
+                modules
+                    .into_iter()
+                    .map(|mut def| {
+                        let module_addr = Some(check_module_address(context, loc, addr, &mut def));
+                        let def = P::PackageDefinition {
+                            package,
+                            named_address_map,
+                            def,
+                            target_kind,
+                        };
+                        (module_addr, def)
+                    })
+                    .collect()
             }
         }
     }
-    context.pop_alias_scope(None);
+
+    defs.into_iter()
+        .flat_map(|def| into_modules(context, named_addr_maps, def))
+        .partition(|(_, def)| !def.def.is_extension)
 }
+
+// -----------------------------------------------
+// Addresses and Module Identifiers
+// -----------------------------------------------
 
 // Access a top level address as declared, not affected by any aliasing/shadowing
 pub(super) fn top_level_address(
@@ -689,7 +900,7 @@ pub(super) fn top_level_address(
 ) -> Address {
     top_level_address_(
         context,
-        context.named_address_mapping.as_ref().unwrap(),
+        context.named_address_mapping.clone().unwrap(),
         suggest_declaration,
         ln,
     )
@@ -697,7 +908,7 @@ pub(super) fn top_level_address(
 
 fn top_level_address_(
     context: &mut DefnContext,
-    named_address_mapping: &NamedAddressMap,
+    named_address_mapping: Arc<NamedAddressMap>,
     suggest_declaration: bool,
     ln: P::LeadingNameAccess,
 ) -> Address {
@@ -810,52 +1021,9 @@ pub(super) fn module_ident(
     sp(loc, ModuleIdent_::new(addr, module))
 }
 
-fn check_module_address(
-    context: &mut Context,
-    loc: Loc,
-    addr: Address,
-    m: &mut P::ModuleDefinition,
-) -> Spanned<Address> {
-    let module_address = std::mem::take(&mut m.address);
-    match module_address {
-        Some(other_paddr) => {
-            let other_loc = other_paddr.loc;
-            let other_addr = top_level_address(
-                &mut context.defn_context,
-                /* suggest_declaration */ true,
-                other_paddr,
-            );
-            let msg = if addr == other_addr {
-                "Redundant address specification"
-            } else {
-                "Multiple addresses specified for module"
-            };
-            context.add_diag(diag!(
-                Declarations::DuplicateItem,
-                (other_loc, msg),
-                (loc, "Address previously specified here")
-            ));
-            sp(other_loc, other_addr)
-        }
-        None => sp(loc, addr),
-    }
-}
-
-fn duplicate_module(
-    context: &mut Context,
-    module_map: &UniqueMap<ModuleIdent, E::ModuleDefinition>,
-    mident: ModuleIdent,
-    old_loc: Loc,
-) {
-    let old_mident = module_map.get_key(&mident).unwrap();
-    let dup_msg = format!("Duplicate definition for module '{}'", mident);
-    let prev_msg = format!("Module previously defined here, with '{}'", old_mident);
-    context.add_diag(diag!(
-        Declarations::DuplicateItem,
-        (mident.loc, dup_msg),
-        (old_loc, prev_msg),
-    ))
-}
+// -----------------------------------------------
+// Modules
+// -----------------------------------------------
 
 fn module(
     context: &mut Context,
@@ -869,9 +1037,15 @@ fn module(
         context.spec_deprecated(module_def.name.0.loc, /* is_error */ false);
         return;
     }
+    if module_def.is_extension {
+        context.add_diag(ice!((
+            module_def.name.0.loc,
+            "ICE: Module extension passed to module()"
+        )));
+    }
     let (mident, mod_) = module_(context, package_name, module_address, module_def);
     if let Err((mident, old_loc)) = module_map.add(mident, mod_) {
-        duplicate_module(context, module_map, mident, old_loc)
+        duplicate_module_error(context, module_map, mident, old_loc)
     }
     context.address = None
 }
@@ -897,6 +1071,22 @@ fn set_module_address(
     })
 }
 
+fn duplicate_module_error(
+    context: &mut Context,
+    module_map: &UniqueMap<ModuleIdent, E::ModuleDefinition>,
+    mident: ModuleIdent,
+    old_loc: Loc,
+) {
+    let old_mident = module_map.get_key(&mident).unwrap();
+    let dup_msg = format!("Duplicate definition for module '{}'", mident);
+    let prev_msg = format!("Module previously defined here, with '{}'", old_mident);
+    context.add_diag(diag!(
+        Declarations::DuplicateItem,
+        (mident.loc, dup_msg),
+        (old_loc, prev_msg),
+    ))
+}
+
 fn module_(
     context: &mut Context,
     package_name: Option<Symbol>,
@@ -909,10 +1099,17 @@ fn module_(
         loc,
         address,
         is_spec_module: _,
+        is_extension,
         name,
-        members,
+        mut members,
         definition_mode: _,
     } = mdef;
+    if is_extension {
+        context.add_diag(ice!((
+            loc,
+            "ICE: Module extensions should have been handled earlier"
+        )));
+    }
     let attributes = expand_attributes(context, AttributePosition::Module, attributes);
     let warning_filter = module_warning_filter(context, package_name, &attributes);
     context.push_warning_filter_scope(warning_filter);
@@ -931,6 +1128,27 @@ fn module_(
 
     let name_loc = name.0.loc;
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
+
+    // [NOTE: MOD-EXT] Extensions are currently injected directly into the original module before any
+    // processing is done. This means that extensions can use aliases and other definitions from the
+    // defining module, and can define their own. In addition, use funs, etc., defined in the original
+    // may be used in the extension. Conversely, any attempt to change the meaning of a use fun, etc.,
+    // will result in a duplicate delcaration error.
+    //
+    // This is not the only option for this design, and it may be worth revisiting. In particular, this
+    // approach will not allow an extension to use diffferent packages or named address mappings than
+    // the original module. To support such behavior, we would need to process extensions separately
+    // and combined behavior much later. This would mean significant scope juggling, though, during
+    // name resolution, use fun resolution, typing, etc.
+
+    let cur_addr = *context.cur_address();
+
+    if let Some(extension) =
+        context.get_module_extension_opt(&cur_addr, &current_module.value.module)
+    {
+        members.extend(extension.members);
+        extension_attributes(context, extension.attributes);
+    }
 
     let mut new_scope = context.new_alias_map_builder();
     let mut use_funs_builder = UseFunsBuilder::new();
@@ -984,13 +1202,16 @@ fn module_(
 
     context.pop_alias_scope(Some(&mut use_funs));
 
+    let named_address_map = context.defn_context.named_address_mapping.clone().unwrap();
+    let target_kind = context.defn_context.target_kind;
     let def = E::ModuleDefinition {
+        named_address_map,
         doc,
         package_name,
         attributes,
         loc,
         use_funs,
-        target_kind: context.defn_context.target_kind,
+        target_kind,
         friends,
         structs,
         enums,
@@ -1115,6 +1336,22 @@ fn check_visibility_modifiers(
                     ));
                 }
                 _ => {}
+            }
+        }
+    }
+}
+
+fn extension_attributes(context: &mut Context<'_>, attributes: Vec<Spanned<P::Attributes_>>) {
+    for attrs in attributes {
+        for attr in attrs.value.0 {
+            if !matches!(
+                attr.value,
+                P::Attribute_::Mode { .. } | P::Attribute_::External { .. }
+            ) {
+                context.add_diag(diag!(
+                    Attributes::ValueWarning,
+                    (attr.loc, "Non-'mode' attributes on module extensions are not supported and will be ignored")
+                ));
             }
         }
     }
@@ -1259,7 +1496,6 @@ fn all_module_members<'a>(
     context: &mut DefnContext,
     named_addr_maps: &NamedAddressMaps,
     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
-    always_add: bool,
     defs: impl IntoIterator<Item = &'a P::PackageDefinition>,
 ) {
     for P::PackageDefinition {
@@ -1268,7 +1504,7 @@ fn all_module_members<'a>(
         ..
     } in defs
     {
-        let named_addr_map: &NamedAddressMap = named_addr_maps.get(*named_address_map_index);
+        let named_addr_map = named_addr_maps.get(*named_address_map_index);
         match def {
             P::Definition::Module(m) => {
                 let addr = match &m.address {
@@ -1281,7 +1517,7 @@ fn all_module_members<'a>(
                     // Error will be handled when the module is compiled
                     None => Address::anonymous(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS),
                 };
-                module_members(members, always_add, addr, m)
+                module_members(members, addr, m)
             }
             P::Definition::Address(addr_def) => {
                 let addr = top_level_address_(
@@ -1291,7 +1527,7 @@ fn all_module_members<'a>(
                     addr_def.addr,
                 );
                 for m in &addr_def.modules {
-                    module_members(members, always_add, addr, m)
+                    module_members(members, addr, m)
                 }
             }
         };
@@ -1300,14 +1536,10 @@ fn all_module_members<'a>(
 
 fn module_members(
     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
-    always_add: bool,
     address: Address,
     m: &P::ModuleDefinition,
 ) {
     let mident = sp(m.name.loc(), ModuleIdent_::new(address, m.name));
-    if !always_add && members.contains_key(&mident) {
-        return;
-    }
     let mut cur_members = members.remove(&mident).unwrap_or_default();
     for mem in &m.members {
         match mem {
@@ -1327,6 +1559,42 @@ fn module_members(
         };
     }
     members.add(mident, cur_members).unwrap();
+}
+
+/// Convert a pre-compiled module info to a map of member kinds.
+fn pre_compiled_member_kinds(
+    pre_compiled_module_info: &ModuleInfo,
+) -> BTreeMap<Name, ModuleMemberKind> {
+    let mut member_kinds = BTreeMap::new();
+    for (loc, name, _) in &pre_compiled_module_info.structs {
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Struct);
+        assert!(
+            prev_val.is_none(),
+            "ICE a struct with the same name as another module member in pre-compiled info"
+        );
+    }
+    for (loc, name, _) in &pre_compiled_module_info.enums {
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Enum);
+        assert!(
+            prev_val.is_none(),
+            "ICE an enum with the same name as another module member in pre-compiled info"
+        );
+    }
+    for (loc, name, _) in &pre_compiled_module_info.functions {
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Function);
+        assert!(
+            prev_val.is_none(),
+            "ICE a function with the same name as another module member in pre-compiled info"
+        );
+    }
+    for (loc, name, _) in &pre_compiled_module_info.constants {
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Constant);
+        assert!(
+            prev_val.is_none(),
+            "ICE a constant with the same name as another module member in pre-compiled info"
+        );
+    }
+    member_kinds
 }
 
 fn named_addr_map_to_alias_map_builder(

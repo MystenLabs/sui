@@ -41,6 +41,7 @@ title: Module `bridge::treasury`
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
+<b>use</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator">sui::funds_accumulator</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/object_bag.md#sui_object_bag">sui::object_bag</a>;
@@ -427,8 +428,8 @@ title: Module `bridge::treasury`
 ) {
     // Make sure TreasuryCap <b>has</b> not been minted before.
     <b>assert</b>!(coin::total_supply(&tc) == 0, <a href="../bridge/treasury.md#bridge_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>);
-    <b>let</b> type_name = type_name::get&lt;T&gt;();
-    <b>let</b> address_bytes = hex::decode(ascii::into_bytes(type_name::get_address(&type_name)));
+    <b>let</b> type_name = type_name::with_defining_ids&lt;T&gt;();
+    <b>let</b> address_bytes = hex::decode(ascii::into_bytes(type_name::address_string(&type_name)));
     <b>let</b> coin_address = address::from_bytes(address_bytes);
     // Make sure upgrade cap is <b>for</b> the Coin package
     // FIXME: add test
@@ -559,7 +560,7 @@ title: Module `bridge::treasury`
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/treasury.md#bridge_treasury_burn">burn</a>&lt;T&gt;(self: &<b>mut</b> <a href="../bridge/treasury.md#bridge_treasury_BridgeTreasury">BridgeTreasury</a>, token: Coin&lt;T&gt;) {
-    <b>let</b> <a href="../bridge/treasury.md#bridge_treasury">treasury</a> = &<b>mut</b> self.treasuries[type_name::get&lt;T&gt;()];
+    <b>let</b> <a href="../bridge/treasury.md#bridge_treasury">treasury</a> = &<b>mut</b> self.treasuries[type_name::with_defining_ids&lt;T&gt;()];
     coin::burn(<a href="../bridge/treasury.md#bridge_treasury">treasury</a>, token);
 }
 </code></pre>
@@ -584,7 +585,7 @@ title: Module `bridge::treasury`
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/treasury.md#bridge_treasury_mint">mint</a>&lt;T&gt;(self: &<b>mut</b> <a href="../bridge/treasury.md#bridge_treasury_BridgeTreasury">BridgeTreasury</a>, amount: u64, ctx: &<b>mut</b> TxContext): Coin&lt;T&gt; {
-    <b>let</b> <a href="../bridge/treasury.md#bridge_treasury">treasury</a> = &<b>mut</b> self.treasuries[type_name::get&lt;T&gt;()];
+    <b>let</b> <a href="../bridge/treasury.md#bridge_treasury">treasury</a> = &<b>mut</b> self.treasuries[type_name::with_defining_ids&lt;T&gt;()];
     coin::mint(<a href="../bridge/treasury.md#bridge_treasury">treasury</a>, amount, ctx)
 }
 </code></pre>
@@ -646,7 +647,7 @@ title: Module `bridge::treasury`
 
 
 <pre><code><b>fun</b> <a href="../bridge/treasury.md#bridge_treasury_get_token_metadata">get_token_metadata</a>&lt;T&gt;(self: &<a href="../bridge/treasury.md#bridge_treasury_BridgeTreasury">BridgeTreasury</a>): <a href="../bridge/treasury.md#bridge_treasury_BridgeTokenMetadata">BridgeTokenMetadata</a> {
-    <b>let</b> coin_type = type_name::get&lt;T&gt;();
+    <b>let</b> coin_type = type_name::with_defining_ids&lt;T&gt;();
     <b>let</b> metadata = self.supported_tokens.try_get(&coin_type);
     <b>assert</b>!(metadata.is_some(), <a href="../bridge/treasury.md#bridge_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>);
     metadata.destroy_some()

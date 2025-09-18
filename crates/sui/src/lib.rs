@@ -13,6 +13,7 @@ pub mod genesis_inspector;
 pub mod keytool;
 pub mod mvr_resolver;
 pub mod sui_commands;
+pub mod trace_analysis_commands;
 pub mod upgrade_compatibility;
 pub mod validator_commands;
 mod verifier_meter;

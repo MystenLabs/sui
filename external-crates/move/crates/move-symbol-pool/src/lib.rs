@@ -97,6 +97,11 @@ static_symbols!(
     "beta",
     "development",
     "party_transfer",
+    "derived_object",
+    "claim",
+    "coin_registry",
+    "new_currency",
+    "test"
 );
 
 /// The global, unique cache of strings.

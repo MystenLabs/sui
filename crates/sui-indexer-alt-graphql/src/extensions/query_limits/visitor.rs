@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, sync::LazyLock};
 
 use anyhow::anyhow;
 use async_graphql::{
@@ -18,6 +18,27 @@ use super::{
     chain::Chain,
     error::{Error, ErrorKind},
 };
+
+/// Type representing the `__typename` meta field in GraphQL. This doesn't appear in the schema, but
+/// the visitor may still need to visit it.
+static TYPENAME: LazyLock<MetaField> = LazyLock::new(|| MetaField {
+    name: "__typename".to_owned(),
+    description: Some("Meta field that returns the name of the Object's type.".to_owned()),
+    args: Default::default(),
+    ty: "String".to_owned(),
+    deprecation: Default::default(),
+    cache_control: Default::default(),
+    external: false,
+    requires: None,
+    provides: None,
+    shareable: false,
+    inaccessible: false,
+    tags: Default::default(),
+    override_from: None,
+    visible: None,
+    compute_complexity: None,
+    directive_invocations: Default::default(),
+});
 
 /// Visitors traverse the AST of a query, performing an action on each field.
 pub(super) trait Visitor<'r> {
@@ -178,15 +199,19 @@ impl<'r> Driver<'r> {
             match &sel.node {
                 Selection::Field(field) => {
                     let name = &field.node.name.node;
-                    let meta_field = meta_type.field_by_name(name.as_str()).ok_or_else(|| {
-                        Error::new(
-                            ErrorKind::InternalError(anyhow!(
-                                "Field '{type_}.{name}' not found in schema"
-                            )),
-                            Chain::path(&chain),
-                            field.pos,
-                        )
-                    })?;
+                    let meta_field = if name == "__typename" {
+                        &*TYPENAME
+                    } else {
+                        meta_type.field_by_name(name.as_str()).ok_or_else(|| {
+                            Error::new(
+                                ErrorKind::InternalError(anyhow!(
+                                    "Field '{type_}.{name}' not found in schema"
+                                )),
+                                Chain::path(&chain),
+                                field.pos,
+                            )
+                        })?
+                    };
 
                     visitor.visit_field(&FieldDriver {
                         driver: self,

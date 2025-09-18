@@ -136,9 +136,10 @@ jobs:
       - name: cargo test (sui-graphql staging)
         run: |
           cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)' -E 'package(sui-indexer-alt-graphql)'
-      - name: benchmark (smoke)
-        run: |
-          cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
+      # TODO: run stress against a local Sui network.
+      # - name: benchmark (smoke)
+      #   run: |
+      #     cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
       - name: doctests
         run: |
           cargo test --doc
@@ -433,20 +434,3 @@ jobs:
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
         run: cargo build -p sui-execution
-
-  check-protos:
-    runs-on: [ ubuntu-ghcloud ]
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-        with:
-          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      # Install buf
-      - name: Install buf
-        uses: bufbuild/buf-setup-action@v1.24.0
-        with:
-          version: 1.47.2
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: lint protos
-        run: cd crates/sui-rpc-api && buf lint
-      - name: format protos
-        run: cd crates/sui-rpc-api && buf format --diff --exit-code

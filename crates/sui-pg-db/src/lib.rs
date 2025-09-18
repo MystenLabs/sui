@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -10,7 +11,6 @@ use diesel::pg::Pg;
 use diesel::ConnectionError;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::pooled_connection::ManagerConfig;
-use diesel_async::AsyncConnection;
 use diesel_async::{
     pooled_connection::{
         bb8::{Pool, PooledConnection},
@@ -22,7 +22,10 @@ use futures::FutureExt;
 use tracing::info;
 use url::Url;
 
+use tls::{build_tls_config, establish_tls_connection};
+
 mod model;
+mod tls;
 
 pub use sui_field_count::FieldCount;
 pub use sui_sql_macro::sql;
@@ -49,6 +52,15 @@ pub struct DbArgs {
     #[arg(long)]
     /// Time spent waiting for statements to complete, in milliseconds.
     pub db_statement_timeout_ms: Option<u64>,
+
+    #[arg(long)]
+    /// Enable server certificate verification. By default, this is set to false to match the
+    /// default behavior of libpq.
+    pub tls_verify_cert: bool,
+
+    #[arg(long)]
+    /// Path to a custom CA certificate to use for server certificate verification.
+    pub tls_ca_cert_path: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -177,6 +189,8 @@ impl Default for DbArgs {
             db_connection_pool_size: 100,
             db_connection_timeout_ms: 60_000,
             db_statement_timeout_ms: None,
+            tls_verify_cert: false,
+            tls_ca_cert_path: None,
         }
     }
 }
@@ -217,10 +231,16 @@ async fn pool(
 ) -> anyhow::Result<Pool<AsyncPgConnection>> {
     let statement_timeout = args.statement_timeout();
 
+    // Build TLS configuration once
+    let tls_config = build_tls_config(args.tls_verify_cert, args.tls_ca_cert_path.clone())?;
+
     let mut config = ManagerConfig::default();
+
     config.custom_setup = Box::new(move |url| {
+        let tls_config = tls_config.clone();
+
         async move {
-            let mut conn = AsyncPgConnection::establish(url).await?;
+            let mut conn = establish_tls_connection(url, tls_config).await?;
 
             if let Some(timeout) = statement_timeout {
                 diesel::sql_query(format!("SET statement_timeout = {}", timeout.as_millis()))
@@ -268,7 +288,6 @@ pub fn merge_migrations(
 
     Migrations(migrations)
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

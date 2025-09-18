@@ -4,22 +4,19 @@
 use std::{sync::Arc, time::SystemTime};
 
 use consensus_config::{AuthorityIndex, Committee, Parameters};
-#[cfg(test)]
 use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
 use consensus_types::block::BlockTimestampMs;
 use sui_protocol_config::ProtocolConfig;
-#[cfg(test)]
 use tempfile::TempDir;
 use tokio::time::Instant;
 
-#[cfg(test)]
 use crate::metrics::test_metrics;
 use crate::metrics::Metrics;
 
 /// Context contains per-epoch configuration and metrics shared by all components
 /// of this authority.
 #[derive(Clone)]
-pub(crate) struct Context {
+pub struct Context {
     /// Timestamp of the start of the current epoch.
     pub epoch_start_timestamp_ms: u64,
     /// Index of this authority in the committee.
@@ -58,12 +55,20 @@ impl Context {
     }
 
     /// Create a test context with a committee of given size and even stake
-    #[cfg(test)]
-    pub(crate) fn new_for_test(
+    pub fn new_for_test(committee_size: usize) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
+        Self::new_with_test_options(committee_size, true)
+    }
+
+    /// Create a test context with a committee of given size and even stake
+    pub fn new_with_test_options(
         committee_size: usize,
+        unused_port: bool,
     ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
-        let (committee, keypairs) =
-            consensus_config::local_committee_and_keys(0, vec![1; committee_size]);
+        let (committee, keypairs) = consensus_config::local_committee_and_keys_with_test_options(
+            0,
+            vec![1; committee_size],
+            unused_port,
+        );
         let metrics = test_metrics();
         let temp_dir = TempDir::new().unwrap();
         let clock = Arc::new(Clock::default());
@@ -83,32 +88,27 @@ impl Context {
         (context, keypairs)
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_epoch_start_timestamp_ms(mut self, epoch_start_timestamp_ms: u64) -> Self {
+    pub fn with_epoch_start_timestamp_ms(mut self, epoch_start_timestamp_ms: u64) -> Self {
         self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
         self
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_authority_index(mut self, authority: AuthorityIndex) -> Self {
+    pub fn with_authority_index(mut self, authority: AuthorityIndex) -> Self {
         self.own_index = authority;
         self
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_committee(mut self, committee: Committee) -> Self {
+    pub fn with_committee(mut self, committee: Committee) -> Self {
         self.committee = committee;
         self
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_parameters(mut self, parameters: Parameters) -> Self {
+    pub fn with_parameters(mut self, parameters: Parameters) -> Self {
         self.parameters = parameters;
         self
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_protocol_config(mut self, protocol_config: ProtocolConfig) -> Self {
+    pub fn with_protocol_config(mut self, protocol_config: ProtocolConfig) -> Self {
         self.protocol_config = protocol_config;
         self
     }

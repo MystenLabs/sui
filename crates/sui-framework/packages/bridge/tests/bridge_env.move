@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
+#[allow(deprecated_usage)] // TODO: update tests to not use deprecated governance
 module bridge::bridge_env {
     use bridge::bridge::{
         assert_not_paused,
@@ -405,10 +406,10 @@ module bridge::bridge_env {
             false,
             vector[BTC_ID, ETH_ID, USDC_ID, USDT_ID],
             vector[
-                type_name::get<BTC>().into_string(),
-                type_name::get<ETH>().into_string(),
-                type_name::get<USDC>().into_string(),
-                type_name::get<USDT>().into_string(),
+                type_name::with_defining_ids<BTC>().into_string(),
+                type_name::with_defining_ids<ETH>().into_string(),
+                type_name::with_defining_ids<USDC>().into_string(),
+                type_name::with_defining_ids<USDT>().into_string(),
             ],
             vector[1000, 100, 1, 1],
         );
@@ -870,7 +871,7 @@ module bridge::bridge_env {
         let register_events = event::events_by_type<TokenRegistrationEvent>();
         assert!(register_events.length() == 1);
         let (type_name, decimal, nat) = register_events[0].unwrap_registration_event();
-        assert!(type_name == type_name::get<TEST_TOKEN>());
+        assert!(type_name == type_name::with_defining_ids<TEST_TOKEN>());
         assert!(decimal == 8);
         assert!(nat == false);
 
@@ -969,7 +970,7 @@ module bridge::bridge_env {
         assert!(register_events.length() == 1);
 
         // verify changes in bridge
-        let type_name = type_name::get<T>();
+        let type_name = type_name::with_defining_ids<T>();
         let inner = bridge.test_load_inner();
         let treasury = inner.inner_treasury();
         let waiting_room = treasury.waiting_room();
@@ -1156,7 +1157,7 @@ module bridge::bridge_env {
         let inner = bridge.test_load_inner();
         let treasury = inner.inner_treasury();
         let treasuries = treasury.treasuries();
-        let tc: &TreasuryCap<T> = &treasuries[type_name::get<T>()];
+        let tc: &TreasuryCap<T> = &treasuries[type_name::with_defining_ids<T>()];
         tc.total_supply()
     }
 }
@@ -1165,7 +1166,7 @@ module bridge::bridge_env {
 // Test Coins
 //
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module bridge::test_token {
     use std::ascii;
     use std::type_name;
@@ -1191,9 +1192,9 @@ module bridge::test_token {
             ctx,
         );
 
-        let type_name = type_name::get<TEST_TOKEN>();
+        let type_name = type_name::with_defining_ids<TEST_TOKEN>();
         let address_bytes = hex::decode(
-            ascii::into_bytes(type_name::get_address(&type_name)),
+            ascii::into_bytes(type_name::address_string(&type_name)),
         );
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);
@@ -1202,7 +1203,7 @@ module bridge::test_token {
     }
 }
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module bridge::btc {
     use std::ascii;
     use std::type_name;
@@ -1228,9 +1229,9 @@ module bridge::btc {
             ctx,
         );
 
-        let type_name = type_name::get<BTC>();
+        let type_name = type_name::with_defining_ids<BTC>();
         let address_bytes = hex::decode(
-            ascii::into_bytes(type_name::get_address(&type_name)),
+            ascii::into_bytes(type_name::address_string(&type_name)),
         );
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);
@@ -1239,7 +1240,7 @@ module bridge::btc {
     }
 }
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module bridge::eth {
     use std::ascii;
     use std::type_name;
@@ -1265,9 +1266,9 @@ module bridge::eth {
             ctx,
         );
 
-        let type_name = type_name::get<ETH>();
+        let type_name = type_name::with_defining_ids<ETH>();
         let address_bytes = hex::decode(
-            ascii::into_bytes(type_name::get_address(&type_name)),
+            ascii::into_bytes(type_name::address_string(&type_name)),
         );
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);
@@ -1276,7 +1277,7 @@ module bridge::eth {
     }
 }
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module bridge::usdc {
     use std::ascii;
     use std::type_name;
@@ -1302,9 +1303,9 @@ module bridge::usdc {
             ctx,
         );
 
-        let type_name = type_name::get<USDC>();
+        let type_name = type_name::with_defining_ids<USDC>();
         let address_bytes = hex::decode(
-            ascii::into_bytes(type_name::get_address(&type_name)),
+            ascii::into_bytes(type_name::address_string(&type_name)),
         );
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);
@@ -1313,7 +1314,7 @@ module bridge::usdc {
     }
 }
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module bridge::usdt {
     use std::ascii;
     use std::type_name;
@@ -1339,9 +1340,9 @@ module bridge::usdt {
             ctx,
         );
 
-        let type_name = type_name::get<USDT>();
+        let type_name = type_name::with_defining_ids<USDT>();
         let address_bytes = hex::decode(
-            ascii::into_bytes(type_name::get_address(&type_name)),
+            ascii::into_bytes(type_name::address_string(&type_name)),
         );
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);

@@ -18,6 +18,11 @@ pub(crate) fn field<T>(
     }
 }
 
+/// Merge options by equality check (equal values get merged, everything else is inconsistent).
+pub(crate) fn by_eq<T: Eq>(a: T, b: T) -> Option<T> {
+    (a == b).then_some(a)
+}
+
 /// Merge options by taking the max.
 pub(crate) fn by_max<T: Ord>(a: T, b: T) -> Option<T> {
     Some(a.max(b))

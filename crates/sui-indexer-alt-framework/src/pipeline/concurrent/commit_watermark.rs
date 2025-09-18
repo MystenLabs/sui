@@ -322,7 +322,7 @@ mod tests {
         store: MockStore,
     ) -> TestSetup {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
-        let metrics = IndexerMetrics::new(&Default::default());
+        let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
 
         let store_clone = store.clone();

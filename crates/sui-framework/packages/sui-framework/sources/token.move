@@ -435,7 +435,7 @@ public fun confirm_with_treasury_cap<T>(
 /// be used to add arbitrary approvals to the request (not only the ones
 /// required by the `TokenPolicy`).
 public fun add_approval<T, W: drop>(_t: W, request: &mut ActionRequest<T>, _ctx: &mut TxContext) {
-    request.approvals.insert(type_name::get<W>())
+    request.approvals.insert(type_name::with_defining_ids<W>())
 }
 
 /// Add a `Config` for a `Rule` in the `TokenPolicy`. Rule configuration is
@@ -563,7 +563,7 @@ public fun add_rule_for_action<T, Rule: drop>(
         allow(self, cap, action, ctx);
     };
 
-    self.rules.get_mut(&action).insert(type_name::get<Rule>())
+    self.rules.get_mut(&action).insert(type_name::with_defining_ids<Rule>())
 }
 
 /// Removes a rule for an action with `name` in the `TokenPolicy`. Returns
@@ -578,7 +578,7 @@ public fun remove_rule_for_action<T, Rule: drop>(
 ) {
     assert!(object::id(self) == cap.`for`, ENotAuthorized);
 
-    self.rules.get_mut(&action).remove(&type_name::get<Rule>())
+    self.rules.get_mut(&action).remove(&type_name::with_defining_ids<Rule>())
 }
 
 // === Protected: Treasury Management ===

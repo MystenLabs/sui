@@ -391,6 +391,13 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_typename() {
+        let schema = schema(config(), page());
+        let response = execute(&schema, "{ __typename, alias: __typename }").await;
+        assert_snapshot!(response.extensions.get("usage").unwrap(), @"{input: {nodes: 2,depth: 1},payload: {query_payload_size: 33,tx_payload_size: 0},output: {nodes: 2}}");
+    }
+
+    #[tokio::test]
     async fn test_too_deep() {
         let schema = schema(config(), page());
         let response = execute(&schema, "{ a { b { c { a { b { c { z } } } } } } }").await;

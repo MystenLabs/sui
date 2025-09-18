@@ -13,7 +13,7 @@ mod consensus_tests {
     use consensus_core::NoopTransactionVerifier;
     use consensus_core::{BlockAPI, BlockStatus, TransactionVerifier, ValidationError};
     use consensus_simtests::node::{AuthorityNode, Config};
-    use consensus_types::block::TransactionIndex;
+    use consensus_types::block::{BlockRef, TransactionIndex};
     use mysten_metrics::RegistryService;
     use mysten_network::Multiaddr;
     use prometheus::Registry;
@@ -388,6 +388,7 @@ mod consensus_tests {
 
         fn verify_and_vote_batch(
             &self,
+            _block_ref: &BlockRef,
             batch: &[&[u8]],
         ) -> Result<Vec<TransactionIndex>, ValidationError> {
             let mut rejected_indices = vec![];

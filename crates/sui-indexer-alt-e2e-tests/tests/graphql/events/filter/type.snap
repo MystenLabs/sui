@@ -1,0 +1,570 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-34:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6551200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 36-57:
+//# publish --sender B --dependencies P1
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6323200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 59:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 61:
+//# run P1::M1::emit_T1 --sender A
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: P1, module: Identifier("M1"), name: Identifier("T1"), type_params: [] })] }, contents: [0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 63:
+//# run P1::M1::emit_T2 --sender A
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: P1, module: Identifier("M1"), name: Identifier("T2"), type_params: [] })] }, contents: [0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 65:
+//# run P1::M1::emit_both --sender A
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: P1, module: Identifier("M1"), name: Identifier("T1"), type_params: [] })] }, contents: [0] }, Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: P1, module: Identifier("M1"), name: Identifier("T2"), type_params: [] })] }, contents: [0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 67:
+//# run P1::M1::emit_both --sender B
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: B, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: P1, module: Identifier("M1"), name: Identifier("T1"), type_params: [] })] }, contents: [0] }, Event { package_id: P1, transaction_module: Identifier("M1"), sender: B, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [Struct(StructTag { address: P1, module: Identifier("M1"), name: Identifier("T2"), type_params: [] })] }, contents: [0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 69:
+//# run P2::M2::emit_T3 --sender B
+events: Event { package_id: P2, transaction_module: Identifier("M2"), sender: B, type_: StructTag { address: P2, module: Identifier("M2"), name: Identifier("EventC"), type_params: [Struct(StructTag { address: P1, module: Identifier("M1"), name: Identifier("T3"), type_params: [] })] }, contents: [0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 71:
+//# run P2::M2::emit_T4 --sender B
+events: Event { package_id: P2, transaction_module: Identifier("M2"), sender: B, type_: StructTag { address: P2, module: Identifier("M2"), name: Identifier("EventC"), type_params: [Struct(StructTag { address: P2, module: Identifier("M2"), name: Identifier("T4"), type_params: [] })] }, contents: [0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 73:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 11, lines 75-118:
+//# run-graphql
+Response: {
+  "data": {
+    "allEvents": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T1>"
+            }
+          },
+          "transaction": {
+            "digest": "Bs7Lx4zAVDNATGoWPAN7N7Cx6cLfdWts8QWLMvFxsvnm",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "6YN1nC9x6Sj7kmnQECS4Q1UoowTZrikyaBuYWyhq4SRv",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T1>"
+            }
+          },
+          "transaction": {
+            "digest": "8aRECHjLCHdmdzjRegsD7WnA8hoq4VTGukBjxkGNVA5C",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "8aRECHjLCHdmdzjRegsD7WnA8hoq4VTGukBjxkGNVA5C",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T1>"
+            }
+          },
+          "transaction": {
+            "digest": "C2Dv8gAhsFMJ4YYHZZJCp8EE9MoBckwaFB472m7LSCnh",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "C2Dv8gAhsFMJ4YYHZZJCp8EE9MoBckwaFB472m7LSCnh",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xc191bf470a38a2b2fb81859c5424724f7dde218505361013d715c11e0887fa15"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xc191bf470a38a2b2fb81859c5424724f7dde218505361013d715c11e0887fa15::M2::EventC<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T3>"
+            }
+          },
+          "transaction": {
+            "digest": "6KEJWsUvZvinmbX57rHMBxTgakETwsjkbtohAVnQBTS4",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xc191bf470a38a2b2fb81859c5424724f7dde218505361013d715c11e0887fa15"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xc191bf470a38a2b2fb81859c5424724f7dde218505361013d715c11e0887fa15::M2::EventC<0xc191bf470a38a2b2fb81859c5424724f7dde218505361013d715c11e0887fa15::M2::T4>"
+            }
+          },
+          "transaction": {
+            "digest": "AeAz53ACabj2KzbfkCowFspwSWMpWVeGwTNWtqYC2PhV",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsOfP1M1EventA": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T1>"
+            }
+          },
+          "transaction": {
+            "digest": "Bs7Lx4zAVDNATGoWPAN7N7Cx6cLfdWts8QWLMvFxsvnm",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "6YN1nC9x6Sj7kmnQECS4Q1UoowTZrikyaBuYWyhq4SRv",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T1>"
+            }
+          },
+          "transaction": {
+            "digest": "8aRECHjLCHdmdzjRegsD7WnA8hoq4VTGukBjxkGNVA5C",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "8aRECHjLCHdmdzjRegsD7WnA8hoq4VTGukBjxkGNVA5C",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T1>"
+            }
+          },
+          "transaction": {
+            "digest": "C2Dv8gAhsFMJ4YYHZZJCp8EE9MoBckwaFB472m7LSCnh",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "C2Dv8gAhsFMJ4YYHZZJCp8EE9MoBckwaFB472m7LSCnh",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsOfP1M1EventATypeT2": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "6YN1nC9x6Sj7kmnQECS4Q1UoowTZrikyaBuYWyhq4SRv",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "8aRECHjLCHdmdzjRegsD7WnA8hoq4VTGukBjxkGNVA5C",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "C2Dv8gAhsFMJ4YYHZZJCp8EE9MoBckwaFB472m7LSCnh",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsOfP1M1EventABySenderB": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T1>"
+            }
+          },
+          "transaction": {
+            "digest": "C2Dv8gAhsFMJ4YYHZZJCp8EE9MoBckwaFB472m7LSCnh",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "sequenceNumber": 1,
+          "transactionModule": {
+            "package": {
+              "address": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::EventA<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T2>"
+            }
+          },
+          "transaction": {
+            "digest": "C2Dv8gAhsFMJ4YYHZZJCp8EE9MoBckwaFB472m7LSCnh",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsOfTypeP1EmittedByP2": {
+      "nodes": [
+        {
+          "sequenceNumber": 0,
+          "transactionModule": {
+            "package": {
+              "address": "0xc191bf470a38a2b2fb81859c5424724f7dde218505361013d715c11e0887fa15"
+            }
+          },
+          "sender": {
+            "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+          },
+          "contents": {
+            "type": {
+              "repr": "0xc191bf470a38a2b2fb81859c5424724f7dde218505361013d715c11e0887fa15::M2::EventC<0xb87e435bcbaac5f376f92920d07e3160c6e2b0caef1f8412cd7550b50623f053::M1::T3>"
+            }
+          },
+          "transaction": {
+            "digest": "6KEJWsUvZvinmbX57rHMBxTgakETwsjkbtohAVnQBTS4",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -171,4 +171,31 @@ impl ServiceConfig {
         let limits: &Limits = ctx.data()?;
         Ok(Some(limits.max_move_value_depth))
     }
+
+    /// Maximum budget in bytes to spend when outputting a structured `MoveValue`.
+    async fn max_move_value_bound(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_move_value_bound))
+    }
+
+    /// Maximum depth of nested field access supported in display outputs.
+    async fn max_display_field_depth(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_display_field_depth))
+    }
+
+    /// Maximum output size of a display output.
+    async fn max_display_output_size(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_display_output_size))
+    }
+
+    /// Maximum output size of a disassembled MoveModule, in bytes.
+    async fn max_disassembled_module_size(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_disassembled_module_size))
+    }
 }

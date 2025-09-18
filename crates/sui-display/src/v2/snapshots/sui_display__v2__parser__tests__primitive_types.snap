@@ -1,0 +1,13 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(\"{ vector<address> \\\n             | vector<bool> \\\n             | vector<u8> \\\n             | vector<u16> \\\n             | vector<u32> \\\n             | vector<u64> \\\n             | vector<u128> \\\n             | vector<u256> }\")"
+---
+{ vector<address> []
+| vector<bool> []
+| vector<u8> []
+| vector<u16> []
+| vector<u32> []
+| vector<u64> []
+| vector<u128> []
+| vector<u256> []
+}

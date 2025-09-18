@@ -59,7 +59,7 @@ export default function Home() {
           <HomeCard title="Validators and Node operators">
             <Link
               className={styles.cardLink}
-              to="./guides/operator/validator-config"
+              to="./guides/operator/validator/validator-config"
             >
               Validator configuration
             </Link>

@@ -164,7 +164,7 @@ async fn test_events() -> Result<(), anyhow::Error> {
         .await
         .move_call(move_package, "events_queries", function, arguments)
         .build();
-    let signed_transaction = cluster.wallet.sign_transaction(&transaction);
+    let signed_transaction = cluster.wallet.sign_transaction(&transaction).await;
     cluster.execute_transaction(signed_transaction).await;
 
     // query for events

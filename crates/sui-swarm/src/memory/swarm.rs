@@ -15,6 +15,8 @@ use std::{
 };
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
+#[cfg(msim)]
+use sui_config::node::ExecutionTimeObserverConfig;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{ExecutionCacheConfig, NodeConfig};
 use sui_macros::nondeterministic;
@@ -61,6 +63,8 @@ pub struct SwarmBuilder<R = OsRng> {
     submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
     disable_fullnode_pruning: bool,
+    #[cfg(msim)]
+    execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
 }
 
 impl SwarmBuilder {
@@ -92,6 +96,8 @@ impl SwarmBuilder {
             submit_delay_step_override_millis: None,
             global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(true),
             disable_fullnode_pruning: false,
+            #[cfg(msim)]
+            execution_time_observer_config: None,
         }
     }
 }
@@ -125,6 +131,8 @@ impl<R> SwarmBuilder<R> {
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
+            #[cfg(msim)]
+            execution_time_observer_config: self.execution_time_observer_config,
         }
     }
 
@@ -244,6 +252,12 @@ impl<R> SwarmBuilder<R> {
         c: GlobalStateHashV2EnabledConfig,
     ) -> Self {
         self.global_state_hash_v2_enabled_config = c;
+        self
+    }
+
+    #[cfg(msim)]
+    pub fn with_execution_time_observer_config(mut self, c: ExecutionTimeObserverConfig) -> Self {
+        self.execution_time_observer_config = Some(c);
         self
     }
 
@@ -380,7 +394,8 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                     .with_submit_delay_step_override_millis(submit_delay_step_override_millis);
             }
 
-            config_builder
+            #[allow(unused_mut)]
+            let mut final_builder = config_builder
                 .committee(self.committee)
                 .rng(self.rng)
                 .with_objects(self.additional_objects)
@@ -389,8 +404,15 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 )
                 .with_global_state_hash_v2_enabled_config(
                     self.global_state_hash_v2_enabled_config.clone(),
-                )
-                .build()
+                );
+
+            #[cfg(msim)]
+            if let Some(execution_time_observer_config) = self.execution_time_observer_config {
+                final_builder = final_builder
+                    .with_execution_time_observer_config(execution_time_observer_config);
+            }
+
+            final_builder.build()
         });
 
         let mut nodes: HashMap<_, _> = network_config

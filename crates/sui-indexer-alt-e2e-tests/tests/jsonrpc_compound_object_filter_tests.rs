@@ -8,10 +8,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
-use sui_indexer_alt::config::IndexerConfig;
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
-use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster, OffchainClusterConfig};
 use sui_indexer_alt_jsonrpc::config::{ObjectsConfig, RpcConfig as JsonRpcConfig};
 use sui_json_rpc_types::Page;
 use sui_types::{
@@ -324,13 +321,13 @@ async fn test_next_cursor() {
 async fn setup_cluster(config: ObjectsConfig) -> FullCluster {
     FullCluster::new_with_configs(
         Simulacrum::new(),
-        IndexerArgs::default(),
-        IndexerConfig::example(),
-        JsonRpcConfig {
-            objects: config,
-            ..JsonRpcConfig::default()
+        OffchainClusterConfig {
+            jsonrpc_config: JsonRpcConfig {
+                objects: config,
+                ..Default::default()
+            },
+            ..Default::default()
         },
-        GraphQlConfig::default(),
         &prometheus::Registry::new(),
         CancellationToken::new(),
     )
@@ -414,7 +411,7 @@ fn create_bag(cluster: &mut FullCluster, owner: SuiAddress, size: u64) -> Object
     assert!(fx.status().is_ok(), "create bag transaction failed");
 
     find_address_owned(&fx)
-        .expect("Failed to find created coin")
+        .expect("Failed to find created bag")
         .0
 }
 

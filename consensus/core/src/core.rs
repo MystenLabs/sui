@@ -51,7 +51,7 @@ use crate::{
 #[cfg(test)]
 use crate::{
     block::CertifiedBlocksOutput, block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
-    CommitConsumer, TransactionClient,
+    CommitConsumerArgs, TransactionClient,
 };
 
 // Maximum number of commit votes to include in a block.
@@ -490,6 +490,11 @@ impl Core {
             let dag_state = self.dag_state.read();
             let clock_round = dag_state.threshold_clock_round();
             if clock_round <= dag_state.get_last_proposed_block().round() {
+                debug!(
+                    "Skipping block proposal for round {} as it is not higher than the last proposed block {}",
+                    clock_round,
+                    dag_state.get_last_proposed_block().round()
+                );
                 return None;
             }
             clock_round
@@ -512,6 +517,12 @@ impl Core {
                     .saturating_sub(self.last_proposed_timestamp_ms()),
             ) < self.context.parameters.min_round_delay
             {
+                debug!(
+                    "Skipping block proposal for round {} as it is too soon after the last proposed block timestamp {}; min round delay is {}ms",
+                    clock_round,
+                    self.last_proposed_timestamp_ms(),
+                    self.context.parameters.min_round_delay.as_millis(),
+                );
                 return None;
             }
         }
@@ -525,6 +536,10 @@ impl Core {
             assert!(
                 !force,
                 "Ancestors should have been returned if force is true!"
+            );
+            debug!(
+                "Skipping block proposal for round {} because no good ancestor is found",
+                clock_round,
             );
             return None;
         }
@@ -1415,7 +1430,7 @@ impl CoreTextFixture {
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
         let (commit_consumer, commit_output_receiver, blocks_output_receiver) =
-            CommitConsumer::new(0);
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1486,7 +1501,7 @@ mod test {
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
         transaction::{BlockStatus, TransactionClient},
-        CommitConsumer, CommitIndex,
+        CommitConsumerArgs, CommitIndex,
     };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
@@ -1541,7 +1556,8 @@ mod test {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1674,7 +1690,8 @@ mod test {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1784,7 +1801,8 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2009,7 +2027,8 @@ mod test {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2169,7 +2188,8 @@ mod test {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2261,7 +2281,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2615,7 +2636,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2911,7 +2933,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -3003,7 +3026,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -3072,7 +3096,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -3527,7 +3552,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,

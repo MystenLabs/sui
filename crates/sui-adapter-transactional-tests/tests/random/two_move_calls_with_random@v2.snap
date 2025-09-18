@@ -16,4 +16,4 @@ task 2, lines 14-16:
 //# programmable --sender A --inputs immshared(8) @A
 //> test::random::use_random(Input(0));
 //> test::random::use_random(Input(0));
-Error: Error checking transaction input objects: PostRandomCommandRestrictions
+Error: Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins
