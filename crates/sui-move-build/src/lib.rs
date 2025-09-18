@@ -14,7 +14,7 @@ use anyhow::bail;
 use anyhow::Context;
 use fastcrypto::encoding::Base64;
 use serde_reflection::Registry;
-use toml::Value as TV;
+use toml::value::Value as TV;
 
 use move_binary_format::{
     normalized::{self, Type},
@@ -262,10 +262,14 @@ impl BuildConfig {
                     })
                 }
                 _ => {
-                    tokio::runtime::Handle::current()
-                        .block_on(RootPackage::<SuiFlavor>::load(path, env))
+                    // TODO: pkg-alt - this needs to be fixed because the non futures code will
+                    // fail in a bunch of tokio test with runtime cannot be created within a
+                    // runtime
+                    #[allow(clippy::disallowed_methods)]
+                    // tokio::runtime::Handle::current()
+                    //     .block_on(RootPackage::<SuiFlavor>::load(path, env))
                     // Single-threaded or current-thread runtime, use futures::executor
-                    // futures::executor::block_on(RootPackage::<SuiFlavor>::load(path, env))
+                    futures::executor::block_on(RootPackage::<SuiFlavor>::load(path, env))
                 }
             }
         } else {
