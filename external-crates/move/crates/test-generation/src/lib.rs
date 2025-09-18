@@ -27,11 +27,11 @@ use move_binary_format::{
 use move_bytecode_verifier::verify_module_unmetered;
 use move_compiler::Compiler;
 use move_core_types::{
-    account_address::AccountAddress, language_storage::TypeTag, runtime_value::MoveValue,
-    vm_status::StatusCode,
+    account_address::AccountAddress, language_storage::TypeTag, vm_status::StatusCode,
 };
 use move_vm_runtime::{
     dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage},
+    execution::values::{Value, Vector},
     runtime::MoveRuntime,
 };
 use move_vm_runtime::{
@@ -81,18 +81,18 @@ fn run_vm(module: CompiledModule) -> Result<(), VMError> {
         let sig_idx = module.function_handle_at(handle).parameters;
         module.signature_at(sig_idx).clone()
     };
-    let main_args: Vec<Vec<u8>> = function_signature
+    let main_args: Vec<Value> = function_signature
         .0
         .iter()
         .map(|sig_tok| match sig_tok {
-            SignatureToken::Address => MoveValue::Address(AccountAddress::ZERO)
-                .simple_serialize()
-                .unwrap(),
-            SignatureToken::U64 => MoveValue::U64(0).simple_serialize().unwrap(),
-            SignatureToken::Bool => MoveValue::Bool(true).simple_serialize().unwrap(),
-            SignatureToken::Vector(inner_tok) if **inner_tok == SignatureToken::U8 => {
-                MoveValue::Vector(vec![]).simple_serialize().unwrap()
-            }
+            SignatureToken::Address => Value::Address(Box::new(AccountAddress::ZERO)),
+            SignatureToken::U64 => Value::U64(0),
+            SignatureToken::Bool => Value::Bool(true),
+            SignatureToken::Vector(inner_tok) if **inner_tok == SignatureToken::U8 => Vector::pack(
+                move_vm_runtime::execution::values::VectorSpecialization::U8,
+                vec![],
+            )
+            .unwrap(),
             SignatureToken::Vector(_)
             | SignatureToken::U8
             | SignatureToken::U128
@@ -116,7 +116,7 @@ fn execute_function_in_module(
     module: CompiledModule,
     idx: FunctionDefinitionIndex,
     ty_arg_tags: Vec<TypeTag>,
-    args: Vec<Vec<u8>>,
+    args: Vec<Value>,
 ) -> Result<(), VMError> {
     let module_id = module.self_id();
     let entry_name = {

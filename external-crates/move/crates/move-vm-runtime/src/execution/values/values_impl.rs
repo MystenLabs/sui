@@ -378,7 +378,7 @@ impl<T: Debug> MemBox<T> {
             Ok(refcell) => Ok(refcell.into_inner()),
             Err(val) => Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!("Tried to take value {:?} with dangline references", val),
+                    format!("Tried to take value {:?} with dangling references", val),
                 ),
             ),
         }
