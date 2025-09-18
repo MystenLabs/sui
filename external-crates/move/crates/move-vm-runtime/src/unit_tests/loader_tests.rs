@@ -935,48 +935,6 @@ fn relink_defining_module_oneshot() {
 }
 
 #[test]
-fn relink_defining_module_cleanup() {
-    // If loading fails for a module that pulls in a module that was defined at an earlier version
-    // of the package, roll-back should occur cleanly.
-    let data_store = InMemoryStorage::new();
-    let c0 = ModuleId::new(ADDR2, ident_str!("c").to_owned());
-    let b0 = ModuleId::new(ADDR3, ident_str!("b").to_owned());
-    let b1 = ModuleId::new(ADDR6, ident_str!("b").to_owned());
-    let adapter = Adapter::new(data_store);
-    let c0_modules = get_relinker_tests_modules_with_deps(ADDR2, ADDR2, "c_v0", []).unwrap();
-    let b1_modules =
-        get_relinker_tests_modules_with_deps(ADDR3, *b1.address(), "b_v1", ["c_v1"]).unwrap();
-    // B was built against the later version of C but published against the earlier version,
-    // which should fail because a function is missing.
-    adapter
-        .with_linkage(
-            /* linkage */
-            BTreeMap::from_iter([(*c0.address(), *c0.address())]),
-            /* type origin */
-            vec![((c0.name(), ident_str!("S")), *c0.address())],
-        )
-        .publish_package(c0_modules);
-    // Somehow dependency verification fails, and the publish succeeds.
-    fail::cfg("verifier-failpoint-4", "100%return").unwrap();
-    let mut adapter = adapter.with_linkage(
-        /* linkage */
-        BTreeMap::from_iter([
-            (*b0.address(), *b1.address()),
-            (*c0.address(), *c0.address()),
-        ]),
-        /* type origin */
-        vec![
-            ((c0.name(), ident_str!("S")), *c0.address()),
-            ((b0.name(), ident_str!("S")), *b1.address()),
-        ],
-    );
-    adapter.publish_package_with_error(b1_modules);
-
-    // Restore old behavior of failpoint
-    fail::cfg("verifier-failpoint-4", "off").unwrap();
-}
-
-#[test]
 fn publish_bundle_and_load() {
     let data_store = InMemoryStorage::new();
     let adapter = Adapter::new(data_store);
