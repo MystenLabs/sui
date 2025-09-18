@@ -938,7 +938,7 @@ impl<'a> PTBBuilder<'a> {
                 .map_err(|e| err!(pkg_loc, "Cannot compile package: {e}"))?;
 
                 let compiled_package = compile_package(
-                    &self.reader,
+                    self.reader,
                     &root_pkg,
                     build_config,
                     package_path,

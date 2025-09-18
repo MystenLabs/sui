@@ -149,59 +149,60 @@ impl TreeShakingTest {
         .await
     }
 
-    async fn publish_package_without_tree_shaking(&mut self, package_name: &str) -> ObjectID {
-        let package_path = self.package_path(package_name);
-
-        let obj_ref = sui_test_transaction_builder::publish_package(
-            self.test_cluster.wallet_mut(),
-            package_path.clone(),
-        )
-        .await;
-
-        obj_ref.0
-    }
-
-    async fn upgrade_package(
-        &mut self,
-        package_name: &str,
-        upgrade_capability: ObjectID,
-    ) -> Result<ObjectID, anyhow::Error> {
-        let mut build_config = BuildConfig::new_for_testing().config;
-        build_config.lock_file = Some(self.package_path(package_name).join("Move.lock"));
-        let resp = SuiClientCommands::Upgrade {
-            package_path: self.package_path(package_name),
-            upgrade_capability: Some(upgrade_capability),
-            build_config,
-            skip_dependency_verification: false,
-            verify_deps: false,
-            verify_compatibility: true,
-            with_unpublished_dependencies: false,
-            payment: PaymentArgs {
-                gas: vec![self.gas_obj_id],
-            },
-            gas_data: GasDataArgs {
-                gas_budget: Some(self.rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-                ..Default::default()
-            },
-            processing: TxProcessingArgs::default(),
-        }
-        .execute(self.test_cluster.wallet_mut())
-        .await?;
-
-        let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
-            unreachable!("Invalid response");
-        };
-
-        let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
-        assert!(effects.status.is_ok());
-
-        let package_a_v1 = effects
-            .created()
-            .iter()
-            .find(|refe| matches!(refe.owner, Owner::Immutable))
-            .unwrap();
-        Ok(package_a_v1.object_id())
-    }
+    // TODO: add back when tree shaking tests are added back
+    // async fn publish_package_without_tree_shaking(&mut self, package_name: &str) -> ObjectID {
+    //     let package_path = self.package_path(package_name);
+    //
+    //     let obj_ref = sui_test_transaction_builder::publish_package(
+    //         self.test_cluster.wallet_mut(),
+    //         package_path.clone(),
+    //     )
+    //     .await;
+    //
+    //     obj_ref.0
+    // }
+    //
+    // async fn upgrade_package(
+    //     &mut self,
+    //     package_name: &str,
+    //     upgrade_capability: ObjectID,
+    // ) -> Result<ObjectID, anyhow::Error> {
+    //     let mut build_config = BuildConfig::new_for_testing().config;
+    //     build_config.lock_file = Some(self.package_path(package_name).join("Move.lock"));
+    //     let resp = SuiClientCommands::Upgrade {
+    //         package_path: self.package_path(package_name),
+    //         upgrade_capability: Some(upgrade_capability),
+    //         build_config,
+    //         skip_dependency_verification: false,
+    //         verify_deps: false,
+    //         verify_compatibility: true,
+    //         with_unpublished_dependencies: false,
+    //         payment: PaymentArgs {
+    //             gas: vec![self.gas_obj_id],
+    //         },
+    //         gas_data: GasDataArgs {
+    //             gas_budget: Some(self.rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+    //             ..Default::default()
+    //         },
+    //         processing: TxProcessingArgs::default(),
+    //     }
+    //     .execute(self.test_cluster.wallet_mut())
+    //     .await?;
+    //
+    //     let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+    //         unreachable!("Invalid response");
+    //     };
+    //
+    //     let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+    //     assert!(effects.status.is_ok());
+    //
+    //     let package_a_v1 = effects
+    //         .created()
+    //         .iter()
+    //         .find(|refe| matches!(refe.owner, Owner::Immutable))
+    //         .unwrap();
+    //     Ok(package_a_v1.object_id())
+    // }
 
     async fn fetch_linkage_table(&self, pkg: ObjectID) -> BTreeMap<ObjectID, UpgradeInfo> {
         let move_pkg = fetch_move_packages(&self.client, vec![pkg]).await;
@@ -306,42 +307,42 @@ pub async fn fetch_move_packages(
         .collect()
 }
 
-/// Adds the `published-at` field to the Move.toml file. Pass in the `address_id` if you want to
-/// set the `addresses` field in the Move.toml file.
-///
-/// Note that address_id works only if there's one item in the addresses section. It does not know
-/// how to handle multiple addresses / addresses from deps.
-fn add_ids_to_manifest(
-    package_path: &Path,
-    published_at_id: &ObjectID,
-    address_id: Option<ObjectID>,
-) -> Result<(), anyhow::Error> {
-    let content = std::fs::read_to_string(package_path.join("Move.toml"))?;
-    let mut toml: toml::Value = toml::from_str(&content)?;
-    if let Some(tbl) = toml.get_mut("package") {
-        if let Some(tbl) = tbl.as_table_mut() {
-            tbl.insert(
-                "published-at".to_string(),
-                toml::Value::String(published_at_id.to_hex_uncompressed()),
-            );
-        }
-    }
-
-    if let (Some(address_id), Some(tbl)) = (address_id, toml.get_mut("addresses")) {
-        if let Some(tbl) = tbl.as_table_mut() {
-            // Get the first address item
-            let first_key = tbl.keys().next().unwrap();
-            tbl.insert(
-                first_key.to_string(),
-                toml::Value::String(address_id.to_hex_uncompressed()),
-            );
-        }
-    }
-
-    let toml_str = toml::to_string(&toml)?;
-    std::fs::write(package_path.join("Move.toml"), toml_str)?;
-    Ok(())
-}
+// Adds the `published-at` field to the Move.toml file. Pass in the `address_id` if you want to
+// set the `addresses` field in the Move.toml file.
+//
+// Note that address_id works only if there's one item in the addresses section. It does not know
+// how to handle multiple addresses / addresses from deps.
+// fn add_ids_to_manifest(
+//     package_path: &Path,
+//     published_at_id: &ObjectID,
+//     address_id: Option<ObjectID>,
+// ) -> Result<(), anyhow::Error> {
+//     let content = std::fs::read_to_string(package_path.join("Move.toml"))?;
+//     let mut toml: toml::Value = toml::from_str(&content)?;
+//     if let Some(tbl) = toml.get_mut("package") {
+//         if let Some(tbl) = tbl.as_table_mut() {
+//             tbl.insert(
+//                 "published-at".to_string(),
+//                 toml::Value::String(published_at_id.to_hex_uncompressed()),
+//             );
+//         }
+//     }
+//
+//     if let (Some(address_id), Some(tbl)) = (address_id, toml.get_mut("addresses")) {
+//         if let Some(tbl) = tbl.as_table_mut() {
+//             // Get the first address item
+//             let first_key = tbl.keys().next().unwrap();
+//             tbl.insert(
+//                 first_key.to_string(),
+//                 toml::Value::String(address_id.to_hex_uncompressed()),
+//             );
+//         }
+//     }
+//
+//     let toml_str = toml::to_string(&toml)?;
+//     std::fs::write(package_path.join("Move.toml"), toml_str)?;
+//     Ok(())
+// }
 
 #[sim_test]
 async fn test_genesis() -> Result<(), anyhow::Error> {
@@ -1225,7 +1226,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     let pkg_path = &tempdir.join("test");
     // copy test pkg
     copy_dir_all(
-        &PathBuf::from(TEST_DATA_DIR).join("pkg_mgmt_modules_publish"),
+        PathBuf::from(TEST_DATA_DIR).join("pkg_mgmt_modules_publish"),
         pkg_path,
     )
     .expect("to copy the test pkg from dir to a temp dir");
@@ -1233,7 +1234,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     let framework_pkgs = PathBuf::from("../sui-framework/packages");
     copy_dir_all(
         framework_pkgs,
-        &tempdir.join("sui-framework").join("packages"),
+        tempdir.join("sui-framework").join("packages"),
     )?;
 
     // we want to do a non ephemeral publication, so set localnet as environment in toml file
@@ -1272,7 +1273,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
         };
 
     // read the file with published data after publish command successfully executed
-    let pubfile_str = std::fs::read_to_string(&pkg_path.join("Published.toml"))
+    let pubfile_str = std::fs::read_to_string(pkg_path.join("Published.toml"))
         .expect("to read from Published.toml file");
     let parsed: ParsedPublishedFile<SuiFlavor> = toml_edit::de::from_str(&pubfile_str).unwrap();
 
@@ -2480,7 +2481,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let framework_pkgs = PathBuf::from("../sui-framework/packages");
     copy_dir_all(
         framework_pkgs,
-        &tempdir.join("sui-framework").join("packages"),
+        tempdir.join("sui-framework").join("packages"),
     )?;
 
     // we want to do a non ephemeral publication, so set localnet as environment in toml file
@@ -5468,11 +5469,7 @@ async fn test_party_transfer_gas_object_as_transfer_object() -> Result<(), anyho
 
 fn update_toml_with_localnet_chain_id(toml_path: &PathBuf, chain_id: String) -> String {
     let orig_toml = std::fs::read_to_string(toml_path).unwrap();
-    let mut toml = OpenOptions::new()
-        .write(true)
-        .append(true)
-        .open(toml_path)
-        .unwrap();
+    let mut toml = OpenOptions::new().append(true).open(toml_path).unwrap();
     writeln!(
         toml,
         "{}",

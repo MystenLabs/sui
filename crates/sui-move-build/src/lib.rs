@@ -6,7 +6,7 @@ extern crate move_ir_types;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
 };
 
@@ -262,8 +262,10 @@ impl BuildConfig {
                     })
                 }
                 _ => {
+                    tokio::runtime::Handle::current()
+                        .block_on(RootPackage::<SuiFlavor>::load(path, env))
                     // Single-threaded or current-thread runtime, use futures::executor
-                    futures::executor::block_on(RootPackage::<SuiFlavor>::load(path, env))
+                    // futures::executor::block_on(RootPackage::<SuiFlavor>::load(path, env))
                 }
             }
         } else {
@@ -720,7 +722,7 @@ pub enum PublishedAtError {
 }
 
 pub fn parse_legacy_package_info(
-    package_path: &PathBuf,
+    package_path: &Path,
 ) -> Result<LegacyPackageMetadata, anyhow::Error> {
     let manifest_string = std::fs::read_to_string(package_path.join("Move.toml"))?;
     let tv =
@@ -734,13 +736,13 @@ pub fn parse_legacy_package_info(
                 .transpose()
                 .context("Error parsing '[package]' section of manifest")?
                 .unwrap();
-            return Ok(metadata);
+            Ok(metadata)
         }
         _ => bail!("Expected a table from the manifest file"),
     }
 }
 
-pub fn published_at_property(package_path: &PathBuf) -> Result<ObjectID, PublishedAtError> {
+pub fn published_at_property(package_path: &Path) -> Result<ObjectID, PublishedAtError> {
     let parsed_manifest =
         parse_legacy_package_info(package_path).expect("should read the manifest");
 

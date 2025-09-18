@@ -74,7 +74,6 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
 
     let orig_toml = std::fs::read_to_string("tests/ptb_files/publish/test_pkg/Move.toml").unwrap();
     let mut toml = OpenOptions::new()
-        .write(true)
         .append(true)
         .open("tests/ptb_files/publish/test_pkg/Move.toml")
         .unwrap();

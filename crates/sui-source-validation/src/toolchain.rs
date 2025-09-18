@@ -1,10 +1,9 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+//
 use move_package_alt::schema::PackageName;
 use move_package_alt_compilation::compiled_package::CompiledUnitWithSource;
 use move_symbol_pool::Symbol;
-
-// // Copyright (c) Mysten Labs, Inc.
-// // SPDX-License-Identifier: Apache-2.0
-//
 // use std::{
 //     collections::HashMap,
 //     ffi::OsStr,
@@ -99,6 +98,7 @@ use move_symbol_pool::Symbol;
 // /// Move.lock contents. This works by detecting if a compiled unit requires a prior compiler version:
 // /// - If so, download the compiler, recompile the unit, and return that unit in the result.
 // /// - If not, simply keep the current compiled unit.
+#[allow(clippy::ptr_arg)] // TODO: remove this
 pub(crate) fn units_for_toolchain(
     _compiled_units: &Vec<(Symbol, CompiledUnitWithSource)>,
 ) -> anyhow::Result<Vec<(PackageName, CompiledUnitWithSource)>> {

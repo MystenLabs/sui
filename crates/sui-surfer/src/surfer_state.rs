@@ -338,7 +338,7 @@ impl SurferState {
             self.address,
             self.gas_object,
             modules,
-            package.dependency_ids,
+            package.dependency_ids.published.values().cloned().collect(),
             TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
             rgp,
         );

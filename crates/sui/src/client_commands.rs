@@ -2052,7 +2052,7 @@ pub(crate) async fn compile_package(
     let package = move_package_alt_compilation::compile_from_root_package::<
         &mut dyn std::io::Write,
         SuiFlavor,
-    >(&root_pkg, &build_config, &mut writer)
+    >(root_pkg, &build_config, &mut writer)
     .unwrap();
 
     let dependency_ids = PackageDependencies::new(root_pkg)?;
@@ -3654,7 +3654,7 @@ pub async fn load_root_pkg_for_publish_upgrade(
             bail!("Could not find an environment named {env} in this package's manifest");
         };
 
-        if &chain_id != env_id {
+        if chain_id != env_id {
             bail!("The chain id of the active environment in the CLI does not match the chain id {env_id} for {env} environment in the manifest");
         }
 
@@ -3665,7 +3665,7 @@ pub async fn load_root_pkg_for_publish_upgrade(
 
     // we found the active env in the manifest's environments
     if let Some(env_chain_id) = envs.get(&active_env) {
-        if env_chain_id != &chain_id {
+        if env_chain_id != chain_id {
             bail!(
                 "Error: Environment `{active_env}` has chain ID `{chain_id}` in your CLI \
                 environment, but `Move.toml` expects `{active_env}` to have chain ID \
@@ -3876,7 +3876,7 @@ async fn publish_command(
 
     let compiled_package = compile_package(
         read_api,
-        &root_package,
+        root_package,
         build_config.clone(),
         &package_path,
         with_unpublished_dependencies,
