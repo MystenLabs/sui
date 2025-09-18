@@ -951,12 +951,7 @@ impl<'a> PTBBuilder<'a> {
 
                 let res = self.ptb.publish_upgradeable(
                     compiled_modules,
-                    compiled_package
-                        .package
-                        .dependency_ids()
-                        .iter()
-                        .map(|x| x.1 .0.into())
-                        .collect(),
+                    compiled_package.get_published_dependencies_ids(),
                 );
                 self.last_command = Some(res);
             }
@@ -1039,8 +1034,9 @@ impl<'a> PTBBuilder<'a> {
                     upgrade_ticket,
                     compiled_package
                         .dependency_ids
+                        .published
                         .values()
-                        .map(|x| x.0.into())
+                        .cloned()
                         .collect::<Vec<_>>(),
                     compiled_modules,
                 );

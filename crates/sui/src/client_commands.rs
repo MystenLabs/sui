@@ -53,7 +53,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
-use sui_move_build::CompiledPackage;
+use sui_move_build::{CompiledPackage, PackageDependencies};
 use sui_package_management::LockCommand;
 use sui_sdk::{
     apis::ReadApi,
@@ -97,6 +97,7 @@ use tabled::{
 };
 
 use move_package_alt::{
+    graph::NamedAddress,
     package::RootPackage,
     schema::{
         Environment, EnvironmentID, EnvironmentName, OriginalID, Publication, PublishAddresses,
@@ -2035,7 +2036,6 @@ pub(crate) async fn compile_package(
     debug!("Current client has {chain_id} as chain identifier");
 
     debug!("Loaded package from {:?}", package_path.display());
-    let dependency_ids = root_pkg.deps_ids().clone();
 
     let published_at = root_pkg
         .publication()
@@ -2055,6 +2055,33 @@ pub(crate) async fn compile_package(
         SuiFlavor,
     >(&root_pkg, &build_config, &mut writer)
     .unwrap();
+
+    let mut dependency_ids = PackageDependencies {
+        published: BTreeMap::new(),
+        unpublished: BTreeSet::new(),
+        invalid: BTreeMap::new(),
+        conflicting: BTreeMap::new(),
+    };
+
+    let named_addresses = root_pkg
+        .package_graph()
+        .root_package_info()
+        .named_addresses()?;
+
+    for (pkg_name, addr) in named_addresses {
+        match addr {
+            NamedAddress::RootPackage(_) => (),
+            NamedAddress::Unpublished { dummy_addr: _ } => {
+                dependency_ids.unpublished.insert(pkg_name.as_str().into());
+            }
+            NamedAddress::Defined(original_id) => {
+                dependency_ids.published.insert(
+                    pkg_name.as_str().into(),
+                    ObjectID::from_address(original_id.0),
+                );
+            }
+        }
+    }
 
     let mut compiled_package = CompiledPackage {
         package,
@@ -3596,6 +3623,7 @@ pub(crate) async fn pkg_tree_shake(
     let immediate_dep_packages: BTreeMap<_, _> = compiled_package
         .dependency_ids
         .clone()
+        .published
         .into_iter()
         .filter(|(pkg_name, _)| pkgs_to_keep.contains(pkg_name))
         .collect();
@@ -3612,22 +3640,14 @@ pub(crate) async fn pkg_tree_shake(
 
     info!("Pkg name to orig id {:#?}", pkg_name_to_orig_id);
 
-    let trans_deps_orig_ids = trans_deps_original_ids(
-        read_api,
-        &immediate_dep_packages
-            .clone()
-            .into_iter()
-            .map(|x| (x.0, ObjectID::from_address(x.1 .0)))
-            .collect(),
-    )
-    .await?;
+    let trans_deps_orig_ids = trans_deps_original_ids(read_api, &immediate_dep_packages).await?;
 
     info!("Trans deps orig ids {:?}", trans_deps_orig_ids);
 
     // for every published package in the original list of published dependencies, get its original
     // id and then check if that id exists in the linkage table. If it does, then we need to keep
     // this package. Similarly, all immediate dep packages must stay
-    compiled_package.dependency_ids.retain(|pkg, _| {
+    compiled_package.dependency_ids.published.retain(|pkg, _| {
         immediate_dep_packages.contains_key(pkg)
             || pkg_name_to_orig_id
                 .get(pkg)

@@ -100,7 +100,7 @@ use move_symbol_pool::Symbol;
 // /// - If so, download the compiler, recompile the unit, and return that unit in the result.
 // /// - If not, simply keep the current compiled unit.
 pub(crate) fn units_for_toolchain(
-    compiled_units: &Vec<(Symbol, CompiledUnitWithSource)>,
+    _compiled_units: &Vec<(Symbol, CompiledUnitWithSource)>,
 ) -> anyhow::Result<Vec<(PackageName, CompiledUnitWithSource)>> {
     todo!()
 }

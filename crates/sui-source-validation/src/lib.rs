@@ -233,7 +233,7 @@ impl ValidationMode {
     /// substituted with the specified address.
     #[allow(clippy::result_large_err)]
     fn local(&self, package: &CompiledPackage) -> Result<LocalModules, Error> {
-        let sui_package = package;
+        let _sui_package = package;
         let package = &package.package;
         let root_package = package.compiled_package_info.package_name;
         let mut map = LocalModules::new();
@@ -482,5 +482,5 @@ fn substitute_root_address(
 
 /// The on-chain addresses for a source package's dependencies
 fn dependency_addresses(package: &CompiledPackage) -> impl Iterator<Item = AccountAddress> + '_ {
-    package.dependency_ids.iter().map(|id| id.1 .0)
+    package.dependency_ids.published.values().map(|id| **id)
 }

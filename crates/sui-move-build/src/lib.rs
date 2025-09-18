@@ -584,9 +584,9 @@ impl CompiledPackage {
     //     }
     //
     pub fn get_published_dependencies_ids(&self) -> Vec<ObjectID> {
-        self.get_dependency_storage_package_ids()
+        self.dependency_ids.published.values().cloned().collect()
     }
-    //
+
     //     /// Find the map of packages that are immediate dependencies of the root modules, joined with
     //     /// the set of bytecode dependencies.
     //     pub fn find_immediate_deps_pkgs_to_keep(
