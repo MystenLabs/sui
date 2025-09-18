@@ -2,10 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_package_alt::{
-    graph::NamedAddress,
-    schema::{OriginalID, PackageName},
-};
+use move_package_alt::{graph::NamedAddress, schema::PackageName};
 
 use crate::build_config::BuildConfig;
 
@@ -40,9 +37,6 @@ pub struct CompiledPackage {
     // Optional artifacts from compilation
     /// filename -> doctext
     pub compiled_docs: Option<Vec<(String, String)>>,
-    /// The list of published ids for the dependencies of this package
-    // pub deps_published_ids: Vec<OriginalID>,
-    pub dependency_ids: BTreeMap<Symbol, OriginalID>,
     /// The mapping of file hashes to file names and contents
     pub file_map: MappedFiles,
 }
@@ -154,6 +148,7 @@ impl CompiledPackage {
             })
             .collect()
     }
+
     pub fn get_module_by_name(
         &self,
         package_name: &str,
@@ -190,11 +185,6 @@ impl CompiledPackage {
                     self.compiled_package_info.package_name
                 )
             })
-    }
-
-    /// Return the published ids of the dependencies of this package
-    pub fn dependency_ids(&self) -> BTreeMap<Symbol, OriginalID> {
-        self.dependency_ids.clone()
     }
 }
 

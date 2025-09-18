@@ -35,11 +35,9 @@ use move_package_alt::{
     compatibility::legacy_parser::{parse_package_info, LegacyPackageMetadata},
     flavor::MoveFlavor,
     package::RootPackage,
-    schema::{Environment, OriginalID},
+    schema::Environment,
 };
-use move_package_alt_compilation::compiled_package::{
-    CompiledPackage as MoveCompiledPackage, // CompiledUnitWithSource,
-};
+use move_package_alt_compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_package_alt_compilation::{
     build_config::BuildConfig as MoveBuildConfig, build_plan::BuildPlan,
 };
@@ -90,7 +88,7 @@ pub struct CompiledPackage {
     /// Address the package is recorded as being published at.
     pub published_at: Option<ObjectID>,
     /// The dependency IDs of this package
-    pub dependency_ids: BTreeMap<Symbol, OriginalID>,
+    pub dependency_ids: PackageDependencies,
     // Transitive dependency graph of a Move package
     // pub dependency_graph: Vec<PackageInfo<SuiFlavor>>,
 }
@@ -120,7 +118,6 @@ pub struct PackageDependencies {
     /// the package, and the tuple refers to the address in the (Move.lock, Move.toml) respectively.
     pub conflicting: BTreeMap<Symbol, (ObjectID, ObjectID)>,
 }
-//
 
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
@@ -142,7 +139,7 @@ impl BuildConfig {
         }
     }
 
-    pub fn new_for_testing_replace_addresses<I, S>(dep_original_addresses: I) -> Self
+    pub fn new_for_testing_replace_addresses<I, S>(_dep_original_addresses: I) -> Self
     where
         I: IntoIterator<Item = (S, ObjectID)>,
         S: Into<String>,
@@ -260,7 +257,14 @@ impl BuildConfig {
             verify_bytecode(&package, &fn_info)?;
         }
 
-        let dependency_ids = package.dependency_ids().clone();
+        // TODO fill in the PackageDependencies
+        // let dependency_ids = package.dependency_ids().clone();
+        let dependency_ids = PackageDependencies {
+            published: BTreeMap::new(),
+            unpublished: BTreeSet::new(),
+            invalid: BTreeMap::new(),
+            conflicting: BTreeMap::new(),
+        };
 
         Ok(CompiledPackage {
             package,
@@ -386,7 +390,7 @@ impl CompiledPackage {
     /// Return the set of Object IDs corresponding to this package's transitive dependencies'
     /// storage package IDs (where to load those packages on-chain).
     pub fn get_dependency_storage_package_ids(&self) -> Vec<ObjectID> {
-        self.dependency_ids.values().map(|x| x.0.into()).collect()
+        self.dependency_ids.published.values().cloned().collect()
     }
 
     /// Return a digest of the bytecode modules in this package.
