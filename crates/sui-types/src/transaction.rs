@@ -721,9 +721,12 @@ impl CallArg {
                 );
             }
             CallArg::Object(o) => match o {
-                ObjectArg::ImmOrOwnedObject(_)
-                | ObjectArg::SharedObject { .. }
-                | ObjectArg::SharedObjectV2 { .. } => (),
+                ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. } => (),
+                ObjectArg::SharedObjectV2 { .. } => {
+                    return Err(UserInputError::Unsupported(
+                        "User transactions cannot use SharedObjectV2".to_string(),
+                    ));
+                }
                 ObjectArg::Receiving(_) => {
                     if !config.receiving_objects_supported() {
                         return Err(UserInputError::Unsupported(format!(
