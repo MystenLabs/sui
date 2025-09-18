@@ -8215,7 +8215,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "sha2 0.9.9",
  "tempfile",
- "toml 0.5.11",
+ "toml 0.7.4",
  "toml_edit 0.22.24",
  "treeline",
  "vfs",
@@ -8253,7 +8253,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
- "toml 0.5.11",
+ "toml 0.7.4",
  "toml_edit 0.22.24",
  "tracing",
  "tracing-subscriber",
@@ -14102,7 +14102,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "toml 0.7.4",
- "toml_edit 0.19.10",
+ "toml_edit 0.22.24",
 ]
 
 [[package]]

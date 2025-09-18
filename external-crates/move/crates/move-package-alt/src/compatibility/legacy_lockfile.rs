@@ -96,7 +96,7 @@ pub(crate) fn try_load_legacy_lockfile_publications(
 }
 
 fn parse_legacy_lockfile_addresses(
-    lockfile: &toml::value::Map<String, toml::Value>,
+    lockfile: &toml::map::Map<String, toml::Value>,
 ) -> Result<BTreeMap<EnvironmentName, LegacyEnvironment>> {
     let mut publish_info = BTreeMap::new();
 
