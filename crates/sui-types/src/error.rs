@@ -288,6 +288,14 @@ pub enum UserInputError {
 
     #[error("Invalid wait for effects request: {error}")]
     InvalidWaitForEffectsRequest { error: String },
+
+    #[error("Transaction with empty gas payment must have expiration")]
+    MissingTransactionExpiration,
+
+    #[error(
+        "Transaction expiration chain ID {provided} does not match network chain ID {expected}"
+    )]
+    InvalidExpirationChainId { provided: String, expected: String },
 }
 
 #[derive(
