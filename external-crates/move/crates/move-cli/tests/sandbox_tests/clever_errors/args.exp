@@ -1,5 +1,5 @@
 Command `test -t 1`:
-INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY std
 BUILDING PackageBasics
 Running Move unit tests
 [ FAIL    ] std::AModule::abort_in_macro_same_module
