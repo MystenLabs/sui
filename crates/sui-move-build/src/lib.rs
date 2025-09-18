@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-extern crate move_ir_types;
+// extern crate move_ir_types;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -11,10 +11,8 @@ use std::{
 };
 
 use anyhow::bail;
-use anyhow::Context;
 use fastcrypto::encoding::Base64;
 use serde_reflection::Registry;
-use toml::value::Value as TV;
 
 use move_binary_format::{
     normalized::{self, Type},
@@ -32,11 +30,8 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
 };
 use move_package_alt::{
-    compatibility::legacy_parser::{parse_package_info, LegacyPackageMetadata},
-    flavor::MoveFlavor,
-    graph::NamedAddress,
-    package::RootPackage,
-    schema::Environment,
+    compatibility::parse_legacy_package_info, flavor::MoveFlavor, graph::NamedAddress,
+    package::RootPackage, schema::Environment,
 };
 use move_package_alt_compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_package_alt_compilation::{
@@ -55,8 +50,6 @@ use sui_types::{
     SUI_SYSTEM_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
-
-const PACKAGE: &str = "package";
 
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
@@ -723,27 +716,6 @@ pub enum PublishedAtError {
     Invalid(String),
     #[error("The 'published-at' field is not present in Move.toml or Move.lock")]
     NotPresent,
-}
-
-pub fn parse_legacy_package_info(
-    package_path: &Path,
-) -> Result<LegacyPackageMetadata, anyhow::Error> {
-    let manifest_string = std::fs::read_to_string(package_path.join("Move.toml"))?;
-    let tv =
-        toml::from_str::<TV>(&manifest_string).context("Unable to parse Move package manifest")?;
-
-    match tv {
-        TV::Table(mut table) => {
-            let metadata = table
-                .remove(PACKAGE)
-                .map(parse_package_info)
-                .transpose()
-                .context("Error parsing '[package]' section of manifest")?
-                .unwrap();
-            Ok(metadata)
-        }
-        _ => bail!("Expected a table from the manifest file"),
-    }
 }
 
 pub fn published_at_property(package_path: &Path) -> Result<ObjectID, PublishedAtError> {

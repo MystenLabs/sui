@@ -13,7 +13,6 @@ fastcrypto.workspace = true
 futures.workspace = true
 thiserror.workspace = true
 tempfile.workspace = true
-toml = "0.5.8"
 
 move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
 sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
