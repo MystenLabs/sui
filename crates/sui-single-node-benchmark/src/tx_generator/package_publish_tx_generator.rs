@@ -95,7 +95,7 @@ impl PackagePublishTxGenerator {
         .build(&target_path)
         .unwrap();
 
-        compiled_package.dependency_ids = published_deps.values().cloned().collect();
+        compiled_package.dependency_ids.published = published_deps;
         Self { compiled_package }
     }
 }
