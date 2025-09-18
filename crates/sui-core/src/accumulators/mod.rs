@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
@@ -15,7 +16,9 @@ use sui_types::effects::{
     TransactionEffects, TransactionEffectsAPI,
 };
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, CallArg, ObjectArg, TransactionKind};
+use sui_types::transaction::{
+    Argument, CallArg, ObjectArg, SharedObjectMutability, TransactionKind,
+};
 use sui_types::{
     TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -272,48 +275,60 @@ impl AccumulatorSettlementTxBuilder {
             .accumulator_root_obj_initial_shared_version()
             .expect("accumulator root object must exist");
 
-        let mut builder = ProgrammableTransactionBuilder::new();
+        self.updates
+            .into_iter()
+            .chunks(2)
+            .into_iter()
+            .enumerate()
+            .map(|(idx, updates)| {
+                let mut builder = ProgrammableTransactionBuilder::new();
 
-        let root = builder
-            .input(CallArg::Object(ObjectArg::SharedObject {
-                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-                initial_shared_version: accumulator_root_obj_initial_shared_version,
-                mutable: true,
-            }))
-            .unwrap();
+                let root = builder
+                    .input(CallArg::Object(ObjectArg::SharedObjectV2 {
+                        id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                        initial_shared_version: accumulator_root_obj_initial_shared_version,
+                        mutability: SharedObjectMutability::NonExclusiveWrite,
+                    }))
+                    .unwrap();
 
-        let epoch_arg = builder.pure(epoch).unwrap();
-        let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
-        let idx_arg = builder.pure(0u64).unwrap();
-        let total_input_sui_arg = builder.pure(self.total_input_sui).unwrap();
-        let total_output_sui_arg = builder.pure(self.total_output_sui).unwrap();
-        tracing::debug!("total_input_sui: {}", self.total_input_sui);
-        tracing::debug!("total_output_sui: {}", self.total_output_sui);
+                let epoch_arg = builder.pure(epoch).unwrap();
+                let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
+                let idx_arg = builder.pure(idx as u64).unwrap();
+                let total_input_sui_arg = builder.pure(self.total_input_sui).unwrap();
+                let total_output_sui_arg = builder.pure(self.total_output_sui).unwrap();
+                tracing::debug!("total_input_sui: {}", self.total_input_sui);
+                tracing::debug!("total_output_sui: {}", self.total_output_sui);
 
-        builder.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            ACCUMULATOR_SETTLEMENT_MODULE.into(),
-            ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
-            vec![],
-            vec![
-                epoch_arg,
-                checkpoint_height_arg,
-                idx_arg,
-                total_input_sui_arg,
-                total_output_sui_arg,
-            ],
-        );
+                builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    ACCUMULATOR_SETTLEMENT_MODULE.into(),
+                    ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
+                    vec![],
+                    vec![
+                        epoch_arg,
+                        checkpoint_height_arg,
+                        idx_arg,
+                        total_input_sui_arg,
+                        total_output_sui_arg,
+                    ],
+                );
 
-        for (accumulator_obj, update) in self.updates {
-            let Update { merge, split } = update;
-            let address = self.addresses.get(&accumulator_obj).unwrap();
-            let merged_value = MergedValue::from(merge);
-            let split_value = MergedValue::from(split);
-            MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
-        }
+                for (accumulator_obj, update) in updates {
+                    let Update { merge, split } = update;
+                    let address = self.addresses.get(&accumulator_obj).unwrap();
+                    let merged_value = MergedValue::from(merge);
+                    let split_value = MergedValue::from(split);
+                    MergedValue::add_move_call(
+                        merged_value,
+                        split_value,
+                        root,
+                        address,
+                        &mut builder,
+                    );
+                }
 
-        vec![TransactionKind::ProgrammableSystemTransaction(
-            builder.finish(),
-        )]
+                TransactionKind::ProgrammableSystemTransaction(builder.finish())
+            })
+            .collect()
     }
 }
