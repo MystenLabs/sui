@@ -690,6 +690,56 @@ impl CommitHandlerState {
             .cloned()
             .collect()
     }
+
+    fn init_randomness<'a, 'epoch>(
+        &'a mut self,
+        epoch_store: &'epoch AuthorityPerEpochStore,
+        commit_info: &'a ConsensusCommitInfo,
+    ) -> Option<tokio::sync::MutexGuard<'epoch, RandomnessManager>> {
+        // DONE(commit-handler-rewrite): load randomness manager, get random round
+        let mut randomness_manager = epoch_store.randomness_manager.get().map(|rm| {
+            rm.try_lock()
+                .expect("should only ever be called from the commit handler thread")
+        });
+
+        let mut dkg_failed = false;
+        let randomness_round = if epoch_store.randomness_state_enabled() {
+            let randomness_manager = randomness_manager
+                .as_mut()
+                .expect("randomness manager should exist if randomness is enabled");
+            match randomness_manager.dkg_status() {
+                DkgStatus::Pending => None,
+                DkgStatus::Failed => {
+                    dkg_failed = true;
+                    None
+                }
+                DkgStatus::Successful => {
+                    // DONE(commit-handler-rewrite): do not reserve randomness if !should_accept_tx()
+                    // Generate randomness for this commit if DKG is successful and we are still
+                    // accepting certs.
+                    if self.initial_reconfig_state.should_accept_tx() {
+                        randomness_manager
+                            // TODO: make infallible
+                            .reserve_next_randomness(commit_info.timestamp, &mut self.output)
+                            .expect("epoch ended")
+                    } else {
+                        None
+                    }
+                }
+            }
+        } else {
+            None
+        };
+
+        if randomness_round.is_some() {
+            assert!(!dkg_failed); // invariant check
+        }
+
+        self.randomness_round = randomness_round;
+        self.dkg_failed = dkg_failed;
+
+        randomness_manager
+    }
 }
 
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
@@ -813,7 +863,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // DONE(commit-handler-rewrite): de-duplicate transactions
         let transactions = self.deduplicate_consensus_txns(&mut state, &commit_info, transactions);
 
-        let mut randomness_manager = self.init_randomness(&mut state, &commit_info);
+        let mut randomness_manager = state.init_randomness(&self.epoch_store, &commit_info);
 
         // DONE(commit-handler-rewrite): Split transactions into different types for processing.
         let CommitHandlerInput {
@@ -1533,56 +1583,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         )
     }
 
-    fn init_randomness(
-        &self,
-        state: &mut CommitHandlerState,
-        commit_info: &ConsensusCommitInfo,
-    ) -> Option<tokio::sync::MutexGuard<'_, RandomnessManager>> {
-        // DONE(commit-handler-rewrite): load randomness manager, get random round
-        let mut randomness_manager = self.epoch_store.randomness_manager.get().map(|rm| {
-            rm.try_lock()
-                .expect("should only ever be called from the commit handler thread")
-        });
-
-        let mut dkg_failed = false;
-        let randomness_round = if self.epoch_store.randomness_state_enabled() {
-            let randomness_manager = randomness_manager
-                .as_mut()
-                .expect("randomness manager should exist if randomness is enabled");
-            match randomness_manager.dkg_status() {
-                DkgStatus::Pending => None,
-                DkgStatus::Failed => {
-                    dkg_failed = true;
-                    None
-                }
-                DkgStatus::Successful => {
-                    // DONE(commit-handler-rewrite): do not reserve randomness if !should_accept_tx()
-                    // Generate randomness for this commit if DKG is successful and we are still
-                    // accepting certs.
-                    if state.initial_reconfig_state.should_accept_tx() {
-                        randomness_manager
-                            // TODO: make infallible
-                            .reserve_next_randomness(commit_info.timestamp, &mut state.output)
-                            .expect("epoch ended")
-                    } else {
-                        None
-                    }
-                }
-            }
-        } else {
-            None
-        };
-
-        if randomness_round.is_some() {
-            assert!(!dkg_failed); // invariant check
-        }
-
-        state.randomness_round = randomness_round;
-        state.dkg_failed = dkg_failed;
-
-        randomness_manager
-    }
-
     fn process_jwks(
         &self,
         state: &mut CommitHandlerState,
@@ -2292,19 +2292,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // DONE(commit-handler-rewrite): ignored external transactions must not be recorded as processed.
                 if !initial_reconfig_state.should_accept_consensus_certs() {
                     // DONE(commit-handler-rewrite): ignore txns due to !should_accept_consensus_certs(), unless they were previously deferred
-                    // (Note: we no lnoger need to worry about the previously deferred condition, since we are only
+                    // (Note: we no longer need to worry about the previously deferred condition, since we are only
                     // processing newly-received transactions at this time).
-                    if parsed.transaction.is_user_transaction() {
-                        debug!(
-                            "Ignoring consensus transaction {:?} because of end of epoch",
-                            parsed.transaction.key()
-                        );
-                        continue;
-                    }
-
                     match &parsed.transaction.kind {
                         ConsensusTransactionKind::UserTransaction(_)
                         | ConsensusTransactionKind::CertifiedTransaction(_)
+                        // deprecated and ignore later, but added for exhaustive match
+                        | ConsensusTransactionKind::CapabilityNotification(_)
                         // DONE(commit-handler-rewrite): [ssm] ignore capability notifications if !should_accept_consensus_certs()
                         | ConsensusTransactionKind::CapabilityNotificationV2(_)
                         // DONE(commit-handler-rewrite): [ssm] ignore end of publish messages if !should_accept_consensus_certs()
@@ -2313,8 +2307,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // Note: we no longer have to check protocol_config.ignore_execution_time_observations_after_certs_closed()
                         | ConsensusTransactionKind::ExecutionTimeObservation(_)
                         // DONE(commit-handler-rewrite): [ssm] ignore jwk votes if !should_accept_consensus_certs()
-                        | ConsensusTransactionKind::NewJWKFetched(_, _, _) => continue,
-                        _ => {},
+                        | ConsensusTransactionKind::NewJWKFetched(_, _, _) => {
+                            debug!(
+                                "Ignoring consensus transaction {:?} because of end of epoch",
+                                parsed.transaction.key()
+                            );
+                            continue;
+                        }
+
+                        // These are the message types that are still processed even if !should_accept_consensus_certs()
+                        ConsensusTransactionKind::CheckpointSignature(_)
+                        | ConsensusTransactionKind::CheckpointSignatureV2(_)
+                        | ConsensusTransactionKind::RandomnessStateUpdate(_, _)
+                        | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                        | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => ()
                     }
                 }
 
@@ -2328,55 +2334,40 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
+                // DONE(commit-handler-rewrite): ignore mfp user transaction if mfp is disabled
+                if parsed.transaction.is_mfp_transaction()
+                    && !self.epoch_store.protocol_config().mysticeti_fastpath()
+                {
+                    debug!(
+                        "Ignoring MFP transaction {:?} because MFP is disabled",
+                        parsed.transaction.key()
+                    );
+                    continue;
+                }
+
+                // DONE(commit-handler-rewrite): ignore certs from wrong epoch
+                if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
+                    &parsed.transaction.kind
+                {
+                    if certificate.epoch() != epoch {
+                        debug!(
+                            "Certificate epoch ({:?}) doesn't match the current epoch ({:?})",
+                            certificate.epoch(),
+                            epoch
+                        );
+                        continue;
+                    }
+                }
+
+                // Handle deprecated messages
                 match &parsed.transaction.kind {
-                    ConsensusTransactionKind::UserTransaction(_) => {
-                        // DONE(commit-handler-rewrite): ignore mfp user transaction if mfp is disabled
-                        if !self.epoch_store.protocol_config().mysticeti_fastpath() {
-                            debug!(
-                                "Ignoring MFP transaction {:?} because MFP is disabled",
-                                parsed.transaction.key()
-                            );
-                            continue;
-                        }
-                    }
-
-                    ConsensusTransactionKind::CertifiedTransaction(certificate) => {
-                        // DONE(commit-handler-rewrite): ignore certs from wrong epoch
-                        if certificate.epoch() != epoch {
-                            // Epoch has changed after this certificate was sequenced, ignore it.
-                            debug!(
-                                "Certificate epoch ({:?}) doesn't match the current epoch ({:?})",
-                                certificate.epoch(),
-                                epoch
-                            );
-                            continue;
-                        }
-                    }
-
-                    // Deprecated messages
-                    ConsensusTransactionKind::CapabilityNotification(_) => {
+                    // DONE(commit-handler-rewrite): [ssm] can ignore capabilities v1 in rewrite
+                    ConsensusTransactionKind::CapabilityNotification(_)
+                    | ConsensusTransactionKind::RandomnessStateUpdate(_, _)
+                    | ConsensusTransactionKind::CheckpointSignature(_) => {
                         debug_fatal!(
-                            "BUG: saw deprecated CapabilityNotification tx for commit round {}",
-                            commit_info.round
-                        );
-                        // DONE(commit-handler-rewrite): [ssm] can ignore capabilities v1 in rewrite
-                        continue;
-                    }
-
-                    ConsensusTransactionKind::RandomnessStateUpdate(randomness_round, _) => {
-                        // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
-                        debug_fatal!(
-                            "BUG: saw deprecated RandomnessStateUpdate tx for commit round {}, randomness round {}",
-                            commit_info.round,
-                            randomness_round
-                        );
-                        continue;
-                    }
-
-                    ConsensusTransactionKind::CheckpointSignature(_) => {
-                        // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
-                        debug_fatal!(
-                            "BUG: saw deprecated CheckpointSignature tx for commit round {}",
+                            "BUG: saw deprecated tx {:?}for commit round {}",
+                            parsed.transaction.key(),
                             commit_info.round
                         );
                         continue;
