@@ -129,27 +129,35 @@ where
         loop {
             interval.tick().await;
 
+            let mut tasks = JoinSet::new();
+
             for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
                 Self::execute_latency_for_tx_type(
                     self.clone(),
+                    &mut tasks,
                     MAX_DELAY_BETWEEN_REQUESTS_MS,
                     PING_REQUEST_TIMEOUT,
                     tx_type,
-                )
-                .await;
+                );
+            }
+
+            while let Some(result) = tasks.join_next().await {
+                if let Err(e) = result {
+                    tracing::info!("Error while driving ping transaction: {}", e);
+                }
             }
         }
     }
 
     /// Executes a single round of latency checks for all validators and the provided transaction type.
-    async fn execute_latency_for_tx_type(
+    fn execute_latency_for_tx_type(
         self: Arc<Self>,
+        tasks: &mut JoinSet<()>,
         max_delay_ms: u64,
         ping_timeout: Duration,
         tx_type: TxType,
     ) {
         // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
-        let mut tasks = JoinSet::new();
         let auth_agg = self.authority_aggregator.load().clone();
         let validators = auth_agg.committee.names().cloned().collect::<Vec<_>>();
 
@@ -198,12 +206,6 @@ where
             };
 
             tasks.spawn(task);
-        }
-
-        while let Some(result) = tasks.join_next().await {
-            if let Err(e) = result {
-                tracing::info!("Error while driving ping transaction: {}", e);
-            }
         }
     }
 
