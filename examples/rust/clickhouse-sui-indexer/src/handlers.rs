@@ -7,11 +7,12 @@ use clickhouse::Row;
 use serde::Serialize;
 use std::sync::Arc;
 
-use sui_types::full_checkpoint_content::CheckpointData;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, sequential::Handler},
+    pipeline::{concurrent::Handler, Processor},
+    FieldCount,
 };
 use sui_indexer_alt_framework_store_traits::Store;
+use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::store::ClickHouseStore;
 
@@ -23,6 +24,10 @@ pub struct Transaction {
     pub transaction_digest: String,
 }
 
+impl FieldCount for Transaction {
+    const FIELD_COUNT: usize = 2;
+}
+
 /// Handler that processes checkpoint data and extracts transaction digests
 #[derive(Clone, Default)]
 pub struct TransactionDigestHandler;
@@ -32,9 +37,8 @@ impl Processor for TransactionDigestHandler {
     type Value = Transaction;
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        println!("-------1");
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
-        
+
         let mut transactions = Vec::new();
         for txn in &checkpoint.transactions {
             transactions.push(Transaction {
@@ -42,7 +46,7 @@ impl Processor for TransactionDigestHandler {
                 transaction_digest: txn.transaction.digest().to_string(),
             });
         }
-        
+
         Ok(transactions)
     }
 }
@@ -50,24 +54,19 @@ impl Processor for TransactionDigestHandler {
 #[async_trait]
 impl Handler for TransactionDigestHandler {
     type Store = ClickHouseStore;
-    type Batch = Vec<Transaction>;
-
-    fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
-        batch.extend(values);
-    }
 
     async fn commit<'a>(
-        batch: &Self::Batch,
+        values: &[Self::Value],
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
-        let row_count = batch.len();
+        let row_count = values.len();
         if row_count == 0 {
             return Ok(0);
         }
 
         // Use ClickHouse inserter for efficient bulk inserts
         let mut inserter = conn.client.inserter("transactions")?;
-        for transaction in batch {
+        for transaction in values {
             inserter.write(transaction)?;
         }
         inserter.end().await?;
