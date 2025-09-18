@@ -181,7 +181,7 @@ pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     };
 
     let root_pkg = RootPackage::<F>::load(pkg_path, env).await?;
-    let package_name = Symbol::from(format!("{}", root_pkg.name().as_str()));
+    let package_name = Symbol::from(root_pkg.name().as_str());
 
     let packages = root_pkg.packages()?;
 

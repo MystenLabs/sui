@@ -199,7 +199,7 @@ fn copy_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
 
     // Canonicalize pkg_dir for consistent path operations
     let pkg_dir_canonical = pkg_dir.canonicalize()?;
-    let package_nest_depth = determine_package_nest_depth(&root_pkg, &pkg_dir)?;
+    let package_nest_depth = determine_package_nest_depth(&root_pkg, pkg_dir)?;
 
     let tmp_dir = pad_tmp_path(tmp_dir, package_nest_depth)?;
 
@@ -478,7 +478,7 @@ pub fn run_all(
             entry_path.exists()
         );
 
-        match run_one(&entry_path, cli_binary, use_temp_dir, track_cov) {
+        match run_one(entry_path, cli_binary, use_temp_dir, track_cov) {
             Ok(cov_opt) => {
                 test_passed = test_passed.checked_add(1).unwrap();
                 if let Some(cov) = cov_opt {
