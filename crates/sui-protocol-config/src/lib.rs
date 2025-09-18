@@ -4037,6 +4037,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.use_mfp_txns_in_load_initial_object_debts = true;
                     cfg.feature_flags.cancel_for_failed_dkg_early = true;
                     cfg.feature_flags.enable_coin_registry = true;
+
+                    // Enable Mysticeti fastpath handlers on mainnet.
+                    cfg.feature_flags.mysticeti_fastpath = true;
                 }
                 // Use this template when making changes:
                 //
