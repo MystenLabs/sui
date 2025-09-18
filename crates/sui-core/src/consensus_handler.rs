@@ -46,7 +46,7 @@ use sui_types::{
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedCertificate, VerifiedTransaction},
 };
-use tokio::task::JoinSet;
+use tokio::{sync::MutexGuard, task::JoinSet};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
@@ -683,6 +683,15 @@ struct CommitHandlerState {
     initial_reconfig_state: ReconfigState,
 }
 
+impl CommitHandlerState {
+    fn get_notifications(&self) -> Vec<SequencedConsensusTransactionKey> {
+        self.output
+            .get_consensus_messages_processed()
+            .cloned()
+            .collect()
+    }
+}
+
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// Called during startup to allow us to observe commits we previously processed, for crash recovery.
     /// Any state computed here must be a pure function of the commits observed, it cannot depend on any
@@ -850,17 +859,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             user_transactions,
         );
 
-        let collected_eop =
-            self.process_end_of_publish_transactions(&mut state, end_of_publish_transactions);
-        let (should_accept_tx, lock, final_round) = if collected_eop {
-            // DONE(commit-handler-rewrite): [ssm] after 2f+1 EOPs, transition to RejectAllCerts
-            // DONE(commit-handler-rewrite): [ssm] check if epoch is over
-            let (lock, final_round) = self.advance_eop_state_machine(&mut state);
-            // DONE(commit-handler-rewrite): check tx acceptance state
-            (lock.should_accept_tx(), Some(lock), final_round)
-        } else {
-            (true, None, false)
-        };
+        let (should_accept_tx, lock, final_round) =
+            self.handle_eop(&mut state, end_of_publish_transactions);
 
         let make_checkpoint = should_accept_tx || final_round;
         if !make_checkpoint {
@@ -874,16 +874,152 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // If this is the final round, record execution time observations for storage in the
         // end-of-epoch tx.
         if final_round {
-            if let Some(estimator) = execution_time_estimator.as_mut() {
-                self.epoch_store.end_of_epoch_execution_time_observations
-                    .set(estimator.take_observations())
-                    .expect(
-                        "`stored_execution_time_observations` should only be set once at end of epoch",
-                    );
-            }
-            drop(execution_time_estimator); // make sure this is not used after `take_observations`
+            self.record_end_of_epoch_execution_time_observations(execution_time_estimator);
         }
 
+        self.create_pending_checkpoints(
+            &mut state,
+            &commit_info,
+            &schedulables,
+            &randomness_schedulables,
+            final_round,
+        );
+
+        let notifications = state.get_notifications();
+
+        // DONE(commit-handler-rewrite): record consensus_stats
+        state
+            .output
+            .record_consensus_commit_stats(self.last_consensus_stats.clone());
+
+        // DONE(commit-handler-rewrite): propogate deferral deletion to consensus output cache
+        self.record_deferral_deletion(&mut state);
+
+        // DONE(commit-handler-rewrite): send consensus output to quarantine
+        self.epoch_store
+            .consensus_quarantine
+            .write()
+            .push_consensus_output(state.output, &self.epoch_store)
+            .expect("push_consensus_output should not fail");
+
+        // DONE(commit-handler-rewrite): notify checkpoint service
+        // Only after batch is written, notify checkpoint service to start building any new
+        // pending checkpoints.
+        debug!(
+            ?commit_info.round,
+            "Notifying checkpoint service about new pending checkpoint(s)",
+        );
+        self.checkpoint_service
+            .notify_checkpoint()
+            .expect("failed to notify checkpoint service");
+
+        // DONE(commit-handler-rewrite): Once commit processing is recorded, kick off randomness generation.
+        if let Some(randomness_round) = state.randomness_round {
+            randomness_manager
+                .as_ref()
+                .expect("randomness manager should exist if randomness round is provided")
+                .generate_randomness(epoch, randomness_round);
+        }
+
+        // DONE(commit-handler-rewrite): notify waiters that consensus transactions have been processed
+        self.epoch_store.process_notifications(notifications.iter());
+
+        // DONE(commit-handler-rewrite): log end of epoch
+        // pass lock by value to ensure that it is held until this point
+        self.log_final_round(lock, final_round);
+
+        // DONE(commit-handler-rewrite): update throughput calculator
+        // update the calculated throughput
+        self.throughput_calculator
+            .add_transactions(timestamp, schedulables.len() as u64);
+
+        // DONE(commit-handler-rewrite): fail points
+        fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
+            let key = [commit_sub_dag_index, epoch];
+            if sui_simulator::random::deterministic_probability_once(&key, 0.01) {
+                sui_simulator::task::kill_current_node(None);
+            }
+        });
+
+        fail_point!("crash"); // for tests that produce random crashes
+
+        // DONE(commit-handler-rewrite): enqueue transactions
+        let mut schedulables = schedulables;
+        schedulables.extend(randomness_schedulables);
+        self.execution_scheduler_sender.send(
+            schedulables,
+            assigned_versions,
+            SchedulingSource::NonFastPath,
+        );
+
+        // DONE(commit-handler-rewrite): Check if we should send EndOfPublish after processing consensus commit
+        self.send_end_of_publish_if_needed().await;
+    }
+
+    fn handle_eop(
+        &self,
+        state: &mut CommitHandlerState,
+        end_of_publish_transactions: Vec<AuthorityName>,
+    ) -> (bool, Option<RwLockWriteGuard<ReconfigState>>, bool) {
+        let collected_eop =
+            self.process_end_of_publish_transactions(state, end_of_publish_transactions);
+        if collected_eop {
+            // DONE(commit-handler-rewrite): [ssm] after 2f+1 EOPs, transition to RejectAllCerts
+            // DONE(commit-handler-rewrite): [ssm] check if epoch is over
+            let (lock, final_round) = self.advance_eop_state_machine(state);
+            // DONE(commit-handler-rewrite): check tx acceptance state
+            (lock.should_accept_tx(), Some(lock), final_round)
+        } else {
+            (true, None, false)
+        }
+    }
+
+    fn record_end_of_epoch_execution_time_observations(
+        &self,
+        mut execution_time_estimator: MutexGuard<Option<ExecutionTimeEstimator>>,
+    ) {
+        if let Some(estimator) = execution_time_estimator.as_mut() {
+            self.epoch_store
+                .end_of_epoch_execution_time_observations
+                .set(estimator.take_observations())
+                .expect(
+                    "`stored_execution_time_observations` should only be set once at end of epoch",
+                );
+        }
+    }
+
+    fn record_deferral_deletion(&self, state: &mut CommitHandlerState) {
+        let mut deferred_transactions = self
+            .epoch_store
+            .consensus_output_cache
+            .deferred_transactions_v2
+            .lock();
+        for deleted_deferred_key in state.output.get_deleted_deferred_txn_keys() {
+            deferred_transactions.remove(&deleted_deferred_key);
+        }
+    }
+
+    fn log_final_round(&self, lock: Option<RwLockWriteGuard<ReconfigState>>, final_round: bool) {
+        if final_round {
+            let epoch = self.epoch_store.epoch();
+            info!(
+                ?epoch,
+                lock=?lock.as_ref(),
+                final_round=?final_round,
+                "Notified last checkpoint"
+            );
+            self.epoch_store.record_end_of_message_quorum_time_metric();
+        }
+    }
+
+    fn create_pending_checkpoints(
+        &self,
+        state: &mut CommitHandlerState,
+        commit_info: &ConsensusCommitInfo,
+        schedulables: &[Schedulable],
+        randomness_schedulables: &[Schedulable],
+        final_round: bool,
+    ) {
         // DONE(commit-handler-rewrite): Create pending checkpoints if we are still accepting tx.
         let checkpoint_height = self
             .epoch_store
@@ -926,101 +1062,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
                 .expect("failed to write pending checkpoint");
         }
-
-        let notifications: Vec<_> = state
-            .output
-            .get_consensus_messages_processed()
-            .cloned()
-            .collect();
-
-        // DONE(commit-handler-rewrite): record consensus_stats
-        state
-            .output
-            .record_consensus_commit_stats(self.last_consensus_stats.clone());
-
-        {
-            // DONE(commit-handler-rewrite): propogate deferral deletion to consensus output cache
-            let mut deferred_transactions = self
-                .epoch_store
-                .consensus_output_cache
-                .deferred_transactions_v2
-                .lock();
-            for deleted_deferred_key in state.output.get_deleted_deferred_txn_keys() {
-                deferred_transactions.remove(&deleted_deferred_key);
-            }
-        }
-
-        // DONE(commit-handler-rewrite): send consensus output to quarantine
-        self.epoch_store
-            .consensus_quarantine
-            .write()
-            .push_consensus_output(state.output, &self.epoch_store)
-            .expect("push_consensus_output should not fail");
-
-        // DONE(commit-handler-rewrite): notify checkpoint service
-        // Only after batch is written, notify checkpoint service to start building any new
-        // pending checkpoints.
-        debug!(
-            ?commit_info.round,
-            "Notifying checkpoint service about new pending checkpoint(s)",
-        );
-        self.checkpoint_service
-            .notify_checkpoint()
-            .expect("failed to notify checkpoint service");
-
-        // DONE(commit-handler-rewrite): Once commit processing is recorded, kick off randomness generation.
-        if let Some(randomness_round) = state.randomness_round {
-            randomness_manager
-                .as_ref()
-                .expect("randomness manager should exist if randomness round is provided")
-                .generate_randomness(epoch, randomness_round);
-        }
-
-        // DONE(commit-handler-rewrite): notify waiters that consensus transactions have been processed
-        self.epoch_store.process_notifications(notifications.iter());
-
-        // DONE(commit-handler-rewrite): log end of epoch
-        {
-            let lock = lock; // ensure lock is dropped after this block
-            if final_round {
-                info!(
-                    ?epoch,
-                    // Accessing lock on purpose so that the compiler ensures
-                    // the lock is not yet dropped.
-                    lock=?lock.as_ref(),
-                    final_round=?final_round,
-                    "Notified last checkpoint"
-                );
-                self.epoch_store.record_end_of_message_quorum_time_metric();
-            }
-        }
-
-        // DONE(commit-handler-rewrite): update throughput calculator
-        // update the calculated throughput
-        self.throughput_calculator
-            .add_transactions(timestamp, schedulables.len() as u64);
-
-        // DONE(commit-handler-rewrite): fail points
-        fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
-            let key = [commit_sub_dag_index, epoch];
-            if sui_simulator::random::deterministic_probability_once(&key, 0.01) {
-                sui_simulator::task::kill_current_node(None);
-            }
-        });
-
-        fail_point!("crash"); // for tests that produce random crashes
-
-        // DONE(commit-handler-rewrite): enqueue transactions
-        let mut schedulables = schedulables;
-        schedulables.extend(randomness_schedulables);
-        self.execution_scheduler_sender.send(
-            schedulables,
-            assigned_versions,
-            SchedulingSource::NonFastPath,
-        );
-
-        // DONE(commit-handler-rewrite): Check if we should send EndOfPublish after processing consensus commit
-        self.send_end_of_publish_if_needed().await;
     }
 
     fn process_transactions(
