@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
@@ -23,7 +23,6 @@ use sui_types::{
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::execution_cache::TransactionCacheRead;
-use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 
 /// Merged value is the value stored inside accumulator objects.
 /// Each mergeable Move type will map to a single variant as its representation.
@@ -236,9 +235,10 @@ impl AccumulatorSettlementTxBuilder {
         self.updates.len()
     }
 
-    pub fn get_balance_settlements(&self) -> BalanceSettlement {
-        let balance_changes = self
-            .updates
+    /// Returns a unified map of accumulator changes for all accounts.
+    /// The accumulator change for each account is merged from the merge and split operations.
+    pub fn collect_accumulator_changes(&self) -> BTreeMap<AccumulatorObjId, i128> {
+        self.updates
             .iter()
             .map(|(object_id, update)| match (update.merge, update.split) {
                 (
@@ -247,9 +247,7 @@ impl AccumulatorSettlementTxBuilder {
                 ) => (*object_id, merge as i128 - split as i128),
                 _ => todo!(),
             })
-            .collect();
-
-        BalanceSettlement { balance_changes }
+            .collect()
     }
 
     // TODO(address-balances): This currently only creates a single accumulator update transaction.
