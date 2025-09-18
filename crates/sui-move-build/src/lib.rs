@@ -30,8 +30,11 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
 };
 use move_package_alt::{
-    compatibility::parse_legacy_package_info, flavor::MoveFlavor, graph::NamedAddress,
-    package::RootPackage, schema::Environment,
+    compatibility::{legacy_parser::LegacyPackageMetadata, parse_legacy_package_info},
+    flavor::MoveFlavor,
+    graph::NamedAddress,
+    package::RootPackage,
+    schema::Environment,
 };
 use move_package_alt_compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_package_alt_compilation::{
@@ -716,6 +719,10 @@ pub enum PublishedAtError {
     Invalid(String),
     #[error("The 'published-at' field is not present in Move.toml or Move.lock")]
     NotPresent,
+}
+
+pub fn parse_legacy_pkg_info(package_path: &Path) -> LegacyPackageMetadata {
+    parse_legacy_package_info(package_path)
 }
 
 pub fn published_at_property(package_path: &Path) -> Result<ObjectID, PublishedAtError> {

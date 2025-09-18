@@ -6,7 +6,7 @@ mod compatibility_tests {
     use std::path::Path;
     use sui_framework::{compare_system_package, BuiltInFramework};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
-    use sui_move_build::{parse_legacy_package_info, published_at_property};
+    use sui_move_build::{parse_legacy_pkg_info, published_at_property};
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::execution_config_utils::to_binary_config;
 
@@ -96,7 +96,7 @@ mod compatibility_tests {
                     .join("..")
                     .join(&package.path);
                 let legacy_package_info =
-                    parse_legacy_package_info(&package_path).expect("Move.toml exists");
+                    parse_legacy_pkg_info(&package_path).expect("Move.toml exists");
                 // check manifest name field is package.name
                 assert_eq!(legacy_package_info.legacy_name, package.name);
                 // check manifest published-at field is package.id
