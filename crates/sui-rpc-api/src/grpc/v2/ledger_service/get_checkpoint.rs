@@ -15,6 +15,7 @@ use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointResponse;
+use sui_rpc::proto::sui::rpc::v2::ObjectSet;
 use sui_sdk_types::Digest;
 
 pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
@@ -71,6 +72,7 @@ pub fn get_checkpoint(
 
     if read_mask.contains(Checkpoint::CONTENTS_FIELD.name)
         || read_mask.contains(Checkpoint::TRANSACTIONS_FIELD.name)
+        || read_mask.contains(Checkpoint::OBJECTS_FIELD.name)
     {
         let core_contents = service
             .reader
@@ -82,42 +84,65 @@ pub fn get_checkpoint(
             checkpoint.merge(core_contents.clone(), &read_mask);
         }
 
-        if let Some(submask) = read_mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
+        if read_mask.contains(Checkpoint::TRANSACTIONS_FIELD.name)
+            || read_mask.contains(Checkpoint::OBJECTS_FIELD.name)
+        {
             let checkpoint_data = service
                 .reader
                 .inner()
                 .get_checkpoint_data(verified_summary, core_contents)?;
 
-            checkpoint.transactions = checkpoint_data
-                .transactions
-                .into_iter()
-                .map(|t| {
-                    let balance_changes = submask
-                        .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
-                        .then(|| {
-                            service
-                                .reader
-                                .get_transaction_info(t.transaction.digest())
-                                .map(|info| {
-                                    info.balance_changes
-                                        .into_iter()
-                                        .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
-                                        .collect::<Vec<_>>()
-                                })
-                        })
-                        .flatten()
-                        .unwrap_or_default();
-                    let mut transaction = ExecutedTransaction::merge_from(t, &submask);
-                    transaction.checkpoint = submask
-                        .contains(ExecutedTransaction::CHECKPOINT_FIELD)
-                        .then_some(sequence_number);
-                    transaction.timestamp = submask
-                        .contains(ExecutedTransaction::TIMESTAMP_FIELD)
-                        .then(|| sui_rpc::proto::timestamp_ms_to_proto(timestamp_ms));
-                    transaction.balance_changes = balance_changes;
-                    transaction
-                })
-                .collect();
+            if let Some(submask) = read_mask
+                .subtree(Checkpoint::OBJECTS_FIELD)
+                .and_then(|submask| submask.subtree(ObjectSet::OBJECTS_FIELD))
+            {
+                let set: std::collections::BTreeMap<_, _> = checkpoint_data
+                    .transactions
+                    .iter()
+                    .flat_map(|t| t.input_objects.iter().chain(t.output_objects.iter()))
+                    .map(|object| ((object.id(), object.version().value()), object))
+                    .collect();
+                checkpoint.objects = Some(
+                    ObjectSet::default().with_objects(
+                        set.into_values()
+                            .map(|o| sui_rpc::proto::sui::rpc::v2::Object::merge_from(o, &submask))
+                            .collect(),
+                    ),
+                );
+            }
+
+            if let Some(submask) = read_mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
+                checkpoint.transactions = checkpoint_data
+                    .transactions
+                    .into_iter()
+                    .map(|t| {
+                        let balance_changes = submask
+                            .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
+                            .then(|| {
+                                service
+                                    .reader
+                                    .get_transaction_info(t.transaction.digest())
+                                    .map(|info| {
+                                        info.balance_changes
+                                            .into_iter()
+                                            .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
+                                            .collect::<Vec<_>>()
+                                    })
+                            })
+                            .flatten()
+                            .unwrap_or_default();
+                        let mut transaction = ExecutedTransaction::merge_from(t, &submask);
+                        transaction.checkpoint = submask
+                            .contains(ExecutedTransaction::CHECKPOINT_FIELD)
+                            .then_some(sequence_number);
+                        transaction.timestamp = submask
+                            .contains(ExecutedTransaction::TIMESTAMP_FIELD)
+                            .then(|| sui_rpc::proto::timestamp_ms_to_proto(timestamp_ms));
+                        transaction.balance_changes = balance_changes;
+                        transaction
+                    })
+                    .collect();
+            }
         }
     }
 

@@ -10,7 +10,8 @@ use tracing::debug;
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
 use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
-use crate::graph::PackageInfo;
+use crate::graph::{LinkageTable, PackageInfo};
+use crate::package::package_lock::PackageLock;
 use crate::schema::{
     Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
     Publication, RenderToml,
@@ -61,6 +62,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     pubs: PublicationSource<F>,
 
     /// The list of published ids for every dependency in the root package
+    // TODO: the comment says published ids but the type says original id; what is this for?
     deps_published_ids: Vec<OriginalID>,
 }
 
@@ -86,7 +88,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
     pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
-        debug!("Loading RootPackage for {:?}", path.as_ref());
+        debug!(
+            "Loading RootPackage for {:?} (CWD: {:?}",
+            path.as_ref(),
+            std::env::current_dir()
+        );
+        let _mutx = PackageLock::lock(); // held until function returns
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
@@ -194,6 +201,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
+        debug!(
+            "creating RootPackage at {:?} (CWD: {:?})",
+            package_path.path(),
+            std::env::current_dir()
+        );
         let lockfile = Self::load_lockfile(&package_path)?;
         let pubs = Self::load_pubfile(&package_path)?;
 
@@ -220,9 +232,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             .insert(self.environment.name().clone(), BTreeMap::from(&self.graph));
     }
 
-    /// The name of the root package
-    pub fn name(&self) -> &PackageName {
-        self.package_graph().root_package().name()
+    /// The id of the root package (TODO: perhaps this method is poorly named; check where it's
+    /// used and decide if they should be using `id` or `display_name`)
+    pub fn name(&self) -> &PackageID {
+        self.package_graph().root_package_info().id()
     }
 
     /// Returns the `display_name` for the root package.
@@ -245,7 +258,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Return the linkage table for the root package. This contains an entry for each package that
     /// this package depends on (transitively). Returns an error if any of the packages that this
     /// package depends on is unpublished.
-    pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
+    pub fn linkage(&self) -> PackageResult<LinkageTable<F>> {
         Ok(self.graph.linkage()?)
     }
 
@@ -382,6 +395,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.package_graph().sorted_deps()
     }
 
+    // TODO: what is the spec of this function?
     pub fn deps_published_ids(&self) -> &Vec<OriginalID> {
         &self.deps_published_ids
     }
@@ -511,7 +525,7 @@ pkg_b = { local = "../pkg_b" }"#,
                 .contains_key(DEFAULT_ENV_NAME)
         );
 
-        assert_eq!(root.name(), &PackageName::new("graph").unwrap());
+        assert_eq!(root.name(), &PackageID::from("graph"));
     }
 
     #[test(tokio::test)]
@@ -996,7 +1010,17 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .await;
 
-        assert_snapshot!(root.unwrap_err().to_string(), @"TODO: inconsistent linkage");
+        assert_snapshot!(root.unwrap_err().to_string(), @r###"
+        Package depends on multiple versions of the package with ID 0x00...0001:
+
+          root::dep1 refers to { local = "../dep1" }
+          root::dep2 refers to { local = "../dep2" }
+
+        To resolve this, you must explicitly add an override in your Move.toml:
+
+            [dependencies]
+            _dep1 = { ..., override = true }
+        "###);
     }
 
     /// Loading an ephemeral root package from a non-existing file succeeds and uses the published

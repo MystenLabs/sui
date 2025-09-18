@@ -82,6 +82,14 @@ pub struct PackageSpec {
 
     /// Is the package a legacy package?
     is_legacy: bool,
+
+    /// ```toml
+    /// name = "MoveStdLib" <-- `legacy_name`
+    ///
+    /// [addresses]
+    /// std = "0x1" <-- `name`
+    /// ```
+    legacy_name: Option<String>,
 }
 
 /// Information used to build an edge in the package graph
@@ -282,7 +290,10 @@ impl TestPackageGraph {
             edition = "2024"
             {published_at}
             "#,
-            package.id.to_camel_case()
+            package
+                .legacy_name
+                .clone()
+                .unwrap_or(package.id.to_camel_case())
         );
 
         let mut deps = String::from("\n[dependencies]\n");
@@ -410,6 +421,7 @@ impl PackageSpec {
             pubs: BTreeMap::new(),
             id: name.as_ref().to_string(),
             is_legacy: false,
+            legacy_name: None,
         }
     }
 
@@ -454,6 +466,13 @@ impl PackageSpec {
     /// named address will be set to 0.
     pub fn set_legacy(mut self) -> Self {
         self.is_legacy = true;
+        self
+    }
+
+    /// Set the `name` field in the manifest of legacy packages.
+    pub fn set_legacy_name(mut self, name: impl AsRef<str>) -> Self {
+        assert!(self.is_legacy);
+        self.legacy_name = Some(name.as_ref().to_string());
         self
     }
 }
@@ -644,8 +663,11 @@ mod tests {
         let graph = TestPackageGraph::new(["a", "c"])
             .add_legacy_packages(["b"])
             .add_package("d", |d| {
-                d.set_legacy()
-                    .publish(OriginalID::from(0x4444), PublishedID::from(0x5555), None)
+                d.set_legacy().set_legacy_name("Any").publish(
+                    OriginalID::from(0x4444),
+                    PublishedID::from(0x5555),
+                    None,
+                )
             })
             .add_deps([("a", "b"), ("b", "c"), ("c", "d")])
             .build();
@@ -665,7 +687,7 @@ mod tests {
 
         assert_snapshot!(graph.read_file("d/Move.toml"), @r###"
         [package]
-        name = "D"
+        name = "Any"
         edition = "2024"
         published-at = 0x0000000000000000000000000000000000000000000000000000000000005555
 

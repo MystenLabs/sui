@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 use fastcrypto::{hmac, traits::ToFromBytes};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
@@ -43,9 +43,7 @@ pub fn hmac_sha3_256(
     debug_assert!(args.len() == 2);
 
     // Load the cost parameters from the protocol config
-    let hmac_hmac_sha3_256_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let hmac_hmac_sha3_256_cost_params = get_extension!(context, NativesCostTable)?
         .hmac_hmac_sha3_256_cost_params
         .clone();
 

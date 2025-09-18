@@ -1,16 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
-    ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC, ACCUMULATOR_ROOT_SETTLE_U128_FUNC,
+    AccumulatorObjId, ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC, ACCUMULATOR_ROOT_SETTLE_U128_FUNC,
     ACCUMULATOR_SETTLEMENT_MODULE,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
-use sui_types::base_types::ObjectID;
 use sui_types::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
     TransactionEffects, TransactionEffectsAPI,
@@ -24,7 +23,6 @@ use sui_types::{
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::execution_cache::TransactionCacheRead;
-use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 
 /// Merged value is the value stored inside accumulator objects.
 /// Each mergeable Move type will map to a single variant as its representation.
@@ -155,8 +153,8 @@ struct Update {
 }
 
 pub(crate) struct AccumulatorSettlementTxBuilder {
-    updates: HashMap<ObjectID, Update>,
-    addresses: HashMap<ObjectID, AccumulatorAddress>,
+    updates: HashMap<AccumulatorObjId, Update>,
+    addresses: HashMap<AccumulatorObjId, AccumulatorAddress>,
 
     total_input_sui: u64,
     total_output_sui: u64,
@@ -237,9 +235,10 @@ impl AccumulatorSettlementTxBuilder {
         self.updates.len()
     }
 
-    pub fn get_balance_settlements(&self) -> BalanceSettlement {
-        let balance_changes = self
-            .updates
+    /// Returns a unified map of accumulator changes for all accounts.
+    /// The accumulator change for each account is merged from the merge and split operations.
+    pub fn collect_accumulator_changes(&self) -> BTreeMap<AccumulatorObjId, i128> {
+        self.updates
             .iter()
             .map(|(object_id, update)| match (update.merge, update.split) {
                 (
@@ -248,9 +247,7 @@ impl AccumulatorSettlementTxBuilder {
                 ) => (*object_id, merge as i128 - split as i128),
                 _ => todo!(),
             })
-            .collect();
-
-        BalanceSettlement { balance_changes }
+            .collect()
     }
 
     // TODO(address-balances): This currently only creates a single accumulator update transaction.

@@ -14,6 +14,8 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
+#[cfg(tidehunter)]
+use serde::de::DeserializeOwned;
 use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::atomic::AtomicU64;
@@ -56,6 +58,12 @@ static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
 pub const EPOCH_DURATION_MS_FOR_TESTING: u64 = 24 * 60 * 60 * 1000;
 pub struct AuthorityStorePruner {
     _objects_pruner_cancel_handle: oneshot::Sender<()>,
+}
+
+#[derive(Default)]
+pub struct PrunerWatermarks {
+    pub epoch_id: Arc<AtomicU64>,
+    pub checkpoint_id: Arc<AtomicU64>,
 }
 
 static MIN_PRUNING_TICK_DURATION_MS: u64 = 10 * 1000;
@@ -554,19 +562,36 @@ impl AuthorityStorePruner {
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
         num_epochs_to_retain: u64,
-        pruning_watermark: Arc<AtomicU64>,
+        pruning_watermark: Arc<PrunerWatermarks>,
     ) -> anyhow::Result<()> {
         // TODO: add support for checkpoints db pruning
         use std::sync::atomic::Ordering;
-        let epoch_id = checkpoint_store
+        let current_epoch_id = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| c.epoch)
             .unwrap_or_default();
-        if epoch_id >= num_epochs_to_retain {
-            let watermark = epoch_id - num_epochs_to_retain + 1;
-            info!("relocation: setting pruning watermark to {}", watermark);
-            pruning_watermark.store(watermark, Ordering::Relaxed);
-            perpetual_db.objects.db.start_relocation()?;
+        if current_epoch_id < num_epochs_to_retain {
+            return Ok(());
+        }
+        let target_epoch_id = current_epoch_id - num_epochs_to_retain;
+        let checkpoint_id =
+            checkpoint_store.get_epoch_last_checkpoint_seq_number(target_epoch_id)?;
+
+        info!(
+            "relocation: setting epoch watermark to {}",
+            target_epoch_id + 1
+        );
+        pruning_watermark
+            .epoch_id
+            .store(target_epoch_id + 1, Ordering::Relaxed);
+        if let Some(checkpoint_id) = checkpoint_id {
+            info!(
+                "relocation: setting checkpoint watermark to {}",
+                checkpoint_id
+            );
+            pruning_watermark
+                .checkpoint_id
+                .store(checkpoint_id, Ordering::Relaxed);
         }
         Ok(())
     }
@@ -661,7 +686,7 @@ impl AuthorityStorePruner {
         jsonrpc_index: Option<Arc<IndexStore>>,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        #[allow(unused_variables)] pruner_watermark: Arc<AtomicU64>,
+        #[allow(unused_variables)] pruner_watermarks: Arc<PrunerWatermarks>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -698,7 +723,7 @@ impl AuthorityStorePruner {
                             &perpetual_db,
                             &checkpoint_store,
                             num_epochs_to_retain,
-                            pruner_watermark.clone(),
+                            pruner_watermarks.clone(),
                         ) {
                             error!("Failed to prune tidehunter: {:?}", err);
                         }
@@ -773,7 +798,7 @@ impl AuthorityStorePruner {
         epoch_duration_ms: u64,
         registry: &Registry,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
-        pruner_watermark: Arc<AtomicU64>, // used by tidehunter relocation filters
+        pruner_watermarks: Arc<PrunerWatermarks>, // used by tidehunter relocation filters
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
         {
@@ -795,7 +820,7 @@ impl AuthorityStorePruner {
                 jsonrpc_index,
                 pruner_db,
                 AuthorityStorePruningMetrics::new(registry),
-                pruner_watermark,
+                pruner_watermarks,
             ),
         }
     }
@@ -806,6 +831,34 @@ impl AuthorityStorePruner {
             &ObjectKey(ObjectID::MAX, SequenceNumber::MAX),
         )
     }
+}
+
+#[cfg(tidehunter)]
+pub(crate) fn apply_relocation_filter<T: DeserializeOwned>(
+    config: typed_store::tidehunter_util::KeySpaceConfig,
+    pruner_watermark: Arc<AtomicU64>,
+    extractor: impl Fn(T) -> u64 + Send + Sync + 'static,
+    by_key: bool,
+) -> typed_store::tidehunter_util::KeySpaceConfig {
+    use bincode::Options;
+    use std::sync::atomic::Ordering;
+    use typed_store::tidehunter_util::Decision;
+    config.with_relocation_filter(move |key, value| {
+        let data = if by_key {
+            bincode::DefaultOptions::new()
+                .with_big_endian()
+                .with_fixint_encoding()
+                .deserialize(&key)
+                .expect("relocation filter deserialization error")
+        } else {
+            bcs::from_bytes(&value).expect("relocation filter deserialization error")
+        };
+        if extractor(data) < pruner_watermark.load(Ordering::Relaxed) {
+            Decision::Remove
+        } else {
+            Decision::StopRelocation
+        }
+    })
 }
 
 #[derive(Clone)]

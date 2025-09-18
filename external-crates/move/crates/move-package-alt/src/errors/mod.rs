@@ -108,6 +108,18 @@ pub enum PackageError {
     UnknownBuildEnv { build_env: EnvironmentName },
 }
 
+/// Truncate `s` to the first `head` characters and the last `tail` characters of `s`, separated by
+/// "..."
+pub fn fmt_truncated(s: impl AsRef<str>, head: usize, tail: usize) -> String {
+    let len = s.as_ref().len();
+    if head + tail + 3 >= len {
+        s.as_ref().to_string()
+    } else {
+        let tail_start = s.as_ref().len() - tail;
+        format!("{}...{}", &s.as_ref()[..head], &s.as_ref()[tail_start..])
+    }
+}
+
 impl PackageError {
     pub fn to_diagnostic(&self) -> Diagnostic<FileHandle> {
         match self {

@@ -114,7 +114,7 @@ pub fn list_owned_objects(
                 message.json =
                     crate::grpc::v2::render_object_to_json(service, &object).map(Box::new);
             }
-            sui_rpc::merge::Merge::merge(&mut message, object, &read_mask);
+            sui_rpc::merge::Merge::merge(&mut message, &object, &read_mask);
             message
         } else {
             owned_object_to_proto(object_info, &read_mask)

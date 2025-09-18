@@ -3,6 +3,7 @@
 
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
+use std::str::FromStr;
 use std::string::ToString;
 use std::sync::Arc;
 
@@ -39,7 +40,9 @@ pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
     symbol: "SUI".to_string(),
     decimals: 9,
     metadata: CurrencyMetadata {
-        coin_type: SUI_COIN_TYPE.to_string(),
+        coin_type: sui_types::TypeTag::from_str(SUI_COIN_TYPE)
+            .map(|t| t.to_canonical_string(true))
+            .unwrap(),
     },
 });
 
@@ -145,7 +148,7 @@ impl CoinMetadataCache {
                 symbol: metadata.symbol,
                 decimals: metadata.decimals as u64,
                 metadata: CurrencyMetadata {
-                    coin_type: type_tag.to_string(),
+                    coin_type: type_tag.clone().to_canonical_string(true),
                 },
             };
             cache.push(type_tag.clone(), ccy);

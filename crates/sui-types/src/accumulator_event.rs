@@ -5,7 +5,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use mysten_common::fatal;
 
-use crate::base_types::ObjectID;
+use crate::accumulator_root::AccumulatorObjId;
 use crate::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
 };
@@ -16,12 +16,12 @@ pub const ACCUMULATOR_MODULE_NAME: &IdentStr = ident_str!("accumulator");
 
 #[derive(Debug, Clone)]
 pub struct AccumulatorEvent {
-    pub accumulator_obj: ObjectID,
+    pub accumulator_obj: AccumulatorObjId,
     pub write: AccumulatorWriteV1,
 }
 
 impl AccumulatorEvent {
-    pub fn new(accumulator_obj: ObjectID, write: AccumulatorWriteV1) -> Self {
+    pub fn new(accumulator_obj: AccumulatorObjId, write: AccumulatorWriteV1) -> Self {
         Self {
             accumulator_obj,
             write,

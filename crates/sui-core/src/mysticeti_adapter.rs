@@ -116,8 +116,10 @@ impl ConsensusClient for LazyMysticetiClient {
             .map_err(|err| SuiError::FailedToSubmitToConsensus(err.to_string()))?;
 
         let is_soft_bundle = transactions.len() > 1;
+        let is_ping = transactions.is_empty();
 
         if !is_soft_bundle
+            && !is_ping
             && matches!(
                 transactions[0].kind,
                 ConsensusTransactionKind::EndOfPublish(_)

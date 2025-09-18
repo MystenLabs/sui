@@ -8,8 +8,9 @@ use std::{
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
-    base_types::AuthorityName, digests::TransactionDigest, error::SuiError,
-    messages_grpc::RawSubmitTxRequest,
+    base_types::AuthorityName,
+    error::SuiError,
+    messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -24,7 +25,7 @@ use crate::{
             TransactionRequestError,
         },
         request_retrier::RequestRetrier,
-        SubmitTransactionOptions, SubmitTxResult, TransactionDriverMetrics,
+        SubmitTransactionOptions, TransactionDriverMetrics,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -46,14 +47,14 @@ impl TransactionSubmitter {
         Self { metrics }
     }
 
-    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"))]
     pub(crate) async fn submit_transaction<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
-        tx_digest: &TransactionDigest,
+        tx_type: TxType,
         amplification_factor: u64,
-        raw_request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<(AuthorityName, SubmitTxResult), TransactionDriverError>
     where
@@ -65,15 +66,20 @@ impl TransactionSubmitter {
             .submit_amplification_factor
             .observe(amplification_factor as f64);
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
+        let mut retrier = RequestRetrier::new(
+            authority_aggregator,
+            client_monitor,
+            tx_type,
+            options.allowed_validators.clone(),
+        );
         let mut retries = 0;
-        let mut requests = FuturesUnordered::new();
+        let mut request_rpcs = FuturesUnordered::new();
 
         // This loop terminates when there are enough (f+1) non-retriable errors when submitting the transaction,
         // or all feasible targets returned errors or timed out.
         loop {
             // Try to fill up to amplification_factor concurrent requests
-            while requests.len() < amplification_factor as usize {
+            while request_rpcs.len() < amplification_factor as usize {
                 match retrier.next_target() {
                     Ok((name, client)) => {
                         let display_name = authority_aggregator.get_display_name(&name);
@@ -85,7 +91,7 @@ impl TransactionSubmitter {
                         // Create a future that returns the name and display_name along with the result
                         let submit_fut = self.submit_transaction_once(
                             client,
-                            &raw_request,
+                            &request,
                             options,
                             client_monitor,
                             name,
@@ -97,9 +103,9 @@ impl TransactionSubmitter {
                             (name, display_name, result)
                         };
 
-                        requests.push(wrapped_fut);
+                        request_rpcs.push(wrapped_fut);
                     }
-                    Err(_) if requests.is_empty() => {
+                    Err(_) if request_rpcs.is_empty() => {
                         // No more targets and no requests in flight
                         return Err(TransactionDriverError::Aborted {
                             submission_non_retriable_errors: aggregate_request_errors(
@@ -122,7 +128,7 @@ impl TransactionSubmitter {
                 }
             }
 
-            match requests.next().await {
+            match request_rpcs.next().await {
                 Some((name, display_name, Ok(result))) => {
                     self.metrics
                         .validator_submit_transaction_successes
@@ -174,10 +180,10 @@ impl TransactionSubmitter {
     }
 
     #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(validator_display_name = ?display_name))]
-    async fn submit_transaction_once<A>(
+    pub(crate) async fn submit_transaction_once<A>(
         &self,
         client: Arc<SafeClient<A>>,
-        raw_request: &RawSubmitTxRequest,
+        request: &SubmitTxRequest,
         options: &SubmitTransactionOptions,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         validator: AuthorityName,
@@ -190,7 +196,7 @@ impl TransactionSubmitter {
 
         let resp = timeout(
             SUBMIT_TRANSACTION_TIMEOUT,
-            client.submit_transaction(raw_request.clone(), options.forwarded_client_addr),
+            client.submit_transaction(request.clone(), options.forwarded_client_addr),
         )
         .await
         .map_err(|_| {

@@ -8240,6 +8240,7 @@ dependencies = [
  "jsonrpc",
  "move-command-line-common",
  "move-core-types",
+ "named-lock",
  "once_cell",
  "path-clean",
  "petgraph 0.8.1",
@@ -8257,6 +8258,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "walkdir",
+ "whoami",
 ]
 
 [[package]]
@@ -13816,7 +13818,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=673e8582c8de7ed835a5cdc96308bf2991cdc195#673e8582c8de7ed835a5cdc96308bf2991cdc195"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -14350,55 +14352,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-grpc-rosetta"
-version = "1.57.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum 0.8.3",
- "axum-extra 0.10.1",
- "bcs",
- "clap",
- "eyre",
- "fastcrypto",
- "futures",
- "hyper 1.5.2",
- "lru 0.10.0",
- "move-cli",
- "move-core-types",
- "mysten-metrics",
- "once_cell",
- "prost-types",
- "quick-js",
- "rand 0.8.5",
- "reqwest 0.12.9",
- "serde",
- "serde_json",
- "shared-crypto",
- "signature 1.6.4",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "sui-config",
- "sui-json-rpc-types",
- "sui-keys",
- "sui-move-build",
- "sui-node",
- "sui-rpc",
- "sui-sdk",
- "sui-sdk-types",
- "sui-swarm-config",
- "sui-types",
- "telemetry-subscribers",
- "tempfile",
- "test-cluster",
- "thiserror 1.0.69",
- "tokio",
- "tonic 0.13.1",
- "tracing",
- "typed-store",
-]
-
-[[package]]
 name = "sui-http"
 version = "0.0.0"
 dependencies = [
@@ -14594,13 +14547,16 @@ dependencies = [
  "diesel",
  "diesel-async",
  "fastcrypto",
+ "insta",
  "jsonrpsee",
  "move-core-types",
  "msim",
  "prometheus",
+ "rand 0.8.5",
  "reqwest 0.12.9",
  "serde",
  "serde_json",
+ "shared-crypto",
  "simulacrum",
  "sui-indexer-alt",
  "sui-indexer-alt-consistent-api",
@@ -14703,8 +14659,10 @@ dependencies = [
  "diesel",
  "diesel-async",
  "fastcrypto",
+ "fastcrypto-zkp",
  "futures",
  "headers",
+ "im",
  "insta",
  "itertools 0.13.0",
  "move-binary-format",
@@ -14715,6 +14673,7 @@ dependencies = [
  "prost-types",
  "serde",
  "serde_json",
+ "shared-crypto",
  "sui-default-config",
  "sui-display",
  "sui-indexer-alt-metrics",
@@ -15113,6 +15072,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "prometheus",
+ "sui-data-ingestion-core",
  "sui-kvstore",
  "sui-protocol-config",
  "sui-rpc",
@@ -15123,6 +15083,7 @@ dependencies = [
  "tokio",
  "tonic 0.13.1",
  "tonic-reflection",
+ "tracing",
 ]
 
 [[package]]
@@ -15822,6 +15783,7 @@ dependencies = [
  "serde",
  "serde_json",
  "similar",
+ "sui-config",
  "sui-execution",
  "sui-framework",
  "sui-json-rpc-types",
@@ -15832,6 +15794,7 @@ dependencies = [
  "telemetry-subscribers",
  "thiserror 1.0.69",
  "tokio",
+ "toml 0.7.4",
  "tracing",
  "zstd 0.12.3+zstd.1.5.2",
 ]
@@ -15885,7 +15848,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=673e8582c8de7ed835a5cdc96308bf2991cdc195#673e8582c8de7ed835a5cdc96308bf2991cdc195"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16044,7 +16007,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d5e360bd9930a5321b62d37101dccce09b6959c#7d5e360bd9930a5321b62d37101dccce09b6959c"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=673e8582c8de7ed835a5cdc96308bf2991cdc195#673e8582c8de7ed835a5cdc96308bf2991cdc195"
 dependencies = [
  "base64ct",
  "bcs",

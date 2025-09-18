@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, error::*, SUI_BRIDGE_OBJECT_ID};
-use crate::accumulator_root::AccumulatorValue;
+use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::Balance;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
@@ -2201,7 +2201,7 @@ pub trait TransactionDataAPI {
     /// reserved amount. This method aggregates all withdraw operations for the same account by
     /// merging their reservations. Each account object ID is derived from the type parameter of
     /// each withdraw operation.
-    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<ObjectID, u64>>;
+    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
 
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
@@ -2329,7 +2329,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok((move_objects, packages, receiving_objects))
     }
 
-    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<ObjectID, u64>> {
+    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
         let mut withdraws = Vec::new();
         // TODO(address-balances): Once we support paying gas using address balances,
         // we add gas reservations here.

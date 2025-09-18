@@ -16,7 +16,6 @@ COPY sui-execution sui-execution
 COPY external-crates external-crates
 
 RUN cargo build --profile ${PROFILE} \
-    --bin stress \
     --bin sui-faucet \
     --bin sui-bridge \
     --bin bridge-indexer \
@@ -33,7 +32,6 @@ WORKDIR "$WORKDIR/sui"
 # sui-tool needs libpq at runtime and uses git when fetching move dependencies during build
 RUN apt-get update && apt-get install -y libpq5 libpq-dev ca-certificates git
 
-COPY --from=builder /sui/target/release/stress /usr/local/bin
 COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 COPY --from=builder /sui/target/release/sui-bridge /usr/local/bin
 COPY --from=builder /sui/target/release/bridge-indexer /usr/local/bin

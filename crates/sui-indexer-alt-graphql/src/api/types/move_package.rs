@@ -48,7 +48,7 @@ use super::{
     move_module::MoveModule,
     move_object::MoveObject,
     object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, Validator as OFValidator},
+    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
     transaction::{filter::TransactionFilter, CTransaction, Transaction},
     type_origin::TypeOrigin,

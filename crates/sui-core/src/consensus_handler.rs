@@ -61,7 +61,7 @@ use crate::{
     execution_cache::ObjectCacheRead,
     execution_scheduler::{ExecutionScheduler, SchedulingSource},
     scoring_decision::update_low_scoring_authorities,
-    traffic_controller::policies::TrafficTally,
+    traffic_controller::{policies::TrafficTally, TrafficController},
 };
 
 pub struct ConsensusHandlerInitializer {
@@ -135,7 +135,7 @@ impl ConsensusHandlerInitializer {
             self.state.metrics.clone(),
             self.throughput_calculator.clone(),
             self.backpressure_manager.subscribe(),
-            self.state.clone(),
+            self.state.traffic_controller.clone(),
         )
     }
 
@@ -547,7 +547,7 @@ pub struct ConsensusHandler<C> {
 
     backpressure_subscriber: BackpressureSubscriber,
 
-    state: Arc<AuthorityState>,
+    traffic_controller: Option<Arc<TrafficController>>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -564,7 +564,7 @@ impl<C> ConsensusHandler<C> {
         metrics: Arc<AuthorityMetrics>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_subscriber: BackpressureSubscriber,
-        state: Arc<AuthorityState>,
+        traffic_controller: Option<Arc<TrafficController>>,
     ) -> Self {
         // Recover last_consensus_stats so it is consistent across validators.
         let mut last_consensus_stats = epoch_store
@@ -597,7 +597,7 @@ impl<C> ConsensusHandler<C> {
                 commit_rate_estimate_window_size,
             ),
             backpressure_subscriber,
-            state,
+            traffic_controller,
         }
     }
 
@@ -782,6 +782,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 let author = block.author.value();
                 // TODO: consider only messages within 1~3 rounds of the leader?
                 self.last_consensus_stats.stats.inc_num_messages(author);
+
+                // Set the "ping" transaction status for this block. This is necessary as there might be some ping requests waiting for the ping transaction to be finalized.
+                self.epoch_store.set_consensus_tx_status(
+                    ConsensusPosition::ping(epoch, block),
+                    ConsensusTxStatus::Finalized,
+                );
+
                 for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
                     let position = ConsensusPosition {
                         epoch,
@@ -801,8 +808,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 .submitted_transaction_cache
                                 .increment_submission_count(digest)
                             {
-                                if let Some(ref traffic_controller) = self.state.traffic_controller
-                                {
+                                if let Some(ref traffic_controller) = self.traffic_controller {
                                     debug!(
                                         "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to {} client addresses",
                                         submitter_client_addrs.len()
@@ -1454,6 +1460,12 @@ impl ConsensusBlockHandler {
             .collect::<Vec<_>>();
         let mut executable_transactions = vec![];
         for (block, transactions) in parsed_transactions.into_iter() {
+            // Set the "ping" transaction status for this block. This is ncecessary as there might be some ping requests waiting for the ping transaction to be certified.
+            self.epoch_store.set_consensus_tx_status(
+                ConsensusPosition::ping(epoch, block),
+                ConsensusTxStatus::FastpathCertified,
+            );
+
             for (txn_idx, parsed) in transactions.into_iter().enumerate() {
                 let position = ConsensusPosition {
                     epoch,
@@ -1674,7 +1686,7 @@ mod tests {
             metrics,
             Arc::new(throughput_calculator),
             backpressure_manager.subscribe(),
-            state.clone(),
+            state.traffic_controller.clone(),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -2088,6 +2100,7 @@ mod tests {
                 None,       // end_of_epoch_data
                 0,          // timestamp
                 Vec::new(), // randomness_rounds
+                Vec::new(), // checkpoint_artifact_digests
             );
             SignedCheckpointSummary::new(epoch, summary, &*state.secret, state.name)
         };
@@ -2166,7 +2179,7 @@ mod tests {
             metrics,
             Arc::new(throughput),
             backpressure.subscribe(),
-            state.clone(),
+            state.traffic_controller.clone(),
         );
 
         handler.handle_consensus_commit(commit).await;

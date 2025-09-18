@@ -1297,6 +1297,7 @@
               "maxSupportedProtocolVersion": "96",
               "protocolVersion": "6",
               "featureFlags": {
+                "abstract_size_in_object_runtime": false,
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
                 "additional_consensus_digest_indirect_state": false,
@@ -1351,6 +1352,7 @@
                 "fresh_vm_on_framework_upgrade": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
+                "include_checkpoint_artifacts_digest_in_summary": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
@@ -1368,6 +1370,7 @@
                 "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
                 "normalize_ptb_arguments": false,
+                "object_runtime_charge_cache_load_gas": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "passkey_auth": false,

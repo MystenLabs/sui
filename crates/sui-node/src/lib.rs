@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
 use std::sync::atomic::Ordering;
-use std::sync::{atomic::AtomicU64, Arc, Weak};
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 use sui_core::authority::authority_store_tables::{
     AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
@@ -110,7 +110,6 @@ use sui_core::overload_monitor::overload_monitor;
 use sui_core::rpc_index::RpcIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
-use sui_core::transaction_orchestrator::QuorumTransactionEffectsResult;
 use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
@@ -231,7 +230,7 @@ mod simulator {
 pub use simulator::set_jwk_injector;
 #[cfg(msim)]
 use simulator::*;
-use sui_core::authority::authority_store_pruner::ObjectsCompactionFilter;
+use sui_core::authority::authority_store_pruner::{ObjectsCompactionFilter, PrunerWatermarks};
 use sui_core::{
     consensus_handler::ConsensusHandlerInitializer, safe_client::SafeClientMetricsBase,
     validator_tx_finalizer::ValidatorTxFinalizer,
@@ -487,7 +486,11 @@ impl SuiNode {
             None,
         ));
 
-        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+        let pruner_watermarks = Arc::new(PrunerWatermarks::default());
+        let checkpoint_store = CheckpointStore::new(
+            &config.db_path().join("checkpoints"),
+            pruner_watermarks.clone(),
+        );
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
 
         Self::check_and_recover_forks(
@@ -517,11 +520,10 @@ impl SuiNode {
             enable_write_stall,
             compaction_filter,
         };
-        let pruner_watermark = Arc::new(AtomicU64::new(0));
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
             Some(perpetual_tables_options),
-            Some(pruner_watermark.clone()),
+            Some(pruner_watermarks.epoch_id.clone()),
         ));
         let is_genesis = perpetual_tables
             .database_is_empty()
@@ -765,7 +767,7 @@ impl SuiNode {
             pruner_db,
             config.policy_config.clone(),
             config.firewall_config.clone(),
-            pruner_watermark,
+            pruner_watermarks,
         )
         .await;
         // ensure genesis txn was executed
@@ -1737,15 +1739,6 @@ impl SuiNode {
         &self,
     ) -> Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>> {
         self.transaction_orchestrator.clone()
-    }
-
-    pub fn subscribe_to_transaction_orchestrator_effects(
-        &self,
-    ) -> Result<tokio::sync::broadcast::Receiver<QuorumTransactionEffectsResult>> {
-        self.transaction_orchestrator
-            .as_ref()
-            .map(|to| to.subscribe_to_effects_queue())
-            .ok_or_else(|| anyhow::anyhow!("Transaction Orchestrator is not enabled in this node."))
     }
 
     /// This function awaits the completion of checkpoint execution of the current epoch,

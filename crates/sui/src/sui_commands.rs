@@ -800,22 +800,22 @@ impl SuiCommand {
                 }
 
                 let node = get_replay_node(&context).await?;
-
+                let file_config = SR2::load_config_file()?;
+                let stable_config = SR2::merge_configs(replay_config, file_config);
                 let experimental_config = SR2::ReplayConfigExperimental {
                     node,
                     ..Default::default()
                 };
 
                 let artifact_path =
-                    SR2::handle_replay_config(&replay_config, &experimental_config, USER_AGENT)
+                    SR2::handle_replay_config(&stable_config, &experimental_config, USER_AGENT)
                         .await?;
 
-                if let Some(digest) = &replay_config.digest {
-                    // show effects and gas
+                if let Some(digest) = &stable_config.digest {
                     SR2::print_effects_or_fork(
                         digest,
                         &artifact_path,
-                        replay_config.show_effects,
+                        stable_config.show_effects,
                         &mut std::io::stdout(),
                     )?;
                 }

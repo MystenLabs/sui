@@ -6,6 +6,8 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::errors::fmt_truncated;
+
 use super::EnvironmentID;
 
 // TODO(Manos): Let's use a less free name...
@@ -137,6 +139,18 @@ impl Serialize for PublishedID {
         S: serde::Serializer,
     {
         ser_account(&self.0, serializer)
+    }
+}
+
+impl PublishedID {
+    pub fn truncated(&self) -> String {
+        fmt_truncated(self.0.to_canonical_string(true), 4, 4)
+    }
+}
+
+impl OriginalID {
+    pub fn truncated(&self) -> String {
+        fmt_truncated(self.0.to_canonical_string(true), 4, 4)
     }
 }
 

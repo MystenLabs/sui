@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 use regex::Regex;
 use tracing::debug;
@@ -63,7 +63,7 @@ pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Option<
     );
 
     if names.len() > 1 {
-        bail!("Multiple module names found in the package.");
+        return Ok(None);
     }
 
     let Some(name) = names.iter().next() else {

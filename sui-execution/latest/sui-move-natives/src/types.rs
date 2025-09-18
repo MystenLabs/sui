@@ -14,7 +14,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 
 pub(crate) fn is_otw_struct(
     struct_layout: &MoveStructLayout,
@@ -59,9 +59,7 @@ pub fn is_one_time_witness(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
-    let type_is_one_time_witness_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let type_is_one_time_witness_cost_params = get_extension!(context, NativesCostTable)?
         .type_is_one_time_witness_cost_params
         .clone();
 

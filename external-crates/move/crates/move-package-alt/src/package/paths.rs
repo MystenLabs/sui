@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use path_clean::PathClean;
 use thiserror::Error;
 
 /// A canonical path to a directory containing a loaded Move package (in particular, the directory
@@ -31,9 +32,7 @@ impl PackagePath {
     /// directory at `dir` and that it contains a valid Move package, i.e., it has a `Move.toml`
     /// file.
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
-        let path = dir
-            .canonicalize()
-            .map_err(|_| PackagePathError::InvalidDirectory { path: dir.clone() })?;
+        let path = dir.clean();
 
         if !dir.is_dir() {
             return Err(PackagePathError::InvalidDirectory { path: dir.clone() });
@@ -105,7 +104,7 @@ mod tests {
         let package_path = PackagePath::new(c.join(relative_path)).unwrap();
 
         // The result should be the canonicalized path to B
-        assert_eq!(package_path.path(), &b.canonicalize().unwrap());
+        assert_eq!(package_path.path(), &b.clean());
     }
 
     #[test]

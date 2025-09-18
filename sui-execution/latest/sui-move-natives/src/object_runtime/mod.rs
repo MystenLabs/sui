@@ -5,7 +5,7 @@ pub(crate) mod accumulator;
 mod fingerprint;
 pub(crate) mod object_store;
 
-use crate::object_runtime::object_store::ChildObjectEffectV1;
+use crate::object_runtime::object_store::{CacheMetadata, ChildObjectEffectV1};
 
 use self::object_store::{ChildObjectEffectV0, ChildObjectEffects, ObjectResult};
 use super::get_object_id;
@@ -393,7 +393,7 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_type: &MoveObjectType,
-    ) -> PartialVMResult<bool> {
+    ) -> PartialVMResult<CacheMetadata<bool>> {
         self.child_object_store
             .object_exists_and_has_type(parent, child, child_type)
     }
@@ -406,7 +406,7 @@ impl<'a> ObjectRuntime<'a> {
         child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
-    ) -> PartialVMResult<Option<ObjectResult<Value>>> {
+    ) -> PartialVMResult<Option<ObjectResult<CacheMetadata<Value>>>> {
         let Some((value, obj_meta)) = self.child_object_store.receive_object(
             parent,
             child,
@@ -440,7 +440,7 @@ impl<'a> ObjectRuntime<'a> {
         child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
-    ) -> PartialVMResult<ObjectResult<&mut GlobalValue>> {
+    ) -> PartialVMResult<ObjectResult<CacheMetadata<&mut GlobalValue>>> {
         let res = self.child_object_store.get_or_fetch_object(
             parent,
             child,
@@ -450,7 +450,9 @@ impl<'a> ObjectRuntime<'a> {
         )?;
         Ok(match res {
             ObjectResult::MismatchedType => ObjectResult::MismatchedType,
-            ObjectResult::Loaded(child_object) => ObjectResult::Loaded(&mut child_object.value),
+            ObjectResult::Loaded((cache_info, child_object)) => {
+                ObjectResult::Loaded((cache_info, &mut child_object.value))
+            }
         })
     }
 

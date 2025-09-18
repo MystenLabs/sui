@@ -263,6 +263,7 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 // Version 96: Enable authority capabilities v2.
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
 //             Create Coin Registry object
+//             Enable checkpoint artifacts digest in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -790,6 +791,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
 
+    // Enable including checkpoint artifacts digest in the summary.
+    #[serde(skip_serializing_if = "is_false")]
+    include_checkpoint_artifacts_digest_in_summary: bool,
+
     // If true, use MFP txns in load initial object debts.
     #[serde(skip_serializing_if = "is_false")]
     use_mfp_txns_in_load_initial_object_debts: bool,
@@ -801,6 +806,14 @@ struct FeatureFlags {
     // Enable coin registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_coin_registry: bool,
+
+    // Use abstract size in the object runtime instead the legacy value size.
+    #[serde(skip_serializing_if = "is_false")]
+    abstract_size_in_object_runtime: bool,
+
+    // If true charge for loads into the cache (i.e., fetches from storage) in the object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    object_runtime_charge_cache_load_gas: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2197,12 +2210,25 @@ impl ProtocolConfig {
             .consensus_checkpoint_signature_key_includes_digest
     }
 
+    pub fn include_checkpoint_artifacts_digest_in_summary(&self) -> bool {
+        self.feature_flags
+            .include_checkpoint_artifacts_digest_in_summary
+    }
+
     pub fn use_mfp_txns_in_load_initial_object_debts(&self) -> bool {
         self.feature_flags.use_mfp_txns_in_load_initial_object_debts
     }
 
     pub fn cancel_for_failed_dkg_early(&self) -> bool {
         self.feature_flags.cancel_for_failed_dkg_early
+    }
+
+    pub fn abstract_size_in_object_runtime(&self) -> bool {
+        self.feature_flags.abstract_size_in_object_runtime
+    }
+
+    pub fn object_runtime_charge_cache_load_gas(&self) -> bool {
+        self.feature_flags.object_runtime_charge_cache_load_gas
     }
 }
 
@@ -3984,6 +4010,11 @@ impl ProtocolConfig {
                     cfg.max_transactions_per_checkpoint = Some(20_000);
                 }
                 96 => {
+                    // Enable artifacts digest in devnet.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags
+                            .include_checkpoint_artifacts_digest_in_summary = true;
+                    }
                     cfg.feature_flags.correct_gas_payment_limit_check = true;
                     cfg.feature_flags.authority_capabilities_v2 = true;
                     cfg.feature_flags.use_mfp_txns_in_load_initial_object_debts = true;

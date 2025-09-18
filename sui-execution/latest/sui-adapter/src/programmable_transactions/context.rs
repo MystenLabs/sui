@@ -57,6 +57,7 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         accumulator_event::AccumulatorEvent,
+        accumulator_root::AccumulatorObjId,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
@@ -1547,7 +1548,10 @@ mod checked {
                         value,
                     };
 
-                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+                    AccumulatorEvent::new(
+                        AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
+                        write,
+                    )
                 }
             })
             .collect();

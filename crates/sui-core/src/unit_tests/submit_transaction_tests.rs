@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use consensus_core::BlockStatus;
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
@@ -14,7 +14,9 @@ use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message as _;
-use sui_types::messages_grpc::RawSubmitTxRequest;
+use sui_types::messages_grpc::{
+    RawSubmitTxRequest, SubmitTxRequest, SubmitTxResponse, SubmitTxResult,
+};
 use sui_types::object::Object;
 use sui_types::transaction::{
     Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
@@ -28,7 +30,6 @@ use crate::authority_server::AuthorityServer;
 use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
 use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
-use crate::transaction_driver::{SubmitTxResponse, SubmitTxResult};
 
 use super::AuthorityServerHandle;
 
@@ -99,10 +100,10 @@ impl TestContext {
         to_sender_signed_transaction(tx_data, &self.keypair)
     }
 
-    fn build_submit_request(&self, transaction: Transaction) -> RawSubmitTxRequest {
-        RawSubmitTxRequest {
-            transactions: vec![bcs::to_bytes(&transaction).unwrap().into()],
-            ..Default::default()
+    fn build_submit_request(&self, transaction: Transaction) -> SubmitTxRequest {
+        SubmitTxRequest {
+            transaction: Some(transaction),
+            ping: None,
         }
     }
 }
@@ -121,7 +122,6 @@ async fn test_submit_transaction_success() {
         .unwrap();
 
     // Verify we got a consensus position back
-    let response: SubmitTxResponse = response.try_into().unwrap();
     assert_eq!(response.results.len(), 1);
     match &response.results[0] {
         SubmitTxResult::Submitted { consensus_position } => {
@@ -129,6 +129,62 @@ async fn test_submit_transaction_success() {
         }
         _ => panic!("Expected Submitted response"),
     };
+}
+
+#[tokio::test]
+async fn test_submit_ping_request() {
+    let test_context = TestContext::new().await;
+
+    println!("Case 1. Submitting an empty array of transactions, soft bundle is true.");
+    {
+        let request = RawSubmitTxRequest {
+            transactions: vec![],
+            soft_bundle: true,
+        };
+
+        let response = test_context
+            .client
+            .client()
+            .unwrap()
+            .submit_transaction(request)
+            .await;
+        assert!(response.is_err());
+        assert!(matches!(
+            response.unwrap_err().into(),
+            SuiError::UserInputError {
+                error: UserInputError::InvalidBatchTransaction { .. }
+            }
+        ));
+    }
+
+    println!("Case 2. Submitting an empty array of transactions, soft bundle is false.");
+    {
+        // Submit an empty array of transactions.
+        // The request should explicitly set `ping` to true to indicate a ping check.
+        let request = RawSubmitTxRequest {
+            transactions: vec![],
+            soft_bundle: false,
+        };
+
+        let response = test_context
+            .client
+            .client()
+            .unwrap()
+            .submit_transaction(request)
+            .await
+            .unwrap();
+
+        // Verify we got a consensus position back
+        let response: SubmitTxResponse = response.into_inner().try_into().unwrap();
+        assert_eq!(response.results.len(), 1);
+        match &response.results[0] {
+            SubmitTxResult::Submitted { consensus_position } => {
+                assert_eq!(consensus_position.index, PING_TRANSACTION_INDEX);
+                assert_eq!(consensus_position.block, BlockRef::MIN);
+            }
+            _ => panic!("Expected Submitted response"),
+        };
+    }
 }
 
 #[tokio::test]
@@ -141,7 +197,13 @@ async fn test_submit_transaction_invalid_transaction() {
         ..Default::default()
     };
 
-    let response = test_context.client.submit_transaction(request, None).await;
+    // Submit request with GRPC client directly.
+    let response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await;
 
     assert!(response.is_err());
 }
@@ -181,7 +243,6 @@ async fn test_submit_transaction_already_executed() {
 
     // Verify we still got a consensus position back, because the transaction has not been committed yet,
     // so we can still sign the same transaction.
-    let response1: SubmitTxResponse = response1.try_into().unwrap();
     assert_eq!(response1.results.len(), 1);
     match &response1.results[0] {
         SubmitTxResult::Submitted { consensus_position } => {
@@ -208,7 +269,6 @@ async fn test_submit_transaction_already_executed() {
         .await
         .unwrap();
     // Verify we got the full effects back.
-    let response2: SubmitTxResponse = response2.try_into().unwrap();
     assert_eq!(response2.results.len(), 1);
     match &response2.results[0] {
         SubmitTxResult::Executed {
@@ -302,14 +362,7 @@ async fn test_submit_transaction_gas_object_validation() {
     // Because the error comes from validating transaction input, the response should contain SubmitTxResult
     // with the Rejected variant.
     let response = test_context.client.submit_transaction(request, None).await;
-    let result: SubmitTxResult = response
-        .unwrap()
-        .results
-        .first()
-        .unwrap()
-        .clone()
-        .try_into()
-        .unwrap();
+    let result: SubmitTxResult = response.unwrap().results.first().unwrap().clone();
     assert!(matches!(
         result,
         SubmitTxResult::Rejected {
@@ -336,12 +389,15 @@ async fn test_submit_batched_transactions() {
         soft_bundle: false,
     };
 
-    // Submit request with batched transactions.
+    // Submit request with batched transactions, using grpc client directly.
     let raw_response = test_context
         .client
-        .submit_transaction(request, None)
+        .client()
+        .unwrap()
+        .submit_transaction(request)
         .await
-        .unwrap();
+        .unwrap()
+        .into_inner();
 
     // Verify we got results for both transactions
     assert_eq!(raw_response.results.len(), 2);
@@ -405,12 +461,15 @@ async fn test_submit_batched_transactions_with_already_executed() {
         soft_bundle: false,
     };
 
-    // Submit both transactions
+    // Submit both transactions, using grpc client directly.
     let raw_response = test_context
         .client
-        .submit_transaction(request, None)
+        .client()
+        .unwrap()
+        .submit_transaction(request)
         .await
-        .unwrap();
+        .unwrap()
+        .into_inner();
 
     // Verify we got results for both transactions
     assert_eq!(raw_response.results.len(), 2);
@@ -447,12 +506,15 @@ async fn test_submit_soft_bundle_transactions() {
         soft_bundle: true,
     };
 
-    // Submit request with batched transactions.
+    // Submit request with batched transactions, using grpc client directly.
     let raw_response = test_context
         .client
-        .submit_transaction(request, None)
+        .client()
+        .unwrap()
+        .submit_transaction(request)
         .await
-        .unwrap();
+        .unwrap()
+        .into_inner();
 
     // Verify we got results for both transactions
     assert_eq!(raw_response.results.len(), 2);
@@ -516,12 +578,15 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
         soft_bundle: true,
     };
 
-    // Submit request with batched transactions.
+    // Submit request with batched transactions, using grpc client directly.
     let error = test_context
         .client
-        .submit_transaction(request, None)
+        .client()
+        .unwrap()
+        .submit_transaction(request)
         .await
-        .unwrap_err();
+        .unwrap_err()
+        .into();
 
     // Verify the error is AlreadyExecutedInSoftBundleError.
     assert!(matches!(

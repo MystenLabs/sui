@@ -10,17 +10,30 @@ mod tests;
 
 pub use metrics::ValidatorClientMetrics;
 pub use monitor::ValidatorClientMonitor;
+use std::time::Duration;
 use strum::EnumIter;
 use sui_types::base_types::AuthorityName;
-
-use std::time::Duration;
 
 /// Operation types for validator performance tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 pub enum OperationType {
     Submit,
     Effects,
+    FastPath,
     HealthCheck,
+    Consensus,
+}
+
+impl OperationType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            OperationType::Submit => "submit",
+            OperationType::Effects => "effects",
+            OperationType::HealthCheck => "health_check",
+            OperationType::FastPath => "fast_path",
+            OperationType::Consensus => "consensus",
+        }
+    }
 }
 
 /// Feedback from TransactionDriver operations

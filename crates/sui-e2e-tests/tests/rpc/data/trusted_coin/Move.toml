@@ -1,6 +1,5 @@
 [package]
-name = "Examples"
-version = "0.0.1"
+name = "trusted_coin"
 edition = "2024.beta"
 
 [dependencies]
