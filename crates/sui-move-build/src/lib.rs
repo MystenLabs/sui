@@ -721,7 +721,7 @@ pub enum PublishedAtError {
     NotPresent,
 }
 
-pub fn parse_legacy_pkg_info(package_path: &Path) -> LegacyPackageMetadata {
+pub fn parse_legacy_pkg_info(package_path: &Path) -> Result<LegacyPackageMetadata, anyhow::Error> {
     parse_legacy_package_info(package_path)
 }
 
