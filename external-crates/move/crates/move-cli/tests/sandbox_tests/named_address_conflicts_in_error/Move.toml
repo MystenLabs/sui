@@ -1,0 +1,6 @@
+[package]
+name = "a"
+edition = "2024.beta"
+
+[dependencies]
+b = { local = "dep", rename-from = "a" }
