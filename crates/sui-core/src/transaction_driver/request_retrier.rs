@@ -83,7 +83,7 @@ impl<A: Clone> RequestRetrier<A> {
             .non_retriable_errors_aggregator
             .reached_validity_threshold()
         {
-            Err(TransactionDriverError::InvalidTransaction {
+            Err(TransactionDriverError::RejectedByValidators {
                 submission_non_retriable_errors: aggregate_request_errors(
                     self.non_retriable_errors_aggregator.status_by_authority(),
                 ),
@@ -124,7 +124,7 @@ impl<A: Clone> RequestRetrier<A> {
                 .non_retriable_errors_aggregator
                 .reached_validity_threshold()
             {
-                return Err(TransactionDriverError::InvalidTransaction {
+                return Err(TransactionDriverError::RejectedByValidators {
                     submission_non_retriable_errors: aggregate_request_errors(
                         self.non_retriable_errors_aggregator.status_by_authority(),
                     ),
@@ -173,7 +173,7 @@ mod tests {
         let Err(error) = retrier.next_target() else {
             panic!("Expected an error");
         };
-        assert!(error.is_retriable());
+        assert!(error.is_local_retriable());
     }
 
     #[tokio::test]
@@ -302,7 +302,7 @@ mod tests {
                 )
                 .unwrap_err();
             // The aggregated error is non-retriable.
-            assert!(!aggregated_error.is_retriable());
+            assert!(!aggregated_error.is_local_retriable());
         }
     }
 }

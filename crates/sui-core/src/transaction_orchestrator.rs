@@ -653,7 +653,7 @@ where
                     timeout,
                 },
                 other => QuorumDriverError::TransactionFailed {
-                    retriable: other.is_retriable(),
+                    category: other.categorize(),
                     details: other.to_string(),
                 },
             });

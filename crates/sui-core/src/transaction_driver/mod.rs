@@ -27,7 +27,7 @@ use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
     error::UserInputError,
-    messages_grpc::{PingType, SubmitTxRequest, TxType},
+    messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
     transaction::TransactionDataAPI as _,
 };
 use tokio::{
@@ -281,7 +281,7 @@ where
                         return Ok(resp);
                     }
                     Err(e) => {
-                        if !e.is_retriable() {
+                        if !e.is_local_retriable() {
                             // Record the number of retries for failed transaction
                             self.metrics
                                 .transaction_retries
@@ -354,6 +354,9 @@ where
                 options,
             )
             .await?;
+        if let SubmitTxResult::Rejected { error } = &submit_txn_result {
+            panic!("SubmitTxResult should not be rejected: {}", error);
+        }
 
         // Wait for quorum effects using EffectsCertifier
         let result = self

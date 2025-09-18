@@ -957,6 +957,49 @@ impl SuiError {
             _ => 0,
         }
     }
+
+    /// Categorizes SuiError into ErrorCategory.
+    pub fn categorize(&self) -> ErrorCategory {
+        match self {
+            SuiError::UserInputError { error } => {
+                match error {
+                    // ObjectNotFound and DependentPackageNotFound are potentially valid because the missing
+                    // input can be created by other transactions.
+                    UserInputError::ObjectNotFound { .. } => ErrorCategory::Aborted,
+                    UserInputError::DependentPackageNotFound { .. } => ErrorCategory::Aborted,
+                    // Other UserInputError variants indeed indicate invalid transaction.
+                    _ => ErrorCategory::InvalidTransaction,
+                }
+            }
+
+            SuiError::InvalidSignature { .. }
+            | SuiError::SignerSignatureAbsent { .. }
+            | SuiError::SignerSignatureNumberMismatch { .. }
+            | SuiError::IncorrectSigner { .. }
+            | SuiError::UnknownSigner { .. }
+            | SuiError::TransactionExpired => ErrorCategory::InvalidTransaction,
+
+            SuiError::ObjectLockConflict { .. } => ErrorCategory::LockConflict,
+
+            SuiError::Unknown { .. }
+            | SuiError::GrpcMessageSerializeError { .. }
+            | SuiError::GrpcMessageDeserializeError { .. }
+            | SuiError::ByzantineAuthoritySuspicion { .. }
+            | SuiError::InvalidTxKindInSoftBundle { .. }
+            | SuiError::UnsupportedFeatureError { .. } => ErrorCategory::Internal,
+
+            SuiError::TooManyTransactionsPendingExecution { .. }
+            | SuiError::TooManyTransactionsPendingOnObject { .. }
+            | SuiError::TooOldTransactionPendingOnObject { .. }
+            | SuiError::TooManyTransactionsPendingConsensus
+            | SuiError::ValidatorOverloadedRetryAfter { .. } => ErrorCategory::ValidatorOverloaded,
+
+            SuiError::TimeoutError { .. } => ErrorCategory::Unavailable,
+
+            // Other variants are assumed to be retriable with new transaction submissions.
+            _ => ErrorCategory::Aborted,
+        }
+    }
 }
 
 impl Ord for SuiError {
@@ -1055,4 +1098,34 @@ pub fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> Execut
         e,
         arg_idx as u16,
     ))
+}
+
+/// Types of SuiError.
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum ErrorCategory {
+    // A generic error that is retriable with new transaction resubmissions.
+    Aborted,
+    // Any validator or full node can check if a transaction is valid.
+    InvalidTransaction,
+    // Lock conflict on the transaction input.
+    LockConflict,
+    // Unexpected client error, for example generating invalid request or entering into invalid state.
+    // And unexpected error from the remote peer. The validator may be malicious or there is a software bug.
+    Internal,
+    // Validator is overloaded.
+    ValidatorOverloaded,
+    // Target validator is down or there are network issues.
+    Unavailable,
+}
+
+impl ErrorCategory {
+    // Whether the failure is retriable with new transaction submission.
+    pub fn is_submission_retriable(&self) -> bool {
+        matches!(
+            self,
+            ErrorCategory::Aborted
+                | ErrorCategory::ValidatorOverloaded
+                | ErrorCategory::Unavailable
+        )
+    }
 }

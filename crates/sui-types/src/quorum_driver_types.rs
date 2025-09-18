@@ -12,7 +12,7 @@ use crate::effects::{
     CertifiedTransactionEffects, TransactionEffects, TransactionEvents,
     VerifiedCertifiedTransactionEffects,
 };
-use crate::error::SuiError;
+use crate::error::{ErrorCategory, SuiError};
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::object::Object;
 use crate::transaction::{Transaction, VerifiedTransaction};
@@ -30,7 +30,7 @@ pub const NON_RECOVERABLE_ERROR_MSG: &str =
 
 /// Client facing errors regarding transaction submission via Quorum Driver.
 /// Every invariant needs detailed documents to instruct client handling.
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr)]
+#[derive(Eq, PartialEq, Clone, Debug, Error, Hash, AsRefStr)]
 pub enum QuorumDriverError {
     #[error("QuorumDriver internal error: {0}.")]
     QuorumDriverInternalError(SuiError),
@@ -69,8 +69,11 @@ pub enum QuorumDriverError {
     },
 
     // Wrapped error from Transaction Driver.
-    #[error("Transaction processing failed. Retriable with new attempts: {retriable}. Details: {details}")]
-    TransactionFailed { retriable: bool, details: String },
+    #[error("Transaction processing failed. Details: {details}")]
+    TransactionFailed {
+        category: ErrorCategory,
+        details: String,
+    },
 
     #[error("Transaction is already being processed in transaction orchestrator (most likely by quorum driver), wait for results")]
     PendingExecutionInTransactionOrchestrator,
