@@ -17,8 +17,8 @@ use sui_types::{
     error::SuiError,
     messages_consensus::ConsensusPosition,
     messages_grpc::{
-        ExecutedData, PingType, RawWaitForEffectsRequest, SubmitTxResult, WaitForEffectsRequest,
-        WaitForEffectsResponse,
+        ExecutedData, PingType, RawWaitForEffectsRequest, SubmitTxResult, TxType,
+        WaitForEffectsRequest, WaitForEffectsResponse,
     },
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
@@ -40,7 +40,7 @@ use crate::{
         request_retrier::RequestRetrier,
         QuorumTransactionResponse, SubmitTransactionOptions,
     },
-    validator_client_monitor::{OperationFeedback, OperationType, TxType, ValidatorClientMonitor},
+    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
 
 #[cfg(test)]

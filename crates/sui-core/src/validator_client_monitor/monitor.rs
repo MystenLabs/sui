@@ -4,7 +4,6 @@
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::validator_client_monitor::stats::ClientObservedStats;
-use crate::validator_client_monitor::TxType;
 use crate::validator_client_monitor::{
     metrics::ValidatorClientMetrics, OperationFeedback, OperationType,
 };
@@ -16,6 +15,7 @@ use std::{sync::Arc, time::Instant};
 use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
+use sui_types::messages_grpc::TxType;
 use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
 use tokio::{
     task::JoinSet,

@@ -3,7 +3,7 @@
 
 use std::{collections::VecDeque, sync::Arc};
 
-use sui_types::base_types::AuthorityName;
+use sui_types::{base_types::AuthorityName, messages_grpc::TxType};
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
@@ -13,7 +13,7 @@ use crate::{
         aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
         TransactionRequestError,
     },
-    validator_client_monitor::{TxType, ValidatorClientMonitor},
+    validator_client_monitor::ValidatorClientMonitor,
 };
 
 pub(crate) const TOP_K_VALIDATORS_DENOMINATOR: usize = 3;

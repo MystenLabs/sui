@@ -14,6 +14,11 @@ use bytes::Bytes;
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
+use mysten_metrics::TX_TYPE_SHARED_OBJ_TX;
+use mysten_metrics::TX_TYPE_SINGLE_WRITER_TX;
+
+use strum::EnumIter;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
     /// Request the latest object state.
@@ -297,6 +302,43 @@ impl SubmitTxRequest {
         Self {
             transaction: None,
             ping: Some(ping),
+        }
+    }
+
+    pub fn tx_type(&self) -> TxType {
+        if let Some(ping) = self.ping {
+            return if ping == PingType::FastPath {
+                TxType::SingleWriter
+            } else {
+                TxType::SharedObject
+            };
+        }
+        let transaction = self.transaction.as_ref().unwrap();
+        if transaction.is_consensus_tx() {
+            TxType::SharedObject
+        } else {
+            TxType::SingleWriter
+        }
+    }
+
+    /// Returns the digest of the transaction if it is a transaction request.
+    /// Returns None if it is a ping request.
+    pub fn tx_digest(&self) -> Option<TransactionDigest> {
+        self.transaction.as_ref().map(|t| *t.digest())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
+pub enum TxType {
+    SingleWriter,
+    SharedObject,
+}
+
+impl TxType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TxType::SingleWriter => TX_TYPE_SINGLE_WRITER_TX,
+            TxType::SharedObject => TX_TYPE_SHARED_OBJ_TX,
         }
     }
 }

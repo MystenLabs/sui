@@ -8,7 +8,7 @@ use crate::{
         error::TransactionDriverError, metrics::TransactionDriverMetrics,
         transaction_submitter::TransactionSubmitter, SubmitTransactionOptions,
     },
-    validator_client_monitor::{TxType, ValidatorClientMonitor},
+    validator_client_monitor::ValidatorClientMonitor,
 };
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
@@ -29,6 +29,7 @@ use sui_types::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
     messages_consensus::ConsensusPosition,
+    messages_grpc::TxType,
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,

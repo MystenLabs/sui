@@ -10,7 +10,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
     base_types::AuthorityName,
     error::SuiError,
-    messages_grpc::{SubmitTxRequest, SubmitTxResult},
+    messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -27,7 +27,7 @@ use crate::{
         request_retrier::RequestRetrier,
         SubmitTransactionOptions, TransactionDriverMetrics,
     },
-    validator_client_monitor::{OperationFeedback, OperationType, TxType, ValidatorClientMonitor},
+    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
 
 #[cfg(test)]

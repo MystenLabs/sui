@@ -26,9 +26,8 @@ use rand::Rng;
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
-    digests::TransactionDigest,
     error::UserInputError,
-    messages_grpc::{PingType, SubmitTxRequest},
+    messages_grpc::{PingType, SubmitTxRequest, TxType},
     transaction::TransactionDataAPI as _,
 };
 use tokio::{
@@ -43,7 +42,7 @@ use crate::{
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
     validator_client_monitor::{
-        OperationFeedback, OperationType, TxType, ValidatorClientMetrics, ValidatorClientMonitor,
+        OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
 use sui_config::NodeConfig;
@@ -216,25 +215,16 @@ where
         options: SubmitTransactionOptions,
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        // To determine the tx type, give priority to the provided ping type (if present).
-        // Also, for ping requests, the amplification factor is always 1.
-        let (tx_type, tx_digest, amplification_factor) = if let Some(ping) = request.ping {
-            let tx_type = if ping == PingType::FastPath {
-                TxType::SingleWriter
-            } else {
-                TxType::SharedObject
-            };
-            (tx_type, None, 1)
+        // For ping requests, the amplification factor is always 1.
+        let amplification_factor = if request.ping.is_some() {
+            1
         } else {
-            let transaction = request.transaction.as_ref().unwrap();
-
-            let tx_type = if transaction.is_consensus_tx() {
-                TxType::SharedObject
-            } else {
-                TxType::SingleWriter
-            };
-
-            let gas_price = transaction.transaction_data().gas_price();
+            let gas_price = request
+                .transaction
+                .as_ref()
+                .unwrap()
+                .transaction_data()
+                .gas_price();
             let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
             let amplification_factor = gas_price / reference_gas_price.max(1);
             if amplification_factor == 0 {
@@ -246,9 +236,10 @@ where
                     .to_string(),
                 });
             }
-            (tx_type, Some(*transaction.digest()), amplification_factor)
+            amplification_factor
         };
 
+        let tx_type = request.tx_type();
         let ping_label = if request.ping.is_some() {
             "true"
         } else {
@@ -273,14 +264,7 @@ where
             loop {
                 // TODO(fastpath): Check local state before submitting transaction
                 match self
-                    .drive_transaction_once(
-                        tx_digest,
-                        tx_type,
-                        amplification_factor,
-                        request.clone(),
-                        &options,
-                        request.ping,
-                    )
+                    .drive_transaction_once(amplification_factor, request.clone(), &options)
                     .await
                 {
                     Ok(resp) => {
@@ -347,17 +331,17 @@ where
     #[instrument(level = "error", skip_all, err)]
     async fn drive_transaction_once(
         &self,
-        tx_digest: Option<TransactionDigest>,
-        tx_type: TxType,
         amplification_factor: u64,
         request: SubmitTxRequest,
         options: &SubmitTransactionOptions,
-        ping: Option<PingType>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
+        let ping = request.ping;
+        let tx_type = request.tx_type();
+        let tx_digest = request.tx_digest();
 
         let (name, submit_txn_result) = self
             .submitter

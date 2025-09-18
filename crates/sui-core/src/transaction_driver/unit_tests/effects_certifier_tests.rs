@@ -8,7 +8,7 @@ use crate::{
         effects_certifier::EffectsCertifier, error::TransactionDriverError,
         metrics::TransactionDriverMetrics, SubmitTransactionOptions,
     },
-    validator_client_monitor::{TxType, ValidatorClientMonitor},
+    validator_client_monitor::ValidatorClientMonitor,
 };
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
@@ -27,7 +27,7 @@ use sui_types::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
     messages_consensus::ConsensusPosition,
-    messages_grpc::{ExecutedData, SubmitTxRequest, SubmitTxResponse, SubmitTxResult},
+    messages_grpc::{ExecutedData, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, TxType},
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
