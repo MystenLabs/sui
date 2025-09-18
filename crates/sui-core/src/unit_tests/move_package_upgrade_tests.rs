@@ -129,7 +129,7 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
-        package.dependency_ids,
+        package.dependency_ids.published.values().cloned().collect(),
     )
 }
 
