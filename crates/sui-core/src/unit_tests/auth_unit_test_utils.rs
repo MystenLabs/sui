@@ -12,6 +12,9 @@ use sui_types::utils::to_sender_signed_transaction;
 use super::authority_test_utils::*;
 use super::*;
 
+/// Compiles the package at path with the dep original addresses. It updates the compiled package
+/// dependencies' information to set the addresses of the package's dependencies to those in
+/// dep_ids -- which are the original ids for these packages.
 pub fn build_test_modules_with_dep_addr(
     path: &Path,
     dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
