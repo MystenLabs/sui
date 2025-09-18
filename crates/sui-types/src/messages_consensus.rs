@@ -423,23 +423,7 @@ pub enum ConsensusTransactionKind {
     CheckpointSignatureV2(Box<CheckpointSignatureMessage>),
 }
 
-impl ConsensusTransactionKind {
-    pub fn is_dkg(&self) -> bool {
-        matches!(
-            self,
-            ConsensusTransactionKind::RandomnessDkgMessage(_, _)
-                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
-        )
-    }
-
-    pub fn is_user_transaction(&self) -> bool {
-        matches!(
-            self,
-            ConsensusTransactionKind::UserTransaction(_)
-                | ConsensusTransactionKind::CertifiedTransaction(_)
-        )
-    }
-}
+impl ConsensusTransactionKind {}
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
@@ -734,13 +718,24 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn is_executable_transaction(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
-            || matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+    pub fn is_dkg(&self) -> bool {
+        matches!(
+            self.kind,
+            ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
+        )
     }
 
     pub fn is_mfp_transaction(&self) -> bool {
         matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+    }
+
+    pub fn is_user_transaction(&self) -> bool {
+        matches!(
+            self.kind,
+            ConsensusTransactionKind::UserTransaction(_)
+                | ConsensusTransactionKind::CertifiedTransaction(_)
+        )
     }
 
     pub fn is_end_of_publish(&self) -> bool {

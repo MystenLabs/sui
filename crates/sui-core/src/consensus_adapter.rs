@@ -1049,7 +1049,7 @@ impl ConsensusAdapter {
                     // This can happen during reconfig, or when consensus has full internal buffers
                     // and needs to back pressure, so retry a few times before logging warnings.
                     if retries > 30
-                        || (retries > 3 && (is_soft_bundle || !transactions[0].kind.is_dkg()))
+                        || (retries > 3 && (is_soft_bundle || !transactions[0].is_dkg()))
                     {
                         warn!(
                             "Failed to submit transactions {transaction_keys:?} to consensus: {err:?}. Retry #{retries}"
@@ -1061,7 +1061,7 @@ impl ConsensusAdapter {
                         .inc();
                     retries += 1;
 
-                    if transactions[0].kind.is_dkg() {
+                    if transactions[0].is_dkg() {
                         // Shorter delay for DKG messages, which are time-sensitive and happen at
                         // start-of-epoch when submit errors due to active reconfig are likely.
                         time::sleep(Duration::from_millis(100)).await;

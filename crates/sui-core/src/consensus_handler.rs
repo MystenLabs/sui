@@ -2248,7 +2248,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // DONE(commit-handler-rewrite): ignore txns due to !should_accept_consensus_certs(), unless they were previously deferred
                     // (Note: we no lnoger need to worry about the previously deferred condition, since we are only
                     // processing newly-received transactions at this time).
-                    if parsed.transaction.kind.is_user_transaction() {
+                    if parsed.transaction.is_user_transaction() {
                         debug!(
                             "Ignoring consensus transaction {:?} because of end of epoch",
                             parsed.transaction.key()
@@ -2850,7 +2850,7 @@ impl SequencedConsensusTransactionKind {
 
     pub fn is_executable_transaction(&self) -> bool {
         match self {
-            SequencedConsensusTransactionKind::External(ext) => ext.is_executable_transaction(),
+            SequencedConsensusTransactionKind::External(ext) => ext.is_user_transaction(),
             SequencedConsensusTransactionKind::System(_) => true,
         }
     }
