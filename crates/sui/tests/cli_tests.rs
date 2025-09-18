@@ -1419,6 +1419,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_receive_argument() -> Result<(), anyhow::Error> {
+    // telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
@@ -5068,7 +5069,7 @@ async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow
 
 #[sim_test]
 async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(), anyhow::Error> {
-    telemetry_subscribers::init_for_testing();
+    // telemetry_subscribers::init_for_testing();
     let mut test = TreeShakingTest::new().await?;
 
     // Publish packages A and B
