@@ -4,9 +4,12 @@
 use async_graphql::SimpleObject;
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
 
-use crate::api::{
-    scalars::{big_int::BigInt, sui_address::SuiAddress},
-    types::validator::Validator,
+use crate::{
+    api::{
+        scalars::{big_int::BigInt, sui_address::SuiAddress},
+        types::validator::Validator,
+    },
+    scope::Scope,
 };
 
 /// Representation of `0x3::validator_set::ValidatorSet`.
@@ -50,15 +53,15 @@ pub(crate) struct ValidatorSet {
     pub validator_candidates_size: Option<u64>,
 }
 
-impl From<ValidatorSetV1> for ValidatorSet {
-    fn from(value: ValidatorSetV1) -> Self {
-        ValidatorSet {
+impl ValidatorSet {
+    pub(crate) fn from_validator_set_v1(scope: Scope, value: ValidatorSetV1) -> Self {
+        Self {
             total_stake: Some(BigInt::from(value.total_stake)),
             active_validators: Some(
                 value
                     .active_validators
                     .iter()
-                    .map(|v| v.clone().into())
+                    .map(|v| Validator::from_validator_v1(scope.clone(), v.clone()))
                     // todo (ewall)
                     // remove this and add pagination
                     .take(1)

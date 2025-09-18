@@ -1,15 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Object, SimpleObject};
+use async_graphql::{connection::Connection, Context, Object, SimpleObject};
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorV1;
 
-use crate::api::scalars::{
-    base64::Base64, big_int::BigInt, sui_address::SuiAddress, uint53::UInt53,
+use crate::{
+    api::{
+        scalars::{
+            base64::Base64, big_int::BigInt, sui_address::SuiAddress, type_filter::TypeInput,
+            uint53::UInt53,
+        },
+        types::{
+            address::Address,
+            balance,
+            balance::Balance,
+            move_object::MoveObject,
+            object::{CLive, Error},
+            object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
+        },
+    },
+    error::RpcError,
+    scope::Scope,
 };
 
 #[derive(Clone, Debug)]
 pub(crate) struct Validator {
+    super_: Address,
     native: ValidatorV1,
 }
 
@@ -26,12 +42,69 @@ pub(crate) struct ValidatorCredentials {
     pub worker_address: Option<String>,
 }
 
-// todo (ewall) implement IAddressable
 #[Object]
 impl Validator {
     /// The validator's address.
-    async fn address(&self) -> SuiAddress {
-        self.native.metadata.sui_address.into()
+    pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
+        self.super_.address(ctx).await
+    }
+
+    /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+    ///
+    /// If the address does not own any coins of that type, a balance of zero is returned.
+    pub(crate) async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: TypeInput,
+    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
+        self.super_.balance(ctx, coin_type).await
+    }
+
+    /// Total balance across coins owned by this address, grouped by coin type.
+    pub(crate) async fn balances(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<balance::Cursor>,
+        last: Option<u64>,
+        before: Option<balance::Cursor>,
+    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
+        self.super_.balances(ctx, first, after, last, before).await
+    }
+
+    /// The domain explicitly configured as the default SuiNS name for this address.
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<String>, RpcError> {
+        self.super_.default_suins_name(ctx).await
+    }
+
+    /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+    /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
+    pub(crate) async fn multi_get_balances(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<TypeInput>,
+    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
+        self.super_.multi_get_balances(ctx, keys).await
+    }
+
+    /// Objects owned by this object, optionally filtered by type.
+    pub(crate) async fn objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CLive>,
+        last: Option<u64>,
+        before: Option<CLive>,
+        #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
+    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<Error>> {
+        self.super_
+            .objects(ctx, first, after, last, before, filter)
+            .await
     }
 
     /// Validator's set of credentials such as public keys, network addresses and others.
@@ -241,8 +314,11 @@ impl Validator {
     // }
 }
 
-impl From<ValidatorV1> for Validator {
-    fn from(native: ValidatorV1) -> Self {
-        Self { native }
+impl Validator {
+    pub(crate) fn from_validator_v1(scope: Scope, native: ValidatorV1) -> Self {
+        Self {
+            super_: Address::with_address(scope, native.metadata.sui_address),
+            native,
+        }
     }
 }
