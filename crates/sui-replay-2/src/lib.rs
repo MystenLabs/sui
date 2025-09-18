@@ -122,7 +122,7 @@ impl Default for ReplayConfigStableInternal {
             terminate_early: false,
             trace: false,
             output_dir: None,
-            show_effects: false,
+            show_effects: true,
             overwrite: false,
         }
     }
