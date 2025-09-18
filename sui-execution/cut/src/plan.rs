@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use toml::value::Value;
-use toml_edit::{self, Document, Item};
+use toml_edit::{self, DocumentMut, Item};
 
 use crate::args::Args;
 use crate::path::{deep_copy, normalize_path, path_relative_to, shortest_new_prefix};
@@ -310,7 +310,7 @@ impl CutPlan {
     /// up-to-date information).
     fn update_package(&self, package: &CutPackage) -> Result<()> {
         let path = package.dst_path.join("Cargo.toml");
-        let mut toml = fs::read_to_string(&path)?.parse::<Document>()?;
+        let mut toml = fs::read_to_string(&path)?.parse::<DocumentMut>()?;
 
         // Update the package name
         toml["package"]["name"] = toml_edit::value(&package.dst_name);
@@ -408,7 +408,7 @@ impl CutPlan {
             bail!(Error::NoWorkspace(path));
         }
 
-        let mut toml = fs::read_to_string(&path)?.parse::<Document>()?;
+        let mut toml = fs::read_to_string(&path)?.parse::<DocumentMut>()?;
         for package in self.packages.values() {
             match package.ws_state {
                 WorkspaceState::Unknown => {
