@@ -411,12 +411,23 @@ pub struct RawSubmitTxRequest {
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub transactions: Vec<Bytes>,
 
+    /// The type of submission.
+    #[prost(enumeration = "SubmitTxType", tag = "2")]
+    pub submit_type: i32,
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, prost::Enumeration)]
+#[repr(i32)]
+pub enum SubmitTxType {
+    /// Default submission, submitting one or more transactions.
+    /// When there are multiple transactions, allow the transactions to be included separately
+    /// and out of order in blocks (batch).
+    Default = 0,
+    /// Ping request to measure latency, no transactions.
+    Ping = 1,
     /// When submitting multiple transactions, attempt to include them in
-    /// the same block with the same order (soft bundle), if true.
-    /// Otherwise, allow the transactions to be included separately and
-    /// out of order in blocks (batch).
-    #[prost(bool, tag = "2")]
-    pub soft_bundle: bool,
+    /// the same block with the same order (soft bundle).
+    SoftBundle = 2,
 }
 
 #[derive(Clone, prost::Message)]
@@ -449,18 +460,13 @@ pub enum RawValidatorSubmitStatus {
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, prost::Enumeration)]
 #[repr(i32)]
-pub enum RawPingType {
-    FastPath = 0,
-    Consensus = 1,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PingType {
-    // Testing the time that it takes for the block of the ping transaction to appear as certified via the FastPath.
-    FastPath,
-    // Testing the time that it takes for the block of the ping transaction to appear as certified via the Consensus.
-    // This is useful when want to test the end to end latency from when a block is proposed up to when it comes out of consensus as certified.
-    Consensus,
+    /// Measures the end to end latency from when a transaction is included by a proposed block,
+    /// to when the block is committed by consensus.
+    Consensus = 0,
+    /// Measures the end to end latency from when a transaction is included by a proposed block,
+    /// to when the block is certified.
+    FastPath = 1,
 }
 
 impl PingType {
@@ -549,7 +555,7 @@ pub struct RawWaitForEffectsRequest {
     pub include_details: bool,
 
     /// Set when this is a ping request, to differentiate between fastpath and consensus pings.
-    #[prost(enumeration = "RawPingType", optional, tag = "4")]
+    #[prost(enumeration = "PingType", optional, tag = "4")]
     pub ping_type: Option<i32>,
 }
 
@@ -640,24 +646,6 @@ pub struct RawValidatorHealthResponse {
 }
 
 // =========== Parse helpers ===========
-
-impl From<RawPingType> for PingType {
-    fn from(value: RawPingType) -> Self {
-        match value {
-            RawPingType::FastPath => PingType::FastPath,
-            RawPingType::Consensus => PingType::Consensus,
-        }
-    }
-}
-
-impl From<PingType> for RawPingType {
-    fn from(value: PingType) -> Self {
-        match value {
-            PingType::FastPath => RawPingType::FastPath,
-            PingType::Consensus => RawPingType::Consensus,
-        }
-    }
-}
 
 impl TryFrom<ExecutedData> for RawExecutedData {
     type Error = crate::error::SuiError;
@@ -942,11 +930,9 @@ impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
         let ping = value
             .ping_type
             .map(|p| {
-                RawPingType::try_from(p).map(PingType::from).map_err(|e| {
-                    SuiError::GrpcMessageDeserializeError {
-                        type_info: "RawWaitForEffectsRequest.ping".to_string(),
-                        error: e.to_string(),
-                    }
+                PingType::try_from(p).map_err(|e| SuiError::GrpcMessageDeserializeError {
+                    type_info: "RawWaitForEffectsRequest.ping".to_string(),
+                    error: e.to_string(),
                 })
             })
             .transpose()?;
@@ -978,10 +964,7 @@ impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
             Some(cp) => Some(cp.into_raw()?),
             None => None,
         };
-        let ping_type = value.ping.map(|p| {
-            let raw: RawPingType = p.into();
-            raw.into()
-        });
+        let ping_type = value.ping.map(|p| p.into());
         Ok(Self {
             consensus_position,
             transaction_digest,

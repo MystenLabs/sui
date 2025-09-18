@@ -173,7 +173,7 @@ mod tests {
         let Err(error) = retrier.next_target() else {
             panic!("Expected an error");
         };
-        assert!(error.is_local_retriable());
+        assert!(error.is_submission_retriable());
     }
 
     #[tokio::test]
@@ -302,7 +302,7 @@ mod tests {
                 )
                 .unwrap_err();
             // The aggregated error is non-retriable.
-            assert!(!aggregated_error.is_local_retriable());
+            assert!(!aggregated_error.is_submission_retriable());
         }
     }
 }

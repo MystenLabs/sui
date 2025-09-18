@@ -105,7 +105,7 @@ pub enum TransactionDriverError {
 }
 
 impl TransactionDriverError {
-    pub fn is_local_retriable(&self) -> bool {
+    pub(crate) fn is_submission_retriable(&self) -> bool {
         self.categorize().is_submission_retriable()
     }
 

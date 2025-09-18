@@ -281,7 +281,7 @@ where
                         return Ok(resp);
                     }
                     Err(e) => {
-                        if !e.is_local_retriable() {
+                        if !e.is_submission_retriable() {
                             // Record the number of retries for failed transaction
                             self.metrics
                                 .transaction_retries
@@ -355,7 +355,9 @@ where
             )
             .await?;
         if let SubmitTxResult::Rejected { error } = &submit_txn_result {
-            panic!("SubmitTxResult should not be rejected: {}", error);
+            return Err(TransactionDriverError::ClientInternal {
+                error: format!("SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}", error),
+            });
         }
 
         // Wait for quorum effects using EffectsCertifier
