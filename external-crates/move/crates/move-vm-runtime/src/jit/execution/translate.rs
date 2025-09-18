@@ -884,8 +884,8 @@ fn functions(
             code: opt_code,
         } = opt_fun;
         if let Some(opt_code) = opt_code {
-            let jump_table_ptrs = fun.jump_tables.to_ptrs();
-            fun.code = code(&mut module_context, &jump_table_ptrs, opt_code.code)?;
+            let mut jump_table_ptrs = fun.jump_tables.to_ptrs();
+            fun.code = code(&mut module_context, &mut jump_table_ptrs, opt_code.code)?;
         }
     }
 
@@ -1003,10 +1003,10 @@ fn alloc_function(
 // [ALLOC] Bytecode result is allocated in the arena
 fn code(
     context: &mut FunctionContext,
-    jump_tables: &[VMPointer<VariantJumpTable>],
+    jump_tables: &mut [VMPointer<VariantJumpTable>],
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
 ) -> PartialVMResult<ArenaVec<Bytecode>> {
-    let function_bytecode = flatten_and_renumber_blocks(blocks);
+    let function_bytecode = flatten_and_renumber_blocks(blocks, jump_tables);
     let result = context.package_context.package_arena.alloc_vec(
         function_bytecode
             .into_iter()
@@ -1019,6 +1019,7 @@ fn code(
 
 fn flatten_and_renumber_blocks(
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
+    jump_tables: &mut [VMPointer<VariantJumpTable>],
 ) -> Vec<input::Bytecode> {
     dbg_println!("Input: {:#?}", blocks);
     let mut offset_map = BTreeMap::new(); // Map line name (u16) -> new bytecode offset
@@ -1033,6 +1034,17 @@ fn flatten_and_renumber_blocks(
     }
     dbg_println!("Concatenated: {:#?}", concatenated);
 
+    // Update the jump tables to match the new layout
+    for jump_table in jump_tables {
+        let jump_table_mut = jump_table.to_mut_ref();
+        // Update each CodeOffset in the jump table to use the new offsets
+        for code_offset in jump_table_mut.iter_mut() {
+            if let Some(&new_offset) = offset_map.get(code_offset) {
+                *code_offset = new_offset;
+            }
+        }
+    }
+
     // Rewrite branch instructions with new offsets
     concatenated
         .into_iter()
@@ -1045,6 +1057,11 @@ fn flatten_and_renumber_blocks(
             }
             input::Bytecode::Branch(target) => {
                 input::Bytecode::Branch(*offset_map.get(&target).expect("Invalid branch target"))
+            }
+            input::Bytecode::VariantSwitch(table_ndx) => {
+                // VariantSwitch bytecode doesn't need target adjustment here since the
+                // jump table itself has already been updated above
+                input::Bytecode::VariantSwitch(table_ndx)
             }
             other => other,
         })
