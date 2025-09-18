@@ -823,26 +823,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.process_execution_time_observations(&mut state, execution_time_observations);
         self.process_checkpoint_signature_messages(checkpoint_signature_messages);
 
-        let randomness_dkg_updates = self.process_randomness_dkg_messages(
+        self.process_dkg_updates(
+            &mut state,
+            &commit_info,
             randomness_manager.as_deref_mut(),
             randomness_dkg_messages,
-        );
-
-        let randomness_dkg_confirmation_updates = self.process_randomness_dkg_confirmations(
-            &mut state,
-            randomness_manager.as_deref_mut(),
             randomness_dkg_confirmations,
-        );
-
-        // DONE(commit-handler-rewrite): [ssm] advance randomness state if needed
-        if randomness_dkg_updates || randomness_dkg_confirmation_updates {
-            if let Some(randomness_manager) = randomness_manager.as_mut() {
-                randomness_manager
-                    .advance_dkg(&mut state.output, commit_info.round)
-                    .await
-                    .expect("epoch ended");
-            }
-        }
+        )
+        .await;
 
         let mut execution_time_estimator = self
             .epoch_store
@@ -1634,24 +1622,51 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
     }
 
+    async fn process_dkg_updates(
+        &self,
+        state: &mut CommitHandlerState,
+        commit_info: &ConsensusCommitInfo,
+        randomness_manager: Option<&mut RandomnessManager>,
+        randomness_dkg_messages: Vec<(AuthorityName, Vec<u8>)>,
+        randomness_dkg_confirmations: Vec<(AuthorityName, Vec<u8>)>,
+    ) {
+        if !self.epoch_store.randomness_state_enabled() {
+            debug_fatal!(
+                "received {} RandomnessDkgConfirmation messages when randomness is not enabled",
+                randomness_dkg_confirmations.len()
+            );
+            return;
+        }
+
+        let randomness_manager =
+            randomness_manager.expect("randomness manager should exist if randomness is enabled");
+
+        let randomness_dkg_updates =
+            self.process_randomness_dkg_messages(randomness_manager, randomness_dkg_messages);
+
+        let randomness_dkg_confirmation_updates = self.process_randomness_dkg_confirmations(
+            state,
+            randomness_manager,
+            randomness_dkg_confirmations,
+        );
+
+        // DONE(commit-handler-rewrite): [ssm] advance randomness state if needed
+        if randomness_dkg_updates || randomness_dkg_confirmation_updates {
+            randomness_manager
+                .advance_dkg(&mut state.output, commit_info.round)
+                .await
+                .expect("epoch ended");
+        }
+    }
+
     fn process_randomness_dkg_messages(
         &self,
-        randomness_manager: Option<&mut RandomnessManager>,
+        randomness_manager: &mut RandomnessManager,
         randomness_dkg_messages: Vec<(AuthorityName, Vec<u8>)>,
     ) -> bool /* randomness state updated */ {
         if randomness_dkg_messages.is_empty() {
             return false;
         }
-        if !self.epoch_store.randomness_state_enabled() {
-            debug_fatal!(
-                "received {} RandomnessDkgMessage messages when randomness is not enabled",
-                randomness_dkg_messages.len()
-            );
-            return false;
-        }
-
-        let randomness_manager =
-            randomness_manager.expect("randomness manager should exist if randomness is enabled");
 
         // DONE(commit-handler-rewrite): [ssm] process dkg message
         let mut randomness_state_updated = false;
@@ -1680,22 +1695,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     fn process_randomness_dkg_confirmations(
         &self,
         state: &mut CommitHandlerState,
-        randomness_manager: Option<&mut RandomnessManager>,
+        randomness_manager: &mut RandomnessManager,
         randomness_dkg_confirmations: Vec<(AuthorityName, Vec<u8>)>,
     ) -> bool /* randomness state updated */ {
         if randomness_dkg_confirmations.is_empty() {
             return false;
         }
-        if !self.epoch_store.randomness_state_enabled() {
-            debug_fatal!(
-                "received {} RandomnessDkgConfirmation messages when randomness is not enabled",
-                randomness_dkg_confirmations.len()
-            );
-            return false;
-        }
-
-        let randomness_manager =
-            randomness_manager.expect("randomness manager should exist if randomness is enabled");
 
         // DONE(commit-handler-rewrite): [ssm] process dkg confirmation
         let mut randomness_state_updated = false;
