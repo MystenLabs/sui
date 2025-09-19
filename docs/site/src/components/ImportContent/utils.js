@@ -319,7 +319,6 @@ exports.returnStructs = (source, structList, language) => {
           return "Struct not found. If code is formatted correctly, consider using code comments instead.";
         }
 
-        // Use your existing balanced-brace helper
         const block = captureBalanced(sub.slice(bracePos));
         if (!block) {
           return "Struct not found. If code is formatted correctly, consider using code comments instead.";
