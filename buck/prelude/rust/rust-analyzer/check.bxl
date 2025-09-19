@@ -1,0 +1,38 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under both the MIT license found in the
+# LICENSE-MIT file in the root directory of this source tree and the Apache
+# License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+# of this source tree.
+
+def check_targets_impl(ctx):
+    target_universe = ctx.uquery().owner(ctx.cli_args.file)
+    owners = ctx.cquery().owner(ctx.cli_args.file, target_universe)
+    nodes = ctx.cquery().kind("^(rust_binary|rust_library|rust_test)$", owners)
+
+    if len(nodes) == 0:
+        return
+
+    diag_kind = "clippy.json" if ctx.cli_args.use_clippy else "diag.json"
+    build_result = ctx.build([
+        node.label.with_sub_target(diag_kind)
+        for node in nodes
+    ])
+
+    dict_output = ctx.output.ensure_multiple(build_result)
+
+    out = [
+        artifacts[0].abs_path()
+        for artifacts in dict_output.values()
+        if len(artifacts) == 1
+    ]
+
+    ctx.output.print_json(out)
+
+check = bxl_main(
+    impl = check_targets_impl,
+    cli_args = {
+        "file": cli_args.string(),
+        "use-clippy": cli_args.bool(),
+    },
+)

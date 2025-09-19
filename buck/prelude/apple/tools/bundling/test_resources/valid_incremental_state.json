@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "source": "repo/foo.txt",
+      "destination_relative_to_bundle": "foo.txt",
+      "digest": "foo_digest"
+    },
+    {
+      "source": "buck-out/bar.txt",
+      "destination_relative_to_bundle": "Resources/bar.txt",
+      "digest": "bar_digest"
+    },
+    {
+      "source": "buck-out/bar",
+      "destination_relative_to_bundle": "Resources/bar",
+      "resolved_symlink": "bar.txt"
+    }
+  ],
+  "codesign_configuration": null,
+  "codesigned": true,
+  "codesign_on_copy_paths": [
+    "Resources/bar.txt"
+  ],
+  "codesign_identity": "Johny Appleseed",
+  "swift_stdlib_paths": [
+    "Frameworks/libswiftCore.dylib"
+  ],
+  "version": 3
+}

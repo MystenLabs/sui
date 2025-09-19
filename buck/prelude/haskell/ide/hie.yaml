@@ -1,0 +1,3 @@
+cradle:
+  bios:
+    shell: buck2 bxl prelude//haskell/ide/ide.bxl --bios true --file $HIE_BIOS_ARG > $HIE_BIOS_OUTPUT
