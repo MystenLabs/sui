@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::Write as IoWrite;
-use std::net::SocketAddr;
-use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 use std::collections::BTreeSet;
 use std::env;
+use std::io::Write as IoWrite;
+use std::net::SocketAddr;
 #[cfg(not(msim))]
 use std::str::FromStr;
+use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
 use fastcrypto::encoding::{Base64, Encoding};
