@@ -115,21 +115,31 @@ impl TransactionDriverError {
             TransactionDriverError::ValidationFailed { .. } => ErrorCategory::InvalidTransaction,
             TransactionDriverError::Aborted {
                 submission_retriable_errors,
+                submission_non_retriable_errors,
                 ..
             } => {
                 if let Some((_, _, _, category)) = submission_retriable_errors.errors.first() {
                     *category
+                } else if let Some((_, _, _, category)) =
+                    submission_non_retriable_errors.errors.first()
+                {
+                    *category
                 } else {
-                    ErrorCategory::Internal
+                    ErrorCategory::Aborted
                 }
             }
             TransactionDriverError::RejectedByValidators {
                 submission_non_retriable_errors,
+                submission_retriable_errors,
                 ..
             } => {
                 if let Some((_, _, _, category)) = submission_non_retriable_errors.errors.first() {
                     *category
+                } else if let Some((_, _, _, category)) = submission_retriable_errors.errors.first()
+                {
+                    *category
                 } else {
+                    // There should be at least one error.
                     ErrorCategory::Internal
                 }
             }

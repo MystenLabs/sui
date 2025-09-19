@@ -26,7 +26,7 @@ use rand::Rng;
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
-    error::UserInputError,
+    error::{ErrorCategory, UserInputError},
     messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
     transaction::TransactionDataAPI as _,
 };
@@ -300,7 +300,19 @@ where
                     }
                 }
 
-                sleep(backoff.next().unwrap_or(MAX_RETRY_DELAY)).await;
+                let overload = if let Some(e) = &latest_retriable_error {
+                    e.categorize() == ErrorCategory::ValidatorOverloaded
+                } else {
+                    false
+                };
+                let delay = if overload {
+                    // Increase delay during overload.
+                    backoff.next().unwrap_or(MAX_RETRY_DELAY) + MAX_RETRY_DELAY
+                } else {
+                    backoff.next().unwrap_or(MAX_RETRY_DELAY)
+                };
+                sleep(delay).await;
+
                 attempts += 1;
             }
         };
