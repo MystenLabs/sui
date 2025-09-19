@@ -917,10 +917,11 @@ fn function_bodies(
         definitions,
     };
 
-    let mut optimized_fns = optimized_fns.clone();
+    // Track which functions have been processed to avoid cloning the entire optimized_fns map
+    let mut remaining_optimized_indices: std::collections::HashSet<_> = optimized_fns.keys().copied().collect();
 
     for fun in functions.iter_mut() {
-        let Some(opt_fun) = optimized_fns.remove(&fun.index) else {
+        let Some(opt_fun) = optimized_fns.get(&fun.index) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                     format!(
@@ -933,14 +934,26 @@ fn function_bodies(
                 ),
             );
         };
-        let input::Function {
-            ndx: _,
-            code: opt_code,
-        } = opt_fun;
-        if let Some(opt_code) = opt_code {
+        remaining_optimized_indices.remove(&fun.index);
+
+        if let Some(opt_code) = &opt_fun.code {
             let mut jump_table_ptrs = fun.jump_tables.to_ptrs();
-            fun.code = code(&mut module_context, &mut jump_table_ptrs, opt_code.code)?;
+            fun.code = code(&mut module_context, &mut jump_table_ptrs, opt_code.code.clone())?;
         }
+    }
+
+    // Validate that all optimized functions were consumed
+    if !remaining_optimized_indices.is_empty() {
+        let unmatched_functions: Vec<_> = remaining_optimized_indices.iter().collect();
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                format!(
+                    "optimized function list contains {} unmatched functions: {:?}",
+                    unmatched_functions.len(),
+                    unmatched_functions
+                ),
+            ),
+        );
     }
 
     let FunctionContext { .. } = module_context;
