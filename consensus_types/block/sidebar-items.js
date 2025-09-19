@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NUM_RESERVED_TRANSACTION_INDICES","PING_TRANSACTION_INDEX"],"struct":["BlockDigest","BlockRef"],"type":["BlockTimestampMs","Round","TransactionIndex"]};

@@ -1,0 +1,95 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Configuration for the Validator Client Monitor"><title>sui_config::validator_client_monitor_config - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.1 (4eb161250 2025-03-15)" data-channel="1.85.1" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sui_config/index.html">sui_<wbr>config</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module validator_<wbr>client_<wbr>monitor_<wbr>config</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#tuning-guide" title="Tuning Guide">Tuning Guide</a><ul><li><a href="#monitoring-metrics" title="Monitoring Metrics">Monitoring Metrics</a></li><li><a href="#configuration-parameters" title="Configuration Parameters">Configuration Parameters</a></li></ul></li><li><a href="#example-configurations" title="Example Configurations">Example Configurations</a><ul><li><a href="#low-latency-priority" title="Low Latency Priority">Low Latency Priority</a></li><li><a href="#high-reliability-priority" title="High Reliability Priority">High Reliability Priority</a></li></ul></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sui_<wbr>config</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../index.html">sui_config</a></span><h1>Module <span>validator_client_monitor_config</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sui_config/validator_client_monitor_config.rs.html#4-256">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Configuration for the Validator Client Monitor</p>
+<p>The Validator Client Monitor tracks client-observed performance metrics for validators
+in the Sui network. It runs from the perspective of a fullnode and monitors:</p>
+<ul>
+<li>Transaction submission latency</li>
+<li>Effects retrieval latency</li>
+<li>Health check response times</li>
+<li>Success/failure rates</li>
+</ul>
+<h2 id="tuning-guide"><a class="doc-anchor" href="#tuning-guide">§</a>Tuning Guide</h2><h3 id="monitoring-metrics"><a class="doc-anchor" href="#monitoring-metrics">§</a>Monitoring Metrics</h3>
+<p>The following Prometheus metrics can help tune the configuration:</p>
+<ul>
+<li><code>validator_client_observed_latency</code> - Histogram of operation latencies per validator</li>
+<li><code>validator_client_operation_success_total</code> - Counter of successful operations</li>
+<li><code>validator_client_operation_failure_total</code> - Counter of failed operations</li>
+<li><code>validator_client_observed_score</code> - Current score for each validator (0-1)</li>
+<li><code>validator_client_consecutive_failures</code> - Current consecutive failure count</li>
+<li><code>validator_client_selections_total</code> - How often each validator is selected</li>
+</ul>
+<h3 id="configuration-parameters"><a class="doc-anchor" href="#configuration-parameters">§</a>Configuration Parameters</h3><h4 id="health-check-settings"><a class="doc-anchor" href="#health-check-settings">§</a>Health Check Settings</h4>
+<ul>
+<li>
+<p><code>health_check_interval</code>: How often to probe validator health</p>
+<ul>
+<li>Default: 10s</li>
+<li>Decrease for more responsive failure detection (higher overhead)</li>
+<li>Increase to reduce network traffic</li>
+<li>Monitor <code>validator_client_operation_success_total{operation="health_check"}</code> to see probe frequency</li>
+</ul>
+</li>
+<li>
+<p><code>health_check_timeout</code>: Maximum time to wait for health check response</p>
+<ul>
+<li>Default: 2s</li>
+<li>Should be less than <code>health_check_interval</code></li>
+<li>Set based on p99 of <code>validator_client_observed_latency{operation="health_check"}</code></li>
+</ul>
+</li>
+</ul>
+<h4 id="failure-handling"><a class="doc-anchor" href="#failure-handling">§</a>Failure Handling</h4>
+<ul>
+<li>
+<p><code>max_consecutive_failures</code>: Failures before temporary exclusion</p>
+<ul>
+<li>Default: 5</li>
+<li>Lower values = faster exclusion of problematic validators</li>
+<li>Higher values = more tolerance for transient issues</li>
+<li>Monitor <code>validator_client_consecutive_failures</code> to see failure patterns</li>
+</ul>
+</li>
+<li>
+<p><code>failure_cooldown</code>: How long to exclude failed validators</p>
+<ul>
+<li>Default: 30s</li>
+<li>Should be several times the <code>health_check_interval</code></li>
+<li>Too short = thrashing between exclusion/inclusion</li>
+<li>Too long = reduced validator pool during transient issues</li>
+</ul>
+</li>
+</ul>
+<h4 id="score-weights"><a class="doc-anchor" href="#score-weights">§</a>Score Weights</h4>
+<p>Scores combine reliability and latency metrics. Adjust weights based on priorities:</p>
+<ul>
+<li>
+<p><code>reliability</code>: Weight for success rate (0-1)</p>
+<ul>
+<li>Default: 0.6</li>
+<li>Increase if consistency is critical</li>
+<li>Decrease if latency is more important than occasional failures</li>
+</ul>
+</li>
+<li>
+<p><code>latency</code>: Weight for latency scores</p>
+<ul>
+<li>Default: 0.4</li>
+<li>Increase for latency-sensitive applications</li>
+<li>Individual operation weights can be tuned separately</li>
+</ul>
+</li>
+</ul>
+<h2 id="example-configurations"><a class="doc-anchor" href="#example-configurations">§</a>Example Configurations</h2><h3 id="low-latency-priority"><a class="doc-anchor" href="#low-latency-priority">§</a>Low Latency Priority</h3><div class="example-wrap"><pre class="language-yaml"><code>validator-client-monitor-config:
+  health-check-interval: 5s
+  health-check-timeout: 1s
+  max-consecutive-failures: 3
+  failure-cooldown: 20s
+  score-weights:
+    latency: 0.7
+    reliability: 0.3
+    effects-latency-weight: 0.6  # Effects queries are critical</code></pre></div><h3 id="high-reliability-priority"><a class="doc-anchor" href="#high-reliability-priority">§</a>High Reliability Priority</h3><div class="example-wrap"><pre class="language-yaml"><code>validator-client-monitor-config:
+  health-check-interval: 15s
+  max-consecutive-failures: 10  # Very tolerant
+  failure-cooldown: 60s
+  score-weights:
+    latency: 0.2
+    reliability: 0.8</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ScoreWeights.html" title="struct sui_config::validator_client_monitor_config::ScoreWeights">Score<wbr>Weights</a></div><div class="desc docblock-short">Weights for different factors in score calculation</div></li><li><div class="item-name"><a class="struct" href="struct.ValidatorClientMonitorConfig.html" title="struct sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig">Validator<wbr>Client<wbr>Monitor<wbr>Config</a></div><div class="desc docblock-short">Configuration for validator client monitoring from the client perspective</div></li></ul></section></div></main></body></html>

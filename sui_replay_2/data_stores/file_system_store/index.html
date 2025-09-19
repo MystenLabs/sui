@@ -1,0 +1,55 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="File system implementation of the replay interfaces: `TransactionStore`, `EpochStore`, and `ObjectStore`. Data is persisted on disk under a simple, human-inspectable directory layout."><title>sui_replay_2::data_stores::file_system_store - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sui_replay_2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.1 (4eb161250 2025-03-15)" data-channel="1.85.1" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../../static.files/storage-59e33391.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../sui_replay_2/index.html">sui_<wbr>replay_<wbr>2</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module file_<wbr>system_<wbr>store</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#directory-structure" title="Directory Structure">Directory Structure</a></li><li><a href="#file-formats" title="File Formats">File Formats</a></li><li><a href="#version-mapping-files" title="Version Mapping Files">Version Mapping Files</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In sui_<wbr>replay_<wbr>2::<wbr>data_<wbr>stores</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../../index.html">sui_replay_2</a>::<wbr><a href="../index.html">data_stores</a></span><h1>Module <span>file_system_store</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/sui_replay_2/data-stores/file_system_store.rs.html#4-812">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>File system implementation of the replay interfaces: <code>TransactionStore</code>, <code>EpochStore</code>,
+and <code>ObjectStore</code>.
+Data is persisted on disk under a simple, human-inspectable directory layout.</p>
+<h2 id="directory-structure"><a class="doc-anchor" href="#directory-structure">§</a>Directory Structure</h2><div class="example-wrap"><pre class="language-text"><code>~/.replay_data_store/
+  node_mapping.csv              (CSV: &quot;node,chain_id&quot; mappings)
+  &lt;chain_id&gt;/                  
+    transaction/
+      &lt;tx_digest&gt;              (BCS: TransactionFileData)
+    epoch/
+      &lt;epoch_id&gt;               (BCS: EpochFileData)
+    objects/
+      &lt;object_id&gt;/
+        &lt;version&gt;              (BCS: sui_types::object::Object)
+        root_versions          (CSV lines: &quot;&lt;max_version&gt;,&lt;actual_version&gt;&quot;)
+        checkpoint_versions    (CSV lines: &quot;&lt;checkpoint&gt;,&lt;actual_version&gt;&quot;)</code></pre></div>
+<ul>
+<li>The top-level directory is fixed to <code>~/.replay_data_store</code>.</li>
+<li>The <code>node_mapping.csv</code> file maps node types to chain identifiers.</li>
+<li>The next level directory is the chain identifier (e.g., “sui_mainnet”, “sui_testnet”).</li>
+<li>Node types: <code>mainnet</code>, <code>testnet</code>, <code>devnet</code> (not yet available), and custom URLs.</li>
+</ul>
+<h2 id="file-formats"><a class="doc-anchor" href="#file-formats">§</a>File Formats</h2>
+<ul>
+<li>Transaction files in <code>transaction/&lt;tx_digest&gt;</code> store <code>TransactionFileData</code> as BCS, which
+includes the original <code>TransactionData</code>, its <code>TransactionEffects</code>, and the execution
+<code>checkpoint</code>.</li>
+<li>Epoch files in <code>epoch/&lt;epoch_id&gt;</code> store <code>EpochFileData</code> as BCS, capturing epoch metadata.</li>
+<li>Object files in <code>objects/&lt;object_id&gt;/&lt;version&gt;</code> store the <code>Object</code> at the corresponding
+version as BCS.</li>
+</ul>
+<h2 id="version-mapping-files"><a class="doc-anchor" href="#version-mapping-files">§</a>Version Mapping Files</h2>
+<p>The <code>root_versions</code> and <code>checkpoint_versions</code> files provide stable lookups for queries
+that are not targeted to a specific version. Each line is a comma-separated pair and the
+files can be edited manually or updated by this store:</p>
+<ul>
+<li>
+<p><code>root_versions</code>: maps a root version bound to the actual stored version.</p>
+<ul>
+<li>line format: <code>&lt;max_version&gt;,&lt;actual_version&gt;</code></li>
+<li>example: <code>4,3</code> means the highest version not exceeding 4 is 3</li>
+</ul>
+</li>
+<li>
+<p><code>checkpoint_versions</code>: maps a checkpoint to the actual stored version for the object
+at that point.</p>
+<ul>
+<li>line format: <code>&lt;checkpoint&gt;,&lt;actual_version&gt;</code></li>
+<li>example: <code>100,1</code> means at checkpoint 100 the object version is 1</li>
+</ul>
+</li>
+</ul>
+<p>These mapping files allow answering <code>VersionQuery::RootVersion(_)</code> and
+<code>VersionQuery::AtCheckpoint(_)</code> without requiring a full index; the store writes them as
+it learns the concrete versions.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.FileSystemStore.html" title="struct sui_replay_2::data_stores::file_system_store::FileSystemStore">File<wbr>System<wbr>Store</a></div><div class="desc docblock-short">File system implementation of the replay interfaces</div></li></ul></section></div></main></body></html>

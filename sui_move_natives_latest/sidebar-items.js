@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["all_natives","get_nested_struct_field","get_nth_struct_field","get_object_id","get_receiver_object_id","make_stdlib_gas_params_for_protocol_config"],"macro":["charge_cache_or_load_gas","get_extension","get_extension_mut","make_native"],"mod":["object_runtime","test_scenario","transaction_context"],"struct":["NativesCostTable"]};

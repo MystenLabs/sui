@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["certified_checkpoint","checkpoint_contents","sequence_number","star"]};
