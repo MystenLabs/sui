@@ -427,7 +427,8 @@ impl ExecutionScheduler {
         let mut tx_with_withdraws = Vec::new();
         let mut settlement_txns = Vec::new();
 
-        for (schedulable, env) in certs {
+        let mut settlement_count = 0;
+        for (schedulable, mut env) in certs {
             match schedulable {
                 Schedulable::Transaction(tx) => {
                     // Check if this transaction has withdraws based on the assigned versions
@@ -444,6 +445,12 @@ impl ExecutionScheduler {
                     tx_with_keys.push((s.key(), env));
                 }
                 Schedulable::AccumulatorSettlement(_, _) => {
+                    settlement_count += 1;
+                    settlement_txns.push((schedulable.key(), env));
+                }
+                Schedulable::AccumulatorSettlementBarrier(_, _) => {
+                    env.barrier_count = settlement_count;
+                    settlement_count = 0;
                     settlement_txns.push((schedulable.key(), env));
                 }
             }

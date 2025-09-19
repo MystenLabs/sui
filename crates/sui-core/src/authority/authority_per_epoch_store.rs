@@ -3015,6 +3015,7 @@ impl AuthorityPerEpochStore {
                 }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
                 Schedulable::AccumulatorSettlement(_, _) => None,
+                Schedulable::AccumulatorSettlementBarrier(_, _) => None,
             })
             .collect();
 

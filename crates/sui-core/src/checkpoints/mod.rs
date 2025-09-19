@@ -1499,6 +1499,7 @@ impl CheckpointBuilder {
         };
 
         for fx in settlement_effects.iter() {
+            dbg!("settlement transaction effects", fx);
             assert!(
                 fx.status().is_ok(),
                 "settlement transaction cannot fail (digest: {:?}) {:#?}",

@@ -180,6 +180,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
+            dbg!("mutate_input_object", object.id());
             self.mutate_input_object(object.clone());
         }
     }

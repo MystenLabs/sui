@@ -3443,7 +3443,7 @@ impl ObjectReadResult {
             (InputObjectKind::SharedMoveObject { mutability, .. }, _) => match mutability {
                 SharedObjectMutability::Mutable => true,
                 SharedObjectMutability::Immutable => false,
-                SharedObjectMutability::NonExclusiveWrite => todo!(),
+                SharedObjectMutability::NonExclusiveWrite => false,
             },
         }
     }
@@ -3696,7 +3696,7 @@ impl InputObjects {
                             Some((oref.0, ((oref.1, oref.2), object.owner.clone())))
                         }
                         SharedObjectMutability::Immutable => None,
-                        SharedObjectMutability::NonExclusiveWrite => todo!(),
+                        SharedObjectMutability::NonExclusiveWrite => None,
                     },
                     (
                         InputObjectKind::ImmOrOwnedMoveObject(_),
@@ -3864,6 +3864,7 @@ pub enum TransactionKey {
     Digest(TransactionDigest),
     RandomnessRound(EpochId, RandomnessRound),
     AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
+    AccumulatorSettlementBarrier(EpochId, u64 /* checkpoint height */),
 }
 
 impl TransactionKey {
