@@ -595,9 +595,9 @@ where
         let transaction = &request.transaction;
         let tx_digest = *transaction.digest();
         let tx_type = if transaction.is_consensus_tx() {
-            TxType::SingleWriter
-        } else {
             TxType::SharedObject
+        } else {
+            TxType::SingleWriter
         };
 
         let timer = Instant::now();
