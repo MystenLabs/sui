@@ -15,8 +15,9 @@ mod checked {
         },
         execution_mode::ExecutionMode,
         execution_value::{
-            CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents,
-            ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue, UsageKind, Value,
+            CommandKind, ExecutionState, InputObjectMetadata, InputValue, Mutability,
+            ObjectContents, ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue,
+            UsageKind, Value,
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
@@ -183,7 +184,7 @@ mod checked {
                     &mut linkage_view,
                     &[],
                     &mut input_object_map,
-                    /* imm override */ false,
+                    /* mutability override */ None,
                     gas_coin,
                 )?;
                 // subtract the max gas budget. This amount is off limits in the programmable transaction,
@@ -511,7 +512,7 @@ mod checked {
             if matches!(
                 input_metadata_opt,
                 Some(InputObjectMetadata::InputObject {
-                    is_mutable_input: false,
+                    mutability: Mutability::Immutable | Mutability::NonExclusiveWrite,
                     ..
                 })
             ) {
@@ -564,7 +565,7 @@ mod checked {
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             };
             if let Some(InputObjectMetadata::InputObject {
-                is_mutable_input: false,
+                mutability: Mutability::Immutable,
                 ..
             }) = input_metadata_opt
             {
@@ -816,7 +817,7 @@ mod checked {
                     object_metadata:
                         Some(InputObjectMetadata::InputObject {
                             // We are only interested in mutable inputs.
-                            is_mutable_input: true,
+                            mutability: Mutability::Mutable,
                             id,
                             version,
                             owner,
@@ -834,6 +835,7 @@ mod checked {
                     },
                 );
                 if let Some(Value::Object(object_value)) = value {
+                    dbg!(&id);
                     add_additional_write(&mut additional_writes, owner, object_value)?;
                 } else if owner.is_shared() {
                     by_value_shared_objects.insert(id);
@@ -957,6 +959,7 @@ mod checked {
                     )?
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
+                dbg!(&object);
                 written_objects.insert(id, object);
                 if let Some(loaded) = loaded_runtime_objects.get_mut(&id) {
                     loaded.is_modified = true;
@@ -1014,6 +1017,7 @@ mod checked {
                     )?
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
+                dbg!(&object);
                 written_objects.insert(id, object);
             }
 
@@ -1754,7 +1758,7 @@ mod checked {
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
-        override_as_immutable: bool,
+        mutability_override: Option<Mutability>,
         id: ObjectID,
     ) -> Result<InputValue, ExecutionError> {
         let Some(obj) = state_view.read_object(&id) else {
@@ -1763,17 +1767,19 @@ mod checked {
         };
         // override_as_immutable ==> Owner::Shared or Owner::ConsensusAddressOwner
         assert_invariant!(
-            !override_as_immutable
+            mutability_override.is_none()
                 || matches!(
                     obj.owner,
                     Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. }
                 ),
             "override_as_immutable should only be set for consensus objects"
         );
-        let is_mutable_input = match obj.owner {
-            Owner::AddressOwner(_) => true,
-            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => !override_as_immutable,
-            Owner::Immutable => false,
+        let mutability = match obj.owner {
+            Owner::AddressOwner(_) => Mutability::Mutable,
+            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
+                mutability_override.unwrap_or(Mutability::Mutable)
+            }
+            Owner::Immutable => Mutability::Immutable,
             Owner::ObjectOwner(_) => {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
@@ -1783,7 +1789,7 @@ mod checked {
         let version = obj.version();
         let object_metadata = InputObjectMetadata::InputObject {
             id,
-            is_mutable_input,
+            mutability,
             owner: owner.clone(),
             version,
         };
@@ -1866,27 +1872,14 @@ mod checked {
                 linkage_view,
                 new_packages,
                 input_object_map,
-                /* imm override */ false,
+                /* mutability override */ None,
                 id,
             ),
-            ObjectArg::SharedObject { id, mutable, .. } => load_object(
-                protocol_config,
-                vm,
-                state_view,
-                linkage_view,
-                new_packages,
-                input_object_map,
-                /* imm override */ !mutable,
-                id,
-            ),
-            ObjectArg::SharedObjectV2 { id, mutability, .. } => {
-                let mutable = match mutability {
-                    SharedObjectMutability::Mutable => true,
-                    // From the perspective of the adapter, non-exclusive write are mutable,
-                    // in that the move code will receive a &mut arg. The object itself
-                    // cannot be written to, this is enforced by post execution checks.
-                    SharedObjectMutability::NonExclusiveWrite => true,
-                    SharedObjectMutability::Immutable => false,
+            ObjectArg::SharedObject { id, mutable, .. } => {
+                let mutability = if mutable {
+                    Mutability::Mutable
+                } else {
+                    Mutability::Immutable
                 };
                 load_object(
                     protocol_config,
@@ -1895,7 +1888,27 @@ mod checked {
                     linkage_view,
                     new_packages,
                     input_object_map,
-                    /* imm override */ !mutable,
+                    Some(mutability),
+                    id,
+                )
+            }
+            ObjectArg::SharedObjectV2 { id, mutability, .. } => {
+                let mutability = match mutability {
+                    SharedObjectMutability::Mutable => Mutability::Mutable,
+                    // From the perspective of the adapter, non-exclusive write are mutable,
+                    // in that the move code will receive a &mut arg. The object itself
+                    // cannot be written to, this is enforced by post execution checks.
+                    SharedObjectMutability::NonExclusiveWrite => Mutability::NonExclusiveWrite,
+                    SharedObjectMutability::Immutable => Mutability::Immutable,
+                };
+                load_object(
+                    protocol_config,
+                    vm,
+                    state_view,
+                    linkage_view,
+                    new_packages,
+                    input_object_map,
+                    Some(mutability),
                     id,
                 )
             }

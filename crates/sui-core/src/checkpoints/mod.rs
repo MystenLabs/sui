@@ -1446,6 +1446,10 @@ impl CheckpointBuilder {
 
         let tx_key =
             TransactionKey::AccumulatorSettlement(self.epoch_store.epoch(), checkpoint_height);
+        let barrier_key = TransactionKey::AccumulatorSettlementBarrier(
+            self.epoch_store.epoch(),
+            checkpoint_height,
+        );
 
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.effects_store.as_ref()),
@@ -1454,22 +1458,24 @@ impl CheckpointBuilder {
 
         let settlements = builder.get_balance_settlements();
         let num_updates = builder.num_updates();
-        let settlement_txns = builder.build_tx(&self.epoch_store, checkpoint_height);
+        let (settlement_txns, barrier_tx) = builder.build_tx(&self.epoch_store, checkpoint_height);
 
-        let settlement_txns: Vec<_> = settlement_txns
-            .into_iter()
-            .map(|tx| {
-                VerifiedExecutableTransaction::new_system(
-                    VerifiedTransaction::new_system_transaction(tx),
-                    self.epoch_store.epoch(),
-                )
-            })
-            .collect();
+        let into_vef = |tx| {
+            VerifiedExecutableTransaction::new_system(
+                VerifiedTransaction::new_system_transaction(tx),
+                self.epoch_store.epoch(),
+            )
+        };
+
+        let settlement_txns: Vec<_> = settlement_txns.into_iter().map(into_vef).collect();
+        let barrier_tx = into_vef(barrier_tx);
 
         let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
+        let barrier_digest = barrier_tx.digest();
 
         debug!(
             ?settlement_digests,
+            ?barrier_digest,
             ?tx_key,
             "created settlement transactions with {num_updates} updates"
         );

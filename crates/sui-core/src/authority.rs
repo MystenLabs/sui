@@ -793,9 +793,9 @@ pub struct ExecutionEnv {
     pub scheduling_source: SchedulingSource,
     /// Status of the balance withdraw scheduling of the transaction.
     pub withdraw_status: BalanceWithdrawStatus,
-    /// The number of non-exclusive writes preceding this transaction that must finish
-    /// before this transaction can be executed.
-    pub barrier_count: u32,
+    /// The number of non-exclusive writes (on a per-object basis) preceding this
+    /// transaction that must finish before this transaction can be executed.
+    pub barrier_count: BTreeMap<ObjectID, u32>,
 }
 
 impl Default for ExecutionEnv {
@@ -805,7 +805,7 @@ impl Default for ExecutionEnv {
             expected_effects_digest: None,
             scheduling_source: SchedulingSource::NonFastPath,
             withdraw_status: BalanceWithdrawStatus::NoWithdraw,
-            barrier_count: 0,
+            barrier_count: BTreeMap::new(),
         }
     }
 }

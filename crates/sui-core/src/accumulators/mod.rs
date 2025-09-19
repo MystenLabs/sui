@@ -268,14 +268,18 @@ impl AccumulatorSettlementTxBuilder {
         self,
         epoch_store: &AuthorityPerEpochStore,
         checkpoint_height: u64,
-    ) -> Vec<TransactionKind> {
+    ) -> (
+        Vec<TransactionKind>, /* settlements */
+        TransactionKind,      /* barrier */
+    ) {
         let epoch = epoch_store.epoch();
         let accumulator_root_obj_initial_shared_version = epoch_store
             .epoch_start_config()
             .accumulator_root_obj_initial_shared_version()
             .expect("accumulator root object must exist");
 
-        self.updates
+        let settlements = self
+            .updates
             .into_iter()
             .chunks(2)
             .into_iter()
@@ -329,6 +333,38 @@ impl AccumulatorSettlementTxBuilder {
 
                 TransactionKind::ProgrammableSystemTransaction(builder.finish())
             })
-            .collect()
+            .collect();
+
+        let builder = ProgrammableTransactionBuilder::new();
+        let root = builder
+            .input(CallArg::Object(ObjectArg::SharedObjectV2 {
+                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                initial_shared_version: accumulator_root_obj_initial_shared_version,
+                mutability: SharedObjectMutability::Mutable,
+            }))
+            .unwrap();
+
+        let epoch_arg = builder.pure(epoch).unwrap();
+        let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
+        let idx_arg = builder.pure(settlements.len() as u64).unwrap();
+        let total_input_sui_arg = builder.pure(0u64).unwrap();
+        let total_output_sui_arg = builder.pure(0u64).unwrap();
+
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            ACCUMULATOR_SETTLEMENT_MODULE.into(),
+            ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
+            vec![],
+            vec![
+                epoch_arg,
+                checkpoint_height_arg,
+                idx_arg,
+                total_input_sui_arg,
+                total_output_sui_arg,
+            ],
+        );
+        let barrier = TransactionKind::ProgrammableSystemTransaction(builder.finish());
+
+        (settlements, barrier)
     }
 }
