@@ -14,6 +14,7 @@ use sui::bag::{Self, Bag};
 use sui::balance::{Supply, Balance};
 use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata, Coin};
 use sui::derived_object;
+use sui::dynamic_object_field as dof;
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
 
@@ -207,7 +208,7 @@ public fun new_currency_with_otw<T: drop>(
     assert!(is_ascii_printable!(&symbol), EInvalidSymbol);
 
     let treasury_cap = coin::new_treasury_cap(ctx);
-    let currency = Currency<T> {
+    let mut currency = Currency<T> {
         id: object::new(ctx),
         decimals,
         name,
@@ -220,6 +221,15 @@ public fun new_currency_with_otw<T: drop>(
         metadata_cap_id: MetadataCapState::Unclaimed,
         extra_fields: vec_map::empty(),
     };
+
+    // Create a legacy currency DOF, that'll be destroyed when "finalizing" the claim.
+    // This is to allow RPCs to work on init -- storage gets rebated on finalization (incentivized).
+    // TODO: remove when args on init are introduced.
+    dof::add(
+        &mut currency.id,
+        0,
+        coin::new_legacy_coin_metadata<T>(decimals, symbol, name, description, icon_url, ctx),
+    );
 
     (CurrencyInitializer { currency, is_otw: true, extra_fields: bag::new(ctx) }, treasury_cap)
 }
@@ -331,7 +341,7 @@ public fun finalize_registration<T>(
     // 1. Consume Currency
     // 2. Re-create it with a "derived" address.
     let Currency {
-        id,
+        mut id,
         decimals,
         name,
         symbol,
@@ -343,6 +353,9 @@ public fun finalize_registration<T>(
         metadata_cap_id,
         extra_fields,
     } = transfer::receive(&mut registry.id, currency);
+
+    // delete legacy metadata object
+    dof::remove<_, CoinMetadata<T>>(&mut id, 0).destroy_metadata();
     id.delete();
     // Now, create the derived version of the coin currency.
     transfer::share_object(Currency {

@@ -491,6 +491,28 @@ public(package) fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
     id.delete()
 }
 
+/// Allow creating a legacy `CoinMetadata` object, just to retain backwards compat.
+/// Can be removed after args on init are introduced.
+public(package) fun new_legacy_coin_metadata<T>(
+    decimals: u8,
+    name: string::String,
+    symbol: string::String,
+    description: string::String,
+    icon_url: string::String,
+    ctx: &mut TxContext,
+): CoinMetadata<T> {
+    // Safe as we validate ascii for modern
+    let ascii_symbol = (*symbol.as_bytes()).to_ascii_string();
+    CoinMetadata {
+        id: object::new(ctx),
+        decimals,
+        name,
+        symbol: ascii_symbol,
+        description,
+        icon_url: option::some(url::new_unsafe_from_bytes(*icon_url.as_bytes())),
+    }
+}
+
 public(package) fun deny_cap_id<T>(metadata: &RegulatedCoinMetadata<T>): ID {
     metadata.deny_cap_object
 }
