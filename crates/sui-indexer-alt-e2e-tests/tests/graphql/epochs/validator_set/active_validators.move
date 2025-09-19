@@ -8,7 +8,6 @@
   epoch(epochId: 0) {
     epochId
     validatorSet {
-      # todo (ewall) add more validators to test pagination
       activeValidators {
         pageInfo {
          hasPreviousPage
