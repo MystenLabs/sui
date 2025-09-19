@@ -38,7 +38,7 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     },
     value: sui::accumulator_settlement::EventStreamHead {
         mmr: vector[
-            18303917074361336946698993234536050700134299586949299936328069228041812542634u256,
+            62955904256068828000364933990293687232493522409910932807352058947045862533335u256,
         ],
         checkpoint_seq: 0u64,
         num_events: 1u64,
@@ -72,7 +72,7 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     value: sui::accumulator_settlement::EventStreamHead {
         mmr: vector[
             0u256,
-            29810830933555599370216278631654329841668533619019360791749163046343675723088u256,
+            74554057711894871457628614655024369865117452415927520687030087896539353474013u256,
         ],
         checkpoint_seq: 0u64,
         num_events: 2u64,
@@ -105,8 +105,8 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     },
     value: sui::accumulator_settlement::EventStreamHead {
         mmr: vector[
-            11044591306729393610957271521269526835275561033229993572619396699119418261920u256,
-            29810830933555599370216278631654329841668533619019360791749163046343675723088u256,
+            78313174135928063549980703713666821338718681390925586199291451869856428120056u256,
+            74554057711894871457628614655024369865117452415927520687030087896539353474013u256,
         ],
         checkpoint_seq: 0u64,
         num_events: 3u64,
@@ -141,7 +141,7 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
         mmr: vector[
             0u256,
             0u256,
-            99861683810580454253732552928243500450848817450709555262950503442301355732136u256,
+            87002537184975294303401156848807706651658979038556442278356805444719906372504u256,
         ],
         checkpoint_seq: 0u64,
         num_events: 4u64,

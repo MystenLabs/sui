@@ -1538,7 +1538,12 @@ mod checked {
                 let value = match accum_event.value {
                     MoveAccumulatorValue::U64(amount) => AccumulatorValue::Integer(amount),
                     MoveAccumulatorValue::EventRef(event_idx) => {
-                        let event = &user_events[event_idx as usize];
+                        let Some(event) = user_events.get(event_idx as usize) else {
+                            return Err(make_invariant_violation!(
+                                "Could not find authenticated event at index {}",
+                                event_idx
+                            ));
+                        };
                         let digest = event.digest();
                         AccumulatorValue::EventDigest(event_idx, digest)
                     }
@@ -1553,9 +1558,12 @@ mod checked {
                     value,
                 };
 
-                AccumulatorEvent::new(AccumulatorObjId::new_unchecked(accum_event.accumulator_id), write)
+                Ok(AccumulatorEvent::new(
+                    AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
+                    write,
+                ))
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(ExecutionResults::V2(ExecutionResultsV2 {
             written_objects,

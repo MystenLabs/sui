@@ -87,6 +87,9 @@ pub struct SuiInitArgs {
     /// Enable accumulator features for testing (e.g., authenticated event streams)
     #[clap(long = "enable-accumulators")]
     pub enable_accumulators: bool,
+    /// Enable authenticated event streams for testing
+    #[clap(long = "enable-authenticated-event-streams")]
+    pub enable_authenticated_event_streams: bool,
 }
 
 #[derive(Debug, clap::Parser)]

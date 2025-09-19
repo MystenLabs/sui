@@ -21,6 +21,8 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::ObjectID, error::VMMemoryLimitExceededSubStatusCode};
 
+pub const NOT_SUPPORTED: u64 = 0;
+
 #[derive(Clone, Debug)]
 pub struct EventEmitCostParams {
     pub event_emit_cost_base: InternalGas,
@@ -59,6 +61,15 @@ pub fn emit_authenticated_impl(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.len() == 2);
     debug_assert!(args.len() == 3);
+
+    // Feature flag check temporarily disabled for debugging
+    // let cost = context.gas_used();
+    // if !get_extension!(context, ObjectRuntime)?
+    //     .protocol_config
+    //     .enable_authenticated_event_streams()
+    // {
+    //     return Ok(NativeResult::err(cost, NOT_SUPPORTED));
+    // }
 
     let event_ty = ty_args.pop().unwrap();
     // This type is always sui::event::EventStreamHead
@@ -198,7 +209,14 @@ fn emit_impl(
     {
         let stream_id_addr: AccountAddress = stream_id.value_as::<AccountAddress>().unwrap();
         let accumulator_id: ObjectID = accumulator_id.value_as::<AccountAddress>().unwrap().into();
-        let event_idx = obj_runtime.state.events().len() - 1;
+        let events_len = obj_runtime.state.events().len();
+        if events_len == 0 {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("No events found after emitting authenticated event".to_string()),
+            );
+        }
+        let event_idx = events_len - 1;
         obj_runtime.emit_accumulator_event(
             accumulator_id,
             MoveAccumulatorAction::Merge,

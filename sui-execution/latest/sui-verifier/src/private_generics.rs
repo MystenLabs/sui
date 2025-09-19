@@ -18,10 +18,10 @@ use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const EVENT_FUNCTION: &IdentStr = ident_str!("emit");
-
+pub const EMIT_AUTHENTICATED_FUNCTION: &IdentStr = ident_str!("emit_authenticated");
 pub const EMIT_AUTHENTICATED_IMPL_FUNCTION: &IdentStr = ident_str!("emit_authenticated_impl");
-pub const PRIVATE_EVENT_FUNCTIONS: &[&IdentStr] =
-    &[ident_str!("emit"), ident_str!("emit_authenticated")];
+
+pub const PRIVATE_EVENT_FUNCTIONS: &[&IdentStr] = &[EVENT_FUNCTION, EMIT_AUTHENTICATED_FUNCTION];
 pub const GET_EVENTS_TEST_FUNCTION: &IdentStr = ident_str!("events_by_type");
 pub const COIN_REGISTRY_MODULE: &IdentStr = ident_str!("coin_registry");
 pub const DYNAMIC_COIN_CREATION_FUNCTION: &IdentStr = ident_str!("new_currency");
@@ -171,7 +171,8 @@ fn verify_private_event_emit(
     }
 
     if fident == EMIT_AUTHENTICATED_IMPL_FUNCTION {
-        // private function, cannot be called directly from outside the module
+        // emit_authenticated_impl is a private fun in event.move
+        // we want to apply usage validations only on emit_authenticated
         return Ok(());
     }
 

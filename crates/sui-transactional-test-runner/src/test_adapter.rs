@@ -238,6 +238,7 @@ impl AdapterInitConfig {
             data_ingestion_path,
             rest_api_url,
             enable_accumulators,
+            enable_authenticated_event_streams,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -252,6 +253,9 @@ impl AdapterInitConfig {
         };
         if enable_accumulators {
             protocol_config.enable_accumulators_for_testing();
+        }
+        if enable_authenticated_event_streams {
+            protocol_config.enable_authenticated_event_streams_for_testing();
         }
         if let Some(enable) = shared_object_deletion {
             protocol_config.set_shared_object_deletion_for_testing(enable);
@@ -1776,7 +1780,7 @@ impl SuiTestAdapter {
         let mut accumulators_written: Vec<_> = effects
             .accumulator_events()
             .iter()
-            .map(|event| event.accumulator_obj)
+            .map(|event| *event.accumulator_obj.inner())
             .collect();
 
         let gas_summary = effects.gas_cost_summary();

@@ -3,7 +3,7 @@
 
 // Exercise test functions that emit authenticated events
 
-//# init --addresses test=0x0 --accounts A B --simulator --enable-accumulators
+//# init --addresses test=0x0 --accounts A B --simulator --enable-authenticated-event-streams
 
 //# publish
 
