@@ -2206,6 +2206,9 @@ pub trait TransactionDataAPI {
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
 
+    // Get all the funds withdrawals args in the transaction.
+    fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg>;
+
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult;
@@ -2330,25 +2333,17 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
-        let mut withdraws = Vec::new();
+        let withdraws = self.get_funds_withdrawals();
         // TODO(address-balances): Once we support paying gas using address balances,
         // we add gas reservations here.
         // TODO(address-balances): Use a protocol config parameter for max_withdraws.
         let max_withdraws = 10;
-        // First get all withdraw arguments.
-        if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
-            for input in &pt.inputs {
-                if let CallArg::FundsWithdrawal(withdraw) = input {
-                    withdraws.push(withdraw.clone());
-                    if withdraws.len() > max_withdraws {
-                        return Err(UserInputError::InvalidWithdrawReservation {
-                            error: format!(
-                                "Maximum number of balance withdraw reservations is {max_withdraws}"
-                            ),
-                        });
-                    }
-                }
-            }
+        if withdraws.len() > max_withdraws {
+            return Err(UserInputError::InvalidWithdrawReservation {
+                error: format!(
+                    "Maximum number of balance withdraw reservations is {max_withdraws}"
+                ),
+            });
         }
 
         // Accumulate all withdraws per account.
@@ -2404,6 +2399,23 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
         }
         false
+    }
+
+    fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg> {
+        if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
+            pt.inputs
+                .iter()
+                .filter_map(|input| {
+                    if let CallArg::FundsWithdrawal(withdraw) = input {
+                        Some(withdraw.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
