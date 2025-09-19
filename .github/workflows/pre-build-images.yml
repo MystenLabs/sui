@@ -25,7 +25,7 @@ jobs:
           client-payload: >
             {
               "sui_commit": "${{ github.sha }}",
-              "caller_name": "${{ github.ref_name }}",
+              "caller_name": "sui_repo_${{ github.ref_name }}",
               "push_to_dockerhub": true,
               "build_arm64": false,
               "graphql_rpc": true,
