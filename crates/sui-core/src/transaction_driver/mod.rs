@@ -26,8 +26,8 @@ use rand::Rng;
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
-    error::UserInputError,
-    messages_grpc::{PingType, SubmitTxRequest, TxType},
+    error::{ErrorCategory, UserInputError},
+    messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
     transaction::TransactionDataAPI as _,
 };
 use tokio::{
@@ -283,7 +283,7 @@ where
                         return Ok(resp);
                     }
                     Err(e) => {
-                        if !e.is_retriable() {
+                        if !e.is_submission_retriable() {
                             // Record the number of retries for failed transaction
                             self.metrics
                                 .transaction_retries
@@ -302,7 +302,19 @@ where
                     }
                 }
 
-                sleep(backoff.next().unwrap_or(MAX_RETRY_DELAY)).await;
+                let overload = if let Some(e) = &latest_retriable_error {
+                    e.categorize() == ErrorCategory::ValidatorOverloaded
+                } else {
+                    false
+                };
+                let delay = if overload {
+                    // Increase delay during overload.
+                    backoff.next().unwrap_or(MAX_RETRY_DELAY) + MAX_RETRY_DELAY
+                } else {
+                    backoff.next().unwrap_or(MAX_RETRY_DELAY)
+                };
+                sleep(delay).await;
+
                 attempts += 1;
             }
         };
@@ -356,6 +368,11 @@ where
                 options,
             )
             .await?;
+        if let SubmitTxResult::Rejected { error } = &submit_txn_result {
+            return Err(TransactionDriverError::ClientInternal {
+                error: format!("SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}", error),
+            });
+        }
 
         // Wait for quorum effects using EffectsCertifier
         let result = self
