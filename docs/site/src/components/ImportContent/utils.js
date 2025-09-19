@@ -294,11 +294,18 @@ exports.returnStructs = (source, structList, language) => {
   const out = [];
 
   for (const name of names) {
-    const shortStructRE = new RegExp(`^(\\s*)*?(pub(lic)? )?struct \\b${escapeRegex(name)}\\b;\\n`, "m");
+    const shortStructRE = new RegExp(
+      String.raw`^\s*(?:pub(?:$begin:math:text$[^)]+$end:math:text$)?\s+)?struct\s+${escapeRegex(name)}\s*;[ \t]*(?:\r?\n|$)`,
+      "m",
+    );
+
     const m = shortStructRE.exec(src);
     let full, pre = "";
     if (!m) {
-      const structBegRE = new RegExp(`^(\\s*)*?(pub(lic)? )?struct \\b${escapeRegex(name)}\\b[^\\n]*\\{`, "m");
+      const structBegRE = new RegExp(
+        String.raw`^\s*(?:pub(?:$begin:math:text$[^)]+$end:math:text$)?\s+)?struct\s+${escapeRegex(name)}\b[^\n]*\{`,
+        "m",
+      );
       const ml = structBegRE.exec(src);
       if (!ml) {
         return "Struct not found. If code is formatted correctly, consider using code comments instead.";
