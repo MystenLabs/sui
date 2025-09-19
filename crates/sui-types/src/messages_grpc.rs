@@ -354,9 +354,16 @@ impl SubmitTxRequest {
         } else {
             vec![]
         };
+
+        let submit_type = if self.ping.is_some() {
+            SubmitTxType::Ping
+        } else {
+            SubmitTxType::Default
+        };
+
         Ok(RawSubmitTxRequest {
             transactions,
-            ..Default::default()
+            submit_type: submit_type.into(),
         })
     }
 }
@@ -1068,5 +1075,52 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
             last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
             last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        messages_grpc::{PingType, SubmitTxRequest, SubmitTxType},
+        transaction::{Transaction, TransactionData},
+    };
+
+    #[tokio::test]
+    async fn test_submit_tx_request_into_raw() {
+        println!("Case 1. SubmitTxRequest::new_ping should be converted to RawSubmitTxRequest with submit_type set to Ping.");
+        {
+            let request = SubmitTxRequest::new_ping(PingType::Consensus);
+            let raw_request = request.into_raw().unwrap();
+
+            let submit_type = SubmitTxType::try_from(raw_request.submit_type).unwrap();
+            assert_eq!(submit_type, SubmitTxType::Ping);
+        }
+
+        println!("Case 2. SubmitTxRequest::new_transaction should be converted to RawSubmitTxRequest with submit_type set to Default.");
+        {
+            // Create a dummy transaction for testing
+            let sender = crate::base_types::SuiAddress::random_for_testing_only();
+            let recipient = crate::base_types::SuiAddress::random_for_testing_only();
+            let gas_object_ref = crate::base_types::random_object_ref();
+
+            let tx_data = TransactionData::new_transfer_sui(
+                recipient,
+                sender,
+                None,
+                gas_object_ref,
+                1000,
+                1000,
+            );
+
+            let (_, keypair) = crate::crypto::get_account_key_pair();
+            let transaction = Transaction::from_data_and_signer(tx_data, vec![&keypair]);
+
+            let request = SubmitTxRequest::new_transaction(transaction);
+            let raw_request = request.into_raw().unwrap();
+
+            let submit_type = SubmitTxType::try_from(raw_request.submit_type).unwrap();
+            assert_eq!(submit_type, SubmitTxType::Default);
+            assert_eq!(raw_request.transactions.len(), 1);
+        }
     }
 }

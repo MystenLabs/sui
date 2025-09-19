@@ -161,6 +161,11 @@ where
         let auth_agg = self.authority_aggregator.load().clone();
         let validators = auth_agg.committee.names().cloned().collect::<Vec<_>>();
 
+        self.metrics
+            .latency_check_runs
+            .with_label_values(&[tx_type.as_str()])
+            .inc();
+
         for name in validators {
             let display_name = auth_agg.get_display_name(&name);
             let delay_ms = rand::thread_rng().gen_range(0..max_delay_ms);
