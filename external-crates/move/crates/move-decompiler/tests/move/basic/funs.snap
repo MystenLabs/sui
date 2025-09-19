@@ -1,9 +1,13 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
 ---
-module simple {
+module funs {
     public fun f () {
-        return         &( l0 ).x
+        return 
+    }
+
+    public fun f_s () {
+        return l0
     }
 
 }

@@ -80,6 +80,11 @@ pub fn module(module: SB::Module) -> Out::Module {
 
 fn function(fun: SB::Function) -> Out::Function {
     println!("Decompiling function {}", fun.name);
+    println!("-- stackless bytecode ------------------");
+    for (lbl, blk) in &fun.basic_blocks {
+        println!("Block {}:\n{blk}", lbl);
+    }
+    println!("----------------------------------------");
     let (name, terms, input, entry) = make_input(fun);
     println!("Input: {input:?}");
     let structured = crate::structuring::structure(input, entry);
@@ -141,46 +146,57 @@ fn generate_term_block(block: &SB::BasicBlock, let_binds: &mut HashSet<SB::RegId
 }
 
 fn extract_input(block: &SB::BasicBlock, next_block_label: Option<SB::Label>) -> D::Input {
+    use D::Input as DI;
+    use SB::Instruction as SI;
+
     // Look at the last instruction to determine control flow
     if let Some(last_instr) = block.instructions.last() {
         match last_instr {
-            SB::Instruction::Jump(label) => D::Input::Code(
+            SI::Jump(label) => DI::Code(
                 (block.label as u32).into(),
-                ((block.label as u32).into(), false),
+                (block.label as u32).into(),
                 Some((*label as u32).into()),
             ),
-            SB::Instruction::JumpIf {
+            SI::JumpIf {
                 condition: _,
                 then_label,
                 else_label,
-            } => D::Input::Condition(
+            } => DI::Condition(
                 (block.label as u32).into(),
-                ((block.label as u32).into(), false),
+                (block.label as u32).into(),
                 (*then_label as u32).into(),
                 (*else_label as u32).into(),
             ),
-            SB::Instruction::VariantSwitch {
+            SI::VariantSwitch {
                 condition: _,
+                enum_,
+                variants,
                 labels,
-                variants: _,
-            } => D::Input::Variants(
+            } => {
+                assert!(variants.len() == labels.len());
+                DI::Variants(
+                    (block.label as u32).into(),
+                    (block.label as u32).into(),
+                    enum_.clone(),
+                    variants
+                        .iter()
+                        .zip(labels.iter())
+                        .map(|(variant, label)| (variant.clone(), (*label as u32).into()))
+                        .collect(),
+                )
+            }
+            SI::Abort(_) | SI::Return(_) => DI::Code(
                 (block.label as u32).into(),
-                ((block.label as u32).into(), false),
-                labels.iter().map(|label| (*label as u32).into()).collect(),
-            ),
-            SB::Instruction::Return(_) => D::Input::Code(
                 (block.label as u32).into(),
-                ((block.label as u32).into(), false),
                 None,
             ),
-            SB::Instruction::AssignReg { lhs: _, rhs: _ }
-            | SB::Instruction::StoreLoc { loc: _, value: _ }
-            | SB::Instruction::Abort(_)
-            | SB::Instruction::Nop
-            | SB::Instruction::Drop(_)
-            | SB::Instruction::NotImplemented(_) => D::Input::Code(
+            SI::AssignReg { lhs: _, rhs: _ }
+            | SI::StoreLoc { loc: _, value: _ }
+            | SI::Nop
+            | SI::Drop(_)
+            | SI::NotImplemented(_) => DI::Code(
                 (block.label as u32).into(),
-                ((block.label as u32).into(), false),
+                (block.label as u32).into(),
                 next_block_label.map(|lbl| (lbl as u32).into()),
             ),
         }
@@ -193,7 +209,7 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
     match structured {
         D::Structured::Break => Out::Exp::Break,
         D::Structured::Continue => Out::Exp::Continue,
-        D::Structured::Block((lbl, _invert)) => terms.remove(&(lbl as u32).into()).unwrap(),
+        D::Structured::Block(lbl) => terms.remove(&(lbl as u32).into()).unwrap(),
         D::Structured::Loop(body) => Out::Exp::Loop(Box::new(generate_output(terms, *body))),
         D::Structured::Seq(seq) => {
             let seq = seq
@@ -202,7 +218,7 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                 .collect();
             Out::Exp::Seq(seq)
         }
-        D::Structured::IfElse((lbl, _invert), conseq, alt) => {
+        D::Structured::IfElse(lbl, conseq, alt) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();
             // TODO create helper function to extract last exp from term that works with whatever Exp, not just Seq
             let Exp::Seq(mut seq) = term else {
@@ -218,7 +234,7 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             ));
             Out::Exp::Seq(exps)
         }
-        D::Structured::Switch((lbl, _invert), cases) => {
+        D::Structured::Switch(lbl, enum_, cases) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();
             let Exp::Seq(mut seq) = term else {
                 panic!("A seq espected")
@@ -227,9 +243,9 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
 
             let cases = cases
                 .into_iter()
-                .map(|c| generate_output(terms.clone(), c))
+                .map(|(v, c)| (v, generate_output(terms.clone(), c)))
                 .collect();
-            exps.push(Out::Exp::Switch(Box::new(cond), cases));
+            exps.push(Out::Exp::Switch(Box::new(cond), enum_, cases));
             Out::Exp::Seq(exps)
         }
         D::Structured::Jump(_) | D::Structured::JumpIf { .. } => {

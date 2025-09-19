@@ -1,1 +1,3 @@
-simple
+enums
+funs
+structs

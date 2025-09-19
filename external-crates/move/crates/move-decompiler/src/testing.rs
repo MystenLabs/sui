@@ -5,6 +5,10 @@
 // Harness for Structring Testing
 // -------------------------------------------------------------------------------------------------
 
+use move_binary_format::normalized::ModuleId;
+use move_core_types::account_address::AccountAddress;
+use move_symbol_pool::{Symbol, symbol};
+
 pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
     use crate::structuring::ast::Input as In;
 
@@ -46,22 +50,17 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
 
             match parts.as_slice() {
                 ["cond", a, b, c] => match (a.parse::<u32>(), b.parse::<u32>(), c.parse::<u32>()) {
-                    (Ok(a), Ok(b), Ok(c)) => nodes.push(In::Condition(
-                        a.into(),
-                        (a.into(), false),
-                        b.into(),
-                        c.into(),
-                    )),
-                    _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
-                },
-                ["code", a, b] => match (a.parse::<u32>(), b.parse::<u32>()) {
-                    (Ok(a), Ok(b)) => {
-                        nodes.push(In::Code(a.into(), (a.into(), false), Some(b.into())))
+                    (Ok(a), Ok(b), Ok(c)) => {
+                        nodes.push(In::Condition(a.into(), a.into(), b.into(), c.into()))
                     }
                     _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
                 },
+                ["code", a, b] => match (a.parse::<u32>(), b.parse::<u32>()) {
+                    (Ok(a), Ok(b)) => nodes.push(In::Code(a.into(), a.into(), Some(b.into()))),
+                    _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
+                },
                 ["code", a] => match a.parse::<u32>() {
-                    Ok(a) => nodes.push(In::Code(a.into(), (a.into(), false), None)),
+                    Ok(a) => nodes.push(In::Code(a.into(), a.into(), None)),
                     _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
                 },
                 [head, rest @ ..] if *head == "variants" => {
@@ -91,9 +90,17 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
                             }
                         }
                     }
-
+                    let others = others
+                        .into_iter()
+                        .map(|other| (Symbol::from(format!("{}", other.index())), other))
+                        .collect::<Vec<_>>();
+                    let mid: ModuleId<Symbol> = ModuleId {
+                        address: AccountAddress::ZERO,
+                        name: Symbol::from("M"),
+                    };
+                    let e = Symbol::from("E");
                     if ok {
-                        nodes.push(In::Variants(first.into(), (first.into(), false), others));
+                        nodes.push(In::Variants(first.into(), first.into(), (mid, e), others));
                     }
                 }
                 _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),

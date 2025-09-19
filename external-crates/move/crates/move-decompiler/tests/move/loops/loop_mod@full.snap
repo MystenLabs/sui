@@ -34,20 +34,20 @@ public fun do_4(_cond: &mut bool) {
 public fun loop_0(cond: &mut bool) {
     {
         while (*l0) {
-            do_0(l0)
+            0x0::loop_mod::do_0(l0)
         };
-        do_1(l0);
+        0x0::loop_mod::do_1(l0);
         return
     }
 }
 
 public fun loop_1(cond: &mut bool) {
     {
-        do_0(l0);
+        0x0::loop_mod::do_0(l0);
         while (*l0) {
-            do_1(l0)
+            0x0::loop_mod::do_1(l0)
         };
-        do_2(l0);
+        0x0::loop_mod::do_2(l0);
         return
     }
 }

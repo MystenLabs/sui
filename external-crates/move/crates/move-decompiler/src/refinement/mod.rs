@@ -64,7 +64,13 @@ trait Refine {
                     (**e2).as_mut().map(|e| self.refine(e)).unwrap_or(false)
                 )
             }
-            E::Switch(e, es) => or!(self.refine(e), self.refine_seq(es)),
+            E::Switch(e, _, es) => {
+                let mut changed = self.refine(e);
+                for (_, e) in es.iter_mut() {
+                    changed |= self.refine(e);
+                }
+                changed
+            }
             E::Return(es) => self.refine_seq(es),
             E::Assign(_, e) => self.refine(e),
             E::LetBind(_, e) => self.refine(e),
@@ -73,13 +79,13 @@ trait Refine {
             E::Primitive { op: _, args } => self.refine_seq(args),
             E::Data { op: _, args } => self.refine_seq(args),
             E::Borrow(_, e) => self.refine(e),
-
             E::Break => false,
             E::Continue => false,
-
             E::Value(_) => false,
             E::Variable(_) => false,
             E::Constant(_) => false,
+            E::Unpack(_, _, e) => self.refine(e),
+            E::UnpackVariant(_, _, _, e) => self.refine(e),
         }
     }
 

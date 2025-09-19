@@ -1,6 +1,6 @@
 [package]
-name = "enum"
+name = "enums"
 edition = "2024.beta"
 
 [addresses]
-enum = "0x0"
+enums = "0x0"

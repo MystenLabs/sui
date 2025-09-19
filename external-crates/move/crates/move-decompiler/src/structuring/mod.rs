@@ -217,14 +217,17 @@ fn insert_breaks(
             *structured,
             graph,
         ))),
-        DS::Switch(code, structureds) => {
+        DS::Switch(code, enum_, structureds) => {
             let result = structureds
                 .into_iter()
-                .map(|structured| {
-                    insert_breaks(loop_nodes, loop_head, succ_node, structured, graph)
+                .map(|(v, structured)| {
+                    (
+                        v,
+                        insert_breaks(loop_nodes, loop_head, succ_node, structured, graph),
+                    )
                 })
                 .collect::<Vec<_>>();
-            DS::Switch(code, result)
+            DS::Switch(code, enum_, result)
         }
     }
 }
@@ -298,9 +301,10 @@ fn structure_acyclic_region(
             };
             D::Structured::IfElse(code, Box::new(conseq_arm), Box::new(alt))
         }
-        D::Input::Variants(_lbl, code, items) => {
+        D::Input::Variants(_lbl, code, enum_, items) => {
             let latches = items
                 .iter()
+                .map(|(_v, item)| item)
                 .filter(|item| item != &&post_dominator)
                 .cloned()
                 .collect::<Vec<_>>();
@@ -308,24 +312,30 @@ fn structure_acyclic_region(
 
             let arms = items
                 .into_iter()
-                .map(|item| {
+                .map(|(v, item)| {
                     if post_dominator == item {
-                        D::Structured::Seq(vec![])
+                        (v, D::Structured::Seq(vec![]))
                     } else {
                         assert!(
                             graph
                                 .cfg
                                 .neighbors_directed(item, petgraph::Direction::Incoming)
                                 .count()
-                                == 1
+                                == 1,
+                            "Structured arms must have exactly one predecessor, found {:#?} for {:#?}",
+                            graph
+                                .cfg
+                                .neighbors_directed(item, petgraph::Direction::Incoming)
+                                .collect::<Vec<_>>(),
+                            item
                         );
-                        structured_blocks.remove(&item).unwrap()
+                        (v, structured_blocks.remove(&item).unwrap())
                     }
                 })
                 .collect();
             // Maybe we could reconstruct matches from the arms? It would require a lot more -- and
             // more painful -- analysis.
-            D::Structured::Switch(code, arms)
+            D::Structured::Switch(code, enum_, arms)
         }
         code @ D::Input::Code(..) => {
             return structure_code_node(graph, structured_blocks, start, code);
@@ -362,7 +372,7 @@ fn structure_latch_node(graph: &Graph, node_ndx: NodeIndex, node: D::Input) -> D
             D::Structured::Block(code),
             D::Structured::Jump(next.unwrap()),
         ]),
-        D::Input::Variants(_, _, _) => unreachable!(),
+        D::Input::Variants(_, _, _, _) => unreachable!(),
     }
 }
 
@@ -414,7 +424,7 @@ fn flatten_sequence(seq: D::Structured) -> D::Structured {
             | DS::Break
             | DS::Loop(_)
             | DS::IfElse(_, _, _)
-            | DS::Switch(_, _)
+            | DS::Switch(_, _, _)
             | DS::Continue
             | DS::Jump(_)
             | DS::JumpIf(_, _, _) => result.push(entry),

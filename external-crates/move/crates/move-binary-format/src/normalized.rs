@@ -1859,6 +1859,12 @@ fn signature_to_single_type<S: Hash + Eq>(
     tables.signatures[sig_idx.0 as usize][0].clone()
 }
 
+impl<S: std::fmt::Display> std::fmt::Display for ModuleId<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "0x{}::{}", self.address.short_str_lossless(), self.name)
+    }
+}
+
 impl<S: std::fmt::Display> std::fmt::Display for Type<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {

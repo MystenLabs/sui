@@ -117,19 +117,19 @@ impl<'a, K: SourceKind> ToDoc for crate::model::Struct<'a, K> {
             Doc::nil()
         };
         let abilities = if !abilities.0.is_empty() {
-            Doc::hsep(vec![Doc::text("has"), abilities.to_doc()])
+            Doc::softline()
+                .concat(Doc::hsep(vec![Doc::text("has"), abilities.to_doc()]))
+                .group()
         } else {
             Doc::nil()
         };
-        let fields = fields.to_doc();
 
         Doc::text("public struct")
             .concat_space(Doc::text(name.as_str()))
             .concat(type_parameters)
             .group()
-            .concat_space(abilities)
-            .concat(Doc::softline())
-            .concat(Doc::braces(fields).group())
+            .concat(abilities)
+            .concat(Doc::softline().concat(fields.to_doc().braces()))
             .group()
     }
 }
@@ -156,7 +156,9 @@ impl<'a, K: SourceKind> ToDoc for crate::model::Enum<'a, K> {
             D::nil()
         };
         let abilities = if !abilities.0.is_empty() {
-            Doc::hsep(vec![Doc::text("has"), abilities.to_doc()])
+            Doc::softline()
+                .concat(Doc::hsep(vec![Doc::text("has"), abilities.to_doc()]))
+                .group()
         } else {
             Doc::nil()
         };
@@ -164,8 +166,7 @@ impl<'a, K: SourceKind> ToDoc for crate::model::Enum<'a, K> {
             variants.iter().map(|(name, variant)| {
                 D::text(name.as_str())
                     .concat_space(variant.to_doc())
-                    .concat(D::text(",").concat(D::line()))
-                    .group()
+                    .concat(D::text(","))
             }),
             D::line(),
         );
@@ -174,10 +175,13 @@ impl<'a, K: SourceKind> ToDoc for crate::model::Enum<'a, K> {
             .concat_space(Doc::text(name.as_ref()))
             .concat(type_parameters)
             .group()
-            .concat_space(abilities)
-            .concat(Doc::line())
-            .concat(D::braces(variants).group())
-            .group()
+            .concat(abilities)
+            .concat_space(
+                D::line()
+                    .concat(variants.indent(4))
+                    .concat(D::line())
+                    .braces(),
+            )
     }
 }
 
@@ -212,7 +216,7 @@ impl ToDoc for Variant {
             fields,
         } = self;
         let fields = fields.to_doc();
-        Doc::braces(fields)
+        fields.braces()
     }
 }
 
@@ -319,14 +323,23 @@ impl ToDoc for Fields {
         }
 
         // --- Wide (single-line) ---
-        let wide = D::intersperse(items.iter().cloned(), D::text(",").concat(D::space()));
+        let wide = D::space().concat(
+            D::intersperse(items.iter().cloned(), D::text(",").concat(D::space()))
+                .concat(D::space()),
+        );
 
         // --- Tall (multiline) with trailing comma ---
-        let tall_body = D::intersperse(items, D::text(",").concat(D::line()));
-        let tall = tall_body.concat(D::text(",")).concat(D::line()); // trailing comma
+        let tall = D::line()
+            .concat(
+                D::intersperse(items, D::text(",").concat(D::line()))
+                    .concat(D::text(","))
+                    .indent(4),
+            )
+            .concat(D::line())
+            .group();
 
         // Pick one layout for the entire list, consistently.
-        D::alt(wide, tall)
+        D::alt(wide, tall).group()
     }
 }
 

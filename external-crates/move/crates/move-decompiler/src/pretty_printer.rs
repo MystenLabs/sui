@@ -11,11 +11,6 @@ impl ToDoc for Exp {
             D::braces(D::line().concat(body.indent(4)).concat(D::line()))
         }
 
-        fn stmt(doc: Doc) -> Doc {
-            // attach a trailing semicolon to a simple statement
-            doc.concat(D::text(";"))
-        }
-
         // Render a list of statements separated by lines.
         fn stmts<'a, I>(it: I) -> Doc
         where
@@ -66,9 +61,8 @@ impl ToDoc for Exp {
                         .concat_space(D::text("="))
                         .concat_space(recur(rhs))
                 }
-                Exp::Call(f, args) => {
-                    D::text(f).concat(D::parens(comma_sep(args.into_iter().map(recur))))
-                }
+                Exp::Call((m, f), args) => D::text(format!("{m}::{f}"))
+                    .concat(D::parens(comma_sep(args.into_iter().map(recur)))),
                 Exp::Abort(e) => D::text("abort").concat_space(recur(e)),
                 Exp::Borrow(mutable, e) => {
                     if *mutable {
@@ -79,9 +73,7 @@ impl ToDoc for Exp {
                 }
                 Exp::Value(v) => value(v),
                 Exp::Variable(s) => D::text(s),
-                Exp::Constant(c) => D::text(format!("{c:?}")), // TODO: nicer constant printing
-
-                // Blocky/compound forms as expressions (when needed)
+                Exp::Constant(c) => D::text(format!("{c:?}")),
                 Exp::Seq(vs) => {
                     let final_semi =
                         matches!(vs.last(), Some(Exp::LetBind(_, _) | Exp::Assign(_, _)));
@@ -94,15 +86,55 @@ impl ToDoc for Exp {
                 Exp::Loop(b) => D::text("loop").concat_space(braces_block(e_block(b))),
                 Exp::While(c, b) => while_doc(c, b),
                 Exp::IfElse(c, t, e) => if_doc(c, t, e),
-                Exp::Switch(subject, arms) => {
-                    let arms_doc = stmts(arms);
-                    D::text("switch")
+                Exp::Switch(subject, (mid, enum_), arms) => {
+                    let arms_doc = Doc::intersperse(
+                        arms.iter().map(|(variant, body)| {
+                            D::text(variant.as_str())
+                                .concat_space(D::text("=>"))
+                                .concat_space(e_block(body))
+                        }),
+                        D::text(",").concat(D::line()),
+                    );
+                    D::text(format!("switch {mid}::{enum_}"))
                         .concat_space(D::parens(recur(subject)))
                         .concat_space(braces_block(arms_doc))
                 }
-                // Fallbacks for forms we didn’t special-case (shouldn’t happen here):
                 Exp::Primitive { op, args } => primitive_op_doc(&op, &args),
                 Exp::Data { op, args } => data_op_doc(&op, &args),
+                Exp::Unpack((mod_, struct_), items, exp) => {
+                    let items_doc = D::intersperse(
+                        items.iter().map(|(field, rhs)| {
+                            D::text(field.as_str())
+                                .concat(D::text(":"))
+                                .concat_space(D::text(rhs))
+                        }),
+                        D::text(",").concat(D::space()),
+                    );
+                    D::text(format!("{mod_}::{struct_}"))
+                        .concat_space(items_doc.braces())
+                        .concat_space(D::text("="))
+                        .concat_space(recur(exp))
+                }
+                Exp::UnpackVariant(unpack_kind, (mod_, enum_, variant), items, exp) => {
+                    let items_doc = D::intersperse(
+                        items.iter().map(|(field, rhs)| {
+                            D::text(field.as_str())
+                                .concat(D::text(":"))
+                                .concat_space(D::text(rhs))
+                        }),
+                        D::text(",").concat(D::space()),
+                    );
+                    let unpack_str = match unpack_kind {
+                        crate::ast::UnpackKind::Value => "",
+                        crate::ast::UnpackKind::ImmRef => "&",
+                        crate::ast::UnpackKind::MutRef => "&mut ",
+                    };
+                    D::text(format!("{mod_}::{enum_}::{variant}"))
+                        .concat_space(items_doc.braces())
+                        .concat_space(D::text("="))
+                        .concat_space(D::text(unpack_str))
+                        .concat(recur(exp))
+                }
             }
         }
 
