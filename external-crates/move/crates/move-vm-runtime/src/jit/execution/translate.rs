@@ -865,6 +865,7 @@ fn functions(
         definitions,
     };
 
+    // TODO: Can avoid cloning by tracking fun.index that were consumed.
     let mut optimized_fns = optimized_fns.clone();
 
     for fun in loaded_functions.iter_mut() {
@@ -887,6 +888,20 @@ fn functions(
             let jump_table_ptrs = fun.jump_tables.to_ptrs();
             fun.code = code(&mut module_context, &jump_table_ptrs, opt_code.code)?;
         }
+    }
+
+    // Validate that all optimized functions were consumed
+    if !optimized_fns.is_empty() {
+        let unmatched_functions: Vec<_> = optimized_fns.keys().collect();
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                format!(
+                    "optimized function list contains {} unmatched functions: {:?}",
+                    unmatched_functions.len(),
+                    unmatched_functions
+                ),
+            ),
+        );
     }
 
     let FunctionContext { .. } = module_context;
