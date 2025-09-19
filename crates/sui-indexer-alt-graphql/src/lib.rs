@@ -194,6 +194,7 @@ where
         } else {
             info!("Skipping GraphiQL IDE setup");
         }
+
         router = router
             .layer(Extension(schema.finish()))
             .layer(axum::middleware::from_fn_with_state(
