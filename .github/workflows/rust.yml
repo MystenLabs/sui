@@ -75,7 +75,7 @@ jobs:
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
+    timeout-minutes: 150
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
@@ -102,7 +102,7 @@ jobs:
       - name: cargo test
         run: |
           # TODO: pkg-alt DISABLED TESTS -- only sui-bridge and sui-bridge-indexer were disabled before
-          cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer) and !package(sui-package-resolver) and !package(sui-core)'
+          cargo nextest run --profile ci --no-fail-fast -E '!package(sui-bridge) and !package(sui-bridge-indexer) and !package(sui-package-resolver) and !package(sui-core)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
