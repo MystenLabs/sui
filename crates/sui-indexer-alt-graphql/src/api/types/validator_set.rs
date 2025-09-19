@@ -1,25 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::SimpleObject;
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
+use async_graphql::connection::{Connection, CursorType, Edge};
+use async_graphql::{ComplexObject, Context, SimpleObject};
+use sui_types::sui_system_state::sui_system_state_inner_v1::{ValidatorSetV1, ValidatorV1};
 
 use crate::{
+    api::scalars::cursor::JsonCursor,
     api::{
         scalars::{big_int::BigInt, sui_address::SuiAddress},
         types::validator::Validator,
     },
+    error::RpcError,
+    pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
+pub(crate) type CValidator = JsonCursor<u64>;
+
 /// Representation of `0x3::validator_set::ValidatorSet`.
-#[derive(Clone, Debug, SimpleObject, Default)]
+#[derive(Clone, Debug, SimpleObject)]
+#[graphql(complex)]
 pub(crate) struct ValidatorSet {
+    #[graphql(skip)]
+    scope: Scope,
+
+    #[graphql(skip)]
+    active_validators: Vec<ValidatorV1>,
+
     /// Total amount of stake for all active validators at the beginning of the epoch.
     pub total_stake: Option<BigInt>,
-
-    /// The current list of active validators.
-    pub active_validators: Option<Vec<Validator>>,
 
     /// Validators that are pending removal from the active validator set, expressed as indices in
     /// to `activeValidators`.
@@ -53,20 +63,47 @@ pub(crate) struct ValidatorSet {
     pub validator_candidates_size: Option<u64>,
 }
 
+#[ComplexObject]
+impl ValidatorSet {
+    /// The current list of active validators.
+    async fn active_validators(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CValidator>,
+        last: Option<u64>,
+        before: Option<CValidator>,
+    ) -> Result<Connection<String, Validator>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("ValidatorSet", "activeValidators");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let mut conn = Connection::new(false, false);
+
+        let active_validators = self.active_validators.iter().enumerate().collect();
+
+        let (prev, next, edges) =
+            page.paginate_results(active_validators, |(i, _)| CValidator::new(*i as u64));
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
+        edges.for_each(|(cursor, (_, validator))| {
+            conn.edges.push(Edge::new(
+                cursor.encode_cursor(),
+                Validator::from_validator_v1(self.scope.clone(), validator.clone()),
+            ));
+        });
+
+        Ok(conn)
+    }
+}
+
 impl ValidatorSet {
     pub(crate) fn from_validator_set_v1(scope: Scope, value: ValidatorSetV1) -> Self {
         Self {
+            scope,
+            active_validators: value.active_validators,
             total_stake: Some(BigInt::from(value.total_stake)),
-            active_validators: Some(
-                value
-                    .active_validators
-                    .iter()
-                    .map(|v| Validator::from_validator_v1(scope.clone(), v.clone()))
-                    // todo (ewall)
-                    // remove this and add pagination
-                    .take(1)
-                    .collect(),
-            ),
             pending_removals: Some(value.pending_removals),
             pending_active_validators_id: Some(value.pending_active_validators.contents.id.into()),
             pending_active_validators_size: Some(value.pending_active_validators.contents.size),
