@@ -111,27 +111,27 @@ impl RpcService {
         let metrics = self.metrics.clone();
 
         let router = {
-            let ledger_service =
-                sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer::new(
-                    self.clone(),
-                )
-                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-            let transaction_execution_service = sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer::new(self.clone())
-                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-            let state_service =
-                sui_rpc::proto::sui::rpc::v2::state_service_server::StateServiceServer::new(
-                    self.clone(),
-                )
-                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-            let signature_verification_service = sui_rpc::proto::sui::rpc::v2::signature_verification_service_server::SignatureVerificationServiceServer::new(self.clone())
-                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-            let move_package_service = sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServiceServer::new(self.clone())
-                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-            let name_service =
-                sui_rpc::proto::sui::rpc::v2::name_service_server::NameServiceServer::new(
-                    self.clone(),
-                )
-                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            // let ledger_service =
+            //     sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer::new(
+            //         self.clone(),
+            //     )
+            //     .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            // let transaction_execution_service = sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer::new(self.clone())
+            //     .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            // let state_service =
+            //     sui_rpc::proto::sui::rpc::v2::state_service_server::StateServiceServer::new(
+            //         self.clone(),
+            //     )
+            //     .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            // let signature_verification_service = sui_rpc::proto::sui::rpc::v2::signature_verification_service_server::SignatureVerificationServiceServer::new(self.clone())
+            //     .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            // let move_package_service = sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServiceServer::new(self.clone())
+            //     .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            // let name_service =
+            //     sui_rpc::proto::sui::rpc::v2::name_service_server::NameServiceServer::new(
+            //         self.clone(),
+            //     )
+            //     .send_compressed(tonic::codec::CompressionEncoding::Zstd);
 
             let ledger_service2 =
                 sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerServiceServer::new(
@@ -154,9 +154,9 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(
                     crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
                 )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
+                // .register_encoded_file_descriptor_set(
+                //     sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
+                // )
                 .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
                 )
@@ -171,9 +171,9 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(
                     crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
                 )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
+                // .register_encoded_file_descriptor_set(
+                //     sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
+                // )
                 .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
                 )
@@ -186,12 +186,12 @@ impl RpcService {
             }
 
             for service_name in [
-                service_name(&ledger_service),
-                service_name(&transaction_execution_service),
-                service_name(&state_service),
-                service_name(&signature_verification_service),
-                service_name(&move_package_service),
-                service_name(&name_service),
+                // service_name(&ledger_service),
+                // service_name(&transaction_execution_service),
+                // service_name(&state_service),
+                // service_name(&signature_verification_service),
+                // service_name(&move_package_service),
+                // service_name(&name_service),
                 service_name(&ledger_service2),
                 service_name(&transaction_execution_service2),
                 service_name(&live_data_service2),
@@ -207,12 +207,12 @@ impl RpcService {
 
             let mut services = grpc::Services::new()
                 // V2
-                .add_service(ledger_service)
-                .add_service(transaction_execution_service)
-                .add_service(state_service)
-                .add_service(signature_verification_service)
-                .add_service(move_package_service)
-                .add_service(name_service)
+                // .add_service(ledger_service)
+                // .add_service(transaction_execution_service)
+                // .add_service(state_service)
+                // .add_service(signature_verification_service)
+                // .add_service(move_package_service)
+                // .add_service(name_service)
                 // v2beta2
                 .add_service(ledger_service2)
                 .add_service(transaction_execution_service2)
@@ -224,14 +224,14 @@ impl RpcService {
                 .add_service(reflection_v1alpha);
 
             if let Some(subscription_service_handle) = self.subscription_service_handle.clone() {
-                let subscription_service =
-sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceServer::new(subscription_service_handle.clone());
-                health_reporter
-                    .set_service_status(
-                        service_name(&subscription_service),
-                        tonic_health::ServingStatus::Serving,
-                    )
-                    .await;
+                // let subscription_service =
+                // sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceServer::new(subscription_service_handle.clone());
+                // health_reporter
+                //     .set_service_status(
+                //         service_name(&subscription_service),
+                //         tonic_health::ServingStatus::Serving,
+                //     )
+                //     .await;
 
                 let subscription_service2 =
 sui_rpc::proto::sui::rpc::v2beta2::subscription_service_server::SubscriptionServiceServer::new(subscription_service_handle);
@@ -243,7 +243,7 @@ sui_rpc::proto::sui::rpc::v2beta2::subscription_service_server::SubscriptionServ
                     .await;
 
                 services = services
-                    .add_service(subscription_service)
+                    // .add_service(subscription_service)
                     .add_service(subscription_service2);
             }
 
