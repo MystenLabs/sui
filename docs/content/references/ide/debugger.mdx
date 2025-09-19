@@ -91,9 +91,10 @@ Debugging a Move unit test is a two-step process:
 
 **I. Generate execution traces**
    1. Open the command palette (<kbd>Shift</kbd> + <kbd>⌘</kbd> + <kbd>P</kbd> on macOS, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> on Windows/Linux).
+
    1. Run the `Move: Trace Move test execution` command.
 
-      ![Move Trace generation in the command palette](./images/trace_palette.png)
+      <img src="./images/trace_palette.png" style="width: 50%; height: auto;" alt="Command pallette" />
 
       :::info
         This command uses the `sui` binary under the hood which needs to be [pre-installed](#install). The location of the binary needs to be discoverable by the Move extension as described [here](./move.mdx#build-test-and-trace).
@@ -102,7 +103,8 @@ Debugging a Move unit test is a two-step process:
 
    1. The extension displays a filter prompt. Either type a filter string to target specific tests or leave the field blank to run all tests and press <kbd>Enter</kbd>.
 
-      ![Move Trace generation filter string](./images/filter_string.png)
+      <img src="./images/filter_string.png" style="width: 50%; height: auto;" alt="Filter test string" />
+
    1. Find the generated traces in the `traces` directory.
 
       :::info
@@ -115,12 +117,14 @@ Debugging a Move unit test is a two-step process:
 
 **II. Start debugging**
    1. Open the Move file containing your test.
+
    1. Select **Run** -> **Start Debugging** from the main menu.
 
-      ![Start test debugging](./images/start_debugging.png)
+      <img src="./images/start_debugging.png" style="width: 30%; height: auto;" alt="Start test debugging" />
+
    1. If the file has multiple tests, select the specific test from the dropdown menu.
 
-      ![Test selection](./images/test_selection.png)
+      <img src="./images/test_selection.png" style="width: 50%; height: auto;" alt="Test selection" />
 
 
 ### Debugging on-chain transactions
@@ -129,23 +133,22 @@ Debugging an on-chain transaction is a two-step process:
 
 **I. Generate execution trace**
 
-    To generate a trace for a given transaction we need to know this transaction's digest (in the example below it's `0x42`).
+  To generate a trace for a given transaction we need to know this transaction's digest (in the example below it's `0x42`).
 
-    ```bash
-    sui replay --trace --digest 0x42
-    ```
+  ```bash
+  sui replay --trace --digest 0x42
+  ```
 
-    This command will re-execute the transaction locally, generate a trace of its execution, and download all data required for debugging this transaction from the chain. All this data will be deposited in a subdirectory of replay tool's output directory (`.replay` by default). This subdirectory is named after the transaction digest. You can also change the location of replay tool's output directory (see [here](../../references/cli/replay.mdx#usage) for instructions).
+  This command will re-execute the transaction locally, generate a trace of its execution, and download all data required for debugging this transaction from the chain. All this data will be deposited in a subdirectory of replay tool's output directory (`.replay` by default). This subdirectory is named after the transaction digest. You can also change the location of replay tool's output directory (see [here](../../references/cli/replay.mdx#usage) for instructions).
 
 **II. Start debugging**
-
    1. Open subdirectory containing transaction data downloaded for a transaction with a given digest and open the trace file (`trace.json.zst`)
 
       ![Replay trace](./images/replay_trace.png)
 
    2. Select **Run** -> **Start Debugging** from the main menu.
 
-      ![Start test debugging](./images/start_debugging.png)
+      <img src="./images/start_debugging.png" style="width: 30%; height: auto;" alt="Start txn debugging" />
 
       :::info
         The first time you run this command you may be asked to select a debugger type, in which case chose `Move Debugger`.
@@ -221,11 +224,11 @@ To locate the right version of the source code for our user package, utilize a S
 
 Search for this package in a Sui explorer.
 
-![Deepbook search](./images/deepbook_search.png)
+<img src="./images/deepbook_search.png" style="width: 50%; height: auto;" alt="Package search" />
 
 You can see that the the package in question is `deepbook/core`. Look at the detailed information about this package available in the explorer.
 
-![Deepbook explorer](./images/deepbook_explorer.png)
+<img src="./images/deepbook_explorer.png" style="width: 70%; height: auto;" alt="Package explorer" />
 
 You can see that the package description in the explorer includes an MVR link. When you follow that link, you get to the MVR page containing a different kind of description for this package. The MVR description includes a link to the package's source code repository and information that this ID represent the 3rd version of this package.
 
