@@ -347,6 +347,7 @@ impl LocalValidatorAggregatorProxy {
             transaction_driver_metrics,
             None,
             client_metrics,
+            true,
         );
         Self {
             _qd_handler: qd_handler,
