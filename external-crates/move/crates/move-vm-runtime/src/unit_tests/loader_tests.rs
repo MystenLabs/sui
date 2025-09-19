@@ -163,12 +163,12 @@ impl Adapter {
 
     fn publish_package(&mut self, mut pkg: StoredPackage) {
         if !self.store.linkage.linkage_table.is_empty() {
-            pkg.linkage_context = self.store.linkage.clone();
+            pkg.0.linkage_table = self.store.linkage.linkage_table.clone();
         }
         if !self.store.type_origin.is_empty() {
-            pkg.type_origin_table = self.store.type_origin.clone();
+            pkg.0.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = pkg.original_id;
+        let runtime_id = pkg.0.original_id;
         self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())
@@ -177,12 +177,12 @@ impl Adapter {
 
     fn publish_package_with_error(&mut self, mut pkg: StoredPackage) {
         if !self.store.linkage.linkage_table.is_empty() {
-            pkg.linkage_context = self.store.linkage.clone();
+            pkg.0.linkage_table = self.store.linkage.linkage_table.clone();
         }
         if !self.store.type_origin.is_empty() {
-            pkg.type_origin_table = self.store.type_origin.clone();
+            pkg.0.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = pkg.original_id;
+        let runtime_id = pkg.0.original_id;
         self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())

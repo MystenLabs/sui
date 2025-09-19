@@ -518,15 +518,13 @@ fn make_module(
 
     let module_id = module.self_id();
     let mut pkg = StoredPackage::from_modules_for_testing(addr, vec![module.clone()]).unwrap();
-    pkg.linkage_context = LinkageContext::new(
-        [(addr, addr)]
-            .into_iter()
-            .chain(module.module_handles().iter().map(|mhandle| {
-                let addr = *module.address_identifier_at(mhandle.address);
-                (addr, addr)
-            }))
-            .collect(),
-    );
+    pkg.0.linkage_table = [(addr, addr)]
+        .into_iter()
+        .chain(module.module_handles().iter().map(|mhandle| {
+            let addr = *module.address_identifier_at(mhandle.address);
+            (addr, addr)
+        }))
+        .collect();
     session
         .publish_package(addr, pkg.into_serialized_package())
         .unwrap();

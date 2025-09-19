@@ -574,8 +574,8 @@ impl MovePackage {
                     )
                 })
                 .collect(),
-            storage_id: self.id.into(),
-            runtime_id: self.original_package_id().into(),
+            version_id: self.id.into(),
+            original_id: self.original_package_id().into(),
             linkage_table: self
                 .linkage_table()
                 .iter()
