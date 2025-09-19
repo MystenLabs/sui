@@ -5,9 +5,9 @@ pub(crate) mod accumulator;
 mod fingerprint;
 pub(crate) mod object_store;
 
-use crate::object_runtime::object_store::{CacheMetadata, ChildObjectEffectV1};
+use crate::object_runtime::object_store::{CacheMetadata, ChildObjectEffect};
 
-use self::object_store::{ChildObjectEffectV0, ChildObjectEffects, ObjectResult};
+use self::object_store::{ChildObjectEffects, ObjectResult};
 use super::get_object_id;
 use better_any::{Tid, TidAble};
 use indexmap::map::IndexMap;
@@ -17,7 +17,6 @@ use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveTypeLayout, MoveValue},
     annotated_visitor as AV,
-    effects::Op,
     language_storage::StructTag,
     runtime_value as R,
     vm_status::StatusCode,
@@ -601,8 +600,8 @@ pub fn max_event_error(max_events: u64) -> PartialVMError {
 
 impl ObjectRuntimeState {
     /// Update `state_view` with the effects of successfully executing a transaction:
-    /// - Given the effects `Op<Value>` of child objects, processes the changes in terms of
-    ///   object writes/deletes
+    /// - Given the effects of child objects, processes the changes in terms of
+    ///   object writes/deletes basedon the previous state and the changes to the child objects.
     /// - Process `transfers` and `input_objects` to determine whether the type of change
     ///   (WriteKind) to the object
     /// - Process `deleted_ids` with previously determined information to determine the
@@ -716,70 +715,8 @@ impl ObjectRuntimeState {
         loaded_child_objects: &mut BTreeMap<ObjectID, LoadedRuntimeObject>,
         child_object_effects: ChildObjectEffects,
     ) {
-        match child_object_effects {
-            ChildObjectEffects::V0(child_object_effects) => {
-                self.apply_child_object_effects_v0(loaded_child_objects, child_object_effects)
-            }
-            ChildObjectEffects::V1(child_object_effects) => {
-                self.apply_child_object_effects_v1(loaded_child_objects, child_object_effects)
-            }
-        }
-    }
-
-    fn apply_child_object_effects_v0(
-        &mut self,
-        loaded_child_objects: &mut BTreeMap<ObjectID, LoadedRuntimeObject>,
-        child_object_effects: BTreeMap<ObjectID, ChildObjectEffectV0>,
-    ) {
         for (child, child_object_effect) in child_object_effects {
-            let ChildObjectEffectV0 {
-                owner: parent,
-                ty,
-                effect,
-            } = child_object_effect;
-
-            if let Some(loaded_child) = loaded_child_objects.get_mut(&child) {
-                loaded_child.is_modified = true;
-            }
-
-            match effect {
-                // was modified, so mark it as mutated and transferred
-                Op::Modify(v) => {
-                    debug_assert!(!self.transfers.contains_key(&child));
-                    debug_assert!(!self.new_ids.contains(&child));
-                    debug_assert!(loaded_child_objects.contains_key(&child));
-                    self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
-                }
-
-                Op::New(v) => {
-                    debug_assert!(!self.transfers.contains_key(&child));
-                    self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
-                }
-
-                Op::Delete => {
-                    // was transferred so not actually deleted
-                    if self.transfers.contains_key(&child) {
-                        debug_assert!(!self.deleted_ids.contains(&child));
-                    }
-                    // ID was deleted too was deleted so mark as deleted
-                    if self.deleted_ids.contains(&child) {
-                        debug_assert!(!self.transfers.contains_key(&child));
-                        debug_assert!(!self.new_ids.contains(&child));
-                    }
-                }
-            }
-        }
-    }
-
-    fn apply_child_object_effects_v1(
-        &mut self,
-        loaded_child_objects: &mut BTreeMap<ObjectID, LoadedRuntimeObject>,
-        child_object_effects: BTreeMap<ObjectID, ChildObjectEffectV1>,
-    ) {
-        for (child, child_object_effect) in child_object_effects {
-            let ChildObjectEffectV1 {
+            let ChildObjectEffect {
                 owner: parent,
                 ty,
                 final_value,

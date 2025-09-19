@@ -123,7 +123,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
             // TODO: VM error instead?
             panic!("Did not find runtime ID {original_id} in linkage context.");
         };
-        assert_eq!(version_id, package.storage_id);
+        assert_eq!(version_id, package.version_id);
         let mut gas_meter = GasStatus::new_unmetered();
         self.runtime.validate_package(
             &self.storage,

@@ -27,11 +27,11 @@ pub struct TypeOrigin {
 #[derive(Debug, Clone)]
 pub struct SerializedPackage {
     pub modules: BTreeMap<Identifier, Vec<u8>>,
-    /// The storage ID of this package. This is a unique identifier for this particular package.
-    pub storage_id: AccountAddress,
-    /// The runtime ID of the package. This is the ID that is used to refer to the package in the
+    /// The version ID of this package. This is a unique identifier for this particular package.
+    pub version_id: AccountAddress,
+    /// The original ID of the package. This is the ID that is used to refer to the package in the
     /// VM, and is constant across all versions of the package.
-    pub runtime_id: AccountAddress,
+    pub original_id: AccountAddress,
     /// For each dependency (including transitive dependencies), maps runtime package ID to the
     /// storage ID of the package that is to be used for the linkage rooted at this package.
     ///
@@ -48,23 +48,23 @@ impl SerializedPackage {
     /// reading that back in when loading a package. Remove this when no longer needed.
     pub fn raw_package(
         modules: BTreeMap<Identifier, Vec<u8>>,
-        runtime_id: AccountAddress,
-        storage_id: AccountAddress,
+        original_id: AccountAddress,
+        version_id: AccountAddress,
     ) -> Self {
         Self {
             modules,
-            runtime_id,
-            storage_id,
+            original_id,
+            version_id,
             linkage_table: BTreeMap::new(),
             type_origin_table: vec![],
         }
     }
 
-    pub fn empty(runtime_id: AccountAddress, storage_id: AccountAddress) -> Self {
+    pub fn empty(original_id: AccountAddress, version_id: AccountAddress) -> Self {
         Self {
             modules: BTreeMap::new(),
-            storage_id,
-            runtime_id,
+            version_id,
+            original_id,
             linkage_table: BTreeMap::new(),
             type_origin_table: vec![],
         }
