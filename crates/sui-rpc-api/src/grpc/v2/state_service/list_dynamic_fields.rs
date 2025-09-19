@@ -12,6 +12,7 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::dynamic_field::DynamicFieldKind;
+use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::DynamicField;
 use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsRequest;
@@ -168,11 +169,11 @@ fn get_dynamic_field(
 fn should_load_field(mask: &FieldMaskTree) -> bool {
     [
         DynamicField::KIND_FIELD,
-        DynamicField::NAME_TYPE_FIELD,
-        DynamicField::NAME_VALUE_FIELD,
+        DynamicField::NAME_FIELD,
         DynamicField::VALUE_TYPE_FIELD,
-        DynamicField::DYNAMIC_OBJECT_ID_FIELD,
-        DynamicField::OBJECT_FIELD,
+        DynamicField::CHILD_ID_FIELD,
+        DynamicField::CHILD_OBJECT_FIELD,
+        DynamicField::FIELD_OBJECT_FIELD,
     ]
     .into_iter()
     .any(|field| mask.contains(field))
@@ -237,12 +238,24 @@ fn load_dynamic_field(
         message.set_kind(kind);
     }
 
-    if read_mask.contains(DynamicField::NAME_TYPE_FIELD) {
-        message.name_type =
-            Some(sui_types::TypeTag::from(field.name_layout).to_canonical_string(true));
+    if read_mask.contains(DynamicField::NAME_FIELD) {
+        message.name = Some(
+            Bcs::default()
+                .with_name(sui_types::TypeTag::from(field.name_layout).to_canonical_string(true))
+                .with_value(field.name_bytes.to_vec()),
+        );
     }
-    if read_mask.contains(DynamicField::NAME_VALUE_FIELD) {
-        message.name_value = Some(field.name_bytes.to_vec().into());
+
+    if read_mask.contains(DynamicField::VALUE_FIELD) {
+        message.value = Some(
+            Bcs::default()
+                .with_name(sui_types::TypeTag::from(field.value_layout).to_canonical_string(true))
+                .with_value(field.value_bytes.to_vec()),
+        );
+    }
+
+    if let Some(submask) = read_mask.subtree(DynamicField::FIELD_OBJECT_FIELD) {
+        message.field_object = Some(Object::merge_from(&field_object, &submask));
     }
 
     match field.value_metadata()? {
@@ -252,12 +265,12 @@ fn load_dynamic_field(
             }
         }
         DFV::ValueMetadata::DynamicObjectField(object_id) => {
-            if read_mask.contains(DynamicField::DYNAMIC_OBJECT_ID_FIELD) {
-                message.dynamic_object_id = Some(object_id.to_canonical_string(true));
+            if read_mask.contains(DynamicField::CHILD_ID_FIELD) {
+                message.child_id = Some(object_id.to_canonical_string(true));
             }
 
             if read_mask.contains(DynamicField::VALUE_TYPE_FIELD)
-                || read_mask.contains(DynamicField::OBJECT_FIELD)
+                || read_mask.contains(DynamicField::CHILD_OBJECT_FIELD)
             {
                 let object = service
                     .reader
@@ -272,8 +285,8 @@ fn load_dynamic_field(
                     message.value_type = Some(type_tag.to_canonical_string(true));
                 }
 
-                if let Some(submask) = read_mask.subtree(DynamicField::OBJECT_FIELD) {
-                    message.object = Some(Object::merge_from(&object, &submask));
+                if let Some(submask) = read_mask.subtree(DynamicField::CHILD_OBJECT_FIELD) {
+                    message.child_object = Some(Object::merge_from(&object, &submask));
                 }
             }
         }

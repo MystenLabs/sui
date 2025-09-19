@@ -26,8 +26,8 @@ use rand::Rng;
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
-    error::UserInputError,
-    messages_grpc::{PingType, SubmitTxRequest, TxType},
+    error::{ErrorCategory, UserInputError},
+    messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
     transaction::TransactionDataAPI as _,
 };
 use tokio::{
@@ -129,27 +129,35 @@ where
         loop {
             interval.tick().await;
 
+            let mut tasks = JoinSet::new();
+
             for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
                 Self::execute_latency_for_tx_type(
                     self.clone(),
+                    &mut tasks,
                     MAX_DELAY_BETWEEN_REQUESTS_MS,
                     PING_REQUEST_TIMEOUT,
                     tx_type,
-                )
-                .await;
+                );
+            }
+
+            while let Some(result) = tasks.join_next().await {
+                if let Err(e) = result {
+                    tracing::info!("Error while driving ping transaction: {}", e);
+                }
             }
         }
     }
 
     /// Executes a single round of latency checks for all validators and the provided transaction type.
-    async fn execute_latency_for_tx_type(
+    fn execute_latency_for_tx_type(
         self: Arc<Self>,
+        tasks: &mut JoinSet<()>,
         max_delay_ms: u64,
         ping_timeout: Duration,
         tx_type: TxType,
     ) {
         // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
-        let mut tasks = JoinSet::new();
         let auth_agg = self.authority_aggregator.load().clone();
         let validators = auth_agg.committee.names().cloned().collect::<Vec<_>>();
 
@@ -198,12 +206,6 @@ where
             };
 
             tasks.spawn(task);
-        }
-
-        while let Some(result) = tasks.join_next().await {
-            if let Err(e) = result {
-                tracing::info!("Error while driving ping transaction: {}", e);
-            }
         }
     }
 
@@ -281,7 +283,7 @@ where
                         return Ok(resp);
                     }
                     Err(e) => {
-                        if !e.is_retriable() {
+                        if !e.is_submission_retriable() {
                             // Record the number of retries for failed transaction
                             self.metrics
                                 .transaction_retries
@@ -300,7 +302,19 @@ where
                     }
                 }
 
-                sleep(backoff.next().unwrap_or(MAX_RETRY_DELAY)).await;
+                let overload = if let Some(e) = &latest_retriable_error {
+                    e.categorize() == ErrorCategory::ValidatorOverloaded
+                } else {
+                    false
+                };
+                let delay = if overload {
+                    // Increase delay during overload.
+                    backoff.next().unwrap_or(MAX_RETRY_DELAY) + MAX_RETRY_DELAY
+                } else {
+                    backoff.next().unwrap_or(MAX_RETRY_DELAY)
+                };
+                sleep(delay).await;
+
                 attempts += 1;
             }
         };
@@ -354,6 +368,11 @@ where
                 options,
             )
             .await?;
+        if let SubmitTxResult::Rejected { error } = &submit_txn_result {
+            return Err(TransactionDriverError::ClientInternal {
+                error: format!("SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}", error),
+            });
+        }
 
         // Wait for quorum effects using EffectsCertifier
         let result = self

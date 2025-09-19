@@ -15,7 +15,7 @@ use sui_types::error::{SuiError, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message as _;
 use sui_types::messages_grpc::{
-    RawSubmitTxRequest, SubmitTxRequest, SubmitTxResponse, SubmitTxResult,
+    RawSubmitTxRequest, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SubmitTxType,
 };
 use sui_types::object::Object;
 use sui_types::transaction::{
@@ -135,11 +135,11 @@ async fn test_submit_transaction_success() {
 async fn test_submit_ping_request() {
     let test_context = TestContext::new().await;
 
-    println!("Case 1. Submitting an empty array of transactions, soft bundle is true.");
+    println!("Case 1. Ping request cannot contain transactions.");
     {
         let request = RawSubmitTxRequest {
-            transactions: vec![],
-            soft_bundle: true,
+            transactions: vec![vec![0xFF, 0xFF, 0xFF].into()],
+            submit_type: SubmitTxType::Ping.into(),
         };
 
         let response = test_context
@@ -151,19 +151,17 @@ async fn test_submit_ping_request() {
         assert!(response.is_err());
         assert!(matches!(
             response.unwrap_err().into(),
-            SuiError::UserInputError {
-                error: UserInputError::InvalidBatchTransaction { .. }
-            }
+            SuiError::InvalidRequest { .. }
         ));
     }
 
-    println!("Case 2. Submitting an empty array of transactions, soft bundle is false.");
+    println!("Case 2. Valid ping request.");
     {
         // Submit an empty array of transactions.
-        // The request should explicitly set `ping` to true to indicate a ping check.
+        // The request should explicitly set type to `ping` to indicate a ping check.
         let request = RawSubmitTxRequest {
             transactions: vec![],
-            soft_bundle: false,
+            submit_type: SubmitTxType::Ping.into(),
         };
 
         let response = test_context
@@ -386,7 +384,7 @@ async fn test_submit_batched_transactions() {
             bcs::to_bytes(&tx1).unwrap().into(),
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
-        soft_bundle: false,
+        ..Default::default()
     };
 
     // Submit request with batched transactions, using grpc client directly.
@@ -458,7 +456,7 @@ async fn test_submit_batched_transactions_with_already_executed() {
             bcs::to_bytes(&tx1).unwrap().into(),
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
-        soft_bundle: false,
+        ..Default::default()
     };
 
     // Submit both transactions, using grpc client directly.
@@ -503,7 +501,7 @@ async fn test_submit_soft_bundle_transactions() {
             bcs::to_bytes(&tx1).unwrap().into(),
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
-        soft_bundle: true,
+        submit_type: SubmitTxType::SoftBundle.into(),
     };
 
     // Submit request with batched transactions, using grpc client directly.
@@ -575,7 +573,7 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
             bcs::to_bytes(&tx1).unwrap().into(),
             bcs::to_bytes(&tx2).unwrap().into(),
         ],
-        soft_bundle: true,
+        submit_type: SubmitTxType::SoftBundle.into(),
     };
 
     // Submit request with batched transactions, using grpc client directly.

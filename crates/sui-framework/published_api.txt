@@ -2632,9 +2632,6 @@ burn_balance
 set_name
 	public fun
 	0x2::coin_registry
-set_symbol
-	public fun
-	0x2::coin_registry
 set_description
 	public fun
 	0x2::coin_registry

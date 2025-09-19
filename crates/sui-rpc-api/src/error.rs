@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_types::error::ErrorCategory;
 use tonic::Code;
 
 use crate::proto::google::rpc::{BadRequest, ErrorInfo, RetryInfo};
@@ -199,14 +200,17 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                 // TODO add a Retry-After header
                 RpcError::new(Code::Unavailable, "system is overloaded")
             }
-            TransactionFailed { retriable, details } => RpcError::new(
-                // TODO(fastpath): improve the error code precision. add a Retry-After header.
-                if retriable {
-                    Code::Aborted
-                } else {
-                    Code::InvalidArgument
+            TransactionFailed { category, details } => RpcError::new(
+                // TODO(fastpath): add a Retry-After header.
+                match category {
+                    ErrorCategory::Internal => Code::Internal,
+                    ErrorCategory::Aborted => Code::Aborted,
+                    ErrorCategory::InvalidTransaction => Code::InvalidArgument,
+                    ErrorCategory::LockConflict => Code::FailedPrecondition,
+                    ErrorCategory::ValidatorOverloaded => Code::ResourceExhausted,
+                    ErrorCategory::Unavailable => Code::Unavailable,
                 },
-                format!("[MFP experimental]: {details}"),
+                details,
             ),
             PendingExecutionInTransactionOrchestrator => RpcError::new(
                 Code::AlreadyExists,

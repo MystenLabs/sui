@@ -217,6 +217,7 @@ mod tests {
     use async_graphql_value::ConstValue;
     use axum::http::HeaderValue;
     use insta::{assert_json_snapshot, assert_snapshot};
+    use serde_json::json;
 
     use crate::pagination::PageLimits;
 
@@ -363,14 +364,14 @@ mod tests {
             .finish()
     }
 
+    fn request(query: &str) -> Request {
+        Request::from(query)
+            .data(ShowUsage(HeaderValue::from_static("true")))
+            .data(ContentLength(query.len() as u64))
+    }
+
     async fn execute(schema: &Schema<Query, Mutation, EmptySubscription>, query: &str) -> Response {
-        schema
-            .execute(
-                Request::from(query)
-                    .data(ShowUsage(HeaderValue::from_static("true")))
-                    .data(ContentLength(query.len() as u64)),
-            )
-            .await
+        schema.execute(request(query)).await
     }
 
     /// Extract a particular `kind` of usage information from the response.
@@ -386,15 +387,208 @@ mod tests {
     async fn test_pass_limits() {
         let schema = schema(config(), page());
         let response = execute(&schema, "{ a { b { c { a { z } } } } }").await;
+        let usage = response
+            .extensions
+            .get("usage")
+            .unwrap()
+            .clone()
+            .into_json()
+            .unwrap();
 
-        assert_snapshot!(response.extensions.get("usage").unwrap(), @"{input: {nodes: 5,depth: 5},payload: {query_payload_size: 29,tx_payload_size: 0},output: {nodes: 5}}");
+        assert_json_snapshot!(usage, @r###"
+        {
+          "input": {
+            "nodes": 5,
+            "depth": 5
+          },
+          "payload": {
+            "query_payload_size": 29,
+            "tx_payload_size": 0
+          },
+          "output": {
+            "nodes": 5
+          }
+        }
+        "###);
     }
 
     #[tokio::test]
     async fn test_typename() {
         let schema = schema(config(), page());
         let response = execute(&schema, "{ __typename, alias: __typename }").await;
-        assert_snapshot!(response.extensions.get("usage").unwrap(), @"{input: {nodes: 2,depth: 1},payload: {query_payload_size: 33,tx_payload_size: 0},output: {nodes: 2}}");
+        let usage = response
+            .extensions
+            .get("usage")
+            .unwrap()
+            .clone()
+            .into_json()
+            .unwrap();
+
+        assert_json_snapshot!(usage, @r###"
+        {
+          "input": {
+            "nodes": 2,
+            "depth": 1
+          },
+          "payload": {
+            "query_payload_size": 33,
+            "tx_payload_size": 0
+          },
+          "output": {
+            "nodes": 2
+          }
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_variable_optional() {
+        let schema = schema(config(), page());
+        let response = schema
+            .execute(request(
+                "query ($first: Int) { p(first: $first) { nodes { z } } }",
+            ))
+            .await;
+
+        assert_json_snapshot!(response, @r###"
+        {
+          "data": {
+            "p": {
+              "nodes": []
+            }
+          },
+          "extensions": {
+            "usage": {
+              "input": {
+                "nodes": 3,
+                "depth": 3
+              },
+              "payload": {
+                "query_payload_size": 56,
+                "tx_payload_size": 0
+              },
+              "output": {
+                "nodes": 12
+              }
+            }
+          }
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_variable_null() {
+        let schema = schema(config(), page());
+        let response = schema
+            .execute(
+                request("query ($first: Int) { p(first: $first) { nodes { z } } }").variables(
+                    Variables::from_json(json!({
+                        "first": null,
+                    })),
+                ),
+            )
+            .await;
+
+        assert_json_snapshot!(response, @r###"
+        {
+          "data": {
+            "p": {
+              "nodes": []
+            }
+          },
+          "extensions": {
+            "usage": {
+              "input": {
+                "nodes": 3,
+                "depth": 3
+              },
+              "payload": {
+                "query_payload_size": 56,
+                "tx_payload_size": 0
+              },
+              "output": {
+                "nodes": 12
+              }
+            }
+          }
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_variable_valid_page() {
+        let schema = schema(config(), page());
+        let response = schema
+            .execute(
+                request("query ($first: Int) { p(first: $first) { nodes { z } } }").variables(
+                    Variables::from_json(json!({
+                        "first": 5,
+                    })),
+                ),
+            )
+            .await;
+
+        assert_json_snapshot!(response, @r###"
+        {
+          "data": {
+            "p": {
+              "nodes": []
+            }
+          },
+          "extensions": {
+            "usage": {
+              "input": {
+                "nodes": 3,
+                "depth": 3
+              },
+              "payload": {
+                "query_payload_size": 56,
+                "tx_payload_size": 0
+              },
+              "output": {
+                "nodes": 12
+              }
+            }
+          }
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_variable_huge_page() {
+        let schema = schema(config(), page());
+        let response = schema
+            .execute(
+                request("query ($first: Int) { p(first: $first) { nodes { z } } }").variables(
+                    Variables::from_json(json!({
+                        "first": 1000,
+                    })),
+                ),
+            )
+            .await;
+
+        assert_json_snapshot!(response, @r###"
+        {
+          "data": null,
+          "errors": [
+            {
+              "message": "Page size is too large: 1000 > 10",
+              "locations": [
+                {
+                  "line": 1,
+                  "column": 23
+                }
+              ],
+              "path": [
+                "p"
+              ],
+              "extensions": {
+                "code": "GRAPHQL_VALIDATION_FAILED"
+              }
+            }
+          ]
+        }
+        "###);
     }
 
     #[tokio::test]

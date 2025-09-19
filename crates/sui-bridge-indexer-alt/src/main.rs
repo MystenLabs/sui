@@ -8,6 +8,7 @@ use sui_bridge_indexer_alt::handlers::error_handler::ErrorTransactionHandler;
 use sui_bridge_indexer_alt::handlers::governance_action_handler::GovernanceActionHandler;
 use sui_bridge_indexer_alt::handlers::token_transfer_data_handler::TokenTransferDataHandler;
 use sui_bridge_indexer_alt::handlers::token_transfer_handler::TokenTransferHandler;
+use sui_bridge_indexer_alt::metrics::BridgeIndexerMetrics;
 use sui_bridge_schema::MIGRATIONS;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::postgres::DbArgs;
@@ -51,6 +52,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let cancel = CancellationToken::new();
     let registry = Registry::new_custom(Some("bridge".into()), None)
         .context("Failed to create Prometheus registry.")?;
+
+    // Initialize bridge-specific metrics
+    let bridge_metrics = BridgeIndexerMetrics::new(&registry);
+
     let metrics = MetricsService::new(
         MetricsArgs { metrics_address },
         registry,
@@ -78,7 +83,10 @@ async fn main() -> Result<(), anyhow::Error> {
     .await?;
 
     indexer
-        .concurrent_pipeline(TokenTransferHandler::default(), Default::default())
+        .concurrent_pipeline(
+            TokenTransferHandler::new(bridge_metrics.clone()),
+            Default::default(),
+        )
         .await?;
 
     indexer
@@ -86,7 +94,10 @@ async fn main() -> Result<(), anyhow::Error> {
         .await?;
 
     indexer
-        .concurrent_pipeline(GovernanceActionHandler::default(), Default::default())
+        .concurrent_pipeline(
+            GovernanceActionHandler::new(bridge_metrics.clone()),
+            Default::default(),
+        )
         .await?;
 
     indexer
