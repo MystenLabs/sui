@@ -124,7 +124,7 @@ task 12, line 48:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 13, lines 50-55:
+task 13, lines 50-53:
 //# view-object 2,0
 Owner: Object ID: ( _ )
 Version: 5

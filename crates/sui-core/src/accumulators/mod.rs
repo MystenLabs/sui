@@ -149,6 +149,16 @@ struct EventCommitment {
 }
 
 fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
+    // Debug assertion to ensure events are ordered by the natural order of EventCommitment
+    debug_assert!(
+        events.windows(2).all(|pair| {
+            let (a, b) = (&pair[0], &pair[1]);
+            (a.checkpoint_seq, a.transaction_idx, a.event_idx)
+                <= (b.checkpoint_seq, b.transaction_idx, b.event_idx)
+        }),
+        "Events must be ordered by (checkpoint_seq, transaction_idx, event_idx)"
+    );
+
     let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
         .expect("failed to serialize event commitments for merkle root");
     let root_node = merkle_tree.root();
@@ -308,12 +318,12 @@ impl AccumulatorSettlementTxBuilder {
     pub fn collect_accumulator_changes(&self) -> BTreeMap<AccumulatorObjId, i128> {
         self.updates
             .iter()
-            .map(|(object_id, update)| match (&update.merge, &update.split) {
+            .filter_map(|(object_id, update)| match (&update.merge, &update.split) {
                 (
                     MergedValueIntermediate::SumU128(merge),
                     MergedValueIntermediate::SumU128(split),
-                ) => (*object_id, *merge as i128 - *split as i128),
-                _ => todo!(),
+                ) => Some((*object_id, *merge as i128 - *split as i128)),
+                _ => None,
             })
             .collect()
     }
