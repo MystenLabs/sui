@@ -67,20 +67,15 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
 
     let gas_price = client.get_reference_gas_price().await?;
 
+    let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
+
     // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
-        // Get fresh gas object for each transaction
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
-            .await?
-            .unwrap();
-
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
         let tx_data = TransactionData::new_programmable(
             sender,
-            vec![gas_object],
+            vec![gas_for_transfers],
             ptb.finish(),
             DEFAULT_GAS_BUDGET,
             gas_price,
@@ -97,6 +92,10 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
             let error = effects.status().error_opt();
             panic!("Something went wrong sending coins: {:?}", error);
         }
+
+        gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
+            .await?
+            .as_object_ref();
     }
 
     // Fetch the updated state of the first two coins directly from the ledger
@@ -336,20 +335,15 @@ async fn test_limit_many_small_coins() -> Result<()> {
 
     let gas_price = client.get_reference_gas_price().await?;
 
+    let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
+
     // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
-        // Get fresh gas object for each transaction
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
-            .await?
-            .unwrap();
-
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
         let tx_data = TransactionData::new_programmable(
             sender,
-            vec![gas_object],
+            vec![gas_for_transfers],
             ptb.finish(),
             DEFAULT_GAS_BUDGET,
             gas_price,
@@ -366,6 +360,10 @@ async fn test_limit_many_small_coins() -> Result<()> {
             let error = effects.status().error_opt();
             panic!("Something went wrong sending coins: {:?}", error);
         }
+
+        gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
+            .await?
+            .as_object_ref();
     }
 
     // Fetch the updated state of the first two coins directly from the ledger
@@ -722,6 +720,23 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
+    let debug_coins = get_all_coins(&mut client.clone(), sender).await?;
+    println!("=== DEBUG: Sender coins before rosetta call ===");
+    println!("Sender address: {}", sender);
+    println!("Number of coins: {}", debug_coins.len());
+    println!(
+        "Expected split_amount: {}, new_coins: {}",
+        split_amount, new_coins
+    );
+    println!("Budget: {}", budget);
+    for (i, coin) in debug_coins.iter().enumerate() {
+        println!("  Coin {}: {} MIST", i, get_coin_value(coin));
+    }
+    let total_balance: u64 = debug_coins.iter().map(|c| get_coin_value(c)).sum();
+    println!("Total balance: {} MIST", total_balance);
+    println!("Amount to send: {} MIST", amount_to_send);
+    println!("===============================================");
+
     let ops = serde_json::from_value(json!(
         [{
             "operation_identifier":{"index":0},
@@ -861,20 +876,15 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
 
     let gas_price = client.get_reference_gas_price().await?;
 
+    let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
+
     // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
-        // Get fresh gas object for each transaction
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
-            .await?
-            .unwrap();
-
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
         let tx_data = TransactionData::new_programmable(
             sender,
-            vec![gas_object],
+            vec![gas_for_transfers],
             ptb.finish(),
             DEFAULT_GAS_BUDGET,
             gas_price,
@@ -891,9 +901,13 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
             let error = effects.status().error_opt();
             panic!("Something went wrong sending coins: {:?}", error);
         }
+
+        gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
+            .await?
+            .as_object_ref();
     }
 
-    // First two coins were probably been used for gas already so update coins:
+    // First coin was used for gas, so update coins:
     let mut all_coins_sender = get_all_coins(&mut client.clone(), sender).await?;
     assert!(
         all_coins_sender.len() == 2,
@@ -1011,7 +1025,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
     let effects: sui_types::effects::TransactionEffects = effects_bcs.deserialize().unwrap();
     let tx_cost_summary = effects.gas_cost_summary().net_gas_usage();
     let total_amount = initial_balance as i128 - tx_cost_summary as i128;
-    let expected_budget = 3_076_000; // Calculated after a successful dry-run
+    let expected_budget = 2_100_000; // Calculated after a successful dry-run
     let recipient_change = total_amount - expected_budget + 1; // Make it fail with insufficient
     let sender_change = expected_budget - total_amount - 1;
 
@@ -1044,14 +1058,14 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
         panic!("Expected metadata to exists and error");
     };
 
-    let details = Some(json!({ "error":
-        format!("Invalid input: Address {sender} does not have amount: {recipient_change} + budget: {expected_budget} balance. SUI balance: {}.", recipient_change + expected_budget - 1)
-    }));
+    let details = Some(
+        json!({ "error": "ExecutionError: Kind: InsufficientCoinBalance, Description: No description" }),
+    );
     assert_eq!(
         err,
         RosettaError {
-            code: 2,
-            message: "Invalid input".to_string(),
+            code: 11,
+            message: "Transaction dry run error".to_string(),
             description: None,
             retriable: false,
             details
@@ -1078,20 +1092,15 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
 
     let gas_price = client.get_reference_gas_price().await?;
 
+    let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
+
     // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
-        // Get fresh gas object for each transaction
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
-            .await?
-            .unwrap();
-
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
         let tx_data = TransactionData::new_programmable(
             sender,
-            vec![gas_object],
+            vec![gas_for_transfers],
             ptb.finish(),
             DEFAULT_GAS_BUDGET,
             gas_price,
@@ -1108,9 +1117,13 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
             let error = effects.status().error_opt();
             panic!("Something went wrong sending coins: {:?}", error);
         }
+
+        gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
+            .await?
+            .as_object_ref();
     }
 
-    // First two coins were probably been used for gas already so update coins:
+    // First coin was used for gas, so update coins:
     let mut all_coins_sender = get_all_coins(&mut client.clone(), sender).await?;
     assert!(
         all_coins_sender.len() == 2,
@@ -1262,12 +1275,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
         .await;
 
     let details = Some(json!({
-        "error":
-        format!(
-            "status: FailedPrecondition, message: \"Insufficient funds for address [{sender}], requested amount: {}, total available: {}\", details: [], metadata: MetadataMap {{ headers: {{}} }}",
-            recipient_change + budget + 1,
-            total_amount
-        ),
+        "error": "ExecutionError: Kind: InsufficientCoinBalance, Description: No description"
     }));
     let Some(Err(e)) = resps.metadata else {
         panic!("Expected metadata to exist and error")
@@ -1275,8 +1283,8 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
     assert_eq!(
         e,
         RosettaError {
-            code: 16,
-            message: "Sui rpc error".to_string(),
+            code: 11,
+            message: "Transaction dry run error".to_string(),
             description: None,
             retriable: false,
             details,
@@ -1303,20 +1311,15 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
 
     let gas_price = client.get_reference_gas_price().await?;
 
+    let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
+
     // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
-        // Get fresh gas object for each transaction
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
-            .await?
-            .unwrap();
-
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
         let tx_data = TransactionData::new_programmable(
             sender,
-            vec![gas_object],
+            vec![gas_for_transfers],
             ptb.finish(),
             DEFAULT_GAS_BUDGET,
             gas_price,
@@ -1333,9 +1336,13 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
             let error = effects.status().error_opt();
             panic!("Something went wrong sending coins: {:?}", error);
         }
+
+        gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
+            .await?
+            .as_object_ref();
     }
 
-    // First two coins were probably been used for gas already so update coins:
+    // First coin was used for gas, so update coins:
     let mut all_coins_sender = get_all_coins(&mut client.clone(), sender).await?;
     assert!(
         all_coins_sender.len() == 2,
@@ -1494,7 +1501,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
         )
         .await;
 
-    let Some(Err(err)) = rosetta_resp.submit else {
+    let Some(Err(err)) = rosetta_resp.metadata else {
         panic!("Expected submit to error with dry-run: InsufficientGas");
     };
 

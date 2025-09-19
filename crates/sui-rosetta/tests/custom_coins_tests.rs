@@ -263,12 +263,11 @@ async fn test_custom_coin_transfer() {
     ))
     .unwrap();
 
-    let response = rosetta_client
-        .rosetta_flow(&ops, keystore, None)
-        .await
-        .submit
-        .unwrap()
-        .unwrap();
+    let flow_response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+
+    // Debug print all responses
+
+    let response = flow_response.submit.unwrap().unwrap();
 
     // Wait for transaction to be indexed
     wait_for_transaction_grpc(
@@ -279,15 +278,15 @@ async fn test_custom_coin_transfer() {
     .unwrap();
 
     // Fetch transaction using gRPC
-    let mut grpc_request = GetTransactionRequest::default();
-    grpc_request.digest = Some(response.transaction_identifier.hash.to_string());
-    grpc_request.read_mask = Some(FieldMask::from_paths([
-        "digest",
-        "transaction",
-        "effects",
-        "balance_changes",
-        "events",
-    ]));
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(response.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events",
+        ]));
 
     let grpc_response = client
         .clone()
@@ -308,19 +307,19 @@ async fn test_custom_coin_transfer() {
     println!("Sui TX: {tx:?}");
     // Create a gRPC client and fetch the transaction with gRPC
     let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
-    let tx_digest = tx.digest;
+    let tx_digest = tx.digest.expect("Expected transaction digest");
 
-    let mut grpc_request = GetTransactionRequest::default();
-    grpc_request.digest = tx_digest.clone();
-    grpc_request.read_mask = Some(FieldMask::from_paths([
-        "digest",
-        "transaction",
-        "effects",
-        "balance_changes",
-        "events.events.event_type",
-        "events.events.json",
-        "events.events.contents",
-    ]));
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(tx_digest.clone())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events.events.event_type",
+            "events.events.json",
+            "events.events.contents",
+        ]));
 
     let mut client_copy = client.clone();
     let grpc_response = client_copy
@@ -374,15 +373,15 @@ async fn test_custom_coin_without_symbol() {
         .unwrap();
 
     // Fetch transaction using gRPC
-    let mut grpc_request = GetTransactionRequest::default();
-    grpc_request.digest = Some(mint_res.digest().to_string());
-    grpc_request.read_mask = Some(FieldMask::from_paths([
-        "digest",
-        "transaction",
-        "effects",
-        "balance_changes",
-        "events",
-    ]));
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(mint_res.digest().to_string())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events",
+        ]));
 
     let grpc_response = client
         .clone()
@@ -402,19 +401,19 @@ async fn test_custom_coin_without_symbol() {
     );
     // Create a gRPC client and fetch the transaction with gRPC
     let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
-    let tx_digest = tx.digest;
+    let tx_digest = tx.digest.expect("Expected transaction digest");
 
-    let mut grpc_request = GetTransactionRequest::default();
-    grpc_request.digest = tx_digest.clone();
-    grpc_request.read_mask = Some(FieldMask::from_paths([
-        "digest",
-        "transaction",
-        "effects",
-        "balance_changes",
-        "events.events.event_type",
-        "events.events.json",
-        "events.events.contents",
-    ]));
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(tx_digest.clone())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events.events.event_type",
+            "events.events.json",
+            "events.events.contents",
+        ]));
 
     let mut client_copy = client.clone();
     let grpc_response = client_copy

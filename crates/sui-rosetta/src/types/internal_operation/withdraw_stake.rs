@@ -10,7 +10,6 @@ use sui_rpc::client::v2::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, ListOwnedObjectsRequest};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::error::{SuiError, UserInputError};
 use sui_types::governance::WITHDRAW_STAKE_FUN_NAME;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::rpc_proto_conversions::ObjectReferenceExt;
@@ -20,7 +19,7 @@ use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use crate::errors::Error;
 
-use super::{budget_from_dry_run, TransactionObjectData, TryConstructTransaction, MAX_GAS_COINS};
+use super::{simulate_transaction, TransactionObjectData, TryConstructTransaction};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WithdrawStake {
@@ -53,14 +52,9 @@ impl TryConstructTransaction for WithdrawStake {
                 .list_owned_objects(list_request)
                 .map_err(Error::from)
                 .and_then(|object| async move {
-                    if let Some(object_id) = object.object_id {
-                        let object_id = ObjectID::from_hex_literal(&object_id).map_err(|e| {
-                            Error::InvalidInput(format!("Invalid object_id: {}", e))
-                        })?;
-                        Ok(object_id)
-                    } else {
-                        Err(Error::DataError("Missing object_id in object".to_string()))
-                    }
+                    let object_id = ObjectID::from_hex_literal(object.object_id())
+                        .map_err(|e| Error::InvalidInput(format!("Invalid object_id: {}", e)))?;
+                    Ok(object_id)
                 })
                 .try_collect::<Vec<_>>()
                 .await?
@@ -112,36 +106,12 @@ impl TryConstructTransaction for WithdrawStake {
             }
         }
 
-        // dry run
-        let budget = match budget {
-            Some(budget) => budget,
-            None => {
-                let pt = withdraw_stake_pt(stake_refs.clone(), withdraw_all)?;
-                budget_from_dry_run(client, pt.clone(), sender, gas_price).await?
-            }
-        };
+        let pt = withdraw_stake_pt(stake_refs.clone(), withdraw_all)?;
+        let (budget, gas_coin_objs) =
+            simulate_transaction(client, pt, sender, vec![], gas_price, budget).await?;
 
-        let gas_objects = client
-            .select_coins(
-                &sender.to_string(),
-                sui_rpc::client::v2::SUI_COIN_TYPE,
-                budget as u128,
-                &[],
-            )
-            .await
-            .map_err(Error::from)?;
-        if gas_objects.len() > MAX_GAS_COINS {
-            return Err(SuiError::UserInputError {
-                error: UserInputError::SizeLimitExceeded {
-                    limit: "maximum number of gas payment objects".to_string(),
-                    value: MAX_GAS_COINS.to_string(),
-                },
-            }
-            .into());
-        }
-
-        let total_sui_balance = gas_objects.iter().map(|o| o.balance()).sum::<u64>() as i128;
-        let gas_coins = gas_objects
+        let total_sui_balance = gas_coin_objs.iter().map(|c| c.balance()).sum::<u64>() as i128;
+        let gas_coins = gas_coin_objs
             .iter()
             .map(|obj| {
                 obj.object_reference()

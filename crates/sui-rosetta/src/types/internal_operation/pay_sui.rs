@@ -13,8 +13,8 @@ use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransacti
 use crate::errors::Error;
 
 use super::{
-    collect_coins_until_budget_met, TransactionObjectData, TryConstructTransaction,
-    MAX_COMMAND_ARGS, MAX_GAS_COINS,
+    simulate_transaction, TransactionObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
+    MAX_GAS_COINS,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -38,44 +38,48 @@ impl TryConstructTransaction for PaySui {
             amounts,
         } = self;
 
-        let total_amount = amounts.iter().sum::<u64>();
-        if let Some(budget) = budget {
-            // We have a constant budget, so no need to dry-run
-            let all_coins = client
-                .select_coins(
-                    &sender.to_string(),
-                    sui_rpc::client::v2::SUI_COIN_TYPE,
-                    (total_amount + budget) as u128,
-                    &[],
-                )
-                .await
-                .map_err(Error::from)?;
+        let all_coins = client
+            .select_up_to_n_largest_coins(
+                &Address::from(sender),
+                &StructTag::sui().into(),
+                1500,
+                &[],
+            )
+            .await?;
 
-            let total_sui_balance = all_coins.iter().map(|o| o.balance()).sum::<u64>() as i128;
+        let total_sui_balance = all_coins.iter().map(|c| c.balance()).sum::<u64>() as i128;
 
-            let mut iter = all_coins
-                .into_iter()
-                .map(|obj| obj.object_reference().try_to_object_ref());
-            let gas_coins = iter
-                .by_ref()
-                .take(MAX_GAS_COINS)
-                .collect::<Result<Vec<_>, _>>()?;
-            let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>()?;
+        let mut iter = all_coins
+            .iter()
+            .map(|obj| obj.object_reference().try_to_object_ref());
+        let gas_coins = iter
+            .by_ref()
+            .take(MAX_GAS_COINS)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Error::from)?;
+        let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>().map_err(Error::from)?;
 
-            return Ok(TransactionObjectData {
-                gas_coins,
-                extra_gas_coins,
-                objects: vec![],
-                total_sui_balance,
-                budget,
-            });
-        };
+        // Simulate to get budget if necessary and validate we can cover payment + gas amount.
+        let pt = pay_sui_pt(recipients, amounts, &extra_gas_coins)?;
+        let (budget, gas_coin_objs) =
+            simulate_transaction(client, pt, sender, gas_coins, gas_price, budget).await?;
 
-        let total_amount = amounts.iter().sum::<u64>();
-        let pay_sui_pt = |extra_gas_coins: &[ObjectRef]| {
-            pay_sui_pt(recipients.clone(), amounts.clone(), extra_gas_coins)
-        };
-        collect_coins_until_budget_met(client, sender, pay_sui_pt, total_amount, gas_price).await
+        let gas_coins = gas_coin_objs
+            .iter()
+            .map(|obj| {
+                obj.object_reference()
+                    .try_to_object_ref()
+                    .map_err(Error::from)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(TransactionObjectData {
+            gas_coins,
+            extra_gas_coins,
+            objects: vec![],
+            total_sui_balance,
+            budget,
+        })
     }
 }
 

@@ -2,12 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use futures::StreamExt;
-use prost_types::FieldMask;
 use serde::{Deserialize, Serialize};
 use sui_rpc::client::v2::Client;
-use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 
 use sui_types::base_types::ObjectRef;
 use sui_types::governance::ADD_STAKE_FUN_NAME;
@@ -23,8 +19,7 @@ use crate::errors::Error;
 use crate::types::internal_operation::MAX_GAS_COINS;
 
 use super::{
-    budget_from_dry_run, collect_coins_until_budget_met, TransactionObjectData,
-    TryConstructTransaction, MAX_COMMAND_ARGS,
+    simulate_transaction, TransactionObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -48,115 +43,43 @@ impl TryConstructTransaction for Stake {
             amount,
         } = self;
 
-        if amount.is_none() {
-            let mut all_coins = vec![];
+        let all_coins = client
+            .select_up_to_n_largest_coins(
+                &Address::from(sender),
+                &StructTag::sui().into(),
+                1500,
+                &[],
+            )
+            .await?;
 
-            let list_request = ListOwnedObjectsRequest::default()
-                .with_owner(sender.to_string())
-                .with_object_type(format!("0x2::coin::Coin<{}>", sui_sdk::SUI_COIN_TYPE))
-                .with_page_size(1000u32)
-                .with_read_mask(FieldMask::from_paths([
-                    "object_id",
-                    "version",
-                    "digest",
-                    "balance",
-                ]));
+        let total_sui_balance = all_coins.iter().map(|c| c.balance()).sum::<u64>() as i128;
 
-            let mut coins_stream = Box::pin(client.list_owned_objects(list_request));
+        let mut iter = all_coins
+            .iter()
+            .map(|obj| obj.object_reference().try_to_object_ref());
+        let gas_coins = iter
+            .by_ref()
+            .take(MAX_GAS_COINS)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Error::from)?;
+        let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>().map_err(Error::from)?;
 
-            while let Some(object) = coins_stream.next().await {
-                let object = object?;
-                all_coins.push(object);
-            }
+        // Always simulate to validate the transaction
+        // For stake_all (amount is None), simulate with minimal amount
+        // For specific amount, simulate with actual amount
+        let simulation_amount = amount.unwrap_or(1_000_000_000); // 1 SUI minimum staking threshold
 
-            let total_sui_balance = all_coins.iter().map(|o| o.balance()).sum::<u64>() as i128;
-            let mut iter = all_coins
-                .into_iter()
-                .map(|obj| obj.object_reference().try_to_object_ref());
-            let gas_coins = iter
-                .by_ref()
-                .take(MAX_GAS_COINS)
-                .collect::<Result<Vec<_>, _>>()?;
-            let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>()?;
+        let pt = stake_pt(validator, simulation_amount, false, &extra_gas_coins)?;
+        let (budget, _) =
+            simulate_transaction(client, pt, sender, gas_coins.clone(), gas_price, budget).await?;
 
-            let budget = match budget {
-                Some(budget) => budget,
-                None => {
-                    let pt = stake_pt(validator, total_sui_balance as u64, true, &extra_gas_coins)?;
-                    budget_from_dry_run(client, pt, sender, gas_price).await?
-                }
-            };
-
-            return Ok(TransactionObjectData {
-                gas_coins,
-                extra_gas_coins,
-                objects: vec![],
-                total_sui_balance,
-                budget,
-            });
-        }
-
-        let amount = amount.expect("We already handled amount: None");
-
-        if let Some(budget) = budget {
-            let mut all_coins = vec![];
-            let mut gathered = 0u64;
-            let needed = amount + budget;
-
-            let list_request = ListOwnedObjectsRequest::default()
-                .with_owner(sender.to_string())
-                .with_object_type(format!("0x2::coin::Coin<{}>", sui_sdk::SUI_COIN_TYPE))
-                .with_page_size(1000u32)
-                .with_read_mask(FieldMask::from_paths([
-                    "object_id",
-                    "version",
-                    "digest",
-                    "balance",
-                ]));
-
-            let mut coins_stream = Box::pin(client.list_owned_objects(list_request));
-
-            while gathered < needed {
-                match coins_stream.next().await {
-                    Some(object) => {
-                        let object = object?;
-                        gathered += object.balance();
-                        all_coins.push(object);
-                    }
-                    None => {
-                        if gathered < needed {
-                            return Err(Error::InvalidInput(format!(
-                                "Address {sender} does not have amount: {amount} + budget: {budget} balance. SUI balance: {gathered}."
-                            )));
-                        }
-                        break;
-                    }
-                }
-            }
-
-            let total_sui_balance = all_coins.iter().map(|o| o.balance()).sum::<u64>() as i128;
-            let mut iter = all_coins
-                .into_iter()
-                .map(|obj| obj.object_reference().try_to_object_ref());
-            let gas_coins = iter
-                .by_ref()
-                .take(MAX_GAS_COINS)
-                .collect::<Result<Vec<_>, _>>()?;
-            let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>()?;
-
-            return Ok(TransactionObjectData {
-                gas_coins,
-                extra_gas_coins,
-                objects: vec![],
-                total_sui_balance,
-                budget,
-            });
-        }
-
-        // amount is given, budget is not
-        let stake_pt =
-            |extra_gas_coins: &[ObjectRef]| stake_pt(validator, amount, false, extra_gas_coins);
-        collect_coins_until_budget_met(client, sender, stake_pt, amount, gas_price).await
+        Ok(TransactionObjectData {
+            gas_coins,
+            extra_gas_coins,
+            objects: vec![],
+            total_sui_balance,
+            budget,
+        })
     }
 }
 

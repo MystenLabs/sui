@@ -819,11 +819,12 @@ fn get_random_address(addresses: &[SuiAddress], except: Vec<SuiAddress>) -> SuiA
 }
 
 async fn get_balance(client: &mut GrpcClient, address: SuiAddress) -> u64 {
-    let mut request = GetBalanceRequest::default();
-    request.owner = Some(address.to_string());
-    request.coin_type = Some(
-        "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI".to_string(),
-    );
+    let request = GetBalanceRequest::default()
+        .with_owner(address.to_string())
+        .with_coin_type(
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                .to_string(),
+        );
 
     client
         .state_client()

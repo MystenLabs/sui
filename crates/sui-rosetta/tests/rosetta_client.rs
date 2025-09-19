@@ -165,8 +165,6 @@ impl RosettaClient {
         let Ok(preprocess) = &resps.preprocess.as_ref().unwrap() else {
             return resps;
         };
-        println!("Preprocess : {preprocess:?}");
-        // Metadata
         let metadata = self
             .call(
                 RosettaEndpoint::Metadata,
@@ -182,8 +180,6 @@ impl RosettaClient {
             return resps;
         };
 
-        println!("Metadata : {metadata:?}");
-        // Payload
         let payloads = self
             .call(
                 RosettaEndpoint::Payloads,
@@ -199,8 +195,6 @@ impl RosettaClient {
         let Ok(payloads) = resps.payloads.as_ref().unwrap() else {
             return resps;
         };
-        println!("Payload : {payloads:?}");
-        // Combine
         let signing_payload = payloads.payloads.first().unwrap();
         let bytes = Hex::decode(&signing_payload.hex_bytes).unwrap();
         let signer = signing_payload.account_identifier.address;
@@ -225,8 +219,6 @@ impl RosettaClient {
         let Ok(combine) = resps.combine.as_ref().unwrap() else {
             return resps;
         };
-        println!("Combine : {combine:?}");
-        // Submit
         let submit = self
             .call(
                 RosettaEndpoint::Submit,
