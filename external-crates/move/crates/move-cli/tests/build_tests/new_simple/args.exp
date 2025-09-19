@@ -1,3 +1,7 @@
+External Command `echo TODO: pkg-alt revisit this test; test of `move new` should be revised`:
+TODO: pkg-alt revisit this test
+sh: move: command not found
+sh: line 0: test: too many arguments
 Command `new P1`:
 External Command `cat P1/Move.toml`:
 # Full documentation for Move.toml can be found at: docs.sui.io
@@ -9,12 +13,13 @@ edition = "2024"         # use "2024" for Move 2024 edition
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 # flavor = sui
 
-[environments]           # add the environment names and their chain ids here
-mainnet = "{MAINNET_CHAIN_ID}"
-testnet = "{TESTNET_CHAIN_ID}"
+# add the environment names and their chain ids here
+# by default, testnet and mainnet are implicitly available
+# [environments]           
+# chain_name = "{chain_id}"
 
-[dependencies]
-# Add your dependencies here or leave empty.
+# Add your dependencies here or leave empty (for adding automatically sui and std deps)
+# [dependencies]
 
 # Depedency on local package in the directory `../bar`, which can be referred to in the Move code as "bar::module::function"
 # bar = { local = "../bar" }
@@ -27,10 +32,9 @@ testnet = "{TESTNET_CHAIN_ID}"
 # two of your dependencies depend on different versions of the same package
 # foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true}
 
-[dep-replacements.mainnet]
 # Use to replace dependencies for specific environments
-
-foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }External Command `cat P1/.gitignore`:
+# [dep-replacements.mainnet]
+# foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }External Command `cat P1/.gitignore`:
 build/*
 .trace
 .coverage*
@@ -45,12 +49,13 @@ edition = "2024"         # use "2024" for Move 2024 edition
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 # flavor = sui
 
-[environments]           # add the environment names and their chain ids here
-mainnet = "{MAINNET_CHAIN_ID}"
-testnet = "{TESTNET_CHAIN_ID}"
+# add the environment names and their chain ids here
+# by default, testnet and mainnet are implicitly available
+# [environments]           
+# chain_name = "{chain_id}"
 
-[dependencies]
-# Add your dependencies here or leave empty.
+# Add your dependencies here or leave empty (for adding automatically sui and std deps)
+# [dependencies]
 
 # Depedency on local package in the directory `../bar`, which can be referred to in the Move code as "bar::module::function"
 # bar = { local = "../bar" }
@@ -63,10 +68,9 @@ testnet = "{TESTNET_CHAIN_ID}"
 # two of your dependencies depend on different versions of the same package
 # foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true}
 
-[dep-replacements.mainnet]
 # Use to replace dependencies for specific environments
-
-foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }External Command `cat other_dir/.gitignore`:
+# [dep-replacements.mainnet]
+# foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }External Command `cat other_dir/.gitignore`:
 build/*
 .trace
 .coverage*
