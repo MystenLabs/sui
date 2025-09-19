@@ -3,10 +3,9 @@
 
 use crate::object_runtime::{get_all_uids, LocalProtocolConfig};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{
-    annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
-};
+use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
 use move_vm_types::{
+    effects::Op,
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
 };

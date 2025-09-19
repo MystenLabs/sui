@@ -9,7 +9,6 @@ use crate::shared::{
 use move_binary_format::errors::*;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::{AccountChangeSet, ChangeSet, Op},
     identifier::Identifier,
     resolver::{ModuleResolver, SerializedPackage},
     vm_status::StatusCode,
@@ -49,31 +48,6 @@ impl<S: ModuleResolver> TransactionDataCache<S> {
             remote,
             module_map: BTreeMap::new(),
         }
-    }
-
-    pub fn into_effects(mut self) -> (PartialVMResult<ChangeSet>, S) {
-        (self.impl_into_effects(), self.remote)
-    }
-
-    fn impl_into_effects(&mut self) -> PartialVMResult<ChangeSet> {
-        let mut change_set = ChangeSet::new();
-        for (addr, account_data_cache) in std::mem::take(&mut self.module_map).into_iter() {
-            let mut modules = BTreeMap::new();
-            for (module_name, module_blob) in account_data_cache.module_map {
-                modules.insert(module_name, Op::New(module_blob));
-            }
-
-            if !modules.is_empty() {
-                change_set
-                    .add_account_changeset(
-                        addr,
-                        AccountChangeSet::from_modules(account_data_cache.original_id, modules),
-                    )
-                    .expect("accounts should be unique");
-            }
-        }
-
-        Ok(change_set)
     }
 
     pub fn get_remote_resolver(&self) -> &S {
@@ -121,17 +95,17 @@ impl<S: ModuleResolver> DataStore for TransactionDataCache<S> {
         // However it's unlikely to be a bottleneck.
         let mut packages = ids.map(|id| SerializedPackage::empty(id, id));
         for package in packages.iter_mut() {
-            let Some(account_cache) = self.module_map.get(&package.storage_id) else {
+            let Some(account_cache) = self.module_map.get(&package.version_id) else {
                 return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                     .with_message(format!(
                         "Cannot find package {:?} in data cache",
-                        package.storage_id
+                        package.version_id
                     ))
                     .finish(Location::Undefined));
             };
             // TODO(vm-rewrite): Update this to include linkage info and type origins
             package.modules = account_cache.module_map.clone();
-            package.runtime_id = account_cache.original_id;
+            package.original_id = account_cache.original_id;
         }
         Ok(packages)
     }
@@ -201,7 +175,7 @@ impl<S: ModuleResolver> DataStore for TransactionDataCache<S> {
         // Should all be the same length, the the ordering should be preserved.
         debug_assert_eq!(result.len(), ids.len());
         for (pkg, id) in result.iter().zip(ids.iter()) {
-            debug_assert_eq!(pkg.storage_id, *id);
+            debug_assert_eq!(pkg.version_id, *id);
         }
 
         Ok(result)

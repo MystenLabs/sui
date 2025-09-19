@@ -167,8 +167,8 @@ impl OnDiskStateView {
         }
         let pkg = SerializedPackage {
             modules,
-            runtime_id: info.original_id,
-            storage_id: info.version_id,
+            original_id: info.original_id,
+            version_id: info.version_id,
             linkage_table: info.linkage_table,
             type_origin_table,
         };
@@ -252,7 +252,7 @@ impl OnDiskStateView {
 
     /// Save all the modules in the local cache, re-generate mv_interfaces if required.
     pub fn save_package(&self, package: SerializedPackage) -> Result<()> {
-        let pkg_id = package.storage_id;
+        let pkg_id = package.version_id;
         let pkg_path = self.get_package_path(&pkg_id);
         if !pkg_path.exists() {
             fs::create_dir_all(&pkg_path)?;
@@ -282,7 +282,7 @@ impl OnDiskStateView {
         }
         let info = PackageInfo {
             version_id: pkg_id,
-            original_id: package.runtime_id,
+            original_id: package.original_id,
             linkage_table: package.linkage_table,
             type_origin_table,
         };
