@@ -274,8 +274,6 @@ impl BuildConfig {
             rt.block_on(RootPackage::<SuiFlavor>::load(path, env))
         }?;
 
-        root_pkg.save_to_disk()?;
-
         let result = if self.print_diags_to_stderr {
             self.compile_package(&root_pkg, &mut std::io::stderr())
         } else {

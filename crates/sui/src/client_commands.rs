@@ -2075,7 +2075,7 @@ pub(crate) async fn compile_package(
 
     compatibility_checks(read_api, &compiled_package).await?;
 
-    pkg_tree_shake(read_api, with_unpublished_deps, &mut compiled_package).await?;
+    // pkg_tree_shake(read_api, with_unpublished_deps, &mut compiled_package).await?;
 
     // TODO: pluck back in
     // if with_unpublished_dependencies {
