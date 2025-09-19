@@ -88,9 +88,68 @@ pub fn run_move_unit_tests(
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
-    let result = tokio::task::block_in_place(|| {
-        let mut writer: Box<dyn Write + Send> = Box::new(std::io::stdout());
-        tokio::runtime::Handle::current().block_on(move_cli::base::test::run_move_unit_tests::<
+    // let result = tokio::task::block_in_place(|| {
+    let mut writer: Box<dyn Write + Send> = Box::new(std::io::stdout());
+    let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        // We're already in a tokio runtime
+        match handle.runtime_flavor() {
+            tokio::runtime::RuntimeFlavor::MultiThread => {
+                // Multi-threaded runtime, can use block_in_place
+                tokio::task::block_in_place(|| {
+                    handle.block_on(move_cli::base::test::run_move_unit_tests::<
+                        sui_package_alt::SuiFlavor,
+                        Box<dyn Write + Send>,
+                    >(
+                        path,
+                        build_config,
+                        UnitTestingConfig {
+                            report_stacktrace_on_abort: true,
+                            ..config
+                        },
+                        sui_move_natives::all_natives(
+                            /* silent */ false,
+                            &ProtocolConfig::get_for_max_version_UNSAFE(),
+                        ),
+                        Some(initial_cost_schedule_for_unit_tests()),
+                        compute_coverage,
+                        save_disassembly,
+                        &mut writer,
+                    ))
+                })
+            }
+            _ => {
+                // TODO: pkg-alt - this needs to be fixed because the non futures code will
+                // fail in a bunch of tokio test with runtime cannot be created within a
+                // runtime
+                #[allow(clippy::disallowed_methods)]
+                // tokio::runtime::Handle::current()
+                //     .block_on(RootPackage::<SuiFlavor>::load(path, env))
+                // Single-threaded or current-thread runtime, use futures::executor
+                futures::executor::block_on(move_cli::base::test::run_move_unit_tests::<
+                    sui_package_alt::SuiFlavor,
+                    Box<dyn Write + Send>,
+                >(
+                    path,
+                    build_config,
+                    UnitTestingConfig {
+                        report_stacktrace_on_abort: true,
+                        ..config
+                    },
+                    sui_move_natives::all_natives(
+                        /* silent */ false,
+                        &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    ),
+                    Some(initial_cost_schedule_for_unit_tests()),
+                    compute_coverage,
+                    save_disassembly,
+                    &mut writer,
+                ))
+            }
+        }
+    } else {
+        // No runtime exists, create one
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(move_cli::base::test::run_move_unit_tests::<
             sui_package_alt::SuiFlavor,
             Box<dyn Write + Send>,
         >(
@@ -109,7 +168,28 @@ pub fn run_move_unit_tests(
             save_disassembly,
             &mut writer,
         ))
-    });
+    };
+
+    // tokio::runtime::Handle::current().block_on(move_cli::base::test::run_move_unit_tests::<
+    //     sui_package_alt::SuiFlavor,
+    //     Box<dyn Write + Send>,
+    // >(
+    //     path,
+    //     build_config,
+    //     UnitTestingConfig {
+    //         report_stacktrace_on_abort: true,
+    //         ..config
+    //     },
+    //     sui_move_natives::all_natives(
+    //         /* silent */ false,
+    //         &ProtocolConfig::get_for_max_version_UNSAFE(),
+    //     ),
+    //     Some(initial_cost_schedule_for_unit_tests()),
+    //     compute_coverage,
+    //     save_disassembly,
+    //     &mut writer,
+    // ))
+    // });
 
     result.map(|(test_result, warning_diags)| {
         if test_result == UnitTestResult::Success {
