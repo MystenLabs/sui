@@ -296,16 +296,16 @@ fn withdraw_from_balance_tx_with_reservation(
         reservation_amount,
         sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
     );
-    builder.funds_withdrawal(withdraw_arg).unwrap();
+    let funds_withdrawal = builder.funds_withdrawal(withdraw_arg).unwrap();
 
     let amount = builder.pure(amount).unwrap();
 
     let balance = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("balance").unwrap(),
-        Identifier::new("withdraw_from_account").unwrap(),
+        Identifier::new("withdraw_funds").unwrap(),
         vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![amount],
+        vec![funds_withdrawal, amount],
     );
 
     let coin = builder.programmable_move_call(
@@ -353,7 +353,7 @@ fn make_send_to_account_tx(
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("balance").unwrap(),
-        Identifier::new("send_to_account").unwrap(),
+        Identifier::new("send_funds").unwrap(),
         vec!["0x2::sui::SUI".parse().unwrap()],
         vec![balance, recipient_arg],
     );

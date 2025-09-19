@@ -99,16 +99,22 @@ public fun destroy_zero<T>(balance: Balance<T>) {
 }
 
 /// Send a `Balance` to an address's funds accumulator.
-public(package) fun send_funds<T>(balance: Balance<T>, recipient: address) {
+public fun send_funds<T>(balance: Balance<T>, recipient: address) {
     sui::funds_accumulator::add_impl(balance, recipient);
 }
 
 /// Redeem a `Withdrawal<Balance<T>>` to get the underlying `Balance<T>` from an address's funds
 /// accumulator.
-public(package) fun redeem_funds<T>(
-    withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
-): Balance<T> {
+public fun redeem_funds<T>(withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>): Balance<T> {
     withdrawal.redeem()
+}
+
+public fun withdraw_funds<T>(
+    withdrawal: &mut sui::funds_accumulator::Withdrawal<Balance<T>>,
+    amount: u64,
+): Balance<T> {
+    let sub_withdrawal = withdrawal.split(amount as u256);
+    sub_withdrawal.redeem()
 }
 
 /// Create a `Withdrawal<Balance<T>>` from an object to withdraw funds from it.
@@ -179,20 +185,4 @@ public fun destroy_for_testing<T>(self: Balance<T>): u64 {
 /// Create a `Supply` of any coin for testing purposes.
 public fun create_supply_for_testing<T>(): Supply<T> {
     Supply { value: 0 }
-}
-
-// === Test entry points for address balance deposits and withdrawals ===
-
-// TODO: Replace these with the final API
-
-#[allow(unused_function)]
-fun send_to_account<T>(balance: Balance<T>, recipient: address) {
-    balance.send_funds(recipient)
-}
-
-#[allow(unused_function)]
-fun withdraw_from_account<T>(amount: u64, ctx: &TxContext): Balance<T> {
-    let owner = ctx.sender();
-    let withdrawal = sui::funds_accumulator::create_withdrawal<Balance<T>>(owner, amount as u256);
-    withdrawal.redeem()
 }
