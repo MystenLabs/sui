@@ -32,6 +32,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) certified_effects_ack_successes: IntCounterVec,
     pub(crate) validator_selections: IntCounterVec,
     pub(crate) submit_amplification_factor: Histogram,
+    pub(crate) latency_check_runs: IntCounterVec,
 }
 
 impl TransactionDriverMetrics {
@@ -156,6 +157,13 @@ impl TransactionDriverMetrics {
                 "transaction_driver_submit_amplification_factor",
                 "The amplification factor used by transaction driver to submit to validators",
                 COUNT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            latency_check_runs: register_int_counter_vec_with_registry!(
+                "transaction_driver_latency_check_runs",
+                "Number of times the latency check runs",
+                &["tx_type"],
                 registry,
             )
             .unwrap(),
