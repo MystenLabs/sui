@@ -213,6 +213,20 @@ type AuthenticatorStateUpdateTransaction {
 }
 
 """
+Checkpoint range for which data is available.
+"""
+type AvailableRange {
+	"""
+	Inclusive lower checkpoint for which data is available.
+	"""
+	first: Checkpoint
+	"""
+	Inclusive upper checkpoint for which data is available.
+	"""
+	last: Checkpoint
+}
+
+"""
 The total balance for a particular coin type.
 """
 type Balance {
@@ -3453,6 +3467,10 @@ type ServiceConfig {
 	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
 	queryTimeoutMs: Int
+	"""
+	Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
+	"""
+	retention(type: String!, field: String!, filter: String): AvailableRange!
 }
 
 """
