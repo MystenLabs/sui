@@ -97,10 +97,7 @@ impl<'r> FieldDriver<'_, 'r> {
     /// Return `val` with variables all resolved. Missing variables resolve to `null`.
     pub(super) fn resolve_val(&self, val: Value) -> ConstValue {
         let val: Result<_, Infallible> = val.into_const_with(|name| {
-            Ok(self
-                .resolve_var(&name)
-                .cloned()
-                .unwrap_or(ConstValue::Null))
+            Ok(self.resolve_var(&name).cloned().unwrap_or(ConstValue::Null))
         });
 
         match val {
