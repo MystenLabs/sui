@@ -89,7 +89,7 @@ function addIdToHtmlHeading(tagOpen, level, attrs, inner, id) {
 // Convert Markdown heading (## ...) to an HTML heading with id
 function mdHeadingToHtml(hashes, innerHtml, id) {
   const level = hashes.length;
-  return `<h${level} id="${id}">${innerHtml}</h${level}>`;
+  return `<h${level} id="${id}">${innerHtml.trim()}</h${level}>`;
 }
 
 // Ensure Struct/Function/Constants headings have the exact IDs
@@ -275,6 +275,16 @@ const frameworkPlugin = (_context, _options) => {
         theseFiles.forEach((absFile) => {
           let reMarkdown = fs.readFileSync(absFile, "utf8");
 
+          // DEBUG: Log the original content to see what cargo docs generated
+          if (absFile.includes('transfer.md')) {
+            console.log('=== ORIGINAL SOURCE CONTENT ===');
+            const sampleStart = reMarkdown.indexOf('Transfer ownership of');
+            if (sampleStart !== -1) {
+              console.log(reMarkdown.substring(sampleStart, sampleStart + 300));
+            }
+            console.log('=== END ORIGINAL CONTENT ===');
+          }
+
           // Make hrefs work without ".md"
           reMarkdown = reMarkdown.replace(/<a\s+(.*?)\.md(.*?)>/g, `<a $1$2>`);
 
@@ -293,7 +303,21 @@ const frameworkPlugin = (_context, _options) => {
             }
           );
 
-          // Do NOT strip <p> or convert other <a name=...> to <a id=...>; avoid MDX HTML-mode pitfalls
+          // Remove backticks around terms that Prism might recognize as Rust syntax
+          // This prevents Prism from auto-converting them to code blocks
+          const rustKeywords = ['obj', 'party', 'transfer', 'share_object', 'default', 'store', 'key', 'Party', 'T'];
+          const errorConstants = /E[A-Z][a-zA-Z]+/g; // Match error constants like ENotSupported
+          
+          // Remove backticks around known problematic terms
+          rustKeywords.forEach(keyword => {
+            const regex = new RegExp(`\`(${keyword})\``, 'g');
+            reMarkdown = reMarkdown.replace(regex, '$1');
+          });
+          
+          // Remove backticks around error constants
+          reMarkdown = reMarkdown.replace(/`(E[A-Z][a-zA-Z]+)`/g, '$1');
+          
+          // Leave other backticks as-is for normal inline code
 
           // crate-relative link rewriting
           reMarkdown = reMarkdown
@@ -310,6 +334,10 @@ const frameworkPlugin = (_context, _options) => {
           // Ensure headings have ids (HTML-first), then inject HTML TOC
           reMarkdown = ensureHeadingIdsHtml(reMarkdown);
           reMarkdown = injectToc(reMarkdown);
+
+          // FINAL STEP: Convert backticks to inline code AFTER all other processing
+          // This prevents <code><a href="...">text</a></code> which Docusaurus converts to blocks
+          reMarkdown = reMarkdown.replace(/`([^`\n]+)`/g, '<span className="code-inline">$1</span>');
 
           // Write to prefixed path
           const filename = absFile.replace(/.*\/docs\/(.*)$/, `$1`);
@@ -338,9 +366,9 @@ const frameworkPlugin = (_context, _options) => {
                 const top = relParts[0] || parts[0] || "";
                 const topUnpref = top.replace(/^sui_/, "");
 
-                // Category label: "sui:<lowercased dirname without sui_ prefix>"
+                // Category label: lowercased dirname without sui_ prefix
                 const unprefixed = part.replace(/^sui_/, "");
-                const label = `sui:${unprefixed.toLowerCase()}`;
+                const label = unprefixed.toLowerCase();
 
                 const category = {
                   label,
