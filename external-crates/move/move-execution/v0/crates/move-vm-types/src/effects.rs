@@ -2,8 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId};
-use anyhow::{Result, bail};
+use move_core_types::{
+    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
+};
 use std::collections::btree_map::{self, BTreeMap};
 
 /// A storage operation.
@@ -123,9 +124,9 @@ impl ChangeSet {
         &mut self,
         addr: AccountAddress,
         account_changeset: AccountChangeSet,
-    ) -> Result<()> {
+    ) {
         match self.accounts.entry(addr) {
-            btree_map::Entry::Occupied(_) => bail!(
+            btree_map::Entry::Occupied(_) => panic!(
                 "Failed to add account change set. Account {} already exists.",
                 addr
             ),
@@ -133,8 +134,6 @@ impl ChangeSet {
                 entry.insert(account_changeset);
             }
         }
-
-        Ok(())
     }
 
     pub fn accounts(&self) -> &BTreeMap<AccountAddress, AccountChangeSet> {

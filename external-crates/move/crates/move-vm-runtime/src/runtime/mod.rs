@@ -150,7 +150,7 @@ impl MoveRuntime {
         _gas_meter: &mut impl GasMeter,
         native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
-        let version_id = pkg.storage_id;
+        let version_id = pkg.version_id;
         dbg_println!("\n\nPublishing module at {version_id} (=> {original_id})\n\n");
 
         let data_cache = TransactionDataCache::new(data_cache);
@@ -166,7 +166,7 @@ impl MoveRuntime {
             &self.natives,
             &data_cache,
             &link_context,
-            link_context.all_package_dependencies_except(pkg.storage_id)?,
+            link_context.all_package_dependencies_except(pkg.version_id)?,
         )?;
         let verified_pkg = {
             let deps = pkg_dependencies

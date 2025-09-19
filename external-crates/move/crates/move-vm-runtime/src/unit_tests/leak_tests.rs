@@ -10,6 +10,7 @@ use crate::{
         interpreter::locals::MachineHeap,
         values::{StructRef, VMValueCast, Value},
     },
+    shared::linkage_context::LinkageContext,
 };
 use move_binary_format::file_format::{
     Bytecode::*, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
@@ -63,12 +64,12 @@ fn leak_with_abort() {
 
     let mut adapter = InMemoryTestAdapter::new();
     let pkg = StoredPackage::from_modules_for_testing(*module_id.address(), vec![m]).unwrap();
-    let linkage = pkg.linkage_context.clone();
+    let linkage = pkg.0.linkage_table.clone();
     adapter
         .publish_package(*module_id.address(), pkg.into_serialized_package())
         .unwrap();
 
-    let mut session = adapter.make_vm(linkage).unwrap();
+    let mut session = adapter.make_vm(LinkageContext::new(linkage)).unwrap();
 
     for _ in 0..100_000 {
         let _ = session.execute_entry_function(

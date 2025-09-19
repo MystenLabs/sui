@@ -1,9 +1,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::dev_utils::{
-    gas_schedule::GasStatus, in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage,
-    vm_test_adapter::VMTestAdapter,
+use crate::{
+    dev_utils::{
+        gas_schedule::GasStatus, in_memory_test_adapter::InMemoryTestAdapter,
+        storage::StoredPackage, vm_test_adapter::VMTestAdapter,
+    },
+    shared::linkage_context::LinkageContext,
 };
 use move_binary_format::file_format::{
     Bytecode::*, CodeUnit, Constant, ConstantPoolIndex, FunctionDefinition, FunctionHandle,
@@ -83,11 +86,11 @@ fn merge_borrow_states_infinite_loop() {
 
     let mut adapter = InMemoryTestAdapter::new();
     let pkg = StoredPackage::from_modules_for_testing(*module_id.address(), vec![m]).unwrap();
-    let linkage = pkg.linkage_context.clone();
+    let linkage = pkg.0.linkage_table.clone();
     adapter
         .publish_package(*module_id.address(), pkg.into_serialized_package())
         .unwrap();
-    let mut session = adapter.make_vm(linkage).unwrap();
+    let mut session = adapter.make_vm(LinkageContext::new(linkage)).unwrap();
 
     let err = session
         .execute_entry_function(
