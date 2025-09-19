@@ -349,6 +349,49 @@ a code:not(:is(.table-of-contents a code)) {
   @apply bg-sui-blue-bright/10 text-sui-hero-dark dark:bg-sui-hero-dark dark:text-sui-blue-bright/90;
 }
 
+/* Make inline code blocks that contain only a single link display inline */
+.codeBlockStandalone_O0hG:has(.codeBlockLines_F6q7 > a:only-child) {
+  display: inline-block !important;
+  background: rgba(175, 184, 193, 0.2) !important;
+  border-radius: 0.25rem !important;
+  padding: 0.125rem 0.25rem !important;
+  margin: 0 !important;
+  font-size: 0.875em !important;
+  vertical-align: middle !important;
+  border: none !important;
+  box-shadow: none !important;
+  line-height: normal !important;
+  white-space: nowrap !important;
+  width: auto !important;
+  height: auto !important;
+  float: none !important;
+  clear: none !important;
+}
+
+.codeBlockStandalone_O0hG:has(.codeBlockLines_F6q7 > a:only-child) .codeBlockLines_F6q7 {
+  display: inline !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  line-height: inherit !important;
+  white-space: nowrap !important;
+}
+
+.codeBlockStandalone_O0hG:has(.codeBlockLines_F6q7 > a:only-child) .codeBlockLines_F6q7 a {
+  color: var(--ifm-link-color) !important;
+  text-decoration: none !important;
+  display: inline !important;
+}
+
+.codeBlockStandalone_O0hG:has(.codeBlockLines_F6q7 > a:only-child) .codeBlockLines_F6q7 a:hover {
+  text-decoration: underline !important;
+}
+
+.codeBlockStandalone_O0hG:has(.codeBlockLines_F6q7 > a:only-child).thin-scrollbar {
+  overflow: visible !important;
+}
+
 /** navbar search field **/
 
 .DocSearch-Button-Container {
