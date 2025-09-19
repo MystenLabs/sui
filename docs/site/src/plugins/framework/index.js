@@ -275,16 +275,6 @@ const frameworkPlugin = (_context, _options) => {
         theseFiles.forEach((absFile) => {
           let reMarkdown = fs.readFileSync(absFile, "utf8");
 
-          // DEBUG: Log the original content to see what cargo docs generated
-          if (absFile.includes('transfer.md')) {
-            console.log('=== ORIGINAL SOURCE CONTENT ===');
-            const sampleStart = reMarkdown.indexOf('Transfer ownership of');
-            if (sampleStart !== -1) {
-              console.log(reMarkdown.substring(sampleStart, sampleStart + 300));
-            }
-            console.log('=== END ORIGINAL CONTENT ===');
-          }
-
           // Make hrefs work without ".md"
           reMarkdown = reMarkdown.replace(/<a\s+(.*?)\.md(.*?)>/g, `<a $1$2>`);
 
@@ -303,21 +293,7 @@ const frameworkPlugin = (_context, _options) => {
             }
           );
 
-          // Remove backticks around terms that Prism might recognize as Rust syntax
-          // This prevents Prism from auto-converting them to code blocks
-          const rustKeywords = ['obj', 'party', 'transfer', 'share_object', 'default', 'store', 'key', 'Party', 'T'];
-          const errorConstants = /E[A-Z][a-zA-Z]+/g; // Match error constants like ENotSupported
-          
-          // Remove backticks around known problematic terms
-          rustKeywords.forEach(keyword => {
-            const regex = new RegExp(`\`(${keyword})\``, 'g');
-            reMarkdown = reMarkdown.replace(regex, '$1');
-          });
-          
-          // Remove backticks around error constants
-          reMarkdown = reMarkdown.replace(/`(E[A-Z][a-zA-Z]+)`/g, '$1');
-          
-          // Leave other backticks as-is for normal inline code
+           // Do NOT strip <p> or convert other <a name=...> to <a id=...>; avoid MDX HTML-mode pitfalls
 
           // crate-relative link rewriting
           reMarkdown = reMarkdown
