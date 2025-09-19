@@ -1,14 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::connection::{Connection, CursorType, Edge};
-use async_graphql::{ComplexObject, Context, SimpleObject};
-use sui_types::sui_system_state::sui_system_state_inner_v1::{ValidatorSetV1, ValidatorV1};
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    ComplexObject, Context, SimpleObject,
+};
+use sui_types::{
+    base_types::SuiAddress as NativeSuiAddress,
+    collection_types::VecMap,
+    sui_system_state::sui_system_state_inner_v1::{ValidatorSetV1, ValidatorV1},
+};
 
 use crate::{
-    api::scalars::cursor::JsonCursor,
     api::{
-        scalars::{big_int::BigInt, sui_address::SuiAddress},
+        scalars::{big_int::BigInt, cursor::JsonCursor, sui_address::SuiAddress},
         types::validator::Validator,
     },
     error::RpcError,
@@ -27,6 +32,9 @@ pub(crate) struct ValidatorSet {
 
     #[graphql(skip)]
     active_validators: Vec<ValidatorV1>,
+
+    #[graphql(skip)]
+    at_risk_validators: VecMap<NativeSuiAddress, u64>,
 
     /// Total amount of stake for all active validators at the beginning of the epoch.
     pub total_stake: Option<BigInt>,
@@ -88,9 +96,13 @@ impl ValidatorSet {
         conn.has_previous_page = prev;
         conn.has_next_page = next;
         edges.for_each(|(cursor, (_, validator))| {
+            let at_risk = self
+                .at_risk_validators
+                .get(&validator.metadata.sui_address)
+                .map_or(0, |at_risk| *at_risk);
             conn.edges.push(Edge::new(
                 cursor.encode_cursor(),
-                Validator::from_validator_v1(self.scope.clone(), validator.clone()),
+                Validator::from_validator_v1(self.scope.clone(), validator.clone(), at_risk),
             ));
         });
 
@@ -103,6 +115,7 @@ impl ValidatorSet {
         Self {
             scope,
             active_validators: value.active_validators,
+            at_risk_validators: value.at_risk_validators,
             total_stake: Some(BigInt::from(value.total_stake)),
             pending_removals: Some(value.pending_removals),
             pending_active_validators_id: Some(value.pending_active_validators.contents.id.into()),
