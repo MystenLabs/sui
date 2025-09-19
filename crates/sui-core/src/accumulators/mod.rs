@@ -308,12 +308,12 @@ impl AccumulatorSettlementTxBuilder {
     pub fn collect_accumulator_changes(&self) -> BTreeMap<AccumulatorObjId, i128> {
         self.updates
             .iter()
-            .map(|(object_id, update)| match (&update.merge, &update.split) {
+            .filter_map(|(object_id, update)| match (&update.merge, &update.split) {
                 (
                     MergedValueIntermediate::SumU128(merge),
                     MergedValueIntermediate::SumU128(split),
-                ) => (*object_id, *merge as i128 - *split as i128),
-                _ => todo!(),
+                ) => Some((*object_id, *merge as i128 - *split as i128)),
+                _ => None,
             })
             .collect()
     }
