@@ -59,6 +59,9 @@ const EInvariantViolation: vector<u8> = b"Code invariant violation.";
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
 const REGULATED_COIN_VERSION: u8 = 0;
 
+/// A key to save the legacy metadata, to make backwards compat better.
+const LEGACY_METADATA_DF_KEY: u8 = 0;
+
 /// System object found at address `0xc` that stores coin data for all
 /// registered coin types. This is a shared object that acts as a central
 /// registry for coin metadata, supply information, and regulatory status.
@@ -227,7 +230,7 @@ public fun new_currency_with_otw<T: drop>(
     // TODO: remove when args on init are introduced.
     dof::add(
         &mut currency.id,
-        0,
+        LEGACY_METADATA_DF_KEY,
         coin::new_legacy_coin_metadata<T>(decimals, symbol, name, description, icon_url, ctx),
     );
 
@@ -354,8 +357,9 @@ public fun finalize_registration<T>(
         extra_fields,
     } = transfer::receive(&mut registry.id, currency);
 
-    // delete legacy metadata object
-    dof::remove<_, CoinMetadata<T>>(&mut id, 0).destroy_metadata();
+    // delete legacy metadata object now that RPCs work with it.
+    dof::remove<_, CoinMetadata<T>>(&mut id, LEGACY_METADATA_DF_KEY).destroy_metadata();
+
     id.delete();
     // Now, create the derived version of the coin currency.
     transfer::share_object(Currency {

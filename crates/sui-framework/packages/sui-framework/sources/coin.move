@@ -502,14 +502,14 @@ public(package) fun new_legacy_coin_metadata<T>(
     ctx: &mut TxContext,
 ): CoinMetadata<T> {
     // Safe as we validate ascii for modern
-    let ascii_symbol = (*symbol.as_bytes()).to_ascii_string();
+    let ascii_symbol = symbol.to_ascii();
     CoinMetadata {
         id: object::new(ctx),
         decimals,
         name,
         symbol: ascii_symbol,
         description,
-        icon_url: option::some(url::new_unsafe_from_bytes(*icon_url.as_bytes())),
+        icon_url: option::some(url::new_unsafe(icon_url.to_ascii())),
     }
 }
 
