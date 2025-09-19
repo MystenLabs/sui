@@ -276,9 +276,9 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             linkage_context,
             pub_modules.clone(),
         )?;
+        let pkg = pkg.into_serialized_package();
         let original_id = pkg.original_id;
         let publish_result = self.perform_action(gas_budget, |inner_adapter, _gas_status| {
-            let pkg = pkg.into_serialized_package();
             inner_adapter.publish_package(original_id, pkg)?;
             println!("done");
             Ok(())
@@ -331,8 +331,8 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             linkage_context,
             pub_modules.clone(),
         )?;
-        let original_id = pkg.original_id;
         let pkg = pkg.into_serialized_package();
+        let original_id = pkg.original_id;
         let (verif_pkg, mut publish_vm) = self
             .perform_action_with_gas(&mut gas_meter, |inner_adapter, _gas_status| {
                 inner_adapter.verify_package(original_id, pkg)

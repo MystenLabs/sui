@@ -5,10 +5,11 @@ use better_any::{Tid, TidAble};
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
-    account_address::AccountAddress, annotated_value as A, annotated_visitor as AV, effects::Op,
+    account_address::AccountAddress, annotated_value as A, annotated_visitor as AV,
     language_storage::StructTag, runtime_value as R, vm_status::StatusCode,
 };
 use move_vm_types::{
+    effects::Op,
     loaded_data::runtime_types::Type,
     values::{GlobalValue, Value},
 };

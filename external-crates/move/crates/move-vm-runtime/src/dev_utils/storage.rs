@@ -5,7 +5,7 @@
 use crate::{
     shared::{
         linkage_context::LinkageContext,
-        types::{DefiningTypeId, OriginalId},
+        types::{DefiningTypeId, OriginalId, VersionId},
     },
     validation::verification::ast as verif_ast,
 };
@@ -13,7 +13,6 @@ use anyhow::Result;
 use move_binary_format::CompiledModule;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::ChangeSet,
     identifier::Identifier,
     resolver::{ModuleResolver, SerializedPackage, TypeOrigin},
 };
@@ -32,23 +31,13 @@ pub struct BlankStorage;
 #[derive(Debug, Clone)]
 pub struct DeltaStorage<'a, 'b, S> {
     base: &'a S,
-    delta: &'b ChangeSet,
+    stored_pkg_cache: &'b BTreeMap<VersionId, SerializedPackage>,
 }
 
-/// Simple in-memory representation of packages
+/// Simple in-memory representation of packages. This is a wrapper around `SerializedPackage` to
+/// allow for additional helper methods for testing purposes.
 #[derive(Debug, Clone)]
-pub struct StoredPackage {
-    /// The package ID (address) for this package.
-    pub version_id: DefiningTypeId,
-    pub original_id: OriginalId,
-    pub modules: BTreeMap<Identifier, Vec<u8>>,
-    /// For each dependency (including transitive dependencies), maps runtime package ID to the
-    /// storage ID of the package that is to be used for the linkage rooted at this package.
-    pub linkage_context: LinkageContext,
-    /// The type origin table for the package. Every type in the package must have an entry in this
-    /// table.
-    pub type_origin_table: Vec<TypeOrigin>,
-}
+pub struct StoredPackage(pub SerializedPackage);
 
 /// Simple in-memory storage that can be used as a Move VM storage backend for testing purposes.
 #[derive(Debug, Clone)]
@@ -67,20 +56,23 @@ impl BlankStorage {
 }
 
 impl<'a, 'b, S: ModuleResolver> DeltaStorage<'a, 'b, S> {
-    pub fn new(base: &'a S, delta: &'b ChangeSet) -> Self {
-        Self { base, delta }
+    pub fn new(base: &'a S, delta: &'b BTreeMap<VersionId, SerializedPackage>) -> Self {
+        Self {
+            base,
+            stored_pkg_cache: delta,
+        }
     }
 }
 
 impl StoredPackage {
     fn empty(original_id: OriginalId, version_id: DefiningTypeId) -> Self {
-        Self {
+        Self(SerializedPackage {
             version_id,
             original_id,
             modules: BTreeMap::new(),
-            linkage_context: LinkageContext::new(BTreeMap::new()),
+            linkage_table: BTreeMap::new(),
             type_origin_table: vec![],
-        }
+        })
     }
 
     pub fn from_modules_for_testing(
@@ -110,14 +102,13 @@ impl StoredPackage {
             })
             .collect::<Result<_>>()?;
 
-        let linkage_context = LinkageContext::new(linkage_table);
-        Ok(Self {
+        Ok(Self(SerializedPackage {
             version_id,
-            original_id: Self::original_id(&linkage_context, version_id),
+            original_id: Self::original_id(&linkage_table, version_id),
             modules,
-            linkage_context,
+            linkage_table,
             type_origin_table,
-        })
+        }))
     }
 
     pub fn from_module_for_testing_with_linkage(
@@ -135,17 +126,17 @@ impl StoredPackage {
             })
             .collect::<Result<_>>()?;
 
-        Ok(Self {
+        Ok(Self(SerializedPackage {
             version_id,
-            original_id: Self::original_id(&linkage_context, version_id),
+            original_id: Self::original_id(&linkage_context.linkage_table, version_id),
             modules,
-            linkage_context,
+            linkage_table: linkage_context.linkage_table,
             type_origin_table,
-        })
+        }))
     }
 
     pub fn from_verified_package(verified_package: verif_ast::Package) -> Self {
-        Self {
+        Self(SerializedPackage {
             version_id: verified_package.version_id,
             original_id: verified_package.original_id,
             modules: verified_package
@@ -160,24 +151,17 @@ impl StoredPackage {
                     (name, serialized)
                 })
                 .collect(),
-            linkage_context: LinkageContext::new(verified_package.linkage_table),
+            linkage_table: verified_package.linkage_table,
             type_origin_table: verified_package.type_origin_table,
-        }
+        })
     }
 
     pub fn into_serialized_package(self) -> SerializedPackage {
-        SerializedPackage {
-            storage_id: self.version_id,
-            runtime_id: self.original_id,
-            modules: self.modules,
-            linkage_table: self.linkage_context.linkage_table.into_iter().collect(),
-            type_origin_table: self.type_origin_table,
-        }
+        self.0
     }
 
-    fn original_id(linkage: &LinkageContext, version_id: DefiningTypeId) -> OriginalId {
+    fn original_id(linkage: &BTreeMap<VersionId, OriginalId>, version_id: VersionId) -> OriginalId {
         linkage
-            .linkage_table
             .iter()
             .find_map(|(k, v)| if *v == version_id { Some(*k) } else { None })
             .expect("address not found in linkage table")
@@ -227,7 +211,7 @@ impl InMemoryStorage {
 
     pub fn publish_package(&mut self, stored_package: StoredPackage) {
         self.accounts
-            .insert(stored_package.version_id, stored_package);
+            .insert(stored_package.0.version_id, stored_package);
     }
 
     pub fn publish_or_overwrite_module(
@@ -241,16 +225,16 @@ impl InMemoryStorage {
             .accounts
             .entry(version_id)
             .or_insert_with(|| StoredPackage::empty(original_id, version_id));
-        account.modules.insert(module_name, blob);
+        account.0.modules.insert(module_name, blob);
     }
 
     pub fn debug_dump(&self) {
         for (version_id, stored_package) in &self.accounts {
             println!("Version ID: {:?}", version_id);
-            println!("Linkage context: {:?}", stored_package.linkage_context);
-            println!("Type origins: {:?}", stored_package.type_origin_table);
+            println!("Linkage context: {:?}", stored_package.0.linkage_table);
+            println!("Type origins: {:?}", stored_package.0.type_origin_table);
             println!("Modules:");
-            for module_name in stored_package.modules.keys() {
+            for module_name in stored_package.0.modules.keys() {
                 println!("\tModule: {:?}", module_name);
             }
         }
@@ -302,19 +286,8 @@ impl<S: ModuleResolver> ModuleResolver for DeltaStorage<'_, '_, S> {
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         ids.iter()
             .map(|version_id| {
-                if let Some(account_storage) = self.delta.accounts().get(version_id) {
-                    let module_bytes: BTreeMap<_, _> = account_storage
-                        .modules()
-                        .iter()
-                        .map(|(name, op)| op.clone().ok().map(|blob| (name.clone(), blob)))
-                        .collect::<Option<_>>()
-                        .unwrap_or_default();
-
-                    Ok(Some(SerializedPackage::raw_package(
-                        module_bytes,
-                        account_storage.runtime_id(),
-                        *version_id,
-                    )))
+                if let Some(pkg) = self.stored_pkg_cache.get(version_id) {
+                    Ok(Some(pkg.clone()))
                 } else {
                     // TODO: Can optimize this to do a two-pass bulk lookup if we want
                     Ok(self.base.get_packages(&[*version_id])?[0].clone())
