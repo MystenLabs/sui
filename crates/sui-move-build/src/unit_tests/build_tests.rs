@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+// use std::path::Path;
 
-use move_compiler::editions::Edition;
+// use move_compiler::editions::Edition;
 
-use crate::BuildConfig;
+// use crate::BuildConfig;
 
 // TODO: pkg-alt FAILING TEST
 // #[test]
