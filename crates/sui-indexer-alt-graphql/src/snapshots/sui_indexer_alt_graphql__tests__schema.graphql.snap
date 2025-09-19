@@ -4178,14 +4178,12 @@ type ValidatorSet {
 	"""
 	pendingActiveValidatorsSize: Int
 	"""
-	Validators that are pending removal from the active validator set, expressed as indices in
-	to `activeValidators`.
+	Validators that are pending removal from the active validator set, expressed as indices in to `activeValidators`.
 	"""
 	pendingRemovals: [Int!]
 	"""
-	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
-	of the corresponding validators. This is needed because a validator's address
-	can potentially change but the object ID of its pool will not.
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses of the corresponding validators.
+	This is needed because a validator's address can potentially change but the object ID of its pool will not.
 	"""
 	stakingPoolMappingsId: SuiAddress
 	"""
