@@ -107,6 +107,5 @@ impl Config {
             .http2_keepalive_timeout(self.http2_keepalive_timeout)
             .http2_keepalive_interval(self.http2_keepalive_interval)
             .tcp_keepalive(self.tcp_keepalive)
-            .tcp_nodelay(self.tcp_nodelay.unwrap_or_default())
     }
 }
