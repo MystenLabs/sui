@@ -3,7 +3,7 @@
 /crates/sui-keys/ @joyqvq @patrickkuo
 /crates/sui-protocol-config @mystenmark
 
-*.md @ronny-mysten
+*.md @ronny-mysten @jessiemongeon1
 # Omit auto-generated changelogs and changesets from docs review:
 /.changeset/*.md
 CHANGELOG.md
