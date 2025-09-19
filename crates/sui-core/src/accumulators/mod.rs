@@ -14,7 +14,7 @@ use sui_types::accumulator_root::{
     ACCUMULATOR_SETTLEMENT_MODULE,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
-use sui_types::base_types::{SequenceNumber};
+use sui_types::base_types::SequenceNumber;
 
 use sui_types::digests::Digest;
 use sui_types::effects::{
