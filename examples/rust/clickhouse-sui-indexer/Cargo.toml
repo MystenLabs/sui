@@ -1,0 +1,46 @@
+[package]
+name = "clickhouse-sui-indexer"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# Sui indexer framework dependencies
+sui-indexer-alt-framework = { git = "https://github.com/MystenLabs/sui.git", branch = "testnet" }
+sui-indexer-alt-framework-store-traits = { git = "https://github.com/MystenLabs/sui.git", branch = "testnet" }
+sui-types = { git = "https://github.com/MystenLabs/sui.git", branch = "testnet" }
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+tokio-util = "0.7.10"
+
+# Error handling
+anyhow = "1.0"
+
+# Async traits
+async-trait = "0.1"
+
+# URL parsing
+url = "2.0"
+
+# Command line parsing
+clap = { version = "4.0", features = ["derive"] }
+
+# Use .env file
+dotenvy = "0.15"
+
+# Future utilities
+futures = "0.3"
+scoped-futures = "0.1.3"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# ClickHouse client with recommended features
+clickhouse = { version = "0.12.2", features = ["rustls-tls", "lz4", "inserter", "time"] }
+
+# rustls for crypto provider (needed for HTTPS connections)
+rustls = { version = "0.23", features = ["ring"] }
