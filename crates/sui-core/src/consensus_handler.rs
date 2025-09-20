@@ -1255,26 +1255,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         // DONE(commit-handler-rewrite): create accumulator settlement transactions
         let mut settlement = None;
-        let mut barrier = None;
         let mut randomness_settlement = None;
-        let mut randomness_barrier = None;
         if self.epoch_store.accumulators_enabled() {
             let checkpoint_height = self
                 .epoch_store
                 .calculate_pending_checkpoint_height(commit_info.round);
 
             settlement = Some(Schedulable::AccumulatorSettlement(epoch, checkpoint_height));
-            barrier = Some(Schedulable::AccumulatorSettlementBarrier(
-                epoch,
-                checkpoint_height,
-            ));
 
             if state.randomness_round.is_some() {
                 randomness_settlement = Some(Schedulable::AccumulatorSettlement(
-                    epoch,
-                    checkpoint_height + 1,
-                ));
-                randomness_barrier = Some(Schedulable::AccumulatorSettlementBarrier(
                     epoch,
                     checkpoint_height + 1,
                 ));
@@ -1298,7 +1288,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         )
         .map(Schedulable::Transaction)
         .chain(settlement)
-        .chain(barrier)
         .collect();
 
         let randomness_schedulables: Vec<_> = randomness_state_update_transaction
@@ -1309,7 +1298,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .map(Schedulable::Transaction),
             )
             .chain(randomness_settlement)
-            .chain(randomness_barrier)
             .collect();
 
         // DONE(commit-handler-rewrite): assign shared object versions

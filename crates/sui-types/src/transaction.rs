@@ -3360,6 +3360,23 @@ pub enum ObjectReadResultKind {
     CancelledTransactionSharedObject(SequenceNumber),
 }
 
+impl ObjectReadResultKind {
+    pub fn is_cancelled(&self) -> bool {
+        matches!(
+            self,
+            ObjectReadResultKind::CancelledTransactionSharedObject(_)
+        )
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        match self {
+            ObjectReadResultKind::Object(object) => object.version(),
+            ObjectReadResultKind::ObjectConsensusStreamEnded(seq, _) => *seq,
+            ObjectReadResultKind::CancelledTransactionSharedObject(seq) => *seq,
+        }
+    }
+}
+
 impl std::fmt::Debug for ObjectReadResultKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -3777,6 +3794,25 @@ impl InputObjects {
     pub fn iter_objects(&self) -> impl Iterator<Item = &Object> {
         self.objects.iter().filter_map(|o| o.as_object())
     }
+
+    pub fn non_exclusive_writes(&self) -> impl Iterator<Item = (ObjectID, SequenceNumber)> + '_ {
+        self.objects.iter().filter_map(
+            |ObjectReadResult {
+                 input_object_kind,
+                 object,
+             }| match input_object_kind {
+                // TODO: this is not exercise yet since settlement transactions cannot be
+                // cancelled, but if/when we expose non-exclusive writes to users,
+                // a cancelled transaction should not be considered to have done any writes.
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    mutability: SharedObjectMutability::NonExclusiveWrite,
+                    ..
+                } if !object.is_cancelled() => Some((*id, object.version())),
+                _ => None,
+            },
+        )
+    }
 }
 
 // Result of attempting to read a receiving object (currently only at signing time).
@@ -3864,7 +3900,6 @@ pub enum TransactionKey {
     Digest(TransactionDigest),
     RandomnessRound(EpochId, RandomnessRound),
     AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
-    AccumulatorSettlementBarrier(EpochId, u64 /* checkpoint height */),
 }
 
 impl TransactionKey {

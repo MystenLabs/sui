@@ -16,8 +16,10 @@ use crate::{
         ExecutingGuard, PendingCertificateStats,
     },
 };
+use dashmap::DashMap;
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::debug_fatal;
+use itertools::{Itertools, Position};
+use mysten_common::{debug_fatal, fatal, in_test_configuration};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use std::{
@@ -26,18 +28,84 @@ use std::{
 };
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
-    base_types::{FullObjectID, SequenceNumber},
+    base_types::{FullObjectID, ObjectID, SequenceNumber},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::{ChildObjectResolver, InputKey},
-    transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
+    transaction::{
+        InputObjectKind, SenderSignedData, SharedObjectMutability, TransactionDataAPI,
+        TransactionKey,
+    },
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot;
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use super::{overload_tracker::OverloadTracker, PendingCertificate};
+
+enum ObjectWriteBarrier {
+    // Tracks notifies that are received before the waiter registers itself.
+    PendingWaiter {
+        count: u32,
+    },
+    // Tracks state after the waiter registers itself.
+    Waiting {
+        notify: Option<oneshot::Sender<()>>,
+        count: u32,   // how many notifies have been received
+        barrier: u32, // how many notifies are needed to pass the barrier
+    },
+}
+
+impl Default for ObjectWriteBarrier {
+    fn default() -> Self {
+        Self::PendingWaiter { count: 0 }
+    }
+}
+
+impl ObjectWriteBarrier {
+    // Returns a receiver, or None if the barrier is already passed.
+    pub fn wait(&mut self, barrier: u32) -> Option<oneshot::Receiver<()>> {
+        assert!(barrier > 0, "barrier count must be positive");
+        debug!("wait: {:?}", barrier);
+        if let ObjectWriteBarrier::PendingWaiter { count } = self {
+            assert!(*count <= barrier);
+            if *count == barrier {
+                return None;
+            }
+            let (tx, rx) = oneshot::channel();
+            *self = ObjectWriteBarrier::Waiting {
+                notify: Some(tx),
+                count: *count,
+                barrier,
+            };
+            Some(rx)
+        } else {
+            fatal!("cannot call wait on a waiting barrier");
+        }
+    }
+
+    pub fn notify(&mut self) {
+        match self {
+            ObjectWriteBarrier::PendingWaiter { count } => {
+                *count += 1;
+            }
+            ObjectWriteBarrier::Waiting {
+                notify,
+                count,
+                barrier,
+            } => {
+                assert!(notify.is_some(), "barrier notified after it finished");
+                *count += 1;
+                if *count == *barrier {
+                    debug!("take");
+                    notify.take().unwrap().send(()).unwrap();
+                }
+            }
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct ExecutionScheduler {
@@ -47,6 +115,7 @@ pub struct ExecutionScheduler {
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     balance_withdraw_scheduler: Arc<Mutex<Option<BalanceWithdrawScheduler>>>,
     metrics: Arc<AuthorityMetrics>,
+    barriers: Arc<DashMap<(ObjectID, SequenceNumber), ObjectWriteBarrier>>,
 }
 
 struct PendingGuard<'a> {
@@ -102,6 +171,7 @@ impl ExecutionScheduler {
             tx_ready_certificates,
             balance_withdraw_scheduler,
             metrics,
+            barriers: Arc::new(DashMap::new()),
         }
     }
 
@@ -125,6 +195,7 @@ impl ExecutionScheduler {
         ))
     }
 
+    #[instrument(level = "debug", skip_all, fields(tx_digest = ?cert.digest()))]
     async fn schedule_transaction(
         self,
         cert: VerifiedExecutableTransaction,
@@ -139,14 +210,43 @@ impl ExecutionScheduler {
         let input_object_kinds = tx_data
             .input_objects()
             .expect("input_objects() cannot fail");
-        let input_object_keys: Vec<_> = epoch_store
-            .get_input_object_keys(
-                &cert.key(),
-                &input_object_kinds,
-                &execution_env.assigned_versions,
-            )
-            .into_iter()
+        let input_object_keys = epoch_store.get_input_object_keys(
+            &cert.key(),
+            &input_object_kinds,
+            &execution_env.assigned_versions,
+        );
+
+        let barriers: Vec<_> = execution_env
+            .barrier_count
+            .iter()
+            .map(|(id, count)| (*id, *count))
+            .map(|(id, count)| {
+                if in_test_configuration() {
+                    input_object_kinds
+                        .iter()
+                        .find(|kind| match kind {
+                            InputObjectKind::SharedMoveObject {
+                                id: cur_id,
+                                mutability: SharedObjectMutability::Mutable,
+                                ..
+                            } => *cur_id == id,
+                            _ => false,
+                        })
+                        .expect(
+                            "barrier transaction must have a version for SUI_ACCUMULATOR_ROOT_OBJECT_ID",
+                        );
+                }
+                let version = input_object_keys
+                    .iter()
+                    .find(|key| key.id().id() == id)
+                    .expect("barrier transaction must have a version for SUI_ACCUMULATOR_ROOT_OBJECT_ID")
+                    .version()
+                    .expect("key must be a versioned object");
+                ((id, version), count)
+            })
             .collect();
+
+        let input_object_keys: Vec<_> = input_object_keys.into_iter().collect();
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()
             .into_iter()
@@ -158,11 +258,16 @@ impl ExecutionScheduler {
                 }
             })
             .collect();
+
         let input_and_receiving_keys = [
             input_object_keys,
             receiving_object_keys.iter().cloned().collect(),
         ]
         .concat();
+
+        for (key, count) in &barriers {
+            self.wait_barrier(*key, *count).await;
+        }
 
         let epoch = epoch_store.epoch();
         debug!(
@@ -218,6 +323,19 @@ impl ExecutionScheduler {
                 debug!(?tx_digest, "Transaction already executed");
             }
         };
+    }
+
+    async fn wait_barrier(&self, key: (ObjectID, SequenceNumber), count: u32) {
+        debug!("wait_barrier: {:?} {}", key, count);
+        let Some(rx) = self.barriers.entry(key).or_default().wait(count) else {
+            return;
+        };
+        rx.await.expect("barrier wait channel closed");
+    }
+
+    pub fn notify_barrier(&self, key: (ObjectID, SequenceNumber)) {
+        debug!("notify: {:?}", key);
+        self.barriers.entry(key).or_default().notify();
     }
 
     fn send_transaction_for_execution(
@@ -345,9 +463,36 @@ impl ExecutionScheduler {
                             .collect();
 
                 while let Some((txns, env)) = futures.next().await {
+                    debug!("received settlement transactions {:?}", txns.iter().map(|tx| tx.digest()).collect::<Vec<_>>());
+                    // This is a "cheat" for scheduling barrier transactions.
+                    // For generalized barrier transactions, we need to track the count of
+                    // NonExclusiveWrite args on a per (ObjectID, version) basis, and then set the barrier
+                    // count to that number whenver we encounter the next Mutable write for that
+                    // (ObjectID, version) pair.
+                    //
+                    // But for settlement transactions, we know every settlement is a NonExclusiveWrite
+                    // for SUI_ACCUMULATOR_ROOT_OBJECT_ID, so we can take a shortcut.
+
                     let txns = txns
                         .into_iter()
-                        .map(|tx| (tx, env.clone()))
+                        .enumerate()
+                        .with_position()
+                        .map(|(position, (idx, tx))| {
+                            let mut env = env.clone();
+
+                            match position {
+                                Position::First | Position::Middle => (),
+                                Position::Last => {
+                                    env.barrier_count.insert(
+                                        SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                                        idx as u32,
+                                    );
+                                }
+                                Position::Only => fatal!("there should always be at least one settlement transaction and one barrier transaction"),
+                            }
+
+                            (tx, env)
+                        })
                         .collect::<Vec<_>>();
                     scheduler.enqueue_transactions(txns, &epoch_store);
                 }
@@ -427,7 +572,7 @@ impl ExecutionScheduler {
         let mut tx_with_withdraws = Vec::new();
         let mut settlement_txns = Vec::new();
 
-        for (schedulable, mut env) in certs {
+        for (schedulable, env) in certs {
             match schedulable {
                 Schedulable::Transaction(tx) => {
                     // Check if this transaction has withdraws based on the assigned versions
@@ -444,9 +589,6 @@ impl ExecutionScheduler {
                     tx_with_keys.push((s.key(), env));
                 }
                 Schedulable::AccumulatorSettlement(_, _) => {
-                    settlement_txns.push((schedulable.key(), env));
-                }
-                Schedulable::AccumulatorSettlementBarrier(_, _) => {
                     settlement_txns.push((schedulable.key(), env));
                 }
             }

@@ -88,7 +88,6 @@ pub enum Schedulable<T = VerifiedExecutableTransaction> {
     Transaction(T),
     RandomnessStateUpdate(EpochId, RandomnessRound),
     AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
-    AccumulatorSettlementBarrier(EpochId, u64 /* checkpoint height */),
 }
 
 impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTransaction> {
@@ -126,9 +125,6 @@ impl Schedulable<&'_ VerifiedExecutableTransaction> {
             Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
                 Schedulable::AccumulatorSettlement(*epoch, *checkpoint_height)
             }
-            Schedulable::AccumulatorSettlementBarrier(epoch, checkpoint_height) => {
-                Schedulable::AccumulatorSettlementBarrier(*epoch, *checkpoint_height)
-            }
         }
     }
 }
@@ -142,7 +138,6 @@ impl<T> Schedulable<T> {
             Schedulable::Transaction(tx) => Some(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => None,
             Schedulable::AccumulatorSettlement(_, _) => None,
-            Schedulable::AccumulatorSettlementBarrier(_, _) => None,
         }
     }
 
@@ -172,16 +167,6 @@ impl<T> Schedulable<T> {
                         .epoch_start_config()
                         .accumulator_root_obj_initial_shared_version()
                         .expect("accumulator root obj initial shared version should be set"),
-                    mutability: SharedObjectMutability::NonExclusiveWrite,
-                }))
-            }
-            Schedulable::AccumulatorSettlementBarrier(_, _) => {
-                Either::Right(std::iter::once(SharedInputObject {
-                    id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-                    initial_shared_version: epoch_store
-                        .epoch_start_config()
-                        .accumulator_root_obj_initial_shared_version()
-                        .expect("accumulator root obj initial shared version should be set"),
                     mutability: SharedObjectMutability::Mutable,
                 }))
             }
@@ -197,7 +182,6 @@ impl<T> Schedulable<T> {
                 .expect("Transaction input should have been verified"),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
             Schedulable::AccumulatorSettlement(_, _) => vec![],
-            Schedulable::AccumulatorSettlementBarrier(_, _) => vec![],
         }
     }
 
@@ -209,7 +193,6 @@ impl<T> Schedulable<T> {
             Schedulable::Transaction(tx) => transaction_receiving_object_keys(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
             Schedulable::AccumulatorSettlement(_, _) => vec![],
-            Schedulable::AccumulatorSettlementBarrier(_, _) => vec![],
         }
     }
 
@@ -224,9 +207,6 @@ impl<T> Schedulable<T> {
             }
             Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
                 TransactionKey::AccumulatorSettlement(*epoch, *checkpoint_height)
-            }
-            Schedulable::AccumulatorSettlementBarrier(epoch, checkpoint_height) => {
-                TransactionKey::AccumulatorSettlementBarrier(*epoch, *checkpoint_height)
             }
         }
     }
@@ -259,11 +239,8 @@ impl SharedObjVerManager {
         let mut assigned_versions = Vec::new();
         for assignable in assignables {
             assert!(
-                !matches!(
-                    assignable,
-                    Schedulable::AccumulatorSettlement(_, _)
-                        | Schedulable::AccumulatorSettlementBarrier(_, _)
-                ) || epoch_store.accumulators_enabled(),
+                !matches!(assignable, Schedulable::AccumulatorSettlement(_, _))
+                    || epoch_store.accumulators_enabled(),
                 "AccumulatorSettlement should not be scheduled when accumulators are disabled"
             );
 
@@ -1048,14 +1025,6 @@ mod tests {
             key
         }
 
-        pub fn add_settlement_barrier_transaction(&mut self) -> TransactionKey {
-            let height = (self.assignables.len() + 1) as u64;
-            let settlement = Schedulable::AccumulatorSettlementBarrier(0, height);
-            let key = settlement.key();
-            self.assignables.push(settlement);
-            key
-        }
-
         pub fn add_withdraw_with_shared_object_transaction(&mut self) -> TransactionKey {
             let mut ptb_builder = ProgrammableTransactionBuilder::new();
             // Add shared object to the transaction
@@ -1119,7 +1088,6 @@ mod tests {
 
         let withdraw_key = ctx.add_withdraw_transaction();
         let settlement_key = ctx.add_settlement_transaction();
-        let barrier_key = ctx.add_settlement_barrier_transaction();
 
         let assigned_versions = ctx.assign_versions_from_consensus();
         assert_eq!(
@@ -1135,16 +1103,6 @@ mod tests {
                     ),
                     (
                         settlement_key,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
-                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
-                                acc_version
-                            )],
-                            withdraw_type: WithdrawType::NonWithdraw,
-                        }
-                    ),
-                    (
-                        barrier_key,
                         AssignedVersions {
                             shared_object_versions: vec![(
                                 (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
@@ -1177,17 +1135,14 @@ mod tests {
         // First withdrawal and settlement
         let withdraw_key1 = ctx.add_withdraw_transaction();
         let settlement_key1 = ctx.add_settlement_transaction();
-        let barrier_key1 = ctx.add_settlement_barrier_transaction();
 
         // Second withdrawal and settlement
         let withdraw_key2 = ctx.add_withdraw_transaction();
         let settlement_key2 = ctx.add_settlement_transaction();
-        let barrier_key2 = ctx.add_settlement_barrier_transaction();
 
         // Third withdrawal and final settlement
         let withdraw_key3 = ctx.add_withdraw_transaction();
         let settlement_key3 = ctx.add_settlement_transaction();
-        let barrier_key3 = ctx.add_settlement_barrier_transaction();
 
         let assigned_versions = ctx.assign_versions_from_consensus();
         assert_eq!(
@@ -1203,16 +1158,6 @@ mod tests {
                     ),
                     (
                         settlement_key1,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
-                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
-                                acc_version
-                            )],
-                            withdraw_type: WithdrawType::NonWithdraw,
-                        }
-                    ),
-                    (
-                        barrier_key1,
                         AssignedVersions {
                             shared_object_versions: vec![(
                                 (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
@@ -1239,16 +1184,6 @@ mod tests {
                         }
                     ),
                     (
-                        barrier_key2,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
-                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
-                                acc_version.next()
-                            )],
-                            withdraw_type: WithdrawType::NonWithdraw,
-                        }
-                    ),
-                    (
                         withdraw_key3,
                         AssignedVersions {
                             shared_object_versions: vec![],
@@ -1261,16 +1196,6 @@ mod tests {
                             shared_object_versions: vec![(
                                 (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
                                 acc_version.next().next()
-                            )],
-                            withdraw_type: WithdrawType::NonWithdraw,
-                        }
-                    ),
-                    (
-                        barrier_key3,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
-                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
-                                acc_version.next().next().next()
                             )],
                             withdraw_type: WithdrawType::NonWithdraw,
                         }

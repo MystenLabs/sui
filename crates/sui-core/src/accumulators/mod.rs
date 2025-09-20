@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use itertools::Itertools;
 use mysten_common::fatal;
@@ -157,7 +157,9 @@ struct Update {
 }
 
 pub(crate) struct AccumulatorSettlementTxBuilder {
-    updates: HashMap<AccumulatorObjId, Update>,
+    // updates is iterated over, must be a BTreeMap
+    updates: BTreeMap<AccumulatorObjId, Update>,
+    // addresses is only used for lookups.
     addresses: HashMap<AccumulatorObjId, AccumulatorAddress>,
 
     total_input_sui: u64,
@@ -169,7 +171,7 @@ impl AccumulatorSettlementTxBuilder {
         cache: Option<&dyn TransactionCacheRead>,
         ckpt_effects: &[TransactionEffects],
     ) -> Self {
-        let mut updates = HashMap::<_, _>::new();
+        let mut updates = BTreeMap::<_, _>::new();
 
         let mut addresses = HashMap::<_, _>::new();
 
@@ -278,10 +280,20 @@ impl AccumulatorSettlementTxBuilder {
             .accumulator_root_obj_initial_shared_version()
             .expect("accumulator root object must exist");
 
-        let settlements = self
+        let mut updates: Vec<_> = self
             .updates
             .into_iter()
             .chunks(2)
+            .into_iter()
+            .map(|chunk| chunk.into_iter().collect::<Vec<_>>())
+            // we need to yield an empty chunk if there are no updates
+            .collect();
+
+        if updates.is_empty() {
+            updates.push(vec![])
+        }
+
+        let settlements: Vec<_> = updates
             .into_iter()
             .enumerate()
             .map(|(idx, updates)| {
@@ -309,6 +321,7 @@ impl AccumulatorSettlementTxBuilder {
                     ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
                     vec![],
                     vec![
+                        root,
                         epoch_arg,
                         checkpoint_height_arg,
                         idx_arg,
@@ -335,7 +348,7 @@ impl AccumulatorSettlementTxBuilder {
             })
             .collect();
 
-        let builder = ProgrammableTransactionBuilder::new();
+        let mut builder = ProgrammableTransactionBuilder::new();
         let root = builder
             .input(CallArg::Object(ObjectArg::SharedObjectV2 {
                 id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
@@ -356,6 +369,7 @@ impl AccumulatorSettlementTxBuilder {
             ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
             vec![],
             vec![
+                root,
                 epoch_arg,
                 checkpoint_height_arg,
                 idx_arg,
@@ -364,6 +378,8 @@ impl AccumulatorSettlementTxBuilder {
             ],
         );
         let barrier = TransactionKind::ProgrammableSystemTransaction(builder.finish());
+
+        assert!(!settlements.is_empty(), "settlements must not be empty");
 
         (settlements, barrier)
     }
