@@ -194,7 +194,8 @@ impl From<BTreeMap<PackageName, NamedAddress>> for BuildNamedAddresses {
             let name = dep_name.as_str().into();
 
             let addr = match dep {
-                NamedAddress::RootPackage(_) => AccountAddress::ZERO,
+                NamedAddress::RootPackage(Some(addr)) => addr.0,
+                NamedAddress::RootPackage(None) => AccountAddress::ZERO,
                 NamedAddress::Unpublished { dummy_addr } => dummy_addr.0,
                 NamedAddress::Defined(original_id) => original_id.0,
             };
