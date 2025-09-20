@@ -1,17 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metrics::{
-    DefaultMetricsCallbackProvider, MetricsCallbackProvider, MetricsHandler,
-    GRPC_ENDPOINT_PATH_HEADER,
-};
-use crate::{
-    config::Config,
-    multiaddr::{Multiaddr, Protocol},
-};
-use eyre::{eyre, Result};
 use std::convert::Infallible;
 use std::task::{Context, Poll};
+use std::time::Duration;
+
+use eyre::{eyre, Result};
+use mysten_network::{
+    config::Config,
+    metrics::{
+        DefaultMetricsCallbackProvider, MetricsCallbackProvider, MetricsHandler,
+        GRPC_ENDPOINT_PATH_HEADER,
+    },
+    multiaddr::{Multiaddr, Protocol},
+};
 use tokio_rustls::rustls::ServerConfig;
 use tonic::codegen::http::HeaderValue;
 use tonic::{
@@ -23,6 +25,8 @@ use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 use tower_http::propagate_header::PropagateHeaderLayer;
 use tower_http::set_header::SetRequestHeaderLayer;
 use tower_http::trace::TraceLayer;
+
+pub const DEFAULT_GRPC_REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub struct ServerBuilder<M: MetricsCallbackProvider = DefaultMetricsCallbackProvider> {
     config: Config,
@@ -71,7 +75,10 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
             // is configured with a tls_config
             .allow_insecure(true);
 
-        let request_timeout = self.config.request_timeout;
+        let request_timeout = self
+            .config
+            .request_timeout
+            .unwrap_or(DEFAULT_GRPC_REQUEST_TIMEOUT);
         let metrics_provider = self.metrics_provider;
         let metrics = MetricsHandler::new(metrics_provider.clone());
         let request_metrics = TraceLayer::new_for_grpc()
@@ -115,7 +122,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
             .layer(request_metrics)
             .layer(PropagateHeaderLayer::new(GRPC_ENDPOINT_PATH_HEADER.clone()))
             .layer_fn(move |service| {
-                crate::grpc_timeout::GrpcTimeout::new(service, request_timeout)
+                mysten_network::grpc_timeout::GrpcTimeout::new(service, request_timeout)
             });
 
         let mut builder = sui_http::Builder::new().config(http_config);
@@ -185,30 +192,74 @@ fn update_tcp_port_in_multiaddr(addr: &Multiaddr, port: u16) -> Multiaddr {
     .expect("tcp protocol at index 1")
 }
 
+#[derive(Clone)]
+struct RequestLifetimeLayer<M: MetricsCallbackProvider> {
+    metrics_provider: M,
+}
+
+impl<M: MetricsCallbackProvider, S> Layer<S> for RequestLifetimeLayer<M> {
+    type Service = RequestLifetime<M, S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        RequestLifetime {
+            inner,
+            metrics_provider: self.metrics_provider.clone(),
+            path: None,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct RequestLifetime<M: MetricsCallbackProvider, S> {
+    inner: S,
+    metrics_provider: M,
+    path: Option<String>,
+}
+
+impl<M: MetricsCallbackProvider, S, RequestBody> Service<Request<RequestBody>>
+    for RequestLifetime<M, S>
+where
+    S: Service<Request<RequestBody>>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request<RequestBody>) -> Self::Future {
+        if self.path.is_none() {
+            let path = request.uri().path().to_string();
+            self.metrics_provider.on_start(&path);
+            self.path = Some(path);
+        }
+        self.inner.call(request)
+    }
+}
+
+impl<M: MetricsCallbackProvider, S> Drop for RequestLifetime<M, S> {
+    fn drop(&mut self) {
+        if let Some(path) = &self.path {
+            self.metrics_provider.on_drop(path)
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use crate::config::Config;
-    use crate::metrics::MetricsCallbackProvider;
-    use crate::Multiaddr;
     use fastcrypto::ed25519::Ed25519KeyPair;
     use fastcrypto::traits::KeyPair;
+    use mysten_network::config::Config;
+    use mysten_network::metrics::MetricsCallbackProvider;
+    use mysten_network::Multiaddr;
     use std::ops::Deref;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tonic::Code;
     use tonic_health::pb::health_client::HealthClient;
     use tonic_health::pb::HealthCheckRequest;
-
-    #[test]
-    fn document_multiaddr_limitation_for_unix_protocol() {
-        // You can construct a multiaddr by hand (ie binary format) just fine
-        let path = "/tmp/foo";
-        let addr = Multiaddr::new_internal(multiaddr::multiaddr!(Unix(path), Http));
-
-        // But it doesn't round-trip in the human readable format
-        let s = addr.to_string();
-        assert!(s.parse::<Multiaddr>().is_err());
-    }
 
     #[tokio::test]
     async fn test_metrics_layer_successful() {
@@ -247,8 +298,7 @@ mod test {
         let config = Config::new();
         let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
 
-        let server = config
-            .server_builder_with_metrics(metrics.clone())
+        let server = super::ServerBuilder::from_config(&config, metrics.clone())
             .bind(
                 &address,
                 Some(sui_tls::create_rustls_server_config(
@@ -324,8 +374,7 @@ mod test {
         let config = Config::new();
         let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
 
-        let server = config
-            .server_builder_with_metrics(metrics.clone())
+        let server = super::ServerBuilder::from_config(&config, metrics.clone())
             .bind(
                 &address,
                 Some(sui_tls::create_rustls_server_config(
@@ -367,17 +416,19 @@ mod test {
         let config = Config::new();
         let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
 
-        let server_handle = config
-            .server_builder()
-            .bind(
-                &address,
-                Some(sui_tls::create_rustls_server_config(
-                    keypair.copy().private(),
-                    "test".to_string(),
-                )),
-            )
-            .await
-            .unwrap();
+        let server_handle = super::ServerBuilder::from_config(
+            &config,
+            mysten_network::metrics::DefaultMetricsCallbackProvider::default(),
+        )
+        .bind(
+            &address,
+            Some(sui_tls::create_rustls_server_config(
+                keypair.copy().private(),
+                "test".to_string(),
+            )),
+        )
+        .await
+        .unwrap();
         let address = server_handle.local_addr().to_owned();
         let channel = config
             .connect(
@@ -418,60 +469,5 @@ mod test {
     async fn ip6() {
         let address: Multiaddr = "/ip6/::1/tcp/0/http".parse().unwrap();
         test_multiaddr(address).await;
-    }
-}
-
-#[derive(Clone)]
-struct RequestLifetimeLayer<M: MetricsCallbackProvider> {
-    metrics_provider: M,
-}
-
-impl<M: MetricsCallbackProvider, S> Layer<S> for RequestLifetimeLayer<M> {
-    type Service = RequestLifetime<M, S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        RequestLifetime {
-            inner,
-            metrics_provider: self.metrics_provider.clone(),
-            path: None,
-        }
-    }
-}
-
-#[derive(Clone)]
-struct RequestLifetime<M: MetricsCallbackProvider, S> {
-    inner: S,
-    metrics_provider: M,
-    path: Option<String>,
-}
-
-impl<M: MetricsCallbackProvider, S, RequestBody> Service<Request<RequestBody>>
-    for RequestLifetime<M, S>
-where
-    S: Service<Request<RequestBody>>,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, request: Request<RequestBody>) -> Self::Future {
-        if self.path.is_none() {
-            let path = request.uri().path().to_string();
-            self.metrics_provider.on_start(&path);
-            self.path = Some(path);
-        }
-        self.inner.call(request)
-    }
-}
-
-impl<M: MetricsCallbackProvider, S> Drop for RequestLifetime<M, S> {
-    fn drop(&mut self) {
-        if let Some(path) = &self.path {
-            self.metrics_provider.on_drop(path)
-        }
     }
 }

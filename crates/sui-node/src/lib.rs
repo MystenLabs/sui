@@ -15,7 +15,6 @@ use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::future::BoxFuture;
 use mysten_common::debug_fatal;
-use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -39,6 +38,7 @@ use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
+use sui_network::validator::server::SUI_TLS_SERVER_NAME;
 
 use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
@@ -71,7 +71,6 @@ use tracing::{error_span, info, Instrument};
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
-use mysten_network::server::ServerBuilder;
 use mysten_service::server_timing::server_timing_middleware;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
@@ -129,6 +128,7 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
+use sui_network::validator::server::ServerBuilder;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_snapshot::uploader::StateSnapshotUploader;
 use sui_storage::{
@@ -236,6 +236,8 @@ use sui_core::{
     validator_tx_finalizer::ValidatorTxFinalizer,
 };
 use sui_types::execution_config_utils::to_binary_config;
+
+const DEFAULT_GRPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -1561,6 +1563,9 @@ impl SuiNode {
         );
 
         let mut server_conf = mysten_network::config::Config::new();
+        server_conf.connect_timeout = Some(DEFAULT_GRPC_CONNECT_TIMEOUT);
+        server_conf.http2_keepalive_interval = Some(DEFAULT_GRPC_CONNECT_TIMEOUT);
+        server_conf.http2_keepalive_timeout = Some(DEFAULT_GRPC_CONNECT_TIMEOUT);
         server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
         server_conf.load_shed = config.grpc_load_shed;
         let mut server_builder =

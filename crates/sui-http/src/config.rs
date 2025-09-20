@@ -11,7 +11,6 @@ pub struct Config {
     init_connection_window_size: Option<u32>,
     max_concurrent_streams: Option<u32>,
     pub(crate) tcp_keepalive: Option<Duration>,
-    pub(crate) tcp_nodelay: bool,
     http2_keepalive_interval: Option<Duration>,
     http2_keepalive_timeout: Option<Duration>,
     http2_adaptive_window: Option<bool>,
@@ -31,7 +30,6 @@ impl Default for Config {
             init_connection_window_size: None,
             max_concurrent_streams: None,
             tcp_keepalive: None,
-            tcp_nodelay: true,
             http2_keepalive_interval: None,
             http2_keepalive_timeout: None,
             http2_adaptive_window: None,
@@ -153,14 +151,6 @@ impl Config {
     pub fn tcp_keepalive(self, tcp_keepalive: Option<Duration>) -> Self {
         Self {
             tcp_keepalive,
-            ..self
-        }
-    }
-
-    /// Set the value of `TCP_NODELAY` option for accepted connections. Enabled by default.
-    pub fn tcp_nodelay(self, enabled: bool) -> Self {
-        Self {
-            tcp_nodelay: enabled,
             ..self
         }
     }

@@ -20,7 +20,7 @@ impl Multiaddr {
     }
 
     #[cfg(test)]
-    pub(crate) fn new_internal(inner: ::multiaddr::Multiaddr) -> Self {
+    fn new_internal(inner: ::multiaddr::Multiaddr) -> Self {
         Self(inner)
     }
 
@@ -519,5 +519,16 @@ mod test {
             Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).with_localhost_ip();
         assert_eq!(Some("127.0.0.1".to_string()), multi_addr_dns.hostname());
         assert_eq!(Some(10501u16), multi_addr_dns.port());
+    }
+
+    #[test]
+    fn document_multiaddr_limitation_for_unix_protocol() {
+        // You can construct a multiaddr by hand (ie binary format) just fine
+        let path = "/tmp/foo";
+        let addr = Multiaddr::new_internal(multiaddr::multiaddr!(Unix(path), Http));
+
+        // But it doesn't round-trip in the human readable format
+        let s = addr.to_string();
+        assert!(s.parse::<Multiaddr>().is_err());
     }
 }

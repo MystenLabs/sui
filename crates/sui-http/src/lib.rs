@@ -103,7 +103,7 @@ impl Builder {
     {
         let listener = listener::TcpListenerWithOptions::new(
             addr,
-            self.config.tcp_nodelay,
+            /* nodelay */ true,
             self.config.tcp_keepalive,
         )?;
 
