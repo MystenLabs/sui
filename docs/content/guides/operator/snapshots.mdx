@@ -47,30 +47,8 @@ To restore from a RocksDB snapshot, follow these steps:
 
    You can use the AWS CLI (provided you have credentials to associate with the download):
    `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive --request-payer requester`.
-   
-   An alternative is to use `sui-tool` to copy the files. The following example command is for reading from a snapshot bucket that you host:
-   ```
-   sui-tool download-db-snapshot --latest \
-       --network <NETWORK> --snapshot-bucket <BUCKET-NAME> \
-       --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> \
-       --num-parallel-downloads 25 \
-       --skip-indexes
-   ```
-   - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
-   - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
-   - `--network`: Network to download snapshot for. Defaults to `mainnet`.
-   - `--path`: Path to snapshot directory on local filesystem.
-   - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and a static Cloudflare R2 bucket is used.
-   - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`. This cannot be used with `--no-sign-request`.
-   - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported. This cannot be used with `--no-sign-request`.
-   - `--skip-indexes`: Skips downloading the very large `indexes/` dir, used by jsonrpc on the full node
 
-   The following environment variables are used if `--no-sign-request` is not set:
-   * *AWS*: `AWS_SNAPSHOT_ACCESS_KEY_ID`, `AWS_SNAPSHOT_SECRET_ACCESS_KEY`, `AWS_SNAPSHOT_REGION`
-   * *GCS*: `GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH`
-   * *AZURE*: `AZURE_SNAPSHOT_STORAGE_ACCOUNT`, `AZURE_SNAPSHOT_STORAGE_ACCESS_KEY`
-
-1. When using `sui-tool download-db-snapshot` the database is copied to the location you pass to `--path`, in a directory named `epoch_[NUM]`. Rename the `epoch_[NUM]` directory to `live/` under your node's `db_path`, for example `cp -r /tmp/epoch_[NUM] /opt/sui/db/authorities_db/full_node_db/live`.
+1. When using `aws s3 cp` (or `gsutil cp`) the database is copied to the location you pass to `--path`, in a directory named `epoch_[NUM]`. Rename the `epoch_[NUM]` directory to `live/` under your node's `db_path`, for example `cp -r /tmp/epoch_[NUM] /opt/sui/db/authorities_db/full_node_db/live`.
 1. Make sure you update the ownership of the downloaded directory to the sui user (whichever linux user you run `sui-node` as)
    `sudo chown -R sui:sui  /opt/sui/db/authorities_db/full_node_db/live`.
 1. Start the Sui node.
@@ -122,6 +100,7 @@ Mysten Labs hosts two tiers of snapshot storage access. **High throughput, Reque
 **Free, permissionless buckets:**
 * These are currently hosted on Cloudflare R2, currently only in North America, but we plan on adding more regions soon.
 * Since the bucket is open to the internet, there's no need to provide any cloud credentials.
+* The free buckets (eg. `sui-tool download-formal-snapshot --no-sign-request`) are now only available for _formal_ snapshots. You must use one of the requester pays (S3 or GCS) buckets if downloading a db snapshot
 
 ### Bucket names
 

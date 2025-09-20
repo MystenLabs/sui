@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    fmt::{Debug, Formatter},
+    sync::Arc,
+};
 
 use async_graphql::Context;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
@@ -159,5 +164,15 @@ impl Scope {
     /// A package resolver with access to the packages known at this scope.
     pub(crate) fn package_resolver(&self) -> Resolver<Arc<dyn PackageStore>> {
         Resolver::new_with_limits(self.package_store.clone(), self.resolver_limits.clone())
+    }
+}
+
+impl Debug for Scope {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Scope")
+            .field("checkpoint_viewed_at", &self.checkpoint_viewed_at)
+            .field("root_version", &self.root_version)
+            .field("resolver_limits", &self.resolver_limits)
+            .finish()
     }
 }

@@ -16,6 +16,7 @@ mod client_stats_tests {
     use super::*;
     use crate::validator_client_monitor::metrics::ValidatorClientMetrics;
     use prometheus::Registry;
+    use sui_types::messages_grpc::TxType;
 
     /// Helper to create test validator names
     fn create_test_validator_names(n: usize) -> Vec<AuthorityName> {
@@ -506,6 +507,8 @@ mod client_stats_tests {
 
 #[cfg(test)]
 mod client_monitor_tests {
+    use sui_types::messages_grpc::TxType;
+
     use crate::{
         authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
         test_authority_clients::MockAuthorityApi,

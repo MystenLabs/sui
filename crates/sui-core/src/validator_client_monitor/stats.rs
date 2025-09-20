@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::validator_client_monitor::{
-    OperationFeedback, OperationType, TxType, ValidatorClientMetrics,
-};
+use crate::validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMetrics};
 use mysten_common::moving_window::MovingWindow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
@@ -12,6 +10,7 @@ use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
+use sui_types::messages_grpc::TxType;
 use tracing::debug;
 
 // TODO: A few optimization to consider:
@@ -21,9 +20,9 @@ use tracing::debug;
 //    report is more critical than a submit report in terms of failures status.
 
 /// Size of the moving window for reliability measurements
-const RELIABILITY_MOVING_WINDOW_SIZE: usize = 100;
+const RELIABILITY_MOVING_WINDOW_SIZE: usize = 40;
 /// Size of the moving window for latency measurements
-const LATENCY_MOVING_WINDOW_SIZE: usize = 100;
+const LATENCY_MOVING_WINDOW_SIZE: usize = 40;
 
 /// Complete client-observed statistics for validator interactions.
 ///

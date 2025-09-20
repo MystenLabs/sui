@@ -88,19 +88,21 @@ impl TestScheduler {
     }
 
     /// Settles the balance changes for all schedulers.
-    fn settle_balance_changes(&self, changes: BTreeMap<ObjectID, i128>) {
-        let accumulator_changes = changes
+    fn settle_balance_changes(
+        &self,
+        next_accumulator_version: SequenceNumber,
+        changes: BTreeMap<ObjectID, i128>,
+    ) {
+        let accumulator_changes: BTreeMap<_, _> = changes
             .iter()
             .map(|(id, value)| (AccumulatorObjId::new_unchecked(*id), *value))
             .collect();
-        self.mock_read.settle_balance_changes(accumulator_changes);
+        self.mock_read
+            .settle_balance_changes(accumulator_changes.clone());
         self.schedulers.values().for_each(|scheduler| {
-            let accumulator_changes = changes
-                .iter()
-                .map(|(id, value)| (AccumulatorObjId::new_unchecked(*id), *value))
-                .collect();
             scheduler.settle_balances(BalanceSettlement {
-                balance_changes: accumulator_changes,
+                next_accumulator_version,
+                balance_changes: accumulator_changes.clone(),
             });
         });
     }
@@ -175,7 +177,7 @@ async fn test_schedules_and_settles() {
     let receivers = test.schedule_withdraws(v1, vec![withdraw1.clone()]);
 
     // 100 -> 40, v0 -> v1
-    test.settle_balance_changes(BTreeMap::from([(account, -60)]));
+    test.settle_balance_changes(v1, BTreeMap::from([(account, -60)]));
 
     wait_for_results(
         receivers,
@@ -187,7 +189,7 @@ async fn test_schedules_and_settles() {
     let receivers = test.schedule_withdraws(v2, vec![withdraw2.clone()]);
 
     // 40 -> 60, v1 -> v2
-    test.settle_balance_changes(BTreeMap::from([(account, 20)]));
+    test.settle_balance_changes(v2, BTreeMap::from([(account, 20)]));
 
     wait_for_results(
         receivers,
@@ -207,7 +209,7 @@ async fn test_already_executed() {
     );
 
     // Advance the accumulator version
-    test.settle_balance_changes(BTreeMap::new());
+    test.settle_balance_changes(init_version.next(), BTreeMap::new());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 
@@ -398,8 +400,9 @@ async fn balance_withdraw_scheduler_stress_test() {
         let results = tokio::time::timeout(
             Duration::from_secs(30),
             async {
+                let mut version = SequenceNumber::from_u64(0);
                 let test = TestScheduler::new(
-                    SequenceNumber::from_u64(0),
+                    version,
                     init_balances,
                 );
 
@@ -430,7 +433,8 @@ async fn balance_withdraw_scheduler_stress_test() {
                             settlements.lock().push(balance_changes);
                         }
 
-                        test_clone.settle_balance_changes(settlements.lock()[idx].clone());
+                        version = version.next();
+                        test_clone.settle_balance_changes(version, settlements.lock()[idx].clone());
                         idx += 1;
                     }
                 });

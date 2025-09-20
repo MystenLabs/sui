@@ -14,6 +14,7 @@ use async_graphql::{
     parser::types::ExecutableDocument,
     Request, Response, ServerError, ServerResult, ValidationResult, Value, Variables,
 };
+use axum::http::HeaderName;
 use serde_json::json;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -23,10 +24,16 @@ use crate::{
     metrics::RpcMetrics,
 };
 
+/// This custom response header contains a unique request-id used for debugging and appears in the logs.
+pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-request-id");
+
 /// Context data that tracks the session UUID and the client's address, to associate logs with a
 /// particular request.
 #[derive(Copy, Clone)]
-pub(crate) struct Session(Uuid, SocketAddr);
+pub(crate) struct Session {
+    pub request_id: Uuid,
+    pub client_addr: SocketAddr,
+}
 
 /// This extension is responsible for tracing and recording metrics for various GraphQL queries.
 pub(crate) struct Logging(pub Arc<RpcMetrics>);
@@ -39,7 +46,10 @@ struct LoggingExt {
 
 impl Session {
     pub(crate) fn new(addr: SocketAddr) -> Self {
-        Self(Uuid::new_v4(), addr)
+        Self {
+            request_id: Uuid::new_v4(),
+            client_addr: addr,
+        }
     }
 }
 
@@ -59,12 +69,17 @@ impl Extension for LoggingExt {
         self.metrics.queries_received.inc();
         self.metrics.queries_in_flight.inc();
         let guard = self.metrics.query_latency.start_timer();
-        let response = next.run(ctx).await;
+        let mut response = next.run(ctx).await;
         let elapsed_ms = guard.stop_and_record() * 1000.0;
         self.metrics.queries_in_flight.dec();
 
         // SAFETY: This is set by `prepare_request`.
-        let Session(uuid, addr) = self.session.lock().unwrap().unwrap();
+        let Session {
+            request_id: uuid,
+            client_addr: addr,
+        } = self.session.lock().unwrap().unwrap();
+        let request_id = uuid.to_string().try_into().unwrap();
+        response.http_headers.insert(REQUEST_ID_HEADER, request_id);
 
         if response.is_ok() {
             info!(%uuid, %addr, elapsed_ms, "Request succeeded");

@@ -10,6 +10,7 @@ mod transaction_submitter;
 /// Exports
 pub use error::TransactionDriverError;
 pub use metrics::*;
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
 use std::{
     net::SocketAddr,
@@ -19,14 +20,20 @@ use std::{
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
-use mysten_metrics::monitored_future;
+use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
+use rand::Rng;
 use sui_types::{
-    committee::EpochId, digests::TransactionDigest, error::UserInputError,
-    messages_grpc::SubmitTxRequest, transaction::TransactionDataAPI as _,
+    base_types::AuthorityName,
+    committee::EpochId,
+    error::UserInputError,
+    messages_grpc::{PingType, SubmitTxRequest, TxType},
+    transaction::TransactionDataAPI as _,
 };
-use tokio::{task::JoinSet, time::sleep};
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio::{
+    task::JoinSet,
+    time::{interval, sleep},
+};
 use tracing::instrument;
 use transaction_submitter::*;
 
@@ -35,17 +42,20 @@ use crate::{
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
     validator_client_monitor::{
-        OperationFeedback, OperationType, TxType, ValidatorClientMetrics, ValidatorClientMonitor,
+        OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
 use sui_config::NodeConfig;
-
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
 pub struct SubmitTransactionOptions {
     /// When forwarding transactions on behalf of a client, this is the client's address
     /// specified for ddos protection.
     pub forwarded_client_addr: Option<SocketAddr>,
+
+    /// When submitting a transaction, only the validators in the allowed validator list can be used to submit the transaction to.
+    /// When the allowed validator list is empty, any validator can be used.
+    pub allowed_validators: Vec<AuthorityName>,
 }
 
 #[derive(Clone, Debug)]
@@ -99,40 +109,148 @@ where
             client_monitor,
         });
 
+        let driver_clone = driver.clone();
+
+        spawn_logged_monitored_task!(Self::run_latency_checks(driver_clone));
+
         driver.enable_reconfig(reconfig_observer);
         driver
     }
 
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
+    // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
+    async fn run_latency_checks(self: Arc<Self>) {
+        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_millis(15_000);
+        const MAX_DELAY_BETWEEN_REQUESTS_MS: u64 = 10_000;
+        const PING_REQUEST_TIMEOUT: Duration = Duration::from_millis(5_000);
+
+        let mut interval = interval(INTERVAL_BETWEEN_RUNS);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+        loop {
+            interval.tick().await;
+
+            for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
+                Self::execute_latency_for_tx_type(
+                    self.clone(),
+                    MAX_DELAY_BETWEEN_REQUESTS_MS,
+                    PING_REQUEST_TIMEOUT,
+                    tx_type,
+                )
+                .await;
+            }
+        }
+    }
+
+    /// Executes a single round of latency checks for all validators and the provided transaction type.
+    async fn execute_latency_for_tx_type(
+        self: Arc<Self>,
+        max_delay_ms: u64,
+        ping_timeout: Duration,
+        tx_type: TxType,
+    ) {
+        // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
+        let mut tasks = JoinSet::new();
+        let auth_agg = self.authority_aggregator.load().clone();
+        let validators = auth_agg.committee.names().cloned().collect::<Vec<_>>();
+
+        for name in validators {
+            let display_name = auth_agg.get_display_name(&name);
+            let delay_ms = rand::thread_rng().gen_range(0..max_delay_ms);
+            let self_clone = self.clone();
+
+            let task = async move {
+                // Add some random delay to the task to avoid all tasks running at the same time
+                if delay_ms > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                }
+                let start_time = Instant::now();
+
+                let ping = if tx_type == TxType::SingleWriter {
+                    PingType::FastPath
+                } else {
+                    PingType::Consensus
+                };
+
+                // Now send a ping transaction to the chosen validator for the provided tx type
+                match self_clone
+                    .drive_transaction(
+                        SubmitTxRequest::new_ping(ping),
+                        SubmitTransactionOptions {
+                            allowed_validators: vec![name],
+                            ..Default::default()
+                        },
+                        Some(ping_timeout),
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        tracing::debug!(
+                            "Ping transaction to validator {} for tx type {} completed end to end in {} seconds",
+                            display_name,
+                            tx_type.as_str(),
+                            start_time.elapsed().as_secs_f64()
+                        );
+                    }
+                    Err(err) => {
+                        tracing::info!("Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}", tx_type.as_str(), display_name, err);
+                    }
+                }
+            };
+
+            tasks.spawn(task);
+        }
+
+        while let Some(result) = tasks.join_next().await {
+            if let Err(e) = result {
+                tracing::info!("Error while driving ping transaction: {}", e);
+            }
+        }
+    }
+
+    /// Drives transaction to submission and effects certification. If ping is provided, then the requested will be treated as a ping transaction.
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.as_ref().map(|t| t.digest()), ping = ?request.ping))]
     pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        let tx_digest = request.transaction.digest();
-        let tx_type = if request.transaction.is_consensus_tx() {
-            TxType::SharedObject
+        // For ping requests, the amplification factor is always 1.
+        let amplification_factor = if request.ping.is_some() {
+            1
         } else {
-            TxType::SingleWriter
+            let gas_price = request
+                .transaction
+                .as_ref()
+                .unwrap()
+                .transaction_data()
+                .gas_price();
+            let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
+            let amplification_factor = gas_price / reference_gas_price.max(1);
+            if amplification_factor == 0 {
+                return Err(TransactionDriverError::ValidationFailed {
+                    error: UserInputError::GasPriceUnderRGP {
+                        gas_price,
+                        reference_gas_price,
+                    }
+                    .to_string(),
+                });
+            }
+            amplification_factor
         };
 
-        let gas_price = request.transaction.transaction_data().gas_price();
-        let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
-        let amplification_factor = gas_price / reference_gas_price.max(1);
-        if amplification_factor == 0 {
-            return Err(TransactionDriverError::ValidationFailed {
-                error: UserInputError::GasPriceUnderRGP {
-                    gas_price,
-                    reference_gas_price,
-                }
-                .to_string(),
-            });
-        }
-
+        let tx_type = request.tx_type();
+        let ping_label = if request.ping.is_some() {
+            "true"
+        } else {
+            "false"
+        };
         let timer = Instant::now();
 
-        self.metrics.total_transactions_submitted.inc();
+        self.metrics
+            .total_transactions_submitted
+            .with_label_values(&[tx_type.as_str(), ping_label])
+            .inc();
 
         const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
         // Exponential backoff with jitter to prevent thundering herd on retries
@@ -146,25 +264,19 @@ where
             loop {
                 // TODO(fastpath): Check local state before submitting transaction
                 match self
-                    .drive_transaction_once(
-                        tx_digest,
-                        tx_type,
-                        amplification_factor,
-                        request.clone(),
-                        &options,
-                    )
+                    .drive_transaction_once(amplification_factor, request.clone(), &options)
                     .await
                 {
                     Ok(resp) => {
                         let settlement_finality_latency = timer.elapsed().as_secs_f64();
                         self.metrics
                             .settlement_finality_latency
-                            .with_label_values(&[tx_type.as_str()])
+                            .with_label_values(&[tx_type.as_str(), ping_label])
                             .observe(settlement_finality_latency);
                         // Record the number of retries for successful transaction
                         self.metrics
                             .transaction_retries
-                            .with_label_values(&["success"])
+                            .with_label_values(&["success", tx_type.as_str(), ping_label])
                             .observe(attempts as f64);
                         return Ok(resp);
                     }
@@ -173,7 +285,7 @@ where
                             // Record the number of retries for failed transaction
                             self.metrics
                                 .transaction_retries
-                                .with_label_values(&["failure"])
+                                .with_label_values(&["failure", tx_type.as_str(), ping_label])
                                 .observe(attempts as f64);
                             tracing::info!("Failed to finalize transaction with non-retriable error after {} attempts: {}", attempts, e);
                             return Err(e);
@@ -219,8 +331,6 @@ where
     #[instrument(level = "error", skip_all, err)]
     async fn drive_transaction_once(
         &self,
-        tx_digest: &TransactionDigest,
-        tx_type: TxType,
         amplification_factor: u64,
         request: SubmitTxRequest,
         options: &SubmitTransactionOptions,
@@ -229,13 +339,15 @@ where
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
+        let ping = request.ping;
+        let tx_type = request.tx_type();
+        let tx_digest = request.tx_digest();
 
         let (name, submit_txn_result) = self
             .submitter
             .submit_transaction(
                 &auth_agg,
                 &self.client_monitor,
-                tx_digest,
                 tx_type,
                 amplification_factor,
                 request,
@@ -254,6 +366,7 @@ where
                 name,
                 submit_txn_result,
                 options,
+                ping,
             )
             .await;
 

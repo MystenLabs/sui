@@ -57,7 +57,7 @@ mod api;
 pub mod args;
 pub mod config;
 mod error;
-mod extensions;
+pub mod extensions;
 mod health;
 mod intersect;
 mod metrics;

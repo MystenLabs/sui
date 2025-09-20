@@ -44,12 +44,3 @@ public fun mint(
     let coin = treasury_cap.mint(amount, ctx);
     transfer::public_transfer(coin, recipient);
 }
-
-/// Update coin metadata using MetadataCap
-public fun update_symbol(
-    currency: &mut Currency<MyCoin>,
-    metadata_cap: &MetadataCap<MyCoin>,
-    new_symbol: vector<u8>,
-) {
-    currency.set_symbol(metadata_cap, new_symbol.to_string());
-}

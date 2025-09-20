@@ -244,13 +244,13 @@ fn default_effects_latency_weight() -> f64 {
 }
 
 fn default_health_check_latency_weight() -> f64 {
-    0.1
+    0.0
 }
 
 fn default_fast_path_latency_weight() -> f64 {
-    0.9
+    1.0
 }
 
 fn default_consensus_latency_weight() -> f64 {
-    0.9
+    1.0
 }

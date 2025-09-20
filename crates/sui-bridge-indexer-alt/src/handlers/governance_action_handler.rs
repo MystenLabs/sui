@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::handlers::{is_bridge_txn, BRIDGE, COMMITTEE, LIMITER, TREASURY};
+use crate::metrics::BridgeIndexerMetrics;
 use crate::struct_tag;
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
@@ -36,10 +37,11 @@ pub struct GovernanceActionHandler {
     token_reg_event_type: StructTag,
     update_price_event_type: StructTag,
     new_token_event_type: StructTag,
+    metrics: Arc<BridgeIndexerMetrics>,
 }
 
-impl Default for GovernanceActionHandler {
-    fn default() -> Self {
+impl GovernanceActionHandler {
+    pub fn new(metrics: Arc<BridgeIndexerMetrics>) -> Self {
         Self {
             update_limit_event_type: struct_tag!(BRIDGE_ADDRESS, LIMITER, UPDATE_ROUTE_LIMIT_EVENT),
             emergency_op_event_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, EMERGENCY_OP_EVENT),
@@ -51,7 +53,17 @@ impl Default for GovernanceActionHandler {
                 UPDATE_TOKEN_PRICE_EVENT
             ),
             new_token_event_type: struct_tag!(BRIDGE_ADDRESS, TREASURY, NEW_TOKEN_EVENT),
+            metrics,
         }
+    }
+}
+
+impl Default for GovernanceActionHandler {
+    fn default() -> Self {
+        use prometheus::Registry;
+        let registry = Registry::new();
+        let metrics = BridgeIndexerMetrics::new(&registry);
+        Self::new(metrics)
     }
 }
 
@@ -77,13 +89,38 @@ impl Processor for GovernanceActionHandler {
                 let (action, data) = match &ev.type_ {
                     t if t == &self.update_limit_event_type => {
                         info!(?ev, "Observed Sui Route Limit Update");
-                        // todo: metrics.total_sui_token_deposited.inc();
                         let event: UpdateRouteLimitEvent = bcs::from_bytes(&ev.contents)?;
+
+                        // Critical bridge limit update metrics
+                        self.metrics
+                            .governance_actions_total
+                            .with_label_values(&["update_bridge_limit", "sui"])
+                            .inc();
+                        self.metrics
+                            .bridge_events_total
+                            .with_label_values(&["update_route_limit", "sui"])
+                            .inc();
+
                         (UpdateBridgeLimit, serde_json::to_value(event)?)
                     }
                     t if t == &self.emergency_op_event_type => {
                         info!(?ev, "Observed Sui Emergency Op");
                         let event: EmergencyOpEvent = bcs::from_bytes(&ev.contents)?;
+
+                        // Critical security event - emergency bridge pause/unpause
+                        self.metrics
+                            .bridge_emergency_events_total
+                            .with_label_values(&["emergency_operation", "critical"])
+                            .inc();
+                        self.metrics
+                            .governance_actions_total
+                            .with_label_values(&["emergency_operation", "sui"])
+                            .inc();
+                        self.metrics
+                            .bridge_pause_status
+                            .with_label_values(&["bridge_main"])
+                            .set(if event.frozen { 0 } else { 1 });
+
                         (EmergencyOperation, serde_json::to_value(event)?)
                     }
                     t if t == &self.blocklist_event_type => {

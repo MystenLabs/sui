@@ -6,7 +6,7 @@ processed 2 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-58:
+task 1, lines 6-70:
 //# run-graphql
 Response: {
   "data": {
@@ -16,6 +16,21 @@ Response: {
         "activeValidators": [
           {
             "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+            "balance": {
+              "totalBalance": "30000000000000000"
+            },
+            "balances": {
+              "__typename": "BalanceConnection"
+            },
+            "defaultSuinsName": null,
+            "multiGetBalances": [
+              {
+                "totalBalance": "30000000000000000"
+              }
+            ],
+            "objects": {
+              "__typename": "MoveObjectConnection"
+            },
             "credentials": {
               "protocolPubKey": "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
               "networkPubKey": "ZeETulurG5EpRBoewpF26pyLQtpUqwH1T6LqgugHBIU=",

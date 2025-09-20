@@ -14,6 +14,11 @@ use bytes::Bytes;
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
+use mysten_metrics::TX_TYPE_SHARED_OBJ_TX;
+use mysten_metrics::TX_TYPE_SINGLE_WRITER_TX;
+
+use strum::EnumIter;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
     /// Request the latest object state.
@@ -281,22 +286,74 @@ pub struct RawExecutedData {
 
 #[derive(Clone, Debug)]
 pub struct SubmitTxRequest {
-    pub transaction: Transaction,
+    pub transaction: Option<Transaction>,
+    pub ping: Option<PingType>,
 }
 
 impl SubmitTxRequest {
     pub fn new_transaction(transaction: Transaction) -> Self {
-        Self { transaction }
+        Self {
+            transaction: Some(transaction),
+            ping: None,
+        }
+    }
+
+    pub fn new_ping(ping: PingType) -> Self {
+        Self {
+            transaction: None,
+            ping: Some(ping),
+        }
+    }
+
+    pub fn tx_type(&self) -> TxType {
+        if let Some(ping) = self.ping {
+            return if ping == PingType::FastPath {
+                TxType::SingleWriter
+            } else {
+                TxType::SharedObject
+            };
+        }
+        let transaction = self.transaction.as_ref().unwrap();
+        if transaction.is_consensus_tx() {
+            TxType::SharedObject
+        } else {
+            TxType::SingleWriter
+        }
+    }
+
+    /// Returns the digest of the transaction if it is a transaction request.
+    /// Returns None if it is a ping request.
+    pub fn tx_digest(&self) -> Option<TransactionDigest> {
+        self.transaction.as_ref().map(|t| *t.digest())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
+pub enum TxType {
+    SingleWriter,
+    SharedObject,
+}
+
+impl TxType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TxType::SingleWriter => TX_TYPE_SINGLE_WRITER_TX,
+            TxType::SharedObject => TX_TYPE_SHARED_OBJ_TX,
+        }
     }
 }
 
 impl SubmitTxRequest {
     pub fn into_raw(&self) -> Result<RawSubmitTxRequest, SuiError> {
-        let transactions = vec![bcs::to_bytes(&self.transaction)
-            .map_err(|e| SuiError::TransactionSerializationError {
-                error: e.to_string(),
-            })?
-            .into()];
+        let transactions = if let Some(transaction) = &self.transaction {
+            vec![bcs::to_bytes(&transaction)
+                .map_err(|e| SuiError::TransactionSerializationError {
+                    error: e.to_string(),
+                })?
+                .into()]
+        } else {
+            vec![]
+        };
         Ok(RawSubmitTxRequest {
             transactions,
             ..Default::default()

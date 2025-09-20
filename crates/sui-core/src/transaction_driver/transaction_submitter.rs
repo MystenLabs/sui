@@ -9,9 +9,8 @@ use std::{
 use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
     base_types::AuthorityName,
-    digests::TransactionDigest,
     error::SuiError,
-    messages_grpc::{SubmitTxRequest, SubmitTxResult},
+    messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -28,7 +27,7 @@ use crate::{
         request_retrier::RequestRetrier,
         SubmitTransactionOptions, TransactionDriverMetrics,
     },
-    validator_client_monitor::{OperationFeedback, OperationType, TxType, ValidatorClientMonitor},
+    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
 
 #[cfg(test)]
@@ -48,12 +47,11 @@ impl TransactionSubmitter {
         Self { metrics }
     }
 
-    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"))]
     pub(crate) async fn submit_transaction<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
-        tx_digest: &TransactionDigest,
         tx_type: TxType,
         amplification_factor: u64,
         request: SubmitTxRequest,
@@ -68,7 +66,12 @@ impl TransactionSubmitter {
             .submit_amplification_factor
             .observe(amplification_factor as f64);
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, tx_type);
+        let mut retrier = RequestRetrier::new(
+            authority_aggregator,
+            client_monitor,
+            tx_type,
+            options.allowed_validators.clone(),
+        );
         let mut retries = 0;
         let mut request_rpcs = FuturesUnordered::new();
 
@@ -177,7 +180,7 @@ impl TransactionSubmitter {
     }
 
     #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(validator_display_name = ?display_name))]
-    async fn submit_transaction_once<A>(
+    pub(crate) async fn submit_transaction_once<A>(
         &self,
         client: Arc<SafeClient<A>>,
         request: &SubmitTxRequest,
