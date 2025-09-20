@@ -11,7 +11,11 @@ use arc_swap::ArcSwap;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
-use std::{sync::Arc, time::Instant};
+use std::sync::atomic::Ordering;
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    time::Instant,
+};
 use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
@@ -40,6 +44,7 @@ pub struct ValidatorClientMonitor<A: Clone> {
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     cached_scores: RwLock<HashMap<TxType, HashMap<AuthorityName, f64>>>,
+    update_cached_scores: Arc<AtomicBool>,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -50,6 +55,7 @@ where
         config: ValidatorClientMonitorConfig,
         metrics: Arc<ValidatorClientMetrics>,
         authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
+        update_cached_scores: Arc<AtomicBool>,
     ) -> Arc<Self> {
         info!(
             "Validator client monitor starting with config: {:?}",
@@ -62,6 +68,7 @@ where
             client_stats: RwLock::new(ClientObservedStats::new(config)),
             authority_aggregator,
             cached_scores: RwLock::new(HashMap::new()),
+            update_cached_scores,
         });
 
         let monitor_clone = monitor.clone();
@@ -80,6 +87,7 @@ where
             ValidatorClientMonitorConfig::default(),
             Arc::new(ValidatorClientMetrics::new(&Registry::default())),
             Arc::new(ArcSwap::new(authority_aggregator)),
+            Arc::new(AtomicBool::new(true)),
         )
     }
 
@@ -90,6 +98,7 @@ where
     /// failures without recording latency to avoid polluting latency statistics.
     async fn run_health_checks(self: Arc<Self>) {
         let mut interval = interval(self.config.health_check_interval);
+        let mut update_cached_scores = self.update_cached_scores.load(Ordering::Relaxed);
 
         loop {
             interval.tick().await;
@@ -155,7 +164,20 @@ where
                 }
             }
 
-            self.update_cached_scores();
+            // If the checks are disabled, then we skip updating the cached scores.
+            if !self.update_cached_scores.load(Ordering::Relaxed) {
+                tracing::debug!("Updating cached scores is disabled, skipping run");
+                continue;
+            }
+
+            // If it's the first time that we are running after enabling the caching of scores, then we reset the interval to the next run
+            // So we give plenty of time until we sample via tx data and then we start caching scores.
+            if !update_cached_scores {
+                update_cached_scores = true;
+                interval.reset();
+            } else {
+                self.update_cached_scores();
+            }
         }
     }
 }

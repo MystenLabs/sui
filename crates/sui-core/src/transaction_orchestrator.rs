@@ -29,7 +29,7 @@ use prometheus::{
 };
 use rand::Rng;
 use sui_config::NodeConfig;
-use sui_protocol_config::Chain;
+use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
@@ -155,12 +155,14 @@ where
             let client_metrics = Arc::new(
                 crate::validator_client_monitor::ValidatorClientMetrics::new(prometheus_registry),
             );
+            let run_latency_checks = Self::is_transaction_driver_enabled(&epoch_store);
             Some(TransactionDriver::new(
                 validators.clone(),
                 reconfig_observer.clone(),
                 td_metrics,
                 Some(node_config),
                 client_metrics,
+                run_latency_checks,
             ))
         } else {
             None
@@ -791,6 +793,10 @@ where
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_digest: TransactionDigest,
     ) -> bool {
+        if !Self::is_transaction_driver_enabled(epoch_store) {
+            return false;
+        }
+
         const MAX_PERCENTAGE: u8 = 100;
         let unknown_network = epoch_store.get_chain() == Chain::Unknown;
         let v = if unknown_network {
@@ -804,6 +810,14 @@ where
             v, self.td_percentage
         );
         v <= self.td_percentage
+    }
+
+    // TODO: remove this after protocol config version 96
+    // We want to enable transaction driver for protocol version 96 and above.
+    // As the new ping latency changes went in the same node version, we can't run transaction driver properly until
+    // we do have at least a quorum of nodes running the new version.
+    fn is_transaction_driver_enabled(epoch_store: &Arc<AuthorityPerEpochStore>) -> bool {
+        epoch_store.protocol_config().version >= ProtocolVersion::new(96)
     }
 
     // TODO: Potentially cleanup this function and pending transaction log.

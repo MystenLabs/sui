@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::validator_client_monitor::stats::{ClientObservedStats, ValidatorClientStats};
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Duration;
 use sui_config::validator_client_monitor_config::{ScoreWeights, ValidatorClientMonitorConfig};
 use sui_types::base_types::{AuthorityName, ConciseableName};
@@ -774,7 +774,12 @@ mod client_monitor_tests {
 
         let metrics = Arc::new(ValidatorClientMetrics::new(&Registry::default()));
         let auth_agg_swap = Arc::new(ArcSwap::new(initial_auth_agg.clone()));
-        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone());
+        let monitor = ValidatorClientMonitor::new(
+            config,
+            metrics,
+            auth_agg_swap.clone(),
+            Arc::new(AtomicBool::new(true)),
+        );
 
         // Record stats for all initial validators
         for validator in &initial_validators {
@@ -848,7 +853,12 @@ mod client_monitor_tests {
 
         let metrics = Arc::new(ValidatorClientMetrics::new(&Registry::default()));
         let auth_agg_swap = Arc::new(ArcSwap::new(initial_auth_agg.clone()));
-        let monitor = ValidatorClientMonitor::new(config, metrics, auth_agg_swap.clone());
+        let monitor = ValidatorClientMonitor::new(
+            config,
+            metrics,
+            auth_agg_swap.clone(),
+            Arc::new(AtomicBool::new(true)),
+        );
 
         // Record stats for initial validators
         for validator in &initial_validators {

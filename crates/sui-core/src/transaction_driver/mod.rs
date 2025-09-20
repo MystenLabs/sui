@@ -14,7 +14,10 @@ use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
 use std::{
     net::SocketAddr,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -78,6 +81,8 @@ pub struct TransactionDriver<A: Clone> {
     submitter: TransactionSubmitter,
     certifier: EffectsCertifier,
     client_monitor: Arc<ValidatorClientMonitor<A>>,
+    // TODO: remove this after protocol config version 96
+    enable_checks: Arc<AtomicBool>,
 }
 
 impl<A> TransactionDriver<A>
@@ -90,15 +95,21 @@ where
         metrics: Arc<TransactionDriverMetrics>,
         node_config: Option<&NodeConfig>,
         client_metrics: Arc<ValidatorClientMetrics>,
+        enable_checks: bool,
     ) -> Arc<Self> {
         let shared_swap = Arc::new(ArcSwap::new(authority_aggregator));
+        let enable_checks = Arc::new(AtomicBool::new(enable_checks));
 
         // Extract validator client monitor config from NodeConfig or use default
         let monitor_config = node_config
             .and_then(|nc| nc.validator_client_monitor_config.clone())
             .unwrap_or_default();
-        let client_monitor =
-            ValidatorClientMonitor::new(monitor_config, client_metrics, shared_swap.clone());
+        let client_monitor = ValidatorClientMonitor::new(
+            monitor_config,
+            client_metrics,
+            shared_swap.clone(),
+            enable_checks.clone(),
+        );
 
         let driver = Arc::new(Self {
             authority_aggregator: shared_swap,
@@ -107,6 +118,7 @@ where
             submitter: TransactionSubmitter::new(metrics.clone()),
             certifier: EffectsCertifier::new(metrics),
             client_monitor,
+            enable_checks,
         });
 
         let driver_clone = driver.clone();
@@ -222,6 +234,9 @@ where
         options: SubmitTransactionOptions,
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
+        // If we do have at least one transaction submitted, then we enable the latency checker, if not already enabled.
+        self.enable_checks.store(true, Ordering::Relaxed);
+
         // For ping requests, the amplification factor is always 1.
         let amplification_factor = if request.ping.is_some() {
             1
