@@ -125,7 +125,7 @@ async function traceProject(context: Readonly<Context>): Promise<void> {
         ignoreFocusOut: true, // Keeps the input box open when it loses focus
     });
     if (filter !== undefined) {
-        const cmd = filter.length > 0 ? `test ${filter} --trace` : 'test --trace';
+        const cmd = filter.length > 0 ? `test ${filter} --trace --disassemble` : 'test --trace --disassemble';
         return suiMoveCmd(context, cmd);
     }
     return Promise.resolve();
