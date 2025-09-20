@@ -173,7 +173,6 @@ pub fn run(implicit_deps: Dependencies) {
                 Arc::new(Mutex::new(CachedPackages::new())),
                 ide_files_root.clone(),
                 p.as_path(),
-                None,
                 lint,
                 None,
                 implicit_deps.clone(),
