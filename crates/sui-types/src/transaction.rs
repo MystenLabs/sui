@@ -15,6 +15,7 @@ use crate::crypto::{
 use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
+use crate::gas_coin::GAS;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
@@ -2377,9 +2378,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
-        let withdraws = self.get_funds_withdrawals();
-        // TODO(address-balances): Once we support paying gas using address balances,
-        // we add gas reservations here.
+        let mut withdraws = self.get_funds_withdrawals();
         // TODO(address-balances): Use a protocol config parameter for max_withdraws.
         let max_withdraws = 10;
         if withdraws.len() > max_withdraws {
@@ -2388,6 +2387,22 @@ impl TransactionDataAPI for TransactionDataV1 {
                     "Maximum number of balance withdraw reservations is {max_withdraws}"
                 ),
             });
+        }
+
+        if self.gas_data().is_paid_from_address_balance() {
+            let gas_withdraw = FundsWithdrawalArg::balance_from_sender(
+                self.gas_data().budget,
+                TypeInput::from(GAS::type_tag()),
+            );
+            withdraws.push(gas_withdraw);
+
+            if withdraws.len() > max_withdraws {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: format!(
+                        "Maximum number of balance withdraw reservations is {max_withdraws} (including gas reservation)"
+                    ),
+                });
+            }
         }
 
         // Accumulate all withdraws per account.
