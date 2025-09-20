@@ -1096,12 +1096,6 @@ ecvrf_verify
 ed25519_verify
 	public fun
 	0x2::ed25519
-blake2b256
-	public fun
-	0x2::hash
-keccak256
-	public fun
-	0x2::hash
 hash_to_input
 	public fun
 	0x2::vdf
@@ -1618,6 +1612,108 @@ accumulator_owner_detach_metadata
 accumulator_owner_destroy
 	fun
 	0x2::accumulator_metadata
+blake2b256
+	public fun
+	0x2::hash
+keccak256
+	public fun
+	0x2::hash
+BCS
+	public struct
+	0x2::bcs
+to_bytes
+	public fun
+	0x2::bcs
+new
+	public fun
+	0x2::bcs
+into_remainder_bytes
+	public fun
+	0x2::bcs
+peel_address
+	public fun
+	0x2::bcs
+peel_bool
+	public fun
+	0x2::bcs
+peel_u8
+	public fun
+	0x2::bcs
+peel_u16
+	public fun
+	0x2::bcs
+peel_u32
+	public fun
+	0x2::bcs
+peel_u64
+	public fun
+	0x2::bcs
+peel_u128
+	public fun
+	0x2::bcs
+peel_u256
+	public fun
+	0x2::bcs
+peel_vec_length
+	public fun
+	0x2::bcs
+peel_vec_address
+	public fun
+	0x2::bcs
+peel_vec_bool
+	public fun
+	0x2::bcs
+peel_vec_u8
+	public fun
+	0x2::bcs
+peel_vec_vec_u8
+	public fun
+	0x2::bcs
+peel_vec_u16
+	public fun
+	0x2::bcs
+peel_vec_u32
+	public fun
+	0x2::bcs
+peel_vec_u64
+	public fun
+	0x2::bcs
+peel_vec_u128
+	public fun
+	0x2::bcs
+peel_vec_u256
+	public fun
+	0x2::bcs
+peel_enum_tag
+	public fun
+	0x2::bcs
+peel_option_address
+	public fun
+	0x2::bcs
+peel_option_bool
+	public fun
+	0x2::bcs
+peel_option_u8
+	public fun
+	0x2::bcs
+peel_option_u16
+	public fun
+	0x2::bcs
+peel_option_u32
+	public fun
+	0x2::bcs
+peel_option_u64
+	public fun
+	0x2::bcs
+peel_option_u128
+	public fun
+	0x2::bcs
+peel_option_u256
+	public fun
+	0x2::bcs
+EventStreamHead
+	public struct
+	0x2::accumulator_settlement
 settlement_prologue
 	fun
 	0x2::accumulator_settlement
@@ -1626,6 +1722,21 @@ settle_u128
 	0x2::accumulator_settlement
 record_settlement_sui_conservation
 	fun
+	0x2::accumulator_settlement
+add_to_mmr
+	fun
+	0x2::accumulator_settlement
+u256_from_bytes
+	fun
+	0x2::accumulator_settlement
+hash_two_to_one_u256
+	fun
+	0x2::accumulator_settlement
+new_stream_head
+	fun
+	0x2::accumulator_settlement
+settle_events
+	entry fun
 	0x2::accumulator_settlement
 AuthenticatorState
 	public struct
@@ -1780,99 +1891,6 @@ send_to_account
 withdraw_from_account
 	fun
 	0x2::balance
-BCS
-	public struct
-	0x2::bcs
-to_bytes
-	public fun
-	0x2::bcs
-new
-	public fun
-	0x2::bcs
-into_remainder_bytes
-	public fun
-	0x2::bcs
-peel_address
-	public fun
-	0x2::bcs
-peel_bool
-	public fun
-	0x2::bcs
-peel_u8
-	public fun
-	0x2::bcs
-peel_u16
-	public fun
-	0x2::bcs
-peel_u32
-	public fun
-	0x2::bcs
-peel_u64
-	public fun
-	0x2::bcs
-peel_u128
-	public fun
-	0x2::bcs
-peel_u256
-	public fun
-	0x2::bcs
-peel_vec_length
-	public fun
-	0x2::bcs
-peel_vec_address
-	public fun
-	0x2::bcs
-peel_vec_bool
-	public fun
-	0x2::bcs
-peel_vec_u8
-	public fun
-	0x2::bcs
-peel_vec_vec_u8
-	public fun
-	0x2::bcs
-peel_vec_u16
-	public fun
-	0x2::bcs
-peel_vec_u32
-	public fun
-	0x2::bcs
-peel_vec_u64
-	public fun
-	0x2::bcs
-peel_vec_u128
-	public fun
-	0x2::bcs
-peel_vec_u256
-	public fun
-	0x2::bcs
-peel_enum_tag
-	public fun
-	0x2::bcs
-peel_option_address
-	public fun
-	0x2::bcs
-peel_option_bool
-	public fun
-	0x2::bcs
-peel_option_u8
-	public fun
-	0x2::bcs
-peel_option_u16
-	public fun
-	0x2::bcs
-peel_option_u32
-	public fun
-	0x2::bcs
-peel_option_u64
-	public fun
-	0x2::bcs
-peel_option_u128
-	public fun
-	0x2::bcs
-peel_option_u256
-	public fun
-	0x2::bcs
 Element
 	public struct
 	0x2::group_ops
@@ -2208,6 +2226,12 @@ drop
 	0x2::table
 emit
 	public fun
+	0x2::event
+emit_authenticated
+	public fun
+	0x2::event
+emit_authenticated_impl
+	fun
 	0x2::event
 Wrapper
 	public struct

@@ -84,6 +84,12 @@ pub struct SuiInitArgs {
     /// URL for the Sui REST API. To be passed to the offchain indexer and reader.
     #[clap(long)]
     pub rest_api_url: Option<String>,
+    /// Enable accumulator features for testing (e.g., authenticated event streams)
+    #[clap(long = "enable-accumulators")]
+    pub enable_accumulators: bool,
+    /// Enable authenticated event streams for testing
+    #[clap(long = "enable-authenticated-event-streams")]
+    pub enable_authenticated_event_streams: bool,
 }
 
 #[derive(Debug, clap::Parser)]

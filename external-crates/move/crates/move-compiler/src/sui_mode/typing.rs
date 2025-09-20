@@ -973,7 +973,8 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 context.add_diag(diag)
             }
             if module.value.is(&SUI_ADDR_VALUE, EVENT_MODULE_NAME)
-                && name.value() == EVENT_FUNCTION_NAME
+                && (name.value() == EVENT_FUNCTION_NAME
+                    || name.value() == EVENT_AUTHENTICATED_FUNCTION_NAME)
             {
                 check_event_emit(context, e.exp.loc, mcall)
             }

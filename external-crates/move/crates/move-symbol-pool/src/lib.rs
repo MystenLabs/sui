@@ -85,6 +85,7 @@ static_symbols!(
     "share_object",
     "event",
     "emit",
+    "emit_authenticated",
     "Receiving",
     "receive",
     "loop",
