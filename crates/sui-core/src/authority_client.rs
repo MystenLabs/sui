@@ -394,6 +394,8 @@ pub fn make_authority_clients_with_timeout_config(
     let mut network_config = mysten_network::config::Config::new();
     network_config.connect_timeout = Some(connect_timeout);
     network_config.request_timeout = Some(request_timeout);
+    network_config.http2_keepalive_interval = Some(connect_timeout);
+    network_config.http2_keepalive_timeout = Some(connect_timeout);
     make_network_authority_clients_with_network_config(committee, &network_config)
 }
 

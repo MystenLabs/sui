@@ -27,7 +27,7 @@ anemo:
   excessive_message_size: 8388608
 tonic:
   keepalive_interval:
-    secs: 5
+    secs: 10
     nanos: 0
   connection_buffer_size: 33554432
   excessive_message_size: 16777216

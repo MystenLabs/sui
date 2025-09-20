@@ -43,9 +43,6 @@ pub struct Config {
     /// Default is no keepalive (None)
     pub tcp_keepalive: Option<Duration>,
 
-    /// Set the value of TCP_NODELAY option for accepted connections. Enabled by default.
-    pub tcp_nodelay: Option<bool>,
-
     /// Set whether HTTP2 Ping frames are enabled on accepted connections.
     ///
     /// If None is specified, HTTP2 keepalive is disabled, otherwise the duration specified will be

@@ -237,6 +237,8 @@ use sui_core::{
 };
 use sui_types::execution_config_utils::to_binary_config;
 
+const DEFAULT_GRPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
+
 pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
@@ -1561,6 +1563,9 @@ impl SuiNode {
         );
 
         let mut server_conf = mysten_network::config::Config::new();
+        server_conf.connect_timeout = Some(DEFAULT_GRPC_CONNECT_TIMEOUT);
+        server_conf.http2_keepalive_interval = Some(DEFAULT_GRPC_CONNECT_TIMEOUT);
+        server_conf.http2_keepalive_timeout = Some(DEFAULT_GRPC_CONNECT_TIMEOUT);
         server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
         server_conf.load_shed = config.grpc_load_shed;
         let mut server_builder =
