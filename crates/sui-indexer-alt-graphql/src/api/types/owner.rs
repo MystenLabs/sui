@@ -46,7 +46,7 @@ pub(crate) struct Immutable {
     dummy: Option<bool>,
 }
 
-/// Object is exclusively owned by a single adderss and sequenced via consensis.
+/// Object is exclusively owned by a single adderss and sequenced via consensus.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct ConsensusAddressOwner {
     /// The version at which the object most recently bcame a consensus object. This serves the same function as `Shared.initialSharedVersion`, except it may change if the object's `owner` type changes.
