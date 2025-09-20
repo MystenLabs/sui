@@ -14785,6 +14785,7 @@ dependencies = [
  "move-core-types",
  "prometheus",
  "prost-types",
+ "serde_json",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",

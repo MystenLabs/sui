@@ -29,3 +29,13 @@ impl From<Value> for Json {
         Self(value)
     }
 }
+
+impl Json {
+    /// Convert the JSON value to a string representation
+    pub(crate) fn to_string(&self) -> serde_json::Result<String> {
+        match &self.0 {
+            Value::String(s) => Ok(s.clone()),
+            other => serde_json::to_string(other),
+        }
+    }
+}

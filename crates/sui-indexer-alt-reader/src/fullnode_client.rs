@@ -132,26 +132,21 @@ impl FullnodeClient {
 
     /// Simulate a transaction on the Sui network via gRPC.
     /// Note: Simulation does not require signatures since the transaction is not committed to the blockchain.
-    #[instrument(skip(self, transaction_data), level = "debug")]
+    #[instrument(skip(self, transaction), level = "debug")]
     pub async fn simulate_transaction(
         &self,
-        transaction_data: TransactionData,
+        transaction: proto::Transaction,
     ) -> Result<proto::SimulateTransactionResponse, Error> {
-        let mut tx_proto = proto::Transaction::default();
-        tx_proto.bcs =
-            Some(proto::Bcs::serialize(&transaction_data).map_err(|e| {
-                Error::Internal(anyhow!("Failed to serialize transaction data: {e}"))
-            })?);
         // No signatures needed for simulation
-
         let mut request = proto::SimulateTransactionRequest::default();
-        request.transaction = Some(tx_proto);
+        request.transaction = Some(transaction);
         request.read_mask = Some(FieldMask::from_paths([
             "transaction.effects.bcs",
             "transaction.events.bcs",
             "transaction.balance_changes",
             "transaction.input_objects.bcs",
             "transaction.output_objects.bcs",
+            "transaction.transaction.bcs",
             "outputs",
         ]));
 
