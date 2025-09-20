@@ -9,6 +9,5 @@ pub mod config;
 pub mod grpc_timeout;
 pub mod metrics;
 pub mod multiaddr;
-pub mod server;
 
 pub use crate::multiaddr::Multiaddr;

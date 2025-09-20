@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::metrics::{DefaultMetricsCallbackProvider, MetricsCallbackProvider};
 use crate::{
     client::{connect_lazy_with_config, connect_with_config},
-    server::ServerBuilder,
     Multiaddr,
 };
 use eyre::Result;
@@ -80,17 +78,6 @@ impl Config {
         Default::default()
     }
 
-    pub fn server_builder(&self) -> ServerBuilder {
-        ServerBuilder::from_config(self, DefaultMetricsCallbackProvider::default())
-    }
-
-    pub fn server_builder_with_metrics<M>(&self, metrics_provider: M) -> ServerBuilder<M>
-    where
-        M: MetricsCallbackProvider,
-    {
-        ServerBuilder::from_config(self, metrics_provider)
-    }
-
     pub async fn connect(&self, addr: &Multiaddr, tls_config: ClientConfig) -> Result<Channel> {
         connect_with_config(addr, tls_config, self).await
     }
@@ -99,7 +86,7 @@ impl Config {
         connect_lazy_with_config(addr, tls_config, self)
     }
 
-    pub(crate) fn http_config(&self) -> sui_http::Config {
+    pub fn http_config(&self) -> sui_http::Config {
         sui_http::Config::default()
             .initial_stream_window_size(self.http2_initial_stream_window_size)
             .initial_connection_window_size(self.http2_initial_connection_window_size)

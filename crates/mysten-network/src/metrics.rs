@@ -17,6 +17,8 @@ use tower_http::classify::GrpcFailureClass;
 use tower_http::trace::{OnFailure, OnRequest, OnResponse};
 use tracing::{warn, Span};
 
+pub static GRPC_ENDPOINT_PATH_HEADER: HeaderName = HeaderName::from_static("grpc-path-req");
+
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
@@ -30,8 +32,6 @@ const SIZE_BYTE_BUCKETS: &[f64] = &[
     4600627., 5980815., 7775060., 10107578., 13139851., 17081807., 22206349., 28868253., 37528729.,
     48787348., 63423553., // *1.3
 ];
-
-pub(crate) static GRPC_ENDPOINT_PATH_HEADER: HeaderName = HeaderName::from_static("grpc-path-req");
 
 /// The trait to be implemented when you want to be notified about
 /// a new request and related metrics around it. When a request
@@ -76,12 +76,12 @@ impl MetricsCallbackProvider for DefaultMetricsCallbackProvider {
 }
 
 #[derive(Clone)]
-pub(crate) struct MetricsHandler<M: MetricsCallbackProvider> {
+pub struct MetricsHandler<M: MetricsCallbackProvider> {
     metrics_provider: M,
 }
 
 impl<M: MetricsCallbackProvider> MetricsHandler<M> {
-    pub(crate) fn new(metrics_provider: M) -> Self {
+    pub fn new(metrics_provider: M) -> Self {
         Self { metrics_provider }
     }
 }

@@ -1,17 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metrics::{
-    DefaultMetricsCallbackProvider, MetricsCallbackProvider, MetricsHandler,
-    GRPC_ENDPOINT_PATH_HEADER,
-};
-use crate::{
-    config::Config,
-    multiaddr::{Multiaddr, Protocol},
-};
-use eyre::{eyre, Result};
 use std::convert::Infallible;
 use std::task::{Context, Poll};
+
+use eyre::{eyre, Result};
+use mysten_network::{
+    config::Config,
+    metrics::{
+        DefaultMetricsCallbackProvider, MetricsCallbackProvider, MetricsHandler,
+        GRPC_ENDPOINT_PATH_HEADER,
+    },
+    multiaddr::{Multiaddr, Protocol},
+};
 use tokio_rustls::rustls::ServerConfig;
 use tonic::codegen::http::HeaderValue;
 use tonic::{
@@ -115,7 +116,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
             .layer(request_metrics)
             .layer(PropagateHeaderLayer::new(GRPC_ENDPOINT_PATH_HEADER.clone()))
             .layer_fn(move |service| {
-                crate::grpc_timeout::GrpcTimeout::new(service, request_timeout)
+                mysten_network::grpc_timeout::GrpcTimeout::new(service, request_timeout)
             });
 
         let mut builder = sui_http::Builder::new().config(http_config);
@@ -187,28 +188,17 @@ fn update_tcp_port_in_multiaddr(addr: &Multiaddr, port: u16) -> Multiaddr {
 
 #[cfg(test)]
 mod test {
-    use crate::config::Config;
-    use crate::metrics::MetricsCallbackProvider;
-    use crate::Multiaddr;
     use fastcrypto::ed25519::Ed25519KeyPair;
     use fastcrypto::traits::KeyPair;
+    use mysten_network::config::Config;
+    use mysten_network::metrics::MetricsCallbackProvider;
+    use mysten_network::Multiaddr;
     use std::ops::Deref;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tonic::Code;
     use tonic_health::pb::health_client::HealthClient;
     use tonic_health::pb::HealthCheckRequest;
-
-    #[test]
-    fn document_multiaddr_limitation_for_unix_protocol() {
-        // You can construct a multiaddr by hand (ie binary format) just fine
-        let path = "/tmp/foo";
-        let addr = Multiaddr::new_internal(multiaddr::multiaddr!(Unix(path), Http));
-
-        // But it doesn't round-trip in the human readable format
-        let s = addr.to_string();
-        assert!(s.parse::<Multiaddr>().is_err());
-    }
 
     #[tokio::test]
     async fn test_metrics_layer_successful() {
@@ -247,8 +237,7 @@ mod test {
         let config = Config::new();
         let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
 
-        let server = config
-            .server_builder_with_metrics(metrics.clone())
+        let server = super::ServerBuilder::from_config(&config, metrics.clone())
             .bind(
                 &address,
                 Some(sui_tls::create_rustls_server_config(
@@ -324,8 +313,7 @@ mod test {
         let config = Config::new();
         let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
 
-        let server = config
-            .server_builder_with_metrics(metrics.clone())
+        let server = super::ServerBuilder::from_config(&config, metrics.clone())
             .bind(
                 &address,
                 Some(sui_tls::create_rustls_server_config(
@@ -367,17 +355,19 @@ mod test {
         let config = Config::new();
         let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
 
-        let server_handle = config
-            .server_builder()
-            .bind(
-                &address,
-                Some(sui_tls::create_rustls_server_config(
-                    keypair.copy().private(),
-                    "test".to_string(),
-                )),
-            )
-            .await
-            .unwrap();
+        let server_handle = super::ServerBuilder::from_config(
+            &config,
+            mysten_network::metrics::DefaultMetricsCallbackProvider::default(),
+        )
+        .bind(
+            &address,
+            Some(sui_tls::create_rustls_server_config(
+                keypair.copy().private(),
+                "test".to_string(),
+            )),
+        )
+        .await
+        .unwrap();
         let address = server_handle.local_addr().to_owned();
         let channel = config
             .connect(
