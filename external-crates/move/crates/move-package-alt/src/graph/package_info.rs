@@ -241,6 +241,11 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
     pub(crate) fn package(&self) -> &Package<F> {
         &self.graph.inner[self.node]
     }
+
+    /// Return the named address for this package
+    pub fn named_address(&self) -> NamedAddress {
+        self.node_to_addr(self.node)
+    }
 }
 
 impl<F: MoveFlavor> std::fmt::Debug for PackageInfo<'_, F> {

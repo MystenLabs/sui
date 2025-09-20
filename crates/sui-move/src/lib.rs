@@ -3,15 +3,13 @@
 
 use clap::Parser;
 use move_cli::base::test::UnitTestResult;
-use move_package::BuildConfig;
+use move_package_alt_compilation::build_config::BuildConfig;
 use std::path::Path;
-use sui_move_build::{implicit_deps, set_sui_flavor, SuiPackageHooks};
-use sui_package_management::system_package_versions::latest_system_packages;
 
 pub mod build;
 pub mod coverage;
 pub mod disassemble;
-pub mod manage_package;
+// pub mod manage_package;
 pub mod migrate;
 pub mod new;
 pub mod summary;
@@ -22,7 +20,7 @@ pub enum Command {
     Build(build::Build),
     Coverage(coverage::Coverage),
     Disassemble(disassemble::Disassemble),
-    ManagePackage(manage_package::ManagePackage),
+    // ManagePackage(manage_package::ManagePackage),
     Migrate(migrate::Migrate),
     New(new::New),
     Test(unit_test::Test),
@@ -35,25 +33,18 @@ pub enum CommandMeta {
     Summary(summary::PackageSummaryMetadata),
 }
 
-pub fn execute_move_command(
+pub async fn execute_move_command(
     package_path: Option<&Path>,
-    mut build_config: BuildConfig,
+    build_config: BuildConfig,
     command: Command,
     command_meta: Option<CommandMeta>,
 ) -> anyhow::Result<()> {
-    if let Some(err_msg) = set_sui_flavor(&mut build_config) {
-        anyhow::bail!(err_msg);
-    }
-
-    build_config.implicit_dependencies = implicit_deps(latest_system_packages());
-
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     match command {
         Command::Build(c) => c.execute(package_path, build_config),
-        Command::Coverage(c) => c.execute(package_path, build_config),
-        Command::Disassemble(c) => c.execute(package_path, build_config),
-        Command::ManagePackage(c) => c.execute(package_path, build_config),
-        Command::Migrate(c) => c.execute(package_path, build_config),
+        Command::Coverage(c) => c.execute(package_path, build_config).await,
+        Command::Disassemble(c) => c.execute(package_path, build_config).await,
+        // Command::ManagePackage(c) => c.execute(package_path, build_config),
+        Command::Migrate(c) => c.execute(package_path, build_config).await,
         Command::New(c) => c.execute(package_path),
         Command::Summary(s) => {
             let additional_metadata = command_meta
@@ -63,8 +54,8 @@ pub fn execute_move_command(
                 })
                 .unwrap_or_default();
             s.execute(package_path, build_config, additional_metadata)
+                .await
         }
-
         Command::Test(c) => {
             let result = c.execute(package_path, build_config)?;
 

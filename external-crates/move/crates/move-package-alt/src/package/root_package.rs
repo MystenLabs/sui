@@ -23,6 +23,7 @@ use crate::{
     package::EnvironmentName,
     schema::ParsedLockfile,
 };
+use move_symbol_pool::Symbol;
 
 /// We store the publication file that we read so that we can update it later in
 /// [RootPackage::write_publish_data]
@@ -63,7 +64,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
 
     /// The list of published ids for every dependency in the root package
     // TODO: the comment says published ids but the type says original id; what is this for?
-    deps_published_ids: Vec<OriginalID>,
+    deps_ids: BTreeMap<Symbol, OriginalID>,
 }
 
 /// Root package is the "public" entrypoint for operations with the package management.
@@ -213,14 +214,17 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let _linkage = graph.linkage()?;
         graph.check_rename_from()?;
 
-        let deps_published_ids = _linkage.into_keys().collect();
+        let deps_ids = _linkage
+            .iter()
+            .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
+            .collect();
 
         Ok(Self {
             package_path,
             environment: env,
             graph,
             lockfile,
-            deps_published_ids,
+            deps_ids,
             pubs: PublicationSource::Published(pubs),
         })
     }
@@ -283,7 +287,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 pubfile
                     .published
                     .insert(self.environment.name().clone(), publish_data);
-                std::fs::write(&self.package_path, pubfile.render_as_toml())?;
+                std::fs::write(
+                    &self.package_path.publications_path(),
+                    pubfile.render_as_toml(),
+                )?;
             }
             PublicationSource::Ephemeral { file, pubs } => {
                 pubs.published.insert(package_id, publish_data.into());
@@ -396,8 +403,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     // TODO: what is the spec of this function?
-    pub fn deps_published_ids(&self) -> &Vec<OriginalID> {
-        &self.deps_published_ids
+    pub fn deps_ids(&self) -> &BTreeMap<Symbol, OriginalID> {
+        &self.deps_ids
     }
 }
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::BTreeMap,
     io::{BufRead, Write},
     path::{Path, PathBuf},
 };
@@ -12,6 +13,7 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 
 use move_compiler::editions::{Edition, Flavor};
+use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
 use move_package_alt::schema::EnvironmentName;
 use move_symbol_pool::Symbol;
@@ -73,6 +75,10 @@ pub struct BuildConfig {
     /// If set, reports errors at JSON
     #[clap(long = move_compiler::command_line::JSON_ERRORS, global = true)]
     pub json_errors: bool,
+
+    /// Additional named address mapping. Useful for tools in rust
+    #[clap(skip)]
+    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 
     #[clap(flatten)]
     pub lint_flag: LintFlag,

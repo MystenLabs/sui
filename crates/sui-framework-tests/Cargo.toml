@@ -30,8 +30,9 @@ sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "su
 
 move-bytecode-verifier-meter.workspace = true
 move-cli.workspace = true
-move-package.workspace = true
+move-package-alt-compilation.workspace = true
 move-unit-test.workspace = true
 sui-config.workspace = true
 
 [dependencies]
+anyhow.workspace = true

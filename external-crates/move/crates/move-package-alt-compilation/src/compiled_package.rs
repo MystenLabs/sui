@@ -2,10 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_package_alt::{
-    graph::NamedAddress,
-    schema::{OriginalID, PackageName},
-};
+use move_package_alt::{graph::NamedAddress, schema::PackageName};
 
 use crate::build_config::BuildConfig;
 
@@ -40,8 +37,6 @@ pub struct CompiledPackage {
     // Optional artifacts from compilation
     /// filename -> doctext
     pub compiled_docs: Option<Vec<(String, String)>>,
-    /// The list of published ids for the dependencies of this package
-    pub deps_published_ids: Vec<OriginalID>,
     /// The mapping of file hashes to file names and contents
     pub file_map: MappedFiles,
 }
@@ -104,37 +99,47 @@ impl CompiledPackage {
         )
     }
 
-    pub fn get_topological_srted_deps() {}
-
     /// Return the bytecode modules in this package, topologically sorted in dependency order.
     /// This is the function to call if you would like to publish or statically analyze the modules.
-    pub fn get_dependency_sorted_modules(&self) -> Vec<CompiledModule> {
+    pub fn get_dependency_sorted_modules(
+        &self,
+        with_unpublished_deps: bool,
+    ) -> Vec<CompiledModule> {
         let all_modules = Modules::new(self.get_modules_and_deps());
 
         // SAFETY: package built successfully
         let modules = all_modules.compute_topological_order().unwrap();
 
-        // Collect all module IDs from the current package to be published (module names are not
-        // sufficient as we may have modules with the same names in user code and in Sui
-        // framework which would result in the latter being pulled into a set of modules to be
-        // published).
-        let self_modules: HashSet<_> = self
-            .root_modules_map()
-            .iter_modules()
-            .iter()
-            .map(|m| m.self_id())
-            .collect();
+        if with_unpublished_deps {
+            // For each transitive dependent module, if they are not to be published, they must have
+            // a non-zero address (meaning they are already published on-chain).
+            modules
+                .filter(|module| module.address() == &AccountAddress::ZERO)
+                .cloned()
+                .collect()
+        } else {
+            // Collect all module IDs from the current package to be published (module names are not
+            // sufficient as we may have modules with the same names in user code and in Sui
+            // framework which would result in the latter being pulled into a set of modules to be
+            // published).
+            let self_modules: HashSet<_> = self
+                .root_modules_map()
+                .iter_modules()
+                .iter()
+                .map(|m| m.self_id())
+                .collect();
 
-        modules
-            .filter(|module| self_modules.contains(&module.self_id()))
-            .cloned()
-            .collect()
+            modules
+                .filter(|module| self_modules.contains(&module.self_id()))
+                .cloned()
+                .collect()
+        }
     }
 
     /// Return a serialized representation of the bytecode modules in this package, topologically
     /// sorted in dependency order.
-    pub fn get_package_bytes(&self) -> Vec<Vec<u8>> {
-        self.get_dependency_sorted_modules()
+    pub fn get_package_bytes(&self, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
+        self.get_dependency_sorted_modules(with_unpublished_deps)
             .iter()
             .map(|m| {
                 let mut bytes = Vec::new();
@@ -143,6 +148,7 @@ impl CompiledPackage {
             })
             .collect()
     }
+
     pub fn get_module_by_name(
         &self,
         package_name: &str,
@@ -179,11 +185,6 @@ impl CompiledPackage {
                     self.compiled_package_info.package_name
                 )
             })
-    }
-
-    /// Return the published ids of the dependencies of this package
-    pub fn dependency_ids(&self) -> Vec<OriginalID> {
-        self.deps_published_ids.clone()
     }
 }
 
