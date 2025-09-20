@@ -3708,7 +3708,7 @@ A Move object that's shared.
 type SharedInput {
 	address: SuiAddress!
 	"""
-	The version that this this object was shared at.
+	The version that object was shared at.
 	"""
 	initialSharedVersion: UInt53!
 	"""

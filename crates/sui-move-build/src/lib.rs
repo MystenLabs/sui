@@ -582,7 +582,7 @@ impl CompiledPackage {
     }
 
     /// Checks for root modules with non-zero package addresses.  Returns an arbitrary one, if one
-    /// can can be found, otherwise returns `None`.
+    /// can be found, otherwise returns `None`.
     pub fn published_root_module(&self) -> Option<&CompiledModule> {
         self.package.root_compiled_units.iter().find_map(|unit| {
             if unit.unit.module.self_id().address() != &AccountAddress::ZERO {
