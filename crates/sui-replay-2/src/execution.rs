@@ -235,7 +235,9 @@ pub fn execute_transaction_to_effects(
             );
 
             writes.insert(change.id, object.clone());
-        };
+        } else {
+            writes.remove(&change.id);
+        }
     }
 
     #[allow(clippy::disallowed_methods)]
@@ -259,16 +261,15 @@ pub fn execute_transaction_to_effects(
 
     for (coin_type, amount) in balance_changes {
         if amount != 0 {
-            debug!(
+            println!(
                 "{} not conserved: {amount}",
                 coin_type.to_canonical_display(true)
             );
         }
     }
 
-    debug!("");
-    debug!(
-        "Balance Changes: {}",
+    println!(
+        "\nBalance Changes:\n{}",
         serde_json::to_string_pretty(
             &address_balance_changes
                 .into_iter()
