@@ -58,6 +58,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
+pub mod coin_registry;
 pub mod find;
 
 /// A simulation of the network, accompanied by off-chain services (database, indexer, RPC),
