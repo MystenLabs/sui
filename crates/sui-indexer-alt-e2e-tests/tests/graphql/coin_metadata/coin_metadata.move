@@ -54,6 +54,8 @@ fragment CM on CoinMetadata {
   iconUrl
   supply
   supplyState
+  regulatedState
+  allowGlobalPause
 }
 
 //# programmable --sender A --inputs object(1,2) 100 @A
@@ -71,5 +73,7 @@ fragment CM on CoinMetadata {
     description
     iconUrl
     supply
+    regulatedState
+    allowGlobalPause
   }
 }

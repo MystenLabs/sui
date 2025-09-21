@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{EpochId, ObjectID, SuiAddress};
+use crate::coin::COIN_MODULE_NAME;
 use crate::config::{Config, Setting};
 use crate::deny_list_v1::{
     input_object_coin_types_for_denylist_check, DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE,
@@ -12,8 +13,11 @@ use crate::id::UID;
 use crate::object::Object;
 use crate::storage::{DenyListResult, ObjectStore};
 use crate::transaction::{CheckedInputObjects, ReceivingObjects};
-use crate::{MoveTypeTagTrait, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
+use crate::{
+    MoveTypeTagTrait, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+};
 use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -21,12 +25,21 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 pub const CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS: usize = 1000;
+pub const DENY_CAP_V2_STRUCT_NAME: &IdentStr = ident_str!("DenyCapV2");
 
 /// Rust representation of the Move type 0x2::coin::DenyCapV2.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DenyCapV2 {
     pub id: UID,
     pub allow_global_pause: bool,
+}
+
+impl DenyCapV2 {
+    pub fn is_deny_cap_v2(other: &StructTag) -> bool {
+        other.address == SUI_FRAMEWORK_ADDRESS
+            && other.module.as_ident_str() == COIN_MODULE_NAME
+            && other.name.as_ident_str() == DENY_CAP_V2_STRUCT_NAME
+    }
 }
 
 /// Rust representation of the Move type 0x2::deny_list::ConfigKey.
