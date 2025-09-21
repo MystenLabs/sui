@@ -359,6 +359,63 @@ impl StoredExecutionTimeObservations {
             ),
         }
     }
+
+    /// Split observations into chunks of the specified size.
+    /// Returns a vector of chunks, each containing up to `chunk_size` observations.
+    pub fn chunk_observations(&self, chunk_size: usize) -> Vec<Self> {
+        match self {
+            Self::V1(observations) => {
+                if chunk_size == 0 {
+                    return vec![];
+                }
+                observations
+                    .chunks(chunk_size)
+                    .map(|chunk| Self::V1(chunk.to_vec()))
+                    .collect()
+            }
+        }
+    }
+
+    /// Merge multiple chunks into a single observation set.
+    /// Maintains sorting by observation key.
+    pub fn merge_chunks(chunks: Vec<Self>) -> Self {
+        let mut all_observations = Vec::new();
+
+        for chunk in chunks {
+            match chunk {
+                Self::V1(observations) => {
+                    all_observations.extend(observations);
+                }
+            }
+        }
+
+        // Sort by key to maintain consistency
+        all_observations.sort_by_key(|(key, _)| key.clone());
+
+        Self::V1(all_observations)
+    }
+
+    /// Filter, sort, and chunk observations.
+    /// Always chunks the observations using the specified chunk_size.
+    pub fn filter_and_sort_v2<P>(&self, predicate: P, limit: usize, chunk_size: usize) -> Vec<Self>
+    where
+        P: FnMut(&&(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)) -> bool,
+    {
+        match self {
+            Self::V1(observations) => {
+                let filtered_sorted: Vec<_> = observations
+                    .iter()
+                    .filter(predicate)
+                    .sorted_by_key(|(key, _)| key)
+                    .take(limit)
+                    .cloned()
+                    .collect();
+
+                let result = Self::V1(filtered_sorted);
+                result.chunk_observations(chunk_size)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]

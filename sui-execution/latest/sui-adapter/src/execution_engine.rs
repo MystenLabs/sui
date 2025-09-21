@@ -775,7 +775,15 @@ mod checked {
                                 protocol_config.per_object_congestion_control_mode(),
                                 PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
                             ));
-                            builder = setup_store_execution_time_estimates(builder, estimates);
+
+                            if protocol_config.enable_observation_chunking() {
+                                let chunk_size = protocol_config.observations_chunk_size() as usize;
+                                builder = setup_store_execution_time_estimates_v2(
+                                    builder, estimates, chunk_size,
+                                );
+                            } else {
+                                builder = setup_store_execution_time_estimates(builder, estimates);
+                            }
                         }
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             assert!(protocol_config.create_root_accumulator_object());
@@ -1437,6 +1445,32 @@ mod checked {
             ident_str!("store_execution_time_estimates").to_owned(),
             vec![],
             vec![system_state, estimates_arg],
+        );
+        builder
+    }
+
+    fn setup_store_execution_time_estimates_v2(
+        mut builder: ProgrammableTransactionBuilder,
+        estimates: StoredExecutionTimeObservations,
+        chunk_size: usize,
+    ) -> ProgrammableTransactionBuilder {
+        let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+
+        let estimate_chunks = estimates.filter_and_sort_v2(|_| true, usize::MAX, chunk_size);
+
+        let chunk_bytes: Vec<Vec<u8>> = estimate_chunks
+            .into_iter()
+            .map(|chunk| bcs::to_bytes(&chunk).unwrap())
+            .collect();
+
+        let chunks_arg = builder.pure(chunk_bytes).unwrap();
+
+        builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("store_execution_time_estimates_v2").to_owned(),
+            vec![],
+            vec![system_state, chunks_arg],
         );
         builder
     }

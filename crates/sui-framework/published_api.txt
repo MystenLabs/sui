@@ -712,6 +712,9 @@ current_epoch_subsidy_amount
 get_distribution_counter
 	public(package) fun
 	0x3::stake_subsidy
+ExecutionTimeObservationChunkKey
+	public struct
+	0x3::sui_system_state_inner
 SystemParameters
 	public struct
 	0x3::sui_system_state_inner
@@ -898,6 +901,9 @@ extract_coin_balance
 store_execution_time_estimates
 	public(package) fun
 	0x3::sui_system_state_inner
+store_execution_time_estimates_v2
+	public(package) fun
+	0x3::sui_system_state_inner
 validators
 	public(package) fun
 	0x3::sui_system_state_inner
@@ -1055,6 +1061,9 @@ validator_voting_powers
 	fun
 	0x3::sui_system
 store_execution_time_estimates
+	fun
+	0x3::sui_system
+store_execution_time_estimates_v2
 	fun
 	0x3::sui_system
 GenesisValidatorMetadata
