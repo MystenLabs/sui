@@ -242,7 +242,7 @@ Response: {
   "id": 3,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Failed to parse type \"invalid_coin_type\": Invalid struct type: invalid_coin_type. Got error: unexpected end of tokens"
+    "message": "Invalid Params: Failed to parse type \"invalid_coin_type\": unexpected end of tokens"
   }
 }
 
