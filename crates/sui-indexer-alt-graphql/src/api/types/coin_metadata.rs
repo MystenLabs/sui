@@ -7,9 +7,12 @@ use move_core_types::language_storage::StructTag;
 use sui_types::{
     base_types::SuiAddress as NativeAddress,
     coin::{
-        CoinMetadata as NativeMetadata, TreasuryCap, COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME,
+        CoinMetadata as NativeMetadata, RegulatedCoinMetadata, TreasuryCap,
+        COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME,
     },
-    coin_registry::{Currency as NativeCurrency, SupplyState as NativeSupply},
+    coin_registry::{
+        Currency as NativeCurrency, RegulatedState as NativeRegulated, SupplyState as NativeSupply,
+    },
     gas_coin::{GAS, TOTAL_SUPPLY_MIST},
     object::Owner as NativeOwner,
     TypeTag, SUI_FRAMEWORK_ADDRESS,
@@ -40,6 +43,28 @@ pub(crate) struct CoinMetadata {
     pub(crate) super_: MoveObject,
 
     contents: OnceCell<Option<MetadataContents>>,
+}
+
+/// Whether the currency is regulated or not.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum RegulatedState {
+    /// A `DenyCap` or a `RegulatedCoinMetadata` exists for this currency.
+    Regulated,
+
+    /// The currency was created without a deny list.
+    Unregulated,
+}
+
+#[derive(SimpleObject, Default)]
+pub(crate) struct RegulatedFields {
+    /// Whether the currency is regulated or not. `null` indicates that the regulatory status is unknown.
+    regulated_state: Option<RegulatedState>,
+
+    /// Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
+    allow_global_pause: Option<bool>,
+
+    /// If the currency is regulated, this object represents the capability to modify the deny list. If a capability is known but wrapped, its address can be fetched but other fields will not be accessible.
+    deny_cap: Option<MoveObject>,
 }
 
 /// Future behavior of a currency's supply.
@@ -362,6 +387,106 @@ impl CoinMetadata {
     }
 
     #[graphql(flatten)]
+    pub(crate) async fn regulated_fields(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<RegulatedFields, RpcError<object::Error>> {
+        let Some(contents) = self.metadata_contents(ctx).await.map_err(upcast)? else {
+            return Ok(RegulatedFields::default());
+        };
+
+        let scope = &self.super_.super_.super_.scope;
+
+        // If the currency's metadata is stored in the Coin Registry, and its regulation state is
+        // known, return it.
+        match &contents.native {
+            NativeContents::Registry(NativeCurrency {
+                regulated: NativeRegulated::Unregulated,
+                ..
+            }) => {
+                return Ok(RegulatedFields {
+                    regulated_state: Some(RegulatedState::Unregulated),
+                    allow_global_pause: Some(false),
+                    deny_cap: None,
+                });
+            }
+
+            NativeContents::Registry(NativeCurrency {
+                regulated:
+                    NativeRegulated::Regulated {
+                        cap,
+                        allow_global_pause,
+                        variant: _,
+                    },
+                ..
+            }) => {
+                return Ok(RegulatedFields {
+                    regulated_state: Some(RegulatedState::Regulated),
+                    allow_global_pause: *allow_global_pause,
+                    deny_cap: Some(MoveObject::from_super(Object::with_address(
+                        scope.without_root_version(),
+                        (*cap).into(),
+                    ))),
+                });
+            }
+
+            _ => {}
+        }
+
+        // ...otherwise fall back to looking up the RegulatedCoinMetadata singleton object (for
+        // coin registry currencies where the regulated state is not known and for legacy currencies).
+        let TypeTag::Struct(coin_type) = &contents.coin_type else {
+            return Ok(RegulatedFields::default());
+        };
+
+        if GAS::is_gas(coin_type.as_ref()) {
+            return Ok(RegulatedFields {
+                regulated_state: Some(RegulatedState::Unregulated),
+                allow_global_pause: Some(false),
+                deny_cap: None,
+            });
+        }
+
+        let type_ = RegulatedCoinMetadata::type_(*coin_type.clone());
+        let Some(object) = Object::singleton(ctx, scope.without_root_version(), type_).await?
+        else {
+            // If there is no RegulatedCoinMetadata object, the coin is unregulated.
+            return Ok(RegulatedFields {
+                regulated_state: Some(RegulatedState::Unregulated),
+                allow_global_pause: Some(false),
+                deny_cap: None,
+            });
+        };
+
+        let Some(contents) = object.contents(ctx).await.map_err(upcast)? else {
+            // We were able to find a regulated coin metadata object but couldn't load its
+            // contents -- it's definitely regulated, but we don't have more details.
+            return Ok(RegulatedFields {
+                regulated_state: Some(RegulatedState::Regulated),
+                allow_global_pause: None,
+                deny_cap: None,
+            });
+        };
+
+        let move_object = contents
+            .data
+            .try_as_move()
+            .context("Query by type returned a package")?;
+
+        let metadata: RegulatedCoinMetadata = bcs::from_bytes(move_object.contents())
+            .context("Failed to deserialize RegulatedCoinMetadata")?;
+
+        Ok(RegulatedFields {
+            regulated_state: Some(RegulatedState::Regulated),
+            allow_global_pause: None,
+            deny_cap: Some(MoveObject::from_super(Object::with_address(
+                scope.without_root_version(),
+                metadata.deny_cap_object.bytes.into(),
+            ))),
+        })
+    }
+
+    #[graphql(flatten)]
     pub(crate) async fn supply_fields(
         &self,
         ctx: &Context<'_>,
@@ -419,9 +544,10 @@ impl CoinMetadata {
             return Ok(SupplyFields::default());
         };
 
-        let Some(move_object) = contents.data.try_as_move() else {
-            return Ok(SupplyFields::default());
-        };
+        let move_object = contents
+            .data
+            .try_as_move()
+            .context("Query by type returned a package")?;
 
         let treasury_cap: TreasuryCap =
             bcs::from_bytes(move_object.contents()).context("Failed to deserialize TreasuryCap")?;
