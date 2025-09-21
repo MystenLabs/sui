@@ -612,6 +612,9 @@ impl ExecutionTimeObserver {
 // `extra_fields` Bag.
 pub const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY: u64 = 0;
 
+// Key used to save the chunk count for chunked execution time observations
+pub const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY: u64 = 1;
+
 // Tracks global execution time observations provided by validators from consensus
 // and computes deterministic per-command estimates for use in congestion control.
 pub struct ExecutionTimeEstimator {
@@ -888,6 +891,8 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
+                        enable_observation_chunking: false,
+                        observations_chunk_size: None,
                     },
                 ),
             );
@@ -1025,6 +1030,8 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
+                        enable_observation_chunking: false,
+                        observations_chunk_size: None,
                     },
                 ),
             );
@@ -1120,6 +1127,8 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
+                        enable_observation_chunking: false,
+                        observations_chunk_size: None,
                     },
                 ),
             );
@@ -1219,6 +1228,8 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
+                        enable_observation_chunking: false,
+                        observations_chunk_size: None,
                     },
                 ),
             );
@@ -1362,6 +1373,8 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
+                        enable_observation_chunking: false,
+                        observations_chunk_size: None,
                     },
                 ),
             );
@@ -1642,6 +1655,8 @@ mod tests {
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
                 default_none_duration_for_new_keys: true,
+                enable_observation_chunking: false,
+                observations_chunk_size: None,
             },
             std::iter::empty(),
         );
