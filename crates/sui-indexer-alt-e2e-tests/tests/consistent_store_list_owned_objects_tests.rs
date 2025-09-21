@@ -8,9 +8,7 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, owner::OwnerKind, ListOwnedObjectsRequest,
     Owner,
 };
-use sui_indexer_alt_e2e_tests::{
-    find_address_mutated, find_address_owned, find_immutable, find_shared, FullCluster,
-};
+use sui_indexer_alt_e2e_tests::{find, FullCluster};
 use sui_types::{
     base_types::{FullObjectRef, ObjectRef, SuiAddress},
     crypto::{get_account_key_pair, Signature, Signer},
@@ -132,9 +130,9 @@ async fn test_address_owner() {
     );
 
     // In the second checkpoint, A and B get funded, so they can sign transactions.
-    let mut a_gas = find_address_owned(&cluster.request_gas(a, DEFAULT_GAS_BUDGET * 5).unwrap())
+    let mut a_gas = find::address_owned(&cluster.request_gas(a, DEFAULT_GAS_BUDGET * 5).unwrap())
         .expect("Failed to find gas for A");
-    let mut b_gas = find_address_owned(&cluster.request_gas(b, DEFAULT_GAS_BUDGET * 5).unwrap())
+    let mut b_gas = find::address_owned(&cluster.request_gas(b, DEFAULT_GAS_BUDGET * 5).unwrap())
         .expect("Failed to find gas for B");
     cluster.create_checkpoint().await;
 
@@ -184,13 +182,13 @@ async fn test_address_owner() {
     let mut objects = BTreeMap::new();
     for (i, coin) in coins {
         let fx = transfer_object(&mut cluster, a, &akp, a_gas, coin, c);
-        objects.insert((!i, coin.0), find_address_mutated(&fx).unwrap());
+        objects.insert((!i, coin.0), find::address_mutated(&fx).unwrap());
         a_gas = fx.gas_object().0;
     }
 
     for bag in bags.into_values() {
         let fx = transfer_object(&mut cluster, b, &bkp, b_gas, bag, c);
-        objects.insert((0, bag.0), find_address_mutated(&fx).unwrap());
+        objects.insert((0, bag.0), find::address_mutated(&fx).unwrap());
         b_gas = fx.gas_object().0;
     }
 
@@ -570,7 +568,7 @@ fn create_coin(cluster: &mut FullCluster, owner: SuiAddress, amount: u64) -> Obj
         .expect("Failed to execute transaction");
 
     assert!(fx.status().is_ok(), "create coin transaction failed");
-    find_address_owned(&fx).expect("Failed to find created coin")
+    find::address_owned(&fx).expect("Failed to find created coin")
 }
 
 fn share_coin(cluster: &mut FullCluster, amount: u64) -> ObjectRef {
@@ -603,7 +601,7 @@ fn share_coin(cluster: &mut FullCluster, amount: u64) -> ObjectRef {
         .expect("Failed to execute transaction");
 
     assert!(fx.status().is_ok(), "share coin transaction failed");
-    find_shared(&fx).expect("Failed to find shared coin")
+    find::shared(&fx).expect("Failed to find shared coin")
 }
 
 fn freeze_coin(cluster: &mut FullCluster, amount: u64) -> ObjectRef {
@@ -636,7 +634,7 @@ fn freeze_coin(cluster: &mut FullCluster, amount: u64) -> ObjectRef {
         .expect("Failed to execute transaction");
 
     assert!(fx.status().is_ok(), "share coin transaction failed");
-    find_immutable(&fx).expect("Failed to find frozen coin")
+    find::immutable(&fx).expect("Failed to find frozen coin")
 }
 
 /// Run a transaction on `cluster` signed by a fresh funded account that creates a `Bag`
@@ -693,7 +691,7 @@ fn create_bag(cluster: &mut FullCluster, owner: SuiAddress, ty: TypeTag, size: u
         .expect("Failed to execute transaction");
 
     assert!(fx.status().is_ok(), "create bag transaction failed");
-    find_address_owned(&fx).expect("Failed to find created bag")
+    find::address_owned(&fx).expect("Failed to find created bag")
 }
 
 /// Run a transaction on `cluster` signed by a fresh funded account that creates a `Table<ty, ty>`
@@ -750,7 +748,7 @@ fn create_table(cluster: &mut FullCluster, owner: SuiAddress, ty: TypeTag, size:
         .expect("Failed to execute transaction");
 
     assert!(fx.status().is_ok(), "create table transaction failed");
-    find_address_owned(&fx).expect("Failed to find created table")
+    find::address_owned(&fx).expect("Failed to find created table")
 }
 
 fn transfer_object(

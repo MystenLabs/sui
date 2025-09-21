@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, ensure, Context};
+use anyhow::{ensure, Context};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
 use reqwest::Client;
@@ -44,11 +44,9 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    effects::TransactionEffects,
     error::ExecutionError,
-    execution_status::ExecutionStatus,
     messages_checkpoint::VerifiedCheckpoint,
-    object::Owner,
     transaction::Transaction,
 };
 use tempfile::TempDir;
@@ -59,6 +57,8 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use url::Url;
+
+pub mod find;
 
 /// A simulation of the network, accompanied by off-chain services (database, indexer, RPC),
 /// connected by local data ingestion.
@@ -684,76 +684,6 @@ impl Default for OffchainClusterConfig {
             bootstrap_genesis: None,
         }
     }
-}
-
-/// Returns the reference for the first address-owned object created in the effects, or an error if
-/// there is none.
-pub fn find_address_owned(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
-        bail!("Transaction failed: {error} (command {command:?})");
-    }
-
-    fx.created()
-        .into_iter()
-        .find_map(|(oref, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(oref))
-        .context("Could not find created object")
-}
-
-/// Returns the reference for the first address-owned object created in the effects owned by
-/// `owner`, or an error if there is none.
-pub fn find_address_owned_by(
-    fx: &TransactionEffects,
-    owner: SuiAddress,
-) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
-        bail!("Transaction failed: {error} (command {command:?})");
-    }
-
-    fx.created()
-        .into_iter()
-        .find_map(|(oref, o)| {
-            matches!(o, Owner::AddressOwner(addr) if addr == owner).then_some(oref)
-        })
-        .context("Could not find created object")
-}
-
-/// Returns the reference for the first immutable object created in the effects, or an error if
-/// there is none.
-pub fn find_immutable(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
-        bail!("Transaction failed: {error} (command {command:?})");
-    }
-
-    fx.created()
-        .into_iter()
-        .find_map(|(oref, owner)| matches!(owner, Owner::Immutable).then_some(oref))
-        .context("Could not find created object")
-}
-
-/// Returns the reference for the first shared object created in the effects, or an error if there
-/// is none.
-pub fn find_shared(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
-        bail!("Transaction failed: {error} (command {command:?})");
-    }
-
-    fx.created()
-        .into_iter()
-        .find_map(|(oref, owner)| matches!(owner, Owner::Shared { .. }).then_some(oref))
-        .context("Could not find created object")
-}
-
-/// Returns the reference for the first address-owned object mutated in the effects that is not a
-/// gas payment, or an error if there is none.
-pub fn find_address_mutated(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
-        bail!("Transaction failed: {error} (command {command:?})");
-    }
-
-    fx.mutated_excluding_gas()
-        .into_iter()
-        .find_map(|(oref, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(oref))
-        .context("Could not find mutated object")
 }
 
 /// Returns ClientArgs that use a temporary local ingestion path and the TempDir of that path.

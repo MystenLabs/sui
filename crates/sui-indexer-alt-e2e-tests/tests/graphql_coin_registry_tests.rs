@@ -8,10 +8,8 @@ use insta::assert_debug_snapshot;
 use move_core_types::{ident_str, language_storage::StructTag};
 use serde::Deserialize;
 use serde_json::json;
-use sui_indexer_alt_e2e_tests::{
-    find_address_mutated, find_address_owned_by, find_immutable, find_shared, FullCluster,
-};
 use sui_move_build::BuildConfig;
+use sui_indexer_alt_e2e_tests::{find, FullCluster};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     coin::{CoinMetadata, TreasuryCap},
@@ -119,8 +117,8 @@ async fn test_sui() {
 async fn test_fixed_supply() {
     let mut cluster = FullCluster::new().await.unwrap();
     let (a, kp, fx) = publish(&mut cluster, "fixed_supply").await;
-    let package = find_immutable(&fx).unwrap().0;
-    let currency = find_address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
+    let package = find::immutable(&fx).unwrap().0;
+    let currency = find::address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
     let gas = fx.gas_object().0;
 
     finalize(&mut cluster, a, &kp, package, "fixed", currency, gas).await;
@@ -156,7 +154,7 @@ async fn test_fixed_supply() {
 async fn test_dynamic() {
     let mut cluster = FullCluster::new().await.unwrap();
     let (sender, kp, fx) = publish(&mut cluster, "dynamic").await;
-    let package = find_immutable(&fx).unwrap().0;
+    let package = find::immutable(&fx).unwrap().0;
     let gas = fx.gas_object().0;
 
     // Create a dynamic currency
@@ -220,15 +218,15 @@ async fn test_dynamic() {
 async fn test_burn_only() {
     let mut cluster = FullCluster::new().await.unwrap();
     let (sender, kp, fx) = publish(&mut cluster, "burn_only").await;
-    let package = find_immutable(&fx).unwrap().0;
-    let currency = find_address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
-    let coin = find_address_owned_by(&fx, sender).unwrap();
+    let package = find::immutable(&fx).unwrap().0;
+    let currency = find::address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
+    let coin = find::address_owned_by(&fx, sender).unwrap();
     let gas = fx.gas_object().0;
 
     let fx = finalize(&mut cluster, sender, &kp, package, "burn", currency, gas).await;
 
     cluster.create_checkpoint().await;
-    let currency = find_shared(&fx).unwrap();
+    let currency = find::shared(&fx).unwrap();
     let gas = fx.gas_object().0;
 
     let metadata = query_metadata(&cluster, &format!("{package}::burn::BURN")).await;
@@ -283,10 +281,10 @@ async fn test_burn_only() {
 async fn test_unknown() {
     let mut cluster = FullCluster::new().await.unwrap();
     let (sender, kp, fx) = publish(&mut cluster, "unknown").await;
-    let package = find_immutable(&fx).unwrap().0;
-    let currency = find_address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
-    let coin = find_address_owned_by(&fx, sender).unwrap();
-    let treasury_cap = find_shared(&fx).unwrap();
+    let package = find::immutable(&fx).unwrap().0;
+    let currency = find::address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
+    let coin = find::address_owned_by(&fx, sender).unwrap();
+    let treasury_cap = find::shared(&fx).unwrap();
     let gas = fx.gas_object().0;
 
     let fx = finalize(&mut cluster, sender, &kp, package, "unknown", currency, gas).await;
@@ -332,7 +330,7 @@ async fn test_unknown() {
 
     cluster.create_checkpoint().await;
     let gas = fx.gas_object().0;
-    let coin = find_address_mutated(&fx).unwrap();
+    let coin = find::address_mutated(&fx).unwrap();
 
     // `supply` should reflect the burn operation.
     assert_eq!(
@@ -454,7 +452,7 @@ async fn test_legacy() {
 
     cluster.create_checkpoint().await;
     let outputs = query_owned_outputs(&cluster, sender).await;
-    let currency = find_shared(&fx).unwrap(); // The migrated Currency<T> object
+    let currency = find::shared(&fx).unwrap(); // The migrated Currency<T> object
     let gas = fx.gas_object().0;
 
     // RPC output should be the same after the migration
@@ -473,8 +471,8 @@ async fn test_legacy() {
 async fn test_regulated() {
     let mut cluster = FullCluster::new().await.unwrap();
     let (a, kp, fx) = publish(&mut cluster, "regulated").await;
-    let package = find_immutable(&fx).unwrap().0;
-    let currency = find_address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
+    let package = find::immutable(&fx).unwrap().0;
+    let currency = find::address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
     let gas = fx.gas_object().0;
 
     finalize(&mut cluster, a, &kp, package, "regulated", currency, gas).await;
@@ -541,7 +539,7 @@ async fn test_legacy_regulated_migrate_deny_cap() {
 
     cluster.create_checkpoint().await;
     let outputs = query_owned_outputs(&cluster, sender).await;
-    let currency = find_shared(&fx).unwrap(); // The migrated Currency<T> object
+    let currency = find::shared(&fx).unwrap(); // The migrated Currency<T> object
     let gas = fx.gas_object().0;
 
     // Query the coin metadata again after migration - should produce the same results
@@ -616,7 +614,7 @@ async fn test_legacy_regulated_migrate_regulated_metadata() {
 
     cluster.create_checkpoint().await;
     let outputs = query_owned_outputs(&cluster, sender).await;
-    let currency = find_shared(&fx).unwrap(); // The migrated Currency<T> object
+    let currency = find::shared(&fx).unwrap(); // The migrated Currency<T> object
     let gas = fx.gas_object().0;
 
     // Query the coin metadata again after migration - should produce the same results

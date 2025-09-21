@@ -7,7 +7,7 @@ use anyhow::{bail, Context};
 use move_core_types::{ident_str, language_storage::StructTag, u256::U256};
 use serde::Deserialize;
 use serde_json::json;
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
+use sui_indexer_alt_e2e_tests::{find, FullCluster};
 use sui_types::{
     base_types::{ObjectDigest, ObjectID, ObjectRef, SuiAddress},
     crypto::{get_account_key_pair, Signature, Signer},
@@ -1016,7 +1016,7 @@ fn create_coin(cluster: &mut FullCluster, owner: SuiAddress, amount: u64) -> Obj
         .expect("Failed to execute transaction");
 
     assert!(fx.status().is_ok(), "create coin transaction failed");
-    find_address_owned(&fx).expect("Failed to find created coin")
+    find::address_owned(&fx).expect("Failed to find created coin")
 }
 
 /// Run a transaction on `cluster` signed by a fresh funded account that creates a `Bag`
@@ -1072,7 +1072,7 @@ fn create_bag(cluster: &mut FullCluster, owner: SuiAddress, ty: TypeTag, size: u
         .expect("Failed to execute transaction");
 
     assert!(fx.status().is_ok(), "create bag transaction failed");
-    find_address_owned(&fx).expect("Failed to find created bag")
+    find::address_owned(&fx).expect("Failed to find created bag")
 }
 
 /// Run a transaction on `cluster` signed by a fresh funded account that creates a `Table<ty, ty>`
@@ -1128,7 +1128,7 @@ fn create_table(cluster: &mut FullCluster, owner: SuiAddress, ty: TypeTag, size:
         .expect("Failed to execute transaction");
 
     assert!(fx.status().is_ok(), "create table transaction failed");
-    find_address_owned(&fx).expect("Failed to find created table")
+    find::address_owned(&fx).expect("Failed to find created table")
 }
 
 /// Run a sponsored transaction to destroy a coin by merging it with gas.
