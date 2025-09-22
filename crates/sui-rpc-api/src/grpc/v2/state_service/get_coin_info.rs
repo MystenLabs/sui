@@ -10,6 +10,7 @@ use sui_rpc::proto::sui::rpc::v2::GetCoinInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoResponse;
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
+use sui_types::coin::RegulatedCoinMetadata;
 use sui_types::coin_registry::{Currency, RegulatedState as CurrencyRegulatedState, SupplyState};
 use sui_types::object::Owner::AddressOwner;
 use sui_types::object::Owner::ConsensusAddressOwner;
@@ -143,16 +144,62 @@ fn get_coin_info_from_registry(
         }
     };
 
-    let regulated_metadata = Some((&currency.regulated).into());
+    // If registry has a definitive state, use it
+    let regulated_metadata = if !matches!(&currency.regulated, CurrencyRegulatedState::Unknown) {
+        Some((&currency.regulated).into())
+    } else {
+        // Registry has Unknown state, need to check for legacy RegulatedCoinMetadata
+        let indexes = match service.reader.inner().indexes() {
+            Some(indexes) => indexes,
+            None => {
+                // No indexes available, keep as Unknown
+                let mut response = GetCoinInfoResponse::default();
+                response.coin_type = Some(coin_type.to_string());
+                response.metadata = metadata;
+                response.treasury = treasury;
+                response.regulated_metadata = Some(CurrencyRegulatedState::Unknown.into());
+                return Ok(Some(response));
+            }
+        };
 
-    {
-        let mut response = GetCoinInfoResponse::default();
-        response.coin_type = Some(coin_type.to_string());
-        response.metadata = metadata;
-        response.treasury = treasury;
-        response.regulated_metadata = regulated_metadata;
-        Ok(Some(response))
-    }
+        let coin_info = indexes.get_coin_info(core_coin_type).map_err(|e| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!("Failed to get coin info for {}: {}", core_coin_type, e),
+            )
+        })?;
+
+        let regulated_id = coin_info.and_then(|info| info.regulated_coin_metadata_object_id);
+
+        match regulated_id {
+            None => {
+                // No RegulatedCoinMetadata exists, coin is unregulated
+                Some(CurrencyRegulatedState::Unregulated.into())
+            }
+            Some(id) => object_store
+                .get_object(&id)
+                .map(RegulatedCoinMetadata::try_from)
+                .transpose()
+                .map_err(|_| {
+                    RpcError::new(
+                        tonic::Code::Internal,
+                        format!(
+                            "Unable to read object {} for coin type {} as RegulatedCoinMetadata",
+                            id, core_coin_type
+                        ),
+                    )
+                })?
+                .map(Into::into)
+                .or(Some(CurrencyRegulatedState::Unregulated.into())),
+        }
+    };
+
+    let mut response = GetCoinInfoResponse::default();
+    response.coin_type = Some(coin_type.to_string());
+    response.metadata = metadata;
+    response.treasury = treasury;
+    response.regulated_metadata = regulated_metadata;
+    Ok(Some(response))
 }
 
 fn get_coin_info_from_index(
@@ -202,7 +249,7 @@ fn get_coin_info_from_index(
             .reader
             .inner()
             .get_object(&regulated_coin_metadata_object_id)
-            .map(sui_types::coin::RegulatedCoinMetadata::try_from)
+            .map(RegulatedCoinMetadata::try_from)
             .transpose()
             .map_err(|_| {
                 RpcError::new(
@@ -215,7 +262,7 @@ fn get_coin_info_from_index(
             })?
             .map(Into::into)
     } else {
-        Some(CurrencyRegulatedState::Unknown.into())
+        Some(CurrencyRegulatedState::Unregulated.into())
     };
 
     {
