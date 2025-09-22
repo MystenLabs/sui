@@ -327,7 +327,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Query", "simulateTransaction") => vec![],
         ("Query", "suinsName") => vec!["obj_versions"],
         ("Query", "transaction") => vec!["tx_digests"],
-        ("Query", "transactionEffects") => vec!["cp_sequence_numbers", "kv_transactions"],
+        ("Query", "transactionEffects") => vec!["cp_sequence_numbers", "tx_digests"],
         ("Query", "transactions") => {
             let mut pipelines = vec!["tx_digests"];
             for filter in filters {
@@ -349,42 +349,37 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Query", "type") => vec!["kv_packages"],
 
         // Transaction queries
-        ("Transaction", "digest") => vec!["kv_transactions"],
-        ("Transaction", "effects") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("Transaction", "expiration") => vec!["kv_transactions"],
-        ("Transaction", "gasInput") => vec!["kv_transactions"],
-        ("Transaction", "kind") => vec!["kv_transactions"],
-        ("Transaction", "sender") => vec!["kv_transactions"],
-        ("Transaction", "signatures") => vec!["kv_transactions"],
-        ("Transaction", "transactionBcs") => vec!["kv_transactions"],
+        ("Transaction", "digest") => vec!["tx_digests"],
+        ("Transaction", "effects") => vec!["tx_digests"],
+        ("Transaction", "expiration") => vec!["tx_digests"],
+        ("Transaction", "gasInput") => vec!["tx_digests"],
+        ("Transaction", "kind") => vec!["tx_digests"],
+        ("Transaction", "sender") => vec!["tx_digests"],
+        ("Transaction", "signatures") => vec!["tx_digests"],
+        ("Transaction", "transactionBcs") => vec!["tx_digests"],
 
         // TransactionEffects queries
-        ("TransactionEffects", "balanceChanges") => vec![
-            "cp_sequence_numbers",
-            "kv_transactions",
-            "tx_balance_changes",
-            "tx_digests",
-        ],
-        ("TransactionEffects", "checkpoint") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("TransactionEffects", "dependencies") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("TransactionEffects", "digest") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("TransactionEffects", "effectsBcs") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("TransactionEffects", "effectsDigest") => vec!["cp_sequence_numbers", "kv_transactions"],
+        ("TransactionEffects", "balanceChanges") => vec!["tx_balance_changes", "tx_digests"],
+        ("TransactionEffects", "checkpoint") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "dependencies") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "digest") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "effectsBcs") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "effectsDigest") => vec!["cp_sequence_numbers", "tx_digests"],
         ("TransactionEffects", "epoch") => {
-            vec!["cp_sequence_numbers", "kv_transactions", "kv_epoch_starts"]
+            vec!["cp_sequence_numbers", "tx_digests", "kv_epoch_starts"]
         }
-        ("TransactionEffects", "events") => vec!["cp_sequence_numbers", "kv_transactions"],
+        ("TransactionEffects", "events") => vec!["cp_sequence_numbers", "tx_digests"],
         ("TransactionEffects", "executionError") => {
-            vec!["cp_sequence_numbers", "kv_transactions", "kv_packages"]
+            vec!["cp_sequence_numbers", "tx_digests", "kv_packages"]
         }
-        ("TransactionEffects", "gasEffects") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("TransactionEffects", "lamportVersion") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("TransactionEffects", "objectChanges") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("TransactionEffects", "status") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("TransactionEffects", "timestamp") => vec!["cp_sequence_numbers", "kv_transactions"],
-        ("TransactionEffects", "transaction") => vec!["cp_sequence_numbers", "kv_transactions"],
+        ("TransactionEffects", "gasEffects") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "lamportVersion") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "objectChanges") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "status") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "timestamp") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "transaction") => vec!["cp_sequence_numbers", "tx_digests"],
         ("TransactionEffects", "unchangedConsensusObjects") => {
-            vec!["cp_sequence_numbers", "kv_transactions"]
+            vec!["cp_sequence_numbers", "tx_digests"]
         }
         (_, _) => vec![],
     }
