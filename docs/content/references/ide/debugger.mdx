@@ -9,14 +9,14 @@ The [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=my
 ## Install
 
 :::info
-The most convenient path to using the debugger is by installing the [Move extension](./move.mdx), which already includes the Move Trace Debugger extension so you should not need to install it separately. The install instructions are included for rare cases where an individual install might be necessary.
+Use the debugger by installing the [Move extension](./move.mdx), which includes the Move Trace Debugger extension; you do not need to install it separately. The install instructions are included for certain cases where a separate install might be necessary.
 :::
 
 The Move Trace Debugger extension is available in the Visual Studio Code Marketplace. Search for `Move Trace Debugger` in the **Extensions** view, or press <kbd>Ctrl</kbd> + <kbd>P</kbd> or <kbd>⌘</kbd> + <kbd>P</kbd> and type `ext install mysten.move-trace-debug`.
 
 Alternatively, run `code --install-extension mysten.move-trace-debug` to install the extension from the command line.
 
-To generate unit execution traces that enable unit test and on-chain transactions debugging, you must also have the `sui` binary installed with the `tracing` feature flag enabled. The `sui` binaries in release tarballs, Homebrew, and Chocolatey have this feature enabled. See [Install Sui](../../guides/developer/getting-started/sui-install.mdx) for more information, including how to build from source.
+To generate unit execution traces that enable unit test and on-chain transaction debugging, you need the `sui` binary installed with the `tracing` feature flag enabled. The `sui` binaries included in release tarballs, Homebrew, and Chocolatey installations have this feature enabled. See [Install Sui](/guides/developer/getting-started/sui-install) for more information.
 
 ## Features
 
@@ -24,29 +24,37 @@ The debugger supports a common set of features when debugging Move code, regardl
 
 ### Move code debugging features
 
-Currently, the Move Trace Debugger supports forward debugging through execution traces (reverse debugging is not currently available).
+Currently, the Move Trace Debugger supports forward debugging through execution traces. Reverse debugging is not currently available.
 
 #### Disassembly and source-level debugging
 
-When attempting to debug unit tests, source code for these tests is available by definition, and when starting a debug session for unit tests, you will find yourself in the source view.
+Source code for debugging unit tests is available by definition, and when starting a debug session for unit tests, you will find yourself in the source view.
 
 ![Source view](./images/source_view.png)
 
-When attempting to debug an on-chain transaction, the source code for Move calls executed throughout this transaction is not available by default (as it is not stored on chain), and a debug session will start in the disassembly view where Move code is represented by disassembled bytecode.
+When debugging an on-chain transaction, the source code for Move calls executed within the transaction is not available by default, as it is not stored on-chain. A debug session will start in the disassembly view where Move code is represented by disassembled bytecode.
 
 ![Disassembly view](./images/disassembly_view.png)
 
-Clearly, this is a much lower level representation of the Move code. While perhaps not as convenient and pleasant to look at as Move source code, it is still quite useful to improve one's understanding of the Move code behavior and execution flow. It also has one advantage over the source view in that it is a much better match to what is recorded in the execution trace, and in presence of Move compiler optimizations, disassembly view is the ultimate source of truth. For example, some variables present in the source may no longer be present in the trace, which you can verify in the disassembly view.
+This is a lower level representation of the Move code that is still quite useful to improve one's understanding of the Move code behavior and execution flow. It also has one advantage over the source view: it is a much better match to what is recorded in the execution trace. In presence of Move compiler optimizations, disassembly view is the ultimate source of truth. For example, some variables present in the source may no longer be present in the trace, which you can verify in the disassembly view.
 
-You can still provide source code for on-chain transactions by hand (as described [here](#source-level-debugging-for-on-chain-transactions)) to enable source view. Support for automating source-level debugging for on-chain transactions will be available in the future.
+You can still provide [source code for on-chain transactions by hand](#source-level-debugging-for-on-chain-transactions) to enable source view. Support for automating source-level debugging for on-chain transactions will be available in the future.
 
-If both source code and disassembled bytecode are available, you can toggle between source view and disassembly view via `Move: Toggle source view` and `Move: Toggle disassembly view` commands from the command palette (which you can open with <kbd>Shift</kbd> + <kbd>⌘</kbd> + <kbd>P</kbd> on macOS, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> on Windows/Linux).
+If both source code and disassembled bytecode are available, you can toggle between source view and disassembly view via `Move: Toggle source view` and `Move: Toggle disassembly view` commands from the command palette. You can open these with <kbd>Shift</kbd> + <kbd>⌘</kbd> + <kbd>P</kbd> on macOS, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> on Windows/Linux).
 
-All debugger features described below work in both views, but we will only show examples in source view for brevity and clarity.
 
 #### Stepping through code execution
 
-Move Trace Debugger supports the following standard [debug actions](https://code.visualstudio.com/docs/debugtest/debugging#_debug-actions): Step Over, Step Into, Step Out, Continue, Restart, Stop. As you step through the code into other function calls, the resulting call stack view in left-hand side bar will keep getting updated.
+Move Trace Debugger supports the following standard [debug actions](https://code.visualstudio.com/docs/debugtest/debugging#_debug-actions): 
+
+- Step Over
+- Step Into
+- Step Out
+- Continue
+- Restart
+- Stop
+
+As you step through the code into other function calls, the resulting call stack view in the left-hand side bar will update.
 
 ![Stepping through code execution](./images/stepping.png)
 
@@ -56,34 +64,33 @@ Move Trace Debugger supports displaying values of primitive types, Move structs,
 
 ![Variable values](./images/variables.png)
 
- Note that at present, the debugger doesn't support setting watch points on variables.
+The debugger currently does not support setting watch points on variables.
 
 #### Line breakpoints
 
-You can set line breakpoints in your code placing a cursor on a given line and choosing **Run** -> **Toggle Breakpoint** from the main menu. You can use the Continue debug command to advance execution to the next breakpoint.
+Set line breakpoints in your code by placing a cursor on any given line and choosing **Run** -> **Toggle Breakpoint** from the main menu. You can use the **Continue** debug command to advance execution to the next breakpoint.
 
 ![Breakpoints](./images/breakpoints.png)
 
 ### PTB debugging features
 
-When debugging PTBs, the first thing that the debugger displays is a summary of the PTB structure. In the following example, you see that the PTB being debugged consists of multiple Move calls and several native PTB commands (**Split Coins**, **Merge Coins**, and **Transfer Objects**).
+When debugging PTBs, the debugger first displays a summary of the PTB structure. In the following example, you can see that the PTB being debugged consists of multiple Move calls and several native PTB commands (**Split Coins**, **Merge Coins**, and **Transfer Objects**).
 
 ![PTB summary](./images/ptb_summary.png)
 
-In the PTB summary you can step into specific commands or step over them, much like stepping into functions and and stepping over them when debugging Move code.
+In the PTB summary, you can step into specific commands or step over them, much like stepping into functions and and stepping over them when debugging Move code.
 
 When you step into a Move function, you are effectively debugging Move code, with all the relevant [features](#move-code-debugging-features) available (value tracking, breakpoints, etc.). Note that setting breakpoints in the PTB summary view is not currently supported.
 
-When you step into a native command, you can inspect its input and result values (if any).
+You can inspect a native command's input and result values (if any) by stepping into it.
 
 ![Split coins](./images/split_coins.png)
 
 There is no stepping "through" native commands. Once the state is inspected, you can only step out of (or simply keep stepping - the effect will be the same).
 
-
 ## Usage
 
-The debugger can be used to debug unit tests as well as existing on-chain transactions (including [PTB](../../concepts/transactions/prog-txn-blocks.mdx) debugging support) with the help of of the [replay tool](../cli/replay.mdx).
+Use the debugger to debug unit tests and existing on-chain transactions (including [PTB](/concepts/transactions/prog-txn-blocks) debugging support) with the help of of the [replay tool](/references/cli/replay).
 
 ### Debugging unit tests
 
@@ -97,7 +104,7 @@ Debugging a Move unit test is a two-step process:
       <img src="./images/trace_palette.png" style="width: 50%; height: auto;" alt="Command palette" />
 
       :::info
-        This command uses the `sui` binary under the hood which needs to be [pre-installed](#install). The location of the binary needs to be discoverable by the Move extension as described [here](./move.mdx#build-test-and-trace).
+        This command uses the `sui` binary under the hood which needs to be [pre-installed](#install). The location of the binary needs to be [discoverable by the Move extension](/references/ide/move#build-test-and-trace).
       :::
 
 
@@ -108,7 +115,7 @@ Debugging a Move unit test is a two-step process:
    1. Find the generated traces in the `traces` directory.
 
       :::info
-        If trace generation in the VSCode extension does not work for some reason, you can also generated traces by executing tests for your package with additional flags:
+        If trace generation in the Visual Studio Code extension does not work for some reason, you can generate traces by executing tests for your package using additional flags:
         ```bash
         sui move test  --trace-execution --disassemble
         ```
@@ -142,27 +149,27 @@ Debugging an on-chain transaction is a two-step process:
   This command will re-execute the transaction locally, generate a trace of its execution, and download all data required for debugging this transaction from the chain. All this data will be deposited in a subdirectory of replay tool's output directory (`.replay` by default). This subdirectory is named after the transaction digest. You can also change the location of replay tool's output directory (see [here](../../references/cli/replay.mdx#usage) for instructions).
 
 **II. Start debugging**
-   1. Open subdirectory containing transaction data downloaded for a transaction with a given digest and open the trace file (`trace.json.zst`)
+   1. Open the subdirectory containing the transaction data downloaded for a transaction with the given digest. Open the trace file `trace.json.zst`.
 
       ![Replay trace](./images/replay_trace.png)
 
-   2. Select **Run** -> **Start Debugging** from the main menu.
+   1. Select **Run** -> **Start Debugging** from the main menu.
 
       <img src="./images/start_debugging.png" style="width: 30%; height: auto;" alt="Start txn debugging" />
 
       :::info
-        The first time you run this command you may be asked to select a debugger type, in which case chose `Move Debugger`.
+        The first time you run this command you may be asked to select a debugger type. Select **Move Debugger**.
       :::
 
 ## Source-level debugging for on-chain transactions
 
-Data downloaded from the chain to facilitate debugging a given transaction does not contain the source code for Move calls executed throughout this transaction. You can, however, provide the sources (along with additional debugging metadata) by yourself to enable source-level debugging. Conceptually, it's quite simple. If you have access to the source code of a package (or packages) used throughout the transaction, you can simply build this package to generate the debugging metadata and make location of this data "visible" to the replay tool.
+Data downloaded from the network for debugging a transaction does not contain the source code for Move calls executed throughout the transaction. You can, however, provide the sources along with additional debugging metadata yourself to enable source-level debugging. If you have access to the source code of packages used throughout the transaction, you can build the packages to generate the debugging metadata and make the location of this data visible to the replay tool.
 
 The challenge here is that the source code version of each such package must be the same exact version that was used to build the package used in a transaction. Otherwise, if hitting a discrepancy between execution trace (generated from on-chain data) and package debugging metadata (generated locally), debugging may not work correctly. For example, consider a situation when on-chain transaction executes a call to some public function `foo` which then call some private function `bar`. Further consider that package's source code used to generate debugging metadata still has public function `foo` but `foo` not longer calls `bar`. When attempting to do source-level debugging in such case, if a call to `bar` was part of the execution trace, debugger would have no source for function `bar` to display when the call is reached during the debugging session.
 
 You can still try to use the newest version of a given package, particularly for packages whose existing functionality is largely stabilized (and its source code rarely changes), such as Sui framework code, and have a high chance of debugging working correctly. Here are the instructions on how to handle this simplified case, followed by instructions on how to locate precise versions of packages (these, however, are mostly recommended for advanced users).
 
-Let's use a concrete transaction to debug as our running example. It's a mainnet transaction and its digest is `95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs`. Assume that all commands (unless stated otherwise) are executed in some `$ROOT_DIR` (which you can set, for example, to you your home directory).
+Consider the following: a mainnet transaction and with the digest `95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs`. Assume that all commands (unless stated otherwise) are executed in some `$ROOT_DIR` (such as your home directory).
 
 Start by tracing execution of this transaction.
 
@@ -170,7 +177,7 @@ Start by tracing execution of this transaction.
 sui replay --digest 95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs  --trace
 ```
 
-When you replay the transaction, the replay tool downloads data for all Move packages used by this transaction. In the case of our running example, they reside in the `$ROOT_DIR/.replay/95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs` directory, in subdirectories named after package IDs:
+When you replay the transaction, the replay tool downloads data for all Move packages used by this transaction. In the case of this example, they reside in the `$ROOT_DIR/.replay/95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs` parent directory, with subdirectories named after package IDs:
 
     ```
     0x0000000000000000000000000000000000000000000000000000000000000001
@@ -183,7 +190,7 @@ When you replay the transaction, the replay tool downloads data for all Move pac
     0xecf47609d7da919ea98e7fd04f6e0648a0a79b337aaad373fa37aac8febf19c8
     ```
 
-Note, that the second directory on the list corresponds to the ID of the Sui framework package. If we want to enable source-level debugging for this package, we need to provide the replay tool with access to its debugging metadata: obtain package source, build it, and copy the metadata to a specific location (`source` directory) in the Sui framework package subdirectory.
+The second directory on the list corresponds to the ID of the Sui framework package. To enable source-level debugging for this package, provide the replay tool with access to its debugging metadata: obtain the package source, build it, and copy the metadata to a specific location (`source` directory) in the Sui framework package subdirectory.
 
 <span id="metadata-generation">**Metadata generation**</span>
 
@@ -194,25 +201,25 @@ Note, that the second directory on the list corresponds to the ID of the Sui fra
         git clone https://github.com/MystenLabs/sui.git
         ```
 
-   2. Build Sui framework package source code.
+   1. Build Sui framework package source code.
 
         ```bash
         cd sui/crates/sui-framework/packages/sui-framework; sui move build
         ```
 
-   3. Copy debugging metadata to the right location.
+   1. Copy the debugging metadata to the right location.
 
         ```bash
         cp -r $ROOT_DIR/sui/crates/sui-framework/packages/sui-framework/build/Sui $ROOT_DIR.replay/95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs/0x0000000000000000000000000000000000000000000000000000000000000002/source
         ```
 
-After all this is accomplished, when you start debug session and reach Sui framework code during debugging you will be in the source view rather than disassembly view.
+When you start a debug session and reach the Sui framework code during debugging, you will be in the source view rather than disassembly view.
 
 ### Locating precise package versions
 
 Ideally, you want to enable source-level debugging uniformly for all packages used throughout the transaction (both user-level and system packages), and use precise package versions to ensure smooth debugging experience (see [here](#precise-versions-for-all-packages) for details). This may not always be possible, but in such case you can still locate precise versions of system packages, such as Sui framework package (see [here](#precise-versions-for-system-packages) for details), to enable limited source-level debugging.
 
-First, let's start debugging the transaction in our running example that was just replayed, to collect some more information about Move code executed in this transaction.
+Start debugging the transaction to collect some more information about Move code executed in the transaction.
 
 ![Deepbook PTB](./images/deepbook_ptb.png)
 
@@ -220,9 +227,9 @@ The PTB summary reveals that this transaction consists of only one Move call to 
 
 #### Precise versions for all packages
 
-To locate the right version of the source code for our user package, utilize a Sui explorer (e.g. [suiscan](https://suiscan.xyz)) and Sui's Move Package Registry ([MVR](https://www.moveregistry.com/)). This method will become more reliable with growing adoption of MVR in the Sui ecosystem.
+To locate the correct version of the source code for a user package, utilize a Sui explorer (such as [suiscan](https://suiscan.xyz)) and Sui's Move Package Registry ([MVR](https://www.moveregistry.com/)). 
 
-Search for this package in a Sui explorer.
+Search for the package in a Sui explorer.
 
 <img src="./images/deepbook_search.png" style="width: 50%; height: auto;" alt="Package search" />
 
@@ -230,33 +237,33 @@ You can see that the the package in question is `deepbook/core`. Look at the det
 
 <img src="./images/deepbook_explorer.png" style="width: 70%; height: auto;" alt="Package explorer" />
 
-You can see that the package description in the explorer includes an MVR link. When you follow that link, you get to the MVR page containing a different kind of description for this package. The MVR description includes a link to the package's source code repository and information that this ID represent the 3rd version of this package.
+You can see that the package description in the explorer includes an MVR link. When you follow that link, you get to the MVR page containing a different kind of description for this package. The MVR description includes a link to the package's source code repository and information that the ID represents the 3rd version of this package.
 
 ![Deepbook MVR](./images/deepbook_mvr.png)
 
-While the source code repository for `deepbook/core` contains three different packages, the `pool` module in our PTB is only defined in the `deepbook` package.
+While the source code repository for `deepbook/core` contains three different packages, the `pool` module in the PTB is only defined in the `deepbook` package.
 
-You can now proceed to building a correct version of this package to generated debugging metadata that must accompany package source code. It's a modified version of the process described [earlier](#metadata-generation). Assume that all commands are executed in `$ROOT_DIR` unless stated otherwise.
+Proceed to building a correct version of this package to generate debugging metadata that must accompany the package source code. Assume that all commands are executed in `$ROOT_DIR` unless stated otherwise.
 
-1. Clone the repository
+1. Clone the repository.
 
     ```bash
     git clone https://github.com/MystenLabs/deepbookv3.git
     ```
 
-2. Go to the `deepbook` package directory
+1. Go to the `deepbook` package directory.
 
     ```bash
     cd deepbookv3/packages/deepbook
     ```
 
-3. Developers often tag code released at a given version so check if any tags are available
+1. Check the version tags.
 
     ```bash
     git tag -l
     ```
 
-    As it happens, in this repository the tags indeed represent different package versions.
+    In this repository, the tags indeed represent different package versions.
 
     ```
     v1.0.0
@@ -264,21 +271,21 @@ You can now proceed to building a correct version of this package to generated d
     v3.0.0
     ```
 
-    You can then choose the exact version of the package to build.
+    Choose the exact version of the package to build.
 
     ```bash
     git checkout v3.0.0
     ```
 
-    If tags are not found you can proceed directly to the next step but with no guarantee that the most recent version of source code in the repository corresponds to the version of the package on chain (which may affect debugging capabilities).
+    If tags are not found, you can proceed directly to the next step, but there is no guarantee that the most recent version of source code in the repository corresponds to the version of the package on-chain, which may affect debugging capabilities.
 
-4. Build the package and copying debugging metadata
+1. Build the package and copying the debugging metadata.
 
     ```bash
     sui move build
     ```
 
-    This will result in creating a `build` directory with a `deepbook` subdirectory in it containing all the relevant metadata, which you now copy to the right directory
+    This creates a `build` directory with a `deepbook` subdirectory in it containing all the relevant metadata, which you now copy to the right directory.
 
 
     ```bash
