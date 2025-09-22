@@ -62,14 +62,13 @@ pub fn emit_authenticated_impl(
     debug_assert!(ty_args.len() == 2);
     debug_assert!(args.len() == 3);
 
-    // Feature flag check temporarily disabled for debugging
-    // let cost = context.gas_used();
-    // if !get_extension!(context, ObjectRuntime)?
-    //     .protocol_config
-    //     .enable_authenticated_event_streams()
-    // {
-    //     return Ok(NativeResult::err(cost, NOT_SUPPORTED));
-    // }
+    let cost = context.gas_used();
+    if !get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .enable_authenticated_event_streams()
+    {
+        return Ok(NativeResult::err(cost, NOT_SUPPORTED));
+    }
 
     let event_ty = ty_args.pop().unwrap();
     // This type is always sui::event::EventStreamHead

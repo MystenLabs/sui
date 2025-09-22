@@ -171,9 +171,20 @@ fn verify_private_event_emit(
     }
 
     if fident == EMIT_AUTHENTICATED_IMPL_FUNCTION {
-        // emit_authenticated_impl is a private fun in event.move
-        // we want to apply usage validations only on emit_authenticated
-        return Ok(());
+        let module_id = view.self_id();
+        if (module_id.address(), module_id.name()) != (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
+            debug_assert!(
+                false,
+                "Calling {} outside of {} module this shouldn't happen",
+                EMIT_AUTHENTICATED_IMPL_FUNCTION, EVENT_MODULE
+            );
+            return Err(format!(
+                "Calling {} outside of {} which is impossible",
+                EMIT_AUTHENTICATED_IMPL_FUNCTION, EVENT_MODULE
+            ));
+        } else {
+            return Ok(());
+        }
     }
 
     if !PRIVATE_EVENT_FUNCTIONS.contains(&fident) {

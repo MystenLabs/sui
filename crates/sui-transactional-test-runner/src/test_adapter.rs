@@ -2578,6 +2578,7 @@ async fn init_sim_executor(
             reference_gas_price,
             None,
             protocol_config.enable_accumulators(),
+            protocol_config.enable_authenticated_event_streams(),
         );
 
     sim.set_data_ingestion_path(data_ingestion_path.clone());

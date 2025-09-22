@@ -109,6 +109,7 @@ impl PersistedStore {
         reference_gas_price: Option<u64>,
         path: Option<PathBuf>,
         enable_accumulators: bool,
+        enable_authenticated_event_streams: bool,
     ) -> (Simulacrum<R, Self>, PersistedStoreInnerReadOnlyWrapper)
     where
         R: rand::RngCore + rand::CryptoRng,
@@ -129,12 +130,19 @@ impl PersistedStore {
             builder = builder.with_reference_gas_price(reference_gas_price)
         };
 
-        let _override_guard = if enable_accumulators {
-            Some(ProtocolConfig::apply_overrides_for_testing(|_, cfg| {
-                let mut c = cfg;
-                c.enable_accumulators_for_testing();
-                c
-            }))
+        let _override_guard = if enable_accumulators || enable_authenticated_event_streams {
+            Some(ProtocolConfig::apply_overrides_for_testing(
+                move |_, cfg| {
+                    let mut c = cfg;
+                    if enable_accumulators {
+                        c.enable_accumulators_for_testing();
+                    }
+                    if enable_authenticated_event_streams {
+                        c.enable_authenticated_event_streams_for_testing();
+                    }
+                    c
+                },
+            ))
         } else {
             None
         };
@@ -158,6 +166,7 @@ impl PersistedStore {
         account_configs: Vec<AccountConfig>,
         path: Option<PathBuf>,
         enable_accumulators: bool,
+        enable_authenticated_event_streams: bool,
     ) -> Simulacrum<R, Self>
     where
         R: rand::RngCore + rand::CryptoRng,
@@ -171,6 +180,7 @@ impl PersistedStore {
             None,
             path,
             enable_accumulators,
+            enable_authenticated_event_streams,
         )
         .0
     }
@@ -704,6 +714,7 @@ mod tests {
             vec![],
             None,
             false,
+            false,
         );
         let genesis_checkpoint_digest1 = *chain1
             .store()
@@ -718,6 +729,7 @@ mod tests {
             ProtocolVersion::MAX,
             vec![],
             None,
+            false,
             false,
         );
         let genesis_checkpoint_digest2 = *chain2
@@ -736,6 +748,7 @@ mod tests {
             ProtocolVersion::MAX,
             vec![],
             None,
+            false,
             false,
         );
 

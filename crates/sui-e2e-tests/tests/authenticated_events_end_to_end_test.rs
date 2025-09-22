@@ -42,12 +42,12 @@ async fn publish_auth_event_package(test_cluster: &TestCluster) -> ObjectID {
     package_id
 }
 
-async fn emit_authenticated_event(
+async fn try_emit_authenticated_event(
     test_cluster: &mut TestCluster,
     package_id: ObjectID,
     sender: SuiAddress,
     value: u64,
-) -> SuiTransactionBlockResponse {
+) -> anyhow::Result<SuiTransactionBlockResponse> {
     let rgp = test_cluster.get_reference_gas_price().await;
 
     let mut ptb = ProgrammableTransactionBuilder::new();
@@ -76,7 +76,9 @@ async fn emit_authenticated_event(
         10_000_000,
         rgp,
     );
-    test_cluster.sign_and_execute_transaction(&tx_data).await
+
+    let tx = test_cluster.wallet.sign_transaction(&tx_data).await;
+    test_cluster.wallet.execute_transaction_may_fail(tx).await
 }
 
 async fn load_event_stream_head_by_object_id(
@@ -95,9 +97,17 @@ async fn authenticated_events_single_event_test() {
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let resp = emit_authenticated_event(&mut test_cluster, package_id, sender, 42).await;
+    let resp = try_emit_authenticated_event(&mut test_cluster, package_id, sender, 42)
+        .await
+        .expect("Transaction should succeed");
 
-    let acc_events = resp.effects.as_ref().unwrap().accumulator_events();
+    let effects = resp.effects.as_ref().unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "Transaction effects should be successful"
+    );
+
+    let acc_events = effects.accumulator_events();
     assert_eq!(acc_events.len(), 1, "Expected 1 accumulator event");
 
     let event = &acc_events[0];
@@ -124,8 +134,17 @@ async fn authenticated_events_multiple_events_test() {
     let mut last_event_obj_id = None;
 
     for i in 0..10 {
-        let resp = emit_authenticated_event(&mut test_cluster, package_id, sender, 100 + i).await;
-        let acc_events = resp.effects.as_ref().unwrap().accumulator_events();
+        let resp = try_emit_authenticated_event(&mut test_cluster, package_id, sender, 100 + i)
+            .await
+            .expect("Transaction should succeed");
+
+        let effects = resp.effects.as_ref().unwrap();
+        assert!(
+            effects.status().is_ok(),
+            "Transaction effects should be successful"
+        );
+
+        let acc_events = effects.accumulator_events();
         assert_eq!(acc_events.len(), 1);
         assert_eq!(
             acc_events[0].address,
@@ -143,4 +162,38 @@ async fn authenticated_events_multiple_events_test() {
 
     assert_eq!(stream_head.num_events, 10);
     assert!(stream_head.mmr.len() > 1);
+}
+
+#[sim_test]
+async fn authenticated_events_disabled_test() {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let package_id = publish_auth_event_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+
+    // This test verifies that when authenticated events are disabled,
+    // calling emit_authenticated will fail with abort code 0.
+    let result = try_emit_authenticated_event(&mut test_cluster, package_id, sender, 42).await;
+
+    // The transaction should succeed in being executed but fail in the effects
+    let response = result.expect("Transaction should execute to effects");
+    let effects = response.effects.as_ref().unwrap();
+
+    assert!(
+        effects.status().is_err(),
+        "Transaction should have failed when authenticated events are disabled"
+    );
+
+    let acc_events = effects.accumulator_events();
+    assert_eq!(
+        acc_events.len(),
+        0,
+        "No accumulator events should be generated when feature is disabled"
+    );
+
+    let error_str = format!("{:?}", effects.status());
+    assert!(
+        error_str.contains("0"),
+        "Error should contain abort code 0 (NOT_SUPPORTED): {}",
+        error_str
+    );
 }
