@@ -4,7 +4,9 @@ description: Debug Move execution traces directly in VS Code to understand how y
 keywords: [ move trace debugger, debug move execution traces, debug move traces, move execution traces, vs code, debug in vs code, visual studio code, move extension, vs code extension, move vs code extension, debugging, debug interface, replay ]
 ---
 
-The [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension for Visual Studio Code provides a familiar [debugging interface](https://code.visualstudio.com/docs/debugtest/debugging) for Move unit tests and on-chain transactions with [PTB](../../concepts/transactions/prog-txn-blocks.mdx) debugging support. You can inspect the state of PTB commands, and for Move code (either in unit tests or in on-chain Move calls), you can step through code execution, track local variable values, and set line breakpoints. For a more detailed list of features look [here](#features). Debugging is enabled via trace generation: traces can be generated during unit test execution (look [here](#debugging-unit-tests) for details) or during on-chain transaction replay (look [here](#debugging-on-chain-transactions) for details).
+The [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension for Visual Studio Code provides a familiar [debugging interface](https://code.visualstudio.com/docs/debugtest/debugging) for Move unit tests and on-chain transactions, including [PTB](/concepts/transactions/prog-txn-blocks) debugging support. You can inspect the state of PTB commands, step through code execution, track local variable values, and set line breakpoints for Move code, either in unit tests or in on-chain Move calls.
+
+Debugging is enabled via trace generation: traces can be generated during [unit test execution](#debugging-unit-tests) or during on-chain [transaction replay](#debugging-on-chain-transactions).
 
 ## Install
 
@@ -20,7 +22,7 @@ To generate unit execution traces that enable unit test and on-chain transaction
 
 ## Features
 
-The debugger supports a common set of features when debugging Move code, regardless of whether it is used to debug Move unit tests of on-chain Move calls. In the on-chain debugging scenario, however, a Move call is only one of the many PTB commands, and the debugger also supports inspection of the state of the remaining native PTB commands.
+The debugger provides a common set of features for all Move code debugging, whether you're debugging Move unit tests or on-chain Move calls. When debugging on-chain transactions, a Move call is just one of many PTB commands. The debugger supports inspecting not only the Move call itself, but also the state and execution of all remaining native PTB commands.
 
 ### Move code debugging features
 
@@ -45,7 +47,7 @@ If both source code and disassembled bytecode are available, you can toggle betw
 
 #### Stepping through code execution
 
-Move Trace Debugger supports the following standard [debug actions](https://code.visualstudio.com/docs/debugtest/debugging#_debug-actions): 
+Move Trace Debugger supports the following standard [debug actions](https://code.visualstudio.com/docs/debugtest/debugging#_debug-actions):
 
 - Step Over
 - Step Into
@@ -78,15 +80,15 @@ When debugging PTBs, the debugger first displays a summary of the PTB structure.
 
 ![PTB summary](./images/ptb_summary.png)
 
-In the PTB summary, you can step into specific commands or step over them, much like stepping into functions and and stepping over them when debugging Move code.
+In the PTB summary, you can step into specific commands or step over them, much like stepping into functions and and stepping over them when debugging Move code. Setting breakpoints in the PTB summary view is not currently supported.
 
-When you step into a Move function, you are effectively debugging Move code, with all the relevant [features](#move-code-debugging-features) available (value tracking, breakpoints, etc.). Note that setting breakpoints in the PTB summary view is not currently supported.
+Stepping into a Move function starts Move code debugging with all the relevant [features](#move-code-debugging-features) available (value tracking, breakpoints, etc.).
 
-You can inspect a native command's input and result values (if any) by stepping into it.
+Stepping into a native command allows you to inspect its input and result values.
 
 ![Split coins](./images/split_coins.png)
 
-There is no stepping "through" native commands. Once the state is inspected, you can only step out of (or simply keep stepping - the effect will be the same).
+There is no stepping "through" native commands. Once the state is inspected, you can only step out of it or keep stepping to move to the next command.
 
 ## Usage
 
@@ -140,13 +142,13 @@ Debugging an on-chain transaction is a two-step process:
 
 **I. Generate execution trace**
 
-  To generate a trace for a given transaction we need to know this transaction's digest (in the example below it's `0x42`).
+  You need to know a transaction's digest to generate a trace for it. For example, `0x42`.
 
   ```bash
   sui replay --trace --digest 0x42
   ```
 
-  This command will re-execute the transaction locally, generate a trace of its execution, and download all data required for debugging this transaction from the chain. All this data will be deposited in a subdirectory of replay tool's output directory (`.replay` by default). This subdirectory is named after the transaction digest. You can also change the location of replay tool's output directory (see [here](../../references/cli/replay.mdx#usage) for instructions).
+  This command re-executes the transaction locally, generates a trace of its execution, and downloads all data required for debugging this transaction. Data is deposited in a subdirectory of replay tool's output directory (`.replay` by default, but its location is [configurable](../../references/cli/replay.mdx#usage)). This subdirectory is named after the transaction digest.
 
 **II. Start debugging**
    1. Open the subdirectory containing the transaction data downloaded for a transaction with the given digest. Open the trace file `trace.json.zst`.
@@ -165,9 +167,11 @@ Debugging an on-chain transaction is a two-step process:
 
 Data downloaded from the network for debugging a transaction does not contain the source code for Move calls executed throughout the transaction. You can, however, provide the sources along with additional debugging metadata yourself to enable source-level debugging. If you have access to the source code of packages used throughout the transaction, you can build the packages to generate the debugging metadata and make the location of this data visible to the replay tool.
 
-The challenge here is that the source code version of each such package must be the same exact version that was used to build the package used in a transaction. Otherwise, if hitting a discrepancy between execution trace (generated from on-chain data) and package debugging metadata (generated locally), debugging may not work correctly. For example, consider a situation when on-chain transaction executes a call to some public function `foo` which then call some private function `bar`. Further consider that package's source code used to generate debugging metadata still has public function `foo` but `foo` not longer calls `bar`. When attempting to do source-level debugging in such case, if a call to `bar` was part of the execution trace, debugger would have no source for function `bar` to display when the call is reached during the debugging session.
+The source code version of each package should be the same version that was used to build the package used in the transaction. Otherwise, a discrepancy between execution trace (generated from on-chain data) and package debugging metadata (generated locally), might result in debugging failures.
 
-You can still try to use the newest version of a given package, particularly for packages whose existing functionality is largely stabilized (and its source code rarely changes), such as Sui framework code, and have a high chance of debugging working correctly. Here are the instructions on how to handle this simplified case, followed by instructions on how to locate precise versions of packages (these, however, are mostly recommended for advanced users).
+For example, consider a situation when an on-chain transaction executes a call to some public function `foo` which then calls some private function `bar`. The package's source code used to generate the debugging metadata still has public function `foo` but `foo` not longer calls `bar`. When attempting to do source-level debugging in such case, if a call to `bar` was part of the execution trace, the debugger would have no source for function `bar` to display when the call is reached during the debugging session.
+
+Using the newest version of a package might still work, particularly for packages whose existing functionality is largely stabilized and its source code rarely changes, such as Sui framework package. Below are the instructions on how to handle this simplified case, followed by instructions on how to locate precise versions of packages.
 
 Consider the following: a mainnet transaction and with the digest `95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs`. Assume that all commands (unless stated otherwise) are executed in some `$ROOT_DIR` (such as your home directory).
 
@@ -195,7 +199,7 @@ The second directory on the list corresponds to the ID of the Sui framework pack
 <span id="metadata-generation">**Metadata generation**</span>
 
 
-   1. You may already have Sui source code repository available, in which case free to use it, otherwise clone the repository.
+   1. Clone the repository, unless you already have the Sui source code repository available.
 
         ```bash
         git clone https://github.com/MystenLabs/sui.git
@@ -217,17 +221,17 @@ When you start a debug session and reach the Sui framework code during debugging
 
 ### Locating precise package versions
 
-Ideally, you want to enable source-level debugging uniformly for all packages used throughout the transaction (both user-level and system packages), and use precise package versions to ensure smooth debugging experience (see [here](#precise-versions-for-all-packages) for details). This may not always be possible, but in such case you can still locate precise versions of system packages, such as Sui framework package (see [here](#precise-versions-for-system-packages) for details), to enable limited source-level debugging.
+You should try to enable source-level debugging uniformly for all packages used throughout the transaction (both user-level and system packages), and use precise package versions to ensure a smooth [debugging experience](#precise-versions-for-all-packages). This may not always be possible, but in such case, you can still locate [precise versions of system packages](#precise-versions-for-system-packages) to enable limited source-level debugging.
 
 Start debugging the transaction to collect some more information about Move code executed in the transaction.
 
 ![Deepbook PTB](./images/deepbook_ptb.png)
 
-The PTB summary reveals that this transaction consists of only one Move call to function `add_deep_price_point`, in module `pool`, in user package `0xb29d83c26cdd2a64959263abbcfc4a6937f0c9fccaf98580ca56faded65be244`. Ideally, you want to be able to locate (buildable) source code for this package and find out what the correct version of the source code is. If you manage to accomplish this and build debugging metadata for this package, this metadata will automatically include information for all dependent packages enabling uniform source-level debugging. Barring that, you may want to find out what the correct version of the source code for system packages is to enable trouble-free source-level debugging for at least Sui framework code.
+The PTB summary reveals that this transaction consists of only one Move call to the function `add_deep_price_point`, in module `pool`, in user package `0xb29d83c26cdd2a64959263abbcfc4a6937f0c9fccaf98580ca56faded65be244`. Ideally, you want to be able to locate the buildable source code for this package and the correct version of the source code. Then, build debugging metadata for this package, which will automatically include information for all dependent packages, enabling uniform source-level debugging. Barring that, you might want to find the correct version of the source code for system packages to at least enable source-level debugging for Sui framework code.
 
 #### Precise versions for all packages
 
-To locate the correct version of the source code for a user package, utilize a Sui explorer (such as [suiscan](https://suiscan.xyz)) and Sui's Move Package Registry ([MVR](https://www.moveregistry.com/)). 
+To locate the correct version of the source code for a user package, utilize a Sui explorer (such as [suiscan](https://suiscan.xyz)) and Sui's Move Package Registry ([MVR](https://www.moveregistry.com/)).
 
 Search for the package in a Sui explorer.
 
@@ -296,9 +300,11 @@ Proceed to building a correct version of this package to generate debugging meta
 
 #### Precise versions for system packages
 
-If you cannot locate sources for the user package (`0xb29d83c26cdd2a64959263abbcfc4a6937f0c9fccaf98580ca56faded65be244` in our running example), you can still locate source code and its correct version for system packages that this user package depends on. This will allow you to at least view the source of system packages, such as Sui framework package, during the debugging session.
+If you cannot locate sources for a user package, you can still locate source code and its correct version for system packages that the user package depends on. This allows you to at least view the source of system packages during the debugging session.
 
-System packages in Sui (Sui framework package in particular), may only change at a very specific time, that is at a time when protocol version for Sui changes. These changes are tracked [here](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework-snapshot/manifest.json) - in this file you will find protocol version numbers (starting with 3) and corresponding git revisions that represent the exact version of Sui framework package's source code at a given protocol version. The remaining piece of information to locate is what protocol version was in effect when our user package was published on chain. You can accomplish this by running the following query against the mainnet's GraphQL [endpoint](https://graphql.mainnet.sui.io/graphql) where `address` parameter is the ID of our user package.
+System packages in Sui (the Sui framework package in particular), might only change when the protocol version for Sui changes. These changes [are tracked](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework-snapshot/manifest.json) and include information about protocol version numbers (starting with 3) and corresponding git revisions that represent the exact version of the Sui framework package's source code at a given protocol version. This allows you to locate which protocol version was in effect when the user package was published on-chain.
+
+Run the following query against the mainnet's GraphQL [endpoint](https://graphql.mainnet.sui.io/graphql) where the `address` parameter is the ID of the user package (`0xb29d83c26cdd2a64959263abbcfc4a6937f0c9fccaf98580ca56faded65be244` in this example).
 
 ```
 {
@@ -316,7 +322,7 @@ System packages in Sui (Sui framework package in particular), may only change at
 }
 ```
 
-In the case of our running example, the result of this query looks as follows.
+The result of this query looks as follows.
 
 ```
 {
@@ -336,7 +342,7 @@ In the case of our running example, the result of this query looks as follows.
 }
 ```
 
-This means, that our user package was published at protocol version 84. The corresponding git revision from the protocol version tracking file is `25804c243d07dd73c0d199e7794383bd855cd436`. You can now follow the debugging metadata generation instructions for Sui framework code described [earlier](#metadata-generation). The only difference is that before building the framework package, you need choose the right git revision.
+In this example, the user package was published at protocol version 84. The corresponding git revision from the protocol version tracking file is `25804c243d07dd73c0d199e7794383bd855cd436`. Now, you can follow the debugging metadata generation [instructions](#metadata-generation) for Sui framework code. The only difference is that before building the framework package, you need choose the right git revision.
 
 ```bash
 git checkout 25804c243d07dd73c0d199e7794383bd855cd436
