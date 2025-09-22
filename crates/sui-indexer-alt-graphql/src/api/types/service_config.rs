@@ -211,7 +211,7 @@ impl ServiceConfig {
         ctx: &Context<'_>,
         type_: String,
         field: String,
-        filter: Option<String>,
+        filters: Option<Vec<String>>,
     ) -> Result<AvailableRange, RpcError> {
         AvailableRange::new(
             ctx,
@@ -219,7 +219,7 @@ impl ServiceConfig {
             RetentionKey {
                 type_,
                 field,
-                filter,
+                filters,
             },
         )
     }
