@@ -53,7 +53,7 @@ use sui_types::{
     transaction::{CheckedInputObjects, TransactionDataAPI},
     TypeTag,
 };
-use tracing::{debug, debug_span, trace};
+use tracing::{debug, debug_span, trace, warn};
 
 // Executor for the replay. Created and used by `ReplayTransaction`.
 pub struct ReplayExecutor {
@@ -346,7 +346,7 @@ pub fn execute_transaction_to_effects(
 
     for (coin_type, amount) in balance_changes {
         if amount != 0 {
-            println!(
+            warn!(
                 "{} not conserved: {amount}",
                 coin_type.to_canonical_display(true)
             );
@@ -354,7 +354,7 @@ pub fn execute_transaction_to_effects(
     }
 
     println!(
-        "\nBalance Changes:\n{}",
+        "{}",
         serde_json::to_string_pretty(
             &address_balance_changes
                 .into_iter()
