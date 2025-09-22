@@ -133,6 +133,7 @@ impl MoveFlavor for SuiFlavor {
                     dependency_info,
                     is_override: true,
                     rename_from: None,
+                    modes: None,
                 }),
                 addresses: None,
                 use_environment: None,
