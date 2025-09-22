@@ -265,6 +265,24 @@ jobs:
     name: Tag sui docker images in DockerHub
     runs-on: ubuntu-latest
     steps:
+      # adding arm64 image build step here because they're not built in regular CI
+      - name: Build arm64 images
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with: 
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: prebuild-sui-images
+          # by default, sui-node, sui-tools are included so adding services and indexer
+          client-payload: >
+            {
+              "sui_commit": "${{ github.sha }}",
+              "caller_name": "sui_repo_${{ github.ref_name }}",
+              "push_to_dockerhub": true,
+              "build_arm64": true,
+              "indexer": true,
+              "services": true
+            }
+
       - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
         with:
