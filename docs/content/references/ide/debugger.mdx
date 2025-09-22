@@ -98,10 +98,10 @@ Use the debugger to debug unit tests and existing on-chain transactions (includi
 
 Debugging a Move unit test is a two-step process:
 
-**I. Generate execution traces**
-   1. Open the command palette (<kbd>Shift</kbd> + <kbd>⌘</kbd> + <kbd>P</kbd> on macOS, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> on Windows/Linux).
+**1. Generate execution traces**
+   - Open the command palette (<kbd>Shift</kbd> + <kbd>⌘</kbd> + <kbd>P</kbd> on macOS, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> on Windows/Linux).
 
-   1. Run the `Move: Trace Move test execution` command.
+   - Run the `Move: Trace Move test execution` command.
 
       <img src="./images/trace_palette.png" style={{ width: "50%", height: "auto" }} alt="Command palette" />
 
@@ -110,11 +110,11 @@ Debugging a Move unit test is a two-step process:
       :::
 
 
-   1. The extension displays a filter prompt. Either type a filter string to target specific tests or leave the field blank to run all tests and press <kbd>Enter</kbd>.
+   - The extension displays a filter prompt. Either type a filter string to target specific tests or leave the field blank to run all tests and press <kbd>Enter</kbd>.
 
       <img src="./images/filter_string.png" style={{ width: "50%", height: "auto" }} alt="Filter test string" />
 
-   1. Find the generated traces in the `traces` directory.
+   - Find the generated traces in the `traces` directory.
 
       :::info
         If trace generation in the Visual Studio Code extension does not work for some reason, you can generate traces by executing tests for your package using additional flags:
@@ -124,14 +124,14 @@ Debugging a Move unit test is a two-step process:
       :::
 
 
-**II. Start debugging**
-   1. Open the Move file containing your test.
+**2. Start debugging**
+   - Open the Move file containing your test.
 
-   1. Select **Run** -> **Start Debugging** from the main menu.
+   - Select **Run** -> **Start Debugging** from the main menu.
 
       <img src="./images/start_debugging.png" style={{ width: "30%", height: "auto" }} alt="Start test debugging" />
 
-   1. If the file has multiple tests, select the specific test from the dropdown menu.
+   - If the file has multiple tests, select the specific test from the dropdown menu.
 
       <img src="./images/test_selection.png" style={{ width: "50%", height: "auto" }} alt="Test selection" />
 
@@ -140,7 +140,7 @@ Debugging a Move unit test is a two-step process:
 
 Debugging an on-chain transaction is a two-step process:
 
-**I. Generate execution trace**
+**1. Generate execution trace**
 
   You need to know a transaction's digest to generate a trace for it. For example, `0x42`.
 
@@ -150,12 +150,12 @@ Debugging an on-chain transaction is a two-step process:
 
   This command re-executes the transaction locally, generates a trace of its execution, and downloads all data required for debugging this transaction. Data is deposited in a subdirectory of replay tool's output directory (`.replay` by default, but its location is [configurable](../../references/cli/replay.mdx#usage)). This subdirectory is named after the transaction digest.
 
-**II. Start debugging**
-   1. Open the subdirectory containing the transaction data downloaded for a transaction with the given digest. Open the trace file `trace.json.zst`.
+**2. Start debugging**
+   - Open the subdirectory containing the transaction data downloaded for a transaction with the given digest. Open the trace file `trace.json.zst`.
 
       ![Replay trace](./images/replay_trace.png)
 
-   1. Select **Run** -> **Start Debugging** from the main menu.
+   - Select **Run** -> **Start Debugging** from the main menu.
 
       <img src="./images/start_debugging.png" style={{ width: "30%", height: "auto" }} alt="Start txn debugging" />
 
@@ -199,19 +199,19 @@ The second directory on the list corresponds to the ID of the Sui framework pack
 <span id="metadata-generation">**Metadata generation**</span>
 
 
-   1. Clone the repository, unless you already have the Sui source code repository available.
+   - Clone the repository, unless you already have the Sui source code repository available.
 
         ```bash
         git clone https://github.com/MystenLabs/sui.git
         ```
 
-   1. Build Sui framework package source code.
+   - Build Sui framework package source code.
 
         ```bash
         cd sui/crates/sui-framework/packages/sui-framework; sui move build
         ```
 
-   1. Copy the debugging metadata to the right location.
+   - Copy the debugging metadata to the right location.
 
         ```bash
         cp -r $ROOT_DIR/sui/crates/sui-framework/packages/sui-framework/build/Sui $ROOT_DIR.replay/95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs/0x0000000000000000000000000000000000000000000000000000000000000002/source
@@ -249,19 +249,19 @@ While the source code repository for `deepbook/core` contains three different pa
 
 Proceed to building a correct version of this package to generate debugging metadata that must accompany the package source code. Assume that all commands are executed in `$ROOT_DIR` unless stated otherwise.
 
-1. Clone the repository.
+- Clone the repository.
 
     ```bash
     git clone https://github.com/MystenLabs/deepbookv3.git
     ```
 
-1. Go to the `deepbook` package directory.
+- Go to the `deepbook` package directory.
 
     ```bash
     cd deepbookv3/packages/deepbook
     ```
 
-1. Check the version tags.
+- Check the version tags.
 
     ```bash
     git tag -l
@@ -283,7 +283,7 @@ Proceed to building a correct version of this package to generate debugging meta
 
     If tags are not found, you can proceed directly to the next step, but there is no guarantee that the most recent version of source code in the repository corresponds to the version of the package on-chain, which may affect debugging capabilities.
 
-1. Build the package and copying the debugging metadata.
+- Build the package and copying the debugging metadata.
 
     ```bash
     sui move build
