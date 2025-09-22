@@ -167,7 +167,11 @@ impl ClientObservedStats {
         let mut max_latencies = HashMap::new();
 
         for validator in committee.names() {
-            let stats = self.validator_stats.get(validator).unwrap();
+            // It's possible that a reconfiguration happened and the validator is no longer in the committee.
+            let Some(stats) = self.validator_stats.get(validator) else {
+                continue;
+            };
+
             // We are specifically excluding from the max latencies calculations the validators that are meant to be excluded
             // from the score calculations anyways. Only the ones participating in the pool should be considered to avoid score inflation.
             let is_excluded = if let Some(exclusion_time) = stats.exclusion_time {
