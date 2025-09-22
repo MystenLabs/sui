@@ -9,6 +9,7 @@ mod resolve;
 pub use resolve::{ResolvedDependency, ResolverError};
 
 mod pin;
+pub use pin::Pinned;
 pub use pin::PinnedDependencyInfo;
 
 mod fetch;
@@ -31,6 +32,12 @@ use crate::{
 /// dependency, etc). The `DepInfo` type encapsulates these invariants.
 #[derive(Debug, Clone)]
 struct Dependency<DepInfo> {
+    /// The name given to this dependency in the manifest. For modern manifests, this is the same
+    /// as the name used for the package in the source code, while for legacy manifests this name
+    /// may be different (it is still normalized to be a valid identifier but does not correspond
+    /// to the named address).
+    name: PackageName,
+
     dep_info: DepInfo,
 
     /// The environment in the dependency's namespace to use. For example, given
@@ -57,6 +64,7 @@ impl<T> Dependency<T> {
     /// Apply `f` to `self.dep_info`, keeping the remaining fields unchanged
     pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Dependency<U> {
         Dependency {
+            name: self.name,
             dep_info: f(self.dep_info),
             use_environment: self.use_environment,
             is_override: self.is_override,

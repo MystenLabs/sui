@@ -1,11 +1,12 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-{
-    Identifier(
-        "mock1",
-    ): PinnedDependencyInfo(
+[
+    PinnedDependencyInfo(
         Dependency {
+            name: Identifier(
+                "mock1",
+            ),
             dep_info: Local(
                 PinnedLocalDependency {
                     absolute_path_to_package: "tests/data/external_multiple_resolvers/for-res-1",
@@ -19,10 +20,11 @@ source: crates/move-package-alt/tests/test_runner.rs
             containing_file: "tests/data/external_multiple_resolvers/Move.toml",
         },
     ),
-    Identifier(
-        "mock2",
-    ): PinnedDependencyInfo(
+    PinnedDependencyInfo(
         Dependency {
+            name: Identifier(
+                "mock2",
+            ),
             dep_info: Local(
                 PinnedLocalDependency {
                     absolute_path_to_package: "tests/data/external_multiple_resolvers/for-res-2",
@@ -36,4 +38,4 @@ source: crates/move-package-alt/tests/test_runner.rs
             containing_file: "tests/data/external_multiple_resolvers/Move.toml",
         },
     ),
-}
+]

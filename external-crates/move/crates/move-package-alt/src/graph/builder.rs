@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::PinnedDependencyInfo,
+    dependency::{Pinned, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{EnvironmentName, Package, lockfile::Lockfiles, paths::PackagePath},
@@ -21,7 +21,7 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use tokio::sync::OnceCell;
 use tracing::debug;
 
-use super::{PackageGraph, PackageGraphEdge};
+use super::PackageGraph;
 
 struct PackageCache<F: MoveFlavor> {
     // TODO: better errors; I'm using Option for now because PackageResult doesn't have clone, but
@@ -85,7 +85,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
-            let dep = PinnedDependencyInfo::from_lockfile(lockfile.file(), env.name(), pin)?;
+            let dep = Pinned::from_lockfile(lockfile.file(), pin)?;
             let package = self.cache.fetch(&dep, env).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
@@ -115,7 +115,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             let source_index = package_ids.get_by_left(source_id).unwrap();
             let source_package = inner[*source_index].clone();
 
-            for (dep_name, dep) in source_package.direct_deps() {
+            for dep in source_package.direct_deps() {
+                let dep_name = dep.name();
                 let target_id = source_pin
                     .deps
                     .get(dep_name)
@@ -129,14 +130,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                         "Invalid lockfile: package depends on a package with undefined ID `{target_id}`"
                     )))?;
 
-                inner.add_edge(
-                    *source_index,
-                    *target_index,
-                    PackageGraphEdge {
-                        name: dep_name.clone(),
-                        dep: dep.clone(),
-                    },
-                );
+                inner.add_edge(*source_index, *target_index, dep.clone());
             }
         }
 
@@ -167,7 +161,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             .add_transitive_manifest_deps(root, env, graph.clone(), visited)
             .await?;
 
-        let inner: DiGraph<Arc<Package<F>>, PackageGraphEdge> =
+        let inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo> =
             graph.lock().expect("unpoisoned").map(
                 |_, node| {
                     node.clone()
@@ -187,7 +181,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     /// Assign unique identifiers to each node. In the case that there is no overlap, the
     /// identifier should be the same as the package's name.
     fn create_ids(
-        graph: &DiGraph<Arc<Package<F>>, PackageGraphEdge>,
+        graph: &DiGraph<Arc<Package<F>>, PinnedDependencyInfo>,
     ) -> BiBTreeMap<PackageID, NodeIndex> {
         let mut name_to_suffix: BTreeMap<PackageName, u8> = BTreeMap::new();
         let mut node_to_id: BiBTreeMap<PackageID, NodeIndex> = BiBTreeMap::new();
@@ -232,7 +226,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         package: Arc<Package<F>>,
         env: &Environment,
-        graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PackageGraphEdge>>>,
+        graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PinnedDependencyInfo>>>,
         visited: Arc<Mutex<BTreeMap<(EnvironmentName, PathBuf), NodeIndex>>>,
     ) -> PackageResult<NodeIndex> {
         // return early if node is cached; add empty node to graph and visited list otherwise
@@ -247,8 +241,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
-        for (name, dep) in package.direct_deps().iter() {
-            let fetched = self.cache.fetch(dep, env).await?;
+        for dep in package.direct_deps().iter() {
+            let fetched = self.cache.fetch(dep.as_ref(), env).await?;
 
             // We retain the defined environment name, but we assign a consistent chain id (environmentID).
             let new_env = Environment::new(dep.use_environment().clone(), env.id().clone());
@@ -261,14 +255,10 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             );
             let dep_index = Box::pin(future).await?;
 
-            graph.lock().expect("unpoisoned").add_edge(
-                index,
-                dep_index,
-                PackageGraphEdge {
-                    name: name.clone(),
-                    dep: dep.clone(),
-                },
-            );
+            graph
+                .lock()
+                .expect("unpoisoned")
+                .add_edge(index, dep_index, dep.clone());
         }
 
         graph
@@ -291,11 +281,7 @@ impl<F: MoveFlavor> PackageCache<F> {
     }
 
     /// Return a reference to a cached [Package], loading it if necessary
-    pub async fn fetch(
-        &self,
-        dep: &PinnedDependencyInfo,
-        env: &Environment,
-    ) -> PackageResult<Arc<Package<F>>> {
+    pub async fn fetch(&self, dep: &Pinned, env: &Environment) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache
             .lock()
