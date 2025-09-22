@@ -75,20 +75,12 @@ pub struct ReplayConfigStable {
     pub digests_path: Option<PathBuf>,
 
     /// Terminate a batch replay early if an error occurs when replaying one of the transactions.
-    #[arg(
-        long = "terminate-early",
-        num_args = 0..=1,
-        default_missing_value = "false"
-    )]
+    #[arg(long = "terminate-early", num_args = 0, default_missing_value = "true")]
     pub terminate_early: Option<bool>,
 
     /// Whether to trace the transaction execution. Generated traces will be saved in the output
     /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
-    #[arg(
-        long = "trace",
-        num_args = 0..=1,
-        default_missing_value = "false"
-    )]
+    #[arg(long = "trace", num_args = 0, default_missing_value = "true")]
     pub trace: Option<bool>,
 
     /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
@@ -96,21 +88,12 @@ pub struct ReplayConfigStable {
     pub output_dir: Option<PathBuf>,
 
     /// Show transaction effects.
-    #[arg(
-        short = 'e',
-        long = "show-effects",
-        num_args = 0..=1,
-        default_missing_value = "true"
-    )]
+    #[arg(short = 'e', long = "show-effects", num_args = 1)]
     pub show_effects: Option<bool>,
 
     /// Whether existing artifacts that were generated from a previous replay of the transaction
     /// should be overwritten or an error raised if they already exist.
-    #[arg(
-        long = "overwrite",
-        num_args = 0..=1,
-        default_missing_value = "false"
-    )]
+    #[arg(long = "overwrite", num_args = 0, default_missing_value = "true")]
     pub overwrite: Option<bool>,
 }
 
@@ -125,6 +108,24 @@ pub struct ReplayConfigStableInternal {
     pub output_dir: Option<PathBuf>,
     pub show_effects: bool,
     pub overwrite: bool,
+}
+
+impl Default for ReplayConfigStableInternal {
+    /// Theser represent default values for the flags specified on the command line.
+    /// They need to be specified explicitly as we can't provide them in as Clap
+    /// annotations - if we did, we'd loose the ability to detect which command line
+    /// arguments are missing.
+    fn default() -> Self {
+        Self {
+            digest: None,
+            digests_path: None,
+            terminate_early: false,
+            trace: false,
+            output_dir: None,
+            show_effects: true,
+            overwrite: false,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -274,9 +275,7 @@ pub fn merge_configs(
     cli_config: ReplayConfigStable,
     file_config: ReplayConfigStable,
 ) -> ReplayConfigStableInternal {
-    // Get default config from clap (any name can be used as first
-    // element of the vector to represent the command/program name).
-    let default_config = ReplayConfigStableInternal::parse_from(["dummy"]);
+    let default_config = ReplayConfigStableInternal::default();
     ReplayConfigStableInternal {
         digest: cli_config.digest.or(file_config.digest),
 

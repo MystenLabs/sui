@@ -566,6 +566,7 @@ impl AuthorityStorePruner {
     ) -> anyhow::Result<()> {
         // TODO: add support for checkpoints db pruning
         use std::sync::atomic::Ordering;
+        let current_watermark = pruning_watermark.epoch_id.load(Ordering::Relaxed);
         let current_epoch_id = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| c.epoch)
@@ -577,13 +578,15 @@ impl AuthorityStorePruner {
         let checkpoint_id =
             checkpoint_store.get_epoch_last_checkpoint_seq_number(target_epoch_id)?;
 
-        info!(
-            "relocation: setting epoch watermark to {}",
-            target_epoch_id + 1
-        );
+        let new_watermark = target_epoch_id + 1;
+        if current_watermark == new_watermark {
+            info!("skip relocation. Watermark hasn't changed");
+            return Ok(());
+        }
+        info!("relocation: setting epoch watermark to {}", new_watermark);
         pruning_watermark
             .epoch_id
-            .store(target_epoch_id + 1, Ordering::Relaxed);
+            .store(new_watermark, Ordering::Relaxed);
         if let Some(checkpoint_id) = checkpoint_id {
             info!(
                 "relocation: setting checkpoint watermark to {}",
@@ -593,6 +596,8 @@ impl AuthorityStorePruner {
                 .checkpoint_id
                 .store(checkpoint_id, Ordering::Relaxed);
         }
+        perpetual_db.objects.db.start_relocation()?;
+        checkpoint_store.tables.watermarks.db.start_relocation()?;
         Ok(())
     }
 

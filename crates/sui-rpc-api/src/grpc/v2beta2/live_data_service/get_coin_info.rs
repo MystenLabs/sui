@@ -15,11 +15,9 @@ use sui_rpc::proto::sui::rpc::v2beta2::RegulatedCoinMetadata;
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
 use sui_types::coin_registry::{
-    self, Currency, CurrencyKey, CurrencyRegulatedState, MetadataCapState, SupplyState,
+    Currency, MetadataCapState, RegulatedState as CurrencyRegulatedState, SupplyState,
 };
-use sui_types::derived_object;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
-use sui_types::{TypeTag, SUI_COIN_REGISTRY_OBJECT_ID};
 
 const SUI_COIN_TREASURY: CoinTreasury = {
     let mut treasury = CoinTreasury::const_default();
@@ -78,32 +76,7 @@ fn get_coin_info_from_registry(
     coin_type: &StructTag,
     core_coin_type: &move_core_types::language_storage::StructTag,
 ) -> Result<Option<GetCoinInfoResponse>> {
-    let currency_key_type = move_core_types::language_storage::StructTag {
-        address: move_core_types::account_address::AccountAddress::from_hex_literal("0x2").unwrap(),
-        module: move_core_types::identifier::Identifier::new(
-            coin_registry::COIN_REGISTRY_MODULE_NAME.as_str(),
-        )
-        .unwrap(),
-        name: move_core_types::identifier::Identifier::new(
-            coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str(),
-        )
-        .unwrap(),
-        type_params: vec![TypeTag::Struct(Box::new(core_coin_type.clone()))],
-    };
-
-    let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new()).map_err(|e| {
-        RpcError::new(
-            tonic::Code::Internal,
-            format!("Failed to serialize CurrencyKey: {}", e),
-        )
-    })?;
-
-    let currency_id = derived_object::derive_object_id(
-        SUI_COIN_REGISTRY_OBJECT_ID,
-        &TypeTag::Struct(Box::new(currency_key_type.clone())),
-        &currency_key_bytes,
-    )
-    .map_err(|e| {
+    let currency_id = Currency::derive_object_id(core_coin_type.clone().into()).map_err(|e| {
         RpcError::new(
             tonic::Code::Internal,
             format!(
@@ -142,7 +115,7 @@ fn get_coin_info_from_registry(
     })?;
     let metadata = {
         let mut metadata = CoinMetadata::default();
-        metadata.id = Some(Address::from(currency.id.id.bytes).to_string());
+        metadata.id = Some(Address::from(currency.id.into_bytes()).to_string());
         metadata.decimals = Some(currency.decimals.into());
         metadata.name = Some(currency.name);
         metadata.symbol = Some(currency.symbol);
@@ -172,7 +145,7 @@ fn get_coin_info_from_registry(
                 treasury.id = currency
                     .treasury_cap_id
                     .map(|id| Address::from(id).to_string());
-                treasury.total_supply = Some(supply.value);
+                treasury.total_supply = Some(*supply);
                 treasury.supply_state = Some(RpcSupplyState::Fixed.into());
                 Some(treasury)
             }
@@ -181,7 +154,7 @@ fn get_coin_info_from_registry(
                 treasury.id = currency
                     .treasury_cap_id
                     .map(|id| Address::from(id).to_string());
-                treasury.total_supply = Some(supply.value);
+                treasury.total_supply = Some(*supply);
                 treasury.supply_state = Some(RpcSupplyState::BurnOnly.into());
                 Some(treasury)
             }

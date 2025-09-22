@@ -88,7 +88,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
     pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
-        debug!("Loading RootPackage for {:?}", path.as_ref());
+        debug!(
+            "Loading RootPackage for {:?} (CWD: {:?}",
+            path.as_ref(),
+            std::env::current_dir()
+        );
         let _mutx = PackageLock::lock(); // held until function returns
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
@@ -197,6 +201,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
+        debug!(
+            "creating RootPackage at {:?} (CWD: {:?})",
+            package_path.path(),
+            std::env::current_dir()
+        );
         let lockfile = Self::load_lockfile(&package_path)?;
         let pubs = Self::load_pubfile(&package_path)?;
 
@@ -223,9 +232,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             .insert(self.environment.name().clone(), BTreeMap::from(&self.graph));
     }
 
-    /// The name of the root package
-    pub fn name(&self) -> &PackageName {
-        self.package_graph().root_package().name()
+    /// The id of the root package (TODO: perhaps this method is poorly named; check where it's
+    /// used and decide if they should be using `id` or `display_name`)
+    pub fn name(&self) -> &PackageID {
+        self.package_graph().root_package_info().id()
     }
 
     /// Returns the `display_name` for the root package.
@@ -515,7 +525,7 @@ pkg_b = { local = "../pkg_b" }"#,
                 .contains_key(DEFAULT_ENV_NAME)
         );
 
-        assert_eq!(root.name(), &PackageName::new("graph").unwrap());
+        assert_eq!(root.name(), &PackageID::from("graph"));
     }
 
     #[test(tokio::test)]

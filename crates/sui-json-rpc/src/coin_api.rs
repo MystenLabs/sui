@@ -10,7 +10,6 @@ use cached::SizedCache;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use sui_core::jsonrpc_index::TotalBalance;
 use tap::TapFallible;
 use tracing::{debug, instrument};
@@ -25,8 +24,7 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::coin::{CoinMetadata, TreasuryCap};
-use sui_types::coin_registry::{self, Currency, CurrencyKey, SupplyState};
-use sui_types::derived_object;
+use sui_types::coin_registry::{Currency, SupplyState};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_MIST};
 use sui_types::object::Object;
@@ -286,9 +284,7 @@ impl CoinReadApiServer for CoinReadApi {
             if let Some(currency) = get_currency_from_registry(object_store, &coin_struct).await? {
                 match &currency.supply {
                     Some(SupplyState::Fixed(supply)) | Some(SupplyState::BurnOnly(supply)) => {
-                        return Ok(Supply {
-                            value: supply.value,
-                        });
+                        return Ok(Supply { value: *supply });
                     }
                     _ => {
                         if let Some(treasury_cap_id) = currency.treasury_cap_id {
@@ -419,24 +415,7 @@ async fn get_currency_from_registry(
     object_store: &Arc<dyn ObjectStore + Send + Sync>,
     coin_type: &StructTag,
 ) -> RpcInterimResult<Option<Currency>> {
-    use sui_types::{TypeTag, SUI_COIN_REGISTRY_OBJECT_ID};
-
-    let currency_key_type = StructTag {
-        address: AccountAddress::from_hex_literal("0x2").unwrap(),
-        module: Identifier::new(coin_registry::COIN_REGISTRY_MODULE_NAME.as_str()).unwrap(),
-        name: Identifier::new(coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str()).unwrap(),
-        type_params: vec![TypeTag::Struct(Box::new(coin_type.clone()))],
-    };
-
-    let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new())
-        .map_err(|e| Error::UnexpectedError(format!("Failed to serialize CurrencyKey: {}", e)))?;
-
-    let currency_id = derived_object::derive_object_id(
-        SUI_COIN_REGISTRY_OBJECT_ID,
-        &TypeTag::Struct(Box::new(currency_key_type)),
-        &currency_key_bytes,
-    )
-    .map_err(|e| {
+    let currency_id = Currency::derive_object_id(coin_type.clone().into()).map_err(|e| {
         Error::UnexpectedError(format!(
             "Failed to derive Currency ID for coin type {}: {}",
             coin_type, e
@@ -1575,11 +1554,8 @@ mod tests {
 
         #[tokio::test]
         async fn test_coin_metadata_with_registry_data() {
-            use sui_types::coin_registry::{
-                self, Currency, CurrencyKey, MetadataCapState, SupplyState,
-            };
+            use sui_types::coin_registry::{self, Currency, MetadataCapState, SupplyState};
             use sui_types::collection_types::VecMap;
-            use sui_types::derived_object;
 
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
@@ -1590,34 +1566,21 @@ mod tests {
             )
             .unwrap();
             let currency = Currency {
-                id: UID::new(currency_object_id),
+                id: currency_object_id,
                 decimals: 9,
                 name: "Registry Test Coin".to_string(),
                 symbol: "RTC".to_string(),
                 description: "A coin from the registry".to_string(),
                 icon_url: "https://registry.test/icon.png".to_string(),
-                supply: Some(SupplyState::Fixed(coin_registry::Supply { value: 1000000 })),
-                regulated: coin_registry::CurrencyRegulatedState::Unknown,
+                supply: Some(SupplyState::Fixed(1000000)),
+                regulated: coin_registry::RegulatedState::Unknown,
                 treasury_cap_id: None,
                 metadata_cap_id: MetadataCapState::Unclaimed,
                 extra_fields: VecMap { contents: vec![] },
             };
 
             // Derive currency ID the same way the function does
-            let currency_key_type = StructTag {
-                address: AccountAddress::from_hex_literal("0x2").unwrap(),
-                module: Identifier::new(coin_registry::COIN_REGISTRY_MODULE_NAME.as_str()).unwrap(),
-                name: Identifier::new(coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str()).unwrap(),
-                type_params: vec![TypeTag::Struct(Box::new(coin_struct.clone()))],
-            };
-            let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new()).unwrap();
-            let currency_id = derived_object::derive_object_id(
-                sui_types::SUI_COIN_REGISTRY_OBJECT_ID,
-                &TypeTag::Struct(Box::new(currency_key_type)),
-                &currency_key_bytes,
-            )
-            .unwrap();
-
+            let currency_id = Currency::derive_object_id(coin_struct.clone().into()).unwrap();
             let currency_object = create_currency_object(currency);
 
             let mock_object_store =
@@ -1800,11 +1763,8 @@ mod tests {
 
         #[tokio::test]
         async fn test_total_supply_with_registry_fixed_supply() {
-            use sui_types::coin_registry::{
-                self, Currency, CurrencyKey, MetadataCapState, SupplyState,
-            };
+            use sui_types::coin_registry::{self, Currency, MetadataCapState, SupplyState};
             use sui_types::collection_types::VecMap;
-            use sui_types::derived_object;
 
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
@@ -1815,36 +1775,21 @@ mod tests {
             )
             .unwrap();
             let currency = Currency {
-                id: UID::new(currency_uid),
+                id: currency_uid,
                 decimals: 18,
                 name: "Fixed Supply Coin".to_string(),
                 symbol: "FSC".to_string(),
                 description: "A coin with fixed supply".to_string(),
                 icon_url: "https://fixed.supply/icon.png".to_string(),
-                supply: Some(SupplyState::Fixed(coin_registry::Supply {
-                    value: 21_000_000_000_000_000,
-                })),
-                regulated: coin_registry::CurrencyRegulatedState::Unknown,
+                supply: Some(SupplyState::Fixed(21_000_000_000_000_000)),
+                regulated: coin_registry::RegulatedState::Unknown,
                 treasury_cap_id: None,
                 metadata_cap_id: MetadataCapState::Unclaimed,
                 extra_fields: VecMap { contents: vec![] },
             };
 
             // Derive currency ID the same way the function does
-            let currency_key_type = StructTag {
-                address: AccountAddress::from_hex_literal("0x2").unwrap(),
-                module: Identifier::new(coin_registry::COIN_REGISTRY_MODULE_NAME.as_str()).unwrap(),
-                name: Identifier::new(coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str()).unwrap(),
-                type_params: vec![TypeTag::Struct(Box::new(coin_struct.clone()))],
-            };
-            let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new()).unwrap();
-            let currency_id = derived_object::derive_object_id(
-                sui_types::SUI_COIN_REGISTRY_OBJECT_ID,
-                &TypeTag::Struct(Box::new(currency_key_type)),
-                &currency_key_bytes,
-            )
-            .unwrap();
-
+            let currency_id = Currency::derive_object_id(coin_struct.clone().into()).unwrap();
             let currency_object = create_currency_object(currency);
 
             let mock_object_store =
@@ -1865,11 +1810,8 @@ mod tests {
 
         #[tokio::test]
         async fn test_total_supply_with_registry_unknown_supply() {
-            use sui_types::coin_registry::{
-                self, Currency, CurrencyKey, MetadataCapState, SupplyState,
-            };
+            use sui_types::coin_registry::{self, Currency, MetadataCapState, SupplyState};
             use sui_types::collection_types::VecMap;
-            use sui_types::derived_object;
 
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
@@ -1885,34 +1827,21 @@ mod tests {
             )
             .unwrap();
             let currency = Currency {
-                id: UID::new(currency_uid),
+                id: currency_uid,
                 decimals: 6,
                 name: "Unknown Supply Coin".to_string(),
                 symbol: "USC".to_string(),
                 description: "A coin with unknown supply".to_string(),
                 icon_url: "https://unknown.supply/icon.png".to_string(),
                 supply: Some(SupplyState::Unknown),
-                regulated: coin_registry::CurrencyRegulatedState::Unknown,
+                regulated: coin_registry::RegulatedState::Unknown,
                 treasury_cap_id: Some(treasury_cap_id),
                 metadata_cap_id: MetadataCapState::Unclaimed,
                 extra_fields: VecMap { contents: vec![] },
             };
 
             // Derive currency ID the same way the function does
-            let currency_key_type = StructTag {
-                address: AccountAddress::from_hex_literal("0x2").unwrap(),
-                module: Identifier::new(coin_registry::COIN_REGISTRY_MODULE_NAME.as_str()).unwrap(),
-                name: Identifier::new(coin_registry::CURRENCY_KEY_STRUCT_NAME.as_str()).unwrap(),
-                type_params: vec![TypeTag::Struct(Box::new(coin_struct.clone()))],
-            };
-            let currency_key_bytes = bcs::to_bytes(&CurrencyKey::new()).unwrap();
-            let currency_id = derived_object::derive_object_id(
-                sui_types::SUI_COIN_REGISTRY_OBJECT_ID,
-                &TypeTag::Struct(Box::new(currency_key_type)),
-                &currency_key_bytes,
-            )
-            .unwrap();
-
+            let currency_id = Currency::derive_object_id(coin_struct.clone().into()).unwrap();
             let currency_object = create_currency_object(currency);
 
             let treasury_cap = TreasuryCap {

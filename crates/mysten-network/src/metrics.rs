@@ -31,7 +31,7 @@ const SIZE_BYTE_BUCKETS: &[f64] = &[
     48787348., 63423553., // *1.3
 ];
 
-pub(crate) static GRPC_ENDPOINT_PATH_HEADER: HeaderName = HeaderName::from_static("grpc-path-req");
+pub static GRPC_ENDPOINT_PATH_HEADER: HeaderName = HeaderName::from_static("grpc-path-req");
 
 /// The trait to be implemented when you want to be notified about
 /// a new request and related metrics around it. When a request
@@ -76,12 +76,12 @@ impl MetricsCallbackProvider for DefaultMetricsCallbackProvider {
 }
 
 #[derive(Clone)]
-pub(crate) struct MetricsHandler<M: MetricsCallbackProvider> {
+pub struct MetricsHandler<M: MetricsCallbackProvider> {
     metrics_provider: M,
 }
 
 impl<M: MetricsCallbackProvider> MetricsHandler<M> {
-    pub(crate) fn new(metrics_provider: M) -> Self {
+    pub fn new(metrics_provider: M) -> Self {
         Self { metrics_provider }
     }
 }

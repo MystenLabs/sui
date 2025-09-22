@@ -85,7 +85,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
     }
 
     /// The unique ID for this package in the package graph
-    pub fn id(&self) -> &PackageID {
+    pub fn id(&self) -> &'graph PackageID {
         self.graph
             .package_ids
             .get_by_right(&self.node)

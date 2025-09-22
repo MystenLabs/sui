@@ -20,6 +20,7 @@ pub mod parsing;
 pub mod proptest_types;
 pub mod resolver;
 pub mod runtime_value;
+pub mod runtime_visitor;
 pub mod u256;
 #[cfg(test)]
 mod unit_tests;

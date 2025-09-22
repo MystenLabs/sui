@@ -3,6 +3,7 @@
 use crate::handlers::{
     is_bridge_txn, BRIDGE, TOKEN_DEPOSITED_EVENT, TOKEN_TRANSFER_APPROVED, TOKEN_TRANSFER_CLAIMED,
 };
+use crate::metrics::BridgeIndexerMetrics;
 use crate::struct_tag;
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
@@ -26,15 +27,27 @@ pub struct TokenTransferHandler {
     deposited_event_type: StructTag,
     approved_event_type: StructTag,
     claimed_event_type: StructTag,
+    metrics: Arc<BridgeIndexerMetrics>,
 }
 
-impl Default for TokenTransferHandler {
-    fn default() -> Self {
+impl TokenTransferHandler {
+    pub fn new(metrics: Arc<BridgeIndexerMetrics>) -> Self {
         Self {
             deposited_event_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, TOKEN_DEPOSITED_EVENT),
             approved_event_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, TOKEN_TRANSFER_APPROVED),
             claimed_event_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, TOKEN_TRANSFER_CLAIMED),
+            metrics,
         }
+    }
+}
+
+impl Default for TokenTransferHandler {
+    fn default() -> Self {
+        // For compatibility with existing code that doesn't pass metrics
+        use prometheus::Registry;
+        let registry = Registry::new();
+        let metrics = BridgeIndexerMetrics::new(&registry);
+        Self::new(metrics)
     }
 }
 
@@ -55,21 +68,59 @@ impl Processor for TokenTransferHandler {
             for ev in tx.events.iter().flat_map(|e| &e.data) {
                 let (chain_id, nonce) = if self.deposited_event_type == ev.type_ {
                     info!("Observed Sui Deposit {:?}", ev);
-                    // todo: metrics.total_sui_token_deposited.inc();
                     let event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
+
+                    // Bridge-specific metrics for token deposits
+                    self.metrics
+                        .bridge_events_total
+                        .with_label_values(&["token_deposited", "sui"])
+                        .inc();
+                    self.metrics
+                        .token_transfers_total
+                        .with_label_values(&[
+                            "sui_to_eth",
+                            "deposited",
+                            &event.token_type.to_string(),
+                        ])
+                        .inc();
+                    self.metrics
+                        .token_transfer_gas_used
+                        .with_label_values(&["sui_to_eth", "true"])
+                        .inc_by(tx.effects.gas_cost_summary().net_gas_usage() as u64);
+
                     (event.source_chain, event.seq_num)
                 } else if self.approved_event_type == ev.type_ {
                     info!("Observed Sui Approval {:?}", ev);
-                    // todo: metrics.total_sui_token_transfer_approved.inc();
                     let event: MoveTokenTransferApproved = bcs::from_bytes(&ev.contents)?;
+
+                    // Bridge committee approval metrics
+                    self.metrics
+                        .bridge_events_total
+                        .with_label_values(&["transfer_approved", "sui"])
+                        .inc();
+                    self.metrics
+                        .token_transfers_total
+                        .with_label_values(&["eth_to_sui", "approved", "unknown"])
+                        .inc();
+
                     (
                         event.message_key.source_chain,
                         event.message_key.bridge_seq_num,
                     )
                 } else if self.claimed_event_type == ev.type_ {
                     info!("Observed Sui Claim {:?}", ev);
-                    // todo: metrics.total_sui_token_transfer_claimed.inc();
                     let event: MoveTokenTransferClaimed = bcs::from_bytes(&ev.contents)?;
+
+                    // Bridge transfer completion metrics
+                    self.metrics
+                        .bridge_events_total
+                        .with_label_values(&["transfer_claimed", "sui"])
+                        .inc();
+                    self.metrics
+                        .token_transfers_total
+                        .with_label_values(&["eth_to_sui", "claimed", "unknown"])
+                        .inc();
+
                     (
                         event.message_key.source_chain,
                         event.message_key.bridge_seq_num,

@@ -389,6 +389,7 @@ public fun set_name<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, name: Str
     currency.name = name;
 }
 
+#[test_only]
 /// Update the symbol of the `Currency`.
 public fun set_symbol<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, symbol: String) {
     assert!(is_ascii_printable!(&symbol), EInvalidSymbol);

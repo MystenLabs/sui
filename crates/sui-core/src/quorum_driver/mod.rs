@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::messages_grpc::HandleCertificateRequestV3;
+use sui_types::messages_grpc::{HandleCertificateRequestV3, TxType};
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequestV3, QuorumDriverEffectsQueueResult, QuorumDriverError,
     QuorumDriverResponse, QuorumDriverResult,
@@ -32,7 +32,7 @@ use crate::authority_aggregator::{
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
-use mysten_metrics::{spawn_monitored_task, GaugeGuard, TxType};
+use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use std::fmt::Write;
 use sui_macros::fail_point;
 use sui_types::error::{SuiError, SuiResult};
@@ -595,9 +595,9 @@ where
         let transaction = &request.transaction;
         let tx_digest = *transaction.digest();
         let tx_type = if transaction.is_consensus_tx() {
-            TxType::SingleWriter
-        } else {
             TxType::SharedObject
+        } else {
+            TxType::SingleWriter
         };
 
         let timer = Instant::now();

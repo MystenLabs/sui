@@ -285,9 +285,6 @@ pub enum UserInputError {
 
     #[error("Invalid withdraw reservation: {error}")]
     InvalidWithdrawReservation { error: String },
-
-    #[error("Invalid wait for effects request: {error}")]
-    InvalidWaitForEffectsRequest { error: String },
 }
 
 #[derive(
@@ -692,8 +689,12 @@ pub enum SuiError {
         round: u32,
         last_committed_round: u32,
     },
+
     #[error("Invalid admin request: {0}")]
     InvalidAdminRequest(String),
+
+    #[error("Invalid request: {0}")]
+    InvalidRequest(String),
 }
 
 #[repr(u64)]
@@ -877,53 +878,6 @@ impl SuiError {
         (retryable, true)
     }
 
-    /// Checks if this error is retriable with transaction resubmission attempts,
-    /// when this error is received outside of validators during transaction lifecycle.
-    ///
-    /// When a non-retriable error is returned by an honest validator during
-    /// transaction submission or effects query, this and other honest validators will
-    /// never vote to accept the same transaction with the same user signature.
-    /// So this transaction can never be finalized and retrying submission will not help.
-    ///
-    /// Also, when an error is categorized as non-retriable, we expect some consistency
-    /// among honest validators in also returning non-retriable errors for the same transaction
-    /// when there are no other temporary failures (network, overload, etc).
-    ///
-    /// SuiError contains many variants unrelated to transaction processing.
-    /// They can be returned externally by malicious validators or due to software bugs.
-    /// These variants are considered retriable, because they don't meet the criteria for
-    /// non-retriable errors above.
-    pub fn is_transaction_submission_retriable(&self) -> bool {
-        match self {
-            SuiError::UserInputError { error } => {
-                match error {
-                    // ObjectNotFound and DependentPackageNotFound are potentially retriable because the missing
-                    // input can be created by other transactions.
-                    UserInputError::ObjectNotFound { .. } => true,
-                    UserInputError::DependentPackageNotFound { .. } => true,
-                    // Other UserInputError variants are not retriable with resubmission.
-                    _ => false,
-                }
-            }
-
-            // Non retryable errors
-            SuiError::ByzantineAuthoritySuspicion { .. } => false,
-            SuiError::ObjectLockConflict { .. } => false,
-            SuiError::TransactionExpired => false,
-            SuiError::InvalidTxKindInSoftBundle { .. } => false,
-            SuiError::UnsupportedFeatureError { .. } => false,
-
-            SuiError::InvalidSignature { .. } => false,
-            SuiError::SignerSignatureAbsent { .. } => false,
-            SuiError::SignerSignatureNumberMismatch { .. } => false,
-            SuiError::IncorrectSigner { .. } => false,
-            SuiError::UnknownSigner { .. } => false,
-
-            // Other variants are assumed to be retriable.
-            _ => true,
-        }
-    }
-
     pub fn is_object_or_package_not_found(&self) -> bool {
         match self {
             SuiError::UserInputError { error } => {
@@ -955,6 +909,50 @@ impl SuiError {
         match self {
             SuiError::ValidatorOverloadedRetryAfter { retry_after_secs } => *retry_after_secs,
             _ => 0,
+        }
+    }
+
+    /// Categorizes SuiError into ErrorCategory.
+    pub fn categorize(&self) -> ErrorCategory {
+        match self {
+            SuiError::UserInputError { error } => {
+                match error {
+                    // ObjectNotFound and DependentPackageNotFound are potentially valid because the missing
+                    // input can be created by other transactions.
+                    UserInputError::ObjectNotFound { .. } => ErrorCategory::Aborted,
+                    UserInputError::DependentPackageNotFound { .. } => ErrorCategory::Aborted,
+                    // Other UserInputError variants indeed indicate invalid transaction.
+                    _ => ErrorCategory::InvalidTransaction,
+                }
+            }
+
+            SuiError::InvalidSignature { .. }
+            | SuiError::SignerSignatureAbsent { .. }
+            | SuiError::SignerSignatureNumberMismatch { .. }
+            | SuiError::IncorrectSigner { .. }
+            | SuiError::UnknownSigner { .. }
+            | SuiError::TransactionExpired => ErrorCategory::InvalidTransaction,
+
+            SuiError::ObjectLockConflict { .. } => ErrorCategory::LockConflict,
+
+            SuiError::Unknown { .. }
+            | SuiError::GrpcMessageSerializeError { .. }
+            | SuiError::GrpcMessageDeserializeError { .. }
+            | SuiError::ByzantineAuthoritySuspicion { .. }
+            | SuiError::InvalidTxKindInSoftBundle { .. }
+            | SuiError::UnsupportedFeatureError { .. }
+            | SuiError::InvalidRequest { .. } => ErrorCategory::Internal,
+
+            SuiError::TooManyTransactionsPendingExecution { .. }
+            | SuiError::TooManyTransactionsPendingOnObject { .. }
+            | SuiError::TooOldTransactionPendingOnObject { .. }
+            | SuiError::TooManyTransactionsPendingConsensus
+            | SuiError::ValidatorOverloadedRetryAfter { .. } => ErrorCategory::ValidatorOverloaded,
+
+            SuiError::TimeoutError { .. } => ErrorCategory::Unavailable,
+
+            // Other variants are assumed to be retriable with new transaction submissions.
+            _ => ErrorCategory::Aborted,
         }
     }
 }
@@ -1055,4 +1053,34 @@ pub fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> Execut
         e,
         arg_idx as u16,
     ))
+}
+
+/// Types of SuiError.
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum ErrorCategory {
+    // A generic error that is retriable with new transaction resubmissions.
+    Aborted,
+    // Any validator or full node can check if a transaction is valid.
+    InvalidTransaction,
+    // Lock conflict on the transaction input.
+    LockConflict,
+    // Unexpected client error, for example generating invalid request or entering into invalid state.
+    // And unexpected error from the remote peer. The validator may be malicious or there is a software bug.
+    Internal,
+    // Validator is overloaded.
+    ValidatorOverloaded,
+    // Target validator is down or there are network issues.
+    Unavailable,
+}
+
+impl ErrorCategory {
+    // Whether the failure is retriable with new transaction submission.
+    pub fn is_submission_retriable(&self) -> bool {
+        matches!(
+            self,
+            ErrorCategory::Aborted
+                | ErrorCategory::ValidatorOverloaded
+                | ErrorCategory::Unavailable
+        )
+    }
 }

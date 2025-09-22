@@ -239,6 +239,7 @@ impl AuthorityPerpetualTables {
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
+        let epoch_prefix_key = KeyType::prefix_uniform(10, 4);
 
         let configs = vec![
             (
@@ -247,7 +248,9 @@ impl AuthorityPerpetualTables {
                     32 + 8,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
-                    KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
+                    KeySpaceConfig::new()
+                        .with_compactor(Box::new(objects_compactor))
+                        .with_relocation_bloom_filter(0.001, 2_000_000_000),
                 ),
             ),
             (
@@ -256,7 +259,9 @@ impl AuthorityPerpetualTables {
                     32 + 8 + 32 + 8,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
-                    bloom_config.clone(),
+                    bloom_config
+                        .clone()
+                        .with_relocation_bloom_filter(0.001, 100_000),
                 ),
             ),
             (
@@ -359,7 +364,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::VariableLength,
                     mutexes,
-                    uniform_key,
+                    epoch_prefix_key,
                     apply_relocation_filter(
                         KeySpaceConfig::default(),
                         pruner_watermark.clone(),
@@ -373,7 +378,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::VariableLength,
                     mutexes,
-                    uniform_key,
+                    epoch_prefix_key,
                     apply_relocation_filter(
                         KeySpaceConfig::default(),
                         pruner_watermark.clone(),

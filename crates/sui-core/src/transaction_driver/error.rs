@@ -9,7 +9,7 @@ use sui_types::{
     base_types::{AuthorityName, ConciseableName},
     committee::{EpochId, StakeUnit},
     digests::TransactionEffectsDigest,
-    error::SuiError,
+    error::{ErrorCategory, SuiError},
 };
 use thiserror::Error;
 
@@ -26,8 +26,8 @@ pub(crate) enum TransactionRequestError {
     TimedOutSubmittingTransaction,
     #[error("Request timed out getting full effects")]
     TimedOutGettingFullEffectsAtValidator,
-    #[error("Failed to find execution data")]
-    ExecutionDataNotFound,
+    #[error("{0}")]
+    ValidatorInternal(String),
 
     // Rejected by the validator when voting on the transaction.
     #[error("{0}")]
@@ -43,14 +43,23 @@ pub(crate) enum TransactionRequestError {
 }
 
 impl TransactionRequestError {
-    pub fn is_submission_retriable(&self) -> bool {
+    pub(crate) fn categorize(&self) -> ErrorCategory {
         match self {
-            TransactionRequestError::RejectedAtValidator(error) => {
-                error.is_transaction_submission_retriable()
+            TransactionRequestError::TimedOutSubmittingTransaction => ErrorCategory::Unavailable,
+            TransactionRequestError::TimedOutGettingFullEffectsAtValidator => {
+                ErrorCategory::Unavailable
             }
-            TransactionRequestError::Aborted(error) => error.is_transaction_submission_retriable(),
-            _ => true,
+            TransactionRequestError::ValidatorInternal(_) => ErrorCategory::Internal,
+
+            TransactionRequestError::RejectedAtValidator(error) => error.categorize(),
+            TransactionRequestError::RejectedByConsensus => ErrorCategory::Aborted,
+            TransactionRequestError::StatusExpired(_, _) => ErrorCategory::Aborted,
+            TransactionRequestError::Aborted(error) => error.categorize(),
         }
+    }
+
+    pub(crate) fn is_submission_retriable(&self) -> bool {
+        self.categorize().is_submission_retriable()
     }
 }
 
@@ -60,21 +69,21 @@ impl TransactionRequestError {
 #[derive(Eq, PartialEq, Clone)]
 pub enum TransactionDriverError {
     /// TransactionDriver encountered an internal error.
-    /// Retriable.
-    Internal { error: String },
+    /// Non-retriable.
+    ClientInternal { error: String },
+    /// The transaction failed validation from local state.
+    /// Non-retriable.
+    ValidationFailed { error: String },
     /// Transient failure during transaction processing that prevents the transaction from finalization.
-    /// Retriable with new transaction submission / call to TransactionDriver.
+    /// Retriable with new transaction submission.
     Aborted {
         submission_non_retriable_errors: AggregatedRequestErrors,
         submission_retriable_errors: AggregatedRequestErrors,
         observed_effects_digests: AggregatedEffectsDigests,
     },
-    /// The transaction failed validation from local state.
-    /// Non-retriable.
-    ValidationFailed { error: String },
     /// Over validity threshold of validators rejected the transaction as invalid.
     /// Non-retriable.
-    InvalidTransaction {
+    RejectedByValidators {
         submission_non_retriable_errors: AggregatedRequestErrors,
         submission_retriable_errors: AggregatedRequestErrors,
     },
@@ -96,14 +105,48 @@ pub enum TransactionDriverError {
 }
 
 impl TransactionDriverError {
-    pub fn is_retriable(&self) -> bool {
+    pub(crate) fn is_submission_retriable(&self) -> bool {
+        self.categorize().is_submission_retriable()
+    }
+
+    pub fn categorize(&self) -> ErrorCategory {
         match self {
-            TransactionDriverError::Internal { .. } => true,
-            TransactionDriverError::Aborted { .. } => true,
-            TransactionDriverError::ValidationFailed { .. } => false,
-            TransactionDriverError::InvalidTransaction { .. } => false,
-            TransactionDriverError::ForkedExecution { .. } => false,
-            TransactionDriverError::TimeoutWithLastRetriableError { .. } => true,
+            TransactionDriverError::ClientInternal { .. } => ErrorCategory::Internal,
+            TransactionDriverError::ValidationFailed { .. } => ErrorCategory::InvalidTransaction,
+            TransactionDriverError::Aborted {
+                submission_retriable_errors,
+                submission_non_retriable_errors,
+                ..
+            } => {
+                if let Some((_, _, _, category)) = submission_retriable_errors.errors.first() {
+                    *category
+                } else if let Some((_, _, _, category)) =
+                    submission_non_retriable_errors.errors.first()
+                {
+                    *category
+                } else {
+                    ErrorCategory::Aborted
+                }
+            }
+            TransactionDriverError::RejectedByValidators {
+                submission_non_retriable_errors,
+                submission_retriable_errors,
+                ..
+            } => {
+                if let Some((_, _, _, category)) = submission_non_retriable_errors.errors.first() {
+                    *category
+                } else if let Some((_, _, _, category)) = submission_retriable_errors.errors.first()
+                {
+                    *category
+                } else {
+                    // There should be at least one error.
+                    ErrorCategory::Internal
+                }
+            }
+            TransactionDriverError::ForkedExecution { .. } => ErrorCategory::Internal,
+            TransactionDriverError::TimeoutWithLastRetriableError { .. } => {
+                ErrorCategory::Unavailable
+            }
         }
     }
 
@@ -116,9 +159,8 @@ impl TransactionDriverError {
         else {
             return Ok(());
         };
-        let mut msgs = vec![
-            "Transaction processing aborted (retriable with the same transaction).".to_string(),
-        ];
+        let mut msgs =
+            vec!["Transaction processing aborted (retriable with another submission).".to_string()];
         if submission_retriable_errors.total_stake > 0 {
             msgs.push(format!(
                 "Retriable errors: [{submission_retriable_errors}]."
@@ -145,7 +187,7 @@ impl TransactionDriverError {
     }
 
     fn display_invalid_transaction(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let TransactionDriverError::InvalidTransaction {
+        let TransactionDriverError::RejectedByValidators {
             submission_non_retriable_errors,
             submission_retriable_errors,
         } = self
@@ -197,10 +239,12 @@ impl TransactionDriverError {
 impl std::fmt::Display for TransactionDriverError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TransactionDriverError::Internal { error } => write!(f, "Internal error: {}", error),
+            TransactionDriverError::ClientInternal { error } => {
+                write!(f, "TransactionDriver internal error: {}", error)
+            }
             TransactionDriverError::Aborted { .. } => self.display_aborted(f),
             TransactionDriverError::ValidationFailed { .. } => self.display_validation_failed(f),
-            TransactionDriverError::InvalidTransaction { .. } => {
+            TransactionDriverError::RejectedByValidators { .. } => {
                 self.display_invalid_transaction(f)
             }
             TransactionDriverError::ForkedExecution { .. } => self.display_forked_execution(f),
@@ -234,7 +278,8 @@ impl std::error::Error for TransactionDriverError {}
 
 #[derive(Eq, PartialEq, Clone, Debug, Default)]
 pub struct AggregatedRequestErrors {
-    pub errors: Vec<(String, Vec<AuthorityName>, StakeUnit)>,
+    pub errors: Vec<(String, Vec<AuthorityName>, StakeUnit, ErrorCategory)>,
+    // The total stake of all errors.
     pub total_stake: StakeUnit,
 }
 
@@ -243,7 +288,7 @@ impl std::fmt::Display for AggregatedRequestErrors {
         let msg = self
             .errors
             .iter()
-            .map(|(error, names, stake)| {
+            .map(|(error, names, stake, _category)| {
                 format!(
                     "{} {{ {} }} with {} stake",
                     error,
@@ -273,21 +318,24 @@ pub(crate) fn aggregate_request_errors(
     errors: Vec<(AuthorityName, StakeUnit, TransactionRequestError)>,
 ) -> AggregatedRequestErrors {
     let mut total_stake = 0;
-    let mut aggregated_errors = BTreeMap::<String, (Vec<AuthorityName>, StakeUnit)>::new();
+    let mut aggregated_errors =
+        BTreeMap::<String, (Vec<AuthorityName>, StakeUnit, ErrorCategory)>::new();
 
     for (name, stake, error) in errors {
         total_stake += stake;
         let key = format_transaction_request_error(&error);
-        let entry = aggregated_errors.entry(key).or_default();
+        let entry = aggregated_errors
+            .entry(key)
+            .or_insert_with(|| (vec![], 0, error.categorize()));
         entry.0.push(name);
         entry.1 += stake;
     }
 
     let mut errors: Vec<_> = aggregated_errors
         .into_iter()
-        .map(|(error, (names, stake))| (error, names, stake))
+        .map(|(error, (names, stake, category))| (error, names, stake, category))
         .collect();
-    errors.sort_by_key(|(_, _, stake)| std::cmp::Reverse(*stake));
+    errors.sort_by_key(|(_, _, stake, _)| std::cmp::Reverse(*stake));
 
     AggregatedRequestErrors {
         errors,
