@@ -250,7 +250,10 @@ impl Object {
     }
 
     /// Attempts to convert the object into a MoveObject.
-    async fn as_move_object(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>, RpcError> {
+    pub(crate) async fn as_move_object(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<MoveObject>, RpcError> {
         MoveObject::from_object(self, ctx).await
     }
 

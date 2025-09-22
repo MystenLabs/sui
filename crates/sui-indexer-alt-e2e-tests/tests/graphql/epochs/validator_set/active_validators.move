@@ -42,6 +42,9 @@
           imageUrl
           # todo (ewall) populate projectUrl
           projectUrl
+          operationCap {
+            address
+          }
           stakingPoolId
           exchangeRatesSize
           stakingPoolActivationEpoch
