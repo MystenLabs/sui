@@ -2155,23 +2155,6 @@ impl ProtocolConfig {
         self.feature_flags.allow_unbounded_system_objects
     }
 
-    pub fn get_aliased_addresses(&self) -> &Vec<AliasedAddress> {
-        &self.aliased_addresses
-    }
-
-    pub fn is_tx_allowed_via_aliasing(
-        &self,
-        sender: [u8; 32],
-        signer: [u8; 32],
-        tx_digest: &[u8; 32],
-    ) -> bool {
-        self.aliased_addresses.iter().any(|addr| {
-            addr.original == sender
-                && addr.aliased == signer
-                && addr.allowed_tx_digests.contains(tx_digest)
-        })
-    }
-
     pub fn type_tags_in_object_runtime(&self) -> bool {
         self.feature_flags.type_tags_in_object_runtime
     }
@@ -4252,19 +4235,6 @@ impl ProtocolConfig {
 
     pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
         self.feature_flags.record_time_estimate_processed = val;
-    }
-
-    pub fn push_aliased_addresses_for_testing(
-        &mut self,
-        original: [u8; 32],
-        aliased: [u8; 32],
-        allowed_tx_digests: Vec<[u8; 32]>,
-    ) {
-        self.aliased_addresses.push(AliasedAddress {
-            original,
-            aliased,
-            allowed_tx_digests,
-        });
     }
 
     pub fn enable_accumulators_for_testing(&mut self) {
