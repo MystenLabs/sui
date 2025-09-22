@@ -35,7 +35,7 @@ use petgraph::{
 /// The graph of all packages. May include multiple versions of "the same" package. Guaranteed to
 /// be a rooted dag
 #[derive(Debug)]
-pub struct PackageGraph<F: MoveFlavor> {
+pub(crate) struct PackageGraph<F: MoveFlavor> {
     /// The root of the dag
     root_index: NodeIndex,
 
