@@ -16,7 +16,7 @@ use crate::{
     schema::LocalDepInfo,
 };
 
-use super::{Dependency, PinnedDependencyInfo, pin::Pinned};
+use super::{Dependency, Pinned};
 
 /// Once a dependency has been fetched, it is simply represented by a [PackagePath]
 type Fetched = PackagePath;
@@ -36,14 +36,16 @@ pub type FetchResult<T> = Result<T, FetchError>;
 
 impl FetchedDependency {
     /// Ensure that the dependency's files are present on the disk and return a path to them
-    pub async fn fetch(pinned: &PinnedDependencyInfo) -> FetchResult<Self> {
-        // TODO: need to actually fetch local dep
-        let path = match &pinned.0.dep_info {
+    /// Assumes that `pinned` is already normalized - paths of any local dependencies are relative
+    /// to the current working directory, and local dependencies of git dependencies have been
+    /// transformed into git dependencies
+    pub async fn fetch(pinned: &Pinned) -> FetchResult<PackagePath> {
+        let path = match &pinned {
             Pinned::Git(dep) => dep.inner.fetch().await?,
             _ => pinned.unfetched_path(),
         };
-        let path = PackagePath::new(path)?;
-        Ok(Self(pinned.0.clone().map(|_| path)))
+
+        Ok(PackagePath::new(path)?)
     }
 }
 
