@@ -530,7 +530,7 @@ impl Scenario {
         PackagePath::new(self.project.root().join(package.as_ref())).unwrap()
     }
 
-    pub async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
+    pub(crate) async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
         let path = self.path_for(package);
 
         PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment())

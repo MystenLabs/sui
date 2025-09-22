@@ -169,11 +169,8 @@ pub fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     let root_pkg_name = Symbol::from(root_pkg.name().as_str());
 
     let mut addresses: Vec<(String, NumericalAddress)> = vec![];
-    let named_address_values: BuildNamedAddresses = root_pkg
-        .package_graph()
-        .root_package_info()
-        .named_addresses()?
-        .into();
+    let named_address_values: BuildNamedAddresses =
+        root_pkg.package_info().named_addresses()?.into();
     for (name, addr) in named_address_values.inner.into_iter() {
         addresses.push((name.to_string(), addr));
     }
