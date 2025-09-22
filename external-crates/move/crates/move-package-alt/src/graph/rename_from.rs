@@ -24,7 +24,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         for edge in self.inner.edge_references() {
             let dep = &edge.weight();
 
-            let expected_name = dep.rename_from().as_ref().unwrap_or(&edge.weight().name());
+            let expected_name = dep.rename_from().as_ref().unwrap_or(edge.weight().name());
             let origin_pkg = self.inner[edge.source()].clone();
             let target_pkg = self.inner[edge.target()].clone();
 
@@ -38,7 +38,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 return Err(RenameError::new(
                     &self.inner[edge.source()],
                     &self.inner[edge.target()],
-                    &edge.weight().name(),
+                    edge.weight().name(),
                     dep,
                 ));
             }

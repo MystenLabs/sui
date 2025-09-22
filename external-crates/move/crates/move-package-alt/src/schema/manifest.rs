@@ -16,6 +16,9 @@ use super::{
 /// names in the `[environments]` table of the manifest
 pub type EnvironmentID = String;
 
+/// The name of a mode
+pub type ModeName = String;
+
 // Note: [Manifest] objects should not be mutated or serialized; they are user-defined files so
 // tools that write them should use [toml_edit] to set / preserve the formatting. However, we do
 // implement [Serialize] and provide [render_as_toml], primarily for generating tests
@@ -69,6 +72,9 @@ pub struct DefaultDependency {
 
     #[serde(default)]
     pub rename_from: Option<PackageName>,
+
+    #[serde(default)]
+    pub modes: Option<Vec<ModeName>>,
 }
 
 /// An entry in the `[dep-replacements]` section of a manifest
@@ -294,6 +300,7 @@ mod tests {
             [dependencies]
             foo = { git = "https://example.com/foo.git", rev = "releases/v1", rename-from = "Foo", override = true}
             qwer = { r.mvr = "@pkg/qwer" }
+            tester = { local = "../tester", modes = ["test"] }
 
             [dep-replacements]
             # used to replace dependencies for specific environments
@@ -900,7 +907,7 @@ mod tests {
     /// You can't add partial dependency information (e.g. just updating the `rev` field) in a
     /// `dep-replacement`
     #[test]
-    #[ignore] // TODO: this test is currently failing because the extra stuff just gets dropped
+    #[ignore] // TODO: pkg-alt this test is currently failing because the extra stuff just gets dropped
     fn parse_git_partial_replacement() {
         let error = toml_edit::de::from_str::<ParsedManifest>(
             r#"

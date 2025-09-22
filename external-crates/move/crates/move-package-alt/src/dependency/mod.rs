@@ -17,7 +17,7 @@ pub use fetch::{FetchError, FetchedDependency};
 
 use crate::{
     errors::FileHandle,
-    schema::{EnvironmentName, PackageName, PublishAddresses},
+    schema::{EnvironmentName, ModeName, PackageName, PublishAddresses},
 };
 
 // TODO(refactor): instead of `Dependency<DepInfo>`, we should just have `DependencyContext`, and
@@ -56,6 +56,9 @@ struct Dependency<DepInfo> {
     /// Does the original manifest override the published address?
     addresses: Option<PublishAddresses>,
 
+    /// The `modes` field for the dependency
+    modes: Option<Vec<ModeName>>,
+
     /// What manifest or lockfile does this dependency come from?
     containing_file: FileHandle,
 }
@@ -71,6 +74,7 @@ impl<T> Dependency<T> {
             addresses: self.addresses,
             containing_file: self.containing_file,
             rename_from: self.rename_from,
+            modes: self.modes,
         }
     }
 

@@ -193,7 +193,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
                         return Err(LinkageError::conflicting_overrides(
                             self,
                             &old.get().0,
-                            &edge.weight().name(),
+                            edge.weight().name(),
                             &old.get().1.original_id(),
                         ));
                     }

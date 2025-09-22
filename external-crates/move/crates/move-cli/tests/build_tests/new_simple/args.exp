@@ -1,7 +1,5 @@
-External Command `echo TODO: pkg-alt revisit this test; test of `move new` should be revised`:
-TODO: pkg-alt revisit this test
-sh: move: command not found
-sh: line 0: test: too many arguments
+External Command `echo TODO: pkg-alt revisit this test - test of "move new" should be revised`:
+TODO: pkg-alt revisit this test - test of move new should be revised
 Command `new P1`:
 External Command `cat P1/Move.toml`:
 # Full documentation for Move.toml can be found at: docs.sui.io
@@ -16,7 +14,7 @@ edition = "2024"         # use "2024" for Move 2024 edition
 # add the environment names and their chain ids here
 # by default, testnet and mainnet are implicitly available
 # example for devnet: devnet = "abcdef1234"
-# [environments]           
+# [environments]
 # chain_name = "{chain_id}"
 
 # Add your dependencies here or leave empty (for adding automatically sui and std deps)
@@ -53,7 +51,7 @@ edition = "2024"         # use "2024" for Move 2024 edition
 # add the environment names and their chain ids here
 # by default, testnet and mainnet are implicitly available
 # example for devnet: devnet = "abcdef1234"
-# [environments]           
+# [environments]
 # chain_name = "{chain_id}"
 
 # Add your dependencies here or leave empty (for adding automatically sui and std deps)

@@ -27,7 +27,8 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     // Block on the async function
     let env = move_package_alt::flavor::vanilla::default_environment();
-    let root_pkg = RootPackage::<Vanilla>::load_sync(pkg_dir.to_path_buf(), env)?;
+    let root_pkg =
+        RootPackage::<Vanilla>::load_sync(pkg_dir.to_path_buf(), env, config.mode_set())?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()

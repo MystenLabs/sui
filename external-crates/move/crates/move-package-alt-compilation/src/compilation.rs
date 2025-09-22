@@ -46,7 +46,7 @@ pub async fn compile_package<W: Write + Send, F: MoveFlavor>(
     env: &Environment,
     writer: &mut W,
 ) -> PackageResult<CompiledPackage> {
-    let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
+    let root_pkg = RootPackage::<F>::load(path, env.clone(), build_config.mode_set()).await?;
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
