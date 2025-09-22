@@ -10,16 +10,18 @@ Sui is a scalable and performant layer-1 blockchain that is home to a complete s
 
 In contrast to other chains, Sui uses an object-centric model, where every item on the network is an object. Objects are used as input for transactions, which in turn mutate an existing object or create new objects. Each object is addressable on-chain by a unique ID.
 
-To start building an application on Sui, first you must install Sui. This installation includes the Sui CLI, a tool used to create and manage address balances, build and deploy smart contracts, and query information from the network. 
+To create objects, submit transactions, and start building an application on Sui, first you must install Sui. This installation includes the Sui CLI, a tool used to create and manage address balances, build and deploy smart contracts, and query information from the network. 
 
-### Prerequisites 
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
 - [x] Have a machine with one of the following supported operating systems:
     - Linux: Ubuntu version 22.04 (Jammy Jellyfish) or newer
     - macOS: macOS Monterey or newer
     - Microsoft Windows: Windows 10 and 11
 
-- [x] 
+</TabItem>
+</Tabs>
 
 ## Quick install 
 
@@ -35,7 +37,7 @@ The quick install is suitable for most use cases. For those wanting more control
 
 :::
 
-#### Confirm the installation {#confirm-the-installation}
+### Confirm the installation {#confirm-the-installation}
 
 To confirm that Sui installed correctly:
 
@@ -47,56 +49,37 @@ If you receive a "command not found" error, verify the Sui binaries directory is
 
 ## Installation details 
 
+Regardless of using `suiup`, Brew, or Chocolately, your Sui installation will include the following packages:
+
+<ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
+
+### `suiup` installation details 
+
+On macOS and Linux systems, the `suiup` binaries are copied to `$HOME/.local/bin` by default, unless the `SUIUP_DEFAULT_BIN_DIR` environment variable has been set. macOS and Linux installations also include environment variables for `XDG_DATA_HOME`, `XDG_CACHE_HOME`, and `XDG_CONFIG_HOME`.
+
+On Windows, the `suiup` binaries are copied to `LOCALAPPDATA\bin`, and will use `LOCALAPPDATA` or `USERPROFILE\AppData\Local` for storing data and `TEMP` or `USERPROFILE\AppData\Local\Temp` for caching.
+
+### Default configuration file
+
+Regardless of whether you used `suiup`, Homebrew, or Chocolately, Sui will store a primary configuration in the `~/.sui/sui_config/client.yaml` file. This file is used to define settings and preferences for your environment, such as:
+
+- Network environment details for the Mainnet, Testnet, Devnet, and Localnet networks.
+
+- Active environment, which specifies which network the CLI commands will target.
+
+- Active address, which specifies which Sui address will be used by the CLI for transactions and queries.
+
+- Keystore location, which specifies where your address' private keys are stored.
 
 ## Looking for a project to clone? 
 
+Before you can create and deploy a smart contract, you must [configure your Sui client] and [obtain testnet SUI]
 
-## Installing Sui developer tools
-
-If you use VSCode, you can install the [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move) to get language server support for Move, as well as support for building, testing, and debugging Move code within the IDE.
-You can install the extension either by searching the fully-qualified extension name, `Mysten.move`, in the extension view, or by pressing `Ctrl-P` or `Cmd-P` and typing `ext install mysten.move`.
-Installing the Move extension also installs the appropriate `move-analyzer` binary for your operating system, as well as the [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension, and [Move Syntax](https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax) extension.
-
-Community-supported Move packages are available for these editors:
-
-- [Emacs](https://github.com/amnn/move-mode)
-- [Vim](https://github.com/yanganto/move.vim)
-- [Zed](https://github.com/Tzal3x/move-zed-extension)
+Then, you can [deploy Hello, world!] or [clone another example] to start building.
 
 ## Next steps {#next-steps}
 
-Now that you have Sui installed:
-
-- Explore the [Sui CLI reference](/references/cli.mdx) to learn command line operations.
-- [Connect to a network](./connect.mdx) to interact with the Sui ecosystem.
-- [Acquire test coins](./get-coins.mdx) for development purposes.
-- [Build your first dApp](../first-app.mdx) using Sui's programmable transaction model.
-
-## Next steps 
-
-- Brief introduction to Sui
-    - Very high level
-    - Sets the stage for what the user is about to install and why they care about installing it.
-- Prerequisites
-    - Checklist of all prerequisites needed before installing Sui
-        - Include download links or commands to install, limit the number of browser tabs a user has to open to get all necessary components.
-        - Consider including commands to check if each prerequisite is installed.
-            - This might be too text-heavy, we’ll have to see how it formats on the page IMO.
-- Quick install instructions
-    - Provide Suiup as the default tab/option.
-        - Explain what makes Suiup different from brew/choco install.
-        - Provide brew/choco install as alternatives and provide context as to why these are different from Suiup
-        - Install from binary/from source instructions as children pages, keep those instructions the same as they are now.
-        - Add Upgrade Sui page as a child page
-    - Details about what installation actually does
-        - What actually gets installed?
-        - Where are files stored?
-        - What environment variables does installation create?
-    - Looking for a project to clone?
-        - First [Configure the Sui client](link/to/page)
-        - Then, clone [Hello, world!](link/to/page)
-- Next steps
-    - Link to next page Configure Sui client
+Now that you have Sui installed, you must [configure your Sui client].
 
 
 
