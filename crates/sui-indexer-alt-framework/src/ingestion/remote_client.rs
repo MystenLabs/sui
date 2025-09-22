@@ -4,8 +4,14 @@
 use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 use crate::ingestion::Result as IngestionResult;
 use reqwest::{Client, StatusCode};
+use std::time::Duration;
 use tracing::{debug, error};
 use url::Url;
+
+/// Default timeout for remote checkpoint fetches.
+/// This prevents requests from hanging indefinitely due to network issues,
+/// unresponsive servers, or other connection problems.
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum HttpError {
@@ -26,7 +32,7 @@ impl RemoteIngestionClient {
     pub(crate) fn new(url: Url) -> IngestionResult<Self> {
         Ok(Self {
             url,
-            client: Client::builder().build()?,
+            client: Client::builder().timeout(DEFAULT_REQUEST_TIMEOUT).build()?,
         })
     }
 }
