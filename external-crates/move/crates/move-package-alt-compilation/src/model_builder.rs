@@ -25,11 +25,8 @@ pub fn build<W: Write + Send, F: MoveFlavor>(
 ) -> PackageResult<source_model::Model> {
     // TODO: does this also need to be `name_root` like in compilation?
     let root_package_name = Symbol::from(root_pkg.name().as_str());
-    let build_named_addresses: BuildNamedAddresses = root_pkg
-        .package_graph()
-        .root_package_info()
-        .named_addresses()?
-        .into();
+    let build_named_addresses: BuildNamedAddresses =
+        root_pkg.package_info().named_addresses()?.into();
     let root_named_address_map = build_named_addresses
         .inner
         .into_iter()

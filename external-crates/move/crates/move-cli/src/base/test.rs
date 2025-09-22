@@ -166,15 +166,13 @@ pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     // Load the package (package graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer)
     let env = find_env::<F>(pkg_path, &build_config)?;
-    let root_pkg = RootPackage::<F>::load(pkg_path.to_path_buf(), env).await?;
+    let root_pkg =
+        RootPackage::<F>::load(pkg_path.to_path_buf(), env, build_config.mode_set()).await?;
     let root_pkg_name = Symbol::from(root_pkg.name().as_str());
 
     let mut addresses: Vec<(String, NumericalAddress)> = vec![];
-    let named_address_values: BuildNamedAddresses = root_pkg
-        .package_graph()
-        .root_package_info()
-        .named_addresses()?
-        .into();
+    let named_address_values: BuildNamedAddresses =
+        root_pkg.package_info().named_addresses()?.into();
     for (name, addr) in named_address_values.inner.into_iter() {
         addresses.push((name.to_string(), addr));
     }

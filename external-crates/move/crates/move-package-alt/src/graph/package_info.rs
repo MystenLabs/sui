@@ -14,7 +14,9 @@ use crate::{
 use super::PackageGraph;
 use move_compiler::editions::Edition;
 
-/// A narrow interface for representing packages outside of `move-package-alt`
+/// A narrow interface for representing packages outside of `move-package-alt`. Note that
+/// at different points in the package system we use graphs that have been filtered in different
+/// ways; the package info has the same invariants as its underlying graph.
 #[derive(Copy)]
 #[derive_where(Clone)]
 pub struct PackageInfo<'graph, F: MoveFlavor> {
@@ -43,6 +45,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return the `PackageInfo` for id `id`, if one exists
+    #[cfg(test)]
     pub fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<F>> {
         self.package_ids
             .get_by_left(id)

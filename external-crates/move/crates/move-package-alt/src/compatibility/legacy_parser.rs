@@ -11,8 +11,8 @@ use crate::{
     package::paths::PackagePath,
     schema::{
         DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
-        ManifestGitDependency, OnChainDepInfo, PackageMetadata, PackageName, ParsedManifest,
-        PublishAddresses,
+        ManifestGitDependency, ModeName, OnChainDepInfo, PackageMetadata, PackageName,
+        ParsedManifest, PublishAddresses,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
@@ -143,19 +143,21 @@ fn parse_source_manifest(
                 .transpose()
                 .context("Error parsing '[build]' section of manifest")?;
 
-            let dependencies = table
+            let mut dependencies = table
                 .remove(DEPENDENCY_NAME)
-                .map(parse_dependencies)
+                .map(|deps| parse_dependencies(deps, None))
                 .transpose()
                 .context("Error parsing '[dependencies]' section of manifest")?
                 .unwrap_or_default();
 
-            let _dev_dependencies = table
+            let dev_dependencies = table
                 .remove(DEV_DEPENDENCY_NAME)
-                .map(parse_dependencies)
+                .map(|deps| parse_dependencies(deps, Some("test")))
                 .transpose()
                 .context("Error parsing '[dev-dependencies]' section of manifest")?
                 .unwrap_or_default();
+
+            dependencies.extend(dev_dependencies);
 
             let modern_name = derive_modern_name(&addresses, path)?
                 .unwrap_or(PackageName::new(NO_NAME_LEGACY_PACKAGE_NAME).expect("Cannot fail"));
@@ -339,14 +341,17 @@ fn normalize_legacy_name_to_identifier(name: &str) -> Result<Identifier> {
     })
 }
 
-fn parse_dependencies(tval: TV) -> Result<BTreeMap<PackageName, DefaultDependency>> {
+fn parse_dependencies(
+    tval: TV,
+    mode: Option<&str>,
+) -> Result<BTreeMap<PackageName, DefaultDependency>> {
     match tval {
         TV::Table(table) => {
             let mut deps = BTreeMap::new();
 
             for (dep_name, dep) in table.into_iter() {
                 let dep_name_ident = normalize_legacy_name_to_identifier(&dep_name)?;
-                let dep = parse_dependency(dep)?;
+                let dep = parse_dependency(dep, mode)?;
                 deps.insert(dep_name_ident, dep);
             }
 
@@ -456,10 +461,12 @@ fn parse_external_resolver(resolver_val: &TV) -> Result<ExternalDependency> {
     })
 }
 
-fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
+fn parse_dependency(mut tval: TV, mode: Option<&str>) -> Result<DefaultDependency> {
     let Some(table) = tval.as_table_mut() else {
         bail!("Malformed dependency {}", tval);
     };
+
+    let modes = mode.map(|mode| [ModeName::from(mode)].into());
 
     let dep_override = table
         .remove("override")
@@ -475,6 +482,7 @@ fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
             dependency_info: ManifestDependencyInfo::External(dependency?),
             is_override: dep_override,
             rename_from: None,
+            modes,
         });
     }
 
@@ -558,6 +566,7 @@ fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
         dependency_info: result,
         is_override: dep_override,
         rename_from: None,
+        modes,
     })
 }
 
