@@ -193,53 +193,20 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         // update the digests
     }
 
-    /// Central validation point for a RootPackage.
-    ///
-    /// This helps validate:
-    /// 1. TODO: Fill this in! (deduplicate nodes etc)
-    fn _validate_and_construct(
-        package_path: PackagePath,
-        env: Environment,
-        graph: PackageGraph<F>,
-    ) -> PackageResult<Self> {
-        debug!(
-            "creating RootPackage at {:?} (CWD: {:?})",
-            package_path.path(),
-            std::env::current_dir()
-        );
-        let mut lockfile = Self::load_lockfile(&package_path)?;
-        lockfile.pinned.insert(env.name.clone(), graph.to_pins()?);
-        let pubs = Self::load_pubfile(&package_path)?;
-
-        // check that there is a consistent linkage
-        let _linkage = graph.linkage()?;
-        graph.check_rename_from()?;
-
-        let deps_ids = _linkage
-            .iter()
-            .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
-            .collect();
-
-        Ok(Self {
-            package_path,
-            environment: env,
-            graph,
-            lockfile,
-            deps_ids,
-            pubs: PublicationSource::Published(pubs),
-        })
+    pub fn package_info(&self) -> PackageInfo<F> {
+        self.graph.root_package_info()
     }
 
     /// The id of the root package (TODO: perhaps this method is poorly named; check where it's
     /// used and decide if they should be using `id` or `display_name`)
     pub fn name(&self) -> &PackageID {
-        self.package_graph().root_package_info().id()
+        self.package_info().id()
     }
 
     /// Returns the `display_name` for the root package.
     /// Invariant: For modern packages, this is always equal to `name().as_str()`
     pub fn display_name(&self) -> &str {
-        self.package_graph().root_package().display_name()
+        self.graph.root_package().display_name()
     }
 
     /// The path to the root of the package
@@ -294,6 +261,43 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         }
 
         Ok(())
+    }
+
+    /// Central validation point for a RootPackage.
+    ///
+    /// This helps validate:
+    /// 1. TODO: Fill this in! (deduplicate nodes etc)
+    fn _validate_and_construct(
+        package_path: PackagePath,
+        env: Environment,
+        graph: PackageGraph<F>,
+    ) -> PackageResult<Self> {
+        debug!(
+            "creating RootPackage at {:?} (CWD: {:?})",
+            package_path.path(),
+            std::env::current_dir()
+        );
+        let mut lockfile = Self::load_lockfile(&package_path)?;
+        lockfile.pinned.insert(env.name.clone(), graph.to_pins()?);
+        let pubs = Self::load_pubfile(&package_path)?;
+
+        // check that there is a consistent linkage
+        let _linkage = graph.linkage()?;
+        graph.check_rename_from()?;
+
+        let deps_ids = _linkage
+            .iter()
+            .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
+            .collect();
+
+        Ok(Self {
+            package_path,
+            environment: env,
+            graph,
+            lockfile,
+            deps_ids,
+            pubs: PublicationSource::Published(pubs),
+        })
     }
 
     /// Read the lockfile from the root directory, returning an empty structure if none exists
@@ -370,12 +374,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.lockfile
     }
 
-    /// Return the package graph for `env`
-    // TODO: what's the right API here?
-    pub fn package_graph(&self) -> &PackageGraph<F> {
-        &self.graph
-    }
-
     pub fn lockfile(&self) -> &ParsedLockfile {
         &self.lockfile
     }
@@ -394,7 +392,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Return a list of sorted package names
     pub fn sorted_deps(&self) -> Vec<&PackageName> {
-        self.package_graph().sorted_deps()
+        self.graph.sorted_deps()
     }
 
     // TODO: what is the spec of this function?
@@ -751,15 +749,17 @@ pkg_b = { local = "../pkg_b" }"#,
         .unwrap();
 
         // check the root package's named address
-        let root_addr = root
-            .package_graph()
-            .root_package_info()
-            .named_addresses()
-            .unwrap()
-            .into_iter()
-            .next()
-            .unwrap()
-            .1;
+        let root_addr = {
+            let this = &root;
+            &this.graph
+        }
+        .root_package_info()
+        .named_addresses()
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap()
+        .1;
 
         assert_eq!(root_addr, NamedAddress::RootPackage(Some(2.into())));
     }
@@ -801,13 +801,15 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // check the dependency's addresses
 
-        let dep_addrs = root
-            .package_graph()
-            .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+        let dep_addrs = {
+            let this = &root;
+            &this.graph
+        }
+        .package_info_by_id(&PackageID::from("dep"))
+        .unwrap()
+        .published()
+        .unwrap()
+        .clone();
 
         assert_eq!(dep_addrs.original_id, OriginalID::from(2));
         assert_eq!(dep_addrs.published_at, PublishedID::from(3));
@@ -845,13 +847,15 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // check the dependency's addresses
 
-        let dep_addrs = root
-            .package_graph()
-            .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+        let dep_addrs = {
+            let this = &root;
+            &this.graph
+        }
+        .package_info_by_id(&PackageID::from("dep"))
+        .unwrap()
+        .published()
+        .unwrap()
+        .clone();
 
         assert_eq!(dep_addrs.original_id, OriginalID::from(1));
         assert_eq!(dep_addrs.published_at, PublishedID::from(1));
@@ -893,13 +897,15 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // check the dependency's addresses
 
-        let dep_addrs = root
-            .package_graph()
-            .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+        let dep_addrs = {
+            let this = &root;
+            &this.graph
+        }
+        .package_info_by_id(&PackageID::from("dep"))
+        .unwrap()
+        .published()
+        .unwrap()
+        .clone();
 
         assert_eq!(dep_addrs.original_id, OriginalID::from(2));
         assert_eq!(dep_addrs.published_at, PublishedID::from(3));
@@ -936,7 +942,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // check the dependency's addresses
         assert!(
-            root.package_graph()
+            root.graph
                 .package_info_by_id(&PackageID::from("dep"))
                 .unwrap()
                 .published()
@@ -1059,13 +1065,15 @@ pkg_b = { local = "../pkg_b" }"#,
         .unwrap();
 
         // check the dependency's addresses
-        let dep_addrs = root
-            .package_graph()
-            .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+        let dep_addrs = {
+            let this = &root;
+            &this.graph
+        }
+        .package_info_by_id(&PackageID::from("dep"))
+        .unwrap()
+        .published()
+        .unwrap()
+        .clone();
 
         assert_eq!(dep_addrs.original_id, OriginalID::from(1));
         assert_eq!(dep_addrs.published_at, PublishedID::from(2));
