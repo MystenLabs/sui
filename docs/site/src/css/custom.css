@@ -860,3 +860,31 @@ h5 {
   margin: 0;
   padding: 0;
 }
+
+
+/* iframe styling */
+.theme-doc-markdown iframe {
+  display: block;
+  margin: 2rem auto;
+  max-width: 100%;
+  width: 90%;
+  min-height: 300px;
+  border: 1px solid var(--ifm-toc-border-color);
+  border-radius: var(--ifm-global-radius);
+  box-shadow: var(--ifm-global-shadow-md);
+}
+
+/* Responsive iframe sizing */
+@media (max-width: 996px) {
+  .theme-doc-markdown iframe {
+    width: 100%;
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 768px) {
+  .theme-doc-markdown iframe {
+    min-height: 300px;
+    margin: 1.5rem auto;
+  }
+}
