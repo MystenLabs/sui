@@ -11,6 +11,9 @@ use sui_rpc::proto::sui::rpc::v2::GetCoinInfoResponse;
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
 use sui_types::coin_registry::{Currency, RegulatedState as CurrencyRegulatedState, SupplyState};
+use sui_types::object::Owner::AddressOwner;
+use sui_types::object::Owner::ConsensusAddressOwner;
+use sui_types::object::Owner::Immutable;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 const SUI_COIN_TREASURY: CoinTreasury = {
@@ -231,11 +234,12 @@ fn get_treasury_cap_info(
 ) -> Option<CoinTreasury> {
     let obj = service.reader.inner().get_object(&treasury_object_id)?;
 
-    // Treasury caps owned by 0x0 indicate fixed supply
-    let supply_state = if obj.owner == sui_types::object::Owner::AddressOwner(SuiAddress::ZERO) {
-        RpcSupplyState::Fixed
-    } else {
-        RpcSupplyState::Unknown
+    // Treasury caps that are immutable, owned by 0x0, or consensus-owned by 0x0 indicate fixed supply
+    let supply_state = match &obj.owner {
+        Immutable => RpcSupplyState::Fixed,
+        AddressOwner(addr) if *addr == SuiAddress::ZERO => RpcSupplyState::Fixed,
+        ConsensusAddressOwner { owner, .. } if *owner == SuiAddress::ZERO => RpcSupplyState::Fixed,
+        _ => RpcSupplyState::Unknown,
     };
 
     sui_types::coin::TreasuryCap::try_from(obj)
