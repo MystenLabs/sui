@@ -10,6 +10,7 @@ pub mod git;
 mod paths;
 
 pub mod graph_builder;
+pub mod mock_resolver;
 
 use indoc::formatdoc;
 use paths::PathExt;
