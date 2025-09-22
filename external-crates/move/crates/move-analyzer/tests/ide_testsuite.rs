@@ -16,11 +16,11 @@ use move_analyzer::{
     completions::{compute_completions_with_symbols, utils::compute_cursor},
     inlay_hints::inlay_hints_internal,
     symbols::{
-        Symbols,
-        compilation::{CachedPackages, CompiledPkgInfo, SymbolsComputationData, get_compiled_pkg},
+        compilation::{get_compiled_pkg, CachedPackages, CompiledPkgInfo, SymbolsComputationData},
         compute_symbols, compute_symbols_parsed_program, compute_symbols_pre_process,
         requests::{def_info_doc_string, maybe_convert_for_guard},
         use_def::UseDefMap,
+        Symbols,
     },
 };
 use move_command_line_common::testing::insta_assert;
@@ -445,7 +445,7 @@ fn initial_symbols(
     let ide_files_root: VfsPath = MemoryFS::new().into();
     let pkg_deps = Arc::new(Mutex::new(CachedPackages::new()));
 
-    /// Similarly to `get_symbols`, we retry to exercise caching
+    // Similarly to `get_symbols`, we retry to exercise caching
     let mut should_retry = true;
     loop {
         let (compiled_pkg_info_opt, _) = get_compiled_pkg(
