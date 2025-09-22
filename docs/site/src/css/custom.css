@@ -737,7 +737,6 @@ html[data-theme='dark'] {
   place-items: center !important;
 }
 
-/* Extra padding for every Tabs panel on the site */
 .theme-doc-markdown .tabs-container [role="tabpanel"] {
   padding: clamp(0.75rem, 1.2vw, 1rem);
 }
@@ -745,46 +744,92 @@ html[data-theme='dark'] {
 .theme-doc-markdown .tabs-container [role="tabpanel"] > :first-child { margin-top: 0; }
 .theme-doc-markdown .tabs-container [role="tabpanel"] > :last-child { margin-bottom: 0; }
 
-.theme-doc-markdown .tabs-container.tabsHeadingCentered--small {
-  border: 2px solid var(--ifm-toc-border-color);
-  border-radius: var(--ifm-global-radius);
-  background: var(--ifm-background-surface-color);
-  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0,0,0,.06));
-  padding: var(--ifm-spacing-md) var(--ifm-spacing-md);
+/* Styles for ALL tabs containers - box with border */
+.theme-doc-markdown .tabs-container {
+  border: 2px solid var(--ifm-toc-border-color) !important;
+  border-radius: var(--ifm-global-radius) !important;
+  background: var(--ifm-background-surface-color) !important;
+  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0,0,0,.06)) !important;
+  padding: var(--ifm-spacing-lg) var(--ifm-spacing-md) !important;
 }
 
-/* Smaller tab headings (inside the boxed tabs) */
-.theme-doc-markdown .tabs-container.tabsHeadingCentered--small .tabs__item {
-  font-size: 1.05rem !important; 
+/* Target the container when it has the small tabs class inside */
+.theme-doc-markdown .tabs-container:has(.tabsHeadingCentered--small) {
+  border: 2px solid var(--ifm-toc-border-color) !important;
+  border-radius: var(--ifm-global-radius) !important;
+  background: var(--ifm-background-surface-color) !important;
+  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0,0,0,.06)) !important;
+  padding: var(--ifm-spacing-lg) var(--ifm-spacing-md) !important;
+}
+
+/* Remove underline from the tabs list itself */
+.tabsHeadingCentered--small {
+  border-bottom: 1px solid var(--ifm-toc-border-color) !important;
+  margin-top: 1rem !important;
+  margin-bottom: 1rem !important;
+  padding-top: var(--ifm-spacing-md) !important;
+  padding-bottom: 1rem !important;
+}
+
+.tabsHeadingCentered--small::before,
+.tabsHeadingCentered--small::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Style the individual tab items - make them non-clickable */
+.tabsHeadingCentered--small .tabs__item {
+  font-size: 1.1rem !important; 
   font-weight: 700;
-  padding-top: 0.1rem !important;
+  padding-top: var(--ifm-spacing-md) !important;
   padding-left: 0.5rem !important;
-  padding-bottom: 0.2rem !important;
+  padding-bottom: var(--ifm-spacing-sm) !important;
   margin: 0 0.25rem !important;
-  background: transparent;
-  border: none;
-  color: var(--ifm-heading-color);
-  cursor: pointer;
+  background: transparent !important;
+  border: none !important;
+  color: var(--ifm-heading-color) !important;
+  cursor: default !important;
   text-align: left;
+  pointer-events: none !important;
+  text-decoration: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
 }
 
+/* Remove any pseudo-elements from tab items */
+.tabsHeadingCentered--small .tabs__item::before,
+.tabsHeadingCentered--small .tabs__item::after {
+  display: none !important;
+  content: none !important;
+}
 
-/* Smaller panel content */
-.theme-doc-markdown .tabs-container.tabsHeadingCentered--small [role="tabpanel"] {
-  padding: clamp(0.1rem, 0.1vw, 0.1rem) !important;
+/* Ensure no hover effects */
+.tabsHeadingCentered--small .tabs__item:hover {
+  text-decoration: none !important;
+  background: transparent !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
 }
 
 /* Make active tab look the same as inactive */
-.tabsHeadingClean .tabs__item--active {
-  background: none !important;
+.tabsHeadingCentered--small .tabs__item--active {
+  background: transparent !important;
   border: none !important;
+  border-bottom: none !important;
   box-shadow: none !important;
-  color: var(--ifm-heading-color); /* same as normal */
+  color: var(--ifm-heading-color) !important;
+  text-decoration: none !important;
 }
 
-/* Kill the default underline */
-.tabsHeadingClean .tabs__list::after {
+.tabsHeadingCentered--small .tabs__item--active::before,
+.tabsHeadingCentered--small .tabs__item--active::after {
   display: none !important;
+  content: none !important;
+}
+
+/* Smaller panel content */
+.tabs-container:has(.tabsHeadingCentered--small) [role="tabpanel"] {
+  padding: 0 0 1rem 0 !important;
 }
 
 .theme-doc-markdown details.nudge-details,
