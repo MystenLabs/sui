@@ -271,7 +271,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Package", "objects") => pipelines("IObject", "objects", None),
         ("Package", "owner") => pipelines("IObject", "owner", None),
         ("Package", "packageAt") => pipelines("IAddressable", "address", None),
-        ("Package", "packageBcs") => pipelines("IObject", "packageBcs", None),
+        ("Package", "packageBcs") => pipelines("IObject", "contents", None),
         ("Package", "packageVersionsAfter") => pipelines("IObject", "version", None),
         ("Package", "packageVersionsBefore") => pipelines("IObject", "version", None),
         ("Package", "previousTransaction") => pipelines("IObject", "previousTransaction", None),
