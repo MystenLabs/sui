@@ -105,11 +105,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
-        let mut root_pkg = Self::_validate_and_construct(package_path, env, graph)?;
-
-        root_pkg.update_lockfile_digests();
-
-        Ok(root_pkg)
+        Ok(Self::_validate_and_construct(package_path, env, graph)?)
     }
 
     /// A synchronous version of `load` that can be used to load a package while blocking in place.
@@ -172,10 +168,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load_from_manifests(&package_path, &env).await?;
 
-        let mut root_pkg = Self::_validate_and_construct(package_path, env, graph)?;
-        root_pkg.update_lockfile_digests();
-
-        Ok(root_pkg)
+        Ok(Self::_validate_and_construct(package_path, env, graph)?)
     }
 
     /// Loads the root lockfile only, ignoring all manifests. Returns an error if the lockfile
@@ -219,7 +212,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             package_path.path(),
             std::env::current_dir()
         );
-        let lockfile = Self::load_lockfile(&package_path)?;
+        let mut lockfile = Self::load_lockfile(&package_path)?;
+        lockfile.pinned.insert(env.name.clone(), graph.to_pins()?);
         let pubs = Self::load_pubfile(&package_path)?;
 
         // check that there is a consistent linkage
@@ -239,13 +233,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             deps_ids,
             pubs: PublicationSource::Published(pubs),
         })
-    }
-
-    /// Ensure that the in-memory lockfile digests are consistent with the package graph
-    fn update_lockfile_digests(&mut self) {
-        self.lockfile
-            .pinned
-            .insert(self.environment.name().clone(), BTreeMap::from(&self.graph));
     }
 
     /// The id of the root package (TODO: perhaps this method is poorly named; check where it's
@@ -278,16 +265,15 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(self.graph.linkage()?)
     }
 
-    /// Output an updated lockfile containg the dependency graph represented by `self`. Note that
-    /// if `self` was loaded with [Self::load_ignore_digests], then the digests will not be
-    /// changed (since no repinning was performed).
-    pub fn save_to_disk(&self) -> PackageResult<()> {
-        let mut file =
-            PackageSystemLock::new_for_file(self.graph.root_package().path().lockfile_path())?;
+    /// Update the dependencies in the lockfile for this environment to match the dependency graph
+    /// represented by `self`.
+    pub fn update_lockfile(&self) -> PackageResult<()> {
+        let mut lockfile: ParsedLockfile = Self::load_lockfile(self.package_path())?;
+        lockfile
+            .pinned
+            .insert(self.environment.name.clone(), self.graph.to_pins()?);
 
-        file.file_mut()
-            .write_all(self.lockfile.render_as_toml().as_bytes())?;
-
+        std::fs::write(self.path().lockfile_path(), lockfile.render_as_toml())?;
         Ok(())
     }
 
@@ -464,6 +450,16 @@ mod tests {
         },
     };
 
+    /// Create the following directory structure:
+    /// ```ignore
+    /// packages/
+    ///   pkg_a/Move.toml
+    ///   pkg_b/Move.toml
+    ///   nodeps/Move.toml
+    ///   graph/Move.toml        # depends on nodeps and depends_a_b
+    ///   graph/Move.lock        # copied from `tests/data/basic_move_project/graph/Move.lock
+    ///   depends_a_b/Move.toml  # depends on pkg_a and pkg_b
+    /// ```
     async fn setup_test_move_project() -> (Environment, PathBuf) {
         let env = crate::flavor::vanilla::default_environment();
         let project = test_utils::project()
@@ -696,7 +692,7 @@ pkg_b = { local = "../pkg_b" }"#,
             _ => panic!("Expected a git dependency"),
         }
 
-        root_pkg.save_to_disk().unwrap();
+        root_pkg.update_lockfile().unwrap();
         let lockfile = root_pkg.lockfile;
         // Change to first commit in the rev in the manifest
         root_pkg_manifest = root_pkg_manifest.replace(

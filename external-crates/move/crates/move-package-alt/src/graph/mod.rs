@@ -32,12 +32,6 @@ use petgraph::{
     graph::{DiGraph, NodeIndex},
 };
 
-#[derive(Debug, Clone)]
-pub struct PackageGraphEdge {
-    name: PackageName,
-    dep: PinnedDependencyInfo,
-}
-
 /// The graph of all packages. May include multiple versions of "the same" package. Guaranteed to
 /// be a rooted dag
 #[derive(Debug)]
@@ -50,7 +44,7 @@ pub struct PackageGraph<F: MoveFlavor> {
     package_ids: BiBTreeMap<PackageID, NodeIndex>,
 
     /// The actual nodes and edges of the graph
-    inner: DiGraph<Arc<Package<F>>, PackageGraphEdge>,
+    inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo>,
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
@@ -93,14 +87,6 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// Returns the root package of the graph.
     pub fn root_package(&self) -> &Package<F> {
         &self.inner[self.root_index]
-    }
-
-    /// Return all packages in the graph, indexed by their package ID
-    pub(crate) fn all_packages(&self) -> BTreeMap<&PackageID, PackageInfo<F>> {
-        self.package_ids
-            .iter()
-            .map(|(id, node)| (id, self.package_info(*node)))
-            .collect()
     }
 
     /// Return the list of packages that are in the linkage table, as well as

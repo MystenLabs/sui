@@ -177,7 +177,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             BTreeMap::new();
 
         for edge in self.graph.inner.edges(self.node) {
-            let dep = &edge.weight().dep;
+            let dep = &edge.weight();
 
             if !dep.is_override() {
                 continue;
@@ -185,7 +185,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
 
             let target = self.graph.package_info(edge.target());
             match result.entry(target.original_id()) {
-                Entry::Vacant(entry) => entry.insert((edge.weight().name.clone(), target)),
+                Entry::Vacant(entry) => entry.insert((edge.weight().name().clone(), target)),
                 Entry::Occupied(old) => {
                     if old.get().1.node == target.node {
                         continue;
@@ -193,7 +193,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
                         return Err(LinkageError::conflicting_overrides(
                             self,
                             &old.get().0,
-                            &edge.weight().name,
+                            &edge.weight().name(),
                             &old.get().1.original_id(),
                         ));
                     }
