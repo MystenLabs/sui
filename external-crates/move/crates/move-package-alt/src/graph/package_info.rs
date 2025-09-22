@@ -13,7 +13,17 @@ use crate::{
 
 use super::PackageGraph;
 
-/// A narrow interface for representing packages outside of `move-package-alt`
+/// A narrow interface for representing packages outside of `move-package-alt`. PackageInfo objects
+/// are part of the package /graph/ rather than the package /tree/. What that means is that the
+/// methods that access dependencies of the package will use the versions that have been mode
+/// filtered and replaced by overrides.
+///
+/// Contrast that to the package /tree/, where different nodes in the tree can be different
+/// versions of the same package (with the same original ID), and all edges are present (but
+/// annotated by mode labels).
+///
+/// Confusingly, and for historical reasons (we plan to change this as soon as we get time (TM)),
+/// the `PackageGraph` data structure actually currently encodes the package tree.
 #[derive(Copy)]
 #[derive_where(Clone)]
 pub struct PackageInfo<'graph, F: MoveFlavor> {
@@ -42,6 +52,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return the `PackageInfo` for id `id`, if one exists
+    #[cfg(test)]
     pub fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<F>> {
         self.package_ids
             .get_by_left(id)

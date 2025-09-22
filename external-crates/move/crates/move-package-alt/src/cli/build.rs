@@ -39,7 +39,7 @@ impl Build {
 
         let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
-        let root_pkg = RootPackage::<Vanilla>::load(&path, environment).await?;
+        let mut root_pkg = RootPackage::<Vanilla>::load(&path, environment).await?;
 
         for pkg in root_pkg.packages()? {
             println!("Package {}", pkg.name());
