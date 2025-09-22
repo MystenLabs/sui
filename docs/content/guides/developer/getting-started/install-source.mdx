@@ -1,0 +1,280 @@
+
+## Build from source
+
+Follow the instructions in this topic to install the Rust crates (packages) required to interact with Sui networks, including the Sui CLI.
+
+To install Sui from source, you first need to install its [prerequisites](#prerequisites) for your operating system. After installing the supporting technologies, you can install [Sui binaries from source](#install-sui-binaries-from-source).
+
+You can also download the [source code](/references/contribute/sui-environment.mdx) to have local access to files.
+
+### Prerequisites {#prerequisites}
+
+Your system needs the following prerequisites available to successfully install Sui.
+
+#### Rust and Cargo {#rust-and-cargo}
+
+Sui requires Rust and Cargo (Rust's package manager) on all supported operating systems. The suggested method to install Rust is with `rustup` using cURL.
+
+Some other commands in the installation instructions also require cURL to run. If you can't run the cURL command to install Rust, see the instructions to install cURL for your operating system in the following section before you install Rust.
+
+Use the following command to install Rust and Cargo on macOS or Linux:
+
+```sh
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+If you use Windows 11, see information about using the [Rust installer](https://www.rust-lang.org/tools/install) on the Rust website. The installer checks for C++ build tools and prompts you to install them if necessary. Select the option that best defines your environment and follow the instructions in the install wizard.
+
+For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install).
+
+Sui uses the latest version of Cargo to build and manage dependencies. See the [Cargo installation](https://doc.rust-lang.org/cargo/getting-started/installation.html) page on the Rust website for more information.
+
+Use the following command to update Rust with `rustup`:
+
+```sh
+$ rustup update stable
+```
+#### Additional prerequisites by operating system
+
+Select the appropriate tab to view the requirements for your system.
+
+<Tabs groupId="operating-systems">
+
+<TabItem value="linux" label="Linux">
+
+The prerequisites needed for the Linux operating system include:
+
+- cURL
+- Rust and Cargo
+- Git CLI
+- CMake
+- GCC
+- libssl-dev
+- libclang-dev
+- libpq-dev (optional)
+- build-essential
+
+:::info
+
+The Linux instructions assume a distribution that uses the APT package manager. You might need to adjust the instructions to use other package managers.
+
+:::
+
+Install the prerequisites listed in this section. Use the following command to update `apt-get`:
+
+```sh
+$ sudo apt-get update
+```
+
+#### All Linux prerequisites
+
+Reference the relevant sections that follow to install each prerequisite individually, or run the following to install them all at once:
+
+<ImportContent source="linux-deps.mdx" mode="snippet" />
+
+#### cURL {#curl}
+
+Install cURL with the following command:
+
+```sh
+$ sudo apt-get install curl
+```
+
+Verify that cURL installed correctly with the following command:
+
+```sh
+$ curl --version
+```
+
+#### Git CLI {#git-cli}
+
+Run the following command to install Git, including the [Git CLI](https://cli.github.com/):
+
+```sh
+$ sudo apt-get install git-all
+```
+
+For more information, see [Install Git on Linux](https://github.com/git-guides/install-git#install-git-on-linux) on the GitHub website.
+
+#### CMake {#cmake}
+
+Use the following command to install CMake.
+
+```sh
+$ sudo apt-get install cmake
+```
+
+To customize the installation, see [Installing CMake](https://cmake.org/install/) on the CMake website.
+
+#### GCC {#gcc}
+
+Use the following command to install the GNU Compiler Collection, `gcc`:
+
+```sh
+$ sudo apt-get install gcc
+```
+
+#### libssl-dev {#libssl-dev}
+
+Use the following command to install `libssl-dev`:
+
+```sh
+$ sudo apt-get install libssl-dev
+```
+
+If the version of Linux you use doesn't support `libssl-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libssl-dev/).
+
+(Optional) If you have OpenSSL you might also need to also install `pkg-config`:
+
+```sh
+$ sudo apt-get install pkg-config
+```
+
+#### libclang-dev {#libclang-dev}
+
+Use the following command to install `libclang-dev`:
+
+```sh
+$ sudo apt-get install libclang-dev
+```
+
+If the version of Linux you use doesn't support `libclang-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libclang-dev/).
+
+#### libpq-dev (optional) {#libpq-dev}
+
+<ImportContent source="libpq-req.mdx" mode="snippet" />
+
+Use the following command to install `libpq-dev`:
+
+```sh
+$ sudo apt-get install libpq-dev
+```
+
+If the version of Linux you use doesn't support `libpq-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libpq-dev/).
+
+#### build-essential {#build-essential}
+
+Use the following command to install `build-essential`:
+
+```sh
+$ sudo apt-get install build-essential
+```
+
+</TabItem>
+
+<TabItem value="mac" label="macOS">
+
+The prerequisites needed for the macOS operating system include:
+
+- Rust and Cargo
+- Homebrew
+- cURL
+- CMake
+- libpq (optional)
+- Git CLI
+- PostgreSQL
+
+macOS includes a version of cURL you can use to install Homebrew. Use Homebrew to install other tools, including a newer version of cURL.
+
+#### Homebrew {#brew}
+
+Use the following command to install [Homebrew](https://brew.sh/):
+
+```sh
+$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+:::info
+
+If you used the commands in the [Install using Homebrew](#install-homebrew) section, you do not need to install anything else.
+
+:::
+
+#### All macOS prerequisites
+
+With Homebrew installed, you can install individual prerequisites from the following sections or install them all at once with this command:
+
+<ImportContent source="macos-deps.mdx" mode="snippet" />
+
+#### cURL {#curl-1}
+
+Use the following command to update the default [cURL](https://curl.se) on macOS:
+
+```sh
+$ brew install curl
+```
+
+#### CMake {#cmake-1}
+
+Use the following command to install CMake:
+
+```sh
+$ brew install cmake
+```
+
+To customize the installation, see [Installing CMake](https://cmake.org/install/) on the CMake website.
+
+#### libpq (optional) {#libpq-1}
+
+<ImportContent source="libpq-req.mdx" mode="snippet" />
+
+Use the following command to install libpq:
+```sh
+$ brew install libpq
+```
+
+#### Git CLI {#git-cli-1}
+
+Use the following command to install Git:
+
+```sh
+$ brew install git
+```
+
+After installing Git, download and install the [Git command line interface](https://git-scm.com/download/).
+
+#### PostgreSQL
+
+Visit the official [PostgreSQL website](https://wiki.postgresql.org/wiki/Main_Page) for instructions on downloading PostgreSQL.
+
+</TabItem>
+
+<TabItem value="win" label="Windows">
+
+The prerequisites needed for the Windows 11 operating system include:
+
+- cURL
+- Rust and Cargo
+- Git CLI
+- CMake
+- C++ build tools
+- LLVM compiler
+
+#### cURL {#curl-2}
+
+Windows 11 ships with a Microsoft version of [cURL](https://curl.se/windows/microsoft.html) already installed. If you want to use the curl project version instead, download and install it from [https://curl.se/windows/](https://curl.se/windows/).
+
+#### Git CLI {#git-cli-2}
+
+Download and install the [Git command line interface](https://git-scm.com/download/).
+
+#### CMake {#cmake-2}
+
+Download and install [CMake](https://cmake.org/download/) from the CMake website.
+
+#### Protocol Buffers {#protocol-buffers}
+
+Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases) (protoc-xx.x-win32.zip or protoc-xx.x-win64.zip) and add the \bin directory to your Windows PATH environment variable.
+
+#### Additional tools for Windows {#additional-tools-windows}
+
+Sui requires the following additional tools on computers running Windows.
+
+- For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/).
+- [C++ build tools](https://visualstudio.microsoft.com/downloads/) is required to [install Rust](#rust-and-cargo).
+- The [LLVM Compiler Infrastructure](https://releases.llvm.org/). Look for a file with a name similar to LLVM-15.0.7-win64.exe for 64-bit Windows, or LLVM-15.0.7-win32.exe for 32-bit Windows.
+
+</TabItem>
+
+</Tabs>
+

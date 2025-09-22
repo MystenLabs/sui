@@ -1,0 +1,113 @@
+
+## Download binaries from GitHub {#install-binaries}
+
+Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
+
+<Tabs groupId="operating-systems">
+
+<TabItem value="linux" label="Linux">
+
+1. Go to https://github.com/MystenLabs/sui.
+1. In the right pane, find the **Releases** section.
+
+    ![Sui releases in GitHub](./images/releases.png)
+1. Click the release tagged **Latest** to open the release's page.
+1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the expanded folder. You should have the following extracted files:
+
+    <ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
+
+1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
+1. Start a new terminal session or type `source ~/.bashrc` to load the new `PATH` value.
+
+</TabItem>
+
+<TabItem value="mac" label="macOS">
+
+1. Go to https://github.com/MystenLabs/sui.
+1. In the right pane, find the **Releases** section.
+
+    ![Sui releases in GitHub](./images/releases.png)
+1. Click the release tagged **Latest** to open the release's page.
+1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the expanded folder. You should have the following extracted files:
+
+    <ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
+
+1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.zshrc` or `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
+1. Start a new terminal session or type `source ~/.zshrc` (or `.bashrc`) to load the new `PATH` value.
+1. If running the binaries for the first time, you might receive an error from MacOS that prevents the binaries from running. If you receive this error, close the dialog and type `xattr -d com.apple.quarantine ~/sui/*` in your terminal and press Enter (be sure to adjust the path if different).
+
+</TabItem>
+
+<TabItem value="win" label="Windows">
+
+1. Go to https://github.com/MystenLabs/sui.
+1. In the right pane, find the **Releases** section.
+
+    ![Sui releases in GitHub](./images/releases.png)
+1. Click the release tagged **Latest** to open the release's page.
+1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the root of your C drive. Replace references to this location in subsequent steps if you choose a different directory.
+
+    :::info
+
+    Windows does not natively support .tgz files, but you can use a free compressed file app like [7Zip](https://7-zip.org/) to extract.
+
+    :::
+
+1. Navigate to the expanded folder. You should have the following extracted files:
+
+    <ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
+
+1. Add the folder containing the extracted files to your `PATH` variable. There are several ways to get to the setting depending on your version of Windows. One way that works on all versions of Windows is to type `sysdm.cpl` in a console to open the System Properties window. Under the **Advanced** tab, click the **Environment Variables...** button.
+1. In the Environment Variables window, select the `Path` variable and click the **Edit...** button.
+1. In the Edit environment variable window, click **New** and add the path to your expanded folder. Using the example path, this would be `C:\sui`.
+1. Click **OK**.
+
+</TabItem>
+
+</Tabs>
+
+:::tip
+Running binaries other than `sui` might require installing prerequisites listed in the following section.
+::::
+
+
+## Install from Cargo {#install-sui-binaries-from-source}
+
+Run the following command to install Sui binaries from the `testnet` branch:
+
+```sh
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
+```
+
+Enabling the `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Without it these two features will not be able to be used.
+
+The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
+
+To update to the latest stable version of Rust:
+
+```sh
+$ rustup update stable
+```
+
+The command installs Sui components in the `~/.cargo/bin` folder.
+
+## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
+
+    - The [`sui-node` binary from AWS](#aws-sui-node) supports only version 22.04
+
+
+The `sui-node` binaries for Ubuntu 22.04 are available for download from AWS. You can use either the commit sha or version tag in the URL to retrieve the specific version of Sui you want. Use one of these values to construct the AWS download URL.
+
+The URL is in the form `https://sui-releases.s3-accelerate.amazonaws.com/<SHA-OR-TAG>/sui-node`, where you replace `<SHA-OR-TAG>` with the proper value. For example, the URL is `https://sui-releases.s3-accelerate.amazonaws.com/00544a588bb71c395d49d91f756e8bfe96067eca/sui-node` to download the release with the relevant commit sha. If you visit the URL using a browser, the binary downloads automatically.
+
+After downloading, open a console to the file's location and change its permission to `755`.
+```sh
+$ chmod 755 sui-node
+```
+
+Add the file's location to your PATH variable if its directory is not already included. Follow the steps in [Configure a Sui full node](../../operator/sui-full-node.mdx) to complete the setup.
