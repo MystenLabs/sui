@@ -103,7 +103,7 @@ Debugging a Move unit test is a two-step process:
 
    - Run the `Move: Trace Move test execution` command.
 
-      <img src="./images/trace_palette.png" style={{ width: "50%", height: "auto" }} alt="Command palette" />
+      <img src="./images/trace_palette.png" width="50%" height="auto" alt="Command palette" />
 
       :::info
         This command uses the `sui` binary under the hood which needs to be [pre-installed](#install). The location of the binary needs to be [discoverable by the Move extension](/references/ide/move#build-test-and-trace).
@@ -112,7 +112,7 @@ Debugging a Move unit test is a two-step process:
 
    - The extension displays a filter prompt. Either type a filter string to target specific tests or leave the field blank to run all tests and press <kbd>Enter</kbd>.
 
-      <img src="./images/filter_string.png" style={{ width: "50%", height: "auto" }} alt="Filter test string" />
+      <img src="./images/filter_string.png" width="50%" height="auto" alt="Filter test string" />
 
    - Find the generated traces in the `traces` directory.
 
@@ -129,11 +129,11 @@ Debugging a Move unit test is a two-step process:
 
    - Select **Run** -> **Start Debugging** from the main menu.
 
-      <img src="./images/start_debugging.png" style={{ width: "30%", height: "auto" }} alt="Start test debugging" />
+      <img src="./images/start_debugging.png" width="30%" height="auto" alt="Start test debugging" />
 
    - If the file has multiple tests, select the specific test from the dropdown menu.
 
-      <img src="./images/test_selection.png" style={{ width: "50%", height: "auto" }} alt="Test selection" />
+      <img src="./images/test_selection.png" width="50%" height="auto" alt="Test selection" />
 
 
 ### Debugging on-chain transactions
@@ -157,7 +157,7 @@ Debugging an on-chain transaction is a two-step process:
 
    - Select **Run** -> **Start Debugging** from the main menu.
 
-      <img src="./images/start_debugging.png" style={{ width: "30%", height: "auto" }} alt="Start txn debugging" />
+      <img src="./images/start_debugging.png" width="30%" height="auto" alt="Start txn debugging" />
 
       :::info
         The first time you run this command you may be asked to select a debugger type. Select **Move Debugger**.
@@ -235,11 +235,11 @@ To locate the correct version of the source code for a user package, utilize a S
 
 Search for the package in a Sui explorer.
 
-<img src="./images/deepbook_search.png" style={{ width: "50%", height: "auto" }} alt="Package search" />
+<img src="./images/deepbook_search.png" width="50%" height="auto" alt="Package search" />
 
 You can see that the the package in question is `deepbook/core`. Look at the detailed information about this package available in the explorer.
 
-<img src="./images/deepbook_explorer.png" style={{ width: "70%", height: "auto" }} alt="Package explorer" />
+<img src="./images/deepbook_explorer.png" width="70%" height="auto" alt="Package explorer" />
 
 You can see that the package description in the explorer includes an MVR link. When you follow that link, you get to the MVR page containing a different kind of description for this package. The MVR description includes a link to the package's source code repository and information that the ID represents the 3rd version of this package.
 
