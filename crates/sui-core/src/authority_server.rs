@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{future, TryFutureExt};
 use mysten_metrics::spawn_monitored_task;
-use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::{
     register_gauge_with_registry, register_histogram_vec_with_registry,
     register_histogram_with_registry, register_int_counter_vec_with_registry,
@@ -26,6 +25,7 @@ use std::{
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
+    validator::server::SUI_TLS_SERVER_NAME,
 };
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -107,7 +107,7 @@ mod wait_for_effects_tests;
 mod submit_transaction_tests;
 
 pub struct AuthorityServerHandle {
-    server_handle: mysten_network::server::Server,
+    server_handle: sui_network::validator::server::Server,
 }
 
 impl AuthorityServerHandle {
@@ -178,16 +178,19 @@ impl AuthorityServer {
             self.state.config.network_key_pair().copy().private(),
             SUI_TLS_SERVER_NAME.to_string(),
         );
-        let server = mysten_network::config::Config::new()
-            .server_builder()
-            .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
-                self.state,
-                self.consensus_adapter,
-                self.metrics,
-            )))
-            .bind(&address, Some(tls_config))
-            .await
-            .unwrap();
+        let config = mysten_network::config::Config::new();
+        let server = sui_network::validator::server::ServerBuilder::from_config(
+            &config,
+            mysten_network::metrics::DefaultMetricsCallbackProvider::default(),
+        )
+        .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
+            self.state,
+            self.consensus_adapter,
+            self.metrics,
+        )))
+        .bind(&address, Some(tls_config))
+        .await
+        .unwrap();
         let local_addr = server.local_addr().to_owned();
         info!("Listening to traffic on {local_addr}");
         let handle = AuthorityServerHandle {
