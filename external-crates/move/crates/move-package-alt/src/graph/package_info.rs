@@ -5,7 +5,6 @@ use petgraph::{Direction, graph::NodeIndex, visit::EdgeRef};
 
 use crate::{
     compatibility::legacy_parser::NO_NAME_LEGACY_PACKAGE_NAME,
-    dependency::PinnedDependencyInfo,
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{Package, paths::PackagePath},
@@ -77,7 +76,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             };
             let mut result = parent.display_path();
             result.push_str("::");
-            result.push_str(incoming.weight().name.as_str());
+            result.push_str(incoming.weight().name().as_str());
             result
         } else {
             self.package().name().to_string()
@@ -143,7 +142,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             .edges(self.node)
             .map(|edge| {
                 (
-                    edge.weight().name.clone(),
+                    edge.weight().name().clone(),
                     Self {
                         graph: self.graph,
                         node: edge.target(),
@@ -151,12 +150,6 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
                 )
             })
             .collect()
-    }
-
-    /// Return a dependency that resolves to this package
-    pub(crate) fn dep_for_self(&self) -> &PinnedDependencyInfo {
-        // TODO: maybe pull this from the graph instead of storing it in the `Package`?
-        self.package().dep_for_self()
     }
 
     /// The addresses for the names that are available to this package. For modern packages, this
@@ -171,7 +164,12 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             .graph
             .inner
             .edges(self.node)
-            .map(|edge| (edge.weight().name.clone(), self.node_to_addr(edge.target())))
+            .map(|edge| {
+                (
+                    edge.weight().name().clone(),
+                    self.node_to_addr(edge.target()),
+                )
+            })
             .collect();
         result.insert(self.package().name().clone(), self.node_to_addr(self.node));
 
