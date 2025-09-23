@@ -225,13 +225,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Clean up tag name ${{ env.TAG_NAME }}
+        shell: bash
+        run: |
+          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+
       - name: Dispatch Sui Testnet tag update in MystenLabs/walrus
         uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
         with:
           repository: MystenLabs/walrus
           token: ${{ secrets.WALRUS_REPO_DISPATCH }}
           event-type: update-walrus-sui-testnet-tag
-          client-payload: '{"new_tag": "${{ env.TAG_NAME }}"}'            
+          client-payload: '{"new_tag": "${{ env.sui_tag }}"}'            
 
   update-homebrew-formula:
     name: Run brew bump-formula-pr for sui on testnet releases
