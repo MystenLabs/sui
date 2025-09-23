@@ -10615,7 +10615,7 @@ checksum = "0c1318b19085f08681016926435853bbf7858f9c082d0999b80550ff5d9abe15"
 dependencies = [
  "bytes",
  "heck 0.4.1",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -10637,7 +10637,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.99",
@@ -13921,7 +13921,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fe561f3089b3b4acbbd67ff48a278a6c448e488c#fe561f3089b3b4acbbd67ff48a278a6c448e488c"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=358f5c6b6c2f8f9ca05ecd08acd6efdedd87c440#358f5c6b6c2f8f9ca05ecd08acd6efdedd87c440"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -15961,7 +15961,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fe561f3089b3b4acbbd67ff48a278a6c448e488c#fe561f3089b3b4acbbd67ff48a278a6c448e488c"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=358f5c6b6c2f8f9ca05ecd08acd6efdedd87c440#358f5c6b6c2f8f9ca05ecd08acd6efdedd87c440"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16120,7 +16120,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fe561f3089b3b4acbbd67ff48a278a6c448e488c#fe561f3089b3b4acbbd67ff48a278a6c448e488c"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=358f5c6b6c2f8f9ca05ecd08acd6efdedd87c440#358f5c6b6c2f8f9ca05ecd08acd6efdedd87c440"
 dependencies = [
  "base64ct",
  "bcs",
