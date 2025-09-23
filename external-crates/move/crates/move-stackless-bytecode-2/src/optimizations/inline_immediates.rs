@@ -20,10 +20,6 @@ pub fn optimize(function: &mut Function) {
 }
 
 fn inline_block(env: &mut Env, block: &mut BasicBlock) {
-    println!("Optimizing block {}\n", block.label);
-    for inst in &block.instructions {
-        println!("  {}", inst);
-    }
     let instructions = std::mem::take(&mut block.instructions);
     let instructions = instructions
         .into_iter()

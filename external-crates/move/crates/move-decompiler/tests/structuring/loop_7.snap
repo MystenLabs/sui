@@ -5,8 +5,9 @@ if (0) {
     loop {
         if (1) {
             continue;
+        } else {
+            break;
         }
-        break;
     }
 } else {
     { 2 }

@@ -6,7 +6,8 @@ loop {
     { 1 }
     if (2) {
         continue;
+    } else {
+        break;
     }
-    break;
 }
 { 3 }

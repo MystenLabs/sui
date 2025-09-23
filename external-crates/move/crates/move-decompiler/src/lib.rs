@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod ast;
-pub mod decompiler;
-pub mod output;
+pub mod config;
 pub mod pretty_printer;
+
 mod refinement;
 mod structuring;
 pub mod testing;
 pub mod translate;
 
+use anyhow::anyhow;
 use move_model_2::{
     compiled_model as CM,
     model::{self as M, Model},
@@ -20,7 +21,7 @@ use pretty_simple::{Doc, ToDoc};
 
 use std::{
     collections::BTreeMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -35,25 +36,45 @@ use std::{
 /// * `input_files` - A slice of PathBufs representing the input .mv files.
 /// * `output` - A Path representing the output directory.
 /// # Returns
-/// * `anyhow::Result<()>` - Ok(()) if successful, or an error if something goes wrong.
-pub fn generate_from_files(input_files: &[PathBuf], output: &PathBuf) -> anyhow::Result<()> {
+/// * `anyhow::Result<Vec<Path>>` - A result containing a vector of paths to the generated files,
+pub fn generate_from_files(input_files: &[PathBuf], output: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let module_bytes = input_files
         .iter()
-        .map(|path| std::fs::read_to_string(path))
+        .map(|path| {
+            let path = path.canonicalize().map_err(|e| {
+                let path = path.display();
+                anyhow!(format!("Failed to canonicalize path {path}: {e}"))
+            })?;
+            // read raw bytes from file
+            std::fs::read(&path)
+                .map_err(|e| anyhow!(format!("Failed to read file {}: {}", path.display(), e)))
+                .map(|bytes| (path.clone(), bytes))
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let modules = module_bytes
         .iter()
-        .map(|bytes| {
-            move_binary_format::file_format::CompiledModule::deserialize_with_defaults(
-                bytes.as_bytes(),
-            )
+        .map(|(path, bytes)| {
+            let path = path.display();
+            move_binary_format::file_format::CompiledModule::deserialize_with_defaults(bytes)
+                .map_err(|e| anyhow!(format!("Failed to deserialize module at {path}: {e}")))
         })
         .collect::<Result<Vec<_>, _>>()?;
     let model = CM::Model::from_compiled(&BTreeMap::new(), modules);
     generate_from_model(model, output)
 }
 
-pub fn generate_from_model<S: SourceKind>(input: Model<S>, output: &PathBuf) -> anyhow::Result<()> {
+/// Generate Move source code from a model and write the output to the specified directory. The
+/// output directory will contain subdirectories for each package, with the decompiled Move source
+/// files.
+/// # Arguments
+/// * `input` - A Model representing the compiled Move modules.
+/// * `output` - A Path representing the output directory.
+/// # Returns
+/// * `anyhow::Result<Vec<PathBuf>>` - A result containing a vector of paths to the generated files
+pub fn generate_from_model<S: SourceKind>(
+    input: Model<S>,
+    output: &Path,
+) -> anyhow::Result<Vec<PathBuf>> {
     let decompiled = crate::translate::model(input)?;
 
     let crate::ast::Decompiled { model, packages } = decompiled;
@@ -66,6 +87,8 @@ pub fn generate_from_model<S: SourceKind>(input: Model<S>, output: &PathBuf) -> 
             .map(|p| (p.name(), p.address()))
             .collect::<Vec<_>>()
     );
+
+    let mut output_paths = vec![];
 
     println!("Modules\n----------------------------------");
     for pkg in packages {
@@ -88,11 +111,12 @@ pub fn generate_from_model<S: SourceKind>(input: Model<S>, output: &PathBuf) -> 
         for (module_name, module) in &pkg.modules {
             let path = pkg_dir.join(format!("{module_name}.move"));
             // If generate_output returns a Result, use `?`; otherwise drop it
-            generate_module(model_pkg, &path, &name, module)?;
+            output_paths.push(generate_module(model_pkg, &path, &name, module)?);
+            output_paths.push(path);
         }
     }
 
-    Ok(())
+    Ok(output_paths)
 }
 
 fn generate_module<S: SourceKind>(
@@ -100,7 +124,7 @@ fn generate_module<S: SourceKind>(
     path: &PathBuf,
     pkg_name: &str,
     module: &crate::ast::Module,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<PathBuf> {
     use Doc as D;
 
     let Some(model_mod) = pkg.maybe_module(module.name) else {
@@ -173,7 +197,7 @@ fn generate_module<S: SourceKind>(
     let output = doc.render(100);
     println!("- {}", path.display());
     std::fs::write(path, output)?;
-    Ok(())
+    Ok(path.into())
 }
 
 fn generate_function<S: SourceKind>(

@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_decompiler::{output::generate_output, testing::structuring_unit_test, translate::module};
+use move_decompiler::{generate_from_model, testing::structuring_unit_test};
 
 use move_command_line_common::insta_assert;
 use move_package::{BuildConfig, compilation::model_builder};
@@ -58,13 +58,15 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
         .map(|name| name.into())
         .collect::<BTreeSet<Symbol>>();
 
+    let config = move_decompiler::config::Config::default();
+
     for pkg in &bytecode.packages {
         // let pkg_name = pkg.name;
         for (module_name, m) in &pkg.modules {
             if test_module_names.contains(module_name) {
                 // FIXME pkg name not coherent, address name returned instead
                 let name = format!("{}", module_name);
-                let module = module(m.clone());
+                let module = move_decompiler::translate::module(&config, m.clone());
                 let decompiled = format!("{}", module);
                 insta_assert! {
                     input_path: file_path,
@@ -98,7 +100,7 @@ fn run_full_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     let output_path = output_dir.path().join("output");
 
-    generate_output(model, &output_path)?;
+    generate_from_model(model, &output_path)?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()
@@ -131,5 +133,5 @@ datatest_stable::harness!(
     r"modules\.txt$",
     run_structuring_test,
     "tests/structuring",
-    r"\.stt$"
+    r"\.stt$",
 );

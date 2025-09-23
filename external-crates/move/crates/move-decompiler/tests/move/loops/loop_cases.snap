@@ -8,6 +8,8 @@ module loop_cases {
             l0 = l0 + U64(1);
             if (l0 >= U64(10)) {
                 break;
+            } else {
+                continue;
             }
         }
         return 
@@ -27,6 +29,8 @@ module loop_cases {
             }
             if (l0 == U64(10)) {
                 break;
+            } else {
+                continue;
             }
         }
         return 
@@ -71,6 +75,8 @@ module loop_cases {
             l1 = l1 * U64(2) + l0;
             if (l0 >= U64(10)) {
                 break;
+            } else {
+                continue;
             }
         }
         return 
@@ -88,6 +94,8 @@ module loop_cases {
             }
             if (l0 >= U64(10)) {
                 break;
+            } else {
+                continue;
             }
         }
         return 
