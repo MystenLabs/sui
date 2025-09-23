@@ -109,7 +109,7 @@ pub struct BuildConfig {
 }
 
 impl BuildConfig {
-    pub async fn compile<F: MoveFlavor, W: Write>(
+    pub async fn compile_package<F: MoveFlavor, W: Write>(
         &self,
         path: &Path,
         env: &Environment,

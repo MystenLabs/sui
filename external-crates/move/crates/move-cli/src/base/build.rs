@@ -18,11 +18,11 @@ impl Build {
         path: Option<&Path>,
         config: BuildConfig,
     ) -> anyhow::Result<()> {
-        let path = reroot_path(path)?;
-        let env = find_env::<F>(&path, &config)?;
+        let rerooted_path = reroot_path(path)?;
+        let env = find_env::<F>(&rerooted_path, &config)?;
 
         config
-            .compile::<F, _>(&path, &env, &mut std::io::stdout())
+            .compile_package::<F, _>(&rerooted_path, &env, &mut std::io::stdout())
             .await?;
 
         Ok(())
