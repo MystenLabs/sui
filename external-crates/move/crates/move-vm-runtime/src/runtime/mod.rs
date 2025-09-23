@@ -2,12 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::move_cache::MoveCache,
+    cache::move_cache::{MoveCache, ResolvedPackageResult},
     dbg_println,
     execution::{dispatch_tables::VMDispatchTables, vm::MoveVM},
     jit,
     natives::{extensions::NativeExtensions, functions::NativeFunctions},
-    shared::{gas::GasMeter, linkage_context::LinkageContext, types::OriginalId},
+    shared::{
+        gas::GasMeter,
+        linkage_context::LinkageContext,
+        types::{OriginalId, VersionId},
+    },
     validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
 
@@ -38,7 +42,7 @@ impl MoveRuntime {
     pub fn new(natives: NativeFunctions, vm_config: VMConfig) -> Self {
         let natives = Arc::new(natives);
         let vm_config = Arc::new(vm_config);
-        let cache = Arc::new(MoveCache::new(natives.clone(), vm_config.clone()));
+        let cache = Arc::new(MoveCache::new(vm_config.clone()));
         Self {
             cache,
             natives,
@@ -49,7 +53,7 @@ impl MoveRuntime {
     pub fn new_with_default_config(natives: NativeFunctions) -> Self {
         let natives = Arc::new(natives);
         let vm_config = Arc::new(VMConfig::default());
-        let cache = Arc::new(MoveCache::new(natives.clone(), vm_config.clone()));
+        let cache = Arc::new(MoveCache::new(vm_config.clone()));
         Self {
             cache,
             natives,
@@ -70,6 +74,22 @@ impl MoveRuntime {
     /// Retrieive the Move Cache associated with the Runtime
     pub fn cache(&self) -> Arc<MoveCache> {
         self.cache.clone()
+    }
+
+    /// Resolve a package, loading it if necessary. This will use the provided `ModuleResolver` to
+    /// fetch the package if it is not already cached.
+    /// If there is an error loading or verifying the package, an error is returned.
+    pub fn resolve_and_cache_package(
+        &self,
+        module_resolver: impl ModuleResolver,
+        package_key: VersionId,
+    ) -> VMResult<ResolvedPackageResult> {
+        package_resolution::resolve_package(
+            &self.cache,
+            &self.natives,
+            module_resolver,
+            package_key,
+        )
     }
 
     /// Makes an Execution Instance for running a Move function invocation.
@@ -102,7 +122,6 @@ impl MoveRuntime {
             &self.cache,
             &self.natives,
             &data_cache,
-            &link_context,
             all_packages,
         )?;
         let validation_packages = packages
@@ -165,7 +184,6 @@ impl MoveRuntime {
             &self.cache,
             &self.natives,
             &data_cache,
-            &link_context,
             link_context.all_package_dependencies_except(pkg.version_id)?,
         )?;
         let verified_pkg = {
@@ -180,7 +198,6 @@ impl MoveRuntime {
         let published_package = package_resolution::jit_package_for_publish(
             &self.cache,
             &self.natives,
-            &link_context,
             verified_pkg.clone(),
         )?;
 

@@ -6,9 +6,7 @@
 //! the `Env` provides consistent access to shared components such as the VM or the protocol config.
 
 use crate::{
-    data_store::{
-        PackageStore, cached_package_store::CachedPackageStore, linked_data_store::LinkedDataStore,
-    },
+    data_store::{PackageStore, cached_package_store::CachedPackageStore},
     execution_value::ExecutionState,
     static_programmable_transactions::{
         execution::context::subst_signature,
@@ -20,14 +18,13 @@ use crate::{
     },
 };
 use move_binary_format::{
-    CompiledModule,
     errors::VMError,
     file_format::{AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
     annotated_value,
     language_storage::{ModuleId, StructTag},
-    resolver::ModuleResolver,
+    resolver::IntraPackageName,
     runtime_value::{self, MoveTypeLayout},
     vm_status::StatusCode,
 };
@@ -41,7 +38,6 @@ use sui_types::{
     Identifier, TypeTag,
     base_types::{ObjectID, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
-    execution_config_utils::to_binary_config,
     execution_status::TypeArgumentError,
     gas_coin::GasCoin,
     move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
@@ -53,7 +49,7 @@ pub struct Env<'pc, 'vm, 'state, 'linkage> {
     pub protocol_config: &'pc ProtocolConfig,
     pub vm: &'vm MoveRuntime,
     pub state_view: &'state mut dyn ExecutionState,
-    pub linkable_store: &'linkage CachedPackageStore<'state>,
+    pub linkable_store: &'linkage CachedPackageStore<'state, 'vm>,
     pub linkage_analysis: &'linkage dyn LinkageAnalysis,
     gas_coin_type: OnceCell<Type>,
     upgrade_ticket_type: OnceCell<Type>,
@@ -79,7 +75,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         protocol_config: &'pc ProtocolConfig,
         vm: &'vm MoveRuntime,
         state_view: &'state mut dyn ExecutionState,
-        linkable_store: &'linkage CachedPackageStore<'state>,
+        linkable_store: &'linkage CachedPackageStore<'state, 'vm>,
         linkage_analysis: &'linkage dyn LinkageAnalysis,
     ) -> Self {
         Self {
@@ -165,10 +161,10 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                         env.linkable_store,
                     )?;
                     let linkage_context = tag_linkage.linkage_context();
-                    let linked_store = LinkedDataStore::new(&tag_linkage, env.linkable_store);
+                    let move_store = &env.linkable_store.package_store;
                     let vm = env
                         .vm
-                        .make_vm(&linked_store, linkage_context)
+                        .make_vm(move_store, linkage_context)
                         .map_err(|e| env.convert_linked_vm_error(e, &tag_linkage))?;
                     vm.annotated_type_layout(tag)
                         .map_err(|e| env.convert_linked_vm_error(e, &tag_linkage))?
@@ -210,10 +206,10 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                         env.linkable_store,
                     )?;
                     let linkage_context = tag_linkage.linkage_context();
-                    let linked_store = LinkedDataStore::new(&tag_linkage, env.linkable_store);
+                    let move_store = &env.linkable_store.package_store;
                     let vm = env
                         .vm
-                        .make_vm(&linked_store, linkage_context)
+                        .make_vm(move_store, linkage_context)
                         .map_err(|e| env.convert_linked_vm_error(e, &tag_linkage))?;
                     vm.runtime_type_layout(tag)
                         .map_err(|e| env.convert_linked_vm_error(e, &tag_linkage))?
@@ -241,7 +237,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         let name = to_identifier(function)?;
         let storage_id = ModuleId::new(package.into(), module.clone());
         let runtime_id = ModuleId::new(original_id.into(), module);
-        let data_store = LinkedDataStore::new(&linkage, self.linkable_store);
+        let data_store = &self.linkable_store.package_store;
         let linkage_context = linkage.linkage_context();
         let loaded_type_arguments = type_arguments
             .iter()
@@ -414,10 +410,10 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             } else {
                 let tag_linkage = type_linkage(&addresses, self.linkable_store)?;
                 let link_context = tag_linkage.linkage_context();
-                let linked_store = LinkedDataStore::new(&tag_linkage, self.linkable_store);
+                let move_store = &self.linkable_store.package_store;
                 Some((
                     self.vm
-                        .make_vm(&linked_store, link_context)
+                        .make_vm(move_store, link_context)
                         .map_err(|e| execution_error(self, type_arg_idx, e, &tag_linkage))?,
                     tag_linkage,
                 ))
@@ -607,11 +603,13 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                                 kind: TypeArgumentError::TypeNotFound,
                             })
                         })?;
-                    let Some(resolved_address) = pkg
-                        .type_origin_map()
-                        .get(&(module.clone(), name.clone()))
-                        .cloned()
-                    else {
+                    let module = to_identifier(module)?;
+                    let name = to_identifier(name)?;
+                    let tid = IntraPackageName {
+                        module_name: module,
+                        type_name: name,
+                    };
+                    let Some(resolved_address) = pkg.type_origin_table().get(&tid).cloned() else {
                         return Err(ExecutionError::from_kind(
                             ExecutionErrorKind::TypeArgumentError {
                                 argument_idx: type_arg_idx as u16,
@@ -620,16 +618,14 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                         ));
                     };
 
-                    let module = to_identifier(module)?;
-                    let name = to_identifier(name)?;
                     let tys = type_params
                         .into_iter()
                         .map(|tp| to_type_tag_internal(env, type_arg_idx, tp))
                         .collect::<Result<Vec<_>, _>>()?;
                     TypeTag::Struct(Box::new(StructTag {
-                        address: *resolved_address,
-                        module,
-                        name,
+                        address: resolved_address,
+                        module: tid.module_name,
+                        name: tid.type_name,
                         type_params: tys,
                     }))
                 }
@@ -650,7 +646,7 @@ fn convert_vm_error(
     error: VMError,
     store: &dyn PackageStore,
     linkage: Option<&ExecutableLinkage>,
-    protocol_config: &ProtocolConfig,
+    _protocol_config: &ProtocolConfig,
 ) -> ExecutionError {
     use crate::error::convert_vm_error_impl;
     convert_vm_error_impl(
@@ -677,19 +673,19 @@ fn convert_vm_error(
                 "Linkage should be set anywhere where runtime errors may occur in order to resolve abort locations to package IDs"
             );
             linkage.and_then(|linkage| {
-                let remapped_id = linkage
+                let version_id = linkage
                     .0
                     .linkage
                     .get(&(*id.address()).into())
-                    .map(|new_id| ModuleId::new((*new_id).into(), id.name().to_owned()))?;
-                let state_view = LinkedDataStore::new(linkage, store);
-                state_view.get_module(&remapped_id).ok().and_then(|module| {
-                    let binary_config = to_binary_config(protocol_config);
-                    let module =
-                        CompiledModule::deserialize_with_config(&module?, &binary_config).ok()?;
-                    let fdef = module.function_def_at(function);
-                    let fhandle = module.function_handle_at(fdef.function);
-                    Some(module.identifier_at(fhandle.name).to_string())
+                    .cloned()
+                    .unwrap_or_else(|| ObjectID::from_address(*id.address()));
+                store.get_package(&version_id).ok().flatten().and_then(|p| {
+                    p.modules().get(id).and_then(|module| {
+                        let module = module.compiled_module();
+                        let fdef = module.function_def_at(function);
+                        let fhandle = module.function_handle_at(fdef.function);
+                        Some(module.identifier_at(fhandle.name).to_string())
+                    })
                 })
             })
         },

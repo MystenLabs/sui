@@ -33,6 +33,7 @@ pub(crate) fn package(
         version_id,
         type_origin_table,
         linkage_table,
+        version,
     } = pkg;
     let context = Context { natives, vm_config };
     let mut modules = BTreeMap::new();
@@ -45,6 +46,7 @@ pub(crate) fn package(
         version_id,
         type_origin_table,
         linkage_table,
+        version,
     })
 }
 

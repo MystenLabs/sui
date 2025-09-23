@@ -3,7 +3,6 @@
 
 use crate::{
     adapter,
-    data_store::linked_data_store::LinkedDataStore,
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
     gas_charger::GasCharger,
@@ -41,6 +40,7 @@ use move_vm_runtime::{
     },
     natives::extensions::NativeExtensions,
     shared::gas::GasMeter as _,
+    validation::verification::ast::Package as VerifiedPackage,
 };
 use mysten_common::debug_fatal;
 use serde::{Deserialize, de::DeserializeSeed};
@@ -446,7 +446,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             written_objects.insert(id, object);
         }
 
-        for package in self.env.linkable_store.to_new_packages().into_iter() {
+        for package in self
+            .env
+            .linkable_store
+            .package_store
+            .to_new_packages()
+            .into_iter()
+        {
             let package_obj = Object::new_from_package(package, tx_digest);
             let id = package_obj.id();
             created_object_ids.insert(id);
@@ -708,7 +714,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .enumerate()
             .map(|(idx, ty)| self.env.load_vm_type_argument_from_adapter_type(idx, ty))
             .collect::<Result<Vec<_>, _>>()?;
-        let data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
+        let data_store = &self.env.linkable_store.package_store;
         let link_context = linkage.linkage_context();
         let mut vm = self
             .env
@@ -805,9 +811,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         pkg: &MovePackage,
         modules: &[CompiledModule],
         linkage: &ExecutableLinkage,
-    ) -> Result<MoveVM<'env>, ExecutionError> {
+    ) -> Result<(VerifiedPackage, MoveVM<'env>), ExecutionError> {
         let serialized_pkg = pkg.into_serialized_move_package();
-        let data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
+        let data_store = &self.env.linkable_store.package_store;
         let vm = self
             .env
             .vm
@@ -834,7 +840,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             )?;
         }
 
-        Ok(vm.1)
+        Ok(vm)
     }
 
     fn init_modules(
@@ -920,25 +926,27 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         )?);
         let package_id = package.id();
 
+        let linkage = ResolvedLinkage::update_for_publication(package_id, runtime_id, linkage);
+
+        let (pkg, vm) =
+            self.publish_and_verify_modules(runtime_id, &package, &modules, &linkage)?;
         // Here we optimistically push the package that is being published/upgraded
         // and if there is an error of any kind (verification or module init) we
         // remove it.
         // The call to `pop_last_package` later is fine because we cannot re-enter and
         // the last package we pushed is the one we are verifying and running the init from
-        let linkage = ResolvedLinkage::update_for_publication(package_id, runtime_id, linkage);
-
         self.env
             .linkable_store
-            .push_package(package_id, package.clone())?;
-        let res = self
-            .publish_and_verify_modules(runtime_id, &package, &modules, &linkage)
-            .and_then(|vm| {
-                self.init_modules(vm, package_id, &modules, &linkage, trace_builder_opt)
-            });
-        match res {
+            .package_store
+            .push_package(package_id, package.clone(), pkg)?;
+
+        match self.init_modules(vm, package_id, &modules, &linkage, trace_builder_opt) {
             Ok(()) => Ok(runtime_id),
             Err(e) => {
-                self.env.linkable_store.pop_package(package_id)?;
+                self.env
+                    .linkable_store
+                    .package_store
+                    .pop_package(package_id)?;
                 Err(e)
             }
         }
@@ -974,7 +982,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         )?;
 
         let linkage = ResolvedLinkage::update_for_publication(storage_id, runtime_id, linkage);
-        self.publish_and_verify_modules(runtime_id, &package, &modules, &linkage)?;
+        let (verified_pkg, _) =
+            self.publish_and_verify_modules(runtime_id, &package, &modules, &linkage)?;
 
         check_compatibility(
             self.env.protocol_config,
@@ -1024,9 +1033,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
         }
 
-        self.env
-            .linkable_store
-            .push_package(storage_id, Rc::new(package))?;
+        self.env.linkable_store.package_store.push_package(
+            storage_id,
+            Rc::new(package),
+            verified_pkg,
+        )?;
         Ok(storage_id)
     }
 
