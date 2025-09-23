@@ -206,7 +206,7 @@ pub fn package(
     // Load modules in dependency order within the package. Needed for both static call
     // resolution and type caching.
     while let Some(mut input_module) = package_modules.pop() {
-        let mut immediate_dependencies = input_module
+        let immediate_dependencies = input_module
             .compiled_module
             .immediate_dependencies()
             .into_iter()
@@ -216,10 +216,15 @@ pub fn package(
 
         // If we haven't processed the immediate dependencies yet, push the module back onto
         // the front and process other modules first.
-        if !immediate_dependencies.all(|dep| {
-            let key = identifier_interner::intern_ident_str(dep.name()).unwrap();
-            package_context.loaded_modules.contains_key(&key)
-        }) {
+        let mut all_deps_loaded = true;
+        for dep in immediate_dependencies {
+            let key = identifier_interner::intern_ident_str(dep.name())?;
+            if !package_context.loaded_modules.contains_key(&key) {
+                all_deps_loaded = false;
+                break;
+            }
+        }
+        if !all_deps_loaded {
             package_modules.insert(0, input_module);
             continue;
         }
