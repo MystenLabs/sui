@@ -14670,6 +14670,7 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
+ "pin-project",
  "prometheus",
  "prost-types",
  "serde",
