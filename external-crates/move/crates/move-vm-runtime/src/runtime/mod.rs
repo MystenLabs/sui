@@ -24,9 +24,6 @@ use std::{collections::BTreeMap, sync::Arc};
 // FIXME(cswords): This is only public for testing...
 pub mod package_resolution;
 
-pub mod data_cache;
-use data_cache::TransactionDataCache;
-
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct MoveRuntime {
@@ -85,9 +82,9 @@ impl MoveRuntime {
         package_key: VersionId,
     ) -> VMResult<ResolvedPackageResult> {
         package_resolution::resolve_package(
+            module_resolver,
             &self.cache,
             &self.natives,
-            module_resolver,
             package_key,
         )
     }
@@ -101,27 +98,30 @@ impl MoveRuntime {
     ///
     ///
     /// TODO: Have this hand back a tokio Notify
-    pub fn make_vm<'extensions, DataCache: ModuleResolver>(
+    pub fn make_vm<'extensions>(
         &self,
-        data_cache: DataCache,
+        package_store: impl ModuleResolver,
         link_context: LinkageContext,
     ) -> VMResult<MoveVM<'extensions>> {
-        self.make_vm_with_native_extensions(data_cache, link_context, NativeExtensions::default())
+        self.make_vm_with_native_extensions(
+            package_store,
+            link_context,
+            NativeExtensions::default(),
+        )
     }
 
-    pub fn make_vm_with_native_extensions<'extensions, DataCache: ModuleResolver>(
+    pub fn make_vm_with_native_extensions<'extensions>(
         &self,
-        data_cache: DataCache,
+        package_store: impl ModuleResolver,
         link_context: LinkageContext,
         native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>> {
         let all_packages = link_context.all_packages()?;
 
-        let data_cache = TransactionDataCache::new(data_cache);
         let packages = package_resolution::resolve_packages(
+            package_store,
             &self.cache,
             &self.natives,
-            &data_cache,
             all_packages,
         )?;
         let validation_packages = packages
@@ -161,9 +161,9 @@ impl MoveRuntime {
     ///
     /// In case an invariant violation occurs, the provided data cache should be considered
     /// corrupted and discarded; a change set will not be returned.
-    pub fn validate_package<'extensions, DataCache: ModuleResolver>(
+    pub fn validate_package<'extensions>(
         &self,
-        data_cache: DataCache,
+        package_store: impl ModuleResolver,
         original_id: OriginalId,
         pkg: SerializedPackage,
         _gas_meter: &mut impl GasMeter,
@@ -172,7 +172,6 @@ impl MoveRuntime {
         let version_id = pkg.version_id;
         dbg_println!("\n\nPublishing module at {version_id} (=> {original_id})\n\n");
 
-        let data_cache = TransactionDataCache::new(data_cache);
         let link_context = LinkageContext::new(pkg.linkage_table.clone());
 
         // Verify a provided serialized package. This will validate the provided serialized
@@ -181,9 +180,9 @@ impl MoveRuntime {
         // case an `init` function or similar will need to run. This will load the dependencies
         // into the package cache.
         let pkg_dependencies = package_resolution::resolve_packages(
+            package_store,
             &self.cache,
             &self.natives,
-            &data_cache,
             link_context.all_package_dependencies_except(pkg.version_id)?,
         )?;
         let verified_pkg = {
