@@ -412,7 +412,9 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
 
         let caching_result = match cached_pkg_info_opt {
             Some(cached_pkg_info) => {
-                dependencies.remove_deps(cached_pkg_info.dep_names.clone());
+                // TODO: do we need to do anything here?
+                // dependencies.remove_deps(cached_pkg_info.dep_names.clone());
+
                 let deps = cached_pkg_info.deps.clone();
                 let analyzed_pkg_info = AnalyzedPkgInfo::new(
                     deps,
@@ -431,12 +433,14 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 )
             }
             None => {
+                let sorted_deps = root_pkg.sorted_deps();
+                let sorted_deps: Vec<PackageName> = sorted_deps.into_iter().cloned().collect();
                 if let Some((program_deps, dep_names)) = compute_pre_compiled_dep_data(
                     &mut cached_packages.compiled_dep_pkgs,
                     mapped_files_data.dep_pkg_paths,
                     src_deps,
-                    resolution_graph.root_package(),
-                    &resolution_graph.topological_order(),
+                    root_pkg_name,
+                    &sorted_deps,
                     compiler_flags,
                     overlay_fs_root.clone(),
                 ) {
