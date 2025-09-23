@@ -10,6 +10,7 @@ use petgraph::visit::EdgeRef;
 use thiserror::Error;
 
 use crate::{
+    dependency::PinnedDependencyInfo,
     flavor::MoveFlavor,
     schema::{OriginalID, PackageName},
 };

@@ -119,4 +119,11 @@ impl<F: MoveFlavor> PackageGraph<F> {
             self.inner[*index] = Arc::new(self.inner[*index].override_publish(publish));
         }
     }
+
+    /// Return a copy of `self` with all nodes replaced using `linkage`
+    #[allow(unused)]
+    pub fn apply_linkage(&self, linkage: &LinkageTable<F>) -> Self {
+        let inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo> = DiGraph::new();
+        todo!()
+    }
 }
