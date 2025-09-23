@@ -10,12 +10,9 @@ mod tests;
 
 pub use metrics::ValidatorClientMetrics;
 pub use monitor::ValidatorClientMonitor;
-use mysten_metrics::TX_TYPE_SHARED_OBJ_TX;
-use mysten_metrics::TX_TYPE_SINGLE_WRITER_TX;
+use std::time::Duration;
 use strum::EnumIter;
 use sui_types::base_types::AuthorityName;
-
-use std::time::Duration;
 
 /// Operation types for validator performance tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
@@ -39,21 +36,6 @@ impl OperationType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
-pub enum TxType {
-    SingleWriter,
-    SharedObject,
-}
-
-impl TxType {
-    pub fn as_str(&self) -> &str {
-        match self {
-            TxType::SingleWriter => TX_TYPE_SINGLE_WRITER_TX,
-            TxType::SharedObject => TX_TYPE_SHARED_OBJ_TX,
-        }
-    }
-}
-
 /// Feedback from TransactionDriver operations
 #[derive(Debug, Clone)]
 pub struct OperationFeedback {
@@ -63,6 +45,10 @@ pub struct OperationFeedback {
     pub display_name: String,
     /// The operation type
     pub operation: OperationType,
-    /// Result of the operation: Ok(latency) if successful, Err(()) if failed
+    /// Result of the operation: Ok(latency) if successful, Err(()) if failed.
+    /// Only errors specific to the target validator should be recorded,
+    /// for example, timeout, unavailability or misbehavior from validators can be recorded.
+    /// But other errors unrelated to a specific validator, for example invalid user transaction,
+    /// should not be recorded.
     pub result: Result<Duration, ()>,
 }

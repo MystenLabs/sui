@@ -7,6 +7,7 @@ mod checkpoint_output;
 mod metrics;
 
 use crate::accumulators::AccumulatorSettlementTxBuilder;
+use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityState;
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
@@ -18,6 +19,7 @@ pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
 
+use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
@@ -37,6 +39,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use tokio::sync::{mpsc, watch};
 use typed_store::rocks::{default_db_options, DBOptions, ReadWriteOptions};
 
@@ -1447,14 +1450,25 @@ impl CheckpointBuilder {
         let tx_key =
             TransactionKey::AccumulatorSettlement(self.epoch_store.epoch(), checkpoint_height);
 
+        let epoch = self.epoch_store.epoch();
+        let accumulator_root_obj_initial_shared_version = self
+            .epoch_store
+            .epoch_start_config()
+            .accumulator_root_obj_initial_shared_version()
+            .expect("accumulator root object must exist");
+
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.effects_store.as_ref()),
             sorted_tx_effects_included_in_checkpoint,
         );
 
-        let settlements = builder.get_balance_settlements();
+        let accumulator_changes = builder.collect_accumulator_changes();
         let num_updates = builder.num_updates();
-        let settlement_txns = builder.build_tx(&self.epoch_store, checkpoint_height);
+        let settlement_txns = builder.build_tx(
+            epoch,
+            accumulator_root_obj_initial_shared_version,
+            checkpoint_height,
+        );
 
         let settlement_txns: Vec<_> = settlement_txns
             .into_iter()
@@ -1498,6 +1512,7 @@ impl CheckpointBuilder {
             }
         };
 
+        let mut next_accumulator_version = None;
         for fx in settlement_effects.iter() {
             assert!(
                 fx.status().is_ok(),
@@ -1505,7 +1520,23 @@ impl CheckpointBuilder {
                 fx.transaction_digest(),
                 fx
             );
+            if let Some(version) = fx
+                .mutated()
+                .iter()
+                .find_map(|(oref, _)| (oref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID).then_some(oref.1))
+            {
+                assert!(
+                    next_accumulator_version.is_none(),
+                    "Only one settlement transaction should mutate the accumulator root object"
+                );
+                next_accumulator_version = Some(version);
+            }
         }
+        let settlements = BalanceSettlement {
+            next_accumulator_version: next_accumulator_version
+                .expect("Accumulator root object should be mutated in the settlement transactions"),
+            balance_changes: accumulator_changes,
+        };
 
         self.state
             .execution_scheduler()

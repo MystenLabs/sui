@@ -18,14 +18,16 @@ use tower::Service;
 
 const GRPC_TIMEOUT_HEADER: &str = "grpc-timeout";
 
+/// Applies timeouts on incoming requests, specified by their header and server default.
 #[derive(Debug, Clone)]
 pub struct GrpcTimeout<S> {
     inner: S,
-    server_timeout: Option<Duration>,
+    // Apply a max timeout for all requests to limit their total memory usage.
+    server_timeout: Duration,
 }
 
 impl<S> GrpcTimeout<S> {
-    pub fn new(inner: S, server_timeout: Option<Duration>) -> Self {
+    pub fn new(inner: S, server_timeout: Duration) -> Self {
         Self {
             inner,
             server_timeout,
@@ -52,19 +54,14 @@ where
         });
 
         // Use the shorter of the two durations, if either are set
-        let timeout_duration = match (client_timeout, self.server_timeout) {
-            (None, None) => None,
-            (Some(dur), None) => Some(dur),
-            (None, Some(dur)) => Some(dur),
-            (Some(header), Some(server)) => {
-                let shorter_duration = std::cmp::min(header, server);
-                Some(shorter_duration)
-            }
+        let resp_timeout = match client_timeout {
+            None => self.server_timeout,
+            Some(d) => self.server_timeout.min(d),
         };
 
         ResponseFuture {
             inner: self.inner.call(req),
-            sleep: timeout_duration.map(tokio::time::sleep),
+            sleep: tokio::time::sleep(resp_timeout),
         }
     }
 }
@@ -74,7 +71,7 @@ pin_project! {
         #[pin]
         inner: F,
         #[pin]
-        sleep: Option<Sleep>,
+        sleep: Sleep,
     }
 }
 
@@ -91,15 +88,11 @@ where
             return Poll::Ready(result.map(|response| response.map(MaybeEmptyBody::full)));
         }
 
-        if let Some(sleep) = this.sleep.as_pin_mut() {
-            ready!(sleep.poll(cx));
-            let response = Status::deadline_exceeded("Timeout expired")
-                .into_http()
-                .map(|()| MaybeEmptyBody::empty());
-            return Poll::Ready(Ok(response));
-        }
-
-        Poll::Pending
+        ready!(this.sleep.poll(cx));
+        let response = Status::deadline_exceeded("Timeout expired")
+            .into_http()
+            .map(|()| MaybeEmptyBody::empty());
+        Poll::Ready(Ok(response))
     }
 }
 

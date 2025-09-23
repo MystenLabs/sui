@@ -496,6 +496,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
+	"""
+	allowGlobalPause: Boolean
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -517,6 +521,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""
 	defaultSuinsName: String
+	"""
+	If the currency is regulated, this object represents the capability to modify the deny list. If a capability is known but wrapped, its address can be fetched but other fields will not be accessible.
+	"""
+	denyCap: MoveObject
 	"""
 	Description of the coin.
 	"""
@@ -612,6 +620,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
+	Whether the currency is regulated or not. `null` indicates that the regulatory status is unknown.
+	"""
+	regulatedState: RegulatedState
+	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
 	storageRebate: BigInt
@@ -619,6 +631,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	The overall balance of coins issued.
 	"""
 	supply: BigInt
+	"""
+	Future behavior of the supply. `null` indicates that the future behavior of the supply is not known because the currency's treasury still exists.
+	"""
+	supplyState: SupplyState
 	"""
 	Symbol for the coin.
 	"""
@@ -704,7 +720,7 @@ type CommandResult {
 }
 
 """
-Object is exclusively owned by a single adderss and sequenced via consensis.
+Object is exclusively owned by a single adderss and sequenced via consensus.
 """
 type ConsensusAddressOwner {
 	"""
@@ -3322,6 +3338,20 @@ type Receiving {
 	object: Object
 }
 
+"""
+Whether the currency is regulated or not.
+"""
+enum RegulatedState {
+	"""
+	A `DenyCap` or a `RegulatedCoinMetadata` exists for this currency.
+	"""
+	REGULATED
+	"""
+	The currency was created without a deny list.
+	"""
+	UNREGULATED
+}
+
 type SafeMode {
 	"""
 	Whether safe mode was used for the last epoch change.
@@ -3580,6 +3610,20 @@ type StoreExecutionTimeObservationsTransaction {
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 """
 scalar SuiAddress
+
+"""
+Future behavior of a currency's supply.
+"""
+enum SupplyState {
+	"""
+	The supply can only decrease.
+	"""
+	BURN_ONLY
+	"""
+	The supply can neither increase nor decrease.
+	"""
+	FIXED
+}
 
 """
 Details of the system that are decided during genesis.
@@ -3971,11 +4015,25 @@ type UserSignature {
 	signatureBytes: Base64
 }
 
-type Validator {
+type Validator implements IAddressable {
 	"""
 	The validator's address.
 	"""
 	address: SuiAddress!
+	"""
+	The number of epochs for which this validator has been below the low stake threshold.
+	"""
+	atRisk: UInt53
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
 	The fee charged by the validator for staking services.
 	"""
@@ -3984,6 +4042,10 @@ type Validator {
 	Validator's set of credentials such as public keys, network addresses and others.
 	"""
 	credentials: ValidatorCredentials
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
 	"""
 	Validator's description.
 	"""
@@ -4000,6 +4062,13 @@ type Validator {
 	Validator's url containing their custom image.
 	"""
 	imageUrl: String
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
 	"""
 	Validator's name.
 	"""
@@ -4020,6 +4089,15 @@ type Validator {
 	The total number of SUI tokens in this pool plus the pending stake amount for this epoch.
 	"""
 	nextEpochStake: BigInt
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The validator's current valid `Cap` object. Validators can delegate the operation ability to another address.
+	The address holding this `Cap` object can then update the reference gas price and tallying rule on behalf of the validator.
+	"""
+	operationCap: MoveObject
 	"""
 	Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
 	"""
@@ -4077,6 +4155,21 @@ type ValidatorAggregatedSignature {
 	signersMap: [Int!]!
 }
 
+type ValidatorConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [ValidatorEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Validator!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
 """
 The credentials related fields associated with a validator.
 """
@@ -4092,13 +4185,27 @@ type ValidatorCredentials {
 }
 
 """
+An edge in a connection.
+"""
+type ValidatorEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Validator!
+}
+
+"""
 Representation of `0x3::validator_set::ValidatorSet`.
 """
 type ValidatorSet {
 	"""
 	The current list of active validators.
 	"""
-	activeValidators: [Validator!]
+	activeValidators(first: Int, after: String, last: Int, before: String): ValidatorConnection!
 	"""
 	Object ID of the `Table` storing the inactive staking pools.
 	"""
@@ -4116,14 +4223,12 @@ type ValidatorSet {
 	"""
 	pendingActiveValidatorsSize: Int
 	"""
-	Validators that are pending removal from the active validator set, expressed as indices in
-	to `activeValidators`.
+	Validators that are pending removal from the active validator set, expressed as indices in to `activeValidators`.
 	"""
 	pendingRemovals: [Int!]
 	"""
-	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
-	of the corresponding validators. This is needed because a validator's address
-	can potentially change but the object ID of its pool will not.
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses of the corresponding validators.
+	This is needed because a validator's address can potentially change but the object ID of its pool will not.
 	"""
 	stakingPoolMappingsId: SuiAddress
 	"""

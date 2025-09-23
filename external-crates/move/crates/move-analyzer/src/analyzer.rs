@@ -172,7 +172,6 @@ pub fn run<F: MoveFlavor>() {
                 Arc::new(Mutex::new(CachedPackages::new())),
                 ide_files_root.clone(),
                 p.as_path(),
-                None,
                 lint,
                 None,
             ) {

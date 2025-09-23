@@ -4,7 +4,6 @@
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::validator_client_monitor::stats::ClientObservedStats;
-use crate::validator_client_monitor::TxType;
 use crate::validator_client_monitor::{
     metrics::ValidatorClientMetrics, OperationFeedback, OperationType,
 };
@@ -16,6 +15,7 @@ use std::{sync::Arc, time::Instant};
 use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
+use sui_types::messages_grpc::TxType;
 use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
 use tokio::{
     task::JoinSet,
@@ -155,7 +155,7 @@ where
                 }
             }
 
-            self.update_cached_scores();
+            self.update_cached_scores(&authority_agg);
         }
     }
 }
@@ -165,8 +165,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     ///
     /// This method is called periodically after health checks complete to update
     /// the cached validator scores.
-    fn update_cached_scores(&self) {
-        let authority_agg = self.authority_aggregator.load();
+    fn update_cached_scores(&self, authority_agg: &AuthorityAggregator<A>) {
         let committee = &authority_agg.committee;
         let mut cached_scores = self.cached_scores.write();
 
@@ -279,8 +278,8 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     }
 
     #[cfg(test)]
-    pub fn force_update_cached_scores(&self) {
-        self.update_cached_scores();
+    pub fn force_update_cached_scores(&self, authority_agg: &AuthorityAggregator<A>) {
+        self.update_cached_scores(authority_agg);
     }
 
     #[cfg(test)]

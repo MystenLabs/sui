@@ -16,6 +16,7 @@ mod client_stats_tests {
     use super::*;
     use crate::validator_client_monitor::metrics::ValidatorClientMetrics;
     use prometheus::Registry;
+    use sui_types::messages_grpc::TxType;
 
     /// Helper to create test validator names
     fn create_test_validator_names(n: usize) -> Vec<AuthorityName> {
@@ -506,6 +507,8 @@ mod client_stats_tests {
 
 #[cfg(test)]
 mod client_monitor_tests {
+    use sui_types::messages_grpc::TxType;
+
     use crate::{
         authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
         test_authority_clients::MockAuthorityApi,
@@ -548,7 +551,7 @@ mod client_monitor_tests {
         }
 
         // Force update cached scores (in production this happens in the health check loop)
-        monitor.force_update_cached_scores();
+        monitor.force_update_cached_scores(&auth_agg);
 
         // Select validators with k=2
         let selected =
@@ -596,7 +599,7 @@ mod client_monitor_tests {
         }
 
         // Force update cached scores (in production this happens in the health check loop)
-        monitor.force_update_cached_scores();
+        monitor.force_update_cached_scores(&auth_agg);
 
         // Select validators with k=3
         let selected =
@@ -654,7 +657,7 @@ mod client_monitor_tests {
         }
 
         // Force update cached scores (in production this happens in the health check loop)
-        monitor.force_update_cached_scores();
+        monitor.force_update_cached_scores(&auth_agg);
 
         // Should still select validators from the provided committee
         let selected =
@@ -690,7 +693,7 @@ mod client_monitor_tests {
         }
 
         // Force update cached scores (in production this happens in the health check loop)
-        monitor.force_update_cached_scores();
+        monitor.force_update_cached_scores(&auth_agg);
 
         // Request more validators than available
         let selected =
@@ -730,7 +733,7 @@ mod client_monitor_tests {
         }
 
         // Force update cached scores (in production this happens in the health check loop)
-        monitor.force_update_cached_scores();
+        monitor.force_update_cached_scores(&auth_agg);
 
         // Select validators with k=2 for the shared object tx type
         let selected =
@@ -825,6 +828,9 @@ mod client_monitor_tests {
         assert!(monitor.has_validator_stats(&initial_validators[0]));
         assert!(monitor.has_validator_stats(&initial_validators[1]));
         assert!(!monitor.has_validator_stats(&initial_validators[2]));
+
+        // Calculate the scores for the validators and ensure this is successful
+        monitor.force_update_cached_scores(&initial_auth_agg);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

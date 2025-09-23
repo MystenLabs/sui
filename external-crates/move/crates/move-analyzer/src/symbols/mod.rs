@@ -157,7 +157,6 @@ pub fn get_symbols<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
-    modified_files: Option<Vec<PathBuf>>,
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
@@ -187,7 +186,6 @@ pub fn get_symbols<F: MoveFlavor>(
             packages_info.clone(),
             ide_files_root.clone(),
             pkg_path,
-            modified_files.clone(),
             lint,
         )?;
         eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
@@ -226,6 +224,12 @@ pub fn compute_symbols(
         .file_name_mapping()
         .iter()
         .map(|(fhash, fpath)| (*fhash, fpath.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let user_file_hashes = compiled_pkg_info
+        .mapped_files
+        .file_name_mapping()
+        .iter()
+        .map(|(fhash, fpath)| (fpath.clone(), *fhash))
         .collect::<BTreeMap<_, _>>();
     let mut symbols_computation_data = SymbolsComputationData::new();
     let typed_mod_named_address_maps = compiled_pkg_info
@@ -268,6 +272,7 @@ pub fn compute_symbols(
                     deps_symbols_data,
                     program: Arc::new(program),
                     file_paths: Arc::new(file_paths),
+                    user_file_hashes: Arc::new(user_file_hashes),
                     edition,
                     compiler_info,
                     lsp_diags,

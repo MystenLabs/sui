@@ -105,3 +105,91 @@ module 0x0.t {
         return;
     }
 }
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+    import 0x2.coin;
+
+    t(s: coin.CurrencyCreated<u64>) {
+        label l0:
+        event.emit_authenticated<coin.CurrencyCreated<u64>>(move(s));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+
+    t<T: copy + drop>(x: T) {
+        label l0:
+        event.emit_authenticated<T>(move(x));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+
+    t(x: u64) {
+        label l0:
+        event.emit_authenticated<u64>(move(x));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+
+    struct X has copy, drop {
+        dummy: bool,
+    }
+
+    t(x: vector<Self.X>) {
+        label l0:
+        event.emit_authenticated<vector<Self.X>>(move(x));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+
+    enum X has copy, drop {
+        V { }
+    }
+
+    t(x: vector<Self.X>) {
+        label l0:
+        event.emit_authenticated<vector<Self.X>>(move(x));
+        return;
+    }
+}
+
+//# publish --dependencies test
+module 0x0.t {
+    import test.m;
+    import 0x2.event;
+
+    t(x: m.X) {
+        label l0:
+        event.emit_authenticated<m.X>(move(x));
+        return;
+    }
+}
+
+//# publish --dependencies test
+module 0x0.t {
+    import test.m;
+    import 0x2.event;
+
+    t(x: m.Y) {
+        label l0:
+        event.emit_authenticated<m.Y>(move(x));
+        return;
+    }
+}

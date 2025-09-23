@@ -115,11 +115,12 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
         }
     }
 
-    // We don't use the settlement information in the naive scheduler.
+    // We don't use the balance changes information in the naive scheduler.
     // Instead, the withdraw scheduling always read the balance state fro storage.
-    async fn settle_balances(&self, _settlement: BalanceSettlement) {
+    async fn settle_balances(&self, settlement: BalanceSettlement) {
         let next_version = self.last_settled_version_receiver.borrow().next();
         debug!("Settling balances for version {:?}", next_version);
+        assert_eq!(next_version, settlement.next_accumulator_version);
         let _ = self.last_settled_version_sender.send(next_version);
     }
 }

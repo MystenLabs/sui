@@ -1,8 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Write, str::FromStr};
-
 use crate::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
@@ -18,6 +16,7 @@ use crate::{
     language_storage::StructTag,
     u256::U256,
 };
+use std::{fmt::Write, str::FromStr};
 
 #[derive(Default)]
 pub(crate) struct CountingTraversal(usize);
@@ -544,41 +543,13 @@ fn nested_datatype_visit() {
     let from_struct =
         MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
 
-    let expected_output = r#"
-[0] struct 0x0::foo::Bar {
-    inner: struct 0x0::baz::Qux {
-        f: u64,
-        g: vector<u32>,
-    },
-    last: enum 0x0::foo::Baz {
-        e {
-            h: u64,
-        },
-    },
-}
-[1] struct 0x0::baz::Qux {
-    f: u64,
-    g: vector<u32>,
-}
-[2] 7: u64
-[2] vector<u32>
-[3] 1: u32
-[3] 2: u32
-[3] 3: u32
-[1] enum 0x0::foo::Baz {
-    e {
-        h: u64,
-    },
-}
-[2] 4: u64"#;
-
     // This is a little strange -- even though we are deserializing a struct, we still get a value.
     // This is because the return type comes from the visitor, not the deserializer.
     assert_eq!(value, from_value);
     assert_eq!(value, from_struct);
 
-    assert_eq!(value_visitor.output, expected_output);
-    assert_eq!(struct_visitor.output, expected_output);
+    assert_eq!(value_visitor.output, struct_visitor.output);
+    insta::assert_snapshot!(value_visitor.output);
 }
 
 #[test]
@@ -1022,36 +993,8 @@ fn byte_offset_test() {
     let mut struct_visitor = ByteOffsetVisitor::default();
     MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
 
-    let expected_output = r#"
-[  0 ..   0] struct 0x0::foo::Bar {
-    inner: struct 0x0::baz::Qux {
-        f: u64,
-        g: vector<u32>,
-    },
-    last: enum 0x0::foo::Baz {
-        e {
-            h: u64,
-        },
-    },
-}
-[  0 ..   0] struct 0x0::baz::Qux {
-    f: u64,
-    g: vector<u32>,
-}
-[  0 ..   8] 7: u64
-[  8 ..   9] vector<u32>
-[  9 ..  13] 1: u32
-[ 13 ..  17] 2: u32
-[ 17 ..  21] 3: u32
-[ 21 ..  22] enum 0x0::foo::Baz {
-    e {
-        h: u64,
-    },
-}
-[ 22 ..  30] 4: u64"#;
-
-    assert_eq!(value_visitor.0, expected_output);
-    assert_eq!(struct_visitor.0, expected_output);
+    assert_eq!(value_visitor.0, struct_visitor.0);
+    insta::assert_snapshot!(value_visitor.0);
 }
 
 /// Create a struct value for test purposes.

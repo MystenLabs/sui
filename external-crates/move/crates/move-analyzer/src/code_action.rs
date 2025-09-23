@@ -133,7 +133,6 @@ fn access_chain_autofix_actions<F: MoveFlavor>(
         pkg_dependencies.clone(),
         ide_files_root,
         &pkg_path,
-        Some(vec![]),
         LintLevel::None,
     ) else {
         return code_actions;

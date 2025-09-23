@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{future, TryFutureExt};
 use mysten_metrics::spawn_monitored_task;
-use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::{
     register_gauge_with_registry, register_histogram_vec_with_registry,
     register_histogram_with_registry, register_int_counter_vec_with_registry,
@@ -26,8 +25,8 @@ use std::{
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
+    validator::server::SUI_TLS_SERVER_NAME,
 };
-use sui_types::effects::TransactionEvents;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
@@ -59,6 +58,7 @@ use sui_types::{
 use sui_types::{
     effects::TransactionEffectsAPI, executable_transaction::VerifiedExecutableTransaction,
 };
+use sui_types::{effects::TransactionEvents, messages_grpc::SubmitTxType};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -107,7 +107,7 @@ mod wait_for_effects_tests;
 mod submit_transaction_tests;
 
 pub struct AuthorityServerHandle {
-    server_handle: mysten_network::server::Server,
+    server_handle: sui_network::validator::server::Server,
 }
 
 impl AuthorityServerHandle {
@@ -178,16 +178,19 @@ impl AuthorityServer {
             self.state.config.network_key_pair().copy().private(),
             SUI_TLS_SERVER_NAME.to_string(),
         );
-        let server = mysten_network::config::Config::new()
-            .server_builder()
-            .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
-                self.state,
-                self.consensus_adapter,
-                self.metrics,
-            )))
-            .bind(&address, Some(tls_config))
-            .await
-            .unwrap();
+        let config = mysten_network::config::Config::new();
+        let server = sui_network::validator::server::ServerBuilder::from_config(
+            &config,
+            mysten_network::metrics::DefaultMetricsCallbackProvider::default(),
+        )
+        .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
+            self.state,
+            self.consensus_adapter,
+            self.metrics,
+        )))
+        .bind(&address, Some(tls_config))
+        .await
+        .unwrap();
         let local_addr = server.local_addr().to_owned();
         info!("Listening to traffic on {local_addr}");
         let handle = AuthorityServerHandle {
@@ -591,23 +594,37 @@ impl ValidatorService {
         }
 
         let request = request.into_inner();
+        let submit_type = SubmitTxType::try_from(request.submit_type).map_err(|e| {
+            SuiError::GrpcMessageDeserializeError {
+                type_info: "RawSubmitTxRequest.submit_type".to_string(),
+                error: e.to_string(),
+            }
+        })?;
 
-        // Treat an empty transactions as a ping request.
-        let is_ping_request = request.transactions.is_empty();
-
+        let is_ping_request = submit_type == SubmitTxType::Ping;
         if is_ping_request {
             fp_ensure!(
-                !request.soft_bundle,
-                SuiError::UserInputError {
-                    error: UserInputError::InvalidBatchTransaction {
-                        error: "Soft bundle transactions cannot be empty".to_string()
-                    },
-                }
+                request.transactions.is_empty(),
+                SuiError::InvalidRequest(format!(
+                    "Ping request cannot contain {} transactions",
+                    request.transactions.len()
+                ))
+                .into()
+            );
+        } else {
+            // Ensure default and soft bundle requests contain at least one transaction.
+            fp_ensure!(
+                !request.transactions.is_empty(),
+                SuiError::InvalidRequest(
+                    "At least one transaction needs to be submitted".to_string(),
+                )
                 .into()
             );
         }
 
-        let max_num_transactions = if request.soft_bundle {
+        let is_soft_bundle_request = submit_type == SubmitTxType::SoftBundle;
+
+        let max_num_transactions = if is_soft_bundle_request {
             // Soft bundle cannot contain too many transactions.
             // Otherwise it is hard to include all of them in a single block.
             epoch_store.protocol_config().max_soft_bundle_size()
@@ -619,12 +636,11 @@ impl ValidatorService {
         };
         fp_ensure!(
             request.transactions.len() <= max_num_transactions as usize,
-            SuiError::UserInputError {
-                error: UserInputError::TooManyTransactionsInBatch {
-                    size: request.transactions.len(),
-                    limit: max_num_transactions,
-                },
-            }
+            SuiError::InvalidRequest(format!(
+                "Too many transactions in request: {} vs {}",
+                request.transactions.len(),
+                max_num_transactions
+            ))
             .into()
         );
 
@@ -641,7 +657,7 @@ impl ValidatorService {
             "ping"
         } else if request.transactions.len() == 1 {
             "single_transaction"
-        } else if request.soft_bundle {
+        } else if is_soft_bundle_request {
             "soft_bundle"
         } else {
             "batch"
@@ -678,7 +694,7 @@ impl ValidatorService {
                     .with_label_values(&[error.as_ref()])
                     .inc();
                 // Avoid breaking the soft bundle if one transaction is rejected.
-                if request.soft_bundle {
+                if is_soft_bundle_request {
                     return Err(error.into());
                 }
                 results[idx] = Some(SubmitTxResult::Rejected { error });
@@ -714,7 +730,7 @@ impl ValidatorService {
                 let effects_digest = effects.digest();
                 if let Ok(executed_data) = self.complete_executed_data(effects, None).await {
                     // Avoid breaking the soft bundle if one transaction has already been executed.
-                    if request.soft_bundle {
+                    if is_soft_bundle_request {
                         return Err(SuiError::UserInputError {
                             error: UserInputError::AlreadyExecutedInSoftBundleError {
                                 digest: *tx_digest,
@@ -756,7 +772,7 @@ impl ValidatorService {
                         if let Ok(executed_data) = self.complete_executed_data(effects, None).await
                         {
                             // Avoid breaking the soft bundle if one transaction has already been executed.
-                            if request.soft_bundle {
+                            if is_soft_bundle_request {
                                 return Err(SuiError::UserInputError {
                                     error: UserInputError::AlreadyExecutedInSoftBundleError {
                                         digest: *tx_digest,
@@ -774,7 +790,7 @@ impl ValidatorService {
                         }
                     }
                     // Avoid breaking the soft bundle if one transaction is rejected.
-                    if request.soft_bundle {
+                    if is_soft_bundle_request {
                         return Err(e.into());
                     }
                     // Otherwise, record the error for the transaction.
@@ -801,7 +817,7 @@ impl ValidatorService {
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
         // We do this to account for serialization overheads and to ensure that the soft bundle is not too large
         // when is attempted to be posted via consensus.
-        let max_transaction_bytes = if request.soft_bundle {
+        let max_transaction_bytes = if is_soft_bundle_request {
             epoch_store
                 .protocol_config()
                 .consensus_max_transactions_in_block_bytes()
@@ -836,7 +852,7 @@ impl ValidatorService {
             .with_label_values(&[req_type])
             .start_timer();
 
-        let consensus_positions = if request.soft_bundle || is_ping_request {
+        let consensus_positions = if is_soft_bundle_request || is_ping_request {
             // We only allow the `consensus_transactions` to be empty for ping requests. This is how it should and is be treated from the downstream components.
             // For any other case, having an empty `consensus_transactions` vector is an invalid state and we should have never reached at this point.
             assert!(
@@ -1412,12 +1428,9 @@ impl ValidatorService {
         }
 
         let Some(tx_digest) = request.transaction_digest else {
-            return Err(SuiError::UserInputError {
-                error: UserInputError::InvalidWaitForEffectsRequest {
-                    error: "Transaction digest is required for wait for effects requests"
-                        .to_string(),
-                },
-            });
+            return Err(SuiError::InvalidRequest(
+                "Transaction digest is required for wait for effects requests".to_string(),
+            ));
         };
         let tx_digests = [tx_digest];
 
@@ -1483,20 +1496,16 @@ impl ValidatorService {
         };
 
         let Some(consensus_position) = request.consensus_position else {
-            return Err(SuiError::UserInputError {
-                error: UserInputError::InvalidWaitForEffectsRequest {
-                    error: "Consensus position is required for ping requests".to_string(),
-                },
-            });
+            return Err(SuiError::InvalidRequest(
+                "Consensus position is required for Ping requests".to_string(),
+            ));
         };
 
         // We assume that the caller has already checked for the existence of the `ping` field, but handling it gracefully here.
         let Some(ping) = request.ping else {
-            return Err(SuiError::UserInputError {
-                error: UserInputError::InvalidWaitForEffectsRequest {
-                    error: "Ping type is required for ping requests".to_string(),
-                },
-            });
+            return Err(SuiError::InvalidRequest(
+                "Ping type is required for ping requests".to_string(),
+            ));
         };
 
         let _metrics_guard = self

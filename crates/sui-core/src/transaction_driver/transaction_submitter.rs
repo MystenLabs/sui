@@ -9,9 +9,8 @@ use std::{
 use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
     base_types::AuthorityName,
-    digests::TransactionDigest,
-    error::SuiError,
-    messages_grpc::{SubmitTxRequest, SubmitTxResult},
+    error::ErrorCategory,
+    messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -28,7 +27,7 @@ use crate::{
         request_retrier::RequestRetrier,
         SubmitTransactionOptions, TransactionDriverMetrics,
     },
-    validator_client_monitor::{OperationFeedback, OperationType, TxType, ValidatorClientMonitor},
+    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
 
 #[cfg(test)]
@@ -48,12 +47,11 @@ impl TransactionSubmitter {
         Self { metrics }
     }
 
-    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"))]
     pub(crate) async fn submit_transaction<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
-        tx_digest: &TransactionDigest,
         tx_type: TxType,
         amplification_factor: u64,
         request: SubmitTxRequest,
@@ -68,7 +66,12 @@ impl TransactionSubmitter {
             .submit_amplification_factor
             .observe(amplification_factor as f64);
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, tx_type);
+        let mut retrier = RequestRetrier::new(
+            authority_aggregator,
+            client_monitor,
+            tx_type,
+            options.allowed_validators.clone(),
+        );
         let mut retries = 0;
         let mut request_rpcs = FuturesUnordered::new();
 
@@ -177,7 +180,7 @@ impl TransactionSubmitter {
     }
 
     #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(validator_display_name = ?display_name))]
-    async fn submit_transaction_once<A>(
+    pub(crate) async fn submit_transaction_once<A>(
         &self,
         client: Arc<SafeClient<A>>,
         request: &SubmitTxRequest,
@@ -205,21 +208,37 @@ impl TransactionSubmitter {
             });
             TransactionRequestError::TimedOutSubmittingTransaction
         })?
-        // TODO(fastpath): Note that we do not record this error in the client monitor
-        // because it may be due to invalid transactions.
-        // To fully utilize this error, we need to either pre-check the transaction
-        // on the fullnode, or be able to categorize the error.
-        .map_err(TransactionRequestError::RejectedAtValidator)?;
-
-        let result = resp.results.into_iter().next().ok_or_else(|| {
-            TransactionRequestError::Aborted(SuiError::GenericAuthorityError {
-                error: "No result in SubmitTxResponse".to_string(),
-            })
+        .map_err(|error| {
+            if is_validator_error(error.categorize()) {
+                client_monitor.record_interaction_result(OperationFeedback {
+                    authority_name: validator,
+                    display_name: display_name.clone(),
+                    operation: OperationType::Submit,
+                    result: Err(()),
+                });
+            }
+            TransactionRequestError::RejectedAtValidator(error)
         })?;
 
+        if resp.results.len() != 1 {
+            return Err(TransactionRequestError::ValidatorInternal(format!(
+                "Expected exactly 1 result, got {}",
+                resp.results.len()
+            )));
+        }
+        let result = resp.results.into_iter().next().unwrap();
+
         // Since only one transaction is submitted, it is ok to return error when the submission is rejected.
-        if let SubmitTxResult::Rejected { error } = result {
-            return Err(TransactionRequestError::RejectedAtValidator(error));
+        if let SubmitTxResult::Rejected { error } = &result {
+            if is_validator_error(error.categorize()) {
+                client_monitor.record_interaction_result(OperationFeedback {
+                    authority_name: validator,
+                    display_name,
+                    operation: OperationType::Submit,
+                    result: Err(()),
+                });
+            }
+            return Err(TransactionRequestError::RejectedAtValidator(error.clone()));
         }
 
         let latency = submit_start.elapsed();
@@ -231,4 +250,15 @@ impl TransactionSubmitter {
         });
         Ok(result)
     }
+}
+
+// Whether the failure is caused by the peer validator, as opposed to the user or this node.
+fn is_validator_error(category: ErrorCategory) -> bool {
+    matches!(
+        category,
+        ErrorCategory::Aborted
+            | ErrorCategory::Internal
+            | ErrorCategory::ValidatorOverloaded
+            | ErrorCategory::Unavailable
+    )
 }

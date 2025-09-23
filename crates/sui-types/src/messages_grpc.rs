@@ -14,6 +14,11 @@ use bytes::Bytes;
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
+use mysten_metrics::TX_TYPE_SHARED_OBJ_TX;
+use mysten_metrics::TX_TYPE_SINGLE_WRITER_TX;
+
+use strum::EnumIter;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
     /// Request the latest object state.
@@ -281,25 +286,84 @@ pub struct RawExecutedData {
 
 #[derive(Clone, Debug)]
 pub struct SubmitTxRequest {
-    pub transaction: Transaction,
+    pub transaction: Option<Transaction>,
+    pub ping: Option<PingType>,
 }
 
 impl SubmitTxRequest {
     pub fn new_transaction(transaction: Transaction) -> Self {
-        Self { transaction }
+        Self {
+            transaction: Some(transaction),
+            ping: None,
+        }
+    }
+
+    pub fn new_ping(ping: PingType) -> Self {
+        Self {
+            transaction: None,
+            ping: Some(ping),
+        }
+    }
+
+    pub fn tx_type(&self) -> TxType {
+        if let Some(ping) = self.ping {
+            return if ping == PingType::FastPath {
+                TxType::SingleWriter
+            } else {
+                TxType::SharedObject
+            };
+        }
+        let transaction = self.transaction.as_ref().unwrap();
+        if transaction.is_consensus_tx() {
+            TxType::SharedObject
+        } else {
+            TxType::SingleWriter
+        }
+    }
+
+    /// Returns the digest of the transaction if it is a transaction request.
+    /// Returns None if it is a ping request.
+    pub fn tx_digest(&self) -> Option<TransactionDigest> {
+        self.transaction.as_ref().map(|t| *t.digest())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
+pub enum TxType {
+    SingleWriter,
+    SharedObject,
+}
+
+impl TxType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TxType::SingleWriter => TX_TYPE_SINGLE_WRITER_TX,
+            TxType::SharedObject => TX_TYPE_SHARED_OBJ_TX,
+        }
     }
 }
 
 impl SubmitTxRequest {
     pub fn into_raw(&self) -> Result<RawSubmitTxRequest, SuiError> {
-        let transactions = vec![bcs::to_bytes(&self.transaction)
-            .map_err(|e| SuiError::TransactionSerializationError {
-                error: e.to_string(),
-            })?
-            .into()];
+        let transactions = if let Some(transaction) = &self.transaction {
+            vec![bcs::to_bytes(&transaction)
+                .map_err(|e| SuiError::TransactionSerializationError {
+                    error: e.to_string(),
+                })?
+                .into()]
+        } else {
+            vec![]
+        };
+
+        let submit_type = if self.ping.is_some() {
+            SubmitTxType::Ping
+        } else {
+            SubmitTxType::Default
+        };
+
         Ok(RawSubmitTxRequest {
             transactions,
-            ..Default::default()
+            submit_type: submit_type.into(),
         })
     }
 }
@@ -354,12 +418,23 @@ pub struct RawSubmitTxRequest {
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub transactions: Vec<Bytes>,
 
+    /// The type of submission.
+    #[prost(enumeration = "SubmitTxType", tag = "2")]
+    pub submit_type: i32,
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, prost::Enumeration)]
+#[repr(i32)]
+pub enum SubmitTxType {
+    /// Default submission, submitting one or more transactions.
+    /// When there are multiple transactions, allow the transactions to be included separately
+    /// and out of order in blocks (batch).
+    Default = 0,
+    /// Ping request to measure latency, no transactions.
+    Ping = 1,
     /// When submitting multiple transactions, attempt to include them in
-    /// the same block with the same order (soft bundle), if true.
-    /// Otherwise, allow the transactions to be included separately and
-    /// out of order in blocks (batch).
-    #[prost(bool, tag = "2")]
-    pub soft_bundle: bool,
+    /// the same block with the same order (soft bundle).
+    SoftBundle = 2,
 }
 
 #[derive(Clone, prost::Message)]
@@ -392,18 +467,13 @@ pub enum RawValidatorSubmitStatus {
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, prost::Enumeration)]
 #[repr(i32)]
-pub enum RawPingType {
-    FastPath = 0,
-    Consensus = 1,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PingType {
-    // Testing the time that it takes for the block of the ping transaction to appear as certified via the FastPath.
-    FastPath,
-    // Testing the time that it takes for the block of the ping transaction to appear as certified via the Consensus.
-    // This is useful when want to test the end to end latency from when a block is proposed up to when it comes out of consensus as certified.
-    Consensus,
+    /// Measures the end to end latency from when a transaction is included by a proposed block,
+    /// to when the block is committed by consensus.
+    Consensus = 0,
+    /// Measures the end to end latency from when a transaction is included by a proposed block,
+    /// to when the block is certified.
+    FastPath = 1,
 }
 
 impl PingType {
@@ -492,7 +562,7 @@ pub struct RawWaitForEffectsRequest {
     pub include_details: bool,
 
     /// Set when this is a ping request, to differentiate between fastpath and consensus pings.
-    #[prost(enumeration = "RawPingType", optional, tag = "4")]
+    #[prost(enumeration = "PingType", optional, tag = "4")]
     pub ping_type: Option<i32>,
 }
 
@@ -583,24 +653,6 @@ pub struct RawValidatorHealthResponse {
 }
 
 // =========== Parse helpers ===========
-
-impl From<RawPingType> for PingType {
-    fn from(value: RawPingType) -> Self {
-        match value {
-            RawPingType::FastPath => PingType::FastPath,
-            RawPingType::Consensus => PingType::Consensus,
-        }
-    }
-}
-
-impl From<PingType> for RawPingType {
-    fn from(value: PingType) -> Self {
-        match value {
-            PingType::FastPath => RawPingType::FastPath,
-            PingType::Consensus => RawPingType::Consensus,
-        }
-    }
-}
 
 impl TryFrom<ExecutedData> for RawExecutedData {
     type Error = crate::error::SuiError;
@@ -885,11 +937,9 @@ impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
         let ping = value
             .ping_type
             .map(|p| {
-                RawPingType::try_from(p).map(PingType::from).map_err(|e| {
-                    SuiError::GrpcMessageDeserializeError {
-                        type_info: "RawWaitForEffectsRequest.ping".to_string(),
-                        error: e.to_string(),
-                    }
+                PingType::try_from(p).map_err(|e| SuiError::GrpcMessageDeserializeError {
+                    type_info: "RawWaitForEffectsRequest.ping".to_string(),
+                    error: e.to_string(),
                 })
             })
             .transpose()?;
@@ -921,10 +971,7 @@ impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
             Some(cp) => Some(cp.into_raw()?),
             None => None,
         };
-        let ping_type = value.ping.map(|p| {
-            let raw: RawPingType = p.into();
-            raw.into()
-        });
+        let ping_type = value.ping.map(|p| p.into());
         Ok(Self {
             consensus_position,
             transaction_digest,
@@ -1028,5 +1075,52 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
             last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
             last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        messages_grpc::{PingType, SubmitTxRequest, SubmitTxType},
+        transaction::{Transaction, TransactionData},
+    };
+
+    #[tokio::test]
+    async fn test_submit_tx_request_into_raw() {
+        println!("Case 1. SubmitTxRequest::new_ping should be converted to RawSubmitTxRequest with submit_type set to Ping.");
+        {
+            let request = SubmitTxRequest::new_ping(PingType::Consensus);
+            let raw_request = request.into_raw().unwrap();
+
+            let submit_type = SubmitTxType::try_from(raw_request.submit_type).unwrap();
+            assert_eq!(submit_type, SubmitTxType::Ping);
+        }
+
+        println!("Case 2. SubmitTxRequest::new_transaction should be converted to RawSubmitTxRequest with submit_type set to Default.");
+        {
+            // Create a dummy transaction for testing
+            let sender = crate::base_types::SuiAddress::random_for_testing_only();
+            let recipient = crate::base_types::SuiAddress::random_for_testing_only();
+            let gas_object_ref = crate::base_types::random_object_ref();
+
+            let tx_data = TransactionData::new_transfer_sui(
+                recipient,
+                sender,
+                None,
+                gas_object_ref,
+                1000,
+                1000,
+            );
+
+            let (_, keypair) = crate::crypto::get_account_key_pair();
+            let transaction = Transaction::from_data_and_signer(tx_data, vec![&keypair]);
+
+            let request = SubmitTxRequest::new_transaction(transaction);
+            let raw_request = request.into_raw().unwrap();
+
+            let submit_type = SubmitTxType::try_from(raw_request.submit_type).unwrap();
+            assert_eq!(submit_type, SubmitTxType::Default);
+            assert_eq!(raw_request.transactions.len(), 1);
+        }
     }
 }

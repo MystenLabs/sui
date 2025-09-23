@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 96;
+const MAX_PROTOCOL_VERSION: u64 = 97;
 
 // Record history of protocol version allocations here:
 //
@@ -264,6 +264,7 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
 //             Create Coin Registry object
 //             Enable checkpoint artifacts digest in devnet.
+// Version 97: Add authenticated event streams support via emit_authenticated function.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -743,6 +744,10 @@ struct FeatureFlags {
     // Enable accumulators
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
+
+    // Enable authenticated event streams
+    #[serde(skip_serializing_if = "is_false")]
+    enable_authenticated_event_streams: bool,
 
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
@@ -1299,6 +1304,7 @@ pub struct ProtocolConfig {
     event_emit_value_size_derivation_cost_per_byte: Option<u64>,
     event_emit_tag_size_derivation_cost_per_byte: Option<u64>,
     event_emit_output_cost_per_byte: Option<u64>,
+    event_emit_auth_stream_cost: Option<u64>,
 
     //  `object` module
     // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -1917,6 +1923,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_authenticated_event_streams(&self) -> bool {
+        self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
     pub fn enable_coin_registry(&self) -> bool {
         self.feature_flags.enable_coin_registry
     }
@@ -2153,23 +2163,6 @@ impl ProtocolConfig {
 
     pub fn allow_unbounded_system_objects(&self) -> bool {
         self.feature_flags.allow_unbounded_system_objects
-    }
-
-    pub fn get_aliased_addresses(&self) -> &Vec<AliasedAddress> {
-        &self.aliased_addresses
-    }
-
-    pub fn is_tx_allowed_via_aliasing(
-        &self,
-        sender: [u8; 32],
-        signer: [u8; 32],
-        tx_digest: &[u8; 32],
-    ) -> bool {
-        self.aliased_addresses.iter().any(|addr| {
-            addr.original == sender
-                && addr.aliased == signer
-                && addr.allowed_tx_digests.contains(tx_digest)
-        })
     }
 
     pub fn type_tags_in_object_runtime(&self) -> bool {
@@ -2520,6 +2513,7 @@ impl ProtocolConfig {
             event_emit_value_size_derivation_cost_per_byte: Some(2),
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
             event_emit_output_cost_per_byte: Some(10),
+            event_emit_auth_stream_cost: None,
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -4037,6 +4031,12 @@ impl ProtocolConfig {
                     cfg.feature_flags.use_mfp_txns_in_load_initial_object_debts = true;
                     cfg.feature_flags.cancel_for_failed_dkg_early = true;
                     cfg.feature_flags.enable_coin_registry = true;
+
+                    // Enable Mysticeti fastpath handlers on mainnet.
+                    cfg.feature_flags.mysticeti_fastpath = true;
+                }
+                97 => {
+                    cfg.event_emit_auth_stream_cost = Some(52);
                 }
                 // Use this template when making changes:
                 //
@@ -4251,22 +4251,14 @@ impl ProtocolConfig {
         self.feature_flags.record_time_estimate_processed = val;
     }
 
-    pub fn push_aliased_addresses_for_testing(
-        &mut self,
-        original: [u8; 32],
-        aliased: [u8; 32],
-        allowed_tx_digests: Vec<[u8; 32]>,
-    ) {
-        self.aliased_addresses.push(AliasedAddress {
-            original,
-            aliased,
-            allowed_tx_digests,
-        });
-    }
-
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
+    }
+
+    pub fn enable_authenticated_event_streams_for_testing(&mut self) {
+        self.enable_accumulators_for_testing();
+        self.feature_flags.enable_authenticated_event_streams = true;
     }
 }
 

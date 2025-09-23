@@ -32,7 +32,6 @@ supply information, regulatory status, and metadata capabilities.
 -  [Function `burn`](#sui_coin_registry_burn)
 -  [Function `burn_balance`](#sui_coin_registry_burn_balance)
 -  [Function `set_name`](#sui_coin_registry_set_name)
--  [Function `set_symbol`](#sui_coin_registry_set_symbol)
 -  [Function `set_description`](#sui_coin_registry_set_description)
 -  [Function `set_icon_url`](#sui_coin_registry_set_icon_url)
 -  [Function `set_treasury_cap_id`](#sui_coin_registry_set_treasury_cap_id)
@@ -68,9 +67,12 @@ supply information, regulatory status, and metadata capabilities.
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
+<b>use</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata">sui::accumulator_metadata</a>;
+<b>use</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement">sui::accumulator_settlement</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
+<b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
 <b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
 <b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
@@ -79,6 +81,7 @@ supply information, regulatory status, and metadata capabilities.
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
 <b>use</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator">sui::funds_accumulator</a>;
+<b>use</b> <a href="../sui/hash.md#sui_hash">sui::hash</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
@@ -1154,32 +1157,6 @@ Update the name of the <code><a href="../sui/coin_registry.md#sui_coin_registry_
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_set_name">set_name</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;, _: &<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: String) {
     currency.<a href="../sui/coin_registry.md#sui_coin_registry_name">name</a> = <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>;
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_coin_registry_set_symbol"></a>
-
-## Function `set_symbol`
-
-Update the symbol of the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_set_symbol">set_symbol</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, _: &<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">sui::coin_registry::MetadataCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: <a href="../std/string.md#std_string_String">std::string::String</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_set_symbol">set_symbol</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;, _: &<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: String) {
-    <b>assert</b>!(<a href="../sui/coin_registry.md#sui_coin_registry_is_ascii_printable">is_ascii_printable</a>!(&<a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>), <a href="../sui/coin_registry.md#sui_coin_registry_EInvalidSymbol">EInvalidSymbol</a>);
-    currency.<a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a> = <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>;
 }
 </code></pre>
 

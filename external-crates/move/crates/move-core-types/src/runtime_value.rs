@@ -3,7 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    VARIANT_TAG_MAX_VALUE, account_address::AccountAddress, annotated_value as A, fmt_list, u256,
+    VARIANT_TAG_MAX_VALUE,
+    account_address::AccountAddress,
+    annotated_value as A, fmt_list,
+    runtime_visitor::{Error as VError, ValueDriver, Visitor, visit_struct, visit_value},
+    u256,
 };
 use anyhow::{Result as AResult, anyhow};
 use move_proc_macros::test_variant_order;
@@ -12,7 +16,10 @@ use serde::{
     de::Error as DeError,
     ser::{SerializeSeq, SerializeTuple},
 };
-use std::fmt::{self, Debug};
+use std::{
+    fmt::{self, Debug},
+    io::Cursor,
+};
 
 /// In the `WithTypes` configuration, a Move struct gets serialized into a Serde struct with this name
 pub const MOVE_STRUCT_NAME: &str = "struct";
@@ -106,6 +113,43 @@ impl MoveValue {
         Ok(bcs::from_bytes_seed(ty, blob)?)
     }
 
+    /// Deserialize `blob` as a Move value with the given `ty`-pe layout, and visit its
+    /// sub-structure with the given `visitor`. The visitor dictates the return value that is built
+    /// up during deserialization.
+    ///
+    /// # Nested deserialization
+    ///
+    /// Vectors and structs are nested structures that can be met during deserialization. Visitors
+    /// are passed a driver (`VecDriver` or `StructDriver` correspondingly) which controls how
+    /// nested elements or fields are visited including whether a given nested element/field is
+    /// explored, which visitor to use (the visitor can pass `self` to recursively explore them) and
+    /// whether a given element is visited or skipped.
+    ///
+    /// The visitor may leave elements unvisited at the end of the vector or struct, which
+    /// implicitly skips them.
+    ///
+    /// # Errors
+    ///
+    /// Deserialization can fail because of an issue in the serialized format (data doesn't match
+    /// layout, unexpected bytes or trailing bytes), or a custom error expressed by the visitor.
+    pub fn visit_deserialize<'b, 'l, V: Visitor<'b, 'l>>(
+        blob: &'b [u8],
+        ty: &'l MoveTypeLayout,
+        visitor: &mut V,
+    ) -> AResult<V::Value>
+    where
+        V::Error: std::error::Error + Send + Sync + 'static,
+    {
+        let mut bytes = Cursor::new(blob);
+        let res = visit_value(&mut bytes, ty, visitor)?;
+        if bytes.position() as usize == blob.len() {
+            Ok(res)
+        } else {
+            let remaining = blob.len() - bytes.position() as usize;
+            Err(VError::TrailingBytes(remaining).into())
+        }
+    }
+
     pub fn simple_serialize(&self) -> Option<Vec<u8>> {
         bcs::to_bytes(self).ok()
     }
@@ -183,6 +227,28 @@ impl MoveStruct {
 
     pub fn simple_deserialize(blob: &[u8], ty: &MoveStructLayout) -> AResult<Self> {
         Ok(bcs::from_bytes_seed(ty, blob)?)
+    }
+
+    /// Like `MoveValue::visit_deserialize` (see for details), but specialized to visiting a struct
+    /// (the `blob` is known to be a serialized Move struct, and the layout is a
+    /// `MoveStructLayout`).
+    pub fn visit_deserialize<'b, 'l, V: Visitor<'b, 'l>>(
+        blob: &'b [u8],
+        ty: &'l MoveStructLayout,
+        visitor: &mut V,
+    ) -> AResult<V::Value>
+    where
+        V::Error: std::error::Error + Send + Sync + 'static,
+    {
+        let mut bytes = Cursor::new(blob);
+        let driver = ValueDriver::new(&mut bytes, None);
+        let res = visit_struct(driver, ty, visitor)?;
+        if bytes.position() as usize == blob.len() {
+            Ok(res)
+        } else {
+            let remaining = blob.len() - bytes.position() as usize;
+            Err(VError::TrailingBytes(remaining).into())
+        }
     }
 
     pub fn decorate(self, layout: &A::MoveStructLayout) -> A::MoveStruct {

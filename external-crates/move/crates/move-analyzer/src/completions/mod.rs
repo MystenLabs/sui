@@ -183,7 +183,6 @@ fn compute_completions_new_symbols<F: MoveFlavor>(
         pkg_dependencies,
         ide_files_root,
         &pkg_path,
-        Some(vec![path.to_path_buf()]),
         LintLevel::None,
         cursor_info,
     )

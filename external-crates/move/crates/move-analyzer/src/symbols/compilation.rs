@@ -128,6 +128,8 @@ pub struct CachedPkgInfo {
     pub program: Arc<CompiledProgram>,
     /// Mapping from file hashes to file paths
     pub file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
+    /// A mapping from file paths to file hashes for user code
+    pub user_file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
     /// Edition of the compiler used to build this package
     pub edition: Option<Edition>,
     /// Compiler info
@@ -149,6 +151,8 @@ pub struct AnalyzedPkgInfo {
     pub program: Option<Arc<CompiledProgram>>,
     /// Mapping from file hashes to file paths
     pub file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
+    /// A mapping from file paths to file hashes for user code
+    pub user_file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
     /// Hashes of dependencies
     pub dep_hashes: Vec<FileHash>,
 }
@@ -204,6 +208,7 @@ impl AnalyzedPkgInfo {
         symbols_data: Option<Arc<SymbolsComputationData>>,
         program: Option<Arc<CompiledProgram>>,
         file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
+        user_file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
         dep_hashes: Vec<FileHash>,
     ) -> Self {
         Self {
@@ -212,6 +217,7 @@ impl AnalyzedPkgInfo {
             symbols_data,
             program,
             file_paths,
+            user_file_hashes,
             dep_hashes,
         }
     }
@@ -228,6 +234,7 @@ impl AnalyzedPkgInfo {
             symbols_data: None,
             program: None,
             file_paths: Arc::new(BTreeMap::new()),
+            user_file_hashes: Arc::new(BTreeMap::new()),
             dep_hashes: vec![],
         }
     }
@@ -296,7 +303,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
-    modified_files: Option<Vec<PathBuf>>,
     lint: LintLevel,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let cached_deps_exist = has_precompiled_deps(pkg_path, packages_info.clone());
@@ -406,9 +412,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
 
         let caching_result = match cached_pkg_info_opt {
             Some(cached_pkg_info) => {
-                // TODO: do we need to do anything here?
-                // dependencies.remove_deps(cached_pkg_info.dep_names.clone());
-
+                dependencies.remove_deps(cached_pkg_info.dep_names.clone());
                 let deps = cached_pkg_info.deps.clone();
                 let analyzed_pkg_info = AnalyzedPkgInfo::new(
                     deps,
@@ -416,6 +420,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                     Some(cached_pkg_info.deps_symbols_data.clone()),
                     Some(cached_pkg_info.program.clone()),
                     cached_pkg_info.file_paths.clone(),
+                    cached_pkg_info.user_file_hashes.clone(),
                     cached_pkg_info.dep_hashes.clone(),
                 );
 
@@ -426,14 +431,12 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 )
             }
             None => {
-                let sorted_deps = root_pkg.sorted_deps();
-                let sorted_deps: Vec<PackageName> = sorted_deps.into_iter().cloned().collect();
                 if let Some((program_deps, dep_names)) = compute_pre_compiled_dep_data(
                     &mut cached_packages.compiled_dep_pkgs,
                     mapped_files_data.dep_pkg_paths,
                     src_deps,
-                    root_pkg_name,
-                    &sorted_deps,
+                    resolution_graph.root_package(),
+                    &resolution_graph.topological_order(),
                     compiler_flags,
                     overlay_fs_root.clone(),
                 ) {
@@ -454,10 +457,28 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     let (full_compilation, files_to_compile) = if let Some(cached_info) = &caching_result.pkg_deps {
         if cached_info.program.is_some() {
             // we already have cached user program, consider incremental compilation
-            match modified_files {
-                Some(files) => (false, BTreeSet::from_iter(files)),
-                None => (true, BTreeSet::new()),
+            let cached_user_file_hashes = cached_info.user_file_hashes.clone();
+
+            // Compute modified files: either new files or files with different hashes
+            let mut modified_files = BTreeSet::new();
+
+            // Check all files directly without materializing intermediate collection
+            for (fhash, fpath) in mapped_files_data.files.file_name_mapping().iter() {
+                match cached_user_file_hashes.get(fpath) {
+                    // File exists in cache but has different hash (modified)
+                    Some(cached_hash) if cached_hash != fhash => {
+                        modified_files.insert(fpath.clone());
+                    }
+                    // File doesn't exist in cache (new file)
+                    None => {
+                        modified_files.insert(fpath.clone());
+                    }
+                    // File exists and has same hash (unchanged) - do nothing
+                    Some(_) => {}
+                }
             }
+
+            (false, modified_files)
         } else {
             (true, BTreeSet::new())
         }
