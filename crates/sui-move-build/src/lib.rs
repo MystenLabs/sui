@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// extern crate move_ir_types;
-
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
@@ -86,8 +84,6 @@ pub struct CompiledPackage {
     pub published_at: Option<ObjectID>,
     /// The dependency IDs of this package
     pub dependency_ids: PackageDependencies,
-    // Transitive dependency graph of a Move package
-    // pub dependency_graph: Vec<PackageInfo<SuiFlavor>>,
 }
 
 /// Wrapper around the core Move `BuildConfig` with some Sui-specific info
@@ -613,93 +609,7 @@ impl CompiledPackage {
     pub fn get_published_dependencies_ids(&self) -> Vec<ObjectID> {
         self.dependency_ids.published.values().cloned().collect()
     }
-
-    //     /// Find the map of packages that are immediate dependencies of the root modules, joined with
-    //     /// the set of bytecode dependencies.
-    //     pub fn find_immediate_deps_pkgs_to_keep(
-    //         &self,
-    //         with_unpublished_deps: bool,
-    //     ) -> Result<BTreeMap<Symbol, ObjectID>, anyhow::Error> {
-    //         // Start from the root modules (or all modules if with_unpublished_deps is true as we
-    //         // need to include modules with 0x0 address)
-    //         let root_modules: Vec<_> = if with_unpublished_deps {
-    //             self.package
-    //                 .all_compiled_units_with_source()
-    //                 .filter(|m| m.unit.address.into_inner() == AccountAddress::ZERO)
-    //                 .map(|x| x.unit.clone())
-    //                 .collect()
-    //         } else {
-    //             self.package
-    //                 .root_modules()
-    //                 .map(|x| x.unit.clone())
-    //                 .collect()
-    //         };
-    //
-    //         // Find the immediate dependencies for each root module and store the package name
-    //         // in the pkgs_to_keep set. This basically prunes the packages that are not used
-    //         // based on the modules information.
-    //         let mut pkgs_to_keep: BTreeSet<Symbol> = BTreeSet::new();
-    //         let module_to_pkg_name: BTreeMap<_, _> = self
-    //             .package
-    //             .all_modules()
-    //             .map(|m| (m.unit.module.self_id(), m.unit.package_name))
-    //             .collect();
-    //
-    //         for module in &root_modules {
-    //             let immediate_deps = module.module.immediate_dependencies();
-    //             for dep in immediate_deps {
-    //                 if let Some(pkg_name) = module_to_pkg_name.get(&dep) {
-    //                     let Some(pkg_name) = pkg_name else {
-    //                         bail!("Expected a package name but it's None")
-    //                     };
-    //                     pkgs_to_keep.insert(*pkg_name);
-    //                 }
-    //             }
-    //         }
-    //
-    //         // If a package depends on another published package that has only bytecode without source
-    //         // code available, we need to include also that package as dep.
-    //         pkgs_to_keep.extend(self.bytecode_deps.iter().map(|(name, _)| *name));
-    //
-    //         // Finally, filter out packages that are published and exist in the manifest at the
-    //         // compilation time but are not referenced in the source code.
-    //         Ok(self
-    //             .dependency_ids
-    //             .clone()
-    //             .published
-    //             .into_iter()
-    //             .filter(|(pkg_name, _)| pkgs_to_keep.contains(pkg_name))
-    //             .collect())
-    //     }
 }
-
-// /// Create a set of [Dependencies] from a [SystemPackagesVersion]; the dependencies are override git
-// /// dependencies to the specific revision given by the [SystemPackagesVersion]
-// ///
-// /// Skips "Deepbook" dependency.
-// pub fn implicit_deps(packages: &SystemPackagesVersion) -> Dependencies {
-//     let deps_to_skip = ["DeepBook".to_string()];
-//     packages
-//         .packages
-//         .iter()
-//         .filter(|package| !deps_to_skip.contains(&package.package_name))
-//         .map(|package| {
-//             (
-//                 package.package_name.clone().into(),
-//                 Dependency::Internal(InternalDependency {
-//                     kind: DependencyKind::Git(GitInfo {
-//                         git_url: SYSTEM_GIT_REPO.into(),
-//                         git_rev: packages.git_revision.clone().into(),
-//                         subdir: package.repo_path.clone().into(),
-//                     }),
-//                     subst: None,
-//                     digest: None,
-//                     dep_override: true,
-//                 }),
-//             )
-//         })
-//         .collect()
-// }
 
 impl GetModule for CompiledPackage {
     type Error = anyhow::Error;
