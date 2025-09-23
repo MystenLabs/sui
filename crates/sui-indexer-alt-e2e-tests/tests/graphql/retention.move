@@ -24,7 +24,7 @@
 //# create-checkpoint
 
 //# run-graphql
-{ # Two Checkpoints, Cp 0 and Cp 1 are available, after next checkpoint is create we expect obj_versions to be pruned
+{ # Two Checkpoints, Cp 0 and Cp 1 are available, after next checkpoint is created we expect Cp0 to not be in available range for queries that are backed by obj_versions
   serviceConfig {
     retention(type: "Address", field: "asObject") {
       first {
@@ -40,7 +40,7 @@
 //# create-checkpoint
 
 //# run-graphql
-{ # Queries that are backed by obj_versions should only have retention of 2 lastest Cps
+{ # Queries that are backed by obj_versions should only have retention of 2 latest Cps
   objectVersionsPruned: serviceConfig {
     retention(type: "Address", field: "asObject") {
       first {
