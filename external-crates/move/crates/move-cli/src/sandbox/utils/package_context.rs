@@ -6,11 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::{
-    DEFAULT_BUILD_DIR,
-    base::{find_env, reroot_path},
-    sandbox::utils::OnDiskStateView,
-};
+use crate::{DEFAULT_BUILD_DIR, base::find_env, sandbox::utils::OnDiskStateView};
 use move_package_alt::flavor::MoveFlavor;
 use move_package_alt_compilation::{build_config::BuildConfig, compiled_package::CompiledPackage};
 
@@ -26,7 +22,7 @@ impl PackageContext {
         path: &Option<PathBuf>,
         build_config: &BuildConfig,
     ) -> Result<Self> {
-        let path = reroot_path(path.as_deref())?;
+        let path = path.as_deref().unwrap_or_else(|| Path::new("."));
         let env = find_env::<F>(&path, build_config)?;
         let build_dir = build_config
             .install_dir
@@ -35,7 +31,7 @@ impl PackageContext {
             .clone();
 
         let package = build_config
-            .compile::<F, _>(&path, &env, &mut Vec::new())
+            .compile_package::<F, _>(&path, &env, &mut Vec::new())
             .await?;
         Ok(PackageContext { package, build_dir })
     }

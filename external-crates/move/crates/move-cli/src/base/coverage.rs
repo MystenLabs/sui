@@ -85,7 +85,9 @@ impl Coverage {
             return Self::output_lcov_coverage::<F>(path, &env, config, differential, test).await;
         }
 
-        let package = config.compile::<F, _>(&path, &env, &mut Vec::new()).await?;
+        let package = config
+            .compile_package::<F, _>(&path, &env, &mut Vec::new())
+            .await?;
         let modules = package.root_modules().map(|unit| &unit.unit.module);
         let coverage_map = CoverageMap::from_binary_file(path.join(".coverage_map.mvcov"))?;
         match self.options {
@@ -146,7 +148,9 @@ impl Coverage {
     ) -> anyhow::Result<()> {
         // Make sure we always compile the package in test mode so we get correct source maps.
         config.test_mode = true;
-        let package = config.compile::<F, _>(&path, env, &mut Vec::new()).await?;
+        let package = config
+            .compile_package::<F, _>(&path, env, &mut Vec::new())
+            .await?;
         let units: Vec<_> = package
             .all_compiled_units_with_source()
             .cloned()
