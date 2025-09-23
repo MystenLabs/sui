@@ -234,8 +234,6 @@ impl<F> PinnedDrop for MetricsFuture<F> {
     fn drop(self: Pin<&mut Self>) {
         if let Some(RequestMetrics { timer, ext }) = self.project().metrics.take() {
             let elapsed_ms = timer.stop_and_record() * 1000.0;
-            let Session { uuid, addr } = ext.session.get().unwrap();
-
             ext.metrics.queries_cancelled.inc();
             info!(elapsed_ms, "Request cancelled");
         }
