@@ -1,13 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// <<<<<<< HEAD
-// use crate::client_commands::{
-//     implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands, USER_AGENT,
-// };
-// =======
 use crate::client_commands::{SuiClientCommands, USER_AGENT};
-// >>>>>>> d74551c51d (Sui PKG ALT Integration)
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
@@ -393,7 +387,6 @@ pub enum SuiCommand {
 
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
-        // move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
         match self {
             SuiCommand::Network {
                 config,
