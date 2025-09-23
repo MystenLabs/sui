@@ -10,7 +10,7 @@ COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
-COPY docker/stress/entrypoint.sh /docker/stress/entrypoint.sh
+COPY docker/stress/entrypoint.sh /docker/stress/
 
 RUN cargo build --profile ${PROFILE} --bin stress
 
