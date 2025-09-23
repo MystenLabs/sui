@@ -150,7 +150,7 @@ impl FunctionContext<'_, '_> {
                 ),
             );
         };
-        if !tys.to_ref().len() == 1 {
+        if tys.to_ref().len() != 1 {
             return Err(
                 PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
                     "the type argument for vector-related bytecode \
