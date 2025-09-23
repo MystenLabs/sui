@@ -3,7 +3,7 @@
 
 use move_binary_format::normalized::Constant;
 
-use move_stackless_bytecode_2::stackless::ast::{DataOp, PrimitiveOp, Value};
+use move_stackless_bytecode_2::ast::{DataOp, PrimitiveOp, Value};
 use move_symbol_pool::Symbol;
 
 use std::collections::BTreeMap;
