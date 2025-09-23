@@ -1853,13 +1853,49 @@ impl From<crate::transaction::GenesisObject> for Object {
 // ObjectReference
 //
 
-pub fn object_ref_to_proto(value: &crate::base_types::ObjectRef) -> ObjectReference {
-    let (object_id, version, digest) = value;
-    let mut message = ObjectReference::default();
-    message.object_id = Some(object_id.to_canonical_string(true));
-    message.version = Some(version.value());
-    message.digest = Some(digest.to_string());
-    message
+pub trait ObjectRefExt {
+    fn to_proto(self) -> ObjectReference;
+}
+
+pub trait ObjectReferenceExt {
+    fn try_to_object_ref(&self) -> Result<crate::base_types::ObjectRef, anyhow::Error>;
+}
+
+impl ObjectRefExt for crate::base_types::ObjectRef {
+    fn to_proto(self) -> ObjectReference {
+        let (object_id, version, digest) = self;
+        let mut message = ObjectReference::default();
+        message.object_id = Some(object_id.to_canonical_string(true));
+        message.version = Some(version.value());
+        message.digest = Some(digest.to_string());
+        message
+    }
+}
+
+impl ObjectReferenceExt for ObjectReference {
+    fn try_to_object_ref(&self) -> Result<crate::base_types::ObjectRef, anyhow::Error> {
+        use anyhow::Context;
+
+        let object_id = self
+            .object_id_opt()
+            .ok_or_else(|| anyhow::anyhow!("missing object_id"))?;
+        let object_id = crate::base_types::ObjectID::from_hex_literal(object_id)
+            .with_context(|| format!("Failed to parse object_id: {}", object_id))?;
+
+        let version = self
+            .version_opt()
+            .ok_or_else(|| anyhow::anyhow!("missing version"))?;
+        let version = crate::base_types::SequenceNumber::from(version);
+
+        let digest = self
+            .digest_opt()
+            .ok_or_else(|| anyhow::anyhow!("missing digest"))?;
+        let digest = digest
+            .parse::<crate::digests::ObjectDigest>()
+            .with_context(|| format!("Failed to parse digest: {}", digest))?;
+
+        Ok((object_id, version, digest))
+    }
 }
 
 impl From<&crate::storage::ObjectKey> for ObjectReference {
@@ -1965,7 +2001,11 @@ impl Merge<&crate::transaction::TransactionData> for Transaction {
 impl From<&crate::transaction::GasData> for GasPayment {
     fn from(value: &crate::transaction::GasData) -> Self {
         let mut message = Self::default();
-        message.objects = value.payment.iter().map(object_ref_to_proto).collect();
+        message.objects = value
+            .payment
+            .iter()
+            .map(|obj_ref| obj_ref.to_proto())
+            .collect();
         message.owner = Some(value.owner.to_string());
         message.price = Some(value.price);
         message.budget = Some(value.budget);
