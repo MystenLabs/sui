@@ -73,6 +73,7 @@ public struct DisplayCap<phantom T> has key, store {
 /// Create a new display object.
 /// TODO: Add internal verifier rule that we can only create display for types we own in the package.
 /// TODO(2): Should we allow `new_with_publisher`, to keep creations compatible?
+/// TODO(3): Do we wanna have an `init` variation?
 public fun new<T /*internal*/>(
     registry: &mut DisplayRegistry,
     fields: VecMap<String, String>,
@@ -103,7 +104,7 @@ public fun remove<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: Strin
 }
 
 /// Replace an existing key with the supplied one.
-public fun update<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: String, value: String) {
+public fun set<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: String, value: String) {
     if (display.fields.contains(&name)) {
         display.fields.remove(&name);
     };
@@ -165,12 +166,26 @@ public fun delete_legacy<T: key>(display: &NewDisplay<T>, legacy: Display<T>) {
     legacy.destroy();
 }
 
-// Create a new display registry object callable only from 0x0 (end of epoch)
-fun create(ctx: &mut TxContext) {
+/// Get a reference to the fields of display.
+public fun fields<T>(display: &NewDisplay<T>): &VecMap<String, String> {
+    &display.fields
+}
+
+public(package) fun create_internal(ctx: &mut TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
     // TODO: Replace with known system address.
     transfer::share_object(DisplayRegistry { id: object::new(ctx) });
 
     transfer::transfer(SystemMigrationCap { id: object::new(ctx) }, SYSTEM_MIGRATION_ADDRESS);
+}
+
+public(package) fun migration_cap_receiver(): address {
+    SYSTEM_MIGRATION_ADDRESS
+}
+
+// Create a new display registry object callable only from 0x0 (end of epoch)
+#[allow(unused_function)]
+fun create(ctx: &mut TxContext) {
+    create_internal(ctx);
 }
