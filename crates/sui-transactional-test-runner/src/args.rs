@@ -8,6 +8,7 @@ use anyhow::{bail, ensure};
 use clap;
 use clap::{Args, Parser};
 use move_compiler::editions::Flavor;
+use move_core_types::parsing::types::ParsedType;
 use move_core_types::parsing::{
     parser::Parser as MoveCLParser,
     parser::{parse_u256, parse_u64},
@@ -23,7 +24,10 @@ use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, CallArg, ObjectArg};
+use sui_types::transaction::{
+    Argument, CallArg, FundsWithdrawalArg, ObjectArg, Reservation, WithdrawFrom, WithdrawalTypeArg,
+};
+use sui_types::type_input::TypeInput;
 
 pub const SUI_ARGS_LONG: &str = "sui-args";
 
@@ -398,6 +402,11 @@ pub enum SuiExtraValueArgs {
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
     ImmShared(FakeID, Option<SequenceNumber>),
+    Withdraw {
+        reservation: Reservation,
+        type_arg: ParsedType,
+        withdraw_from: WithdrawFrom,
+    },
 }
 
 #[derive(Clone)]
@@ -408,6 +417,7 @@ pub enum SuiValue {
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
     ImmShared(FakeID, Option<SequenceNumber>),
+    FundsWithdrawal(FundsWithdrawalArg),
 }
 
 impl SuiExtraValueArgs {
@@ -441,6 +451,70 @@ impl SuiExtraValueArgs {
         let package = parser.advance(ValueToken::Ident)?;
         parser.advance(ValueToken::RParen)?;
         Ok(SuiExtraValueArgs::Digest(package.to_owned()))
+    }
+
+    fn parse_withdraw_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
+        let contents = parser.advance(ValueToken::Ident)?;
+        ensure!(contents == "withdraw");
+        parser.advance(ValueToken::LParen)?;
+
+        let (tok, raw) = parser.advance_any()?;
+        let reservation = match tok {
+            ValueToken::Number | ValueToken::NumberTyped => {
+                let normalized = raw
+                    .strip_suffix("u64")
+                    .or_else(|| raw.strip_suffix("U64"))
+                    .unwrap_or(raw);
+                let (amount, _) = parse_u64(normalized)?;
+                Reservation::MaxAmountU64(amount)
+            }
+            ValueToken::Ident if raw.eq_ignore_ascii_case("entire") => Reservation::EntireBalance,
+            _ => bail!(
+                "Invalid withdraw reservation '{raw}'. Expected an unsigned integer or 'entire'"
+            ),
+        };
+
+        parser.advance(ValueToken::Comma)?;
+
+        let mut type_text = String::new();
+        let mut saw_type_token = false;
+        while let Some(tok) = parser.peek_tok() {
+            match tok {
+                ValueToken::RParen | ValueToken::Comma => break,
+                _ => {
+                    let (_, fragment) = parser.advance_any()?;
+                    type_text.push_str(fragment);
+                    saw_type_token = true;
+                }
+            }
+        }
+        ensure!(
+            saw_type_token,
+            "Expected type argument in withdraw(...) value"
+        );
+        let parsed_type = ParsedType::parse(&type_text)?;
+
+        let withdraw_from = if matches!(parser.peek_tok(), Some(ValueToken::Comma)) {
+            parser.advance(ValueToken::Comma)?;
+            let ident = parser.advance(ValueToken::Ident)?;
+            ensure!(
+                ident.eq_ignore_ascii_case("sender"),
+                "Unsupported withdraw-from '{ident}'. Only 'sender' is currently supported"
+            );
+            WithdrawFrom::Sender
+        } else {
+            WithdrawFrom::Sender
+        };
+
+        parser.advance(ValueToken::RParen)?;
+
+        Ok(SuiExtraValueArgs::Withdraw {
+            reservation,
+            type_arg: parsed_type,
+            withdraw_from,
+        })
     }
 
     fn parse_receiving_or_object_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
@@ -488,6 +562,9 @@ impl SuiValue {
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
             SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::FundsWithdrawal(_) => {
+                panic!("unexpected nested Sui withdraw reservation in args")
+            }
         }
     }
 
@@ -499,6 +576,9 @@ impl SuiValue {
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
             SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::FundsWithdrawal(_) => {
+                panic!("unexpected nested Sui withdraw reservation in args")
+            }
         }
     }
 
@@ -599,6 +679,7 @@ impl SuiValue {
                 };
                 CallArg::Pure(bcs::to_bytes(&staged.digest).unwrap())
             }
+            SuiValue::FundsWithdrawal(arg) => CallArg::FundsWithdrawal(arg),
         })
     }
 
@@ -632,6 +713,7 @@ impl ParsableValue for SuiExtraValueArgs {
             (ValueToken::Ident, "digest") => Some(Self::parse_digest_value(parser)),
             (ValueToken::Ident, "receiving") => Some(Self::parse_receiving_value(parser)),
             (ValueToken::Ident, "immshared") => Some(Self::parse_read_shared_value(parser)),
+            (ValueToken::Ident, "withdraw") => Some(Self::parse_withdraw_value(parser)),
             _ => None,
         }
     }
@@ -660,13 +742,26 @@ impl ParsableValue for SuiExtraValueArgs {
 
     fn into_concrete_value(
         self,
-        _mapping: &impl Fn(&str) -> Option<move_core_types::account_address::AccountAddress>,
+        mapping: &impl Fn(&str) -> Option<move_core_types::account_address::AccountAddress>,
     ) -> anyhow::Result<Self::ConcreteValue> {
         match self {
             SuiExtraValueArgs::Object(id, version) => Ok(SuiValue::Object(id, version)),
             SuiExtraValueArgs::Digest(pkg) => Ok(SuiValue::Digest(pkg)),
             SuiExtraValueArgs::Receiving(id, version) => Ok(SuiValue::Receiving(id, version)),
             SuiExtraValueArgs::ImmShared(id, version) => Ok(SuiValue::ImmShared(id, version)),
+            SuiExtraValueArgs::Withdraw {
+                reservation,
+                type_arg,
+                withdraw_from,
+            } => {
+                let type_tag = type_arg.into_type_tag(mapping)?;
+                let type_input = WithdrawalTypeArg::Balance(TypeInput::from(type_tag));
+                Ok(SuiValue::FundsWithdrawal(FundsWithdrawalArg {
+                    reservation,
+                    type_arg: type_input,
+                    withdraw_from,
+                }))
+            }
         }
     }
 }
