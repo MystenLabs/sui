@@ -40,7 +40,7 @@ impl UpdateDeps {
 
         let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
-        let root_package = RootPackage::<Vanilla>::load_force_repin(&path, environment).await?;
+        let mut root_package = RootPackage::<Vanilla>::load_force_repin(&path, environment).await?;
         root_package.update_lockfile()?;
 
         Ok(())
