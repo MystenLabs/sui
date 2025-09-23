@@ -212,7 +212,7 @@ impl Default for ScoreWeights {
 // Default value functions
 
 fn default_health_check_interval() -> Duration {
-    Duration::from_secs(10)
+    Duration::from_secs(5)
 }
 
 fn default_health_check_timeout() -> Duration {

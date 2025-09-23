@@ -7,7 +7,7 @@ use anyhow::bail;
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
-use rand::{seq::SliceRandom, Rng};
+use rand::Rng;
 use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
@@ -360,75 +360,11 @@ impl LocalValidatorAggregatorProxy {
 
     // Submit transaction block using Transaction Driver
     async fn submit_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
-        let auth_agg = self.qd.authority_aggregator().load();
-        // Read the environment variable STRESS_HOSTNAME. If it set, then match all the validators using the validator_display_names from the auth_agg according to the following rules:
-        // if STRESS_HOSTNAME starts with ewr, then match the validators with display names that start with ewr or ams
-        // if STRESS_HOSTNAME starts with ash, then match the validators with display names that start with ewr or ams
-        // if STRESS_HOSTNAME starts with lax, then match the validators with display names that start with ewr or ams or lax
-        // otherwise, match all the validators
-
-        let stress_hostname = if let Ok(stress_hostname) = std::env::var("STRESS_HOSTNAME") {
-            if stress_hostname.starts_with("ewr") {
-                Some("ewr")
-            } else if stress_hostname.starts_with("ash") {
-                Some("ash")
-            } else if stress_hostname.starts_with("lax") {
-                Some("lax")
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let allowed_validators = if let Some(stress_hostname) = stress_hostname {
-            let allowed_validators = auth_agg
-                .validator_display_names
-                .iter()
-                .filter(|(_key, display_name)| match stress_hostname {
-                    "ewr" => display_name.starts_with("ewr") || display_name.starts_with("ams"),
-                    "ash" => display_name.starts_with("ewr") || display_name.starts_with("ams"),
-                    "lax" => {
-                        display_name.starts_with("ewr")
-                            || display_name.starts_with("ams")
-                            || display_name.starts_with("lax")
-                    }
-                    _ => true,
-                })
-                .collect::<Vec<_>>();
-
-            debug!(
-                "Allowed validators: {:?}",
-                allowed_validators
-                    .iter()
-                    .map(|(_key, display_name)| display_name)
-                    .collect::<Vec<_>>()
-            );
-
-            let mut allowed_vaidators = allowed_validators
-                .into_iter()
-                .map(|(key, _display_name)| key)
-                .cloned()
-                .collect::<Vec<_>>();
-
-            // Shuffle the validators
-            allowed_vaidators.shuffle(&mut rand::thread_rng());
-
-            allowed_vaidators
-        } else {
-            vec![]
-        };
-
-        let options = SubmitTransactionOptions {
-            forwarded_client_addr: None,
-            allowed_validators,
-        };
-
         let response = self
             .td
             .drive_transaction(
                 SubmitTxRequest::new_transaction(tx.clone()),
-                options,
+                SubmitTransactionOptions::default(),
                 Some(Duration::from_secs(60)),
             )
             .await?;
