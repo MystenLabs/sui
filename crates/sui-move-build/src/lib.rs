@@ -384,7 +384,14 @@ impl CompiledPackage {
 
     /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order
     pub fn get_package_bytes(&self, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
-        self.package.get_package_bytes(with_unpublished_deps)
+        self.get_dependency_sorted_modules(with_unpublished_deps)
+            .iter()
+            .map(|m| {
+                let mut bytes = Vec::new();
+                m.serialize_with_version(m.version, &mut bytes).unwrap(); // safe because package built successfully
+                bytes
+            })
+            .collect()
     }
 
     /// Return the base64-encoded representation of the bytecode modules in this package, topologically sorted in dependency order
@@ -394,6 +401,19 @@ impl CompiledPackage {
             .map(|b| Base64::from_bytes(b))
             .collect()
     }
+
+    // /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order
+    // pub fn get_package_bytes(&self, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
+    //     self.package.get_package_bytes(with_unpublished_deps)
+    // }
+    //
+    // /// Return the base64-encoded representation of the bytecode modules in this package, topologically sorted in dependency order
+    // pub fn get_package_base64(&self, with_unpublished_deps: bool) -> Vec<Base64> {
+    //     self.get_package_bytes(with_unpublished_deps)
+    //         .iter()
+    //         .map(|b| Base64::from_bytes(b))
+    //         .collect()
+    // }
 
     /// Get bytecode modules from DeepBook that are used by this package
     pub fn get_deepbook_modules(&self) -> impl Iterator<Item = &CompiledModule> {
