@@ -122,8 +122,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// A synchronous version of `load` that can be used to load a package while blocking in place.
-    pub fn load_sync(path: PathBuf, env: Environment) -> PackageResult<Self> {
-        block_on!(Self::load(path.as_path(), env))
+    pub fn load_sync(path: PathBuf, env: Environment, modes: Vec<ModeName>) -> PackageResult<Self> {
+        block_on!(Self::load(path.as_path(), env, modes))
     }
 
     /// Load the root package from `root` in environment `build_env`, but replace all the addresses
@@ -267,13 +267,16 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let linkage = filtered_graph.linkage()?;
         unfiltered_graph.check_rename_from()?;
 
-        let deps_published_ids = linkage.keys().cloned().collect();
+        let deps_ids = linkage
+            .iter()
+            .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
+            .collect();
 
         Ok(Self {
             package_path,
             environment: env,
             lockfile,
-            deps_published_ids,
+            deps_ids,
             pubs: PublicationSource::Published(pubs),
             unfiltered_graph,
             filtered_graph,
