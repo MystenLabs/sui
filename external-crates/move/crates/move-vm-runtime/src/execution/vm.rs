@@ -38,10 +38,9 @@ use super::{
 // Types
 // -------------------------------------------------------------------------------------------------
 
-/// A runnable Instance of a Virtual Machine. This is an instance with respect to some DataStore,
-/// holding the Runtime VTables for that data store in order to invoke functions from it. This
-/// instance is the main "execution" context for a virtual machine, allowing calls to
-/// `execute_function` to run Move code located in the VM Cache.
+/// A runnable Instance of a Virtual Machine. This is an instance holding the Runtime VTables in
+/// order to invoke functions from it. This instance is the main "execution" context for a virtual
+/// machine, allowing calls to `execute_function` to run Move code located in the VM Cache.
 ///
 /// Note this does NOT support publication. See `vm.rs` for publication.
 #[allow(dead_code)]
