@@ -150,6 +150,10 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
                     ..Default::default()
                 }),
                 obj_info: Some(ConcurrentLayer {
+                    pruner: Some(pruner.clone()),
+                    ..Default::default()
+                }),
+                obj_versions: Some(ConcurrentLayer {
                     pruner: Some(pruner),
                     ..Default::default()
                 }),

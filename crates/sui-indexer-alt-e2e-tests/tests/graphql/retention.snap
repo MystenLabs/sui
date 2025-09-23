@@ -1,29 +1,96 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 7 tasks
+processed 10 tasks
 
 init:
 A: object(0,0)
 
-task 1, line 6:
-//# create-checkpoint
-Checkpoint created: 1
+task 1, lines 6-8:
+//# programmable --sender A --inputs 1000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 8:
-//# create-checkpoint
-Checkpoint created: 2
-
-task 4, line 12:
-//# create-checkpoint
-Checkpoint created: 3
-
-task 5, lines 14-30:
+task 2, lines 10-22:
 //# run-graphql
 Response: {
   "data": {
     "serviceConfig": {
       "retention": {
+        "first": {
+          "sequenceNumber": 0
+        },
+        "last": {
+          "sequenceNumber": 0
+        }
+      }
+    }
+  }
+}
+
+task 3, line 24:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 26-38:
+//# run-graphql
+Response: {
+  "data": {
+    "serviceConfig": {
+      "retention": {
+        "first": {
+          "sequenceNumber": 0
+        },
+        "last": {
+          "sequenceNumber": 1
+        }
+      }
+    }
+  }
+}
+
+task 5, line 40:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 42-54:
+//# run-graphql
+Response: {
+  "data": {
+    "objectVersionsPruned": {
+      "retention": {
+        "first": {
+          "sequenceNumber": 1
+        },
+        "last": {
+          "sequenceNumber": 2
+        }
+      }
+    }
+  }
+}
+
+task 7, line 56:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, lines 58-77:
+//# run-graphql
+Response: {
+  "data": {
+    "serviceConfig": {
+      "transactionQuery": {
+        "first": {
+          "sequenceNumber": 0
+        },
+        "last": {
+          "sequenceNumber": 3
+        }
+      },
+      "consistentQuery": {
         "first": {
           "sequenceNumber": 0
         },
@@ -35,7 +102,7 @@ Response: {
   }
 }
 
-task 6, lines 32-44:
+task 9, lines 79-91:
 //# run-graphql
 Response: {
   "data": {
