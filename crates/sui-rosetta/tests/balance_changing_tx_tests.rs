@@ -1,39 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::CoinMetadataCache;
-use crate::operations::Operations;
-use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
+mod test_utils;
+
 use anyhow::anyhow;
-use futures::StreamExt;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::StructTag;
+use prost_types::FieldMask;
 use rand::seq::{IteratorRandom, SliceRandom};
 use serde_json::json;
 use shared_crypto::intent::Intent;
 use signature::rand_core::OsRng;
 use std::collections::{BTreeMap, HashMap};
-use std::future;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::str::FromStr;
-use sui_json_rpc_types::{Coin, SuiTransactionBlockResponseOptions};
-use sui_json_rpc_types::{
-    ObjectChange, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponseQuery,
-};
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_move_build::BuildConfig;
-use sui_sdk::SuiClient;
-use sui_sdk::rpc_types::{
-    OwnedObjectRef, SuiData, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse,
+use sui_rosetta::CoinMetadataCache;
+use sui_rosetta::operations::Operations;
+use sui_rosetta::types::{ConstructionMetadata, OperationStatus, OperationType};
+use sui_rpc::client::Client as GrpcClient;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::{
+    ExecutedTransaction, GetBalanceRequest, GetEpochRequest, GetTransactionRequest,
 };
-use sui_types::TypeTag;
-use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
-use sui_types::gas_coin::{GAS, GasCoin};
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
+use sui_types::base_types::{FullObjectRef, ObjectRef, SuiAddress};
+use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
     CallArg, InputObjectKind, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
@@ -41,15 +37,15 @@ use sui_types::transaction::{
     TransactionDataAPI, TransactionKind,
 };
 use test_cluster::TestClusterBuilder;
+use test_utils::{execute_transaction, find_module_object, find_published_package, get_random_sui};
 
 #[tokio::test]
 async fn test_transfer_sui() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Transfer Sui
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
@@ -59,7 +55,7 @@ async fn test_transfer_sui() {
         builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![recipient],
         sender,
@@ -75,11 +71,10 @@ async fn test_transfer_sui() {
 #[tokio::test]
 async fn test_transfer_sui_whole_coin() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test transfer sui whole coin
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
@@ -89,7 +84,7 @@ async fn test_transfer_sui_whole_coin() {
         builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![recipient],
         sender,
@@ -105,15 +100,14 @@ async fn test_transfer_sui_whole_coin() {
 #[tokio::test]
 async fn test_transfer_object() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test transfer object
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
-    let object_ref = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let object_ref = get_random_sui(&mut client, sender, vec![]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -122,7 +116,7 @@ async fn test_transfer_object() {
         builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![recipient],
         sender,
@@ -138,11 +132,10 @@ async fn test_transfer_object() {
 #[tokio::test]
 async fn test_publish_and_move_call() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test publish
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -158,7 +151,7 @@ async fn test_publish_and_move_call() {
         builder.finish()
     };
     let response = test_transaction(
-        &client,
+        &network,
         keystore,
         vec![],
         sender,
@@ -169,39 +162,21 @@ async fn test_publish_and_move_call() {
         false,
     )
     .await;
-    let object_changes = response.object_changes.unwrap();
+    let object_changes = response.effects().changed_objects.clone();
 
-    // Test move call (reuse published module from above test)
-    let package = object_changes
-        .iter()
-        .find_map(|change| {
-            if let ObjectChange::Published { package_id, .. } = change {
-                Some(package_id)
-            } else {
-                None
-            }
-        })
-        .unwrap();
+    let package = find_published_package(&object_changes).unwrap();
 
-    let treasury = find_module_object(&object_changes, |type_| {
-        if type_.name.as_str() != "TreasuryCap" {
-            return false;
-        }
-
-        let Some(TypeTag::Struct(otw)) = type_.type_params.first() else {
-            return false;
-        };
-
-        otw.name.as_str() == "MY_COIN"
-    });
-
-    let treasury = treasury.clone().reference.to_object_ref();
+    let (_, treasury) = find_module_object(&object_changes, |type_str| {
+        // Check if this is a TreasuryCap for MY_COIN (but not MY_COIN_NEW)
+        type_str.contains("TreasuryCap") && type_str.contains("::my_coin::MY_COIN>")
+    })
+    .unwrap();
     let recipient = *addresses.choose(&mut OsRng).unwrap();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
             .move_call(
-                *package,
+                package,
                 Identifier::from_str("my_coin").unwrap(),
                 Identifier::from_str("mint").unwrap(),
                 vec![],
@@ -216,7 +191,7 @@ async fn test_publish_and_move_call() {
     };
 
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![],
         sender,
@@ -232,24 +207,19 @@ async fn test_publish_and_move_call() {
 #[tokio::test]
 async fn test_split_coin() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test spilt coin
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let coin = get_random_sui(&client, sender, vec![]).await.object_ref();
-    let tx = client
-        .transaction_builder()
-        .split_coin(sender, coin.0, vec![100000], None, 10000)
-        .await
-        .unwrap();
-    let pt = match tx.into_kind() {
-        TransactionKind::ProgrammableTransaction(pt) => pt,
-        _ => unreachable!(),
+    let coin = get_random_sui(&mut client, sender, vec![]).await;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.split_coin(sender, coin, vec![100000]);
+        builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![],
         sender,
@@ -265,27 +235,20 @@ async fn test_split_coin() {
 #[tokio::test]
 async fn test_merge_coin() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test merge coin
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let coin = get_random_sui(&client, sender, vec![]).await.object_ref();
-    let coin2 = get_random_sui(&client, sender, vec![coin.0])
-        .await
-        .object_ref();
-    let tx = client
-        .transaction_builder()
-        .merge_coins(sender, coin.0, coin2.0, None, 10000)
-        .await
-        .unwrap();
-    let pt = match tx.into_kind() {
-        TransactionKind::ProgrammableTransaction(pt) => pt,
-        _ => unreachable!(),
+    let coin = get_random_sui(&mut client, sender, vec![]).await;
+    let coin2 = get_random_sui(&mut client, sender, vec![coin.0]).await;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.merge_coins(coin, vec![coin2]).unwrap();
+        builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![],
         sender,
@@ -301,15 +264,14 @@ async fn test_merge_coin() {
 #[tokio::test]
 async fn test_pay() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
-    let coin = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let coin = get_random_sui(&mut client, sender, vec![]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -318,7 +280,7 @@ async fn test_pay() {
         builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![recipient],
         sender,
@@ -334,19 +296,16 @@ async fn test_pay() {
 #[tokio::test]
 async fn test_pay_multiple_coin_multiple_recipient() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay multiple coin multiple recipient
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
     let recipient2 = get_random_address(&addresses, vec![sender, recipient1]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
-        .await
-        .object_ref();
+    let coin1 = get_random_sui(&mut client, sender, vec![]).await;
+    let coin2 = get_random_sui(&mut client, sender, vec![coin1.0]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -359,7 +318,7 @@ async fn test_pay_multiple_coin_multiple_recipient() {
         builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![recipient1, recipient2],
         sender,
@@ -375,18 +334,15 @@ async fn test_pay_multiple_coin_multiple_recipient() {
 #[tokio::test]
 async fn test_pay_sui_multiple_coin_same_recipient() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay multiple coin same recipient
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
-        .await
-        .object_ref();
+    let coin1 = get_random_sui(&mut client, sender, vec![]).await;
+    let coin2 = get_random_sui(&mut client, sender, vec![coin1.0]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -398,7 +354,7 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
         builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![recipient1],
         sender,
@@ -414,19 +370,16 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
 #[tokio::test]
 async fn test_pay_sui() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay Sui
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
     let recipient2 = get_random_address(&addresses, vec![sender, recipient1]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
-        .await
-        .object_ref();
+    let coin1 = get_random_sui(&mut client, sender, vec![]).await;
+    let coin2 = get_random_sui(&mut client, sender, vec![coin1.0]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -435,7 +388,7 @@ async fn test_pay_sui() {
         builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![recipient1, recipient2],
         sender,
@@ -451,19 +404,16 @@ async fn test_pay_sui() {
 #[tokio::test]
 async fn test_failed_pay_sui() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test failed Pay Sui
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
     let recipient2 = get_random_address(&addresses, vec![sender, recipient1]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
-        .await
-        .object_ref();
+    let coin1 = get_random_sui(&mut client, sender, vec![]).await;
+    let coin2 = get_random_sui(&mut client, sender, vec![coin1.0]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -472,7 +422,7 @@ async fn test_failed_pay_sui() {
         builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![],
         sender,
@@ -488,41 +438,50 @@ async fn test_failed_pay_sui() {
 #[tokio::test]
 async fn test_stake_sui() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Delegate Sui
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
-        .await
-        .object_ref();
-    let validator = client
-        .governance_api()
-        .get_latest_sui_system_state()
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let coin1 = get_random_sui(&mut client, sender, vec![]).await;
+    let coin2 = get_random_sui(&mut client, sender, vec![coin1.0]).await;
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
         .await
         .unwrap()
-        .active_validators[0]
-        .sui_address;
-    let tx = client
-        .transaction_builder()
-        .request_add_stake(
-            sender,
-            vec![coin1.0, coin2.0],
-            Some(1000000000),
-            validator,
-            None,
-            10_000_000,
-        )
-        .await
+        .into_inner();
+
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
         .unwrap();
-    let pt = match tx.into_kind() {
-        TransactionKind::ProgrammableTransaction(pt) => pt,
-        _ => unreachable!(),
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.merge_coins(coin1, vec![coin2]).unwrap();
+
+        builder
+            .move_call(
+                SUI_SYSTEM_PACKAGE_ID,
+                SUI_SYSTEM_MODULE_NAME.to_owned(),
+                Identifier::from_str("request_add_stake").unwrap(),
+                vec![],
+                vec![
+                    CallArg::SUI_SYSTEM_MUT,
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(coin1)),
+                    CallArg::Pure(bcs::to_bytes(&validator).unwrap()),
+                ],
+            )
+            .unwrap();
+        builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![],
         sender,
@@ -538,41 +497,49 @@ async fn test_stake_sui() {
 #[tokio::test]
 async fn test_stake_sui_with_none_amount() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Staking Sui
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
-        .await
-        .object_ref();
-    let validator = client
-        .governance_api()
-        .get_latest_sui_system_state()
+    let coin1 = get_random_sui(&mut client, sender, vec![]).await;
+    let coin2 = get_random_sui(&mut client, sender, vec![coin1.0]).await;
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
         .await
         .unwrap()
-        .active_validators[0]
-        .sui_address;
-    let tx = client
-        .transaction_builder()
-        .request_add_stake(
-            sender,
-            vec![coin1.0, coin2.0],
-            None,
-            validator,
-            None,
-            rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
-        )
-        .await
+        .into_inner();
+
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
         .unwrap();
-    let pt = match tx.into_kind() {
-        TransactionKind::ProgrammableTransaction(pt) => pt,
-        _ => unreachable!(),
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.merge_coins(coin1, vec![coin2]).unwrap();
+
+        builder
+            .move_call(
+                SUI_SYSTEM_PACKAGE_ID,
+                SUI_SYSTEM_MODULE_NAME.to_owned(),
+                Identifier::from_str("request_add_stake").unwrap(),
+                vec![],
+                vec![
+                    CallArg::SUI_SYSTEM_MUT,
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(coin1)),
+                    CallArg::Pure(bcs::to_bytes(&validator).unwrap()),
+                ],
+            )
+            .unwrap();
+        builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![],
         sender,
@@ -588,25 +555,23 @@ async fn test_stake_sui_with_none_amount() {
 #[tokio::test]
 async fn test_pay_all_sui() {
     let network = TestClusterBuilder::new().build().await;
-    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
-    let rgp = network.get_reference_gas_price().await;
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay All Sui
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
-        .await
-        .object_ref();
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let coin1 = get_random_sui(&mut client, sender, vec![]).await;
+    let coin2 = get_random_sui(&mut client, sender, vec![coin1.0]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder.pay_all_sui(recipient);
         builder.finish()
     };
     test_transaction(
-        &client,
+        &network,
         keystore,
         vec![recipient],
         sender,
@@ -622,19 +587,27 @@ async fn test_pay_all_sui() {
 #[tokio::test]
 async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let network = TestClusterBuilder::new().build().await;
-    let rgp = network.get_reference_gas_price().await;
-    let client = network.wallet.get_client().await.unwrap();
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let coin = get_random_sui(&client, sender, vec![]).await;
-    let gas = coin.object_ref();
-    let total_coin_value = coin.balance as i128;
-    let validator = client
-        .governance_api()
-        .get_latest_sui_system_state()
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
+    let gas = get_random_sui(&mut client, sender, vec![]).await;
+    let total_coin_value = 0i128;
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
         .await
         .unwrap()
-        .active_validators[0]
-        .sui_address;
+        .into_inner();
+
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
 
     let ops: Operations = serde_json::from_value(json!(
         [{
@@ -649,63 +622,37 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let metadata = ConstructionMetadata {
         sender,
         gas_coins: vec![gas],
-        extra_gas_coins: vec![],
         objects: vec![],
+        party_objects: vec![],
         total_coin_value,
         gas_price: rgp,
         budget: rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
         currency: None,
     };
     let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
+
+    let proto_tx: sui_rpc::proto::sui::rpc::v2::Transaction = parsed_data.clone().into();
+    let parsed_ops = Operations::new(Operations::from_transaction(
+        proto_tx
+            .kind
+            .ok_or_else(|| anyhow::anyhow!("Transaction missing kind"))?,
+        parsed_data.sender(),
+        None,
+    )?);
+
     assert_eq!(
-        ops,
-        Operations::try_from(parsed_data.clone())?,
+        ops, parsed_ops,
         "expected {:#?}, got: {:#?}",
-        ops,
-        Operations::try_from(parsed_data)?
+        ops, parsed_ops
     );
 
     Ok(())
 }
 
-fn find_module_object(
-    changes: &[ObjectChange],
-    type_pred: impl Fn(&StructTag) -> bool,
-) -> OwnedObjectRef {
-    let mut results: Vec<_> = changes
-        .iter()
-        .filter_map(|change| {
-            if let ObjectChange::Created {
-                object_id,
-                object_type,
-                owner,
-                version,
-                digest,
-                ..
-            } = change
-                && type_pred(object_type)
-            {
-                return Some(OwnedObjectRef {
-                    owner: owner.clone(),
-                    reference: SuiObjectRef {
-                        object_id: *object_id,
-                        version: *version,
-                        digest: *digest,
-                    },
-                });
-            };
-            None
-        })
-        .collect();
-    // Check that there is only one object found, and hence no ambiguity.
-    assert_eq!(results.len(), 1);
-    results.pop().unwrap()
-}
-
 // Record current Sui balance of an address then execute the transaction,
 // and compare the balance change reported by the event against the actual balance change.
 async fn test_transaction(
-    client: &SuiClient,
+    network: &test_cluster::TestCluster,
     keystore: &Keystore,
     addr_to_check: Vec<SuiAddress>,
     sender: SuiAddress,
@@ -714,7 +661,8 @@ async fn test_transaction(
     gas_budget: u64,
     gas_price: u64,
     expect_fail: bool,
-) -> SuiTransactionBlockResponse {
+) -> ExecutedTransaction {
+    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let gas = if !gas.is_empty() {
         gas
     } else {
@@ -730,11 +678,7 @@ async fn test_transaction(
                 }
             })
             .collect::<Vec<_>>();
-        vec![
-            get_random_sui(client, sender, input_objects)
-                .await
-                .object_ref(),
-        ]
+        vec![get_random_sui(&mut client, sender, input_objects).await]
     };
 
     let data = TransactionData::new_with_gas_coins(
@@ -750,50 +694,68 @@ async fn test_transaction(
         .await
         .unwrap();
 
-    // Balance before execution
     let mut balances = BTreeMap::new();
     let mut addr_to_check = addr_to_check;
     addr_to_check.push(sender);
     for addr in addr_to_check {
-        balances.insert(addr, get_balance(client, addr).await);
+        balances.insert(addr, get_balance(&mut client, addr).await);
     }
 
-    let response = client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            Transaction::from_data(data.clone(), vec![signature]),
-            SuiTransactionBlockResponseOptions::full_content(),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await
-        .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
-        .unwrap();
+    let response = execute_transaction(
+        &mut client.clone(),
+        &Transaction::from_data(data.clone(), vec![signature]),
+    )
+    .await
+    .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
+    .unwrap();
 
-    let effects = response.effects.as_ref().unwrap();
+    let effects = response.effects();
 
     if !expect_fail {
-        assert_eq!(
-            SuiExecutionStatus::Success,
-            *effects.status(),
+        assert!(
+            effects.status().success(),
             "TX execution failed for {:#?}",
             data
         );
     } else {
-        assert!(matches!(
-            effects.status(),
-            SuiExecutionStatus::Failure { .. }
-        ));
+        assert!(!effects.status().success());
     }
+    let client = GrpcClient::new(network.rpc_url()).unwrap();
+    let tx_digest = response.digest().to_string();
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(tx_digest)
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events.events.event_type",
+            "events.events.json",
+            "events.events.contents",
+        ]));
+
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
-    let ops = Operations::try_from_response(response.clone(), &coin_cache)
+    let mut client = client;
+    let grpc_response = client
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner();
+    let executed_tx = grpc_response
+        .transaction
+        .expect("Response transaction should not be empty");
+    let ops = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops);
 
     // get actual balance changed after transaction
+    // Only check balances for addresses that appear in the operations
     let mut actual_balance_change = HashMap::new();
     for (addr, balance) in balances {
-        let new_balance = get_balance(client, addr).await as i128;
+        let new_balance = get_balance(&mut client, addr).await as i128;
         let balance_changed = new_balance - balance as i128;
         actual_balance_change.insert(addr, balance_changed);
     }
@@ -833,17 +795,6 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
         })
 }
 
-async fn get_random_sui(client: &SuiClient, sender: SuiAddress, except: Vec<ObjectID>) -> Coin {
-    let coins = client
-        .coin_read_api()
-        .get_coins_stream(sender, None)
-        .filter(|c| future::ready(!except.contains(&c.coin_object_id)))
-        .collect::<Vec<_>>()
-        .await;
-
-    coins.into_iter().choose(&mut OsRng).unwrap()
-}
-
 fn get_random_address(addresses: &[SuiAddress], except: Vec<SuiAddress>) -> SuiAddress {
     *addresses
         .iter()
@@ -852,44 +803,21 @@ fn get_random_address(addresses: &[SuiAddress], except: Vec<SuiAddress>) -> SuiA
         .unwrap()
 }
 
-async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {
-    let coins = client
-        .read_api()
-        .get_owned_objects(
-            address,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::new()
-                    .with_type()
-                    .with_owner()
-                    .with_previous_transaction(),
-            )),
-            /* cursor */ None,
-            /* limit */ None,
-        )
+async fn get_balance(client: &mut GrpcClient, address: SuiAddress) -> u64 {
+    let request = GetBalanceRequest::default()
+        .with_owner(address.to_string())
+        .with_coin_type(
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                .to_string(),
+        );
+
+    client
+        .state_client()
+        .get_balance(request)
         .await
         .unwrap()
-        .data;
-
-    let mut balance = 0u64;
-    for coin in coins {
-        let obj = coin.into_object().unwrap();
-        if obj.is_gas_coin() {
-            let object = client
-                .read_api()
-                .get_object_with_options(obj.object_id, SuiObjectDataOptions::new().with_bcs())
-                .await
-                .unwrap();
-            let coin: GasCoin = object
-                .into_object()
-                .unwrap()
-                .bcs
-                .unwrap()
-                .try_as_move()
-                .unwrap()
-                .deserialize()
-                .unwrap();
-            balance += coin.value()
-        }
-    }
-    balance
+        .into_inner()
+        .balance
+        .and_then(|b| b.balance)
+        .unwrap_or(0)
 }
