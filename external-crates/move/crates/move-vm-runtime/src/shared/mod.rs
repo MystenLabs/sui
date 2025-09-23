@@ -5,7 +5,6 @@ use std::{collections::HashMap, hash::Hash};
 
 pub mod binary_cache;
 pub mod constants;
-pub mod data_store;
 pub mod gas;
 pub mod linkage_context;
 pub mod logging;
