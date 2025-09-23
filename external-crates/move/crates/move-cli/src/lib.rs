@@ -5,9 +5,10 @@
 pub mod base;
 pub mod sandbox;
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::Parser;
-use std::path::PathBuf;
 
 use crate::base::test::Test;
 use base::{

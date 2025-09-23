@@ -1,13 +1,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::reroot_path;
 use clap::*;
+use std::path::Path;
+
+use move_package_alt::flavor::MoveFlavor;
 use move_package_alt_compilation::build_config::BuildConfig;
 
+use super::reroot_path;
+
 use crate::base::find_env;
-use move_package_alt::flavor::MoveFlavor;
-use std::path::Path;
 
 /// Migrate to Move 2024 for the package at `path`. If no path is provided defaults to current directory.
 #[derive(Parser)]
@@ -20,11 +22,11 @@ impl Migrate {
         path: Option<&Path>,
         config: BuildConfig,
     ) -> anyhow::Result<()> {
-        let path = reroot_path(path)?;
-        let env = find_env::<F>(&path, &config.clone())?;
+        let rerooted_path = reroot_path(path)?;
+        let env = find_env::<F>(&rerooted_path, &config.clone())?;
         config
             .migrate_package::<F, _, _>(
-                &path,
+                &rerooted_path,
                 env,
                 &mut std::io::stdout(),
                 &mut std::io::stdin().lock(),

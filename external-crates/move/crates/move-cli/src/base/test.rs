@@ -1,25 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// if windows
-#[cfg(target_family = "windows")]
-use std::os::windows::process::ExitStatusExt;
-// if unix
-#[cfg(target_family = "unix")]
-use std::os::unix::prelude::ExitStatusExt;
-use std::{
-    io::{Stdout, Write},
-    path::Path,
-    process::ExitStatus,
-};
-// if not windows nor unix
-#[cfg(not(any(target_family = "windows", target_family = "unix")))]
-compile_error!("Unsupported OS, currently we only support windows and unix family");
-
+use super::reroot_path;
+use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
-
-use crate::NativeFunctionRecord;
 
 use move_command_line_common::files::MOVE_COVERAGE_MAP_EXTENSION;
 use move_compiler::{
@@ -37,6 +22,20 @@ use move_package_alt_compilation::{build_config::BuildConfig, build_plan::BuildP
 use move_symbol_pool::Symbol;
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;
+// if windows
+#[cfg(target_family = "windows")]
+use std::os::windows::process::ExitStatusExt;
+// if unix
+#[cfg(target_family = "unix")]
+use std::os::unix::prelude::ExitStatusExt;
+use std::{
+    io::{Stdout, Write},
+    path::Path,
+    process::ExitStatus,
+};
+// if not windows nor unix
+#[cfg(not(any(target_family = "windows", target_family = "unix")))]
+compile_error!("Unsupported OS, currently we only support windows and unix family");
 
 /// Run Move unit tests in this package.
 #[derive(Parser)]
@@ -92,12 +91,12 @@ impl Test {
         natives: Vec<NativeFunctionRecord>,
         cost_table: Option<CostTable>,
     ) -> anyhow::Result<()> {
-        let path = path.unwrap_or(Path::new("."));
+        let rerooted_path = reroot_path(path)?;
         let compute_coverage = self.compute_coverage;
         // save disassembly if trace execution is enabled
         let save_disassembly = self.trace;
         let result = run_move_unit_tests::<F, Stdout>(
-            path,
+            &rerooted_path,
             config,
             self.unit_test_config(),
             natives,
@@ -236,7 +235,6 @@ pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     })?;
 
     let (test_plan, mapped_files, units) = test_plan.unwrap();
-
     let test_plan = test_plan.unwrap();
     let no_tests = test_plan.is_empty();
     let test_plan = TestPlan::new(test_plan, mapped_files, units, vec![]);
@@ -274,7 +272,6 @@ pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
         let coverage_map = CoverageMap::from_trace_file(trace_path);
         output_map_to_file(coverage_map_path, &coverage_map).unwrap();
     }
-
     Ok((UnitTestResult::Success, warning_diags))
 }
 
