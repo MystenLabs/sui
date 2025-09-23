@@ -11,10 +11,10 @@ on:
         type: string
         required: true
 
-concurrency: ${{ github.workflow }}-${{ inputs.sui_tag || github.ref }}
+concurrency: ${{ github.workflow }}-${{ inputs.sui_tag || github.ref_name }}
 
 env:
-  TAG_NAME: "${{ github.event.inputs.sui_tag || github.ref }}"
+  TAG_NAME: "${{ github.event.inputs.sui_tag || github.ref_name }}"
   BINARY_LIST_FILE: "./binary-build-list.json"
   CARGO_TERM_COLOR: always
   # Disable incremental compilation.
@@ -221,7 +221,7 @@ jobs:
   trigger-walrus-testnet-tag-update:
     name: Trigger Walrus Testnet Tag Update
     needs: release-build
-    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
+    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref_name, 'testnet') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -243,7 +243,7 @@ jobs:
     needs: release-build
     runs-on: ubuntu-latest
     # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
-    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
+    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref_name, 'testnet') }}
     steps:
       - name: Clean up tag name ${{ env.TAG_NAME }}
         shell: bash
