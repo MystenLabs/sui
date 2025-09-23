@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: pkg-alt CLIPPY UNUSED
-#![allow(unused)]
-#![allow(clippy::unused)]
 use crate::authority::{
     authority_tests::{call_move, init_state_with_ids, send_and_confirm_transaction},
     move_integration_tests::{build_and_publish_test_package, build_test_package},
@@ -18,8 +15,6 @@ use sui_types::{
     utils::to_sender_signed_transaction,
 };
 
-use move_package::source_package::manifest_parser;
-use sui_move_build::BuildConfig;
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
@@ -28,77 +23,74 @@ use sui_types::{
 use crate::authority::move_integration_tests::{
     build_multi_publish_txns, build_package, run_multi_txns,
 };
-use expect_test::expect;
-use std::env;
-use std::{collections::HashSet, path::PathBuf};
+use std::collections::HashSet;
 use sui_framework::BuiltInFramework;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
-// TODO: pkg-alt FAILING TEST
-// #[tokio::test]
-// #[cfg_attr(msim, ignore)]
-// async fn test_publishing_with_unpublished_deps() {
-//     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-//     let gas = ObjectID::random();
-//     let authority = init_state_with_ids(vec![(sender, gas)]).await;
-//
-//     let package = build_and_publish_test_package(
-//         &authority,
-//         &sender,
-//         &sender_key,
-//         &gas,
-//         "depends_on_basics",
-//         /* with_unpublished_deps */ true,
-//     )
-//     .await;
-//
-//     let ObjectRead::Exists(read_ref, package_obj, _) =
-//         authority.get_object_read(&package.0).unwrap()
-//     else {
-//         panic!("Can't read package")
-//     };
-//
-//     assert_eq!(package, read_ref);
-//     let Data::Package(move_package) = package_obj.into_inner().data else {
-//         panic!("Not a package")
-//     };
-//
-//     // Check that the published package includes its depended upon module.
-//     assert_eq!(
-//         move_package
-//             .serialized_module_map()
-//             .keys()
-//             .map(String::as_str)
-//             .collect::<HashSet<_>>(),
-//         HashSet::from(["depends_on_basics", "object_basics"]),
-//     );
-//
-//     let effects = call_move(
-//         &authority,
-//         &gas,
-//         &sender,
-//         &sender_key,
-//         &package.0,
-//         "depends_on_basics",
-//         "delegate",
-//         vec![],
-//         vec![],
-//     )
-//     .await
-//     .unwrap();
-//
-//     assert!(effects.status().is_ok());
-//     assert_eq!(effects.created().len(), 1);
-//     let ((_, v, _), owner) = effects.created()[0].clone();
-//
-//     // Check that calling the function does what we expect
-//     assert!(matches!(
-//         owner,
-//         Owner::Shared { initial_shared_version: initial } if initial == v
-//     ));
-// }
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_publishing_with_unpublished_deps() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "depends_on_basics",
+        /* with_unpublished_deps */ true,
+    )
+    .await;
+
+    let ObjectRead::Exists(read_ref, package_obj, _) =
+        authority.get_object_read(&package.0).unwrap()
+    else {
+        panic!("Can't read package")
+    };
+
+    assert_eq!(package, read_ref);
+    let Data::Package(move_package) = package_obj.into_inner().data else {
+        panic!("Not a package")
+    };
+
+    // Check that the published package includes its depended upon module.
+    assert_eq!(
+        move_package
+            .serialized_module_map()
+            .keys()
+            .map(String::as_str)
+            .collect::<HashSet<_>>(),
+        HashSet::from(["depends_on_basics", "object_basics"]),
+    );
+
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "depends_on_basics",
+        "delegate",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.created().len(), 1);
+    let ((_, v, _), owner) = effects.created()[0].clone();
+
+    // Check that calling the function does what we expect
+    assert!(matches!(
+        owner,
+        Owner::Shared { initial_shared_version: initial } if initial == v
+    ));
+}
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
@@ -188,106 +180,6 @@ async fn test_publish_duplicate_modules() {
         }
     )
 }
-
-// TODO: pkg-alt -- fix this test or move it to sui-package-alt
-// #[tokio::test]
-// #[cfg_attr(msim, ignore)]
-// async fn test_generate_lock_file() {
-//     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-//     path.extend(["src", "unit_tests", "data", "generate_move_lock_file"]);
-//
-//     let tmp = tempfile::tempdir().expect("Could not create temp dir for Move.lock");
-//     let lock_file_path = tmp.path().join("Move.lock");
-//
-//     let mut build_config = BuildConfig::new_for_testing();
-//     build_config.config.lock_file = Some(lock_file_path.clone());
-//     build_config
-//         .clone()
-//         .build(&path)
-//         .expect("Move package did not build");
-//     // Update the lock file with placeholder compiler version so this isn't bumped every release.
-//     build_config
-//         .config
-//         .update_lock_file_toolchain_version(&path, "0.0.1".into())
-//         .expect("Could not update lock file");
-//
-//     let mut lock_file_contents = String::new();
-//     File::open(lock_file_path)
-//         .expect("Cannot open lock file")
-//         .read_to_string(&mut lock_file_contents)
-//         .expect("Error reading Move.lock file");
-//
-//     let expected = expect![[r##"
-//         # @generated by Move, please check-in and do not edit manually.
-//
-//         [move]
-//         version = 3
-//         manifest_digest = "4C5606BF71339416027A58BDB5BA2EF2F5E0929FCE98BAB8AFFCBC447AFE3A23"
-//         deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
-//         dependencies = [
-//           { id = "Examples", name = "Examples" },
-//           { id = "Sui", name = "Sui" },
-//         ]
-//
-//         [[move.package]]
-//         id = "Examples"
-//         source = { local = "../object_basics" }
-//
-//         dependencies = [
-//           { id = "Sui", name = "Sui" },
-//         ]
-//
-//         [[move.package]]
-//         id = "MoveStdlib"
-//         source = { local = "../../../../../sui-framework/packages/move-stdlib" }
-//
-//         [[move.package]]
-//         id = "Sui"
-//         source = { local = "../../../../../sui-framework/packages/sui-framework" }
-//
-//         dependencies = [
-//           { id = "MoveStdlib", name = "MoveStdlib" },
-//         ]
-//
-//         [move.toolchain-version]
-//         compiler-version = "0.0.1"
-//         edition = "2024.beta"
-//         flavor = "sui"
-//     "##]];
-//     expected.assert_eq(lock_file_contents.as_str());
-// }
-
-// TODO: pkg-alt fix this test or remove it
-// #[tokio::test]
-// #[cfg_attr(msim, ignore)]
-// async fn test_custom_property_check_unpublished_dependencies() {
-//     let build_config = BuildConfig::new_for_testing();
-//     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-//     path.extend([
-//         "src",
-//         "unit_tests",
-//         "data",
-//         "custom_properties_in_manifest_ensure_published_at",
-//     ]);
-//
-//     let resolution_graph = build_config
-//         .config
-//         .resolution_graph_for_package(&path, None, &mut std::io::sink())
-//         .expect("Could not build resolution graph.");
-//
-//     let SuiError::ModulePublishFailure { error } = check_unpublished_dependencies(
-//         &gather_published_ids(&resolution_graph, None).1.unpublished,
-//     )
-//     .err()
-//     .unwrap() else {
-//         panic!("Expected ModulePublishFailure")
-//     };
-//
-//     let expected = expect![[r#"
-//         Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a 'published-at' field, nor is there a 'published-id' in the Move.lock).
-//         If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain)."#]];
-//     expected.assert_eq(&error)
-// }
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]

@@ -2,9 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: pkg-alt CLIPPY UNUSED
-#![allow(unused)]
-#![allow(clippy::unused)]
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::ExecutionEnv;
 use crate::{
@@ -252,128 +249,127 @@ async fn update_objects(
     (transaction, execution_effects)
 }
 
-// TODO: pkg-alt FAILING TEST
 // Tests execution aspect of cancelled transaction due to shared object congestion. Mainly tests that
 //   1. Cancelled transaction should return correct error status.
 //   2. Executing cancelled transaction with effects should result in the same transaction cancellation.
-// #[sim_test]
-// async fn test_congestion_control_execution_cancellation() {
-//     telemetry_subscribers::init_for_testing();
-//
-//     // Creates a authority state with 2 shared object and 1 owned object. We use this setup
-//     // to initialize two more authority states: one tests cancellation execution, and one tests
-//     // executing cancelled transaction from effect.
-//     let test_setup = TestSetup::new().await;
-//     let shared_object_1 = test_setup.create_shared_object().await;
-//     let shared_object_2 = test_setup.create_shared_object().await;
-//     let owned_object = test_setup.create_owned_object().await;
-//
-//     // Gets objects that can be used as genesis objects for new authority states.
-//     let genesis_objects = test_setup
-//         .create_genesis_objects_for_new_authority_state(&[
-//             shared_object_1.0,
-//             shared_object_2.0,
-//             owned_object.0,
-//         ])
-//         .await;
-//
-//     // Creates two authority states with the same genesis objects for the actual test.
-//     let authority_state = TestAuthorityBuilder::new()
-//         .with_reference_gas_price(TEST_ONLY_GAS_PRICE)
-//         .with_protocol_config(test_setup.protocol_config.clone())
-//         .build()
-//         .await;
-//     authority_state
-//         .insert_genesis_objects(&genesis_objects)
-//         .await;
-//     let authority_state_2 = TestAuthorityBuilder::new()
-//         .with_reference_gas_price(TEST_ONLY_GAS_PRICE)
-//         .with_protocol_config(test_setup.protocol_config.clone())
-//         .build()
-//         .await;
-//     authority_state_2
-//         .insert_genesis_objects(&genesis_objects)
-//         .await;
-//
-//     // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
-//     register_fail_point_arg("initial_congestion_tracker", move || {
-//         Some(SharedObjectCongestionTracker::new(
-//             [(shared_object_1.0, 10)],
-//             PerObjectCongestionControlMode::TotalGasBudget,
-//             false,
-//             Some(
-//                 test_setup
-//                     .protocol_config
-//                     .max_accumulated_txn_cost_per_object_in_mysticeti_commit(),
-//             ),
-//             Some(1000), // Not used.
-//             None,       // Not used.
-//             0,          // Disable overage.
-//             0,
-//         ))
-//     });
-//
-//     // Runs a transaction that touches shared_object_1, shared_object_2 and an owned object.
-//     let (congested_tx, effects) = update_objects(
-//         &authority_state,
-//         &test_setup.package,
-//         &test_setup.sender,
-//         &test_setup.sender_key,
-//         &test_setup.gas_object_id,
-//         &(shared_object_1.0, shared_object_1.1),
-//         &(shared_object_2.0, shared_object_2.1),
-//         &authority_state
-//             .get_object(&owned_object.0)
-//             .await
-//             .unwrap()
-//             .compute_object_reference(),
-//     )
-//     .await;
-//
-//     // Transaction should be cancelled with `shared_object_1` as the congested object.
-//     assert_eq!(
-//         effects.status(),
-//         &ExecutionStatus::Failure {
-//             error: ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
-//                 congested_objects: CongestedObjects(vec![shared_object_1.0]),
-//             },
-//             command: None
-//         }
-//     );
-//
-//     // Tests consensus object versions in effects are set correctly.
-//     assert_eq!(
-//         effects.input_consensus_objects(),
-//         vec![
-//             InputConsensusObject::Cancelled(shared_object_1.0, SequenceNumber::CONGESTED),
-//             InputConsensusObject::Cancelled(shared_object_2.0, SequenceNumber::CANCELLED_READ)
-//         ]
-//     );
-//
-//     // Run the same transaction in `authority_state_2`, but using the above effects for the execution.
-//     let (cert, _) = certify_shared_obj_transaction_no_execution(&authority_state_2, congested_tx)
-//         .await
-//         .unwrap();
-//     let assigned_versions = authority_state_2
-//         .epoch_store_for_testing()
-//         .acquire_shared_version_assignments_from_effects(
-//             &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
-//             &effects,
-//             authority_state_2.get_object_cache_reader().as_ref(),
-//         )
-//         .unwrap();
-//     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
-//     let (effects_2, execution_error) = authority_state_2
-//         .try_execute_for_test(&cert, execution_env)
-//         .await
-//         .unwrap();
-//
-//     // Should result in the same cancellation.
-//     assert_eq!(
-//         execution_error.unwrap().to_execution_status().0,
-//         ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
-//             congested_objects: CongestedObjects(vec![shared_object_1.0]),
-//         }
-//     );
-//     assert_eq!(&effects, effects_2.data())
-// }
+#[sim_test]
+async fn test_congestion_control_execution_cancellation() {
+    telemetry_subscribers::init_for_testing();
+
+    // Creates a authority state with 2 shared object and 1 owned object. We use this setup
+    // to initialize two more authority states: one tests cancellation execution, and one tests
+    // executing cancelled transaction from effect.
+    let test_setup = TestSetup::new().await;
+    let shared_object_1 = test_setup.create_shared_object().await;
+    let shared_object_2 = test_setup.create_shared_object().await;
+    let owned_object = test_setup.create_owned_object().await;
+
+    // Gets objects that can be used as genesis objects for new authority states.
+    let genesis_objects = test_setup
+        .create_genesis_objects_for_new_authority_state(&[
+            shared_object_1.0,
+            shared_object_2.0,
+            owned_object.0,
+        ])
+        .await;
+
+    // Creates two authority states with the same genesis objects for the actual test.
+    let authority_state = TestAuthorityBuilder::new()
+        .with_reference_gas_price(TEST_ONLY_GAS_PRICE)
+        .with_protocol_config(test_setup.protocol_config.clone())
+        .build()
+        .await;
+    authority_state
+        .insert_genesis_objects(&genesis_objects)
+        .await;
+    let authority_state_2 = TestAuthorityBuilder::new()
+        .with_reference_gas_price(TEST_ONLY_GAS_PRICE)
+        .with_protocol_config(test_setup.protocol_config.clone())
+        .build()
+        .await;
+    authority_state_2
+        .insert_genesis_objects(&genesis_objects)
+        .await;
+
+    // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
+    register_fail_point_arg("initial_congestion_tracker", move || {
+        Some(SharedObjectCongestionTracker::new(
+            [(shared_object_1.0, 10)],
+            PerObjectCongestionControlMode::TotalGasBudget,
+            false,
+            Some(
+                test_setup
+                    .protocol_config
+                    .max_accumulated_txn_cost_per_object_in_mysticeti_commit(),
+            ),
+            Some(1000), // Not used.
+            None,       // Not used.
+            0,          // Disable overage.
+            0,
+        ))
+    });
+
+    // Runs a transaction that touches shared_object_1, shared_object_2 and an owned object.
+    let (congested_tx, effects) = update_objects(
+        &authority_state,
+        &test_setup.package,
+        &test_setup.sender,
+        &test_setup.sender_key,
+        &test_setup.gas_object_id,
+        &(shared_object_1.0, shared_object_1.1),
+        &(shared_object_2.0, shared_object_2.1),
+        &authority_state
+            .get_object(&owned_object.0)
+            .await
+            .unwrap()
+            .compute_object_reference(),
+    )
+    .await;
+
+    // Transaction should be cancelled with `shared_object_1` as the congested object.
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
+                congested_objects: CongestedObjects(vec![shared_object_1.0]),
+            },
+            command: None
+        }
+    );
+
+    // Tests consensus object versions in effects are set correctly.
+    assert_eq!(
+        effects.input_consensus_objects(),
+        vec![
+            InputConsensusObject::Cancelled(shared_object_1.0, SequenceNumber::CONGESTED),
+            InputConsensusObject::Cancelled(shared_object_2.0, SequenceNumber::CANCELLED_READ)
+        ]
+    );
+
+    // Run the same transaction in `authority_state_2`, but using the above effects for the execution.
+    let (cert, _) = certify_shared_obj_transaction_no_execution(&authority_state_2, congested_tx)
+        .await
+        .unwrap();
+    let assigned_versions = authority_state_2
+        .epoch_store_for_testing()
+        .acquire_shared_version_assignments_from_effects(
+            &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
+            &effects,
+            authority_state_2.get_object_cache_reader().as_ref(),
+        )
+        .unwrap();
+    let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
+    let (effects_2, execution_error) = authority_state_2
+        .try_execute_for_test(&cert, execution_env)
+        .await
+        .unwrap();
+
+    // Should result in the same cancellation.
+    assert_eq!(
+        execution_error.unwrap().to_execution_status().0,
+        ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
+            congested_objects: CongestedObjects(vec![shared_object_1.0]),
+        }
+    );
+    assert_eq!(&effects, effects_2.data())
+}

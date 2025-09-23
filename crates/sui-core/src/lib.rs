@@ -58,9 +58,6 @@ pub mod verify_indexes;
 #[path = "unit_tests/congestion_control_tests.rs"]
 mod congestion_control_tests;
 #[cfg(test)]
-#[path = "unit_tests/move_package_management_tests.rs"]
-mod move_package_management_tests;
-#[cfg(test)]
 #[path = "unit_tests/move_package_publish_tests.rs"]
 mod move_package_publish_tests;
 #[cfg(test)]
@@ -77,9 +74,9 @@ mod pay_sui_tests;
 mod shared_object_deletion_tests;
 #[cfg(test)]
 pub mod test_authority_clients;
-// #[cfg(test)]
-// #[path = "unit_tests/transfer_to_object_tests.rs"]
-// mod transfer_to_object_tests;
+#[cfg(test)]
+#[path = "unit_tests/transfer_to_object_tests.rs"]
+mod transfer_to_object_tests;
 #[cfg(test)]
 #[path = "unit_tests/type_param_tests.rs"]
 mod type_param_tests;

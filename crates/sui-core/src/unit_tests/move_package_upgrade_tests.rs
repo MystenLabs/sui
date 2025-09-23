@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: pkg-alt CLIPPY UNUSED
-#![allow(unused)]
-#![allow(clippy::unused)]
 use move_core_types::{ident_str, language_storage::StructTag};
 use sui_move_build::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
@@ -298,7 +295,6 @@ impl UpgradeStateRunner {
     }
 }
 
-/* TODO: pkg-alt REMOVED TESTS FOR CI
 #[tokio::test]
 async fn test_upgrade_package_happy_path() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
@@ -1581,8 +1577,6 @@ async fn test_upgrade_more_than_max_packages_error() {
         }
     );
 }
-
-*/
 
 async fn assert_valid_dep_only_upgrade(runner: &mut UpgradeStateRunner, package_name: &str) {
     let (digest, modules) = build_upgrade_test_modules(package_name);

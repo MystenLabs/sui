@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: pkg-alt CLIPPY UNUSED
-#![allow(unused)]
-#![allow(clippy::unused)]
 use crate::authority::auth_unit_test_utils::{
     publish_package_on_single_authority, upgrade_package_on_single_authority,
 };
@@ -285,165 +282,164 @@ async fn test_package_publish_disabled() {
     assert_denied(&result);
 }
 
-// TODO: pkg-alt FAILING TEST
-// #[tokio::test]
-// async fn test_package_denied() {
-//     let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
-//     let accounts = get_accounts_and_coins(&network_config, &state);
-//     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-//     // Publish 3 packages, where b depends on c, and a depends on b.
-//     // Also upgrade c to c', and upgrade b to b' (which will start using c' instead of c as dependency).
-//     let (tx_c, (package_c, cap_c)) = publish_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/c"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[0],
-//         [("c", ObjectID::ZERO)],
-//         vec![],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//     let (tx_b, (package_b, cap_b)) = publish_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/b"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[1],
-//         [("b", ObjectID::ZERO), ("c", package_c)],
-//         vec![package_c],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//     let (tx_a, (package_a, cap_a)) = publish_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/a"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[2],
-//         [("b", package_b), ("c", package_c)],
-//         vec![package_b, package_c],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//     let (tx_c_prime, package_c_prime) = upgrade_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/c"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[3],
-//         package_c,
-//         cap_c,
-//         [("c", ObjectID::ZERO)],
-//         vec![],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//     let (tx_b_prime, package_b_prime) = upgrade_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/b"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[4],
-//         package_b,
-//         cap_b,
-//         [("b", ObjectID::ZERO), ("c", package_c)],
-//         [("C", package_c_prime)],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//
-//     let batch = state.get_cache_commit().build_db_batch(
-//         state.epoch_store_for_testing().epoch(),
-//         &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
-//     );
-//
-//     state.get_cache_commit().commit_transaction_outputs(
-//         state.epoch_store_for_testing().epoch(),
-//         batch,
-//         &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
-//     );
-//
-//     // Re-create the state such that we could deny package c.
-//     let state = reload_state_with_new_deny_config(
-//         &network_config,
-//         state,
-//         TransactionDenyConfigBuilder::new()
-//             .add_denied_package(package_c)
-//             .build(),
-//     )
-//     .await;
-//
-//     // Calling modules in package c directly should fail.
-//     let result =
-//         handle_move_call_transaction(&state, package_c, "c", "c", vec![], &accounts[0], 5).await;
-//     assert_denied(&result);
-//
-//     // Calling modules in package b should fail too as it directly depends on c.
-//     let result =
-//         handle_move_call_transaction(&state, package_c, "b", "b", vec![], &accounts[0], 6).await;
-//     assert_denied(&result);
-//
-//     // Calling modules in package a should fail too as it indirectly depends on c.
-//     let result =
-//         handle_move_call_transaction(&state, package_c, "a", "a", vec![], &accounts[0], 7).await;
-//     assert_denied(&result);
-//
-//     // Calling modules in c' should succeed as it is not denied.
-//     let result =
-//         handle_move_call_transaction(&state, package_c_prime, "c", "c", vec![], &accounts[0], 8)
-//             .await;
-//     assert!(result.is_ok());
-//
-//     // Calling modules in b' should succeed as it no longer depends on c.
-//     let result =
-//         handle_move_call_transaction(&state, package_b_prime, "b", "b", vec![], &accounts[0], 9)
-//             .await;
-//     assert!(result.is_ok());
-//
-//     // Publish a should fail because it has a dependency on c, which is denied.
-//     let result = publish_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/a"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[10],
-//         [("b", package_b), ("c", package_c)],
-//         vec![package_b, package_c],
-//         &state,
-//     )
-//     .await;
-//     assert_denied(&result);
-//
-//     // Upgrade a using old c as dependency should fail.
-//     let result = upgrade_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/a"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[11],
-//         package_a,
-//         cap_a,
-//         [("b", package_b), ("c", package_c)],
-//         [("B", package_b), ("C", package_c)],
-//         &state,
-//     )
-//     .await;
-//     assert_denied(&result);
-//
-//     // Upgrade a using c' as dependency will succeed since it no longer depends on c.
-//     let result = upgrade_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/a"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[12],
-//         package_a,
-//         cap_a,
-//         [("b", package_b), ("c", package_c)],
-//         [("B", package_b), ("C", package_c_prime)],
-//         &state,
-//     )
-//     .await;
-//     assert!(result.is_ok());
-// }
+#[tokio::test]
+async fn test_package_denied() {
+    let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
+    let accounts = get_accounts_and_coins(&network_config, &state);
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Publish 3 packages, where b depends on c, and a depends on b.
+    // Also upgrade c to c', and upgrade b to b' (which will start using c' instead of c as dependency).
+    let (tx_c, (package_c, cap_c)) = publish_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/c"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[0],
+        [("c", ObjectID::ZERO)],
+        vec![],
+        &state,
+    )
+    .await
+    .unwrap();
+    let (tx_b, (package_b, cap_b)) = publish_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/b"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[1],
+        [("b", ObjectID::ZERO), ("c", package_c)],
+        vec![package_c],
+        &state,
+    )
+    .await
+    .unwrap();
+    let (tx_a, (package_a, cap_a)) = publish_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/a"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[2],
+        [("b", package_b), ("c", package_c)],
+        vec![package_b, package_c],
+        &state,
+    )
+    .await
+    .unwrap();
+    let (tx_c_prime, package_c_prime) = upgrade_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/c"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[3],
+        package_c,
+        cap_c,
+        [("c", ObjectID::ZERO)],
+        vec![],
+        &state,
+    )
+    .await
+    .unwrap();
+    let (tx_b_prime, package_b_prime) = upgrade_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/b"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[4],
+        package_b,
+        cap_b,
+        [("b", ObjectID::ZERO), ("c", package_c)],
+        [("C", package_c_prime)],
+        &state,
+    )
+    .await
+    .unwrap();
+
+    let batch = state.get_cache_commit().build_db_batch(
+        state.epoch_store_for_testing().epoch(),
+        &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
+    );
+
+    state.get_cache_commit().commit_transaction_outputs(
+        state.epoch_store_for_testing().epoch(),
+        batch,
+        &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
+    );
+
+    // Re-create the state such that we could deny package c.
+    let state = reload_state_with_new_deny_config(
+        &network_config,
+        state,
+        TransactionDenyConfigBuilder::new()
+            .add_denied_package(package_c)
+            .build(),
+    )
+    .await;
+
+    // Calling modules in package c directly should fail.
+    let result =
+        handle_move_call_transaction(&state, package_c, "c", "c", vec![], &accounts[0], 5).await;
+    assert_denied(&result);
+
+    // Calling modules in package b should fail too as it directly depends on c.
+    let result =
+        handle_move_call_transaction(&state, package_c, "b", "b", vec![], &accounts[0], 6).await;
+    assert_denied(&result);
+
+    // Calling modules in package a should fail too as it indirectly depends on c.
+    let result =
+        handle_move_call_transaction(&state, package_c, "a", "a", vec![], &accounts[0], 7).await;
+    assert_denied(&result);
+
+    // Calling modules in c' should succeed as it is not denied.
+    let result =
+        handle_move_call_transaction(&state, package_c_prime, "c", "c", vec![], &accounts[0], 8)
+            .await;
+    assert!(result.is_ok());
+
+    // Calling modules in b' should succeed as it no longer depends on c.
+    let result =
+        handle_move_call_transaction(&state, package_b_prime, "b", "b", vec![], &accounts[0], 9)
+            .await;
+    assert!(result.is_ok());
+
+    // Publish a should fail because it has a dependency on c, which is denied.
+    let result = publish_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/a"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[10],
+        [("b", package_b), ("c", package_c)],
+        vec![package_b, package_c],
+        &state,
+    )
+    .await;
+    assert_denied(&result);
+
+    // Upgrade a using old c as dependency should fail.
+    let result = upgrade_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/a"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[11],
+        package_a,
+        cap_a,
+        [("b", package_b), ("c", package_c)],
+        [("B", package_b), ("C", package_c)],
+        &state,
+    )
+    .await;
+    assert_denied(&result);
+
+    // Upgrade a using c' as dependency will succeed since it no longer depends on c.
+    let result = upgrade_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/a"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[12],
+        package_a,
+        cap_a,
+        [("b", package_b), ("c", package_c)],
+        [("B", package_b), ("C", package_c_prime)],
+        &state,
+    )
+    .await;
+    assert!(result.is_ok());
+}
 
 #[tokio::test]
 async fn test_certificate_deny() {
@@ -576,165 +572,164 @@ async fn test_package_publish_disabled_dynamic_check() {
     assert_denied(&result);
 }
 
-// TODO: pkg-alt FAILING TEST
-// #[tokio::test]
-// async fn test_package_denied_dynamic_check() {
-//     let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
-//     let accounts = get_accounts_and_coins(&network_config, &state);
-//     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-//     // Publish 3 packages, where b depends on c, and a depends on b.
-//     // Also upgrade c to c', and upgrade b to b' (which will start using c' instead of c as dependency).
-//     let (tx_c, (package_c, cap_c)) = publish_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/c"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[0],
-//         [("c", ObjectID::ZERO)],
-//         vec![],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//     let (tx_b, (package_b, cap_b)) = publish_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/b"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[1],
-//         [("b", ObjectID::ZERO), ("c", package_c)],
-//         vec![package_c],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//     let (tx_a, (package_a, cap_a)) = publish_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/a"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[2],
-//         [("b", package_b), ("c", package_c)],
-//         vec![package_b, package_c],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//     let (tx_c_prime, package_c_prime) = upgrade_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/c"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[3],
-//         package_c,
-//         cap_c,
-//         [("c", ObjectID::ZERO)],
-//         vec![],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//     let (tx_b_prime, package_b_prime) = upgrade_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/b"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[4],
-//         package_b,
-//         cap_b,
-//         [("b", ObjectID::ZERO), ("c", package_c)],
-//         [("C", package_c_prime)],
-//         &state,
-//     )
-//     .await
-//     .unwrap();
-//
-//     let batch = state.get_cache_commit().build_db_batch(
-//         state.epoch_store_for_testing().epoch(),
-//         &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
-//     );
-//
-//     state.get_cache_commit().commit_transaction_outputs(
-//         state.epoch_store_for_testing().epoch(),
-//         batch,
-//         &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
-//     );
-//
-//     let program = include_str!("data/dynamic_checks/package_denied.star")
-//         .replace("$OBJECT_ID", &format!("{}", package_c));
-//     // Re-create the state such that we could deny package c.
-//     let state = reload_state_with_new_deny_config(
-//         &network_config,
-//         state,
-//         TransactionDenyConfigBuilder::new()
-//             .add_dynamic_transaction_checks(program.to_string())
-//             .unwrap()
-//             .build(),
-//     )
-//     .await;
-//
-//     // Calling modules in package c directly should fail.
-//     let result =
-//         handle_move_call_transaction(&state, package_c, "c", "c", vec![], &accounts[0], 5).await;
-//     assert_denied(&result);
-//
-//     // Calling modules in package b should fail too as it directly depends on c.
-//     let result =
-//         handle_move_call_transaction(&state, package_c, "b", "b", vec![], &accounts[0], 6).await;
-//     assert_denied(&result);
-//
-//     // Calling modules in package a should fail too as it indirectly depends on c.
-//     let result =
-//         handle_move_call_transaction(&state, package_c, "a", "a", vec![], &accounts[0], 7).await;
-//     assert_denied(&result);
-//
-//     // Calling modules in c' should succeed as it is not denied.
-//     let result =
-//         handle_move_call_transaction(&state, package_c_prime, "c", "c", vec![], &accounts[0], 8)
-//             .await;
-//     assert!(result.is_ok());
-//
-//     // Calling modules in b' should succeed as it no longer depends on c.
-//     let result =
-//         handle_move_call_transaction(&state, package_b_prime, "b", "b", vec![], &accounts[0], 9)
-//             .await;
-//     assert!(result.is_ok());
-//
-//     // Publish a should fail because it has a dependency on c, which is denied.
-//     let result = publish_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/a"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[10],
-//         [("b", package_b), ("c", package_c)],
-//         vec![package_b, package_c],
-//         &state,
-//     )
-//     .await;
-//     assert_denied(&result);
-//
-//     // Upgrade a using old c as dependency should fail.
-//     let result = upgrade_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/a"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[11],
-//         package_a,
-//         cap_a,
-//         [("b", package_b), ("c", package_c)],
-//         [("B", package_b), ("C", package_c)],
-//         &state,
-//     )
-//     .await;
-//     assert_denied(&result);
-//
-//     // Upgrade a using c' as dependency will succeed since it no longer depends on c.
-//     let result = upgrade_package_on_single_authority(
-//         &path.join("src/unit_tests/data/package_deny/a"),
-//         accounts[0].0,
-//         &accounts[0].1,
-//         accounts[0].2[12],
-//         package_a,
-//         cap_a,
-//         [("b", package_b), ("c", package_c)],
-//         [("B", package_b), ("C", package_c_prime)],
-//         &state,
-//     )
-//     .await;
-//     assert!(result.is_ok());
-// }
+#[tokio::test]
+async fn test_package_denied_dynamic_check() {
+    let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
+    let accounts = get_accounts_and_coins(&network_config, &state);
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Publish 3 packages, where b depends on c, and a depends on b.
+    // Also upgrade c to c', and upgrade b to b' (which will start using c' instead of c as dependency).
+    let (tx_c, (package_c, cap_c)) = publish_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/c"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[0],
+        [("c", ObjectID::ZERO)],
+        vec![],
+        &state,
+    )
+    .await
+    .unwrap();
+    let (tx_b, (package_b, cap_b)) = publish_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/b"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[1],
+        [("b", ObjectID::ZERO), ("c", package_c)],
+        vec![package_c],
+        &state,
+    )
+    .await
+    .unwrap();
+    let (tx_a, (package_a, cap_a)) = publish_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/a"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[2],
+        [("b", package_b), ("c", package_c)],
+        vec![package_b, package_c],
+        &state,
+    )
+    .await
+    .unwrap();
+    let (tx_c_prime, package_c_prime) = upgrade_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/c"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[3],
+        package_c,
+        cap_c,
+        [("c", ObjectID::ZERO)],
+        vec![],
+        &state,
+    )
+    .await
+    .unwrap();
+    let (tx_b_prime, package_b_prime) = upgrade_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/b"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[4],
+        package_b,
+        cap_b,
+        [("b", ObjectID::ZERO), ("c", package_c)],
+        [("C", package_c_prime)],
+        &state,
+    )
+    .await
+    .unwrap();
+
+    let batch = state.get_cache_commit().build_db_batch(
+        state.epoch_store_for_testing().epoch(),
+        &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
+    );
+
+    state.get_cache_commit().commit_transaction_outputs(
+        state.epoch_store_for_testing().epoch(),
+        batch,
+        &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
+    );
+
+    let program = include_str!("data/dynamic_checks/package_denied.star")
+        .replace("$OBJECT_ID", &format!("{}", package_c));
+    // Re-create the state such that we could deny package c.
+    let state = reload_state_with_new_deny_config(
+        &network_config,
+        state,
+        TransactionDenyConfigBuilder::new()
+            .add_dynamic_transaction_checks(program.to_string())
+            .unwrap()
+            .build(),
+    )
+    .await;
+
+    // Calling modules in package c directly should fail.
+    let result =
+        handle_move_call_transaction(&state, package_c, "c", "c", vec![], &accounts[0], 5).await;
+    assert_denied(&result);
+
+    // Calling modules in package b should fail too as it directly depends on c.
+    let result =
+        handle_move_call_transaction(&state, package_c, "b", "b", vec![], &accounts[0], 6).await;
+    assert_denied(&result);
+
+    // Calling modules in package a should fail too as it indirectly depends on c.
+    let result =
+        handle_move_call_transaction(&state, package_c, "a", "a", vec![], &accounts[0], 7).await;
+    assert_denied(&result);
+
+    // Calling modules in c' should succeed as it is not denied.
+    let result =
+        handle_move_call_transaction(&state, package_c_prime, "c", "c", vec![], &accounts[0], 8)
+            .await;
+    assert!(result.is_ok());
+
+    // Calling modules in b' should succeed as it no longer depends on c.
+    let result =
+        handle_move_call_transaction(&state, package_b_prime, "b", "b", vec![], &accounts[0], 9)
+            .await;
+    assert!(result.is_ok());
+
+    // Publish a should fail because it has a dependency on c, which is denied.
+    let result = publish_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/a"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[10],
+        [("b", package_b), ("c", package_c)],
+        vec![package_b, package_c],
+        &state,
+    )
+    .await;
+    assert_denied(&result);
+
+    // Upgrade a using old c as dependency should fail.
+    let result = upgrade_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/a"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[11],
+        package_a,
+        cap_a,
+        [("b", package_b), ("c", package_c)],
+        [("B", package_b), ("C", package_c)],
+        &state,
+    )
+    .await;
+    assert_denied(&result);
+
+    // Upgrade a using c' as dependency will succeed since it no longer depends on c.
+    let result = upgrade_package_on_single_authority(
+        &path.join("src/unit_tests/data/package_deny/a"),
+        accounts[0].0,
+        &accounts[0].1,
+        accounts[0].2[12],
+        package_a,
+        cap_a,
+        [("b", package_b), ("c", package_c)],
+        [("B", package_b), ("C", package_c_prime)],
+        &state,
+    )
+    .await;
+    assert!(result.is_ok());
+}
