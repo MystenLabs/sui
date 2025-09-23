@@ -337,8 +337,7 @@ impl EffectsContents {
         after: Option<CUnchangedConsensusObject>,
         last: Option<u64>,
         before: Option<CUnchangedConsensusObject>,
-    ) -> Result<Option<Connection<CUnchangedConsensusObject, UnchangedConsensusObject>>, RpcError>
-    {
+    ) -> Result<Option<Connection<String, UnchangedConsensusObject>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -360,8 +359,10 @@ impl EffectsContents {
                 unchanged_consensus_objects[*edge.cursor].clone(),
                 epoch,
             );
-            conn.edges
-                .push(Edge::new(edge.cursor, unchanged_consensus_object));
+            conn.edges.push(Edge::new(
+                edge.cursor.encode_cursor(),
+                unchanged_consensus_object,
+            ));
         }
 
         Ok(Some(conn))
