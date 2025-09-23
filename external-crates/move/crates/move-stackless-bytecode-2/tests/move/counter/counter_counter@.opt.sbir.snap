@@ -13,7 +13,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
         reg_0 : &mut 0x0::counter::Counter = Copy(lcl_0)
         reg_1 : &u64 = ImmBorrowField<u64>(reg_0 : &mut 0x0::counter::Counter)
         reg_2 : u64 = ReadRef(reg_1 : &u64)
-        reg_4 : u64 = Add(Immediate(U64(1)), reg_2 : u64)
+        reg_4 : u64 = Add(reg_2 : u64, Immediate(U64(1)))
         reg_5 : &mut 0x0::counter::Counter = Move(lcl_0)
         reg_6 : &mut u64 = MutBorrowField<u64>(reg_5 : &mut 0x0::counter::Counter)
         WriteRef(reg_6 : &mut u64, reg_4 : u64)

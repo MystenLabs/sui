@@ -51,6 +51,7 @@ impl<'a, K: SourceKind> Context<'a, K> {
         new_reg
     }
 
+    #[allow(dead_code)]
     pub fn nth_register(&self, n: usize) -> &Register {
         self.logical_stack
             .get(self.logical_stack.len() - n)
