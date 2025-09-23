@@ -102,19 +102,19 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
             pipelines("Query", "transactions", Some(filters))
         }
 
-        // Checkpoint queries
-        ("Checkpoint", "artifactsDigest") => vec!["cp_sequence_numbers"],
+        // Checkpoint fields
+        ("Checkpoint", "artifactsDigest") => vec!["kv_checkpoints"],
         ("Checkpoint", "digest") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "contentDigest") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "epoch") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "networkTotalTransactions") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "previousCheckpointDigest") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "query") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "rollingGasSummary") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "sequenceNumber") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "summaryBcs") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "timestamp") => vec!["cp_sequence_numbers"],
-        ("Checkpoint", "validatorSignatures") => vec!["cp_sequence_numbers, kv_epoch_starts"],
+        ("Checkpoint", "contentDigest") => vec!["kv_checkpoints"],
+        ("Checkpoint", "epoch") => vec!["kv_checkpoints"],
+        ("Checkpoint", "networkTotalTransactions") => vec!["kv_checkpoints"],
+        ("Checkpoint", "previousCheckpointDigest") => vec!["kv_checkpoints"],
+        ("Checkpoint", "query") => vec!["kv_checkpoints"],
+        ("Checkpoint", "rollingGasSummary") => vec!["kv_checkpoints"],
+        ("Checkpoint", "sequenceNumber") => vec!["kv_checkpoints"],
+        ("Checkpoint", "summaryBcs") => vec!["kv_checkpoints"],
+        ("Checkpoint", "timestamp") => vec!["kv_checkpoints"],
+        ("Checkpoint", "validatorSignatures") => vec!["kv_checkpoints, kv_epoch_starts"],
         ("Checkpoint", "transactions") => pipelines("Query", "transactions", Some(filters)),
 
         // CoinMetadata queries
@@ -206,7 +206,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("IObject", "objectVersionsBefore") => vec!["obj_versions"],
         ("IObject", "objects") => vec!["consistent"],
         ("IObject", "owner") => vec!["obj_versions"],
-        ("IObject", "previousTransaction") => vec!["obj_versions", "tx_digests"],
+        ("IObject", "previousTransaction") => vec!["obj_versions", "kv_transactions"],
         ("IObject", "receivedTransactions") => {
             filters.push("affectedAddress".to_string());
             pipelines("Query", "transactions", Some(filters))
@@ -231,7 +231,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Object", "balance") => pipelines("IAddressable", "balance", None),
         ("Object", "balances") => pipelines("IAddressable", "balances", None),
         ("Object", "defaultSuiNsName") => pipelines("IAddressable", "defaultSuiNsName", None),
-        ("Object", "digest") => vec!["obj_versions"],
+        ("Object", "digest") => pipelines("IObject", "digest", None),
         ("Object", "dynamicField") => pipelines("IMoveObject", "dynamicField", None),
         ("Object", "dynamicFields") => pipelines("IMoveObject", "dynamicFields", None),
         ("Object", "dynamicObjectField") => pipelines("IMoveObject", "dynamicObjectField", None),
@@ -326,7 +326,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Query", "protocolConfigs") => vec!["kv_epoch_starts"],
         ("Query", "simulateTransaction") => vec![],
         ("Query", "suinsName") => vec!["obj_versions"],
-        ("Query", "transaction") => vec!["tx_digests"],
+        ("Query", "transaction") => vec!["kv_transactions"],
         ("Query", "transactionEffects") => vec!["cp_sequence_numbers", "tx_digests"],
         ("Query", "transactions") => {
             let mut pipelines = vec!["tx_digests"];
@@ -349,37 +349,37 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Query", "type") => vec!["kv_packages"],
 
         // Transaction queries
-        ("Transaction", "digest") => vec!["tx_digests"],
-        ("Transaction", "effects") => vec!["tx_digests"],
-        ("Transaction", "expiration") => vec!["tx_digests"],
-        ("Transaction", "gasInput") => vec!["tx_digests"],
-        ("Transaction", "kind") => vec!["tx_digests"],
-        ("Transaction", "sender") => vec!["tx_digests"],
-        ("Transaction", "signatures") => vec!["tx_digests"],
-        ("Transaction", "transactionBcs") => vec!["tx_digests"],
+        ("Transaction", "digest") => vec!["kv_transactions"],
+        ("Transaction", "effects") => vec!["kv_transactions"],
+        ("Transaction", "expiration") => vec!["kv_transactions"],
+        ("Transaction", "gasInput") => vec!["kv_transactions"],
+        ("Transaction", "kind") => vec!["kv_transactions"],
+        ("Transaction", "sender") => vec!["kv_transactions"],
+        ("Transaction", "signatures") => vec!["kv_transactions"],
+        ("Transaction", "transactionBcs") => vec!["kv_transactions"],
 
         // TransactionEffects queries
-        ("TransactionEffects", "balanceChanges") => vec!["tx_balance_changes", "tx_digests"],
-        ("TransactionEffects", "checkpoint") => vec!["cp_sequence_numbers", "tx_digests"],
-        ("TransactionEffects", "dependencies") => vec!["cp_sequence_numbers", "tx_digests"],
-        ("TransactionEffects", "digest") => vec!["cp_sequence_numbers", "tx_digests"],
-        ("TransactionEffects", "effectsBcs") => vec!["cp_sequence_numbers", "tx_digests"],
-        ("TransactionEffects", "effectsDigest") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "balanceChanges") => vec!["tx_balance_changes", "kv_transactions"],
+        ("TransactionEffects", "checkpoint") => vec!["kv_transactions"],
+        ("TransactionEffects", "dependencies") => vec!["kv_transactions"],
+        ("TransactionEffects", "digest") => vec!["kv_transactions"],
+        ("TransactionEffects", "effectsBcs") => vec!["kv_transactions"],
+        ("TransactionEffects", "effectsDigest") => vec!["kv_transactions"],
         ("TransactionEffects", "epoch") => {
-            vec!["cp_sequence_numbers", "tx_digests", "kv_epoch_starts"]
+            vec!["kv_transactions", "kv_epoch_starts"]
         }
-        ("TransactionEffects", "events") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "events") => vec!["kv_transactions"],
         ("TransactionEffects", "executionError") => {
-            vec!["cp_sequence_numbers", "tx_digests", "kv_packages"]
+            vec!["kv_transactions", "kv_packages"]
         }
-        ("TransactionEffects", "gasEffects") => vec!["cp_sequence_numbers", "tx_digests"],
-        ("TransactionEffects", "lamportVersion") => vec!["cp_sequence_numbers", "tx_digests"],
-        ("TransactionEffects", "objectChanges") => vec!["cp_sequence_numbers", "tx_digests"],
-        ("TransactionEffects", "status") => vec!["cp_sequence_numbers", "tx_digests"],
-        ("TransactionEffects", "timestamp") => vec!["cp_sequence_numbers", "tx_digests"],
-        ("TransactionEffects", "transaction") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("TransactionEffects", "gasEffects") => vec!["obj_versions", "kv_transactions"],
+        ("TransactionEffects", "lamportVersion") => vec!["kv_transactions"],
+        ("TransactionEffects", "objectChanges") => vec!["kv_transactions"],
+        ("TransactionEffects", "status") => vec!["kv_transactions"],
+        ("TransactionEffects", "timestamp") => vec!["kv_transactions"],
+        ("TransactionEffects", "transaction") => vec!["kv_transactions"],
         ("TransactionEffects", "unchangedConsensusObjects") => {
-            vec!["cp_sequence_numbers", "tx_digests"]
+            vec!["kv_transactions"]
         }
         (_, _) => vec![],
     }
