@@ -738,6 +738,7 @@ sui-node = { path = "crates/sui-node" }
 sui-open-rpc = { path = "crates/sui-open-rpc" }
 sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
 sui-package-dump = { path = "crates/sui-package-dump" }
+sui-package-alt = { path = "crates/sui-package-alt" }
 sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
 sui-pg-db = { path = "crates/sui-pg-db" }

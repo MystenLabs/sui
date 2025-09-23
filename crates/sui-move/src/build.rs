@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use move_cli::base::{self};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
-use std::path::Path;
+use std::{fs, path::Path};
 use sui_move_build::BuildConfig;
 
-// const LAYOUTS_DIR: &str = "layouts";
-// const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
+const LAYOUTS_DIR: &str = "layouts";
+const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
 
 #[derive(Parser)]
 #[group(id = "sui-move-build")]
@@ -16,8 +17,8 @@ pub struct Build {
     /// when dumping bytecode as base64)
     #[clap(long, global = true)]
     pub with_unpublished_dependencies: bool,
-    #[clap(long, global = true)]
     /// Whether we are printing in base64.
+    #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
     /// [Mainly for testing, not recommended for production]
     /// Don't specialize the package to the active chain when dumping bytecode as Base64. This
@@ -45,9 +46,9 @@ impl Build {
         path: Option<&Path>,
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
-        let path = path.unwrap_or(Path::new("."));
+        let rerooted_path = base::reroot_path(path)?;
         Self::execute_internal(
-            path,
+            &rerooted_path,
             build_config,
             self.generate_struct_layouts,
             self.chain_id.clone(),
@@ -55,36 +56,37 @@ impl Build {
     }
 
     pub fn execute_internal(
-        path: &Path,
+        rerooted_path: &Path,
         config: MoveBuildConfig,
-        _generate_struct_layouts: bool,
+        generate_struct_layouts: bool,
         chain_id: Option<String>,
     ) -> anyhow::Result<()> {
-        let _ = BuildConfig {
+        let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
             chain_id,
         }
-        .build(path)?;
+        .build(rerooted_path)?;
 
-        // if generate_struct_layouts {
-        //     let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
-        //     // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
-        //     let dir_name = rerooted_path
-        //         .join("build")
-        //         .join(pkg.package.compiled_package_info.package_name.as_str())
-        //         .join(LAYOUTS_DIR);
-        //     let layout_filename = dir_name.join(STRUCT_LAYOUTS_FILENAME);
-        //     fs::create_dir_all(dir_name)?;
-        //     fs::write(layout_filename, layout_str)?
-        // }
-        //
+        if generate_struct_layouts {
+            let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
+            // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
+            let dir_name = rerooted_path
+                .join("build")
+                .join(pkg.package.compiled_package_info.package_name.as_str())
+                .join(LAYOUTS_DIR);
+            let layout_filename = dir_name.join(STRUCT_LAYOUTS_FILENAME);
+            fs::create_dir_all(dir_name)?;
+            fs::write(layout_filename, layout_str)?
+        }
+
+        // TODO: pkg-alt - do we need to fix this? Now publishing holds the build info
         // pkg.package
         //     .compiled_package_info
         //     .build_flags
         //     .update_lock_file_toolchain_version(rerooted_path, env!("CARGO_PKG_VERSION").into())?;
-        //
+
         Ok(())
     }
 }

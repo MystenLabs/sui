@@ -99,50 +99,6 @@ pub struct BuildConfig {
     pub chain_id: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-pub struct PackageDependencies {
-    /// Set of published dependencies (name and address).
-    pub published: BTreeMap<Symbol, ObjectID>,
-    /// Set of unpublished dependencies (name).
-    pub unpublished: BTreeSet<Symbol>,
-    /// Set of dependencies with invalid `published-at` addresses.
-    pub invalid: BTreeMap<Symbol, String>,
-    /// Set of dependencies that have conflicting `published-at` addresses. The key refers to
-    /// the package, and the tuple refers to the address in the (Move.lock, Move.toml) respectively.
-    pub conflicting: BTreeMap<Symbol, (ObjectID, ObjectID)>,
-}
-
-impl PackageDependencies {
-    pub fn new<F: MoveFlavor>(root_pkg: &RootPackage<F>) -> anyhow::Result<Self> {
-        let mut published = BTreeMap::new();
-        let mut unpublished = BTreeSet::new();
-
-        let packages = root_pkg.packages()?;
-
-        for pkg in packages {
-            match pkg.named_address() {
-                NamedAddress::RootPackage(_) => (),
-                NamedAddress::Unpublished { dummy_addr: _ } => {
-                    unpublished.insert(pkg.name().as_str().into());
-                }
-                NamedAddress::Defined(original_id) => {
-                    published.insert(
-                        pkg.name().as_str().into(),
-                        ObjectID::from_address(original_id.0),
-                    );
-                }
-            }
-        }
-
-        Ok(Self {
-            published,
-            unpublished,
-            invalid: BTreeMap::new(),
-            conflicting: BTreeMap::new(),
-        })
-    }
-}
-
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
         let install_dir = mysten_common::tempdir().unwrap().keep();
@@ -557,55 +513,54 @@ impl CompiledPackage {
             }
         })
     }
-    //
-    //     pub fn verify_unpublished_dependencies(
-    //         &self,
-    //         unpublished_deps: &BTreeSet<Symbol>,
-    //     ) -> SuiResult<()> {
-    //         if unpublished_deps.is_empty() {
-    //             return Ok(());
-    //         }
-    //
-    //         let errors = self
-    //             .package
-    //             .deps_compiled_units
-    //             .iter()
-    //             .filter_map(|(p, m)| {
-    //                 if !unpublished_deps.contains(p) || m.unit.module.address() == &AccountAddress::ZERO
-    //                 {
-    //                     return None;
-    //                 }
-    //                 Some(format!(
-    //                     " - {}::{} in dependency {}",
-    //                     m.unit.module.address(),
-    //                     m.unit.name,
-    //                     p
-    //                 ))
-    //             })
-    //             .collect::<Vec<String>>();
-    //
-    //         if errors.is_empty() {
-    //             return Ok(());
-    //         }
-    //
-    //         let mut error_message = vec![];
-    //         error_message.push(
-    //             "The following modules in package dependencies set a non-zero self-address:".into(),
-    //         );
-    //         error_message.extend(errors);
-    //         error_message.push(
-    //             "If these packages really are unpublished, their self-addresses should be set \
-    // 	     to \"0x0\" in the [addresses] section of the manifest when publishing. If they \
-    // 	     are already published, ensure they specify the address in the `published-at` of \
-    // 	     their Move.toml manifest."
-    //                 .into(),
-    //         );
-    //
-    //         Err(SuiError::ModulePublishFailure {
-    //             error: error_message.join("\n"),
-    //         })
-    //     }
-    //
+
+    pub fn verify_unpublished_dependencies(
+        &self,
+        unpublished_deps: &BTreeSet<Symbol>,
+    ) -> SuiResult<()> {
+        if unpublished_deps.is_empty() {
+            return Ok(());
+        }
+
+        let errors = self
+            .package
+            .deps_compiled_units
+            .iter()
+            .filter_map(|(p, m)| {
+                if !unpublished_deps.contains(p) || m.unit.module.address() == &AccountAddress::ZERO
+                {
+                    return None;
+                }
+                Some(format!(
+                    " - {}::{} in dependency {}",
+                    m.unit.module.address(),
+                    m.unit.name,
+                    p
+                ))
+            })
+            .collect::<Vec<String>>();
+
+        if errors.is_empty() {
+            return Ok(());
+        }
+
+        let mut error_message = vec![];
+        error_message.push(
+            "The following modules in package dependencies set a non-zero self-address:".into(),
+        );
+        error_message.extend(errors);
+        error_message.push(
+            "If these packages really are unpublished, their self-addresses should be not 
+            explicitly set when publishing. If they are already published, ensure they specify the \
+            address in the `published-at` of their Published.toml file."
+                .into(),
+        );
+
+        Err(SuiError::ModulePublishFailure {
+            error: error_message.join("\n"),
+        })
+    }
+
     pub fn get_published_dependencies_ids(&self) -> Vec<ObjectID> {
         self.dependency_ids.published.values().cloned().collect()
     }
@@ -627,6 +582,50 @@ pub enum PublishedAtError {
     Invalid(String),
     #[error("The 'published-at' field is not present in Move.toml or Move.lock")]
     NotPresent,
+}
+
+#[derive(Debug, Clone)]
+pub struct PackageDependencies {
+    /// Set of published dependencies (name and address).
+    pub published: BTreeMap<Symbol, ObjectID>,
+    /// Set of unpublished dependencies (name).
+    pub unpublished: BTreeSet<Symbol>,
+    /// Set of dependencies with invalid `published-at` addresses.
+    pub invalid: BTreeMap<Symbol, String>,
+    /// Set of dependencies that have conflicting `published-at` addresses. The key refers to
+    /// the package, and the tuple refers to the address in the (Move.lock, Move.toml) respectively.
+    pub conflicting: BTreeMap<Symbol, (ObjectID, ObjectID)>,
+}
+
+impl PackageDependencies {
+    pub fn new<F: MoveFlavor>(root_pkg: &RootPackage<F>) -> anyhow::Result<Self> {
+        let mut published = BTreeMap::new();
+        let mut unpublished = BTreeSet::new();
+
+        let packages = root_pkg.packages()?;
+
+        for pkg in packages {
+            match pkg.named_address() {
+                NamedAddress::RootPackage(_) => (),
+                NamedAddress::Unpublished { dummy_addr: _ } => {
+                    unpublished.insert(pkg.name().as_str().into());
+                }
+                NamedAddress::Defined(original_id) => {
+                    published.insert(
+                        pkg.name().as_str().into(),
+                        ObjectID::from_address(original_id.0),
+                    );
+                }
+            }
+        }
+
+        Ok(Self {
+            published,
+            unpublished,
+            invalid: BTreeMap::new(),
+            conflicting: BTreeMap::new(),
+        })
+    }
 }
 
 pub fn parse_legacy_pkg_info(package_path: &Path) -> Result<LegacyPackageMetadata, anyhow::Error> {

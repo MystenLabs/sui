@@ -170,27 +170,6 @@ pub fn run_move_unit_tests(
         ))
     };
 
-    // tokio::runtime::Handle::current().block_on(move_cli::base::test::run_move_unit_tests::<
-    //     sui_package_alt::SuiFlavor,
-    //     Box<dyn Write + Send>,
-    // >(
-    //     path,
-    //     build_config,
-    //     UnitTestingConfig {
-    //         report_stacktrace_on_abort: true,
-    //         ..config
-    //     },
-    //     sui_move_natives::all_natives(
-    //         /* silent */ false,
-    //         &ProtocolConfig::get_for_max_version_UNSAFE(),
-    //     ),
-    //     Some(initial_cost_schedule_for_unit_tests()),
-    //     compute_coverage,
-    //     save_disassembly,
-    //     &mut writer,
-    // ))
-    // });
-
     result.map(|(test_result, warning_diags)| {
         if test_result == UnitTestResult::Success {
             if let Some(diags) = warning_diags {

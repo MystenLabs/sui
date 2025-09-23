@@ -233,7 +233,7 @@ impl ValidationMode {
     /// substituted with the specified address.
     #[allow(clippy::result_large_err)]
     fn local(&self, package: &CompiledPackage) -> Result<LocalModules, Error> {
-        let _sui_package = package;
+        let sui_package = package;
         let package = &package.package;
         let root_package = package.compiled_package_info.package_name;
         let mut map = LocalModules::new();
@@ -247,22 +247,24 @@ impl ValidationMode {
                     }
                 })?;
 
+            // TODO: pkg-alt does this still work correctly given that pkg names might have
+            // changed?
             // only keep modules that are actually used
             let deps_compiled_units: Vec<_> = deps_compiled_units
                 .into_iter()
-                //TODO!
-                // .filter(|pkg| {
-                //     sui_package
-                //         .dependency_ids
-                //         .published
-                //         .contains_key(&Symbol::from(pkg.0.as_str()))
-                // })
+                .filter(|pkg| {
+                    sui_package
+                        .dependency_ids
+                        .published
+                        .contains_key(&Symbol::from(pkg.0.as_str()))
+                })
                 .collect();
 
             for (package, local_unit) in deps_compiled_units {
                 let m = &local_unit.unit;
                 let module = m.name;
                 let address = m.address.into_inner();
+                let package = Symbol::from(package.as_str());
 
                 // Skip modules with on 0x0 because they are treated as part of the root package,
                 // even if they are a source dependency.
@@ -270,25 +272,8 @@ impl ValidationMode {
                     continue;
                 }
 
-                map.insert(
-                    (address, module),
-                    (Symbol::from(package.as_str()), m.module.clone()),
-                );
+                map.insert((address, module), (package, m.module.clone()));
             }
-
-            // TODO! no more bytecode deps
-            // Include bytecode dependencies.
-            // for (package, module) in sui_package.bytecode_deps.iter() {
-            //     let address = *module.address();
-            //     if address == AccountAddress::ZERO {
-            //         continue;
-            //     }
-            //
-            //     map.insert(
-            //         (address, Symbol::from(module.name().as_str())),
-            //         (Symbol::from(package.as_str()), module.clone()),
-            //     );
-            // }
         }
 
         let Self::Root { at, .. } = self else {
