@@ -231,7 +231,7 @@ pub fn package(
             &mut input_module,
         )?;
 
-        let key = identifier_interner::intern_ident_str(loaded_module.id.name()).unwrap();
+        let key = identifier_interner::intern_ident_str(loaded_module.id.name())?;
         assert!(
             package_context
                 .loaded_modules
@@ -373,7 +373,7 @@ fn initialize_type_refs(
 // Datatype Translation
 // -------------------------------------------------------------------------------------------------
 
-/// Loads strucks and enums, returning them and their datatype descriptors (for vtable entry).
+/// Loads structs and enums, returning them and their datatype descriptors (for vtable entry).
 fn datatypes(
     context: &mut PackageContext,
     version_id: &VersionId,
@@ -399,10 +399,12 @@ fn datatypes(
             .type_origin_table
             .get(&name.inner_pkg_key)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(format!(
-                    "Type origin not found for type {}",
-                    name.to_string().expect("No name")
-                ))
+                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(
+                    match name.to_string() {
+                        Ok(name_str) => format!("Type origin not found for type {}", name_str),
+                        Err(_) => "Type origin not found for unnamed type".to_string(),
+                    },
+                )
             })?;
         dbg_println!("Package ID: {:?}", storage_id);
         dbg_println!("Defining Address: {:?}", defining_address);
@@ -874,7 +876,9 @@ fn functions(
                     format!(
                         "failed to find function {}::{} in optimized function list",
                         package_context.version_id,
-                        fun.name.to_short_string().unwrap(),
+                        fun.name
+                            .to_short_string()
+                            .unwrap_or_else(|_| "unknown".to_string()),
                     ),
                 ),
             );
