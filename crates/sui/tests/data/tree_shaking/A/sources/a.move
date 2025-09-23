@@ -8,7 +8,5 @@ module a::a {
     let x = 1;
     let y = 2;
     let z = x + y;
-
-    //let hello = b"test".to_string();
   }
 }
