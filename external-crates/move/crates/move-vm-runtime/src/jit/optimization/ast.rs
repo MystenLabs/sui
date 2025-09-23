@@ -1,8 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::types::{OriginalId, VersionId};
-
+use crate::shared::types::{DefiningTypeId, OriginalId, VersionId};
+use indexmap::IndexMap;
 use move_binary_format::{
     CompiledModule,
     file_format::{
@@ -12,7 +12,7 @@ use move_binary_format::{
         VariantInstantiationHandleIndex, VariantJumpTable, VariantJumpTableIndex,
     },
 };
-use move_core_types::{language_storage::ModuleId, resolver::TypeOrigin};
+use move_core_types::{language_storage::ModuleId, resolver::IntraPackageName};
 use std::collections::BTreeMap;
 
 // -------------------------------------------------------------------------------------------------
@@ -26,7 +26,7 @@ pub struct Package {
     pub(crate) original_id: OriginalId,
     pub(crate) version_id: VersionId,
     pub(crate) modules: BTreeMap<ModuleId, Module>,
-    pub(crate) type_origin_table: Vec<TypeOrigin>,
+    pub(crate) type_origin_table: IndexMap<IntraPackageName, DefiningTypeId>,
     pub(crate) linkage_table: BTreeMap<OriginalId, VersionId>,
 }
 

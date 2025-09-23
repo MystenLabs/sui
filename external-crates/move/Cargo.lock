@@ -2237,6 +2237,7 @@ dependencies = [
  "colored",
  "datatest-stable",
  "difference",
+ "indexmap 2.8.0",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",

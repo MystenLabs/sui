@@ -23,9 +23,10 @@ use crate::{
     shared::{
         gas::UnmeteredGasMeter,
         linkage_context::LinkageContext,
-        types::{OriginalId, VersionId},
+        types::{DefiningTypeId, OriginalId, VersionId},
     },
 };
+use indexmap::IndexMap;
 use move_binary_format::{
     CompiledModule,
     errors::VMResult,
@@ -39,7 +40,7 @@ use move_core_types::{
     ident_str,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
-    resolver::TypeOrigin,
+    resolver::IntraPackageName,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 use once_cell::sync::Lazy;
@@ -105,8 +106,8 @@ struct Adapter {
 #[derive(Clone)]
 struct RelinkingStore {
     linkage: LinkageContext,
-    // TODO: when we add type origin to `LinkageContext`, we should remove this field
-    type_origin: Vec<TypeOrigin>,
+    // TODO: when we ad type origin to `LinkageContext`, we should remove this field
+    type_origin: IndexMap<IntraPackageName, DefiningTypeId>,
 }
 
 impl Adapter {
@@ -127,7 +128,7 @@ impl Adapter {
             store: {
                 RelinkingStore {
                     linkage,
-                    type_origin: vec![],
+                    type_origin: IndexMap::new(),
                 }
             },
             runtime_adapter: vm,
@@ -146,10 +147,14 @@ impl Adapter {
                 };
                 let type_origin = type_origin
                     .into_iter()
-                    .map(|((module, type_name), origin)| TypeOrigin {
-                        module_name: module.to_owned(),
-                        type_name: type_name.to_owned(),
-                        origin_id: origin,
+                    .map(|((module, type_name), origin)| {
+                        (
+                            IntraPackageName {
+                                module_name: module.to_owned(),
+                                type_name: type_name.to_owned(),
+                            },
+                            origin,
+                        )
                     })
                     .collect();
                 RelinkingStore {

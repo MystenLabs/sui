@@ -8,7 +8,6 @@ use crate::{
     jit::execution::ast::Package,
     jit::optimization::{optimize, to_optimized_form},
     natives::functions::NativeFunctions,
-    shared::linkage_context::LinkageContext,
     validation::verification,
 };
 use move_binary_format::errors::PartialVMResult;
@@ -17,7 +16,6 @@ use move_vm_config::runtime::VMConfig;
 pub fn translate_package(
     vm_config: &VMConfig,
     natives: &NativeFunctions,
-    link_context: &LinkageContext,
     loaded_package: verification::ast::Package,
 ) -> PartialVMResult<Package> {
     let opt_package = if vm_config.optimize_bytecode {
@@ -25,16 +23,16 @@ pub fn translate_package(
     } else {
         to_optimized_form(loaded_package)
     };
-    execution::translate::package(natives, link_context, opt_package)
+    execution::translate::package(natives, opt_package)
 }
 
 #[cfg(test)]
 mod tests {
     use super::translate_package;
     use crate::{
-        jit::execution::ast::Package as RuntimePackage, shared::linkage_context::LinkageContext,
-        validation::verification::ast as verif_ast,
+        jit::execution::ast::Package as RuntimePackage, validation::verification::ast as verif_ast,
     };
+    use indexmap::IndexMap;
     use move_binary_format::file_format::empty_module;
     use move_core_types::{account_address::AccountAddress, language_storage::ModuleId};
     use move_vm_config::runtime::VMConfig;
@@ -53,8 +51,9 @@ mod tests {
             original_id,
             version_id,
             modules: BTreeMap::from([(module_id, verif_ast::Module { value: module })]),
-            type_origin_table: vec![],
+            type_origin_table: IndexMap::new(),
             linkage_table: BTreeMap::from([(original_id, version_id)]),
+            version: 0,
         }
     }
 
@@ -80,9 +79,8 @@ mod tests {
             ..VMConfig::default()
         };
         let natives = crate::natives::functions::NativeFunctions::empty_for_testing().unwrap();
-        let link_ctx = LinkageContext::new(BTreeMap::from([(original_id, version_id)]));
 
-        let result = translate_package(&vm_config, &natives, &link_ctx, verified);
+        let result = translate_package(&vm_config, &natives, verified);
         let runtime_pkg = result.expect("translate_package should succeed for minimal package");
         assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
     }
@@ -98,9 +96,8 @@ mod tests {
             ..VMConfig::default()
         };
         let natives = crate::natives::functions::NativeFunctions::empty_for_testing().unwrap();
-        let link_ctx = LinkageContext::new(BTreeMap::from([(original_id, version_id)]));
 
-        let result = translate_package(&vm_config, &natives, &link_ctx, verified);
+        let result = translate_package(&vm_config, &natives, verified);
         let runtime_pkg = result.expect("translate_package should succeed for minimal package");
         assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
     }

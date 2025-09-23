@@ -7,7 +7,6 @@ use crate::{
         in_memory_test_adapter::InMemoryTestAdapter,
         vm_test_adapter::VMTestAdapter,
     },
-    natives::functions::NativeFunctions,
     runtime::{data_cache::TransactionDataCache, package_resolution::resolve_packages},
     shared::{linkage_context::LinkageContext, types::VersionId},
 };
@@ -25,7 +24,7 @@ fn load_linkage_packages_into_runtime<DataSource: ModuleResolver + Send + Sync>(
     let natives = adapter.runtime().natives();
     let all_packages = linkage.all_packages()?;
     let storage = TransactionDataCache::new(adapter.storage());
-    resolve_packages(&cache, &natives, &storage, linkage, all_packages)
+    resolve_packages(&cache, &natives, &storage, all_packages)
 }
 
 #[test]
@@ -94,9 +93,8 @@ fn cache_package_external_package_calls_no_types() {
 /// Generate a new, dummy cachce for testing.
 #[allow(dead_code)]
 fn dummy_cache_for_testing() -> MoveCache {
-    let native_functions = Arc::new(NativeFunctions::new(vec![]).unwrap());
     let config = Arc::new(VMConfig::default());
-    MoveCache::new(native_functions, config)
+    MoveCache::new(config)
 }
 
 #[test]

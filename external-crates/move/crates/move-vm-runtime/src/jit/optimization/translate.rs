@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{jit::optimization::ast, validation::verification::ast as Input};
-
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex};
-
 use std::collections::BTreeMap;
 
 pub(crate) fn package(pkg: Input::Package) -> ast::Package {
@@ -15,6 +13,7 @@ pub(crate) fn package(pkg: Input::Package) -> ast::Package {
         version_id,
         type_origin_table,
         linkage_table,
+        version: _,
     } = pkg;
     let mut modules = BTreeMap::new();
     for (module_id, d_module) in in_modules {

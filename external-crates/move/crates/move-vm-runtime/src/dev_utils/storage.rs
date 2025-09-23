@@ -10,11 +10,12 @@ use crate::{
     validation::verification::ast as verif_ast,
 };
 use anyhow::Result;
+use indexmap::IndexMap;
 use move_binary_format::CompiledModule;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
-    resolver::{ModuleResolver, SerializedPackage, TypeOrigin},
+    resolver::{IntraPackageName, ModuleResolver, SerializedPackage},
 };
 use std::collections::BTreeMap;
 
@@ -42,7 +43,7 @@ pub struct StoredPackage(pub SerializedPackage);
 /// Simple in-memory storage that can be used as a Move VM storage backend for testing purposes.
 #[derive(Debug, Clone)]
 pub struct InMemoryStorage {
-    accounts: BTreeMap<DefiningTypeId, StoredPackage>,
+    accounts: BTreeMap<VersionId, StoredPackage>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -65,18 +66,19 @@ impl<'a, 'b, S: ModuleResolver> DeltaStorage<'a, 'b, S> {
 }
 
 impl StoredPackage {
-    fn empty(original_id: OriginalId, version_id: DefiningTypeId) -> Self {
+    fn empty(original_id: OriginalId, version_id: VersionId, version: u64) -> Self {
         Self(SerializedPackage {
             version_id,
             original_id,
             modules: BTreeMap::new(),
             linkage_table: BTreeMap::new(),
-            type_origin_table: vec![],
+            type_origin_table: IndexMap::new(),
+            version,
         })
     }
 
     pub fn from_modules_for_testing(
-        version_id: DefiningTypeId,
+        version_id: VersionId,
         modules: Vec<CompiledModule>,
     ) -> Result<Self> {
         assert!(!modules.is_empty());
@@ -108,11 +110,12 @@ impl StoredPackage {
             modules,
             linkage_table,
             type_origin_table,
+            version: 0,
         }))
     }
 
     pub fn from_module_for_testing_with_linkage(
-        version_id: DefiningTypeId,
+        version_id: VersionId,
         linkage_context: LinkageContext,
         modules: Vec<CompiledModule>,
     ) -> Result<Self> {
@@ -132,6 +135,7 @@ impl StoredPackage {
             modules,
             linkage_table: linkage_context.linkage_table,
             type_origin_table,
+            version: 0,
         }))
     }
 
@@ -153,6 +157,7 @@ impl StoredPackage {
                 .collect(),
             linkage_table: verified_package.linkage_table,
             type_origin_table: verified_package.type_origin_table,
+            version: verified_package.version,
         })
     }
 
@@ -169,9 +174,9 @@ impl StoredPackage {
 }
 
 pub fn generate_type_origins(
-    version_id: DefiningTypeId,
+    version_id: VersionId,
     modules: &[CompiledModule],
-) -> Vec<TypeOrigin> {
+) -> IndexMap<IntraPackageName, DefiningTypeId> {
     modules
         .iter()
         .flat_map(|module| {
@@ -182,21 +187,25 @@ pub fn generate_type_origins(
                     let mid = module.self_id();
                     let handle = module.datatype_handle_at(def.struct_handle);
                     let struct_name = module.identifier_at(handle.name).to_owned();
-                    TypeOrigin {
-                        module_name: mid.name().to_owned(),
-                        type_name: struct_name.clone(),
-                        origin_id: version_id,
-                    }
+                    (
+                        IntraPackageName {
+                            module_name: mid.name().to_owned(),
+                            type_name: struct_name.clone(),
+                        },
+                        version_id,
+                    )
                 })
                 .chain(module.enum_defs().iter().map(|def| {
                     let mid = module.self_id();
                     let handle = module.datatype_handle_at(def.enum_handle);
                     let enum_name = module.identifier_at(handle.name);
-                    TypeOrigin {
-                        module_name: mid.name().to_owned(),
-                        type_name: enum_name.to_owned(),
-                        origin_id: version_id,
-                    }
+                    (
+                        IntraPackageName {
+                            module_name: mid.name().to_owned(),
+                            type_name: enum_name.to_owned(),
+                        },
+                        version_id,
+                    )
                 }))
         })
         .collect()
@@ -217,14 +226,14 @@ impl InMemoryStorage {
     pub fn publish_or_overwrite_module(
         &mut self,
         original_id: OriginalId,
-        version_id: DefiningTypeId,
+        version_id: VersionId,
         module_name: Identifier,
         blob: Vec<u8>,
     ) {
         let account = self
             .accounts
             .entry(version_id)
-            .or_insert_with(|| StoredPackage::empty(original_id, version_id));
+            .or_insert_with(|| StoredPackage::empty(original_id, version_id, 0));
         account.0.modules.insert(module_name, blob);
     }
 

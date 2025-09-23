@@ -1,12 +1,11 @@
-use std::collections::BTreeMap;
-
 use crate::shared::types::{DefiningTypeId, OriginalId};
-
+use indexmap::IndexMap;
 use move_binary_format::CompiledModule;
 use move_core_types::{
     language_storage::ModuleId,
-    resolver::{SerializedPackage, TypeOrigin},
+    resolver::{IntraPackageName, SerializedPackage},
 };
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Package {
@@ -14,9 +13,10 @@ pub(crate) struct Package {
     pub(crate) version_id: DefiningTypeId,
     pub(crate) modules: BTreeMap<ModuleId, CompiledModule>,
     #[allow(dead_code)]
-    pub(crate) type_origin_table: Vec<TypeOrigin>,
+    pub(crate) type_origin_table: IndexMap<IntraPackageName, DefiningTypeId>,
     #[allow(dead_code)]
     pub(crate) linkage_table: BTreeMap<OriginalId, DefiningTypeId>,
+    pub(crate) version: u64,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -35,6 +35,7 @@ impl Package {
             version_id: pkg.version_id,
             type_origin_table: pkg.type_origin_table,
             linkage_table: pkg.linkage_table,
+            version: pkg.version,
         }
     }
 

@@ -93,7 +93,7 @@ impl<S: ModuleResolver> DataStore for TransactionDataCache<S> {
         // we can use that here.
         // TODO: We can optimize this to take advantage of bulk-get a bit more if we desire.
         // However it's unlikely to be a bottleneck.
-        let mut packages = ids.map(|id| SerializedPackage::empty(id, id));
+        let mut packages = ids.map(|id| SerializedPackage::empty(id, id, 0));
         for package in packages.iter_mut() {
             let Some(account_cache) = self.module_map.get(&package.version_id) else {
                 return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
@@ -123,6 +123,7 @@ impl<S: ModuleResolver> DataStore for TransactionDataCache<S> {
                         account_cache.module_map.clone(),
                         account_cache.original_id,
                         *package_id,
+                        0,
                     )
                 })
             })

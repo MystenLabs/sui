@@ -16,7 +16,7 @@ use move_binary_format::file_format::CompiledModule;
 use move_binary_format::file_format_common::VERSION_6;
 use move_binary_format::normalized;
 use move_core_types::language_storage::ModuleId;
-use move_core_types::resolver::SerializedPackage;
+use move_core_types::resolver::{IntraPackageName, SerializedPackage};
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -562,6 +562,21 @@ impl MovePackage {
     }
 
     pub fn into_serialized_move_package(&self) -> SerializedPackage {
+        let type_origin_table = self
+            .type_origin_table
+            .iter()
+            .map(|ty_origin| {
+                (
+                    IntraPackageName {
+                        module_name: Identifier::new(ty_origin.module_name.clone())
+                            .expect("Published modules must always have valid identifiers"),
+                        type_name: Identifier::new(ty_origin.datatype_name.clone())
+                            .expect("Published modules must always have valid identifiers"),
+                    },
+                    ty_origin.package.into(),
+                )
+            })
+            .collect();
         SerializedPackage {
             modules: self
                 .serialized_module_map()
@@ -585,17 +600,8 @@ impl MovePackage {
                     self.id.into(),
                 )))
                 .collect(),
-            type_origin_table: self
-                .type_origin_table()
-                .iter()
-                .map(|ty_origin| move_core_types::resolver::TypeOrigin {
-                    module_name: Identifier::new(ty_origin.module_name.clone())
-                        .expect("Published modules must always have valid identifiers"),
-                    type_name: Identifier::new(ty_origin.datatype_name.clone())
-                        .expect("Published modules must always have valid identifiers"),
-                    origin_id: ty_origin.package.into(),
-                })
-                .collect(),
+            type_origin_table,
+            version: self.version().value(),
         }
     }
 }

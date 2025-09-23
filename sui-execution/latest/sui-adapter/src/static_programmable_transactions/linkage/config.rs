@@ -65,8 +65,8 @@ impl LinkageConfig {
         if self.always_include_system_packages {
             for id in NATIVE_PACKAGE_IDS {
                 let package = get_package(id, store)?;
-                debug_assert_eq!(package.id(), *id);
-                debug_assert_eq!(package.original_package_id(), *id);
+                debug_assert_eq!(package.version_id(), **id);
+                debug_assert_eq!(package.original_id(), **id);
                 add_and_unify(id, store, &mut resolution_table, ConflictResolution::exact)?;
                 resolution_table
                     .all_versions_resolution_table
