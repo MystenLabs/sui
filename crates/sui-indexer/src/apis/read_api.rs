@@ -68,7 +68,7 @@ impl ReadApiServer for ReadApi {
     }
 
     // For ease of implementation we just forward to the single object query, although in the
-    // future we may want to improve the performance by having a more naitive multi_get
+    // future we may want to improve the performance by having a more naive multi_get
     // functionality
     async fn multi_get_objects(
         &self,
