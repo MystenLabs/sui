@@ -19,7 +19,7 @@ use crate::{
             object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
         },
     },
-    error::RpcError,
+    error::{upcast, RpcError},
     scope::Scope,
 };
 
@@ -163,19 +163,21 @@ impl Validator {
         Some(self.native.metadata.project_url.clone())
     }
 
-    // todo (ewall)
-    // /// The validator's current valid `Cap` object. Validators can delegate
-    // /// the operation ability to another address. The address holding this `Cap` object
-    // /// can then update the reference gas price and tallying rule on behalf of the validator.
-    // async fn operation_cap(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<MoveObject>> {
-    //     MoveObject::query(
-    //         ctx,
-    //         self.operation_cap_id(),
-    //         Object::latest_at(self.checkpoint_viewed_at),
-    //     )
-    //         .await
-    //         .extend()
-    // }
+    /// The validator's current valid `Cap` object. Validators can delegate the operation ability to another address.
+    /// The address holding this `Cap` object can then update the reference gas price and tallying rule on behalf of the validator.
+    async fn operation_cap(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<MoveObject>, RpcError<Error>> {
+        let address = Address::with_address(
+            self.super_.scope.clone(),
+            self.native.operation_cap_id.bytes.into(),
+        );
+        let Some(object) = address.as_object(ctx).await? else {
+            return Ok(None);
+        };
+        object.as_move_object(ctx).await.map_err(upcast)
+    }
 
     /// The ID of this validator's `0x3::staking_pool::StakingPool`.
     async fn staking_pool_id(&self) -> SuiAddress {

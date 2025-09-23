@@ -4098,6 +4098,11 @@ type Validator implements IAddressable {
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 	"""
+	The validator's current valid `Cap` object. Validators can delegate the operation ability to another address.
+	The address holding this `Cap` object can then update the reference gas price and tallying rule on behalf of the validator.
+	"""
+	operationCap: MoveObject
+	"""
 	Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
 	"""
 	pendingPoolTokenWithdraw: BigInt
