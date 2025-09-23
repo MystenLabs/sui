@@ -63,7 +63,6 @@ pub(crate) fn tests(path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
-fn main() {}
 datatest_stable::harness!(
     build,
     EXAMPLES,
