@@ -119,9 +119,9 @@ where
 
     // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
     async fn run_latency_checks(self: Arc<Self>) {
-        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(5);
-        const MAX_JITTER: Duration = Duration::from_secs(2);
-        const PING_REQUEST_TIMEOUT: Duration = Duration::from_millis(2_000);
+        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(15);
+        const MAX_JITTER: Duration = Duration::from_secs(5);
+        const PING_REQUEST_TIMEOUT: Duration = Duration::from_millis(5_000);
 
         let mut interval = interval(INTERVAL_BETWEEN_RUNS);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -361,6 +361,11 @@ where
         let ping = request.ping;
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();
+        let ping_label = if request.ping.is_some() {
+            "true"
+        } else {
+            "false"
+        };
 
         let (name, submit_txn_result) = self
             .submitter
@@ -395,10 +400,17 @@ where
             .await;
 
         if result.is_ok() {
+            // add metric to the submitted validator
+            let display_name = auth_agg.get_display_name(&name);
+            self.metrics
+                .validator_selections
+                .with_label_values(&[&display_name, tx_type.as_str(), ping_label])
+                .inc();
+
             self.client_monitor
                 .record_interaction_result(OperationFeedback {
                     authority_name: name,
-                    display_name: auth_agg.get_display_name(&name),
+                    display_name,
                     operation: if tx_type == TxType::SingleWriter {
                         OperationType::FastPath
                     } else {

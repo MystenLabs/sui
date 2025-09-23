@@ -83,11 +83,6 @@ impl TransactionSubmitter {
                 match retrier.next_target() {
                     Ok((name, client)) => {
                         let display_name = authority_aggregator.get_display_name(&name);
-                        self.metrics
-                            .validator_selections
-                            .with_label_values(&[&display_name])
-                            .inc();
-
                         // Create a future that returns the name and display_name along with the result
                         let submit_fut = self.submit_transaction_once(
                             client,

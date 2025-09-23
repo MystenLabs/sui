@@ -149,7 +149,7 @@ impl TransactionDriverMetrics {
             validator_selections: register_int_counter_vec_with_registry!(
                 "transaction_driver_validator_selections",
                 "Number of times each validator was selected for transaction submission",
-                &["validator"],
+                &["validator", "tx_type", "ping"],
                 registry,
             )
             .unwrap(),
