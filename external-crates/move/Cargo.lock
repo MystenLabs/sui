@@ -2190,6 +2190,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-coverage",
+ "move-decompiler",
  "move-disassembler",
  "move-docgen",
  "move-ir-types",

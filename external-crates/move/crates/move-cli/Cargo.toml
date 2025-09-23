@@ -26,6 +26,7 @@ serde.workspace = true
 move-bytecode-source-map.workspace = true
 move-bytecode-verifier.workspace = true
 move-disassembler.workspace = true
+move-decompiler.workspace = true
 move-docgen.workspace = true
 move-command-line-common.workspace = true
 move-bytecode-utils.workspace = true

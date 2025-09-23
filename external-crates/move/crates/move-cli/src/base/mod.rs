@@ -3,6 +3,7 @@
 
 pub mod build;
 pub mod coverage;
+pub mod decompile;
 pub mod disassemble;
 pub mod docgen;
 pub mod info;
