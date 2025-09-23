@@ -368,11 +368,12 @@ impl LocalValidatorAggregatorProxy {
         // otherwise, match all the validators
 
         let stress_hostname = if let Ok(stress_hostname) = std::env::var("STRESS_HOSTNAME") {
-            if stress_hostname.starts_with("ewr")
-                || stress_hostname.starts_with("ash")
-                || stress_hostname.starts_with("lax")
-            {
-                Some(stress_hostname)
+            if stress_hostname.starts_with("ewr") {
+                Some("ewr")
+            } else if stress_hostname.starts_with("ash") {
+                Some("ash")
+            } else if stress_hostname.starts_with("lax") {
+                Some("lax")
             } else {
                 None
             }
@@ -384,7 +385,7 @@ impl LocalValidatorAggregatorProxy {
             let allowed_validators = auth_agg
                 .validator_display_names
                 .iter()
-                .filter(|(_key, display_name)| match stress_hostname.as_str() {
+                .filter(|(_key, display_name)| match stress_hostname {
                     "ewr" => display_name.starts_with("ewr") || display_name.starts_with("ams"),
                     "ash" => display_name.starts_with("ewr") || display_name.starts_with("ams"),
                     "lax" => {
