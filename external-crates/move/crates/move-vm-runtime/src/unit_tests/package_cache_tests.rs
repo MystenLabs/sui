@@ -1,3 +1,5 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -7,7 +9,7 @@ use crate::{
         in_memory_test_adapter::InMemoryTestAdapter,
         vm_test_adapter::VMTestAdapter,
     },
-    runtime::{data_cache::TransactionDataCache, package_resolution::resolve_packages},
+    runtime::package_resolution::resolve_packages,
     shared::{linkage_context::LinkageContext, types::VersionId},
 };
 use move_binary_format::errors::VMResult;
@@ -23,8 +25,7 @@ fn load_linkage_packages_into_runtime<DataSource: ModuleResolver + Send + Sync>(
     let cache = adapter.runtime().cache();
     let natives = adapter.runtime().natives();
     let all_packages = linkage.all_packages()?;
-    let storage = TransactionDataCache::new(adapter.storage());
-    resolve_packages(&cache, &natives, &storage, all_packages)
+    resolve_packages(adapter.storage(), &cache, &natives, all_packages)
 }
 
 #[test]
