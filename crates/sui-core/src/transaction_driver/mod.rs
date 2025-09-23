@@ -119,9 +119,9 @@ where
 
     // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
     async fn run_latency_checks(self: Arc<Self>) {
-        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(15);
-        const MAX_JITTER: Duration = Duration::from_secs(10);
-        const PING_REQUEST_TIMEOUT: Duration = Duration::from_millis(5_000);
+        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(5);
+        const MAX_JITTER: Duration = Duration::from_secs(2);
+        const PING_REQUEST_TIMEOUT: Duration = Duration::from_millis(2_000);
 
         let mut interval = interval(INTERVAL_BETWEEN_RUNS);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
