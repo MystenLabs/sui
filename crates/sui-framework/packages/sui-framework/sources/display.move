@@ -165,6 +165,12 @@ public fun fields<T: key>(d: &Display<T>): &VecMap<String, String> {
     &d.fields
 }
 
+/// Allow destroying legacy display objects.
+public(package) fun destroy<T: key>(display: Display<T>) {
+    let Display { id, .. } = display;
+    id.delete();
+}
+
 // === Private functions ===
 
 /// Internal function to create a new `Display<T>`.
