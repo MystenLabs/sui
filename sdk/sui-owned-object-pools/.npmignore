@@ -1,0 +1,13 @@
+node_modules/
+.env
+.test.env
+.DS_Store
+build/
+Move.lock
+.vscode/
+sui.log.*
+dump.rdb
+coverage/
+move_examples
+.idea/
+tsconfig.tsbuildinfo
