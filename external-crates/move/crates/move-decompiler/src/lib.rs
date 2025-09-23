@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod ast;
+mod refinement;
 mod structuring;
 pub mod translate;
 
-use move_stackless_bytecode_2::stackless::ast as S;
+use move_stackless_bytecode_2::ast as S;
 use petgraph::graph::NodeIndex;
 
 use std::{

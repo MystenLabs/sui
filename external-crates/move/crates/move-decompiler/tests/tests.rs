@@ -5,7 +5,6 @@ use move_decompiler::decompile_module;
 
 use move_command_line_common::insta_assert;
 use move_package::{BuildConfig, compilation::model_builder};
-use move_stackless_bytecode_2::generator::StacklessBytecodeGenerator;
 use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
@@ -45,7 +44,7 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
     let resolved_package = config.resolution_graph_for_package(pkg_dir, None, &mut writer)?;
     let model = model_builder::build(resolved_package, &mut writer)?;
 
-    let generator = StacklessBytecodeGenerator::from_model(model);
+    let bytecode = move_stackless_bytecode_2::from_model(model, /* optimize */ true)?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()
@@ -55,9 +54,7 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
         .map(|name| name.into())
         .collect::<BTreeSet<Symbol>>();
 
-    let packages = generator.generate_stackless_bytecode(/* optimize */ true)?;
-
-    for pkg in &packages {
+    for pkg in &bytecode.packages {
         // let pkg_name = pkg.name;
         for (module_name, module) in &pkg.modules {
             if test_module_names.contains(module_name) {
