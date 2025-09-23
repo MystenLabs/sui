@@ -236,17 +236,20 @@ impl Epoch {
             return Ok(None);
         };
 
-        let validator_set_v1 = match system_state {
-            SuiSystemState::V1(inner) => inner.validators,
-            SuiSystemState::V2(inner) => inner.validators,
+        let (validator_set_v1, report_records) = match system_state {
+            SuiSystemState::V1(inner) => (inner.validators, inner.validator_report_records),
+            SuiSystemState::V2(inner) => (inner.validators, inner.validator_report_records),
             #[cfg(msim)]
             SuiSystemState::SimTestV1(_)
             | SuiSystemState::SimTestShallowV2(_)
             | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
         };
 
-        let validator_set =
-            ValidatorSet::from_validator_set_v1(self.scope.clone(), validator_set_v1);
+        let validator_set = ValidatorSet::from_validator_set_v1(
+            self.scope.clone(),
+            validator_set_v1,
+            report_records,
+        );
 
         Ok(Some(validator_set))
     }
