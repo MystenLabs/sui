@@ -4,8 +4,14 @@
 use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 use crate::ingestion::Result as IngestionResult;
 use reqwest::{Client, StatusCode};
+use std::time::Duration;
 use tracing::{debug, error};
 use url::Url;
+
+/// Default timeout for remote checkpoint fetches.
+/// This prevents requests from hanging indefinitely due to network issues,
+/// unresponsive servers, or other connection problems.
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum HttpError {
@@ -26,7 +32,15 @@ impl RemoteIngestionClient {
     pub(crate) fn new(url: Url) -> IngestionResult<Self> {
         Ok(Self {
             url,
-            client: Client::builder().build()?,
+            client: Client::builder().timeout(DEFAULT_REQUEST_TIMEOUT).build()?,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_with_timeout(url: Url, timeout: Duration) -> IngestionResult<Self> {
+        Ok(Self {
+            url,
+            client: Client::builder().timeout(timeout).build()?,
         })
     }
 }
@@ -117,7 +131,10 @@ pub(crate) mod tests {
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
     use axum::http::StatusCode;
-    use std::sync::Mutex;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    };
     use wiremock::{
         matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
@@ -228,5 +245,48 @@ pub(crate) mod tests {
         let checkpoint = client.fetch(42).await.unwrap();
 
         assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
+    }
+
+    /// Test that timeout errors are retried as transient errors.
+    /// The first request will timeout, the second will succeed.
+    #[tokio::test]
+    async fn retry_on_timeout() {
+        use std::sync::Arc;
+
+        let server = MockServer::start().await;
+        let times: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+        let times_clone = times.clone();
+
+        // First request will delay longer than timeout, second will succeed immediately
+        respond_with(&server, move |_: &Request| {
+            match times_clone.fetch_add(1, Ordering::Relaxed) {
+                0 => {
+                    // Delay longer than our test timeout (2 seconds)
+                    std::thread::sleep(std::time::Duration::from_secs(4));
+                    status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42))
+                }
+                _ => {
+                    // Respond immediately on retry attempts
+                    status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42))
+                }
+            }
+        })
+        .await;
+
+        // Create a client with a 2 second timeout for testing
+        let ingestion_client = IngestionClient::new_remote_with_timeout(
+            Url::parse(&server.uri()).unwrap(),
+            Duration::from_secs(2),
+            test_metrics(),
+        )
+        .unwrap();
+
+        // This should timeout once, then succeed on retry
+        let checkpoint = ingestion_client.fetch(42).await.unwrap();
+        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number);
+
+        // Verify that the server received exactly 2 requests (1 timeout + 1 successful retry)
+        let final_count = times.load(Ordering::Relaxed);
+        assert_eq!(final_count, 2);
     }
 }

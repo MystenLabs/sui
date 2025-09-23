@@ -73,6 +73,16 @@ impl IngestionClient {
         Ok(Self::new_impl(client, metrics))
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_remote_with_timeout(
+        url: Url,
+        timeout: std::time::Duration,
+        metrics: Arc<IndexerMetrics>,
+    ) -> IngestionResult<Self> {
+        let client = Arc::new(RemoteIngestionClient::new_with_timeout(url, timeout)?);
+        Ok(Self::new_impl(client, metrics))
+    }
+
     pub(crate) fn new_local(path: PathBuf, metrics: Arc<IndexerMetrics>) -> Self {
         let client = Arc::new(LocalIngestionClient::new(path));
         Self::new_impl(client, metrics)
