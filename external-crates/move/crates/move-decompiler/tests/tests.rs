@@ -123,6 +123,23 @@ fn run_full_test(file_path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
+fn run_bytecode_test(file_path: &Path) -> datatest_stable::Result<()> {
+    let input = vec![file_path.into()];
+    let output = Path::new("tests/bytecode/output");
+    // invoke decompiler
+    let paths = move_decompiler::generate_from_files(&input, &output)?;
+    let [path] = paths.as_slice() else {
+        panic!("Expected exactly one output file");
+    };
+    let decompiled = std::fs::read_to_string(path)?;
+    insta_assert! {
+        input_path: file_path,
+        contents: decompiled,
+
+    };
+    Ok(())
+}
+
 // Hand in each move path
 datatest_stable::harness!(
     run_move_test,
@@ -134,4 +151,7 @@ datatest_stable::harness!(
     run_structuring_test,
     "tests/structuring",
     r"\.stt$",
+    run_bytecode_test,
+    "tests/bytecode",
+    r"\.mv$"
 );
