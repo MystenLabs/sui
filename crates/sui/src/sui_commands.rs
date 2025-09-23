@@ -578,6 +578,7 @@ impl SuiCommand {
                         return Ok(());
                     }
                     sui_move::Command::Build(build) if build.dump_bytecode_as_base64 => {
+                        // TODO: pkg-alt fix this
                         // `sui move build` does not ordinarily require a network connection.
                         // The exception is when --dump-bytecode-as-base64 is specified: In this
                         // case, we should resolve the correct addresses for the respective chain
