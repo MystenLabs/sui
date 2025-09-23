@@ -131,7 +131,10 @@ pub(crate) mod tests {
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
     use axum::http::StatusCode;
-    use std::sync::Mutex;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    };
     use wiremock::{
         matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
@@ -251,16 +254,13 @@ pub(crate) mod tests {
         use std::sync::Arc;
 
         let server = MockServer::start().await;
-        let times: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
+        let times: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
         let times_clone = times.clone();
 
         // First request will delay longer than timeout, second will succeed immediately
         respond_with(&server, move |_: &Request| {
-            let mut count = times_clone.lock().unwrap();
-            *count += 1;
-
-            match *count {
-                1 => {
+            match times_clone.fetch_add(1, Ordering::Relaxed) {
+                0 => {
                     // Delay longer than our test timeout (2 seconds)
                     std::thread::sleep(std::time::Duration::from_secs(4));
                     status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42))
@@ -286,7 +286,7 @@ pub(crate) mod tests {
         assert_eq!(42, checkpoint.checkpoint_summary.sequence_number);
 
         // Verify that the server received exactly 2 requests (1 timeout + 1 successful retry)
-        let final_count = *times.lock().unwrap();
+        let final_count = times.load(Ordering::Relaxed);
         assert_eq!(final_count, 2);
     }
 }
