@@ -8,17 +8,15 @@
 // should not be exposed.
 
 use crate::{
-    cache::move_cache::{self, MoveCache, Package},
+    cache::move_cache::{self, MoveCache, Package, ResolvedPackageResult},
     dbg_println, jit,
     natives::functions::NativeFunctions,
-    shared::{
-        data_store::DataStore, linkage_context::LinkageContext,
-        logging::expect_no_verification_errors, types::VersionId,
-    },
+    runtime::data_cache::TransactionDataCache,
+    shared::{data_store::DataStore, logging::expect_no_verification_errors, types::VersionId},
     validation::{validate_package, verification},
 };
 use move_binary_format::errors::{Location, PartialVMError, VMResult};
-use move_core_types::vm_status::StatusCode;
+use move_core_types::{resolver::ModuleResolver, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
 use tracing::error;
 
@@ -27,16 +25,64 @@ use std::{
     sync::Arc,
 };
 
+// Retrieves a package from the cache, attempting to load it from the data store if
+// it is not present.
+pub fn resolve_package(
+    cache: &MoveCache,
+    natives: &NativeFunctions,
+    module_resolver: impl ModuleResolver,
+    package_to_read: VersionId,
+) -> VMResult<ResolvedPackageResult> {
+    let data_store = TransactionDataCache::new(module_resolver);
+    let mut packages = resolve_packages(
+        cache,
+        natives,
+        &data_store,
+        BTreeSet::from([package_to_read]),
+    )?;
+
+    if packages.is_empty() {
+        return Ok(ResolvedPackageResult::NotFound);
+    }
+
+    let Some(pkg) = packages.remove(&package_to_read) else {
+        debug_assert!(false, "A different package was loaded than was requested");
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(
+                    "Package not found in loaded cache despite just loading it".to_string(),
+                )
+                .finish(Location::Undefined),
+        );
+    };
+
+    debug_assert!(
+        packages.is_empty(),
+        "More than one package was loaded when only one was requested"
+    );
+    if !packages.is_empty() {
+        error!("[VM] More than one package was loaded when only one was requested: {packages:#?}");
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(
+                    "More than one package was loaded when only one was requested".to_string(),
+                )
+                .finish(Location::Undefined),
+        );
+    }
+
+    Ok(ResolvedPackageResult::Found(pkg))
+}
+
 // Retrieves a set of packages from the cache, attempting to load them from the data store if
 // they are not present.
 pub fn resolve_packages(
     cache: &MoveCache,
     natives: &NativeFunctions,
     data_store: &impl DataStore,
-    link_context: &LinkageContext,
     packages_to_read: BTreeSet<VersionId>,
 ) -> VMResult<BTreeMap<VersionId, Arc<move_cache::Package>>> {
-    dbg_println!("loading {packages_to_read:#?} in linkage context {link_context:#?}");
+    dbg_println!("loading {packages_to_read:#?}");
     let allow_loading_failure = true;
 
     let initial_size = packages_to_read.len();
@@ -62,7 +108,7 @@ pub fn resolve_packages(
         allow_loading_failure,
         &pkgs_to_cache,
     )? {
-        let pkg = jit_and_cache_package(cache, natives, link_context, pkg)?;
+        let pkg = jit_and_cache_package(cache, natives, pkg)?;
         cached_packages.insert(pkg.verified.version_id, pkg);
     }
 
@@ -105,7 +151,6 @@ pub fn load_and_verify_packages(
 pub fn jit_package_for_publish(
     cache: &MoveCache,
     natives: &NativeFunctions,
-    link_context: &LinkageContext,
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
     let version_id = verified_pkg.version_id;
@@ -113,13 +158,8 @@ pub fn jit_package_for_publish(
         return Ok(cache.cached_package_at(version_id).unwrap());
     }
 
-    let runtime_pkg = jit::translate_package(
-        &cache.vm_config,
-        natives,
-        link_context,
-        verified_pkg.clone(),
-    )
-    .map_err(|err| err.finish(Location::Undefined))?;
+    let runtime_pkg = jit::translate_package(&cache.vm_config, natives, verified_pkg.clone())
+        .map_err(|err| err.finish(Location::Undefined))?;
 
     Ok(Arc::new(Package::new(
         verified_pkg.into(),
@@ -131,7 +171,6 @@ pub fn jit_package_for_publish(
 pub fn jit_and_cache_package(
     cache: &MoveCache,
     natives: &NativeFunctions,
-    link_context: &LinkageContext,
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
     let version_id = verified_pkg.version_id;
@@ -142,13 +181,8 @@ pub fn jit_and_cache_package(
         return Ok(cache.cached_package_at(version_id).unwrap());
     }
 
-    let runtime_pkg = jit::translate_package(
-        &cache.vm_config,
-        natives,
-        link_context,
-        verified_pkg.clone(),
-    )
-    .map_err(|err| err.finish(Location::Undefined))?;
+    let runtime_pkg = jit::translate_package(&cache.vm_config, natives, verified_pkg.clone())
+        .map_err(|err| err.finish(Location::Undefined))?;
 
     cache.add_to_cache(version_id, verified_pkg, runtime_pkg);
 
