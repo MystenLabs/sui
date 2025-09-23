@@ -500,6 +500,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
+	"""
+	allowGlobalPause: Boolean
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -521,6 +525,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""
 	defaultSuinsName: String
+	"""
+	If the currency is regulated, this object represents the capability to modify the deny list. If a capability is known but wrapped, its address can be fetched but other fields will not be accessible.
+	"""
+	denyCap: MoveObject
 	"""
 	Description of the coin.
 	"""
@@ -615,6 +623,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	The transactions that sent objects to this object.
 	"""
 	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
+	Whether the currency is regulated or not. `null` indicates that the regulatory status is unknown.
+	"""
+	regulatedState: RegulatedState
 	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
@@ -3328,6 +3340,20 @@ A Move object that can be received in this transaction.
 """
 type Receiving {
 	object: Object
+}
+
+"""
+Whether the currency is regulated or not.
+"""
+enum RegulatedState {
+	"""
+	A `DenyCap` or a `RegulatedCoinMetadata` exists for this currency.
+	"""
+	REGULATED
+	"""
+	The currency was created without a deny list.
+	"""
+	UNREGULATED
 }
 
 type SafeMode {
