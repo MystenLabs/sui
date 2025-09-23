@@ -193,6 +193,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         // update the digests
     }
 
+    /// The metadata for the root package in [PackageInfo] form
     pub fn package_info(&self) -> PackageInfo<F> {
         self.graph.root_package_info()
     }
@@ -229,7 +230,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Update the dependencies in the lockfile for this environment to match the dependency graph
     /// represented by `self`.
-    pub fn update_lockfile(&self) -> PackageResult<()> {
+    pub fn update_lockfile(&mut self) -> PackageResult<()> {
         let mut lockfile: ParsedLockfile = Self::load_lockfile(self.package_path())?;
         lockfile
             .pinned
@@ -277,6 +278,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             package_path.path(),
             std::env::current_dir()
         );
+        convert_legacy_lockfile::<F>(&package_path)?;
+
         let mut lockfile = Self::load_lockfile(&package_path)?;
         lockfile.pinned.insert(env.name.clone(), graph.to_pins()?);
         let pubs = Self::load_pubfile(&package_path)?;
@@ -301,9 +304,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// Read the lockfile from the root directory, returning an empty structure if none exists
+    /// Assumes that legacy lockfiles have already been converted (which should happen during
+    /// package load)
     fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile> {
-        convert_legacy_lockfile::<F>(package_path)?;
-
         let path = package_path.lockfile_path();
         debug!("loading lockfile {:?}", path);
 
@@ -374,7 +377,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.lockfile
     }
 
-    pub fn lockfile(&self) -> &ParsedLockfile {
+    fn lockfile(&self) -> &ParsedLockfile {
         &self.lockfile
     }
 
