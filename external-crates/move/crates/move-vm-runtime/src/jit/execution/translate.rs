@@ -18,7 +18,6 @@ use crate::{
     jit::{execution::ast::*, optimization::ast as input},
     natives::functions::NativeFunctions,
     shared::{
-        linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
         vm_pointer::VMPointer,
@@ -32,7 +31,7 @@ use move_binary_format::{
         FunctionHandleIndex, SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
     },
 };
-use move_core_types::{identifier::Identifier, vm_status::StatusCode};
+use move_core_types::{identifier::Identifier, resolver::IntraPackageName, vm_status::StatusCode};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 // -------------------------------------------------------------------------------------------------
@@ -170,7 +169,6 @@ impl FunctionContext<'_, '_> {
 
 pub fn package(
     natives: &NativeFunctions,
-    link_context: &LinkageContext,
     verified_package: input::Package,
 ) -> PartialVMResult<Package> {
     let version_id = verified_package.version_id;
@@ -181,15 +179,23 @@ pub fn package(
     let type_origin_table = verified_package
         .type_origin_table
         .into_iter()
-        .map(|type_origin| {
-            Ok((
-                IntraPackageKey {
-                    module_name: intern_identifier(&type_origin.module_name)?,
-                    member_name: intern_identifier(&type_origin.type_name)?,
+        .map(
+            |(
+                IntraPackageName {
+                    module_name,
+                    type_name,
                 },
-                type_origin.origin_id,
-            ))
-        })
+                origin_id,
+            )| {
+                Ok((
+                    IntraPackageKey {
+                        module_name: intern_identifier(&module_name)?,
+                        member_name: intern_identifier(&type_name)?,
+                    },
+                    origin_id,
+                ))
+            },
+        )
         .collect::<PartialVMResult<_>>()?;
 
     let mut package_context = PackageContext {
@@ -224,12 +230,7 @@ pub fn package(
             continue;
         }
 
-        let loaded_module = module(
-            &mut package_context,
-            link_context,
-            version_id,
-            &mut input_module,
-        )?;
+        let loaded_module = module(&mut package_context, version_id, &mut input_module)?;
 
         let key = identifier_interner::intern_ident_str(loaded_module.id.name()).unwrap();
         assert!(
@@ -267,7 +268,6 @@ pub fn package(
 
 fn module(
     context: &mut PackageContext<'_>,
-    _link_context: &LinkageContext,
     version_id: VersionId,
     module: &mut input::Module,
 ) -> PartialVMResult<Module> {

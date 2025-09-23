@@ -2,23 +2,18 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use indexmap::IndexMap;
+
 use crate::{account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId};
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
-/// The `TypeOrigin` struct holds the first storage ID that the type `module_name::type_name` in
-/// the current package was first defined in.
-/// The `origin_id` provides:
-/// 1. A stable and unique representation of the fully-qualified type; and
-/// 2. The ability to fetch the package at the given origin ID and no that the type will exist in
-///    that package.
-#[derive(Debug, Clone)]
-pub struct TypeOrigin {
-    /// The module name of the type
+/// The `IntraPackageName` struct holds the module name and type name of a type within a package.
+/// This is used as a key in the `type_origin_table` of a `SerializedPackage` and other package
+/// related data structures.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IntraPackageName {
     pub module_name: Identifier,
-    /// The type name
     pub type_name: Identifier,
-    /// The package storaage ID of the package that first defined this type
-    pub origin_id: AccountAddress,
 }
 
 /// The `SerializedPackage` struct holds the serialized modules of a package, the storage ID of the
@@ -40,7 +35,14 @@ pub struct SerializedPackage {
     pub linkage_table: BTreeMap<AccountAddress, AccountAddress>,
     /// The type origin table for the package. Every type in the package must have an entry in this
     /// table.
-    pub type_origin_table: Vec<TypeOrigin>,
+    /// This is a mapping of (module name, type name) to the defining ID of the type -- this is the
+    /// version ID of the package where the type was first defined.
+    pub type_origin_table: IndexMap<IntraPackageName, AccountAddress>,
+    /// The version number of this package. This is a monotonically increasing number that is used
+    /// to track the version of the package. This is not used for linkage or identification, but
+    /// can be used for other purposes such as displaying the version of the package or determining
+    /// relative ordering of versions of the same package.
+    pub version: u64,
 }
 
 impl SerializedPackage {
@@ -50,23 +52,26 @@ impl SerializedPackage {
         modules: BTreeMap<Identifier, Vec<u8>>,
         original_id: AccountAddress,
         version_id: AccountAddress,
+        version: u64,
     ) -> Self {
         Self {
             modules,
             original_id,
             version_id,
             linkage_table: BTreeMap::new(),
-            type_origin_table: vec![],
+            type_origin_table: IndexMap::new(),
+            version,
         }
     }
 
-    pub fn empty(original_id: AccountAddress, version_id: AccountAddress) -> Self {
+    pub fn empty(original_id: AccountAddress, version_id: AccountAddress, version: u64) -> Self {
         Self {
             modules: BTreeMap::new(),
             version_id,
             original_id,
             linkage_table: BTreeMap::new(),
-            type_origin_table: vec![],
+            type_origin_table: IndexMap::new(),
+            version,
         }
     }
 

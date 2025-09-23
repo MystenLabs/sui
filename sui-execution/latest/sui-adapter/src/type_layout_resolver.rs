@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::data_store::cached_package_store::CachedPackageStore;
-use crate::data_store::linked_data_store::LinkedDataStore;
+use crate::data_store::transaction_package_store::TransactionPackageStore;
 use crate::static_programmable_transactions::linkage::analysis::type_linkage;
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;
@@ -17,17 +17,16 @@ use sui_types::{error::SuiError, layout_resolver::LayoutResolver};
 /// Retrieve a `MoveStructLayout` from a `Type`.
 pub struct TypeLayoutResolver<'state, 'vm> {
     vm: &'vm MoveRuntime,
-    resolver: CachedPackageStore<'state>,
+    state_view: Box<dyn TypeLayoutStore + 'state>,
 }
 
-/// Implements SuiResolver traits by providing null implementations for module and resource
+/// Implements SuiResolver traits by providing null implementations for module
 /// resolution and delegating backing package resolution to the trait object.
-struct NullSuiResolver<'state>(Box<dyn TypeLayoutStore + 'state>);
+struct NullSuiResolver<'a, 'state>(&'a (dyn TypeLayoutStore + 'state));
 
 impl<'state, 'vm> TypeLayoutResolver<'state, 'vm> {
     pub fn new(vm: &'vm MoveRuntime, state_view: Box<dyn TypeLayoutStore + 'state>) -> Self {
-        let resolver = CachedPackageStore::new(Box::new(NullSuiResolver(state_view)));
-        Self { vm, resolver }
+        Self { vm, state_view }
     }
 }
 
@@ -41,9 +40,12 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
             .into_iter()
             .map(|a| a.into())
             .collect::<Vec<_>>();
-        let tag_linkage = type_linkage(&ids, &self.resolver)?;
+        let null_resolver = NullSuiResolver(&self.state_view);
+        let resolver =
+            CachedPackageStore::new(&self.vm, TransactionPackageStore::new(&null_resolver));
+        let tag_linkage = type_linkage(&ids, &resolver)?;
         let link_context = tag_linkage.linkage_context();
-        let data_store = LinkedDataStore::new(&tag_linkage, &self.resolver);
+        let data_store = TransactionPackageStore::new(&null_resolver);
         let Ok(vm) = self.vm.make_vm(data_store, link_context) else {
             return Err(SuiError::FailObjectLayout {
                 st: format!("{}", struct_tag),
@@ -61,7 +63,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
     }
 }
 
-impl BackingPackageStore for NullSuiResolver<'_> {
+impl BackingPackageStore for NullSuiResolver<'_, '_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.0.get_package_object(package_id)
     }
