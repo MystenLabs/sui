@@ -10,7 +10,7 @@ COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
-COPY docker/stress/entrypoint.sh /docker/stress/
+COPY docker/stress docker/stress
 
 RUN cargo build --profile ${PROFILE} --bin stress
 
@@ -18,7 +18,7 @@ FROM rust:1.85-bullseye
 ARG PROFILE=release
 ARG GIT_REVISION
 COPY --from=builder /sui/target/${PROFILE}/stress /usr/local/bin
-COPY --from=builder /docker/stress/entrypoint.sh /docker/stress/entrypoint.sh
+COPY --from=builder docker/stress/entrypoint.sh /docker/stress/entrypoint.sh
 WORKDIR "$WORKDIR/sui"
 
 RUN apt-get update && apt-get -y --no-install-recommends install wget=1.21-1+deb11u1 \
