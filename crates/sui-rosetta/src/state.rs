@@ -15,10 +15,6 @@ use crate::types::{
 };
 use crate::{CoinMetadataCache, Error};
 
-#[cfg(test)]
-#[path = "unit_tests/balance_changing_tx_tests.rs"]
-mod balance_changing_tx_tests;
-
 #[derive(Clone)]
 pub struct OnlineServerContext {
     pub client: SuiClient,

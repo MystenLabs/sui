@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::operations::Operations;
-use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
-use crate::CoinMetadataCache;
 use anyhow::anyhow;
 use futures::StreamExt;
 use move_core_types::identifier::Identifier;
@@ -24,6 +21,9 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_move_build::BuildConfig;
+use sui_rosetta::operations::Operations;
+use sui_rosetta::types::{ConstructionMetadata, OperationStatus, OperationType};
+use sui_rosetta::CoinMetadataCache;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse,

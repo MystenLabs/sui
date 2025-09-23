@@ -22,15 +22,11 @@ use crate::errors::Error::MissingMetadata;
 use crate::state::{CheckpointBlockProvider, OnlineServerContext};
 use crate::types::{Currency, CurrencyMetadata, SuiEnv};
 
-#[cfg(test)]
-#[path = "unit_tests/lib_tests.rs"]
-mod lib_tests;
-
 /// This lib implements the Rosetta online and offline server defined by the [Rosetta API Spec](https://www.rosetta-api.org/docs/Reference.html)
 mod account;
 mod block;
 mod construction;
-mod errors;
+pub mod errors;
 mod network;
 pub mod operations;
 mod state;
@@ -154,5 +150,17 @@ impl CoinMetadataCache {
             cache.push(type_tag.clone(), ccy);
         }
         cache.get(type_tag).cloned().ok_or(MissingMetadata)
+    }
+
+    pub async fn len(&self) -> usize {
+        self.metadata.lock().await.len()
+    }
+
+    pub async fn is_empty(&self) -> bool {
+        self.metadata.lock().await.is_empty()
+    }
+
+    pub async fn contains(&self, type_tag: &TypeTag) -> bool {
+        self.metadata.lock().await.contains(type_tag)
     }
 }

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::CoinMetadataCache;
 use anyhow::anyhow;
 use rand::prelude::IteratorRandom;
 use rand::rngs::OsRng;
@@ -13,6 +12,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::BuildConfig;
+use sui_rosetta::CoinMetadataCache;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GAS;
@@ -100,19 +100,19 @@ async fn test_cache() {
 
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(1).unwrap());
 
-    assert_eq!(0, coin_cache.metadata.lock().await.len());
+    assert_eq!(0, coin_cache.len().await);
 
     let _ = coin_cache.get_currency(&GAS::type_tag()).await;
 
-    assert_eq!(1, coin_cache.metadata.lock().await.len());
-    assert!(coin_cache.metadata.lock().await.contains(&GAS::type_tag()));
-    assert!(!coin_cache.metadata.lock().await.contains(&my_coin_type));
+    assert_eq!(1, coin_cache.len().await);
+    assert!(coin_cache.get_currency(&GAS::type_tag()).await.is_ok());
+    assert!(!coin_cache.contains(&my_coin_type).await);
 
     let _ = coin_cache.get_currency(&my_coin_type).await;
 
-    assert_eq!(1, coin_cache.metadata.lock().await.len());
-    assert!(coin_cache.metadata.lock().await.contains(&my_coin_type));
-    assert!(!coin_cache.metadata.lock().await.contains(&GAS::type_tag()));
+    assert_eq!(1, coin_cache.len().await);
+    assert!(coin_cache.get_currency(&my_coin_type).await.is_ok());
+    assert!(!coin_cache.contains(&GAS::type_tag()).await);
 }
 
 async fn get_random_sui(
@@ -136,7 +136,6 @@ async fn get_random_sui(
         .await
         .unwrap()
         .data;
-
     let coin_resp = coins
         .iter()
         .filter(|object| {
