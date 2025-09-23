@@ -14,7 +14,8 @@ use crate::{
     },
 };
 use move_binary_format::binary_config::BinaryConfig;
-use sui_types::{base_types::ObjectID, error::ExecutionError, move_package::MovePackage};
+use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
+use sui_types::{base_types::ObjectID, error::ExecutionError};
 
 #[derive(Debug)]
 pub struct LegacyLinkage {
@@ -81,13 +82,13 @@ impl LegacyLinkage {
             object_id: &ObjectID,
             store: &dyn PackageStore,
             resolution_table: &mut ResolutionTable,
-            resolution_fn: fn(&MovePackage) -> Option<ConflictResolution>,
+            resolution_fn: fn(&VerifiedPackage) -> Option<ConflictResolution>,
         ) -> Result<(), ExecutionError> {
             let pkg = get_package(object_id, store)?;
             let transitive_deps = pkg
                 .linkage_table()
                 .values()
-                .map(|info| info.upgraded_id)
+                .map(|version_id| ObjectID::from(*version_id))
                 .collect::<Vec<_>>();
             for object_id in transitive_deps.iter() {
                 add_and_unify(object_id, store, resolution_table, resolution_fn)?;
@@ -131,7 +132,7 @@ impl LegacyLinkage {
             add_and_unify(id, store, &mut resolution_table, ConflictResolution::exact)?;
             resolution_table
                 .all_versions_resolution_table
-                .insert(pkg.id(), pkg.original_package_id());
+                .insert(pkg.version_id().into(), pkg.original_id().into());
         }
         Ok(resolution_table)
     }

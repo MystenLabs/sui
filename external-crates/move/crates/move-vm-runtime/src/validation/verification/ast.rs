@@ -1,10 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::types::{OriginalId, VersionId};
+use crate::shared::types::{DefiningTypeId, OriginalId, VersionId};
 
+use indexmap::IndexMap;
 use move_binary_format::CompiledModule;
-use move_core_types::{language_storage::ModuleId, resolver::TypeOrigin};
+use move_core_types::{language_storage::ModuleId, resolver::IntraPackageName};
 
 use std::collections::BTreeMap;
 
@@ -19,8 +20,9 @@ pub struct Package {
     pub(crate) original_id: OriginalId,
     pub(crate) version_id: VersionId,
     pub(crate) modules: BTreeMap<ModuleId, Module>,
-    pub(crate) type_origin_table: Vec<TypeOrigin>,
+    pub(crate) type_origin_table: IndexMap<IntraPackageName, DefiningTypeId>,
     pub(crate) linkage_table: BTreeMap<OriginalId, VersionId>,
+    pub(crate) version: u64,
 }
 
 /// A deserialized, internally-verified module.
@@ -43,10 +45,38 @@ impl Package {
     pub fn as_modules(&self) -> impl IntoIterator<Item = &Module> {
         self.modules.values()
     }
+
+    pub fn original_id(&self) -> OriginalId {
+        self.original_id
+    }
+
+    pub fn version_id(&self) -> VersionId {
+        self.version_id
+    }
+
+    pub fn modules(&self) -> &BTreeMap<ModuleId, Module> {
+        &self.modules
+    }
+
+    pub fn type_origin_table(&self) -> &IndexMap<IntraPackageName, DefiningTypeId> {
+        &self.type_origin_table
+    }
+
+    pub fn linkage_table(&self) -> &BTreeMap<OriginalId, VersionId> {
+        &self.linkage_table
+    }
+
+    pub fn version(&self) -> u64 {
+        self.version
+    }
 }
 
 impl Module {
     pub fn to_compiled_module(&self) -> CompiledModule {
         self.value.clone()
+    }
+
+    pub fn compiled_module(&self) -> &CompiledModule {
+        &self.value
     }
 }
