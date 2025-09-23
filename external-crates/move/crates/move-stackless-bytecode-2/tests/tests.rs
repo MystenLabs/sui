@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_stackless_bytecode_2::generator::StacklessBytecodeGenerator;
+use move_stackless_bytecode_2::from_model;
 
 use move_command_line_common::insta_assert;
 use move_symbol_pool::Symbol;
@@ -30,13 +30,6 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     // Block on the async function
     let env = move_package_alt::flavor::vanilla::default_environment();
     let root_pkg = rt.block_on(async { RootPackage::<Vanilla>::load(pkg_dir, env).await })?;
-    let model = model_builder::build(&mut writer, &root_pkg, &config)?;
-
-    // let bytecode_files = find_filenames(&[output_dir], |path| {
-    //     extension_equals(path, MOVE_COMPILED_EXTENSION)
-    // })?;
-
-    let generator = StacklessBytecodeGenerator::from_model(model);
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()
@@ -46,36 +39,10 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         .map(|name| name.into())
         .collect::<BTreeSet<Symbol>>();
 
-    let packages = generator.generate_stackless_bytecode(/* optimize */ true)?;
+    let model = model_builder::build(&mut writer, &root_pkg, &config)?;
+    let bytecode = from_model(model, /* optimize */ true)?;
 
-    for pkg in &packages {
-        let pkg_name = pkg.name;
-        for (module_name, module) in &pkg.modules {
-            if test_module_names.contains(module_name) {
-                let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
-                let stackless_bytecode = format!("{}", module);
-                insta_assert! {
-                    input_path: file_path,
-                    contents: stackless_bytecode,
-                    name: name,
-                    suffix: "opt.sbir",
-                };
-                // if let Some(decompiled) = decompile(module) {
-                //     let decompiled = format!("{}", decompiled);
-                //     insta_assert! {
-                //         input_path: file_path,
-                //         contents: decompiled,
-                //         name: name,
-                //         suffix: "decomp",
-                //     };
-                // }
-            }
-        }
-    }
-
-    let packages = generator.generate_stackless_bytecode(/* optimize */ false)?;
-
-    for pkg in &packages {
+    for pkg in &bytecode.packages {
         let pkg_name = pkg.name;
         for (module_name, module) in &pkg.modules {
             if test_module_names.contains(module_name) {

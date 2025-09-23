@@ -2,35 +2,120 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfg::{ControlFlowGraph, StacklessControlFlowGraph},
-    stackless::{
-        ast::{
-            self, BasicBlock, Instruction, RValue,
-            Trivial::{Immediate, Register},
-            Value,
-        },
-        context::Context,
-        optimizations::optimize,
-    },
+    ast::{self, BasicBlock, Instruction, RValue, Register, Value},
+    optimizations::optimize,
 };
 
+use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
-    file_format::JumpTableInner, normalized as N, normalized::Bytecode as IB,
+    file_format::JumpTableInner,
+    normalized::{self as N, Bytecode as IB, Type},
 };
 
 use move_model_2::{
-    model::{Model as Model2, Module, Package},
+    model::{Model, Module, Package},
     source_kind::SourceKind,
 };
 use move_symbol_pool::Symbol;
 
-use std::{collections::BTreeMap, result::Result::Ok};
+use std::{collections::BTreeMap, rc::Rc, result::Result::Ok};
+
+// -------------------------------------------------------------------------------------------------
+// Types
+// -------------------------------------------------------------------------------------------------
+
+pub struct Context<'a, K: SourceKind> {
+    pub var_counter: Counter,
+    pub model: &'a Model<K>,
+    pub logical_stack: Vec<Register>,
+    pub optimize: bool,
+    pub locals_types: Vec<Rc<Type<Symbol>>>,
+}
+
+pub struct Counter {
+    pub count: usize,
+}
+
+// -------------------------------------------------------------------------------------------------
+// Impls
+// -------------------------------------------------------------------------------------------------
+
+impl<'a, K: SourceKind> Context<'a, K> {
+    pub fn new(model: &'a Model<K>) -> Self {
+        Self {
+            var_counter: Counter::new(),
+            model,
+            logical_stack: vec![],
+            optimize: false,
+            locals_types: vec![],
+        }
+    }
+
+    pub fn pop_register(&mut self) -> Register {
+        self.logical_stack
+            .pop()
+            .expect("Popped a register and there was none")
+    }
+
+    pub fn push_register(&mut self, ty: Rc<Type<Symbol>>) -> Register {
+        let reg_id = self.var_counter.incr();
+        let new_reg = Register { name: reg_id, ty };
+        self.logical_stack.push(new_reg.clone());
+        new_reg
+    }
+
+    #[allow(dead_code)]
+    pub fn nth_register(&self, n: usize) -> &Register {
+        self.logical_stack
+            .get(self.logical_stack.len() - n)
+            .expect("Tried to get nth register but stack is too small")
+    }
+
+    pub fn optimize(&mut self, value: bool) {
+        self.optimize = value;
+    }
+
+    pub fn set_locals_types(&mut self, locals_types: Vec<Rc<Type<Symbol>>>) {
+        self.locals_types = locals_types;
+    }
+
+    pub fn get_local_type(&self, loc: usize) -> &Rc<Type<Symbol>> {
+        &self.locals_types[loc]
+    }
+}
+
+impl Counter {
+    pub fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    pub fn incr(&mut self) -> usize {
+        let curr = self.count;
+        self.count += 1;
+        curr
+    }
+
+    pub fn reset(&mut self) {
+        self.count = 0;
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Default
+// -------------------------------------------------------------------------------------------------
+
+impl Default for Counter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 // -------------------------------------------------------------------------------------------------
 // Stackless Bytecode Translation
 // -------------------------------------------------------------------------------------------------
+
 pub(crate) fn packages<K: SourceKind>(
-    model: &Model2<K>,
+    model: &Model<K>,
     optimize: bool,
 ) -> anyhow::Result<Vec<ast::Package>> {
     let mut context = Context::new(model);
@@ -98,7 +183,7 @@ pub(crate) fn function<K: SourceKind>(
             basic_blocks: BTreeMap::new(),
         });
     }
-    let cfg = StacklessControlFlowGraph::new(code, function.jump_tables());
+    let cfg = VMControlFlowGraph::new(code, function.jump_tables());
 
     let locals_types = function
         .parameters
@@ -152,6 +237,9 @@ pub(crate) fn bytecode<K: SourceKind>(
     use ast::LocalOp as LocOp;
     use ast::PrimitiveOp as Op;
 
+    use ast::Trivial::Immediate as I;
+    use ast::Trivial::Register as R;
+
     macro_rules! assign_reg {
         ([$($lhs:expr),*] = $rhs:expr) => {{
             let rhs = $rhs;
@@ -164,7 +252,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
     macro_rules! imm {
         ($val:expr) => {
-            RValue::Trivial(Immediate($val))
+            RValue::Trivial(I($val))
         };
     }
 
@@ -214,23 +302,37 @@ pub(crate) fn bytecode<K: SourceKind>(
         };
     }
 
+    macro_rules! binop {
+        ($op:expr, $lhs:ident => $ty:expr) => {{
+            let rhs = pop!();
+            let $lhs = pop!();
+            binary_op_type_assert!($lhs, rhs);
+            let ty = $ty;
+            assign_reg!([push!(ty)] = primitive_op!($op, R($lhs), R(rhs)))
+        }};
+    }
+
+    // TODO: Everywhere we call pop!() we should check that the type is what we expect
+    // TODO: Almost everywhere we call pop!() appears to be out of order -- we should reverse the
+    // order we grab inputs.
+
     match op {
         IB::Pop => Instruction::Drop(pop!()),
 
         IB::Ret => {
             // TODO: check if this needs to be reversed?
-            let returned_vars = make_vec!(function.return_.len(), Register(pop!()));
+            let returned_vars = make_vec!(function.return_.len(), R(pop!()));
             Instruction::Return(returned_vars)
         }
 
         IB::BrTrue(code_offset) => Instruction::JumpIf {
-            condition: Register(pop!()),
+            condition: R(pop!()),
             then_label: *code_offset as usize,
             else_label: pc + 1,
         },
 
         IB::BrFalse(code_offset) => Instruction::JumpIf {
-            condition: Register(pop!()),
+            condition: R(pop!()),
             then_label: pc + 1,
             else_label: *code_offset as usize,
         },
@@ -244,15 +346,15 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::LdU128(bx) => assign_reg!([push!(Type::U128.into())] = imm!(Value::U128(*(*bx)))),
 
         IB::CastU8 => {
-            assign_reg!([push!(Type::U8.into())] = primitive_op!(Op::CastU8, Register(pop!())))
+            assign_reg!([push!(Type::U8.into())] = primitive_op!(Op::CastU8, R(pop!())))
         }
 
         IB::CastU64 => {
-            assign_reg!([push!(Type::U64.into())] = primitive_op!(Op::CastU64, Register(pop!())))
+            assign_reg!([push!(Type::U64.into())] = primitive_op!(Op::CastU64, R(pop!())))
         }
 
         IB::CastU128 => {
-            assign_reg!([push!(Type::U128.into())] = primitive_op!(Op::CastU128, Register(pop!())))
+            assign_reg!([push!(Type::U128.into())] = primitive_op!(Op::CastU128, R(pop!())))
         }
 
         IB::LdConst(const_ref) => assign_reg!(
@@ -289,7 +391,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let reg = pop!();
             Instruction::StoreLoc {
                 loc: *loc as usize,
-                value: Register(reg),
+                value: R(reg),
             }
         }
 
@@ -318,7 +420,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                     )
                 });
 
-            let args = make_vec!(function.parameters.len(), Register(pop!()));
+            let args = make_vec!(function.parameters.len(), R(pop!()));
 
             let type_params = function_ref
                 .type_arguments
@@ -341,7 +443,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Pack(struct_ref) => {
-            let args = make_vec!(struct_ref.struct_.fields.0.len(), Register(pop!()));
+            let args = make_vec!(struct_ref.struct_.fields.0.len(), R(pop!()));
             assign_reg!(
                 [push!(struct_ref_to_type(struct_ref).into())] = RValue::Data {
                     op: DataOp::Pack(struct_ref.clone()),
@@ -353,7 +455,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::Unpack(struct_ref) => {
             let rhs = RValue::Data {
                 op: DataOp::Unpack(struct_ref.clone()),
-                args: vec![Register(pop!())],
+                args: vec![R(pop!())],
             };
             let lhs = struct_ref
                 .struct_
@@ -371,8 +473,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             match reg.ty.as_ref() {
                 Type::Reference(_mutable, ty) => {
                     assign_reg!(
-                        [push!(ty.clone().into())] =
-                            data_op!(DataOp::ReadRef, Register(reg.clone()))
+                        [push!(ty.clone().into())] = data_op!(DataOp::ReadRef, R(reg.clone()))
                     )
                 }
                 _ => panic!("ReadRef expected a reference type, got: {}", reg.ty),
@@ -390,13 +491,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                         ty,
                         val.ty
                     );
-                    assign_reg!(
-                        [] = data_op!(
-                            DataOp::WriteRef,
-                            Register(reg.clone()),
-                            Register(val.clone())
-                        )
-                    )
+                    assign_reg!([] = data_op!(DataOp::WriteRef, R(reg.clone()), R(val.clone())))
                 }
                 _ => panic!("WriteRef expected a reference type, got: {}", reg.ty),
             }
@@ -408,7 +503,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 Type::Reference(true, ty) => {
                     assign_reg!(
                         [push!(Type::Reference(false, ty.clone()).into())] =
-                            data_op!(DataOp::FreezeRef, Register(reg.clone()))
+                            data_op!(DataOp::FreezeRef, R(reg.clone()))
                     )
                 }
                 _ => panic!(
@@ -446,7 +541,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let ref_type = Type::Reference(true, field_ref.field.type_.clone().into());
             assign_reg!(
                 [push!(ref_type.into())] =
-                    data_op!(DataOp::MutBorrowField(field_ref.clone()), Register(pop!()))
+                    data_op!(DataOp::MutBorrowField(field_ref.clone()), R(pop!()))
             )
         }
 
@@ -454,223 +549,57 @@ pub(crate) fn bytecode<K: SourceKind>(
             let ref_type = Type::Reference(false, field_ref.field.type_.clone().into());
             assign_reg!(
                 [push!(ref_type.into())] =
-                    data_op!(DataOp::ImmBorrowField(field_ref.clone()), Register(pop!()))
+                    data_op!(DataOp::ImmBorrowField(field_ref.clone()), R(pop!()))
             )
         }
 
-        IB::Add => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] =
-                    primitive_op!(Op::Add, Register(operand.clone()), Register(other_operand))
-            )
+        IB::Add => binop!(Op::Add, lhs => lhs.ty.clone()),
+        IB::Sub => binop!(Op::Subtract, lhs => lhs.ty.clone()),
+        IB::Mod => binop!(Op::Modulo, lhs => lhs.ty.clone()),
+        IB::Mul => binop!(Op::Multiply, lhs => lhs.ty.clone()),
+        IB::Div => binop!(Op::Divide, lhs => lhs.ty.clone()),
+
+        IB::BitAnd => binop!(Op::BitAnd, lhs => N::Type::Bool.into()),
+        IB::BitOr => binop!(Op::BitOr, lhs => N::Type::Bool.into()),
+        IB::Xor => binop!(Op::Xor, lhs => N::Type::Bool.into()),
+        IB::And => binop!(Op::And, lhs => N::Type::Bool.into()),
+        IB::Or => binop!(Op::Or, lhs => N::Type::Bool.into()),
+        IB::Eq => binop!(Op::Equal, lhs => N::Type::Bool.into()),
+        IB::Neq => binop!(Op::NotEqual, lhs => N::Type::Bool.into()),
+        IB::Lt => binop!(Op::LessThan, lhs => N::Type::Bool.into()),
+        IB::Gt => binop!(Op::GreaterThan, lhs => N::Type::Bool.into()),
+        IB::Le => binop!(Op::LessThanOrEqual, lhs => N::Type::Bool.into()),
+        IB::Ge => binop!(Op::GreaterThanOrEqual, lhs => N::Type::Bool.into()),
+
+        IB::Shl => {
+            // TODO: Check the types
+            let rhs = pop!();
+            let lhs = pop!();
+            let ty = lhs.ty.clone();
+            assign_reg!([push!(ty)] = primitive_op!((Op::ShiftLeft), R(lhs), R(rhs)))
         }
 
-        IB::Sub => {
-            let subtraend = pop!();
-            let minuend = pop!();
-            binary_op_type_assert!(minuend, subtraend);
-            assign_reg!(
-                [push!(minuend.ty.clone())] =
-                    primitive_op!(Op::Subtract, Register(minuend.clone()), Register(subtraend))
-            )
-        }
-
-        IB::Mul => {
-            let multiplier = pop!();
-            let multiplicand = pop!();
-            binary_op_type_assert!(multiplicand, multiplier);
-            assign_reg!(
-                [push!(multiplicand.ty.clone())] = primitive_op!(
-                    Op::Multiply,
-                    Register(multiplicand.clone()),
-                    Register(multiplier)
-                )
-            )
-        }
-
-        IB::Mod => {
-            let divisor = pop!();
-            let dividend = pop!();
-            binary_op_type_assert!(dividend, divisor);
-            assign_reg!(
-                [push!(dividend.ty.clone())] =
-                    primitive_op!(Op::Modulo, Register(dividend.clone()), Register(divisor))
-            )
-        }
-
-        IB::Div => {
-            let divisor = pop!();
-            let dividend = pop!();
-            binary_op_type_assert!(dividend, divisor);
-            assign_reg!(
-                [push!(dividend.ty.clone())] =
-                    primitive_op!(Op::Divide, Register(dividend.clone()), Register(divisor))
-            )
-        }
-
-        IB::BitOr => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::BitOr,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::BitAnd => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::BitAnd,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Xor => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] =
-                    primitive_op!(Op::Xor, Register(operand.clone()), Register(other_operand))
-            )
-        }
-
-        IB::Or => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] =
-                    primitive_op!(Op::Or, Register(operand.clone()), Register(other_operand))
-            )
-        }
-
-        IB::And => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] =
-                    primitive_op!(Op::And, Register(operand.clone()), Register(other_operand))
-            )
+        IB::Shr => {
+            // TODO: Check the types
+            let rhs = pop!();
+            let lhs = pop!();
+            let ty = lhs.ty.clone();
+            assign_reg!([push!(ty)] = primitive_op!((Op::ShiftRight), R(lhs), R(rhs)))
         }
 
         IB::Not => {
             let reg = pop!();
-            assign_reg!([push!(reg.ty.clone())] = primitive_op!(Op::Not, Register(reg.clone())))
+            assign_reg!([push!(reg.ty.clone())] = primitive_op!(Op::Not, R(reg.clone())))
         }
 
-        IB::Eq => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::Equal,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-        IB::Neq => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::NotEqual,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Lt => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::LessThan,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Gt => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::GreaterThan,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Le => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::LessThanOrEqual,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Ge => {
-            let operand = pop!();
-            let other_operand = pop!();
-            binary_op_type_assert!(operand, other_operand);
-            assign_reg!(
-                [push!(operand.ty.clone())] = primitive_op!(
-                    Op::GreaterThanOrEqual,
-                    Register(operand.clone()),
-                    Register(other_operand)
-                )
-            )
-        }
-
-        IB::Abort => Instruction::Abort(Register(ctxt.pop_register())),
+        IB::Abort => Instruction::Abort(R(ctxt.pop_register())),
 
         IB::Nop => Instruction::Nop,
-
-        IB::Shl => {
-            let ty = ctxt.nth_register(2).ty.clone();
-            assign_reg!(
-                [push!(ty)] = primitive_op!(Op::ShiftLeft, Register(pop!()), Register(pop!()))
-            )
-        }
-
-        IB::Shr => {
-            let ty = ctxt.nth_register(2).ty.clone();
-            assign_reg!(
-                [push!(ty)] = primitive_op!(Op::ShiftRight, Register(pop!()), Register(pop!()))
-            )
-        }
 
         IB::VecPack(bx) => {
             let mut args = vec![];
             for _ in 0..bx.1 {
-                args.push(Register(pop!()));
+                args.push(R(pop!()));
             }
             assign_reg!(
                 [push!(bx.0.clone())] = RValue::Data {
@@ -682,52 +611,38 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::VecLen(rc_type) => {
             assign_reg!(
-                [push!(Type::U64.into())] =
-                    data_op!(DataOp::VecLen(rc_type.clone()), Register(pop!()))
+                [push!(Type::U64.into())] = data_op!(DataOp::VecLen(rc_type.clone()), R(pop!()))
             )
         }
 
         IB::VecImmBorrow(rc_type) => {
             let ref_type = Type::Reference(false, rc_type.as_ref().clone().into());
             assign_reg!(
-                [push!(ref_type.into())] = data_op!(
-                    DataOp::VecImmBorrow(rc_type.clone()),
-                    Register(pop!()),
-                    Register(pop!())
-                )
+                [push!(ref_type.into())] =
+                    data_op!(DataOp::VecImmBorrow(rc_type.clone()), R(pop!()), R(pop!()))
             )
         }
 
         IB::VecMutBorrow(rc_type) => {
             let ref_type = Type::Reference(true, rc_type.as_ref().clone().into());
             assign_reg!(
-                [push!(ref_type.into())] = data_op!(
-                    DataOp::VecMutBorrow(rc_type.clone()),
-                    Register(pop!()),
-                    Register(pop!())
-                )
+                [push!(ref_type.into())] =
+                    data_op!(DataOp::VecMutBorrow(rc_type.clone()), R(pop!()), R(pop!()))
             )
         }
 
         IB::VecPushBack(rc_type) => {
-            assign_reg!(
-                [] = data_op!(
-                    DataOp::VecPushBack(rc_type.clone()),
-                    Register(pop!()),
-                    Register(pop!())
-                )
-            )
+            assign_reg!([] = data_op!(DataOp::VecPushBack(rc_type.clone()), R(pop!()), R(pop!())))
         }
 
         IB::VecPopBack(rc_type) => {
             assign_reg!(
-                [push!(rc_type.clone())] =
-                    data_op!(DataOp::VecPopBack(rc_type.clone()), Register(pop!()))
+                [push!(rc_type.clone())] = data_op!(DataOp::VecPopBack(rc_type.clone()), R(pop!()))
             )
         }
 
         IB::VecUnpack(bx) => {
-            let rhs = data_op!(DataOp::VecUnpack(bx.0.clone()), Register(pop!()));
+            let rhs = data_op!(DataOp::VecUnpack(bx.0.clone()), R(pop!()));
             let mut lhs = vec![];
             // Actually VecUnpack is only generated on empty vectors, so bx.1 is always 0
             for _i in 0..bx.1 {
@@ -737,7 +652,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::VecSwap(rc_type) => {
-            let args = make_vec!(3, Register(pop!()));
+            let args = make_vec!(3, R(pop!()));
             Instruction::AssignReg {
                 rhs: RValue::Data {
                     op: DataOp::VecSwap(rc_type.clone()),
@@ -754,19 +669,19 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::LdU256(_bx) => assign_reg!([push!(Type::U256.into())] = imm!(Value::U256(*(*_bx)))),
 
         IB::CastU16 => {
-            assign_reg!([push!(Type::U16.into())] = primitive_op!(Op::CastU16, Register(pop!())))
+            assign_reg!([push!(Type::U16.into())] = primitive_op!(Op::CastU16, R(pop!())))
         }
 
         IB::CastU32 => {
-            assign_reg!([push!(Type::U32.into())] = primitive_op!(Op::CastU32, Register(pop!())))
+            assign_reg!([push!(Type::U32.into())] = primitive_op!(Op::CastU32, R(pop!())))
         }
 
         IB::CastU256 => {
-            assign_reg!([push!(Type::U256.into())] = primitive_op!(Op::CastU256, Register(pop!())))
+            assign_reg!([push!(Type::U256.into())] = primitive_op!(Op::CastU256, R(pop!())))
         }
 
         IB::PackVariant(bx) => {
-            let args = make_vec!(bx.variant.fields.0.len(), Register(pop!()));
+            let args = make_vec!(bx.variant.fields.0.len(), R(pop!()));
             Instruction::AssignReg {
                 lhs: vec![push!(variant_ref_to_type(bx).into())],
                 rhs: RValue::Data {
@@ -779,7 +694,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::UnpackVariant(bx) => {
             let rhs = RValue::Data {
                 op: DataOp::UnpackVariant(bx.clone()),
-                args: vec![Register(pop!())],
+                args: vec![R(pop!())],
             };
             let lhs = make_vec!(
                 bx.variant.fields.0.len(),
@@ -791,7 +706,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::UnpackVariantImmRef(bx) => {
             let rhs = RValue::Data {
                 op: DataOp::UnpackVariantImmRef(bx.clone()),
-                args: vec![Register(pop!())],
+                args: vec![R(pop!())],
             };
             let ref_type = Type::Reference(false, variant_ref_to_type(bx).into());
             let lhs = make_vec!(bx.variant.fields.0.len(), push!(ref_type.clone().into()));
@@ -801,7 +716,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::UnpackVariantMutRef(bx) => {
             let rhs = RValue::Data {
                 op: DataOp::UnpackVariant(bx.clone()),
-                args: vec![Register(pop!())],
+                args: vec![R(pop!())],
             };
             let ref_type = Type::Reference(true, variant_ref_to_type(bx).into());
             let lhs = make_vec!(bx.variant.fields.0.len(), push!(ref_type.clone().into()));
@@ -811,7 +726,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::VariantSwitch(jt) => {
             let JumpTableInner::Full(offsets) = &jt.jump_table;
             Instruction::VariantSwitch {
-                condition: Register(pop!()),
+                condition: R(pop!()),
                 variants: jt.enum_.variants.keys().cloned().collect(),
                 labels: offsets
                     .iter()

@@ -28,7 +28,6 @@ pub enum Structured {
     Block(Code),
     Loop(Box<Structured>),
     Seq(Vec<Structured>),
-    While(Code, Box<Structured>),
     IfElse(Code, Box<Structured>, Box<Option<Structured>>),
     Switch(Code, Vec<Structured>),
     Jump(Label),
@@ -94,16 +93,6 @@ impl std::fmt::Display for Structured {
                     writeln!(f, "loop {{")?;
                     fmt_structured(body, f, level + 1)?;
                     indent(f, level)?;
-                    writeln!(f, "}}")
-                }
-                Structured::While(cond, body) => {
-                    indent(f, level)?;
-                    if cond.1 {
-                        writeln!(f, "while !({:?}) {{", cond.0)?;
-                    } else {
-                        writeln!(f, "while ({:?}) {{", cond.0)?;
-                    }
-                    fmt_structured(body, f, level + 1)?;
                     writeln!(f, "}}")
                 }
                 Structured::IfElse(cond, then_branch, else_branch) => {
