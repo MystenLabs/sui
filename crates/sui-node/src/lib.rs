@@ -1762,6 +1762,7 @@ impl SuiNode {
                 "Creating checkpoint executor for epoch {}",
                 epoch_store.epoch()
             );
+
             let checkpoint_executor = CheckpointExecutor::new(
                 epoch_store.clone(),
                 self.checkpoint_store.clone(),

@@ -121,9 +121,11 @@ impl Merge<crate::messages_checkpoint::CheckpointSummary> for CheckpointSummary 
         source: crate::messages_checkpoint::CheckpointSummary,
         mask: &FieldMaskTree,
     ) {
-        if mask.contains(Self::BCS_FIELD) {
+        if let Some(mask) = mask.subtree(Self::BCS_FIELD) {
             let mut bcs = Bcs::serialize(&source).unwrap();
-            bcs.name = Some("CheckpointSummary".to_owned());
+            bcs.name = mask
+                .contains("name")
+                .then_some("CheckpointSummary".to_owned());
             self.bcs = Some(bcs);
         }
 
@@ -282,7 +284,9 @@ impl Merge<crate::messages_checkpoint::CheckpointContents> for CheckpointContent
     ) {
         if mask.contains(Self::BCS_FIELD) {
             let mut bcs = Bcs::serialize(&source).unwrap();
-            bcs.name = Some("CheckpointContents".to_owned());
+            bcs.name = mask
+                .contains("name")
+                .then_some("CheckpointContents".to_owned());
             self.bcs = Some(bcs);
         }
 
@@ -415,7 +419,9 @@ impl Merge<&crate::effects::TransactionEvents> for TransactionEvents {
     fn merge(&mut self, source: &crate::effects::TransactionEvents, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD) {
             let mut bcs = Bcs::serialize(&source).unwrap();
-            bcs.name = Some("TransactionEvents".to_owned());
+            bcs.name = mask
+                .contains("name")
+                .then_some("TransactionEvents".to_owned());
             self.bcs = Some(bcs);
         }
 
@@ -1490,7 +1496,9 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
 
         if mask.contains(Self::BCS_FIELD) {
             let mut bcs = Bcs::from(source.as_ref().to_vec());
-            bcs.name = Some("UserSignatureBytes".to_owned());
+            bcs.name = mask
+                .contains("name")
+                .then_some("UserSignatureBytes".to_owned());
             self.bcs = Some(bcs);
         }
 
@@ -1585,7 +1593,7 @@ impl Merge<&crate::object::Object> for Object {
     fn merge(&mut self, source: &crate::object::Object, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
             let mut bcs = Bcs::serialize(&source).unwrap();
-            bcs.name = Some("Object".to_owned());
+            bcs.name = mask.contains("name").then_some("Object".to_owned());
             self.bcs = Some(bcs);
         }
 
@@ -1810,7 +1818,9 @@ impl Merge<&crate::transaction::TransactionData> for Transaction {
     fn merge(&mut self, source: &crate::transaction::TransactionData, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
             let mut bcs = Bcs::serialize(&source).unwrap();
-            bcs.name = Some("TransactionData".to_owned());
+            bcs.name = mask
+                .contains("name")
+                .then_some("TransactionData".to_owned());
             self.bcs = Some(bcs);
         }
 
@@ -2492,7 +2502,9 @@ impl Merge<&crate::effects::TransactionEffects> for TransactionEffects {
     fn merge(&mut self, source: &crate::effects::TransactionEffects, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
             let mut bcs = Bcs::serialize(&source).unwrap();
-            bcs.name = Some("TransactionEffects".to_owned());
+            bcs.name = mask
+                .contains("name")
+                .then_some("TransactionEffects".to_owned());
             self.bcs = Some(bcs);
         }
 

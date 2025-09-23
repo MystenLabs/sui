@@ -3,8 +3,10 @@
 
 use crate::checkpoints::checkpoint_executor::{CheckpointExecutionData, CheckpointTransactionData};
 use crate::execution_cache::TransactionCacheRead;
+use bytes::Bytes;
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
+use sui_config::node::CheckpointExecutorConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiError, SuiResult};
@@ -122,4 +124,78 @@ pub(crate) fn load_checkpoint(
         object_set,
     };
     Ok(checkpoint)
+}
+
+pub(crate) async fn store_checkpoint_in_object_store(
+    object_store: &dyn object_store::ObjectStore,
+    config: &CheckpointExecutorConfig,
+    checkpoint: &Checkpoint,
+) -> anyhow::Result<()> {
+    use std::sync::LazyLock;
+    use sui_rpc::field::FieldMask;
+    use sui_rpc::field::FieldMaskTree;
+    use sui_rpc::field::FieldMaskUtil;
+    use sui_rpc::merge::Merge;
+
+    static MASK: LazyLock<FieldMaskTree> = LazyLock::new(|| {
+        use sui_rpc::proto::sui::rpc::v2::Checkpoint;
+
+        FieldMask::from_paths([
+            Checkpoint::path_builder().sequence_number(),
+            Checkpoint::path_builder().summary().bcs().value(),
+            Checkpoint::path_builder().signature().finish(),
+            Checkpoint::path_builder().contents().bcs().value(),
+            Checkpoint::path_builder()
+                .transactions()
+                .transaction()
+                .bcs()
+                .value(),
+            Checkpoint::path_builder()
+                .transactions()
+                .effects()
+                .bcs()
+                .value(),
+            Checkpoint::path_builder()
+                .transactions()
+                .effects()
+                .unchanged_loaded_runtime_objects()
+                .finish(),
+            Checkpoint::path_builder()
+                .transactions()
+                .events()
+                .bcs()
+                .value(),
+            Checkpoint::path_builder().objects().objects().bcs().value(),
+        ])
+        .into()
+    });
+
+    let file_name =
+        object_store::path::Path::from(format!("{}.zst", checkpoint.summary.sequence_number));
+    let level = config
+        .checkpoint_upload_config
+        .as_ref()
+        .and_then(|c| c.level)
+        .unwrap_or(19);
+
+    let checkpoint = sui_rpc::proto::sui::rpc::v2::Checkpoint::merge_from(checkpoint, &MASK);
+
+    let blob = tokio::task::spawn_blocking(move || compress_message(&checkpoint, level))
+        .await
+        .unwrap()?;
+
+    object_store
+        .put(&file_name, Bytes::from(blob).into())
+        .await?;
+
+    Ok(())
+}
+
+fn compress_message<M: prost::Message>(msg: &M, zstd_level: i32) -> anyhow::Result<Vec<u8>> {
+    // 1) Serialize protobuf
+    let buf = msg.encode_to_vec();
+
+    // 2) Compress with zstd (single-shot)
+    let compressed = zstd::encode_all(&buf[..], zstd_level)?;
+    Ok(compressed)
 }

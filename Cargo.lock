@@ -911,7 +911,7 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
- "zstd 0.13.2",
+ "zstd 0.13.3",
  "zstd-safe 7.2.1",
 ]
 
@@ -8371,7 +8371,7 @@ dependencies = [
  "move-core-types",
  "serde",
  "serde_json",
- "zstd 0.13.2",
+ "zstd 0.13.3",
 ]
 
 [[package]]
@@ -9732,7 +9732,7 @@ dependencies = [
  "snap",
  "thrift",
  "twox-hash",
- "zstd 0.13.2",
+ "zstd 0.13.3",
  "zstd-sys",
 ]
 
@@ -13746,6 +13746,7 @@ dependencies = [
  "pprof",
  "pretty_assertions",
  "prometheus",
+ "prost",
  "rand 0.8.5",
  "rayon",
  "reqwest 0.12.9",
@@ -13764,6 +13765,7 @@ dependencies = [
  "strum_macros 0.27.1",
  "sui-authority-aggregation",
  "sui-config",
+ "sui-data-ingestion-core",
  "sui-execution",
  "sui-framework",
  "sui-genesis-builder",
@@ -13773,6 +13775,7 @@ dependencies = [
  "sui-move-build",
  "sui-network",
  "sui-protocol-config",
+ "sui-rpc",
  "sui-simulator",
  "sui-storage",
  "sui-swarm-config",
@@ -13792,6 +13795,7 @@ dependencies = [
  "tracing",
  "twox-hash",
  "typed-store",
+ "zstd 0.13.3",
 ]
 
 [[package]]
@@ -17704,7 +17708,7 @@ dependencies = [
  "tower-service",
  "tracing",
  "webpki-roots 0.26.3",
- "zstd 0.13.2",
+ "zstd 0.13.3",
 ]
 
 [[package]]
@@ -19591,9 +19595,9 @@ dependencies = [
 
 [[package]]
 name = "zstd"
-version = "0.13.2"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcf2b778a664581e31e389454a7072dab1647606d44f7feea22cd5abb9c9f3f9"
+checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
 dependencies = [
  "zstd-safe 7.2.1",
 ]

@@ -95,6 +95,10 @@ sui-storage.workspace = true
 sui-tls.workspace = true
 sui-types.workspace = true
 nonempty.workspace = true
+sui-data-ingestion-core.workspace = true
+zstd = "0.13.3"
+prost.workspace = true
+sui-rpc.workspace = true
 
 [dev-dependencies]
 sui-move-build.workspace = true
