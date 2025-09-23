@@ -357,7 +357,7 @@ mod tests {
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{metrics::IndexerMetrics, pipeline::Processor, testing::mock_store::*, FieldCount};
+    use crate::{metrics::IndexerMetrics, mocks::store::*, pipeline::Processor, FieldCount};
 
     use super::*;
 
@@ -549,7 +549,7 @@ mod tests {
             pruner_hi: 0,
         };
         let store = MockStore {
-            watermarks: Arc::new(Mutex::new(Some(watermark))),
+            watermark: Arc::new(Mutex::new(Some(watermark))),
             data: Arc::new(Mutex::new(test_data.clone())),
             ..Default::default()
         };
@@ -645,7 +645,7 @@ mod tests {
             pruner_hi: 0,
         };
         let store = MockStore {
-            watermarks: Arc::new(Mutex::new(Some(watermark))),
+            watermark: Arc::new(Mutex::new(Some(watermark))),
             data: Arc::new(Mutex::new(test_data.clone())),
             ..Default::default()
         };
@@ -730,7 +730,7 @@ mod tests {
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
         let store = MockStore {
-            watermarks: Arc::new(Mutex::new(Some(watermark))),
+            watermark: Arc::new(Mutex::new(Some(watermark))),
             data: Arc::new(Mutex::new(test_data.clone())),
             ..Default::default()
         }

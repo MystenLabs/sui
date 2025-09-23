@@ -40,7 +40,7 @@ use super::{Handler, SequentialConfig};
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H>(
     config: SequentialConfig,
-    watermark: Option<CommitterWatermark>,
+    mut next_checkpoint: u64,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
@@ -74,11 +74,11 @@ where
         // The task keeps track of the highest (inclusive) checkpoint it has added to the batch,
         // and whether that batch needs to be written out. By extension it also knows the next
         // checkpoint to expect and add to the batch.
-        let (mut watermark, mut next_checkpoint) = if let Some(watermark) = watermark {
-            let next = watermark.checkpoint_hi_inclusive + 1;
-            (watermark, next)
-        } else {
-            (CommitterWatermark::default(), 0)
+        let mut watermark = CommitterWatermark {
+            checkpoint_hi_inclusive: next_checkpoint,
+            // This initial synthetic checkpoint is overwritten by a real watermark from a processed
+            // checkpoint.
+            ..Default::default()
         };
 
         // The committer task will periodically output a log message at a higher log level to
@@ -394,8 +394,8 @@ fn can_process_pending<T>(
 #[cfg(test)]
 mod tests {
     use crate::{
+        mocks::store::{MockConnection, MockStore},
         pipeline::{CommitterConfig, Processor},
-        testing::mock_store::{MockConnection, MockStore},
     };
 
     use super::*;
@@ -448,11 +448,9 @@ mod tests {
         committer_handle: JoinHandle<()>,
     }
 
-    fn setup_test(
-        initial_watermark: Option<CommitterWatermark>,
-        config: SequentialConfig,
-        store: MockStore,
-    ) -> TestSetup {
+    /// Emulates adding a sequential pipeline to the indexer. The next_checkpoint is the checkpoint
+    /// for the indexer to ingest from.
+    fn setup_test(next_checkpoint: u64, config: SequentialConfig, store: MockStore) -> TestSetup {
         let metrics = IndexerMetrics::new(None, &Registry::default());
         let cancel = CancellationToken::new();
 
@@ -463,7 +461,7 @@ mod tests {
         let store_clone = store.clone();
         let committer_handle = committer(
             config,
-            initial_watermark,
+            next_checkpoint,
             checkpoint_rx,
             watermark_tx,
             store_clone,
@@ -499,13 +497,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_processes_sequential_checkpoints() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Send checkpoints in order
         for i in 0..3 {
@@ -539,17 +535,11 @@ mod tests {
     /// `initial_watermark` into the setup.
     #[tokio::test]
     async fn test_committer_processes_sequential_checkpoints_with_initial_watermark() {
-        // Setup with initial watermark
-        let initial_watermark = Some(CommitterWatermark {
-            checkpoint_hi_inclusive: 5,
-            ..Default::default()
-        });
-
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(5, config, MockStore::default());
 
         // Verify watermark hasn't progressed
         let watermark = setup.store.get_watermark();
@@ -575,7 +565,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Verify data was written in order
-        assert_eq!(setup.store.get_sequential_data(), vec![6, 7]);
+        assert_eq!(setup.store.get_sequential_data(), vec![5, 6, 7]);
 
         // Verify watermark was updated
         {
@@ -584,11 +574,6 @@ mod tests {
             assert_eq!(watermark.tx_hi, 7);
         }
 
-        // Verify watermark was sent to ingestion
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(watermark.1, 7, "Watermark should be at checkpoint 7");
-
         // Clean up
         drop(setup.checkpoint_tx);
         let _ = setup.committer_handle.await;
@@ -596,13 +581,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_processes_out_of_order_checkpoints() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Send checkpoints out of order
         for i in [1, 0, 2] {
@@ -634,13 +617,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_commit_up_to_max_batch_checkpoints() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Send checkpoints up to MAX_BATCH_CHECKPOINTS
         for i in 0..4 {
@@ -673,13 +654,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_does_not_commit_until_checkpoint_lag() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 1, // Only commit checkpoints that are at least 1 behind
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Send checkpoints 0-2
         for i in 0..3 {
@@ -712,8 +691,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_commits_eagerly() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig {
                 collect_interval_ms: 4_000, // Long polling to test eager commit
@@ -721,7 +698,7 @@ mod tests {
             },
             checkpoint_lag: 0, // Zero checkpoint lag to not block the eager logic
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -750,8 +727,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_cannot_commit_eagerly_due_to_checkpoint_lag() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig {
                 collect_interval_ms: 4_000, // Long polling to test eager commit
@@ -759,7 +734,7 @@ mod tests {
             },
             checkpoint_lag: 4, // High checkpoint lag to block eager commits
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -791,8 +766,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_retries_on_transaction_failure() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig {
                 collect_interval_ms: 1_000, // Long polling to test retry logic
@@ -804,7 +777,7 @@ mod tests {
         // Create store with transaction failure configuration
         let store = MockStore::default().with_transaction_failures(1); // Will fail once before succeeding
 
-        let mut setup = setup_test(initial_watermark, config, store);
+        let mut setup = setup_test(0, config, store);
 
         // Send a checkpoint
         send_checkpoint(&mut setup, 0).await;

@@ -1,4 +1,4 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod mock_store;
+pub mod store;

@@ -114,7 +114,7 @@ mod tests {
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{metrics::IndexerMetrics, pipeline::Processor, testing::mock_store::*};
+    use crate::{metrics::IndexerMetrics, mocks::store::*, pipeline::Processor};
 
     use super::*;
 
@@ -162,7 +162,7 @@ mod tests {
         set_reader_watermark_failure_attempts: usize,
     ) -> TestSetup {
         let store = MockStore {
-            watermarks: Arc::new(Mutex::new(Some(watermark))),
+            watermark: Arc::new(Mutex::new(Some(watermark))),
             set_reader_watermark_failure_attempts: Arc::new(Mutex::new(
                 set_reader_watermark_failure_attempts,
             )),

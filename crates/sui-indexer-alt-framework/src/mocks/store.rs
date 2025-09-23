@@ -52,12 +52,14 @@ pub struct Failures {
     pub attempts: AtomicUsize,
 }
 
-/// A mock store for testing. It maintains a map of checkpoint sequence numbers to transaction
-/// sequence numbers, and a watermark that can be used to test the watermark task.
+/// A mock store for testing. Represents an indexer with a single pipeline. It maintains a map of
+/// checkpoint sequence numbers to transaction sequence numbers, and a watermark that can be used to
+/// test the watermark task.
 #[derive(Clone, Default)]
 pub struct MockStore {
-    /// Tracks various watermark states (committer, reader, pruner)
-    pub watermarks: Arc<Mutex<Option<MockWatermark>>>,
+    /// Tracks various watermark states (committer, reader, pruner). This value can be optional
+    /// until a checkpoint is committed.
+    pub watermark: Arc<Mutex<Option<MockWatermark>>>,
     /// Stores the actual data, mapping checkpoint sequence numbers to transaction sequence numbers
     pub data: Arc<Mutex<HashMap<u64, Vec<u64>>>>,
     /// Tracks the order of checkpoint processing for testing sequential processing
@@ -88,8 +90,8 @@ impl Connection for MockConnection<'_> {
         &mut self,
         _pipeline: &'static str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
-        let watermarks = self.0.get_watermark();
-        Ok(watermarks.map(|w| CommitterWatermark {
+        let watermark = self.0.get_watermark();
+        Ok(watermark.map(|w| CommitterWatermark {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
             tx_hi: w.tx_hi,
@@ -101,8 +103,8 @@ impl Connection for MockConnection<'_> {
         &mut self,
         _pipeline: &'static str,
     ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
-        let watermarks = self.0.get_watermark();
-        Ok(watermarks.map(|w| ReaderWatermark {
+        let watermark = self.0.get_watermark();
+        Ok(watermark.map(|w| ReaderWatermark {
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
             reader_lo: w.reader_lo,
         }))
@@ -113,8 +115,8 @@ impl Connection for MockConnection<'_> {
         _pipeline: &'static str,
         delay: Duration,
     ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
-        let watermarks = self.0.get_watermark();
-        Ok(watermarks.map(|w| {
+        let watermark = self.0.get_watermark();
+        Ok(watermark.map(|w| {
             let elapsed_ms = w.pruner_timestamp as i64
                 - SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -134,15 +136,15 @@ impl Connection for MockConnection<'_> {
         _pipeline: &'static str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
-        let mut watermarks = self.0.watermarks.lock().unwrap();
-        *watermarks = Some(MockWatermark {
+        let mut curr = self.0.watermark.lock().unwrap();
+        *curr = Some(MockWatermark {
             epoch_hi_inclusive: watermark.epoch_hi_inclusive,
             checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
             tx_hi: watermark.tx_hi,
             timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
-            reader_lo: watermarks.as_ref().map(|w| w.reader_lo).unwrap_or(0),
-            pruner_timestamp: watermarks.as_ref().map(|w| w.pruner_timestamp).unwrap_or(0),
-            pruner_hi: watermarks.as_ref().map(|w| w.pruner_hi).unwrap_or(0),
+            reader_lo: curr.as_ref().map(|w| w.reader_lo).unwrap_or(0),
+            pruner_timestamp: curr.as_ref().map(|w| w.pruner_timestamp).unwrap_or(0),
+            pruner_hi: curr.as_ref().map(|w| w.pruner_hi).unwrap_or(0),
         });
         Ok(true)
     }
@@ -167,14 +169,14 @@ impl Connection for MockConnection<'_> {
             return Err(anyhow::anyhow!("set_reader_watermark failed"));
         }
 
-        let mut watermarks = self.0.watermarks.lock().unwrap();
-        *watermarks = Some(MockWatermark {
+        let mut curr = self.0.watermark.lock().unwrap();
+        *curr = Some(MockWatermark {
             reader_lo,
             pruner_timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as u64,
-            ..watermarks.as_ref().unwrap().clone()
+            ..curr.as_ref().unwrap().clone()
         });
         Ok(true)
     }
@@ -184,10 +186,10 @@ impl Connection for MockConnection<'_> {
         _pipeline: &'static str,
         pruner_hi: u64,
     ) -> anyhow::Result<bool> {
-        let mut watermarks = self.0.watermarks.lock().unwrap();
-        *watermarks = Some(MockWatermark {
+        let mut curr = self.0.watermark.lock().unwrap();
+        *curr = Some(MockWatermark {
             pruner_hi,
-            ..watermarks.as_ref().unwrap().clone()
+            ..curr.as_ref().unwrap().clone()
         });
         Ok(true)
     }
@@ -365,7 +367,7 @@ impl MockStore {
 
     /// Helper to get the current watermark state for testing
     pub fn get_watermark(&self) -> Option<MockWatermark> {
-        self.watermarks.lock().unwrap().clone()
+        self.watermark.lock().unwrap().clone()
     }
 
     /// Helper to get the number of connection attempts for testing
