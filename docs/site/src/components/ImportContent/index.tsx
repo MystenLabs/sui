@@ -45,6 +45,7 @@ type Props = {
   fun?: string; // target functions
   variable?: string;
   struct?: string;
+  impl?: string;
   type?: string;
   trait?: string;
   enumeration?: string;
@@ -73,6 +74,7 @@ export default function ImportContent({
   variable,
   struct,
   type,
+  impl,
   trait,
   enumeration, // enum is reserved word
   module,
@@ -234,6 +236,10 @@ export default function ImportContent({
 
   if (type) {
     out = utils.returnTypes(out, type);
+  }
+
+  if (impl) {
+    out = utils.returnImplementations(out, impl);
   }
 
   if (trait) {
