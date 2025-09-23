@@ -1,0 +1,46 @@
+Command `build`:
+BUILDING Test
+Command `disassemble --package Test --name m`:
+// Move bytecode v6
+module 42.m {
+
+struct Zs {
+	dummy_field: bool
+}
+
+struct As {
+	dummy_field: bool
+}
+
+public zf(): u64 {
+B0:
+	0: LdConst[0](u64: 1)
+	1: Ret
+}
+
+public af(): u32 {
+B0:
+	0: LdConst[1](u32: 0)
+	1: Ret
+}
+
+public sf(): vector<u8> {
+B0:
+	0: LdConst[2](vector<u8>: "Thi..)
+	1: Ret
+}
+
+public nf(): vector<u16> {
+B0:
+	0: LdConst[3](vector<u16>: 0401..)
+	1: Ret
+}
+
+Constants [
+	0 => u64: 1
+	1 => u32: 0
+	2 => vector<u8>: "This is some emojis 🤔🤔🤔" // interpreted as UTF8 string
+	3 => vector<u16>: 040100020003000400
+]
+}
+

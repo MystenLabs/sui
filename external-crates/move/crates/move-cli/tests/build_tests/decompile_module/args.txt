@@ -1,0 +1,2 @@
+build
+decompile --input build/Test/bytecode_modules --output decompiled/
