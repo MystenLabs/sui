@@ -1,6 +1,7 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+// // Copyright (c) Mysten Labs, Inc.
+// // SPDX-License-Identifier: Apache-2.0
 //
+// TODO: pkg-alt FAILING TEST
 // use expect_test::expect;
 // use move_core_types::account_address::AccountAddress;
 // use std::collections::HashMap;
@@ -685,7 +686,6 @@
 //         // setup b as a bytecode package
 //         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
 //
-//         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
 //         BuildConfig::new_for_testing().build(&pkg_path).unwrap();
 //
 //         fs::remove_dir_all(pkg_path.join("sources"))?;
@@ -730,7 +730,6 @@
 //
 // /// Compile the package at absolute path `package`.
 // fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
-//     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
 //     BuildConfig::new_for_testing()
 //         .build(package.as_ref())
 //         .unwrap()
