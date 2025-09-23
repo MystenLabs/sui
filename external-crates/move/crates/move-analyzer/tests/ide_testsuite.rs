@@ -449,11 +449,10 @@ fn initial_symbols<F: MoveFlavor>(
     // Similarly to `get_symbols`, we retry to exercise caching
     let mut should_retry = true;
     loop {
-        let (mut compiled_pkg_info_opt, _) = get_compiled_pkg::<F>(
+        let (compiled_pkg_info_opt, _) = get_compiled_pkg::<F>(
             pkg_deps.clone(),
             ide_files_root.clone(),
             project_path.as_path(),
-            None,
             LintLevel::None,
         )?;
         let compiled_pkg_info = compiled_pkg_info_opt.ok_or("PACKAGE COMPILATION FAILED")?;
