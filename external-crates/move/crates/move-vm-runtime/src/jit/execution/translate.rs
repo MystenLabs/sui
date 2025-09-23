@@ -1015,7 +1015,7 @@ fn code(
     jump_tables: &[VMPointer<VariantJumpTable>],
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
 ) -> PartialVMResult<ArenaVec<Bytecode>> {
-    let function_bytecode = flatten_and_renumber_blocks(blocks);
+    let function_bytecode = flatten_and_renumber_blocks(blocks)?;
     let result = context.package_context.package_arena.alloc_vec(
         function_bytecode
             .into_iter()
@@ -1028,7 +1028,7 @@ fn code(
 
 fn flatten_and_renumber_blocks(
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
-) -> Vec<input::Bytecode> {
+) -> PartialVMResult<Vec<input::Bytecode>> {
     dbg_println!("Input: {:#?}", blocks);
     let mut offset_map = BTreeMap::new(); // Map line name (u16) -> new bytecode offset
     let mut concatenated = Vec::new();
@@ -1043,21 +1043,37 @@ fn flatten_and_renumber_blocks(
     dbg_println!("Concatenated: {:#?}", concatenated);
 
     // Rewrite branch instructions with new offsets
-    concatenated
+    let result = concatenated
         .into_iter()
         .map(|bytecode| match bytecode {
             input::Bytecode::BrFalse(target) => {
-                input::Bytecode::BrFalse(*offset_map.get(&target).expect("Invalid branch target"))
+                let offset = *offset_map.get(&target).ok_or_else(|| {
+                    PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                        format!("Invalid branch target {} in BrFalse instruction", target),
+                    )
+                })?;
+                Ok(input::Bytecode::BrFalse(offset))
             }
             input::Bytecode::BrTrue(target) => {
-                input::Bytecode::BrTrue(*offset_map.get(&target).expect("Invalid branch target"))
+                let offset = *offset_map.get(&target).ok_or_else(|| {
+                    PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                        format!("Invalid branch target {} in BrTrue instruction", target),
+                    )
+                })?;
+                Ok(input::Bytecode::BrTrue(offset))
             }
             input::Bytecode::Branch(target) => {
-                input::Bytecode::Branch(*offset_map.get(&target).expect("Invalid branch target"))
+                let offset = *offset_map.get(&target).ok_or_else(|| {
+                    PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                        format!("Invalid branch target {} in Branch instruction", target),
+                    )
+                })?;
+                Ok(input::Bytecode::Branch(offset))
             }
-            other => other,
+            other => Ok(other),
         })
-        .collect()
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    Ok(result)
 }
 
 fn bytecode(
