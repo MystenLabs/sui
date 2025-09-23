@@ -10,7 +10,6 @@ COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
-COPY docker docker
 
 RUN cargo build --profile ${PROFILE} --bin stress
 
@@ -18,7 +17,6 @@ FROM rust:1.85-bullseye
 ARG PROFILE=release
 ARG GIT_REVISION
 COPY --from=builder /sui/target/${PROFILE}/stress /usr/local/bin
-COPY --from=builder /sui/docker/stress/entrypoint.sh /docker/stress/entrypoint.sh
 WORKDIR "$WORKDIR/sui"
 
 RUN apt-get update && apt-get -y --no-install-recommends install wget=1.21-1+deb11u1 \
@@ -29,7 +27,10 @@ RUN git clone https://github.com/MystenLabs/sui.git ; \
         git checkout $GIT_REVISION ; \
         cd .. ; \
         mv sui/* .
-
+        
+RUN mkdir -p /docker/stress
+RUN cp docker/stress/entrypoint.sh /docker/stress/entrypoint.sh
+RUN chmod +x /docker/stress/entrypoint.sh
 RUN echo ${GIT_REVISION:-$GIT_REVISION} > /var/run/sui_commit
 
 CMD ["/docker/stress/entrypoint.sh"]
