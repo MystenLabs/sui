@@ -4,6 +4,7 @@
 use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::monitored_future;
+use tracing::info;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -90,6 +91,7 @@ where
         })
         .collect();
     if let Some(prefetch_timeout) = prefetch_timeout {
+        info!("Prefetching with timeout: {:?}", prefetch_timeout);
         let elapsed = Instant::now();
         let prefetch_sleep = tokio::time::sleep(prefetch_timeout);
         let mut authority_to_result: BTreeMap<K, Result<V, E>> = BTreeMap::new();
@@ -143,8 +145,10 @@ where
     }
 
     // As results become available fold them into the state using FReduce.
+    info!("Waiting for quorum with timeout: {:?}", total_timeout);
     while let Ok(Some((authority_name, result))) = timeout(total_timeout, responses.next()).await {
         let authority_weight = committee.weight(&authority_name);
+        info!("Received result with weight: {}", authority_weight,);
         accumulated_state =
             match reduce_result(accumulated_state, authority_name, authority_weight, result).await {
                 // In the first two cases we are told to continue the iteration.
@@ -153,6 +157,7 @@ where
                     return Err(state);
                 }
                 ReduceOutput::Success(result) => {
+                    info!("Quorum reached");
                     // The reducer tells us that we have the result needed. Just return it.
                     return Ok((result, responses));
                 }

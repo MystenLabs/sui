@@ -601,7 +601,7 @@ where
         };
 
         let timer = Instant::now();
-        info!(?tx_digest, "Transaction processing started");
+        info!(?tx_digest, ?tx_type, "Transaction processing started");
         let (tx_cert, newly_formed) = match tx_cert {
             None => match quorum_driver
                 .process_transaction(transaction.clone(), client_addr)
