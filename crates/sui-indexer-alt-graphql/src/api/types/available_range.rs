@@ -85,7 +85,8 @@ impl AvailableRange {
 fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'static str> {
     let mut filters = filters.unwrap_or_default();
     match (type_, field) {
-        // Address queries
+        // Address fields
+        ("Address", "address") => vec![],
         ("Address", "asObject") => vec!["obj_versions"],
         ("Address", "balance") => pipelines("IAddressable", "balance", None),
         ("Address", "balances") => pipelines("IAddressable", "balances", None),
@@ -104,7 +105,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
 
         // Checkpoint fields
         ("Checkpoint", "artifactsDigest") => vec!["kv_checkpoints"],
-        ("Checkpoint", "digest") => vec!["cp_sequence_numbers"],
+        ("Checkpoint", "digest") => vec!["kv_checkpoints"],
         ("Checkpoint", "contentDigest") => vec!["kv_checkpoints"],
         ("Checkpoint", "epoch") => vec!["kv_checkpoints"],
         ("Checkpoint", "networkTotalTransactions") => vec!["kv_checkpoints"],
@@ -117,14 +118,14 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Checkpoint", "validatorSignatures") => vec!["kv_checkpoints, kv_epoch_starts"],
         ("Checkpoint", "transactions") => pipelines("Query", "transactions", Some(filters)),
 
-        // CoinMetadata queries
+        // CoinMetadata fields
         ("CoinMetadata", "address") => pipelines("IAddressable", "address", None),
         ("CoinMetadata", "balance") => pipelines("IAddressable", "balance", None),
         ("CoinMetadata", "balances") => pipelines("IAddressable", "balances", None),
         ("CoinMetadata", "contents") => pipelines("IMoveObject", "contents", None),
-        ("CoinMetadata", "decimals") => vec!["consistent"],
+        ("CoinMetadata", "decimals") => pipelines("IMoveObject", "contents", None),
         ("CoinMetadata", "defaultSuiNsName") => pipelines("IAddressable", "defaultSuiNsName", None),
-        ("CoinMetadata", "description") => vec!["consistent"],
+        ("CoinMetadata", "description") => pipelines("IMoveObject", "contents", None),
         ("CoinMetadata", "dynamicField") => pipelines("IMoveObject", "dynamicField", None),
         ("CoinMetadata", "dynamicFields") => pipelines("IMoveObject", "dynamicFields", None),
         ("CoinMetadata", "dynamicObjectField") => {
@@ -149,9 +150,10 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
             pipelines("IObject", "objectVersionsBefore", None)
         }
         ("CoinMetadata", "objects") => pipelines("IObject", "objects", None),
+        ("CoinMetadata", "supply") => vec!["consistent"],
         ("CoinMetadata", "transactions") => pipelines("Query", "transactions", Some(filters)),
 
-        // Epoch queries
+        // Epochs
         ("Epoch", "epochId") => vec!["kv_epoch_starts"],
         ("Epoch", "checkpoints") => pipelines("Query", "checkpoints", Some(filters)),
         ("Epoch", "coinDenyList") => {
@@ -190,7 +192,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Event", "transactionModule") => pipelines("IMoveObject", "contents", None),
 
         // IAddressable queries
-        ("IAddressable", "address") => vec!["obj_versions"],
+        ("IAddressable", "address") => vec![],
         ("IAddressable", "balance") => vec!["consistent"],
         ("IAddressable", "balances") => vec!["consistent"],
         ("IAddressable", "defaultSuiNsName") => vec!["obj_versions"],
@@ -287,16 +289,10 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
 
         // Query
         ("Query", "address") => pipelines("IAddressable", "address", None),
-        ("Query", "checkpoint") => vec!["cp_sequence_numbers"],
+        ("Query", "checkpoint") => vec!["kv_checkpoints"],
         ("Query", "checkpoints") => vec!["cp_sequence_numbers"],
         ("Query", "coinMetadata") => {
-            let mut pipelines = vec!["consistent"];
-            for filter in filters {
-                if filter == "version" {
-                    pipelines.push("obj_versions");
-                }
-            }
-            pipelines
+            vec!["consistent"]
         }
         ("Query", "epoch") => vec!["kv_epoch_starts"],
         ("Query", "epochs") => vec!["kv_epoch_starts"],
@@ -321,7 +317,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Query", "objects") => vec!["consistent"],
         ("Query", "objectVersions") => vec!["obj_versions"],
         ("Query", "package") => vec!["kv_packages"],
-        ("Query", "packages") => vec!["cp_sequence_numbers", "kv_packages"],
+        ("Query", "packages") => vec!["kv_packages"],
         ("Query", "packageVersions") => vec!["kv_packages"],
         ("Query", "protocolConfigs") => vec!["kv_epoch_starts"],
         ("Query", "simulateTransaction") => vec![],
@@ -359,7 +355,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Transaction", "transactionBcs") => vec!["kv_transactions"],
 
         // TransactionEffects queries
-        ("TransactionEffects", "balanceChanges") => vec!["tx_balance_changes", "kv_transactions"],
+        ("TransactionEffects", "balanceChanges") => vec!["tx_balance_changes", "tx_digests"],
         ("TransactionEffects", "checkpoint") => vec!["kv_transactions"],
         ("TransactionEffects", "dependencies") => vec!["kv_transactions"],
         ("TransactionEffects", "digest") => vec!["kv_transactions"],
@@ -372,7 +368,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("TransactionEffects", "executionError") => {
             vec!["kv_transactions", "kv_packages"]
         }
-        ("TransactionEffects", "gasEffects") => vec!["obj_versions", "kv_transactions"],
+        ("TransactionEffects", "gasEffects") => vec!["kv_transactions"],
         ("TransactionEffects", "lamportVersion") => vec!["kv_transactions"],
         ("TransactionEffects", "objectChanges") => vec!["kv_transactions"],
         ("TransactionEffects", "status") => vec!["kv_transactions"],
