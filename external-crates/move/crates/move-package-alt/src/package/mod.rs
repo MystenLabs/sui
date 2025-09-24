@@ -50,3 +50,5 @@ macro_rules! block_on {
         }
     }};
 }
+
+pub(crate) use block_on;

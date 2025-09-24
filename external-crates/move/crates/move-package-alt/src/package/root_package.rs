@@ -9,9 +9,9 @@ use tracing::debug;
 
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
-use crate::block_on;
 use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
 use crate::graph::{LinkageTable, PackageInfo};
+use crate::package::block_on;
 use crate::package::package_lock::PackageLock;
 use crate::schema::{
     Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
