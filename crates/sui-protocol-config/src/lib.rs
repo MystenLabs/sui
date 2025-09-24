@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 97;
+const MAX_PROTOCOL_VERSION: u64 = 98;
 
 // Record history of protocol version allocations here:
 //
@@ -266,6 +266,7 @@ const MAX_PROTOCOL_VERSION: u64 = 97;
 //             Enable checkpoint artifacts digest in devnet.
 // Version 97: Add authenticated event streams support via emit_authenticated function.
 //             Add better error messages to the loader.
+// Version 98: Set max updates per settlement txn to 100.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1661,6 +1662,9 @@ pub struct ProtocolConfig {
     /// listed in `tx_digests`
     #[serde(skip_serializing_if = "Vec::is_empty")]
     aliased_addresses: Vec<AliasedAddress>,
+
+    /// The maximum number of updates per settlement transaction.
+    max_updates_per_settlement_txn: Option<u32>,
 }
 
 /// An aliased address.
@@ -2827,6 +2831,8 @@ impl ProtocolConfig {
             consensus_commit_rate_estimation_window_size: None,
 
             aliased_addresses: vec![],
+
+            max_updates_per_settlement_txn: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4064,6 +4070,9 @@ impl ProtocolConfig {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
+                }
+                98 => {
+                    cfg.max_updates_per_settlement_txn = Some(100);
                 }
                 // Use this template when making changes:
                 //
