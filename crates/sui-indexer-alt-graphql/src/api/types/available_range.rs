@@ -327,7 +327,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Query", "simulateTransaction") => vec![],
         ("Query", "suinsName") => vec!["obj_versions"],
         ("Query", "transaction") => vec!["kv_transactions"],
-        ("Query", "transactionEffects") => vec!["cp_sequence_numbers", "tx_digests"],
+        ("Query", "transactionEffects") => vec!["kv_transactions"],
         ("Query", "transactions") => {
             let mut pipelines = vec!["tx_digests"];
             for filter in filters {
