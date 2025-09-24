@@ -25,6 +25,10 @@ use sui_sdk::types::base_types::ObjectID;
 
 const EDITION: &str = "2024";
 const FLAVOR: &str = "sui";
+const TESTNET_ENV: &str = "testnet";
+const MAINNET_ENV: &str = "mainnet";
+const TESTNET_CHAIN_ID: &str = "4c78adac";
+const MAINNET_CHAIN_ID: &str = "35834a8a";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SuiFlavor;
@@ -95,8 +99,8 @@ impl MoveFlavor for SuiFlavor {
 
     fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
         IndexMap::from([
-            ("testnet".to_string(), "4c78adac".to_string()),
-            ("mainnet".to_string(), "35834a8a".to_string()),
+            (TESTNET_ENV.to_string(), TESTNET_CHAIN_ID.to_string()),
+            (MAINNET_ENV.to_string(), MAINNET_CHAIN_ID.to_string()),
         ])
     }
 
