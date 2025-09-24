@@ -155,12 +155,17 @@ fn copy_pkg_and_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> 
 /// Return the paths to all the packages needed by the package at `pkg_dir` (including itself); if
 /// the package cannot be loaded we just return the package itself. (sometimes we run a test that
 /// isn't a package for metatests so if there isn't a package we don't need to nest at all).
+///
+/// We copy as if `--mode test` were passed, so that `dev-dependencies` will be included; if tests
+/// use moded dependencies with any other modes, those dependencies won't be copied and this code
+/// will need to be fixed.
 fn package_paths(pkg_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let rt = tokio::runtime::Runtime::new()?;
 
     let root_pkg = rt.block_on(RootPackage::<Vanilla>::load(
         pkg_dir,
         vanilla::default_environment(),
+        vec!["test".into()],
     ))?;
 
     let packages = root_pkg.packages()?;
