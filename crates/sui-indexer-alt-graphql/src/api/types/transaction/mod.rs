@@ -206,9 +206,10 @@ impl Transaction {
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
-        let mut conn = Connection::new(false, false);
-
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let watermarks: &Arc<Watermarks> = ctx.data()?;
+
+        let mut conn = Connection::new(false, false);
 
         let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
 
@@ -230,10 +231,12 @@ impl Transaction {
             tx_call(ctx, query, &page, function, sent_address).await?
         } else if let Some(kind) = kind {
             tx_kind(ctx, query, &page, kind, sent_address).await?
-        } else if affected_address.is_some() || sent_address.is_some() {
-            tx_affected_address(ctx, query, &page, affected_address, sent_address).await?
         } else if let Some(affected_object) = affected_object {
             tx_affected_object(ctx, query, &page, affected_object, sent_address).await?
+        } else if let Some(address) = affected_address {
+            tx_affected_address(ctx, query, &page, address, sent_address).await?
+        } else if let Some(address) = sent_address {
+            tx_affected_address(ctx, query, &page, address, sent_address).await?
         } else {
             tx_unfiltered(ctx, query, &page).await?
         };
@@ -246,7 +249,6 @@ impl Transaction {
             results.iter().map(|(_, sq)| TxDigestKey(*sq)).collect();
 
         // Load the transaction digests for the paginated tx_sequence_numbers
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let digest_map = pg_loader
             .load_many(tx_digest_keys)
             .await
@@ -327,8 +329,8 @@ async fn tx_kind(
     match (kind, sent_address) {
         // We can simplify the query to just the `tx_affected_addresses` table if ProgrammableTX
         // and sender are specified.
-        (TransactionKindInput::ProgrammableTx, Some(_)) => {
-            tx_affected_address(ctx, query, page, None, sent_address).await
+        (TransactionKindInput::ProgrammableTx, Some(address)) => {
+            tx_affected_address(ctx, query, page, address, Some(address)).await
         }
         (TransactionKindInput::SystemTx, Some(_)) => Ok(vec![]),
         // Otherwise, we can ignore the sender always, and just query the `tx_kinds` table.
@@ -353,11 +355,9 @@ async fn tx_affected_address(
     ctx: &Context<'_>,
     mut query: Query<'_>,
     page: &Page<CTransaction>,
-    affected_address: Option<SuiAddress>,
+    affected_address: SuiAddress,
     sent_address: Option<SuiAddress>,
 ) -> Result<Vec<u64>, RpcError> {
-    // Use sent_address as affected_address if affected_address is not set to use PG index.
-    let affected_address = affected_address.or(sent_address).unwrap();
     query += query!(
         r#"
         SELECT
