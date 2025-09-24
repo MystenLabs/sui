@@ -128,7 +128,7 @@ impl<'backing> TemporaryStore<'backing> {
         let results = self.execution_results;
         InnerTemporaryStore {
             input_objects: self.input_objects,
-            mutable_inputs: self.mutable_input_refs,
+            mutated_inputs: self.mutable_input_refs,
             stream_ended_consensus_objects: self.deleted_consensus_objects,
             written: results.written_objects,
             events: TransactionEvents {

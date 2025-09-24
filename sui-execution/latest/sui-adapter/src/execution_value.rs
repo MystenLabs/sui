@@ -50,6 +50,13 @@ where
 }
 
 #[derive(Clone, Debug)]
+pub enum Mutability {
+    Mutable,
+    Immutable,
+    NonExclusiveWrite,
+}
+
+#[derive(Clone, Debug)]
 pub enum InputObjectMetadata {
     Receiving {
         id: ObjectID,
@@ -57,7 +64,7 @@ pub enum InputObjectMetadata {
     },
     InputObject {
         id: ObjectID,
-        is_mutable_input: bool,
+        mutability: Mutability,
         owner: Owner,
         version: SequenceNumber,
     },

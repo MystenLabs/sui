@@ -45,7 +45,9 @@ pub struct TemporaryStore<'backing> {
     stream_ended_consensus_objects: BTreeMap<ObjectID, SequenceNumber /* start_version */>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
-    mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
+    /// Inputs that must be mutated by the transaction. Does not include NonExclusiveWrite inputs,
+    /// which can be taken as `&mut T` but cannot be not directly mutated.
+    mutated_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
     execution_results: ExecutionResultsV2,
     /// Objects that were loaded during execution (dynamic fields + received objects).
     loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
@@ -86,7 +88,7 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
     ) -> Self {
-        let mutable_input_refs = input_objects.mutable_inputs();
+        let mutated_input_refs = input_objects.mutated_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let stream_ended_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
@@ -113,7 +115,7 @@ impl<'backing> TemporaryStore<'backing> {
             input_objects: objects,
             stream_ended_consensus_objects,
             lamport_timestamp,
-            mutable_input_refs,
+            mutated_input_refs,
             execution_results: ExecutionResultsV2::default(),
             protocol_config,
             loaded_runtime_objects: BTreeMap::new(),
@@ -151,7 +153,7 @@ impl<'backing> TemporaryStore<'backing> {
         InnerTemporaryStore {
             input_objects: self.input_objects,
             stream_ended_consensus_objects: self.stream_ended_consensus_objects,
-            mutable_inputs: self.mutable_input_refs,
+            mutated_inputs: self.mutated_input_refs,
             written: results.written_objects,
             events: TransactionEvents {
                 data: results.user_events,
@@ -168,9 +170,9 @@ impl<'backing> TemporaryStore<'backing> {
     /// mutated during the transaction execution, force mutating them by incrementing the
     /// sequence number. This is required to achieve safety.
     pub(crate) fn ensure_active_inputs_mutated(&mut self) {
-        // TODO: do not mutate input objects if they are non-exclusive write
         let mut to_be_updated = vec![];
-        for id in self.mutable_input_refs.keys() {
+        // Note: we do not mutate input objects if they are non-exclusive write
+        for id in self.mutated_input_refs.keys() {
             if !self.execution_results.modified_objects.contains(id) {
                 // We cannot update here but have to push to `to_be_updated` and update later
                 // because the for loop is holding a reference to `self`, and calling
@@ -306,7 +308,7 @@ impl<'backing> TemporaryStore<'backing> {
         // Check all mutable inputs are modified
         debug_assert!(
             {
-                self.mutable_input_refs
+                self.mutated_input_refs
                     .keys()
                     .all(|id| self.execution_results.modified_objects.contains(id))
             },
@@ -513,7 +515,7 @@ impl<'backing> TemporaryStore<'backing> {
     ) -> Option<DynamicallyLoadedObjectMetadata> {
         if self.execution_results.modified_objects.contains(object_id) {
             Some(
-                self.mutable_input_refs
+                self.mutated_input_refs
                     .get(object_id)
                     .map(
                         |((version, digest), owner)| DynamicallyLoadedObjectMetadata {
@@ -765,7 +767,7 @@ impl TemporaryStore<'_> {
         );
         assert_invariant!(
             self.execution_results.modified_objects.iter().all(|id| {
-                self.mutable_input_refs.contains_key(id)
+                self.mutated_input_refs.contains_key(id)
                     || self.loaded_runtime_objects.contains_key(id)
                     || is_system_package(*id)
             }),

@@ -145,7 +145,7 @@ impl<'backing> TemporaryStore<'backing> {
         InnerTemporaryStore {
             input_objects: self.input_objects,
             stream_ended_consensus_objects: self.deleted_consensus_objects,
-            mutable_inputs: self.mutable_input_refs,
+            mutated_inputs: self.mutable_input_refs,
             written: self
                 .written
                 .into_iter()

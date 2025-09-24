@@ -82,7 +82,7 @@ impl InMemoryObjectStore {
 
     pub(crate) fn commit_objects(&self, inner_temp_store: InnerTemporaryStore) {
         let mut objects = self.objects.write().unwrap();
-        for (object_id, _) in inner_temp_store.mutable_inputs {
+        for (object_id, _) in inner_temp_store.mutated_inputs {
             if !inner_temp_store.written.contains_key(&object_id) {
                 objects.remove(&object_id);
             }
