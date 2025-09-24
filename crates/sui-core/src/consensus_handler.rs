@@ -767,6 +767,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
     #[instrument(level = "debug", skip_all, fields(epoch = self.epoch_store.epoch(), round = consensus_commit.leader_round()))]
     async fn handle_consensus_commit_v2(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        assert_reachable!("handle_consensus_commit_v2");
         let protocol_config = self.epoch_store.protocol_config();
 
         // Assert all protocol config settings for which we don't support old behavior.
@@ -1885,6 +1886,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
     #[instrument(level = "debug", skip_all, fields(round = consensus_commit.leader_round()))]
     async fn handle_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        assert_reachable!("handle_consensus_commit");
         // Migration for commit handler v2:
         // - In test configurations, some validators use v1, some use v2. This exposes fork
         //   bugs in tests.
