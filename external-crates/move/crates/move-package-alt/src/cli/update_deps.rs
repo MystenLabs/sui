@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 
 use crate::{
     errors::{PackageError, PackageResult},
@@ -24,8 +24,14 @@ pub struct UpdateDeps {
     #[arg(name = "environment", short = 'e', long = "environment")]
     environment: EnvironmentName,
 
-    #[arg(name = "mode")]
-    mode: Option<ModeName>,
+    /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
+    /// annodations during compiltaion.
+    #[arg(
+        long = "mode",
+        value_name = "MODE",
+        action = ArgAction::Append,
+    )]
+    modes: Vec<ModeName>,
 }
 
 impl UpdateDeps {
@@ -43,12 +49,9 @@ impl UpdateDeps {
 
         let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
-        let mut root_package = RootPackage::<Vanilla>::load_force_repin(
-            &path,
-            environment,
-            self.mode.clone().map(|mode| vec![mode]).unwrap_or(vec![]),
-        )
-        .await?;
+        let mut root_package =
+            RootPackage::<Vanilla>::load_force_repin(&path, environment, self.modes.clone())
+                .await?;
         root_package.update_lockfile()?;
 
         Ok(())

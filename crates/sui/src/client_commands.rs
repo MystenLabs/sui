@@ -99,8 +99,8 @@ use tabled::{
 use move_package_alt::{
     package::RootPackage,
     schema::{
-        Environment, EnvironmentID, EnvironmentName, OriginalID, Publication, PublishAddresses,
-        PublishedID,
+        Environment, EnvironmentID, EnvironmentName, ModeName, OriginalID, Publication,
+        PublishAddresses, PublishedID,
     },
 };
 use move_symbol_pool::Symbol;
@@ -1081,6 +1081,7 @@ impl SuiClientCommands {
                     chain_id,
                     args.build_env,
                     args.pubfile_path,
+                    args.publish_args.build_config.mode_set(),
                 )
                 .await?;
 
@@ -3688,7 +3689,7 @@ pub async fn load_root_pkg_for_publish_upgrade(
 
         let env = Environment::new(env.to_string(), env_id.to_string());
 
-        return Ok(RootPackage::<SuiFlavor>::load(path, env).await?);
+        return Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?);
     }
 
     // we found the active env in the manifest's environments
@@ -3703,7 +3704,7 @@ pub async fn load_root_pkg_for_publish_upgrade(
         }
 
         let env = Environment::new(active_env, chain_id.to_string());
-        return Ok(RootPackage::<SuiFlavor>::load(path, env).await?);
+        return Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?);
     }
 
     // no environment is passed, let's find out the current CLI environment and if it has a
@@ -3718,7 +3719,7 @@ pub async fn load_root_pkg_for_publish_upgrade(
 
         eprintln!("Note: `Move.toml` does not define an `{active_env}` environment; building for `{env_name}` instead");
         let env = Environment::new(env_name.to_string(), chain_id.to_string());
-        return Ok(RootPackage::<SuiFlavor>::load(path, env).await?);
+        return Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?);
     }
 
     if matching_chain_ids.len() > 1 {
@@ -3753,14 +3754,19 @@ async fn load_root_pkg_for_test_publish(
     chain_id: String,
     build_env: Option<String>,
     pubfile_path: Option<PathBuf>,
+    modes: Vec<ModeName>,
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
     let pubfile_path =
         pubfile_path.unwrap_or_else(|| PathBuf::from(format!("Pub.{active_env}.toml")));
 
-    Ok(
-        RootPackage::<SuiFlavor>::load_ephemeral(package_path, build_env, chain_id, pubfile_path)
-            .await?,
+    Ok(RootPackage::<SuiFlavor>::load_ephemeral(
+        package_path,
+        build_env,
+        chain_id,
+        pubfile_path,
+        modes,
     )
+    .await?)
 }
 
 pub fn find_environment(
