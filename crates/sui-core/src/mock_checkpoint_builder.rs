@@ -3,6 +3,7 @@
 
 use fastcrypto::traits::Signer;
 use std::mem;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{AuthorityName, VerifiedExecutionData};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
@@ -121,7 +122,9 @@ impl MockCheckpointBuilder {
         )
     }
 
-    pub fn get_settlement_txns(&self) -> Vec<Transaction> {
+    // Returns the settlement transactions and associated barrier transaction (in the last position).
+    // The barrier transaction must be executed after all the settlement transactions.
+    pub fn get_settlement_txns(&self, protocol_config: &ProtocolConfig) -> Vec<Transaction> {
         let effects: Vec<_> = self
             .transactions
             .iter()
@@ -132,9 +135,16 @@ impl MockCheckpointBuilder {
 
         let checkpoint_height = self.get_next_checkpoint_number();
 
-        builder
-            .build_tx(self.epoch, OBJECT_START_VERSION, checkpoint_height)
+        let (settlement_txns, barrier_tx) = builder.build_tx(
+            protocol_config,
+            self.epoch,
+            OBJECT_START_VERSION,
+            checkpoint_height,
+        );
+
+        settlement_txns
             .into_iter()
+            .chain(std::iter::once(barrier_tx))
             .map(|tx| VerifiedTransaction::new_system_transaction(tx).into_inner())
             .collect()
     }
