@@ -81,37 +81,31 @@ impl EventFilter {
             query += query!(" AND sender = {Bytea}", sender.into_vec());
         }
 
-        if let Some(module) = &self.module {
-            if let Some(package) = module.package() {
-                query += query!(" AND package = {Bytea}", package.into_vec());
-            }
-            if let Some(module) = module.module() {
-                query += query!(" AND module = {Text}", module.to_string());
-            }
+        if let Some(package) = self.module.as_ref().map(|m| m.package()) {
+            query += query!(" AND package = {Bytea}", package.into_vec());
         }
 
-        if let Some(type_) = &self.type_ {
-            if let Some(package) = type_.package() {
-                query += query!(" AND package = {Bytea}", package.into_vec());
-            }
+        if let Some(module) = self.module.as_ref().and_then(|m| m.module()) {
+            query += query!(" AND module = {Text}", module.to_string());
+        }
 
-            if let Some(module) = type_.module() {
-                query += query!(" AND module = {Text}", module.to_string());
-            }
+        if let Some(package) = self.type_.as_ref().map(|t| t.package()) {
+            query += query!(" AND package = {Bytea}", package.into_vec());
+        }
 
-            if let Some(type_name) = type_.type_name() {
-                query += query!(" AND name = {Text}", type_name.to_string());
-            }
+        if let Some(module) = self.type_.as_ref().and_then(|t| t.module()) {
+            query += query!(" AND module = {Text}", module.to_string());
+        }
 
-            if let Some(type_params) = type_.type_params() {
-                if !type_params.is_empty() {
-                    query += query!(
-                        " AND instantiation = {Bytea}",
-                        bcs::to_bytes(&type_params)
-                            .context("Failed to serialize type parameters")?
-                    );
-                }
-            }
+        if let Some(name) = self.type_.as_ref().and_then(|t| t.type_name()) {
+            query += query!(" AND name = {Text}", name.to_string());
+        }
+
+        if let Some(type_params) = self.type_.as_ref().and_then(|t| t.type_params()) {
+            query += query!(
+                " AND instantiation = {Bytea}",
+                bcs::to_bytes(type_params).context("Failed to serialize type parameters")?
+            );
         }
 
         Ok(query)
@@ -119,19 +113,17 @@ impl EventFilter {
 
     // Check if the Event matches sender, module, or type filters in EventFilter if they are provided.
     pub(crate) fn matches(&self, event: &NativeEvent) -> bool {
-        if self
-            .sender
-            .is_some_and(|s| s != SuiAddress::from(event.sender))
-        {
-            return false;
+        if let Some(sender) = &self.sender {
+            if sender != &SuiAddress::from(event.sender) {
+                return false;
+            }
         }
 
         if let Some(module) = &self.module {
-            if let Some(package) = module.package() {
-                if package != SuiAddress::from(event.package_id) {
-                    return false;
-                }
+            if module.package() != SuiAddress::from(event.package_id) {
+                return false;
             }
+
             if let Some(module) = module.module() {
                 if module != event.transaction_module.as_str() {
                     return false;
@@ -140,26 +132,26 @@ impl EventFilter {
         }
 
         if let Some(type_) = &self.type_ {
-            if let Some(package) = type_.package() {
-                if package != SuiAddress::from(event.type_.address) {
-                    return false;
-                }
+            if type_.package() != SuiAddress::from(event.type_.address) {
+                return false;
             }
+
             if let Some(module) = type_.module() {
                 if module != event.type_.module.as_str() {
                     return false;
                 }
             }
+
             if let Some(type_name) = type_.type_name() {
                 if type_name != event.type_.name.as_str() {
                     return false;
                 }
             }
-            if type_
-                .type_params()
-                .is_some_and(|p| p != event.type_.type_params.as_slice())
-            {
-                return false;
+
+            if let Some(type_params) = type_.type_params() {
+                if type_params != event.type_.type_params.as_slice() {
+                    return false;
+                }
             }
         }
 
