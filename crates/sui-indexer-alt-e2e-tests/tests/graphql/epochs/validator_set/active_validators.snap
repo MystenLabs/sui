@@ -6,7 +6,7 @@ processed 2 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-84:
+task 1, lines 6-83:
 //# run-graphql
 Response: {
   "data": {
@@ -66,7 +66,6 @@ Response: {
                 "address": "0x03c47745906988d806cf7b623cebf960c79b370bb8b95c3ad24616e2aa29ca7b"
               },
               "stakingPoolId": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
-              "exchangeRatesSize": 1,
               "stakingPoolActivationEpoch": 0,
               "stakingPoolSuiBalance": "20000000000000000",
               "rewardsPool": "0",

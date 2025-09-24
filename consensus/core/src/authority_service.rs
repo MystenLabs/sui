@@ -88,68 +88,6 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             round_tracker,
         }
     }
-
-    async fn handle_fetch_blocks_old(
-        &self,
-        _peer: AuthorityIndex,
-        mut block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-    ) -> ConsensusResult<Vec<Bytes>> {
-        const MAX_ADDITIONAL_BLOCKS: usize = 10;
-        block_refs.truncate(self.context.parameters.max_blocks_per_fetch);
-
-        if !highest_accepted_rounds.is_empty()
-            && highest_accepted_rounds.len() != self.context.committee.size()
-        {
-            return Err(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
-                highest_accepted_rounds.len(),
-                self.context.committee.size(),
-            ));
-        }
-
-        // Some quick validation of the requested block refs
-        for block in &block_refs {
-            if !self.context.committee.is_valid_index(block.author) {
-                return Err(ConsensusError::InvalidAuthorityIndex {
-                    index: block.author,
-                    max: self.context.committee.size(),
-                });
-            }
-            if block.round == GENESIS_ROUND {
-                return Err(ConsensusError::UnexpectedGenesisBlockRequested);
-            }
-        }
-
-        // For now ask dag state directly
-        let blocks = self.dag_state.read().get_blocks(&block_refs);
-
-        // Now check if an ancestor's round is higher than the one that the peer has. If yes, then serve
-        // that ancestor blocks up to `MAX_ADDITIONAL_BLOCKS`.
-        let mut ancestor_blocks = vec![];
-        if !highest_accepted_rounds.is_empty() {
-            let all_ancestors = blocks
-                .iter()
-                .flatten()
-                .flat_map(|block| block.ancestors().to_vec())
-                .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
-                .take(MAX_ADDITIONAL_BLOCKS)
-                .collect::<Vec<_>>();
-
-            if !all_ancestors.is_empty() {
-                ancestor_blocks = self.dag_state.read().get_blocks(&all_ancestors);
-            }
-        }
-
-        // Return the serialised blocks & the ancestor blocks
-        let result = blocks
-            .into_iter()
-            .chain(ancestor_blocks)
-            .flatten()
-            .map(|block| block.serialized().clone())
-            .collect::<Vec<_>>();
-
-        Ok(result)
-    }
 }
 
 #[async_trait]
@@ -408,18 +346,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     //    - max_blocks_per_fetch blocks should be returned.
     async fn handle_fetch_blocks(
         &self,
-        peer: AuthorityIndex,
+        _peer: AuthorityIndex,
         mut block_refs: Vec<BlockRef>,
         highest_accepted_rounds: Vec<Round>,
         breadth_first: bool,
     ) -> ConsensusResult<Vec<Bytes>> {
         fail_point_async!("consensus-rpc-response");
-
-        if !self.context.protocol_config.consensus_batched_block_sync() {
-            return self
-                .handle_fetch_blocks_old(peer, block_refs, highest_accepted_rounds)
-                .await;
-        }
 
         if !highest_accepted_rounds.is_empty()
             && highest_accepted_rounds.len() != self.context.committee.size()
@@ -1073,10 +1005,7 @@ mod tests {
         // Use NUM_AUTHORITIES and NUM_ROUNDS higher than max_blocks_per_sync to test limits.
         const NUM_AUTHORITIES: usize = 40;
         const NUM_ROUNDS: usize = 40;
-        let (mut context, _keys) = Context::new_for_test(NUM_AUTHORITIES);
-        context
-            .protocol_config
-            .set_consensus_batched_block_sync_for_testing(true);
+        let (context, _keys) = Context::new_for_test(NUM_AUTHORITIES);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));

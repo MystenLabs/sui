@@ -13,6 +13,10 @@ module loop_cases {
         return 
     }
 
+    public fun loop_test_10 () {
+        return 
+    }
+
     public fun loop_test_2 () {
         let l0 = U64(0);
         loop {

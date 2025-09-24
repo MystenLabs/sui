@@ -15,7 +15,6 @@ use std::{collections::BTreeSet, io::BufRead, path::Path};
 
 fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     let pkg_dir = file_path.parent().unwrap();
-    // let toml_path = Path::join(&pkg_dir, "Move.toml");
     let output_dir = TempDir::new()?;
 
     let config = BuildConfig {
@@ -39,7 +38,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         .collect::<BTreeSet<Symbol>>();
 
     let model = model_builder::build(&mut writer, &root_pkg, &config)?;
-    let bytecode = from_model(model, /* optimize */ true)?;
+    let bytecode = from_model(&model, /* optimize */ true)?;
 
     for pkg in &bytecode.packages {
         let pkg_name = pkg.name;
@@ -58,7 +57,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     }
 
     let model = model_builder::build(&mut writer, &root_pkg, &config)?;
-    let bytecode = from_model(model, /* optimize */ false)?;
+    let bytecode = from_model(&model, /* optimize */ false)?;
 
     for pkg in &bytecode.packages {
         let pkg_name = pkg.name;

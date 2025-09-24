@@ -72,14 +72,14 @@ impl TransactionDriverMetrics {
             validator_submit_transaction_errors: register_int_counter_vec_with_registry!(
                 "transaction_driver_validator_submit_transaction_errors",
                 "Number of submit transaction errors by validator",
-                &["validator", "error_type"],
+                &["validator", "error_type", "tx_type", "ping"],
                 registry,
             )
             .unwrap(),
             validator_submit_transaction_successes: register_int_counter_vec_with_registry!(
                 "transaction_driver_validator_submit_transaction_successes",
                 "Number of successful submit transactions by validator",
-                &["validator"],
+                &["validator", "tx_type", "ping"],
                 registry,
             )
             .unwrap(),
@@ -149,7 +149,7 @@ impl TransactionDriverMetrics {
             validator_selections: register_int_counter_vec_with_registry!(
                 "transaction_driver_validator_selections",
                 "Number of times each validator was selected for transaction submission",
-                &["validator"],
+                &["validator", "tx_type", "ping"],
                 registry,
             )
             .unwrap(),
