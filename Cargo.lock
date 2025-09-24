@@ -7913,6 +7913,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-coverage",
+ "move-decompiler",
  "move-disassembler",
  "move-docgen",
  "move-ir-types",
@@ -8040,6 +8041,31 @@ dependencies = [
  "move-trace-format",
  "petgraph 0.8.1",
  "serde",
+]
+
+[[package]]
+name = "move-decompiler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-model",
+ "move-model-2",
+ "move-package",
+ "move-stackless-bytecode",
+ "move-stackless-bytecode-2",
+ "move-symbol-pool",
+ "move-vm-runtime",
+ "petgraph 0.8.1",
+ "pretty_simple",
+ "tempfile",
 ]
 
 [[package]]
@@ -8278,6 +8304,48 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "petgraph 0.8.1",
+]
+
+[[package]]
+name = "move-stackless-bytecode"
+version = "0.1.0"
+dependencies = [
+ "codespan",
+ "codespan-reporting",
+ "ethnum",
+ "im",
+ "itertools 0.10.5",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-model",
+ "num",
+ "petgraph 0.8.1",
+ "serde",
+]
+
+[[package]]
+name = "move-stackless-bytecode-2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-model",
+ "move-model-2",
+ "move-package",
+ "move-stackless-bytecode",
+ "move-symbol-pool",
+ "move-vm-runtime",
+ "tempfile",
 ]
 
 [[package]]
