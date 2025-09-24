@@ -46,7 +46,6 @@
             address
           }
           stakingPoolId
-          exchangeRatesSize
           stakingPoolActivationEpoch
           stakingPoolSuiBalance
           # todo (ewall) populate rewardsPool

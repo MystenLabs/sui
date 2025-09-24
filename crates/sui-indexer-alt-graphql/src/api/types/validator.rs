@@ -184,17 +184,15 @@ impl Validator {
         self.native.staking_pool.id.into()
     }
 
-    // todo (ewall)
-    // /// A wrapped object containing the validator's exchange rates. This is a table from epoch
-    // /// number to `PoolTokenExchangeRate` value. The exchange rate is used to determine the amount
-    // /// of SUI tokens that each past SUI staker can withdraw in the future.
-    // async fn exchange_rates_table(&self) -> async_graphql::Result<Option<Owner>> {
-    //     Ok(Some(Owner {
-    //         address: self.validator_summary.exchange_rates_id.into(),
-    //         checkpoint_viewed_at: self.checkpoint_viewed_at,
-    //         root_version: None,
-    //     }))
-    // }
+    /// A wrapped object containing the validator's exchange rates. This is a table from epoch number to `PoolTokenExchangeRate` value.
+    /// The exchange rate is used to determine the amount of SUI tokens that each past SUI staker can withdraw in the future.
+    async fn exchange_rates_table(&self) -> Option<Address> {
+        let address = Address::with_address(
+            self.super_.scope.clone(),
+            self.native.staking_pool.exchange_rates.id.into(),
+        );
+        Some(address)
+    }
 
     /// Number of exchange rates in the table.
     async fn exchange_rates_size(&self) -> Option<UInt53> {
