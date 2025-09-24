@@ -104,7 +104,7 @@ impl Summary {
                     .collect::<BTreeMap<_, _>>(),
             )
         } else {
-            let root_pkg = RootPackage::<F>::load(&path, env).await?;
+            let root_pkg = RootPackage::<F>::load(&path, env, config.mode_set()).await?;
             // Get named addresses from the root package graph
             let named_addresses = root_pkg.package_info().named_addresses()?;
 
