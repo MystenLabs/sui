@@ -819,6 +819,10 @@ struct FeatureFlags {
     // If true charge for loads into the cache (i.e., fetches from storage) in the object runtime.
     #[serde(skip_serializing_if = "is_false")]
     object_runtime_charge_cache_load_gas: bool,
+
+    // If true, use the new commit handler.
+    #[serde(skip_serializing_if = "is_false")]
+    use_new_commit_handler: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2239,6 +2243,10 @@ impl ProtocolConfig {
 
     pub fn object_runtime_charge_cache_load_gas(&self) -> bool {
         self.feature_flags.object_runtime_charge_cache_load_gas
+    }
+
+    pub fn use_new_commit_handler(&self) -> bool {
+        self.feature_flags.use_new_commit_handler
     }
 }
 

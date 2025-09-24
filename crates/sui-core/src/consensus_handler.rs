@@ -17,7 +17,8 @@ use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use itertools::Itertools as _;
 use lru::LruCache;
 use mysten_common::{
-    assert_reachable, debug_fatal, random_util::randomize_cache_capacity_in_tests,
+    assert_reachable, debug_fatal, in_test_configuration,
+    random_util::randomize_cache_capacity_in_tests,
 };
 use mysten_metrics::{
     monitored_future,
@@ -1884,10 +1885,26 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
     #[instrument(level = "debug", skip_all, fields(round = consensus_commit.leader_round()))]
     async fn handle_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
-        let use_new_commit_handler = {
+        // Migration for commit handler v2:
+        // - In test configurations, some validators use v1, some use v2. This exposes fork
+        //   bugs in tests.
+        // - In production, if the protocol flag is set, all validators must switch to v2 atomically.
+        //   This is likely not necessary, since v2 has been extensively tested for compatibility
+        //   with v1. But we do it anyway as a safety measure, in case there are undiscovered forking
+        //   bugs in v2.
+        // - If the protocol flag is not set, a validator can still use the new commit handler by
+        //   setting `SUI_USE_NEW_COMMIT_HANDLER` in the environment. This is so that we can test the
+        //   new commit handler in prod before it is fully deployed.
+        let use_new_commit_handler = if in_test_configuration() {
             let name = self.epoch_store.name;
             let authority_index = self.epoch_store.committee().authority_index(&name).unwrap();
             authority_index < 2
+        } else if self.epoch_store.protocol_config().use_new_commit_handler() {
+            true
+        } else {
+            self.epoch_store
+                .epoch_start_config()
+                .use_commit_handler_v2()
         };
 
         if use_new_commit_handler {
