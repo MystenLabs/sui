@@ -225,16 +225,29 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
-        // Concurrent pipelines can allow `first_checkpoint` without `skip_watermark` only if it
-        // passes the consistency check.
-        if !self.skip_watermark {
-            self.check_first_checkpoint_consistency::<H>(&watermark)?;
-        }
-
-        // At this point, either `first_checkpoint` is consistent, or `skip_watermark` is set. In
-        // the latter case, we don't really care about the watermark consistency. `first_checkpoint`
-        // can be anything since we don't update watermark, and writes should be idempotent.
-        let next_checkpoint = next_pipeline_checkpoint(watermark, self.first_checkpoint);
+        // If `first_checkpoint` does not violate the consistency check, concurrent pipelines will
+        // prefer to resume from the `first_checkpoint` if configured.
+        let next_checkpoint = match (watermark, self.first_checkpoint) {
+            (Some(watermark), Some(first_checkpoint)) => {
+                // Setting `skip_watermark` allows concurrent pipelines to not be considered in the
+                // consistency check. The indexer will still fail to start if `first_checkpoint`
+                // fails for a sequential pipeline in the indexer.
+                if !self.skip_watermark {
+                    ensure!(
+                        first_checkpoint <= watermark.checkpoint_hi_inclusive + 1,
+                        "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
+                        This could create gaps in the data.",
+                        H::NAME,
+                        first_checkpoint,
+                        watermark.checkpoint_hi_inclusive,
+                    );
+                }
+                first_checkpoint
+            }
+            (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
+            (_, Some(first_checkpoint)) => first_checkpoint,
+            (None, None) => 0,
+        };
 
         self.handles.push(concurrent::pipeline::<H>(
             handler,
@@ -246,28 +259,6 @@ impl<S: Store> Indexer<S> {
             self.metrics.clone(),
             self.cancel.clone(),
         ));
-
-        Ok(())
-    }
-
-    /// Checks that the first checkpoint override is consistent with the watermark for the pipeline.
-    /// If the watermark does not exist, the override can be anything. If the watermark exists, the
-    /// override must not leave any gap in the data: it can be in the past, or at the tip of the
-    /// network, but not in the future.
-    fn check_first_checkpoint_consistency<P: Processor>(
-        &self,
-        watermark: &Option<CommitterWatermark>,
-    ) -> Result<()> {
-        if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
-            ensure!(
-                first_checkpoint <= watermark.checkpoint_hi_inclusive + 1,
-                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
-                 This could create gaps in the data.",
-                P::NAME,
-                first_checkpoint,
-                watermark.checkpoint_hi_inclusive,
-            );
-        }
 
         Ok(())
     }
@@ -390,25 +381,37 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
-        let mut next_checkpoint = next_pipeline_checkpoint(watermark, self.first_checkpoint);
-
-        // Sequential pipelines must write data in the order of checkpoints. Hence, we do not allow
-        // the first_checkpoint override to be in arbitrary positions.
-        if let Some(first_checkpoint) = self.first_checkpoint {
-            self.check_first_checkpoint_consistency::<H>(&watermark)?;
-            // If a watermark already exists, sequential pipelines will ignore checkpoints until the
-            // next after the watermark. Otherwise, sequential pipelines will start committing from
-            // `first_checkpoint`.
-            if let Some(existing_watermark) = &watermark {
+        // If `first_checkpoint` does not violate the consistency check, sequential pipelines will
+        // prefer to resume from the existing watermark unless no watermark exists.
+        let next_checkpoint = match (watermark, self.first_checkpoint) {
+            (Some(watermark), Some(first_checkpoint)) => {
+                // Sequential pipelines must write data in the order of checkpoints. If there is a
+                // gap, this violates the property.
+                ensure!(
+                    first_checkpoint <= watermark.checkpoint_hi_inclusive + 1,
+                    "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
+                     This could create gaps in the data.",
+                    H::NAME,
+                    first_checkpoint,
+                    watermark.checkpoint_hi_inclusive,
+                );
+                // Otherwise, sequential pipelines will wait until the processed checkpoint next
+                // after its current watermark.
                 warn!(
                     pipeline = H::NAME,
                     first_checkpoint,
-                    committer_hi = existing_watermark.checkpoint_hi_inclusive,
+                    committer_hi = watermark.checkpoint_hi_inclusive,
                     "Ignoring --first-checkpoint and will resume from committer_hi",
                 );
-                next_checkpoint = existing_watermark.checkpoint_hi_inclusive + 1;
+                watermark.checkpoint_hi_inclusive + 1
             }
-        }
+            // If a watermark exists, the pipeline will wait for the processed checkpoint next after
+            // its watermark.
+            (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
+            // If no watermark exists, the first checkpoint can be anything.
+            (_, Some(first_checkpoint)) => first_checkpoint,
+            (None, None) => 0,
+        };
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
@@ -427,23 +430,6 @@ impl<T: TransactionalStore> Indexer<T> {
     }
 }
 
-/// Determine the next checkpoint for a pipeline to index. If `first_checkpoint` is provided, it
-/// will be used to determine the next checkpoint. Otherwise, the next checkpoint will be the next
-/// checkpoint after the last committed checkpoint in the pipeline, or 0 if no watermark exists.
-fn next_pipeline_checkpoint(
-    pipeline_watermark: Option<CommitterWatermark>,
-    first_checkpoint: Option<u64>,
-) -> u64 {
-    if let Some(cp) = first_checkpoint {
-        return cp;
-    }
-
-    if let Some(watermark) = pipeline_watermark {
-        watermark.checkpoint_hi_inclusive + 1
-    } else {
-        0
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -763,27 +749,27 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_next_pipeline_checkpoint() {
-        // Test case 1: No watermark + first_checkpoint provided
-        let result = next_pipeline_checkpoint(None, Some(100));
-        assert_eq!(result, 100);
+    // #[test]
+    // fn test_next_pipeline_checkpoint() {
+    //     // Test case 1: No watermark + first_checkpoint provided
+    //     let result = next_pipeline_checkpoint(None, Some(100));
+    //     assert_eq!(result, 100);
 
-        // Test case 2: Existing watermark + no first_checkpoint
-        let existing = CommitterWatermark::new_for_testing(50);
-        let result = next_pipeline_checkpoint(Some(existing), None);
-        assert_eq!(result, 51);
+    //     // Test case 2: Existing watermark + no first_checkpoint
+    //     let existing = CommitterWatermark::new_for_testing(50);
+    //     let result = next_pipeline_checkpoint(Some(existing), None);
+    //     assert_eq!(result, 51);
 
-        // Test case 3: No watermark + no first_checkpoint
-        let result = next_pipeline_checkpoint(None, None);
-        assert_eq!(result, 0);
+    //     // Test case 3: No watermark + no first_checkpoint
+    //     let result = next_pipeline_checkpoint(None, None);
+    //     assert_eq!(result, 0);
 
-        // Test case 4: Edge case - first_checkpoint = 0
-        let result = next_pipeline_checkpoint(None, Some(0));
-        assert_eq!(result, 0);
+    //     // Test case 4: Edge case - first_checkpoint = 0
+    //     let result = next_pipeline_checkpoint(None, Some(0));
+    //     assert_eq!(result, 0);
 
-        // If watermark is 0, next checkpoint should be 1
-        let result = next_pipeline_checkpoint(Some(CommitterWatermark::new_for_testing(0)), None);
-        assert_eq!(result, 1);
-    }
+    //     // If watermark is 0, next checkpoint should be 1
+    //     let result = next_pipeline_checkpoint(Some(CommitterWatermark::new_for_testing(0)), None);
+    //     assert_eq!(result, 1);
+    // }
 }

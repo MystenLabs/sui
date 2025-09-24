@@ -516,7 +516,7 @@ mod tests {
 
         // Verify watermark was updated
         {
-            let watermark = setup.store.get_watermark().unwrap();
+            let watermark = setup.store.watermark().unwrap();
             assert_eq!(watermark.checkpoint_hi_inclusive, 2);
             assert_eq!(watermark.tx_hi, 2);
         }
@@ -542,7 +542,7 @@ mod tests {
         let mut setup = setup_test(5, config, MockStore::default());
 
         // Verify watermark hasn't progressed
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.watermark();
         assert!(watermark.is_none());
 
         // Send checkpoints in order
@@ -554,7 +554,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Verify watermark hasn't progressed
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.watermark();
         assert!(watermark.is_none());
 
         for i in 5..8 {
@@ -569,7 +569,7 @@ mod tests {
 
         // Verify watermark was updated
         {
-            let watermark = setup.store.get_watermark().unwrap();
+            let watermark = setup.store.watermark().unwrap();
             assert_eq!(watermark.checkpoint_hi_inclusive, 7);
             assert_eq!(watermark.tx_hi, 7);
         }
@@ -600,7 +600,7 @@ mod tests {
 
         // Verify watermark was updated
         {
-            let watermark = setup.store.get_watermark().unwrap();
+            let watermark = setup.store.watermark().unwrap();
             assert_eq!(watermark.checkpoint_hi_inclusive, 2);
             assert_eq!(watermark.tx_hi, 2);
         }

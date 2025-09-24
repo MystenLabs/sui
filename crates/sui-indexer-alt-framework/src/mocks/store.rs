@@ -90,7 +90,7 @@ impl Connection for MockConnection<'_> {
         &mut self,
         _pipeline: &'static str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
-        let watermark = self.0.get_watermark();
+        let watermark = self.0.watermark();
         Ok(watermark.map(|w| CommitterWatermark {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
@@ -103,7 +103,7 @@ impl Connection for MockConnection<'_> {
         &mut self,
         _pipeline: &'static str,
     ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
-        let watermark = self.0.get_watermark();
+        let watermark = self.0.watermark();
         Ok(watermark.map(|w| ReaderWatermark {
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
             reader_lo: w.reader_lo,
@@ -115,7 +115,7 @@ impl Connection for MockConnection<'_> {
         _pipeline: &'static str,
         delay: Duration,
     ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
-        let watermark = self.0.get_watermark();
+        let watermark = self.0.watermark();
         Ok(watermark.map(|w| {
             let elapsed_ms = w.pruner_timestamp as i64
                 - SystemTime::now()
@@ -365,8 +365,8 @@ impl MockStore {
         self.sequential_checkpoint_data.lock().unwrap().clone()
     }
 
-    /// Helper to get the current watermark state for testing
-    pub fn get_watermark(&self) -> Option<MockWatermark> {
+    /// Helper to get the current watermark state for testing.
+    pub fn watermark(&self) -> Option<MockWatermark> {
         self.watermark.lock().unwrap().clone()
     }
 
@@ -455,7 +455,7 @@ impl MockStore {
     ) -> MockWatermark {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout_duration {
-            if let Some(watermark) = self.get_watermark() {
+            if let Some(watermark) = self.watermark() {
                 if watermark.checkpoint_hi_inclusive >= checkpoint {
                     return watermark;
                 }
