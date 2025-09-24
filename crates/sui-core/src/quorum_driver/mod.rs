@@ -601,6 +601,7 @@ where
         };
 
         let timer = Instant::now();
+        info!(?tx_digest, "Transaction processing started");
         let (tx_cert, newly_formed) = match tx_cert {
             None => match quorum_driver
                 .process_transaction(transaction.clone(), client_addr)
@@ -610,11 +611,11 @@ where
                     certificate,
                     newly_formed,
                 }) => {
-                    debug!(?tx_digest, "Transaction processing succeeded");
+                    info!(?tx_digest, "Transaction certified");
                     (certificate, newly_formed)
                 }
                 Ok(ProcessTransactionResult::Executed(effects_cert, events)) => {
-                    debug!(
+                    info!(
                         ?tx_digest,
                         "Transaction processing succeeded with effects directly"
                     );
@@ -644,6 +645,10 @@ where
             Some(tx_cert) => (tx_cert, false),
         };
 
+        info!(
+            ?tx_digest,
+            "Transaction process certificate with newly formed: {}", newly_formed
+        );
         let response = match quorum_driver
             .process_certificate(
                 HandleCertificateRequestV3 {
@@ -676,6 +681,10 @@ where
                 return;
             }
         };
+        info!(
+            ?tx_digest,
+            "Transaction processing succeeded. Newly formed: {}", newly_formed
+        );
         if newly_formed {
             let settlement_finality_latency = timer.elapsed().as_secs_f64();
             quorum_driver
