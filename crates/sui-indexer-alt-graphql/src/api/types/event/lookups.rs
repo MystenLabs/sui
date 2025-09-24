@@ -56,7 +56,7 @@ pub(crate) async fn events_from_sequence_numbers(
         .await
         .context("Failed to load transaction events")?;
 
-    let mut results = tx_events_paginated(
+    let results = tx_events_paginated(
         scope,
         page,
         tx_sequence_numbers,
@@ -64,10 +64,6 @@ pub(crate) async fn events_from_sequence_numbers(
         &digest_to_events,
         filter,
     )?;
-
-    if !page.is_from_front() {
-        results.reverse();
-    }
 
     Ok(results)
 }
@@ -84,7 +80,7 @@ fn tx_events_paginated(
     let mut results = Vec::new();
     let limit = page.limit_with_overhead();
 
-    for &tx_seq_num in tx_sequence_numbers {
+    'outer: for &tx_seq_num in tx_sequence_numbers {
         let key = TxDigestKey(tx_seq_num);
         let stored_tx_digest = sequence_to_digest
             .get(&key)
@@ -125,9 +121,13 @@ fn tx_events_paginated(
             results.push((event_cursor, event));
 
             if results.len() >= limit {
-                return Ok(results);
+                break 'outer;
             }
         }
+    }
+
+    if !page.is_from_front() {
+        results.reverse();
     }
 
     Ok(results)
