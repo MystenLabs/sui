@@ -14,7 +14,7 @@ use crate::{
     package::paths::PackagePath,
     schema::{
         EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestGitDependency, OnChainDepInfo, PackageName, Pin, RootDepInfo,
+        ManifestGitDependency, ModeName, OnChainDepInfo, PackageName, Pin, RootDepInfo,
     },
 };
 
@@ -105,6 +105,10 @@ impl PinnedDependencyInfo {
 
     pub fn is_root(&self) -> bool {
         self.0.dep_info.is_root()
+    }
+
+    pub fn modes(&self) -> &Option<Vec<ModeName>> {
+        &self.0.modes
     }
 }
 

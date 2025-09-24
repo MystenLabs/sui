@@ -37,9 +37,9 @@ use move_docgen::DocgenFlags;
 use move_package_alt::{
     errors::PackageResult,
     flavor::MoveFlavor,
-    graph::{NamedAddress, PackageInfo},
+    graph::PackageInfo,
     package::RootPackage,
-    schema::{Environment, OriginalID},
+    schema::{Environment, ModeName},
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -52,7 +52,17 @@ pub async fn compile_package<W: Write + Send, F: MoveFlavor>(
     env: &Environment,
     writer: &mut W,
 ) -> PackageResult<CompiledPackage> {
-    let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
+    let mut modes: Vec<ModeName> = build_config
+        .modes
+        .iter()
+        .map(|mode| mode.to_string())
+        .collect();
+
+    if build_config.test_mode {
+        modes.push("test".to_string());
+    }
+
+    let root_pkg = RootPackage::<F>::load(path, env.clone(), build_config.mode_set()).await?;
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
