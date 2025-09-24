@@ -34,9 +34,11 @@ use move_package_alt::{
     package::RootPackage,
     schema::Environment,
 };
-use move_package_alt_compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_package_alt_compilation::{
     build_config::BuildConfig as MoveBuildConfig, build_plan::BuildPlan,
+};
+use move_package_alt_compilation::{
+    compiled_package::CompiledPackage as MoveCompiledPackage, find_env,
 };
 use move_symbol_pool::Symbol;
 
@@ -184,21 +186,7 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: &Path) -> anyhow::Result<CompiledPackage> {
-        let envs = RootPackage::<SuiFlavor>::environments(path)?;
-        let env = if let Some(ref e) = self.config.environment {
-            if let Some(env) = envs.get(e) {
-                Environment::new(e.to_string(), env.to_string())
-            } else {
-                bail!(
-                    "No environment named `{e}` in the manifest. Available environments are {:?}",
-                    envs.keys()
-                );
-            }
-        } else {
-            let (name, id) = envs.first().expect("At least one default env");
-            Environment::new(name.to_string(), id.to_string())
-        };
-
+        let env = find_env::<SuiFlavor>(path, &self.config)?;
         // we need to block here to compile the package, which requires to fetch dependencies
         let root_pkg = RootPackage::<SuiFlavor>::load_sync(path.to_path_buf(), env)?;
 
