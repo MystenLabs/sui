@@ -20,7 +20,6 @@ fn compute_digest(input: &str) -> String {
 }
 
 /// Convert an async task into a single-threaded task. Copied from `sui-replay-2`
-#[macro_export]
 macro_rules! block_on {
     ($expr:expr) => {{
         #[allow(clippy::disallowed_methods, clippy::result_large_err)]
