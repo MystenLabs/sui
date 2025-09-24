@@ -101,12 +101,7 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
                 .enumerate()
                 .map(|(idx, ty)| env.load_type_input(idx, ty))
                 .collect::<Result<Vec<_>, _>>()?;
-            let linkage = env.linkage_analysis.compute_call_linkage(
-                &package,
-                &type_arguments,
-                env.linkable_store,
-            )?;
-            let function = env.load_function(package, module, name, type_arguments, linkage)?;
+            let function = env.load_function(package, module, name, type_arguments)?;
             L::Command::MoveCall(Box::new(L::MoveCall {
                 function,
                 arguments,

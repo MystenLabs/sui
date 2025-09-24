@@ -14,6 +14,7 @@ use crate::{
         loading::ast::Type,
     },
 };
+use move_core_types::identifier::IdentStr;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID, error::ExecutionError, execution_config_utils::to_binary_config,
@@ -24,6 +25,8 @@ pub trait LinkageAnalysis {
     fn compute_call_linkage(
         &self,
         package: &ObjectID,
+        module_name: &IdentStr,
+        function_name: &IdentStr,
         type_args: &[Type],
         store: &dyn PackageStore,
     ) -> Result<ExecutableLinkage, ExecutionError>;

@@ -225,16 +225,24 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         module: String,
         function: String,
         type_arguments: Vec<Type>,
-        linkage: ExecutableLinkage,
     ) -> Result<LoadedFunction, ExecutionError> {
+        let module = to_identifier(module)?;
+        let name = to_identifier(function)?;
+
+        let linkage = self.linkage_analysis.compute_call_linkage(
+            &package,
+            module.as_ident_str(),
+            name.as_ident_str(),
+            &type_arguments,
+            self.linkable_store,
+        )?;
+
         let Some(original_id) = linkage.0.resolve_to_original_id(&package) else {
             invariant_violation!(
                 "Package ID {:?} is not found in linkage generated for that package",
                 package
             );
         };
-        let module = to_identifier(module)?;
-        let name = to_identifier(function)?;
         let storage_id = ModuleId::new(package.into(), module.clone());
         let runtime_id = ModuleId::new(original_id.into(), module);
         let data_store = &self.linkable_store.package_store;
