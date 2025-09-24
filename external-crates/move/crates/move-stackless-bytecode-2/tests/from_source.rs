@@ -24,11 +24,10 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     };
 
     let mut writer = Vec::new();
-    let rt = tokio::runtime::Runtime::new().unwrap();
 
     // Block on the async function
     let env = move_package_alt::flavor::vanilla::default_environment();
-    let root_pkg = rt.block_on(async { RootPackage::<Vanilla>::load(pkg_dir, env).await })?;
+    let root_pkg = RootPackage::<Vanilla>::load_sync(pkg_dir.to_path_buf(), env)?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()

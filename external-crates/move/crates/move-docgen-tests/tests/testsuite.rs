@@ -51,12 +51,10 @@ fn test_impl(toml_path: &Path, flags: DocgenFlags, test_case: &str) -> datatest_
     };
     let mut w = Vec::new();
 
-    let rt = tokio::runtime::Runtime::new().unwrap();
-
     // Block on the async function
     let env = move_package_alt::flavor::vanilla::default_environment();
-    let root_pkg = rt
-        .block_on(async { RootPackage::<Vanilla>::load(toml_path.parent().unwrap(), env).await })?;
+    let root_pkg =
+        RootPackage::<Vanilla>::load_sync(toml_path.parent().unwrap().to_path_buf(), env)?;
     let model = model_builder::build(&mut w, &root_pkg, &config)?;
     let root_doc_template: PathBuf = test_dir.join(ROOT_DOC_TEMPLATE_NAME);
     let root_doc_template = if root_doc_template.is_file() {
