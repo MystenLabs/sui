@@ -13,8 +13,9 @@ use sui_types::{effects::TransactionEffects, gas::GasUsageReport};
 pub const ARTIFACTS_ENCODING_EXT: &str = "json";
 pub const ARTIFACTS_ENCODING_COMPRESSION_EXT: &str = "json.zst";
 
-pub const ARTIFACTS: [Artifact; 5] = [
+pub const ARTIFACTS: [Artifact; 6] = [
     Artifact::Trace,
+    Artifact::TransactionData,
     Artifact::TransactionEffects,
     Artifact::TransactionGasReport,
     Artifact::ForkedTransactionEffects,
@@ -25,6 +26,7 @@ pub const ARTIFACTS: [Artifact; 5] = [
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Artifact {
     Trace,
+    TransactionData,
     TransactionEffects,
     TransactionGasReport,
     ForkedTransactionEffects,
@@ -93,6 +95,7 @@ impl Artifact {
     pub const fn as_str(&self) -> &str {
         match self {
             Artifact::Trace => "trace",
+            Artifact::TransactionData => "transaction_data",
             Artifact::TransactionEffects => "transaction_effects",
             Artifact::ForkedTransactionEffects => "forked_transaction_effects",
             Artifact::TransactionGasReport => "transaction_gas_report",
@@ -105,6 +108,7 @@ impl Artifact {
         match self {
             Artifact::Trace => EncodingType::JsonCompressed,
             Artifact::ForkedTransactionEffects
+            | Artifact::TransactionData
             | Artifact::TransactionEffects
             | Artifact::TransactionGasReport
             | Artifact::ReplayCacheSummary => EncodingType::Json,

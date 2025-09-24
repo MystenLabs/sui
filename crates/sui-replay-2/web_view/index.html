@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sui Transaction Replay Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Sui Transaction Replay Viewer</h1>
+            <p>Analyze Sui transaction replay data</p>
+        </header>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-nav" id="tab-nav">
+            <button class="tab-btn active" data-tab="load">Load Transaction</button>
+        </nav>
+
+        <!-- Tab Contents -->
+        <div class="tab-content">
+            <!-- Load Files Tab -->
+            <div class="tab-panel active" id="tab-load">
+                <section class="file-input-section">
+                    <h2>Load Transactoin Artifacts</h2>
+                    <div class="directory-input">
+                        <div class="input-group">
+                            <label for="directory-input">Replay Transaction Digest Path:</label>
+                            <input type="text" id="directory-input" placeholder="e.g., .replay/HzKdWEhutkrwHBp3UcV8AWsmSVE9Mks8vdwQUbQK41Yx" />
+                            <button id="browse-directory" type="button">📁 Browse Directory</button>
+                            <input type="file" id="directory-picker" webkitdirectory multiple style="display: none;" />
+                        </div>
+                        <div class="input-group">
+                            <label for="explorer-select">SUI Explorer:</label>
+                            <select id="explorer-select">
+                                <option value="suiscan" selected>SuiScan</option>
+                                <option value="suivision">SuiVision</option>
+                            </select>
+                        </div>
+                        <div class="file-status" id="file-status">
+                            <p>Please select a replay directory containing:</p>
+                            <ul>
+                                <li id="status-transaction-data">❌ transaction_data.json</li>
+                                <li id="status-transaction-effects">❌ transaction_effects.json</li>
+                                <li id="status-transaction-gas-report">❌ transaction_gas_report.json</li>
+                                <li id="status-replay-cache-summary">❌ replay_cache_summary.json</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="drag-drop-area" id="drag-drop-area">
+                        <p>Or drag and drop the replay directory here</p>
+                    </div>
+                    <button id="analyze-btn" disabled>🔍 Analyze Transaction</button>
+                </section>
+            </div>
+
+            <!-- Transaction Overview Tab -->
+            <div class="tab-panel" id="tab-overview">
+                <section class="section-card">
+                    <div id="transaction-overview" class="content"></div>
+                </section>
+            </div>
+
+            <!-- Objects Touched Tab -->
+            <div class="tab-panel" id="tab-objects">
+                <section class="section-card">
+                    <div id="objects-touched" class="content"></div>
+                </section>
+            </div>
+
+            <!-- Object Changes Tab -->
+            <div class="tab-panel" id="tab-changes">
+                <section class="section-card">
+                    <div id="object-changes" class="content"></div>
+                </section>
+            </div>
+
+            <!-- Gas Tab -->
+            <div class="tab-panel" id="tab-gas">
+                <section class="section-card">
+                    <div id="gas-analysis" class="content"></div>
+                </section>
+            </div>
+
+            <!-- Error Tab -->
+            <div class="tab-panel" id="tab-error">
+                <section class="error-section">
+                    <div id="error-message" class="error-content"></div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script src="transaction-viewer.js"></script>
+</body>
+</html>

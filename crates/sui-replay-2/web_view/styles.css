@@ -1,0 +1,516 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    background-color: #1a1a1a;
+    color: white;
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #333;
+    padding-bottom: 20px;
+}
+
+header h1 {
+    color: #4a9eff;
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+
+header p {
+    color: white;
+    font-size: 1.1em;
+}
+
+/* Tab Navigation */
+.tab-nav {
+    display: flex;
+    background: #2a2a2a;
+    border-radius: 8px 8px 0 0;
+    border: 1px solid #333;
+    border-bottom: none;
+    margin-bottom: 0;
+    overflow-x: auto;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    color: white;
+    padding: 15px 20px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    border-right: 1px solid #333;
+}
+
+.tab-btn:last-child {
+    border-right: none;
+}
+
+.tab-btn:hover {
+    background: #333;
+    color: white;
+}
+
+.tab-btn.active {
+    background: #1a1a1a;
+    color: #4a9eff;
+    border-bottom: 2px solid #4a9eff;
+}
+
+/* Tab Content */
+.tab-content {
+    background: #2a2a2a;
+    border: 1px solid #333;
+    border-radius: 0 0 8px 8px;
+    min-height: 400px;
+}
+
+.tab-panel {
+    padding: 20px;
+    display: none;
+}
+
+.tab-panel.active {
+    display: block !important;
+}
+
+/* File Input Section */
+.file-input-section {
+    background: transparent;
+    border-radius: 0;
+    padding: 25px;
+    margin-bottom: 0;
+    border: none;
+}
+
+.file-input-section h2 {
+    color: #4a9eff;
+    margin-bottom: 20px;
+    font-size: 1.4em;
+}
+
+.directory-input {
+    margin-bottom: 20px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    color: white;
+    font-weight: bold;
+}
+
+.input-group input[type="text"] {
+    background: #1a1a1a;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 12px;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 13px;
+}
+
+.input-group input[type="text"]:focus {
+    outline: none;
+    border-color: #4a9eff;
+    background: #222;
+}
+
+.input-group select {
+    background: #1a1a1a;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 12px;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.input-group select:focus {
+    outline: none;
+    border-color: #4a9eff;
+    background: #222;
+}
+
+#browse-directory {
+    background: #333;
+    color: white;
+    border: 1px solid #555;
+    padding: 10px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background-color 0.3s ease;
+    align-self: flex-start;
+}
+
+#browse-directory:hover {
+    background: #444;
+    border-color: #666;
+}
+
+.file-status {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 15px;
+}
+
+.file-status p {
+    color: white;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.file-status ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.file-status li {
+    padding: 4px 0;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.file-status li.found {
+    color: #90ee90;
+}
+
+.file-status li.missing {
+    color: #ff6b6b;
+}
+
+.drag-drop-area {
+    border: 2px dashed #555;
+    border-radius: 8px;
+    padding: 30px;
+    text-align: center;
+    margin: 20px 0;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.drag-drop-area:hover,
+.drag-drop-area.drag-over {
+    border-color: #4a9eff;
+    background-color: #2a2a3a;
+}
+
+.drag-drop-area p {
+    color: white;
+    font-size: 1.1em;
+}
+
+#analyze-btn {
+    background: #4a9eff;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 6px;
+    font-size: 1.1em;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background-color 0.3s ease;
+}
+
+#analyze-btn:hover:not(:disabled) {
+    background: #357abd;
+}
+
+#analyze-btn:disabled {
+    background: #555;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Results Section */
+.results-section {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.section-card {
+    background: #2a2a2a;
+    border-radius: 8px;
+    border: 1px solid #333;
+    overflow: hidden;
+}
+
+.section-card h2 {
+    background: #333;
+    color: #4a9eff;
+    padding: 15px 20px;
+    margin: 0;
+    font-size: 1.3em;
+    border-bottom: 1px solid #444;
+}
+
+.content {
+    padding: 20px;
+}
+
+/* Overview styles */
+.overview-item {
+    display: flex;
+    margin-bottom: 8px;
+    padding: 5px 0;
+}
+
+.overview-label {
+    font-weight: bold;
+    min-width: 120px;
+    color: #4a9eff;
+    text-shadow: 0 0 2px rgba(74, 158, 255, 0.3);
+}
+
+.overview-value {
+    color: white;
+    font-family: monospace;
+}
+
+.overview-section {
+    margin: 15px 0;
+    padding: 15px;
+    background: #1a1a1a;
+    border-radius: 6px;
+    border-left: 3px solid #4a9eff;
+}
+
+.overview-section-title {
+    color: #4a9eff;
+    margin: 0 0 10px 0;
+    font-size: 1.4em;
+    font-weight: bold;
+    text-shadow: 0 0 2px rgba(74, 158, 255, 0.3);
+}
+
+.overview-subsection {
+    margin-left: 15px;
+}
+
+.overview-subsection .overview-item {
+    margin-bottom: 6px;
+}
+
+.overview-subsection .overview-label {
+    min-width: 80px;
+}
+
+/* Object lists */
+.object-category {
+    margin-bottom: 20px;
+}
+
+.object-category h3 {
+    color: #4a9eff;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.object-list {
+    margin-left: 20px;
+}
+
+.object-item {
+    padding: 4px 0;
+    color: white;
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.object-item.input {
+    color: white;
+}
+
+.object-item.gas {
+    color: white;
+}
+
+.object-item.runtime {
+    color: white;
+}
+
+.object-item.created {
+    color: white;
+}
+
+.object-item.deleted {
+    color: white;
+}
+
+.object-item.modified {
+    color: white;
+}
+
+/* Status indicators */
+.status-indicator {
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-indicator.success {
+    color: #90ee90;
+}
+
+.status-indicator.error {
+    color: #ff6b6b;
+}
+
+/* Subsections */
+.subsection {
+    margin-left: 20px;
+    margin-bottom: 15px;
+}
+
+.subsection h4 {
+    color: white;
+    margin-bottom: 8px;
+    font-size: 1em;
+}
+
+/* Explorer Links */
+.explorer-link {
+    color: #4a9eff;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.explorer-link:hover {
+    color: #357abd;
+    text-decoration: underline;
+    text-shadow: 0 0 3px rgba(74, 158, 255, 0.5);
+}
+
+.explorer-link:visited {
+    color: #9d7cbf;
+}
+
+/* Make clickable values in overview section */
+.clickable {
+    cursor: pointer;
+}
+
+/* Error section */
+.error-section {
+    background: #2a2a2a;
+    border: 1px solid #ff6b6b;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.error-section h2 {
+    background: #ff6b6b;
+    color: white;
+    padding: 15px 20px;
+    margin: 0;
+}
+
+.error-content {
+    padding: 20px;
+    color: #ff9999;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+
+    header h1 {
+        font-size: 2em;
+    }
+
+    .tab-nav {
+        flex-wrap: wrap;
+        gap: 2px;
+    }
+
+    .tab-btn {
+        font-size: 12px;
+        padding: 10px 15px;
+    }
+
+    .input-group {
+        gap: 8px;
+    }
+
+    .file-input-section {
+        padding: 15px;
+    }
+}
+
+/* Loading state */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Scrollable content for long lists */
+.scrollable {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 10px;
+    background: #1a1a1a;
+}
+
+/* Sortable table styles */
+.sortable-header {
+    position: relative;
+    transition: background-color 0.2s ease;
+}
+
+.sortable-header:hover {
+    background-color: #3a3a3a !important;
+}
+
+.sortable-header.sort-asc {
+    background-color: #2d4a2d !important;
+}
+
+.sortable-header.sort-desc {
+    background-color: #4a2d2d !important;
+}
+
+.sort-indicator {
+    font-size: 0.8em;
+    color: #4a9eff;
+    margin-left: 4px;
+}
+
+/* Custom tooltip styles - JavaScript controlled tooltips only */
+.custom-tooltip {
+    /* No CSS tooltips - all handled by JavaScript */
+}
