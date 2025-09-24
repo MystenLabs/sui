@@ -32,7 +32,9 @@ pub fn reroot_path(path: Option<&Path>) -> anyhow::Result<PathBuf> {
     Ok(PathBuf::from("."))
 }
 
-/// Find environment
+/// If no environment is passed, it will use the default implicit environment. If an environment
+/// is passed, it will try to find it in the list of available environments, and error if it cannot
+/// be found.
 pub fn find_env<F: MoveFlavor>(path: &Path, config: &BuildConfig) -> anyhow::Result<Environment> {
     let envs = RootPackage::<F>::environments(path)?;
     let env = if let Some(ref e) = config.environment {
