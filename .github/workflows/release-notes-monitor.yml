@@ -115,12 +115,12 @@ jobs:
           *Release Notes:*
           ${{ env.release_notes }}
 
-  tag:
-    name: Adding git tag to processed commit
-    needs: [ get-list-of-prs ]
-    if: ${{ success() && needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
-    uses: mystenlabs/sui/.github/workflows/tag.yml@main
-    with:
-      sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
-      tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
-    secrets: inherit
+  # tag:
+  #   name: Adding git tag to processed commit
+  #   needs: [ get-list-of-prs ]
+  #   if: ${{ success() && needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
+  #   uses: mystenlabs/sui/.github/workflows/tag.yml@main
+  #   with:
+  #     sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
+  #     tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
+  #   secrets: inherit
