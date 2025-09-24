@@ -153,7 +153,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("CoinMetadata", "supply") => vec!["consistent"],
         ("CoinMetadata", "transactions") => pipelines("Query", "transactions", Some(filters)),
 
-        // Epochs
+        // Epoch fields
         ("Epoch", "epochId") => vec!["kv_epoch_starts"],
         ("Epoch", "checkpoints") => pipelines("Query", "checkpoints", Some(filters)),
         ("Epoch", "coinDenyList") => {
@@ -182,7 +182,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Epoch", "transactions") => pipelines("Query", "transactions", None),
         ("Epoch", "validatorSet") => vec!["kv_epoch_starts"],
 
-        // Event queries
+        // Event fields
         ("Event", "contents") => vec!["ev_struct_inst", "tx_digests"],
         ("Event", "eventBcs") => vec!["ev_struct_inst", "tx_digests"],
         ("Event", "sender") => vec!["ev_struct_inst", "ev_emit_mod", "tx_digests"],
@@ -191,7 +191,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Event", "transaction") => vec!["ev_struct_inst", "ev_emit_mod", "tx_digests"],
         ("Event", "transactionModule") => pipelines("IMoveObject", "contents", None),
 
-        // IAddressable queries
+        // IAddressable fields
         ("IAddressable", "address") => vec![],
         ("IAddressable", "balance") => vec!["consistent"],
         ("IAddressable", "balances") => vec!["consistent"],
@@ -199,7 +199,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("IAddressable", "multiGetBalances") => vec!["consistent"],
         ("IAddressable", "objects") => vec!["consistent"],
 
-        // IObject queries
+        // IObject fields
         ("IObject", "contents") => vec!["obj_versions"],
         ("IObject", "digest") => vec!["obj_versions"],
         ("IObject", "objectAt") => vec!["obj_versions"],
@@ -216,7 +216,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("IObject", "storageRebate") => vec!["obj_versions"],
         ("IObject", "version") => vec!["obj_versions"],
 
-        // IMoveObject queries
+        // IMoveObject fields
         ("IMoveObject", "contents") => vec!["obj_versions"],
         ("IMoveObject", "dynamicField") => vec!["obj_versions"],
         ("IMoveObject", "dynamicFields") => vec!["consistent"],
@@ -226,7 +226,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("IMoveObject", "multiGetDynamicFields") => vec!["obj_versions"],
         ("IMoveObject", "multiGetDynamicObjectFields") => vec!["obj_versions"],
 
-        // Object queries
+        // Object fields
         ("Object", "address") => pipelines("IAddressable", "address", None),
         ("Object", "asMoveObject") => pipelines("IMoveObject", "contents", None),
         ("Object", "asMovePackage") => pipelines("IMoveObject", "contents", None),
@@ -255,7 +255,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Object", "storageRebate") => pipelines("IObject", "storageRebate", None),
         ("Object", "version") => pipelines("IObject", "version", None),
 
-        // Package queries
+        // Package fields
         ("Package", "address") => pipelines("IAddressable", "address", None),
         ("Package", "balance") => pipelines("IAddressable", "balance", None),
         ("Package", "balances") => pipelines("IAddressable", "balances", None),
@@ -282,12 +282,12 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Package", "typeOrigins") => pipelines("IObject", "contents", None),
         ("Package", "version") => pipelines("IObject", "version", None),
 
-        // Protocol config queries
+        // Protocol config fields
         ("ProtocolConfigs", "protocolVersion") => vec!["kv_epoch_starts"],
         ("ProtocolConfigs", "featureFlags") => vec!["kv_epoch_starts"],
         ("ProtocolConfigs", "configs") => vec!["kv_epoch_starts"],
 
-        // Query
+        // Queryable
         ("Query", "address") => pipelines("IAddressable", "address", None),
         ("Query", "checkpoint") => vec!["kv_checkpoints"],
         ("Query", "checkpoints") => vec!["cp_sequence_numbers"],
@@ -344,7 +344,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         }
         ("Query", "type") => vec!["kv_packages"],
 
-        // Transaction queries
+        // Transaction fields
         ("Transaction", "digest") => vec!["kv_transactions"],
         ("Transaction", "effects") => vec!["kv_transactions"],
         ("Transaction", "expiration") => vec!["kv_transactions"],
@@ -354,7 +354,7 @@ fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'st
         ("Transaction", "signatures") => vec!["kv_transactions"],
         ("Transaction", "transactionBcs") => vec!["kv_transactions"],
 
-        // TransactionEffects queries
+        // TransactionEffects fields
         ("TransactionEffects", "balanceChanges") => vec!["tx_balance_changes", "tx_digests"],
         ("TransactionEffects", "checkpoint") => vec!["kv_transactions"],
         ("TransactionEffects", "dependencies") => vec!["kv_transactions"],
