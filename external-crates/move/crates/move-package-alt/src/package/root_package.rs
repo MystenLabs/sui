@@ -11,6 +11,7 @@ use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
 use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
 use crate::graph::{LinkageTable, PackageInfo};
+use crate::package::block_on;
 use crate::package::package_lock::PackageLock;
 use crate::schema::{
     Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
@@ -103,6 +104,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         root_pkg.update_lockfile_digests();
 
         Ok(root_pkg)
+    }
+
+    /// A synchronous version of `load` that can be used to load a package while blocking in place.
+    pub fn load_sync(path: PathBuf, env: Environment) -> PackageResult<Self> {
+        block_on!(Self::load(path.as_path(), env))
     }
 
     /// Load the root package from `root` in environment `build_env`, but replace all the addresses

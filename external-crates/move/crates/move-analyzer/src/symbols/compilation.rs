@@ -977,24 +977,7 @@ fn load_root_pkg<F: MoveFlavor>(
     };
 
     // we need to block here to compile the package, which requires to fetch dependencies
-    let root_pkg = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        // We're already in a tokio runtime
-        match handle.runtime_flavor() {
-            tokio::runtime::RuntimeFlavor::MultiThread => {
-                // Multi-threaded runtime, can use block_in_place
-                tokio::task::block_in_place(|| handle.block_on(RootPackage::<F>::load(path, env)))
-            }
-            _ => {
-                tokio::runtime::Handle::current().block_on(RootPackage::<F>::load(path, env))
-                // Single-threaded or current-thread runtime, use futures::executor
-                // futures::executor::block_on(RootPackage::<F>::load(path, env))
-            }
-        }
-    } else {
-        // No runtime exists, create one
-        let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(RootPackage::<F>::load(path, env))
-    }?;
+    let root_pkg = RootPackage::<F>::load_sync(path.to_path_buf(), env)?;
 
     root_pkg.save_to_disk()?;
 

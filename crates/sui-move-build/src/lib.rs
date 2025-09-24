@@ -200,31 +200,7 @@ impl BuildConfig {
         };
 
         // we need to block here to compile the package, which requires to fetch dependencies
-        let root_pkg = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            // We're already in a tokio runtime
-            match handle.runtime_flavor() {
-                tokio::runtime::RuntimeFlavor::MultiThread => {
-                    // Multi-threaded runtime, can use block_in_place
-                    tokio::task::block_in_place(|| {
-                        handle.block_on(RootPackage::<SuiFlavor>::load(path, env))
-                    })
-                }
-                _ => {
-                    // TODO: pkg-alt - this needs to be fixed because the non futures code will
-                    // fail in a bunch of tokio test with runtime cannot be created within a
-                    // runtime
-                    #[allow(clippy::disallowed_methods)]
-                    // tokio::runtime::Handle::current()
-                    //     .block_on(RootPackage::<SuiFlavor>::load(path, env))
-                    // Single-threaded or current-thread runtime, use futures::executor
-                    futures::executor::block_on(RootPackage::<SuiFlavor>::load(path, env))
-                }
-            }
-        } else {
-            // No runtime exists, create one
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(RootPackage::<SuiFlavor>::load(path, env))
-        }?;
+        let root_pkg = RootPackage::<SuiFlavor>::load_sync(path.to_path_buf(), env)?;
 
         let result = if self.print_diags_to_stderr {
             self.compile_package(&root_pkg, &mut std::io::stderr())

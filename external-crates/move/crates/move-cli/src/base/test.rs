@@ -104,8 +104,7 @@ impl Test {
             compute_coverage,
             save_disassembly,
             &mut std::io::stdout(),
-        )
-        .await?;
+        )?;
 
         // Return a non-zero exit code if any test failed
         if let (UnitTestResult::Failure, _) = result {
@@ -149,7 +148,7 @@ pub enum UnitTestResult {
     Failure,
 }
 
-pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
+pub fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     pkg_path: &Path,
     mut build_config: move_package_alt_compilation::build_config::BuildConfig,
     mut unit_test_config: UnitTestingConfig,
@@ -179,7 +178,7 @@ pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
         Environment::new(name.to_string(), id.to_string())
     };
 
-    let root_pkg = RootPackage::<F>::load(pkg_path, env).await?;
+    let root_pkg = RootPackage::<F>::load_sync(pkg_path.to_path_buf(), env)?;
     let package_name = Symbol::from(root_pkg.name().as_str());
 
     let packages = root_pkg.packages()?;

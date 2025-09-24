@@ -187,11 +187,9 @@ fn copy_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
     // Sometimes we run a test that isn't a package for metatests so if there isn't a package we
     // don't need to nest at all. Resolution graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer.
-    let rt = tokio::runtime::Runtime::new()?;
-    let Ok(root_pkg) = rt.block_on(RootPackage::<Vanilla>::load(
-        pkg_dir,
-        vanilla::default_environment(),
-    )) else {
+    let Ok(root_pkg) =
+        RootPackage::<Vanilla>::load_sync(pkg_dir.to_path_buf(), vanilla::default_environment())
+    else {
         // Ensure the temp directory exists before returning
         fs::create_dir_all(tmp_dir)?;
         return Ok(tmp_dir.to_path_buf());
