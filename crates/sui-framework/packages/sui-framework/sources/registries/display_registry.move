@@ -7,7 +7,7 @@ use std::string::String;
 use sui::derived_object;
 use sui::display::Display;
 use sui::package::Publisher;
-use sui::vec_map::VecMap;
+use sui::vec_map::{Self, VecMap};
 
 /// TODO: Fill this in with the programmatic address responsible for
 /// migrating all V1 displays into V2.
@@ -25,11 +25,8 @@ const ECapAlreadyClaimed: vector<u8> = b"Cap for this display object has already
 #[error(code = 3)]
 const ENotValidPublisher: vector<u8> = b"The publisher is not valid for the supplied type.";
 #[error(code = 4)]
-const EFieldAlreadyExists: vector<u8> =
-    b"Field already exists in the display. Call `update` instead.";
-#[error(code = 5)]
 const EFieldDoesNotExist: vector<u8> = b"Field does not exist in the display.";
-#[error(code = 6)]
+#[error(code = 5)]
 const ECapNotClaimed: vector<u8> =
     b"Cap for this display object has not been claimed so you cannot delete the legacy display yet.";
 
@@ -70,35 +67,26 @@ public struct DisplayCap<phantom T> has key, store {
     id: UID,
 }
 
-/// Create a new display object.
-/// TODO: Add internal verifier rule that we can only create display for types we own in the package.
-/// TODO(2): Should we allow `new_with_publisher`, to keep creations compatible?
-/// TODO(3): Do we wanna have an `init` variation?
-public fun new<T /*internal*/>(
+/// Create a new display object using the `Publisher` object.
+public fun new_with_publisher<T>(
     registry: &mut DisplayRegistry,
-    fields: VecMap<String, String>,
+    publisher: &Publisher,
     ctx: &mut TxContext,
-): DisplayCap<T> {
+): (NewDisplay<T>, DisplayCap<T>) {
     assert!(!derived_object::exists(&registry.id, DisplayKey<T>()), EDisplayAlreadyExists);
+    assert!(publisher.from_package<T>(), ENotValidPublisher);
     let cap = DisplayCap<T> { id: object::new(ctx) };
     let display = NewDisplay<T> {
         id: derived_object::claim(&mut registry.id, DisplayKey<T>()),
-        fields,
+        fields: vec_map::empty(),
         language_version: LANGUAGE_VERSION,
         cap_id: option::some(cap.id.to_inner()),
     };
-    transfer::share_object(display);
-    cap
+    (display, cap)
 }
 
-/// Add a `key,value` to display.
-public fun add<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: String, value: String) {
-    assert!(!display.fields.contains(&name), EFieldAlreadyExists);
-    display.fields.insert(name, value);
-}
-
-/// Remove a key from display.
-public fun remove<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: String) {
+/// Unset a key from display.
+public fun unset<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: String) {
     assert!(display.fields.contains(&name), EFieldDoesNotExist);
     display.fields.remove(&name);
 }
@@ -109,6 +97,16 @@ public fun set<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: String, 
         display.fields.remove(&name);
     };
     display.fields.insert(name, value);
+}
+
+/// Clear the display vec_map, allowing a fresh re-creation of fields
+public fun clear<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>) {
+    display.fields = vec_map::empty();
+}
+
+/// Share the `NewDisplay` object to finalize the creation.
+public fun share<T>(display: NewDisplay<T>) {
+    transfer::share_object(display)
 }
 
 /// Allow a legacy Display holder to claim the capability object.
@@ -145,7 +143,7 @@ public fun migrate<T: key>(
     _ctx: &mut TxContext,
 ) {
     assert!(!derived_object::exists(&registry.id, DisplayKey<T>()), EDisplayAlreadyExists);
-    // TODO: Should we transform fields on-chain or off-chain (for the new parsing style?)
+
     transfer::share_object(NewDisplay<T> {
         id: derived_object::claim(&mut registry.id, DisplayKey<T>()),
         fields,
