@@ -72,6 +72,12 @@ impl TransactionSubmitter {
             tx_type,
             options.allowed_validators.clone(),
         );
+
+        let ping_label = if request.ping.is_some() {
+            "true"
+        } else {
+            "false"
+        };
         let mut retries = 0;
         let mut request_rpcs = FuturesUnordered::new();
 
@@ -85,7 +91,7 @@ impl TransactionSubmitter {
                         let display_name = authority_aggregator.get_display_name(&name);
                         self.metrics
                             .validator_selections
-                            .with_label_values(&[&display_name])
+                            .with_label_values(&[&display_name, tx_type.as_str(), ping_label])
                             .inc();
 
                         // Create a future that returns the name and display_name along with the result
@@ -132,7 +138,7 @@ impl TransactionSubmitter {
                 Some((name, display_name, Ok(result))) => {
                     self.metrics
                         .validator_submit_transaction_successes
-                        .with_label_values(&[&display_name])
+                        .with_label_values(&[&display_name, tx_type.as_str(), ping_label])
                         .inc();
                     self.metrics
                         .submit_transaction_retries
@@ -150,7 +156,12 @@ impl TransactionSubmitter {
                     };
                     self.metrics
                         .validator_submit_transaction_errors
-                        .with_label_values(&[&display_name, error_type])
+                        .with_label_values(&[
+                            &display_name,
+                            error_type,
+                            tx_type.as_str(),
+                            ping_label,
+                        ])
                         .inc();
 
                     retries += 1;
