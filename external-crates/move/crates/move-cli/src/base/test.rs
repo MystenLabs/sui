@@ -15,9 +15,7 @@ use move_compiler::{
 };
 use move_core_types::account_address::AccountAddress;
 use move_coverage::coverage_map::{CoverageMap, output_map_to_file};
-use move_package_alt::{
-    flavor::MoveFlavor, graph::NamedAddress, package::RootPackage, schema::Environment,
-};
+use move_package_alt::{flavor::MoveFlavor, graph::NamedAddress, package::RootPackage};
 use move_package_alt_compilation::{build_config::BuildConfig, build_plan::BuildPlan};
 use move_symbol_pool::Symbol;
 use move_unit_test::UnitTestingConfig;
@@ -162,11 +160,9 @@ pub fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     build_config.test_mode = true;
     build_config.save_disassembly = save_disassembly;
 
-    // Build the resolution graph (resolution graph diagnostics are only needed for CLI commands so
+    // Load the package (package graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer)
-
-    let env = find_env(pkg_path, &build_config)?;
-
+    let env = find_env::<F>(pkg_path, &build_config)?;
     let root_pkg = RootPackage::<F>::load_sync(pkg_path.to_path_buf(), env)?;
     let package_name = Symbol::from(root_pkg.name().as_str());
 

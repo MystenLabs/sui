@@ -49,7 +49,7 @@ pub fn find_env<F: MoveFlavor>(path: &Path, config: &BuildConfig) -> anyhow::Res
             );
         }
     } else {
-        let (name, id) = envs.first_key_value().expect("At least one default env");
+        let (name, id) = envs.first().expect("At least one default env");
         Environment::new(name.to_string(), id.to_string())
     };
 

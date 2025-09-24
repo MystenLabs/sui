@@ -332,6 +332,7 @@ mod tests {
     use move_command_line_common::testing::insta::assert_snapshot;
 
     use super::*;
+    use indexmap::IndexMap;
 
     #[derive(Debug)]
     struct TestFlavor;
@@ -345,8 +346,8 @@ mod tests {
             "test".to_string()
         }
 
-        fn default_environments() -> BTreeMap<String, String> {
-            BTreeMap::new()
+        fn default_environments() -> IndexMap<String, String> {
+            IndexMap::new()
         }
 
         // Our test flavor has `[foo, bar, baz]` system dependencies.
