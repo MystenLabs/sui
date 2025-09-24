@@ -16,7 +16,9 @@ use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals,
 use move_core_types::account_address::AccountAddress;
 use move_model_2 as M2;
 use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
-use move_package_alt_compilation::{build_config::BuildConfig, find_env};
+use move_package_alt_compilation::{
+    build_config::BuildConfig, compiled_package::BuildNamedAddresses, find_env,
+};
 use move_symbol_pool::Symbol;
 
 const COMMAND_NAME: &str = "summary";
@@ -104,32 +106,15 @@ impl Summary {
         } else {
             let root_pkg = RootPackage::<F>::load(&path, env).await?;
             // Get named addresses from the root package graph
-            let named_addresses = root_pkg
+            let named_addresses: BuildNamedAddresses = root_pkg
                 .package_graph()
                 .root_package_info()
-                .named_addresses()?;
-
-            // Convert NamedAddress to AccountAddress mapping
+                .named_addresses()?
+                .into();
             let original_address_mapping = named_addresses
+                .inner
                 .into_iter()
-                .map(|(pkg_name, named_addr)| {
-                    let addr = match named_addr {
-                        move_package_alt::graph::NamedAddress::RootPackage(x) => {
-                            if let Some(x) = x {
-                                x.0
-                            } else {
-                                AccountAddress::ZERO
-                            }
-                        }
-                        move_package_alt::graph::NamedAddress::Unpublished { dummy_addr } => {
-                            dummy_addr.0
-                        }
-                        move_package_alt::graph::NamedAddress::Defined(original_id) => {
-                            original_id.0
-                        }
-                    };
-                    (Symbol::from(pkg_name.as_str()), addr)
-                })
+                .map(|x| (x.0, x.1.into_inner()))
                 .collect();
 
             model_source = config
