@@ -44,7 +44,7 @@ impl New {
         writeln!(
             w,
             r#"// For Move coding conventions, see
-// https://docs.sui.io/concepts/sui-move-concepts/conventions
+// https://move-book.com/guides/code-quality-checklist
 
 /// Module: {name}
 module {name}::{name};
@@ -98,6 +98,7 @@ edition = "2024"         # use "2024" for Move 2024 edition
 
 # add the environment names and their chain ids here
 # by default, testnet and mainnet are implicitly available
+# example for devnet: devnet = "abcdef1234"
 # [environments]           
 # chain_name = "{chain_id}"
 
