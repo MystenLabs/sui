@@ -40,7 +40,6 @@ use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
 use sui_network::validator::server::SUI_TLS_SERVER_NAME;
 
-use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
 use sui_core::storage::RestReadStore;
 use sui_json_rpc::bridge_api::BridgeReadApi;
@@ -784,11 +783,7 @@ impl SuiNode {
                     ),
                 );
             state
-                .try_execute_immediately(
-                    &transaction,
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-                    &epoch_store,
-                )
+                .try_execute_immediately(&transaction, ExecutionEnv::for_checkpoint(), &epoch_store)
                 .instrument(span)
                 .await
                 .unwrap();
@@ -1636,13 +1631,13 @@ impl SuiNode {
                     {
                         pending_consensus_certificates.push((
                             Schedulable::Transaction(tx),
-                            ExecutionEnv::new().with_expected_effects_digest(fx_digest),
+                            ExecutionEnv::for_consensus_commit()
+                                .with_expected_effects_digest(fx_digest),
                         ));
                     } else {
                         additional_certs.push((
                             Schedulable::Transaction(tx),
-                            ExecutionEnv::new()
-                                .with_scheduling_source(SchedulingSource::NonFastPath),
+                            ExecutionEnv::for_consensus_commit(),
                         ));
                     }
                 }

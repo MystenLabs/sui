@@ -80,7 +80,6 @@ use crate::{
         shared_object_version_manager::Schedulable, ExecutionEnv,
     },
     checkpoints::CheckpointStore,
-    execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
     transaction_outputs::TransactionOutputs,
 };
@@ -1166,8 +1165,7 @@ impl ValidatorService {
                                 VerifiedExecutableTransaction::new_from_certificate(
                                     VerifiedCertificate::new_unchecked(*(certificate.clone())),
                                 ),
-                                ExecutionEnv::new()
-                                    .with_scheduling_source(SchedulingSource::NonFastPath),
+                                ExecutionEnv::for_grpc_fastpath(),
                             ))
                     } else {
                         None

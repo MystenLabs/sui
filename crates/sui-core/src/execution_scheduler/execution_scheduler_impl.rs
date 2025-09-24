@@ -572,7 +572,6 @@ mod test {
     use crate::authority::shared_object_version_manager::AssignedVersions;
     use crate::authority::ExecutionEnv;
     use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
-    use crate::execution_scheduler::SchedulingSource;
     use std::{time::Duration, vec};
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -658,10 +657,7 @@ mod test {
         let transaction = make_transaction(gas_objects[0].clone(), vec![]);
         let tx_start_time = Instant::now();
         execution_scheduler.enqueue_transactions(
-            vec![(
-                transaction.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(transaction.clone(), ExecutionEnv::for_consensus_commit())],
             &state.epoch_store_for_testing(),
         );
         // scheduler should output the transaction eventually.
@@ -690,10 +686,7 @@ mod test {
         let transaction = make_transaction(gas_object_new.clone(), vec![]);
         let tx_start_time = Instant::now();
         execution_scheduler.enqueue_transactions(
-            vec![(
-                transaction.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(transaction.clone(), ExecutionEnv::for_consensus_commit())],
             &state.epoch_store_for_testing(),
         );
         // scheduler should output no transaction yet.
@@ -706,10 +699,7 @@ mod test {
 
         // Duplicated enqueue is allowed.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                transaction.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(transaction.clone(), ExecutionEnv::for_consensus_commit())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -870,27 +860,27 @@ mod test {
             vec![
                 (
                     transaction_read_0.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
-                        tx_read_0_assigned_versions,
-                    )),
+                    ExecutionEnv::for_consensus_commit().with_assigned_versions(
+                        AssignedVersions::non_withdraw(tx_read_0_assigned_versions),
+                    ),
                 ),
                 (
                     transaction_read_1.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
-                        tx_read_1_assigned_versions,
-                    )),
+                    ExecutionEnv::for_consensus_commit().with_assigned_versions(
+                        AssignedVersions::non_withdraw(tx_read_1_assigned_versions),
+                    ),
                 ),
                 (
                     transaction_default.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
-                        tx_default_assigned_versions,
-                    )),
+                    ExecutionEnv::for_consensus_commit().with_assigned_versions(
+                        AssignedVersions::non_withdraw(tx_default_assigned_versions),
+                    ),
                 ),
                 (
                     transaction_read_2.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
-                        tx_read_2_assigned_versions,
-                    )),
+                    ExecutionEnv::for_consensus_commit().with_assigned_versions(
+                        AssignedVersions::non_withdraw(tx_read_2_assigned_versions),
+                    ),
                 ),
             ],
             &state.epoch_store_for_testing(),
@@ -1005,10 +995,7 @@ mod test {
             // scheduler should output no transaction yet since waiting on receiving object or
             // ImmOrOwnedObject input.
             execution_scheduler.enqueue_transactions(
-                vec![(
-                    txn.clone(),
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-                )],
+                vec![(txn.clone(), ExecutionEnv::for_consensus_commit())],
                 &state.epoch_store_for_testing(),
             );
             sleep(Duration::from_secs(1)).await;
@@ -1091,7 +1078,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1103,7 +1090,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction1.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1115,7 +1102,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1199,7 +1186,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1211,7 +1198,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction1.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1224,7 +1211,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction01.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1249,10 +1236,7 @@ mod test {
         // Enqueue a transaction with a receiving object that is available at the time it is enqueued.
         // This should be immediately available.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                tx1.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(tx1.clone(), ExecutionEnv::for_consensus_commit())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1328,21 +1312,21 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &state.epoch_store_for_testing(),
         );
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction01.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &state.epoch_store_for_testing(),
         );
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction1.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1426,7 +1410,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 cancelled_transaction.clone(),
-                ExecutionEnv::new()
+                ExecutionEnv::for_consensus_commit()
                     .with_assigned_versions(AssignedVersions::non_withdraw(assigned_versions)),
             )],
             &state.epoch_store_for_testing(),

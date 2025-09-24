@@ -987,7 +987,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.execution_scheduler_sender.send(
             executable_transactions,
             assigned_versions,
-            SchedulingSource::NonFastPath,
+            SchedulingSource::ConsensusCommit,
         );
 
         // Check if we should send EndOfPublish after processing consensus commit
@@ -1063,13 +1063,19 @@ impl ExecutionSchedulerSender {
                 .into_iter()
                 .map(|txn| {
                     let key = txn.key();
+                    let env = match scheduling_source {
+                        SchedulingSource::MysticetiFastPath => {
+                            ExecutionEnv::for_mysticeti_fastpath()
+                        }
+                        SchedulingSource::GrpcFastPath => ExecutionEnv::for_grpc_fastpath(),
+                        SchedulingSource::ConsensusCommit => ExecutionEnv::for_consensus_commit(),
+                        SchedulingSource::Checkpoint => ExecutionEnv::for_checkpoint(),
+                    };
                     (
                         txn,
-                        ExecutionEnv::new()
-                            .with_scheduling_source(scheduling_source)
-                            .with_assigned_versions(
-                                assigned_versions.get(&key).cloned().unwrap_or_default(),
-                            ),
+                        env.with_assigned_versions(
+                            assigned_versions.get(&key).cloned().unwrap_or_default(),
+                        ),
                     )
                 })
                 .collect();

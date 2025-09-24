@@ -24,7 +24,12 @@ pub struct PendingCertificateStats {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SchedulingSource {
     MysticetiFastPath,
-    NonFastPath,
+    /// Transaction scheduled directly from the gRPC interface (authority server).
+    GrpcFastPath,
+    /// Transaction scheduled after being sequenced by consensus.
+    ConsensusCommit,
+    /// Transaction scheduled as part of checkpoint execution or re-execution.
+    Checkpoint,
 }
 
 #[derive(Debug)]

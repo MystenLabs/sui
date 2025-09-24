@@ -796,7 +796,7 @@ impl CheckpointExecutor {
                             )
                             .expect("failed to acquire shared version assignments");
 
-                        let mut env = ExecutionEnv::new()
+                        let mut env = ExecutionEnv::for_checkpoint()
                             .with_assigned_versions(assigned_versions)
                             .with_expected_effects_digest(*expected_fx_digest);
 
@@ -871,7 +871,7 @@ impl CheckpointExecutor {
         self.execution_scheduler.enqueue_transactions(
             vec![(
                 change_epoch_tx.clone(),
-                ExecutionEnv::new()
+                ExecutionEnv::for_checkpoint()
                     .with_assigned_versions(assigned_versions)
                     .with_expected_effects_digest(change_epoch_fx.digest()),
             )],

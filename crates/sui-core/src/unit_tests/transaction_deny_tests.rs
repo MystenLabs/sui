@@ -478,7 +478,7 @@ async fn test_certificate_deny() {
             .unwrap(),
     );
     let (effects, _) = state
-        .try_execute_for_test(&cert, ExecutionEnv::new())
+        .try_execute_for_test(&cert, ExecutionEnv::for_grpc_fastpath())
         .await
         .unwrap();
     assert!(matches!(

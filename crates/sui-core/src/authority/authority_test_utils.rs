@@ -127,7 +127,7 @@ pub async fn execute_certificate_with_execution_error(
     let (result, execution_error_opt) = authority
         .try_execute_for_test(
             &certificate,
-            ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
+            ExecutionEnv::for_consensus_commit().with_assigned_versions(assigned_versions.clone()),
         )
         .await?;
     let state_after =
@@ -144,7 +144,7 @@ pub async fn execute_certificate_with_execution_error(
         fullnode
             .try_execute_for_test(
                 &certificate,
-                ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                ExecutionEnv::for_consensus_commit().with_assigned_versions(assigned_versions),
             )
             .await?;
     }
@@ -409,7 +409,7 @@ pub async fn execute_sequenced_certificate_to_effects(
     certificate: VerifiedCertificate,
     assigned_versions: AssignedVersions,
 ) -> Result<(TransactionEffects, Option<ExecutionError>), SuiError> {
-    let env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
+    let env = ExecutionEnv::for_consensus_commit().with_assigned_versions(assigned_versions);
     authority.execution_scheduler.enqueue(
         vec![(
             VerifiedExecutableTransaction::new_from_certificate(certificate.clone()).into(),
@@ -452,7 +452,7 @@ pub async fn send_consensus(
 
     let certs = vec![(
         VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
-        ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
+        ExecutionEnv::for_consensus_commit().with_assigned_versions(assigned_versions.clone()),
     )];
 
     authority

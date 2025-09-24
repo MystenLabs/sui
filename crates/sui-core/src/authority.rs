@@ -795,25 +795,30 @@ pub struct ExecutionEnv {
     pub withdraw_status: BalanceWithdrawStatus,
 }
 
-impl Default for ExecutionEnv {
-    fn default() -> Self {
+impl ExecutionEnv {
+    fn base(scheduling_source: SchedulingSource) -> Self {
         Self {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
-            scheduling_source: SchedulingSource::NonFastPath,
+            scheduling_source,
             withdraw_status: BalanceWithdrawStatus::NoWithdraw,
         }
     }
-}
 
-impl ExecutionEnv {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn for_grpc_fastpath() -> Self {
+        Self::base(SchedulingSource::GrpcFastPath)
     }
 
-    pub fn with_scheduling_source(mut self, scheduling_source: SchedulingSource) -> Self {
-        self.scheduling_source = scheduling_source;
-        self
+    pub fn for_consensus_commit() -> Self {
+        Self::base(SchedulingSource::ConsensusCommit)
+    }
+
+    pub fn for_checkpoint() -> Self {
+        Self::base(SchedulingSource::Checkpoint)
+    }
+
+    pub fn for_mysticeti_fastpath() -> Self {
+        Self::base(SchedulingSource::MysticetiFastPath)
     }
 
     pub fn with_expected_effects_digest(
@@ -1400,7 +1405,7 @@ impl AuthorityState {
             self.execution_scheduler.enqueue(
                 vec![(
                     Schedulable::Transaction(transaction.clone()),
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                    ExecutionEnv::for_grpc_fastpath(),
                 )],
                 epoch_store,
             );

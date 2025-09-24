@@ -280,7 +280,6 @@ mod tests {
     use crate::authority::{AuthorityState, ExecutionEnv};
     use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
     use crate::authority_client::AuthorityAPI;
-    use crate::execution_scheduler::SchedulingSource;
     use crate::validator_tx_finalizer::ValidatorTxFinalizer;
     use arc_swap::ArcSwap;
     use async_trait::async_trait;
@@ -373,7 +372,7 @@ mod tests {
                     &VerifiedExecutableTransaction::new_from_certificate(
                         VerifiedCertificate::new_unchecked(certificate),
                     ),
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                    ExecutionEnv::for_grpc_fastpath(),
                     &epoch_store,
                 )
                 .await?;

@@ -17,7 +17,6 @@ use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
@@ -124,7 +123,7 @@ impl SingleValidator {
             .get_validator()
             .try_execute_immediately(
                 &executable,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_grpc_fastpath(),
                 &self.epoch_store,
             )
             .await
@@ -161,7 +160,8 @@ impl SingleValidator {
                 self.get_validator()
                     .try_execute_immediately(
                         &cert,
-                        ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
+                        ExecutionEnv::for_grpc_fastpath()
+                            .with_assigned_versions(assigned_versions.clone()),
                         &self.epoch_store,
                     )
                     .await
@@ -177,7 +177,8 @@ impl SingleValidator {
                         vec![(
                             VerifiedExecutableTransaction::new_from_certificate(cert.clone())
                                 .into(),
-                            ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
+                            ExecutionEnv::for_consensus_commit()
+                                .with_assigned_versions(assigned_versions.clone()),
                         )],
                         &self.epoch_store,
                     );

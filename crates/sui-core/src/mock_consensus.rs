@@ -66,7 +66,7 @@ impl MockConsensusClient {
             };
             let epoch_store = validator.epoch_store_for_testing();
             let env = match consensus_mode {
-                ConsensusMode::Noop => ExecutionEnv::new(),
+                ConsensusMode::Noop => ExecutionEnv::for_grpc_fastpath(),
                 ConsensusMode::DirectSequencing => {
                     let (_, assigned_versions) = epoch_store
                         .process_consensus_transactions_for_tests(
@@ -84,7 +84,7 @@ impl MockConsensusClient {
                         .next()
                         .map(|(_, v)| v)
                         .unwrap_or_default();
-                    ExecutionEnv::new().with_assigned_versions(assigned_versions)
+                    ExecutionEnv::for_consensus_commit().with_assigned_versions(assigned_versions)
                 }
             };
             match &tx.kind {

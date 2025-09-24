@@ -435,7 +435,7 @@ async fn test_execution_with_dependencies() {
             Schedulable::Transaction(VerifiedExecutableTransaction::new_from_certificate(
                 cert.clone(),
             )),
-            ExecutionEnv::new().with_assigned_versions(assigned_versions),
+            ExecutionEnv::for_consensus_commit().with_assigned_versions(assigned_versions),
         ));
     }
 
@@ -450,7 +450,7 @@ async fn test_execution_with_dependencies() {
         authorities[3].execution_scheduler().enqueue(
             vec![(
                 VerifiedExecutableTransaction::new_from_certificate(cert.clone()).into(),
-                ExecutionEnv::new(),
+                ExecutionEnv::for_consensus_commit(),
             )],
             &authorities[3].epoch_store_for_testing(),
         );

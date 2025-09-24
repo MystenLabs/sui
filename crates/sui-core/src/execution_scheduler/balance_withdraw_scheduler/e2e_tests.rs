@@ -135,7 +135,7 @@ impl TestEnv {
             transactions
                 .iter()
                 .map(|tx| {
-                    let mut env = ExecutionEnv::default();
+                    let mut env = ExecutionEnv::for_consensus_commit();
                     env.assigned_versions.withdraw_type = WithdrawType::Withdraw(version);
                     (Schedulable::Transaction(tx.clone()), env)
                 })

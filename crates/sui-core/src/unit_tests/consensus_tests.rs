@@ -277,7 +277,8 @@ pub fn make_consensus_adapter_for_test(
                         .unwrap_or_default();
                     (
                         tx,
-                        ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                        ExecutionEnv::for_consensus_commit()
+                            .with_assigned_versions(assigned_versions),
                     )
                 })
                 .collect();

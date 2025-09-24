@@ -358,7 +358,8 @@ async fn test_congestion_control_execution_cancellation() {
             authority_state_2.get_object_cache_reader().as_ref(),
         )
         .unwrap();
-    let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
+    let execution_env =
+        ExecutionEnv::for_consensus_commit().with_assigned_versions(assigned_versions);
     let (effects_2, execution_error) = authority_state_2
         .try_execute_for_test(&cert, execution_env)
         .await

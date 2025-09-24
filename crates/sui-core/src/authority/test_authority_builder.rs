@@ -17,7 +17,6 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::RandomnessManager;
 use crate::execution_cache::build_execution_cache;
-use crate::execution_scheduler::SchedulingSource;
 use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
@@ -418,7 +417,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                     genesis.epoch(),
                     genesis.checkpoint().sequence_number,
                 ),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_checkpoint(),
                 &state.epoch_store_for_testing(),
             )
             .await

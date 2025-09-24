@@ -308,7 +308,7 @@ impl LocalAuthorityClient {
                     vec![(
                         VerifiedExecutableTransaction::new_from_certificate(certificate.clone())
                             .into(),
-                        ExecutionEnv::new(),
+                        ExecutionEnv::for_grpc_fastpath(),
                     )],
                     &epoch_store,
                 );

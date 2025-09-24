@@ -28,7 +28,6 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
-use crate::execution_scheduler::SchedulingSource;
 
 use super::AuthorityServerHandle;
 
@@ -116,7 +115,7 @@ async fn test_wait_for_effects_position_mismatch() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+                ExecutionEnv::for_mysticeti_fastpath(),
                 &epoch_store,
             )
             .await
@@ -311,7 +310,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+                ExecutionEnv::for_mysticeti_fastpath(),
                 &epoch_store,
             )
             .await
@@ -420,7 +419,7 @@ async fn test_wait_for_effects_fastpath_certified_then_executed() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_grpc_fastpath(),
                 &epoch_store,
             )
             .await
@@ -475,7 +474,7 @@ async fn test_wait_for_effects_finalized() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_grpc_fastpath(),
                 &epoch_store,
             )
             .await
@@ -586,7 +585,7 @@ async fn test_wait_for_effects_expired() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::for_grpc_fastpath(),
                 &epoch_store,
             )
             .await

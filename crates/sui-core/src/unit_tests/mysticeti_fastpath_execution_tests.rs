@@ -14,7 +14,6 @@ use sui_types::utils::to_sender_signed_transaction;
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::ExecutionEnv;
-use crate::execution_scheduler::SchedulingSource;
 use crate::transaction_outputs::TransactionOutputs;
 
 #[tokio::test]
@@ -102,7 +101,7 @@ async fn test_fast_path_execution() {
     let (effects, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            ExecutionEnv::for_mysticeti_fastpath(),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -161,7 +160,7 @@ async fn test_fast_path_then_consensus_execution() {
     let (effects1, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            ExecutionEnv::for_mysticeti_fastpath(),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -178,7 +177,7 @@ async fn test_fast_path_then_consensus_execution() {
     let (effects2, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            ExecutionEnv::for_consensus_commit(),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -227,7 +226,7 @@ async fn test_consensus_then_fast_path_execution() {
     let (effects1, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            ExecutionEnv::for_consensus_commit(),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -236,7 +235,7 @@ async fn test_consensus_then_fast_path_execution() {
     let (effects2, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            ExecutionEnv::for_mysticeti_fastpath(),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -279,10 +278,7 @@ async fn test_fast_path_then_consensus_execution_e2e() {
 
     let tx_digest = *cert.digest();
     state.execution_scheduler().enqueue_transactions(
-        vec![(
-            cert.clone(),
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
-        )],
+        vec![(cert.clone(), ExecutionEnv::for_mysticeti_fastpath())],
         &state.epoch_store_for_testing(),
     );
 
@@ -307,10 +303,7 @@ async fn test_fast_path_then_consensus_execution_e2e() {
         .is_tx_already_executed(&tx_digest));
 
     state.execution_scheduler().enqueue_transactions(
-        vec![(
-            cert.clone(),
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-        )],
+        vec![(cert.clone(), ExecutionEnv::for_consensus_commit())],
         &state.epoch_store_for_testing(),
     );
 
@@ -359,10 +352,7 @@ async fn test_consensus_then_fast_path_execution_e2e() {
 
     let tx_digest = *cert.digest();
     state.execution_scheduler().enqueue_transactions(
-        vec![(
-            cert.clone(),
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-        )],
+        vec![(cert.clone(), ExecutionEnv::for_consensus_commit())],
         &state.epoch_store_for_testing(),
     );
 
@@ -380,10 +370,7 @@ async fn test_consensus_then_fast_path_execution_e2e() {
         .is_tx_already_executed(&tx_digest));
 
     state.execution_scheduler().enqueue_transactions(
-        vec![(
-            cert.clone(),
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
-        )],
+        vec![(cert.clone(), ExecutionEnv::for_mysticeti_fastpath())],
         &state.epoch_store_for_testing(),
     );
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
