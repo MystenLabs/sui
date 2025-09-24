@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use move_compiler::editions::{Edition, Flavor};
 use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
-use move_package_alt::schema::EnvironmentName;
+use move_package_alt::schema::{EnvironmentName, ModeName};
 use move_symbol_pool::Symbol;
 
 use move_package_alt::{
@@ -115,7 +115,7 @@ impl BuildConfig {
         env: &Environment,
         writer: &mut W,
     ) -> PackageResult<CompiledPackage> {
-        let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
+        let root_pkg = RootPackage::<F>::load(path, env.clone(), self.mode_set()).await?;
         BuildPlan::create(&root_pkg, self)?.compile(writer, |compiler| compiler)
     }
 
@@ -129,7 +129,7 @@ impl BuildConfig {
     ) -> PackageResult<()> {
         // we set test to migrate all the code
         self.test_mode = true;
-        let root_pkg = RootPackage::<F>::load(path, env).await?;
+        let root_pkg = RootPackage::<F>::load(path, env, self.mode_set()).await?;
         let build_plan = BuildPlan::create(&root_pkg, &self)?;
 
         migrate(build_plan, writer, reader)?;
@@ -142,7 +142,7 @@ impl BuildConfig {
         env: Environment,
         writer: &mut W,
     ) -> PackageResult<source_model::Model> {
-        let root_pkg = RootPackage::<F>::load(path, env).await?;
+        let root_pkg = RootPackage::<F>::load(path, env, self.mode_set()).await?;
         self.move_model_from_root_pkg(&root_pkg, writer).await
     }
 
@@ -152,6 +152,17 @@ impl BuildConfig {
         writer: &mut W,
     ) -> PackageResult<source_model::Model> {
         model_builder::build(writer, root_pkg, self)
+    }
+
+    /// Produce the set of mode names to hand to the package system.
+    pub fn mode_set(&self) -> Vec<ModeName> {
+        let mut result: Vec<ModeName> = self.modes.iter().map(|mode| mode.to_string()).collect();
+
+        if self.test_mode {
+            result.push("test".to_string());
+        }
+
+        result
     }
 }
 
