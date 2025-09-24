@@ -7,6 +7,7 @@ Commands:
   build        Build the package at `path`. If no path is provided defaults to current directory
   coverage     Inspect test coverage for this package. A previous test run with the `--coverage` flag must have previously been run
   disassemble  Disassemble the Move bytecode pointed to
+  decompile    Decompile Move bytecode into Move source code
   docgen       Generate javadoc style documentation for Move packages
   info         Print address information
   migrate      Migrate to Move 2024 for the package at `path`. If no path is provided defaults to current directory
