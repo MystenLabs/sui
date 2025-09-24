@@ -21,11 +21,14 @@
 use futures::StreamExt;
 use mysten_common::{debug_fatal, fatal};
 use parking_lot::Mutex;
+use std::collections::{BTreeMap, HashMap};
 use std::{sync::Arc, time::Instant};
 use sui_types::crypto::RandomnessRound;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
-use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{
+    SharedInputObject, SharedObjectMutability, TransactionDataAPI, TransactionKind,
+};
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
@@ -764,6 +767,8 @@ impl CheckpointExecutor {
         ckpt_state: &CheckpointExecutionState,
         tx_data: &CheckpointTransactionData,
     ) -> Vec<TransactionDigest> {
+        let mut barrier_count_state = HashMap::new();
+
         // Find unexecuted transactions and their expected effects digests
         let (unexecuted_tx_digests, unexecuted_txns): (Vec<_>, Vec<_>) = itertools::multiunzip(
             itertools::izip!(
@@ -775,6 +780,25 @@ impl CheckpointExecutor {
             )
             .filter_map(
                 |(txn, tx_digest, expected_fx_digest, effects, executed_fx_digest)| {
+                    let mut barrier_counts = BTreeMap::new();
+                    for SharedInputObject { id, mutability, .. } in
+                        txn.transaction_data().kind().shared_input_objects()
+                    {
+                        match mutability {
+                            SharedObjectMutability::NonExclusiveWrite => {
+                                *barrier_count_state.entry(id).or_default() += 1;
+                            }
+                            SharedObjectMutability::Mutable => {
+                                // If there were preceding non-exclusive writes, this transaction is a barrier.
+                                // for them.
+                                if let Some(count) = barrier_count_state.remove(&id) {
+                                    barrier_counts.insert(id, count);
+                                }
+                            }
+                            SharedObjectMutability::Immutable => (),
+                        }
+                    }
+
                     if let Some(executed_fx_digest) = executed_fx_digest {
                         assert_not_forked(
                             &ckpt_state.data.checkpoint,
@@ -798,7 +822,8 @@ impl CheckpointExecutor {
 
                         let mut env = ExecutionEnv::new()
                             .with_assigned_versions(assigned_versions)
-                            .with_expected_effects_digest(*expected_fx_digest);
+                            .with_expected_effects_digest(*expected_fx_digest)
+                            .with_barrier_count(barrier_counts);
 
                         // Check if the expected effects indicate insufficient balance
                         if let ExecutionStatus::Failure {

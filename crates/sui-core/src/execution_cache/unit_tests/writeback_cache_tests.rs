@@ -170,6 +170,7 @@ impl Scenario {
             new_locks_to_init: Default::default(),
             written: Default::default(),
             output_keys: Default::default(),
+            non_exclusive_writes: Default::default(),
         }
     }
 
