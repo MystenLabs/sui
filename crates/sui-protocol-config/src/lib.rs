@@ -1648,6 +1648,9 @@ pub struct ProtocolConfig {
     /// listed in `tx_digests`
     #[serde(skip_serializing_if = "Vec::is_empty")]
     aliased_addresses: Vec<AliasedAddress>,
+
+    /// The maximum number of updates per settlement transaction.
+    max_updates_per_settlement_txn: Option<u32>,
 }
 
 /// An aliased address.
@@ -2802,6 +2805,8 @@ impl ProtocolConfig {
             consensus_commit_rate_estimation_window_size: None,
 
             aliased_addresses: vec![],
+
+            max_updates_per_settlement_txn: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4037,6 +4042,7 @@ impl ProtocolConfig {
                 }
                 97 => {
                     cfg.event_emit_auth_stream_cost = Some(52);
+                    cfg.max_updates_per_settlement_txn = Some(100);
                 }
                 // Use this template when making changes:
                 //
