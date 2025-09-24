@@ -16,7 +16,10 @@ use move_compiler::{
 use move_core_types::account_address::AccountAddress;
 use move_coverage::coverage_map::{CoverageMap, output_map_to_file};
 use move_package_alt::{flavor::MoveFlavor, graph::NamedAddress, package::RootPackage};
-use move_package_alt_compilation::{build_config::BuildConfig, build_plan::BuildPlan, find_env};
+use move_package_alt_compilation::{
+    build_config::BuildConfig, build_plan::BuildPlan, compiled_package::BuildNamedAddresses,
+    find_env,
+};
 use move_symbol_pool::Symbol;
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;
@@ -164,25 +167,16 @@ pub fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     // ignore them by passing a vector as the writer)
     let env = find_env::<F>(pkg_path, &build_config)?;
     let root_pkg = RootPackage::<F>::load_sync(pkg_path.to_path_buf(), env)?;
-    let package_name = Symbol::from(root_pkg.name().as_str());
-
-    let packages = root_pkg.packages()?;
+    let root_pkg_name = Symbol::from(root_pkg.name().as_str());
 
     let mut addresses: Vec<(String, NumericalAddress)> = vec![];
-
-    for pkg in packages {
-        for (dep_name, dep) in pkg.named_addresses()? {
-            let name = dep_name.as_str().into();
-            let addr = match dep {
-                NamedAddress::RootPackage(_) => AccountAddress::ZERO,
-                NamedAddress::Unpublished { dummy_addr } => dummy_addr.0,
-                NamedAddress::Defined(original_id) => original_id.0,
-            };
-
-            let addr: NumericalAddress =
-                NumericalAddress::new(addr.into_bytes(), NumberFormat::Hex);
-            addresses.push((name, addr));
-        }
+    let named_address_values: BuildNamedAddresses = root_pkg
+        .package_graph()
+        .root_package_info()
+        .named_addresses()?
+        .into();
+    for (name, addr) in named_address_values.inner.into_iter() {
+        addresses.push((name.to_string(), addr));
     }
 
     // Note: unit_test_config.named_address_values is always set to vec![] (the default value) before
@@ -201,7 +195,7 @@ pub fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
             diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
         let (compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
-        let built_test_plan = construct_test_plan(compilation_env, Some(package_name), &cfgir);
+        let built_test_plan = construct_test_plan(compilation_env, Some(root_pkg_name), &cfgir);
         let mapped_files = compilation_env.mapped_files().clone();
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
