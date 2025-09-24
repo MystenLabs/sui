@@ -11,6 +11,12 @@ use crate::{
 };
 use sui_protocol_config::ProtocolConfig;
 
+fn create_config_with_address_balance_gas_payments_enabled() -> ProtocolConfig {
+    let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+    config.enable_address_balance_gas_payments_for_testing();
+    config
+}
+
 fn create_test_transaction_data(
     gas_payment: Vec<ObjectRef>,
     expiration: TransactionExpiration,
@@ -35,6 +41,7 @@ fn create_test_transaction_data(
 #[test]
 fn test_address_balance_payment_requires_accumulators_enabled() {
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    // accumulators not enabled
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -58,11 +65,8 @@ fn test_address_balance_payment_requires_accumulators_enabled() {
 
 #[test]
 fn test_address_balance_payment_requires_feature_flag() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_accumulators_for_testing();
-        cfg
-    });
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+    config.enable_accumulators_for_testing();
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -85,12 +89,8 @@ fn test_address_balance_payment_requires_feature_flag() {
 }
 
 #[test]
-fn test_address_balance_payment_with_accumulators_enabled() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+fn test_address_balance_payment_valid() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -113,11 +113,7 @@ fn test_address_balance_payment_with_accumulators_enabled() {
 
 #[test]
 fn test_address_balance_payment_requires_valid_during_expiration() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let config = create_config_with_address_balance_gas_payments_enabled();
 
     let tx_data = create_test_transaction_data(vec![], TransactionExpiration::None);
 
@@ -133,18 +129,14 @@ fn test_address_balance_payment_requires_valid_during_expiration() {
     let result = tx_data.validity_check(&config);
     assert!(result.is_err());
     match result.unwrap_err() {
-        UserInputError::MissingTransactionExpiration => {}
-        _ => panic!("Expected MissingTransactionExpiration error"),
+        UserInputError::InvalidExpiration { .. } => {}
+        _ => panic!("Expected InvalidExpiration error"),
     }
 }
 
 #[test]
 fn test_address_balance_payment_single_epoch_validation() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let config = create_config_with_address_balance_gas_payments_enabled();
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -185,11 +177,7 @@ fn test_address_balance_payment_single_epoch_validation() {
 
 #[test]
 fn test_address_balance_payment_timestamp_validation() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let config = create_config_with_address_balance_gas_payments_enabled();
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -215,14 +203,27 @@ fn test_address_balance_payment_timestamp_validation() {
 
 #[test]
 fn test_address_balance_payment_missing_epochs() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let config = create_config_with_address_balance_gas_payments_enabled();
 
-    let tx_data = create_test_transaction_data(
-        vec![],
+    fn assert_missing_epoch_error(
+        config: &ProtocolConfig,
+        expiration: TransactionExpiration,
+        case_description: &str,
+    ) {
+        let tx_data = create_test_transaction_data(vec![], expiration);
+
+        let result = tx_data.validity_check(config);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            UserInputError::Unsupported(msg) => {
+                assert!(msg.contains("Both min_epoch and max_epoch must be specified and equal"));
+            }
+            _ => panic!("Expected Unsupported error for {}", case_description),
+        }
+    }
+
+    assert_missing_epoch_error(
+        &config,
         TransactionExpiration::ValidDuring {
             min_epoch: None,
             max_epoch: None,
@@ -231,19 +232,10 @@ fn test_address_balance_payment_missing_epochs() {
             chain: ChainIdentifier::from(CheckpointDigest::default()),
             nonce: 111,
         },
+        "missing epochs",
     );
-
-    let result = tx_data.validity_check(&config);
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
-            assert!(msg.contains("Both min_epoch and max_epoch must be specified and equal"));
-        }
-        _ => panic!("Expected Unsupported error for missing epochs"),
-    }
-
-    let tx_data = create_test_transaction_data(
-        vec![],
+    assert_missing_epoch_error(
+        &config,
         TransactionExpiration::ValidDuring {
             min_epoch: Some(1),
             max_epoch: None,
@@ -252,16 +244,20 @@ fn test_address_balance_payment_missing_epochs() {
             chain: ChainIdentifier::from(CheckpointDigest::default()),
             nonce: 222,
         },
+        "partial epoch specification (min only)",
     );
-
-    let result = tx_data.validity_check(&config);
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
-            assert!(msg.contains("Both min_epoch and max_epoch must be specified and equal"));
-        }
-        _ => panic!("Expected Unsupported error for partial epoch specification"),
-    }
+    assert_missing_epoch_error(
+        &config,
+        TransactionExpiration::ValidDuring {
+            min_epoch: None,
+            max_epoch: Some(1),
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: ChainIdentifier::from(CheckpointDigest::default()),
+            nonce: 333,
+        },
+        "partial epoch specification (max only)",
+    );
 }
 
 #[test]
@@ -416,50 +412,5 @@ fn test_regular_gas_payment_with_epoch_expiration() {
     assert!(
         result.is_ok(),
         "Regular gas payment with Epoch expiration should be allowed"
-    );
-}
-
-#[test]
-fn test_address_balance_payment_requires_valid_during_only() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
-
-    let tx_data = create_test_transaction_data(vec![], TransactionExpiration::None);
-
-    let result = tx_data.validity_check(&config);
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::MissingTransactionExpiration => {}
-        _ => panic!("Expected MissingTransactionExpiration for None expiration"),
-    }
-
-    let tx_data = create_test_transaction_data(vec![], TransactionExpiration::Epoch(5));
-
-    let result = tx_data.validity_check(&config);
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::MissingTransactionExpiration => {}
-        _ => panic!("Expected MissingTransactionExpiration for Epoch expiration"),
-    }
-
-    let tx_data = create_test_transaction_data(
-        vec![],
-        TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
-            min_timestamp_seconds: None,
-            max_timestamp_seconds: None,
-            chain: ChainIdentifier::from(CheckpointDigest::default()),
-            nonce: 123,
-        },
-    );
-
-    let result = tx_data.validity_check(&config);
-    assert!(
-        result.is_ok(),
-        "Address balance payment should accept valid ValidDuring expiration"
     );
 }
