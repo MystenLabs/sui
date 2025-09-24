@@ -67,7 +67,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
         // watermark as much as possible without going over any holes in the sequence of
         // checkpoints (entirely missing watermarks, or incomplete watermarks).
         let mut precommitted: BTreeMap<u64, WatermarkPart> = BTreeMap::new();
-        // This initial synthetic checkpoint is overwritten by a real watermark from a processed
+        // Initially, this watermark is synthetic, and will be overwritten by a processed
         // checkpoint.
         let mut watermark = CommitterWatermark::default();
 
@@ -81,7 +81,10 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             &metrics.watermark_checkpoint_in_db,
         );
 
-        info!(pipeline = H::NAME, ?watermark, "Starting commit watermark");
+        info!(
+            pipeline = H::NAME,
+            next_checkpoint, "Starting commit watermark task"
+        );
 
         loop {
             tokio::select! {
@@ -525,47 +528,6 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark().unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
-    }
-
-    /// Configure the MockStore with no watermark, and emulate `first_checkpoint` by passing the
-    /// `initial_watermark` into the setup.
-    #[tokio::test]
-    async fn test_initial_watermark() {
-        let config = CommitterConfig::default();
-        let mock_store = MockStore::default();
-        let setup = setup_test::<DataPipeline>(config, 5, mock_store);
-
-        // Send checkpoint 6 first.
-        setup
-            .watermark_tx
-            .send(vec![create_watermark_part_for_checkpoint(6)])
-            .await
-            .unwrap();
-
-        // Wait for processing
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-
-        // Verify watermark hasn't progressed
-        let watermark = setup.store.watermark();
-        assert!(watermark.is_none());
-
-        // Send checkpoint 5 watermark to fill the gap.
-        setup
-            .watermark_tx
-            .send(vec![create_watermark_part_for_checkpoint(5)])
-            .await
-            .unwrap();
-
-        // Wait for processing
-        tokio::time::sleep(tokio::time::Duration::from_millis(1200)).await;
-
-        // Verify watermark has progressed
-        let watermark = setup.store.watermark().unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 6);
 
         // Clean up
         setup.cancel.cancel();

@@ -71,15 +71,11 @@ where
         let mut batch_rows = 0;
         let mut batch_checkpoints = 0;
 
-        // The task keeps track of the highest (inclusive) checkpoint it has added to the batch,
-        // and whether that batch needs to be written out. By extension it also knows the next
-        // checkpoint to expect and add to the batch.
-        let mut watermark = CommitterWatermark {
-            checkpoint_hi_inclusive: next_checkpoint,
-            // This initial synthetic checkpoint is overwritten by a real watermark from a processed
-            // checkpoint.
-            ..Default::default()
-        };
+        // The task keeps track of the highest (inclusive) checkpoint it has added to the batch, and
+        // whether that batch needs to be written out. By extension it also knows the next
+        // checkpoint to expect and add to the batch. Initially, this watermark is synthetic, and
+        // will be overwritten by a processed checkpoint.
+        let mut watermark = CommitterWatermark::default();
 
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
@@ -535,10 +531,7 @@ mod tests {
     /// `initial_watermark` into the setup.
     #[tokio::test]
     async fn test_committer_processes_sequential_checkpoints_with_initial_watermark() {
-        let config = SequentialConfig {
-            committer: CommitterConfig::default(),
-            checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
-        };
+        let config = SequentialConfig::default();
         let mut setup = setup_test(5, config, MockStore::default());
 
         // Verify watermark hasn't progressed
