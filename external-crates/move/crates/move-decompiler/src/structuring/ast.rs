@@ -1,6 +1,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::normalized::ModuleId;
+
+use move_symbol_pool::Symbol;
 use petgraph::graph::NodeIndex;
 
 // -------------------------------------------------------------------------------------------------
@@ -12,12 +15,18 @@ use petgraph::graph::NodeIndex;
 // -----------------------------------------------
 
 pub type Label = NodeIndex;
-pub type Code = (u64, bool);
+// The bool indicates whether the condition is negated
+pub type Code = u64;
 
 #[derive(Debug, Clone)]
 pub enum Input {
     Condition(Label, Code, Label, Label),
-    Variants(Label, Code, Vec<Label>),
+    Variants(
+        Label,
+        Code,
+        /* enum */ (ModuleId<Symbol>, Symbol),
+        /* variant x label */ Vec<(Symbol, Label)>,
+    ),
     Code(Label, Code, Option<Label>),
 }
 
@@ -29,7 +38,11 @@ pub enum Structured {
     Loop(Box<Structured>),
     Seq(Vec<Structured>),
     IfElse(Code, Box<Structured>, Box<Option<Structured>>),
-    Switch(Code, Vec<Structured>),
+    Switch(
+        Code,
+        /* enum */ (ModuleId<Symbol>, Symbol),
+        /* variant x rhs */ Vec<(Symbol, Structured)>,
+    ),
     Jump(Label),
     JumpIf(Code, Label, Label),
 }
@@ -42,9 +55,10 @@ impl Input {
     pub fn edges(&self) -> Vec<(NodeIndex, NodeIndex)> {
         match self {
             Input::Condition(lbl, _, then, else_) => vec![(*lbl, *then), (*lbl, *else_)],
-            Input::Variants(lbl, _, items) => {
-                items.iter().map(|item| (*lbl, *item)).collect::<Vec<_>>()
-            }
+            Input::Variants(lbl, _, _, items) => items
+                .iter()
+                .map(|(_, item)| (*lbl, *item))
+                .collect::<Vec<_>>(),
             Input::Code(lbl, _, Some(to)) => vec![(*lbl, *to)],
             Input::Code(_, _, None) => vec![],
         }
@@ -53,7 +67,7 @@ impl Input {
     pub fn label(&self) -> Label {
         match self {
             Input::Condition(lbl, _, _, _)
-            | Input::Variants(lbl, _, _)
+            | Input::Variants(lbl, _, _, _)
             | Input::Code(lbl, _, _) => *lbl,
         }
     }
@@ -86,7 +100,7 @@ impl std::fmt::Display for Structured {
             match s {
                 Structured::Block(code) => {
                     indent(f, level)?;
-                    writeln!(f, "{{ {:?} }}", code.0)
+                    writeln!(f, "{{ {:?} }}", code)
                 }
                 Structured::Loop(body) => {
                     indent(f, level)?;
@@ -97,11 +111,7 @@ impl std::fmt::Display for Structured {
                 }
                 Structured::IfElse(cond, then_branch, else_branch) => {
                     indent(f, level)?;
-                    if cond.1 {
-                        writeln!(f, "if !({:?}) {{", cond.0)?;
-                    } else {
-                        writeln!(f, "if ({:?}) {{", cond.0)?;
-                    }
+                    writeln!(f, "if ({:?}) {{", cond)?;
                     fmt_structured(then_branch, f, level + 1)?;
                     indent(f, level)?;
                     if let Some(else_branch) = &**else_branch {
@@ -122,10 +132,10 @@ impl std::fmt::Display for Structured {
                     }
                     Ok(())
                 }
-                Structured::Switch(expr, arms) => {
+                Structured::Switch(expr, _, arms) => {
                     indent(f, level)?;
-                    writeln!(f, "switch ({:?}) {{", expr.0)?;
-                    for (ndx, arm) in arms.iter().enumerate() {
+                    writeln!(f, "switch ({:?}) {{", expr)?;
+                    for (ndx, (_variant, arm)) in arms.iter().enumerate() {
                         indent(f, level + 1)?;
                         writeln!(f, "_{ndx} => ")?;
                         fmt_structured(arm, f, level + 2)?;
