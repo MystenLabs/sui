@@ -43,6 +43,45 @@ async fn get_sender_and_gas(context: &mut WalletContext) -> (SuiAddress, ObjectR
     (sender, gas)
 }
 
+fn create_transaction_with_expiration(
+    sender: SuiAddress,
+    gas_coin: ObjectRef,
+    rgp: u64,
+    min_epoch: Option<u64>,
+    max_epoch: Option<u64>,
+    chain_id: ChainIdentifier,
+    nonce: u32,
+) -> TransactionData {
+    use sui_types::transaction::{GasData, TransactionDataV1, TransactionExpiration};
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let amount = builder.pure(1000u64).unwrap();
+    let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
+    let Argument::Result(coin_idx) = coin else {
+        panic!("coin is not a result");
+    };
+    let coin = Argument::NestedResult(coin_idx, 0);
+    builder.transfer_arg(sender, coin);
+    let tx = TransactionKind::ProgrammableTransaction(builder.finish());
+    TransactionData::V1(TransactionDataV1 {
+        kind: tx,
+        sender,
+        gas_data: GasData {
+            payment: vec![gas_coin],
+            owner: sender,
+            price: rgp,
+            budget: 10000000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch,
+            max_epoch,
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: chain_id,
+            nonce,
+        },
+    })
+}
+
 #[sim_test]
 async fn test_deposits() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
@@ -620,11 +659,131 @@ async fn test_transaction_invalid_chain_id() {
         Err(err) => {
             let err_str = format!("{:?}", err);
             assert!(
-                err_str.contains("InvalidExpirationChainId"),
-                "Expected InvalidExpirationChainId error, got: {:?}",
+                err_str.contains("InvalidChainId"),
+                "Expected InvalidChainId error, got: {:?}",
                 err
             );
         }
         Ok(_) => panic!("Transaction should be rejected with invalid chain ID"),
+    }
+}
+
+#[sim_test]
+async fn test_transaction_expiration_min_none_max_some() {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster.get_chain_identifier();
+    let context = &mut test_cluster.wallet;
+
+    let (sender, gas_coin) = get_sender_and_gas(context).await;
+    let current_epoch = 0; // Test cluster starts at epoch 0
+
+    // Test: min_epoch: None, max_epoch: Some(future) - should succeed
+    let tx = create_transaction_with_expiration(
+        sender,
+        gas_coin,
+        rgp,
+        None,                    // min_epoch: None
+        Some(current_epoch + 5), // max_epoch: Some(future)
+        chain_id,
+        12345,
+    );
+
+    let signed_tx = test_cluster.sign_transaction(&tx).await;
+    let result = test_cluster
+        .execute_transaction_return_raw_effects(signed_tx)
+        .await;
+
+    assert!(
+        result.is_ok(),
+        "Transaction should succeed with min_epoch: None, max_epoch: Some(future), got: {:?}",
+        result
+    );
+}
+
+#[sim_test]
+async fn test_transaction_expiration_edge_cases() {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster.get_chain_identifier();
+
+    let (sender, gas_coin1) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let current_epoch = 0;
+
+    // Test case 1: min_epoch = max_epoch (single epoch window)
+    let tx1 = create_transaction_with_expiration(
+        sender,
+        gas_coin1,
+        rgp,
+        Some(current_epoch), // min_epoch: Some(current)
+        Some(current_epoch), // max_epoch: Some(current) - single epoch window
+        chain_id,
+        100,
+    );
+
+    let result1 = test_cluster
+        .execute_transaction_return_raw_effects(test_cluster.sign_transaction(&tx1).await)
+        .await;
+    assert!(
+        result1.is_ok(),
+        "Single epoch window transaction should succeed"
+    );
+
+    // Test case 2: Both min and max in the future (transaction not ready)
+    let (_, gas_coin2) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let tx2 = create_transaction_with_expiration(
+        sender,
+        gas_coin2,
+        rgp,
+        Some(current_epoch + 1), // min_epoch: Some(future)
+        Some(current_epoch + 5), // max_epoch: Some(far_future)
+        chain_id,
+        200,
+    );
+
+    let result2 = test_cluster
+        .execute_transaction_return_raw_effects(test_cluster.sign_transaction(&tx2).await)
+        .await;
+    match result2 {
+        Err(err) => {
+            let err_str = format!("{:?}", err);
+            assert!(
+                err_str.contains("TransactionExpired"),
+                "Expected TransactionExpired for future min_epoch, got: {:?}",
+                err
+            );
+        }
+        Ok(_) => panic!("Transaction should be rejected when min_epoch is in the future"),
+    }
+
+    // Test case 3: min_epoch: Some(past), max_epoch: Some(past) - expired
+    let (_, gas_coin3) = get_sender_and_gas(&mut test_cluster.wallet).await;
+
+    // First trigger an epoch change to make current_epoch "past"
+    test_cluster.trigger_reconfiguration().await;
+
+    let tx3 = create_transaction_with_expiration(
+        sender,
+        gas_coin3,
+        rgp,
+        Some(0), // min_epoch: Some(past)
+        Some(0), // max_epoch: Some(past) - now expired
+        chain_id,
+        300,
+    );
+
+    let result3 = test_cluster
+        .execute_transaction_return_raw_effects(test_cluster.sign_transaction(&tx3).await)
+        .await;
+    match result3 {
+        Err(err) => {
+            let err_str = format!("{:?}", err);
+            assert!(
+                err_str.contains("TransactionExpired"),
+                "Expected TransactionExpired for past max_epoch, got: {:?}",
+                err
+            );
+        }
+        Ok(_) => panic!("Transaction should be rejected when max_epoch is in the past"),
     }
 }
