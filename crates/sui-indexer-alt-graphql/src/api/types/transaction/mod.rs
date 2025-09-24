@@ -28,7 +28,7 @@ use crate::{
     api::{
         scalars::{
             base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
-            module_filter::ModuleFilter, sui_address::SuiAddress,
+            sui_address::SuiAddress,
         },
         types::{
             lookups::{CheckpointBounds, TxBoundsCursor},
@@ -396,14 +396,6 @@ async fn tx_call(
     function: FqNameFilter,
     sent_address: Option<SuiAddress>,
 ) -> Result<Vec<u64>, RpcError> {
-    let (package, module, member) = match function {
-        FqNameFilter::Module(module_filter) => match module_filter {
-            ModuleFilter::Package(package) => (package, None, None),
-            ModuleFilter::Module(package, module) => (package, Some(module), None),
-        },
-        FqNameFilter::FqName(package, module, member) => (package, Some(module), Some(member)),
-    };
-
     query += query!(
         r#"
         SELECT
@@ -413,15 +405,15 @@ async fn tx_call(
         WHERE
             package = {Bytea}
         "#,
-        package.into_vec(),
+        function.package().into_vec(),
     );
 
-    if let Some(module) = module {
-        query += query!(" AND module = {Text}", module);
+    if let Some(module) = function.module() {
+        query += query!(" AND module = {Text}", module.to_string());
+    }
 
-        if let Some(member) = member {
-            query += query!(" AND function = {Text}", member);
-        }
+    if let Some(name) = function.name() {
+        query += query!(" AND function = {Text}", name.to_string());
     }
 
     if let Some(address) = sent_address {
