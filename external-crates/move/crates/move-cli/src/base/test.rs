@@ -10,12 +10,11 @@ use move_command_line_common::files::MOVE_COVERAGE_MAP_EXTENSION;
 use move_compiler::{
     PASS_CFGIR,
     diagnostics::{self, Diagnostics},
-    shared::{NumberFormat, NumericalAddress},
+    shared::NumericalAddress,
     unit_test::{TestPlan, plan_builder::construct_test_plan},
 };
-use move_core_types::account_address::AccountAddress;
 use move_coverage::coverage_map::{CoverageMap, output_map_to_file};
-use move_package_alt::{flavor::MoveFlavor, graph::NamedAddress, package::RootPackage};
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
 use move_package_alt_compilation::{
     build_config::BuildConfig, build_plan::BuildPlan, compiled_package::BuildNamedAddresses,
     find_env,

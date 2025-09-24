@@ -44,11 +44,7 @@ use move_compiler::{
 };
 use move_ir_types::location::Loc;
 
-use move_package_alt::{
-    flavor::MoveFlavor,
-    package::RootPackage,
-    schema::{Environment, PackageName},
-};
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage, schema::PackageName};
 use move_package_alt_compilation::{
     build_config::BuildConfig,
     build_plan::BuildPlan,
@@ -337,13 +333,13 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         None
     };
 
-    let root_pkg = load_root_pkg::<F>(&build_config, &pkg_path.to_path_buf())?;
+    let root_pkg = load_root_pkg::<F>(&build_config, pkg_path)?;
     let root_pkg_name = Symbol::from(root_pkg.name().to_string());
     let build_plan =
         BuildPlan::create(&root_pkg, &build_config)?.set_compiler_vfs_root(overlay_fs_root.clone());
 
-    let root_pkg = load_root_pkg::<F>(&build_config, &pkg_path.to_path_buf())?;
-    let mapped_files_data = compute_mapped_files(root_pkg, &build_config, overlay_fs_root.clone())?;
+    let mapped_files_data =
+        compute_mapped_files(&root_pkg, &build_config, overlay_fs_root.clone())?;
     // Hash dependencies so we can check if something has changed.
     // TODO: do we still need this?
     let file_paths: Arc<BTreeMap<FileHash, PathBuf>> = Arc::new(
@@ -360,7 +356,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     let mut diagnostics = None;
 
     // TODO: we need to rework on loading the root pkg only once.
-    let root_pkg = load_root_pkg::<F>(&build_config, &pkg_path.to_path_buf())?;
     let dependencies = root_pkg.packages()?;
 
     let compiler_flags = compiler_flags(&build_config);
@@ -763,7 +758,7 @@ fn has_precompiled_deps(pkg_path: &Path, pkg_dependencies: Arc<Mutex<CachedPacka
 }
 
 fn compute_mapped_files<F: MoveFlavor>(
-    root_pkg: RootPackage<F>,
+    root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
     overlay_fs: VfsPath,
 ) -> anyhow::Result<MappedFilesData> {
@@ -960,7 +955,7 @@ fn is_parsed_pkg_modified(
 
 fn load_root_pkg<F: MoveFlavor>(
     build_config: &BuildConfig,
-    path: &PathBuf,
+    path: &Path,
 ) -> anyhow::Result<RootPackage<F>> {
     let env = find_env::<F>(path, build_config)?;
     let root_pkg = RootPackage::<F>::load_sync(path.to_path_buf(), env)?;
