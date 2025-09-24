@@ -463,6 +463,8 @@ async fn tx_sequence_numbers(
     mut query: Query<'_>,
     page: &Page<CTransaction>,
 ) -> Result<Vec<u64>, RpcError> {
+    let pg_reader: &PgReader = ctx.data()?;
+
     query += query!(
         r#"
             AND (SELECT tx_lo FROM tx_lo) <= tx_sequence_number
@@ -475,8 +477,6 @@ async fn tx_sequence_numbers(
         page.order_by_direction(),
         page.limit_with_overhead() as i64,
     );
-
-    let pg_reader: &PgReader = ctx.data()?;
 
     #[derive(QueryableByName)]
     struct TxSequenceNumber {
@@ -514,19 +514,18 @@ async fn tx_sequence_numbers(
 /// Results are limited to `page.limit() + 2` to allow has_previous_page and has_next_page calculations.
 async fn tx_unfiltered(
     ctx: &Context<'_>,
-    tx_bounds_query: Query<'_>,
+    mut query: Query<'_>,
     page: &Page<CTransaction>,
 ) -> Result<Vec<u64>, RpcError> {
-    let query = tx_bounds_query
-        + query!(
-            r#"
-            SELECT
-                (SELECT tx_lo FROM tx_lo),
-                (SELECT tx_hi FROM tx_hi)
-            "#
-        );
-
     let pg_reader: &PgReader = ctx.data()?;
+
+    query += query!(
+        r#"
+        SELECT
+            (SELECT tx_lo FROM tx_lo),
+            (SELECT tx_hi FROM tx_hi)
+        "#
+    );
 
     #[derive(QueryableByName)]
     struct TxBounds {
