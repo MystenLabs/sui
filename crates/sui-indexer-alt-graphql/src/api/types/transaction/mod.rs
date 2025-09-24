@@ -273,10 +273,120 @@ impl Transaction {
     }
 }
 
+impl TransactionContents {
+    fn empty(scope: Scope) -> Self {
+        Self {
+            scope,
+            contents: None,
+        }
+    }
+
+    /// Attempt to fill the contents. If the contents are already filled, returns a clone,
+    /// otherwise attempts to fetch from the store. The resulting value may still have an empty
+    /// contents field, because it could not be found in the store.
+    pub(crate) async fn fetch(
+        &self,
+        ctx: &Context<'_>,
+        digest: TransactionDigest,
+    ) -> Result<Self, RpcError> {
+        if self.contents.is_some() {
+            return Ok(self.clone());
+        }
+        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
+            return Ok(self.clone());
+        };
+
+        let kv_loader: &KvLoader = ctx.data()?;
+        let Some(transaction) = kv_loader
+            .load_one_transaction(digest)
+            .await
+            .context("Failed to fetch transaction contents")?
+        else {
+            return Ok(self.clone());
+        };
+
+        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
+        let cp_num = transaction
+            .cp_sequence_number()
+            .context("Any transaction fetched from the DB should have a checkpoint set")?;
+        if cp_num > checkpoint_viewed_at {
+            return Ok(self.clone());
+        }
+
+        Ok(Self {
+            scope: self.scope.clone(),
+            contents: Some(Arc::new(transaction)),
+        })
+    }
+}
+
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
         *self.deref()
     }
+}
+
+impl From<TransactionEffects> for Transaction {
+    fn from(fx: TransactionEffects) -> Self {
+        let EffectsContents { scope, contents } = fx.contents;
+
+        Self {
+            digest: fx.digest,
+            contents: TransactionContents { scope, contents },
+        }
+    }
+}
+
+async fn tx_affected_address(
+    ctx: &Context<'_>,
+    mut query: Query<'_>,
+    page: &Page<CTransaction>,
+    affected_address: SuiAddress,
+    sent_address: Option<SuiAddress>,
+) -> Result<Vec<u64>, RpcError> {
+    query += query!(
+        r#"
+        SELECT
+            tx_sequence_number
+        FROM
+            tx_affected_addresses
+        WHERE
+            affected = {Bytea}
+        "#,
+        affected_address.into_vec(),
+    );
+
+    if let Some(address) = sent_address {
+        query += query!(" AND sender = {Bytea}", address.into_vec());
+    }
+
+    tx_sequence_numbers(ctx, query, page).await
+}
+
+async fn tx_affected_object(
+    ctx: &Context<'_>,
+    mut query: Query<'_>,
+    page: &Page<CTransaction>,
+    affected_object: SuiAddress,
+    sent_address: Option<SuiAddress>,
+) -> Result<Vec<u64>, RpcError> {
+    query += query!(
+        r#"
+        SELECT
+            tx_sequence_number
+        FROM
+            tx_affected_objects
+        WHERE
+            affected = {Bytea}
+        "#,
+        affected_object.into_vec(),
+    );
+
+    if let Some(address) = sent_address {
+        query += query!(" AND sender = {Bytea}", address.into_vec());
+    }
+
+    tx_sequence_numbers(ctx, query, page).await
 }
 
 async fn tx_call(
@@ -301,7 +411,7 @@ async fn tx_call(
         FROM
             tx_calls
         WHERE
-            package = {Bytea} /* package */
+            package = {Bytea}
         "#,
         package.into_vec(),
     );
@@ -313,9 +423,11 @@ async fn tx_call(
             query += query!(" AND function = {Text}", member);
         }
     }
-    if let Some(sent_address) = sent_address {
-        query += query!(" AND sender = {Bytea}", sent_address.into_vec());
+
+    if let Some(address) = sent_address {
+        query += query!(" AND sender = {Bytea}", address.into_vec());
     }
+
     tx_sequence_numbers(ctx, query, page).await
 }
 
@@ -332,7 +444,9 @@ async fn tx_kind(
         (TransactionKindInput::ProgrammableTx, Some(address)) => {
             tx_affected_address(ctx, query, page, address, Some(address)).await
         }
+
         (TransactionKindInput::SystemTx, Some(_)) => Ok(vec![]),
+
         // Otherwise, we can ignore the sender always, and just query the `tx_kinds` table.
         (_, None) => {
             query += query!(
@@ -342,65 +456,14 @@ async fn tx_kind(
                 FROM
                     tx_kinds
                 WHERE
-                    tx_kind = {BigInt} /* kind */
+                    tx_kind = {BigInt}
                 "#,
                 kind as i64,
             );
+
             tx_sequence_numbers(ctx, query, page).await
         }
     }
-}
-
-async fn tx_affected_address(
-    ctx: &Context<'_>,
-    mut query: Query<'_>,
-    page: &Page<CTransaction>,
-    affected_address: SuiAddress,
-    sent_address: Option<SuiAddress>,
-) -> Result<Vec<u64>, RpcError> {
-    query += query!(
-        r#"
-        SELECT
-            tx_sequence_number
-        FROM
-            tx_affected_addresses
-        WHERE
-            affected = {Bytea} /* affected_address */
-        "#,
-        affected_address.into_vec(),
-    );
-    if let Some(sent_address) = sent_address {
-        query += filter_sender(sent_address);
-    }
-    tx_sequence_numbers(ctx, query, page).await
-}
-
-async fn tx_affected_object(
-    ctx: &Context<'_>,
-    mut query: Query<'_>,
-    page: &Page<CTransaction>,
-    affected_object: SuiAddress,
-    sent_address: Option<SuiAddress>,
-) -> Result<Vec<u64>, RpcError> {
-    query += query!(
-        r#"
-        SELECT
-            tx_sequence_number
-        FROM
-            tx_affected_objects
-        WHERE
-            affected = {Bytea} /* affected_object */
-        "#,
-        affected_object.into_vec(),
-    );
-    if let Some(sent_address) = sent_address {
-        query += filter_sender(sent_address);
-    }
-    tx_sequence_numbers(ctx, query, page).await
-}
-
-fn filter_sender(sent_address: SuiAddress) -> Query<'static> {
-    query!(" AND sender = {Bytea}", sent_address.into_vec())
 }
 
 async fn tx_sequence_numbers(
@@ -503,64 +566,7 @@ async fn tx_unfiltered(
     } else {
         tx_lo = tx_lo.max(tx_hi.saturating_sub(limit));
     }
+
     let tx_sequence_numbers = (tx_lo..tx_hi).collect();
     Ok(tx_sequence_numbers)
-}
-
-impl TransactionContents {
-    fn empty(scope: Scope) -> Self {
-        Self {
-            scope,
-            contents: None,
-        }
-    }
-
-    /// Attempt to fill the contents. If the contents are already filled, returns a clone,
-    /// otherwise attempts to fetch from the store. The resulting value may still have an empty
-    /// contents field, because it could not be found in the store.
-    pub(crate) async fn fetch(
-        &self,
-        ctx: &Context<'_>,
-        digest: TransactionDigest,
-    ) -> Result<Self, RpcError> {
-        if self.contents.is_some() {
-            return Ok(self.clone());
-        }
-        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
-            return Ok(self.clone());
-        };
-
-        let kv_loader: &KvLoader = ctx.data()?;
-        let Some(transaction) = kv_loader
-            .load_one_transaction(digest)
-            .await
-            .context("Failed to fetch transaction contents")?
-        else {
-            return Ok(self.clone());
-        };
-
-        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
-        let cp_num = transaction
-            .cp_sequence_number()
-            .context("Any transaction fetched from the DB should have a checkpoint set")?;
-        if cp_num > checkpoint_viewed_at {
-            return Ok(self.clone());
-        }
-
-        Ok(Self {
-            scope: self.scope.clone(),
-            contents: Some(Arc::new(transaction)),
-        })
-    }
-}
-
-impl From<TransactionEffects> for Transaction {
-    fn from(fx: TransactionEffects) -> Self {
-        let EffectsContents { scope, contents } = fx.contents;
-
-        Self {
-            digest: fx.digest,
-            contents: TransactionContents { scope, contents },
-        }
-    }
 }
