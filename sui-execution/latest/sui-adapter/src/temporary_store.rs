@@ -31,7 +31,7 @@ use sui_types::{
     storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
     transaction::InputObjects,
 };
-use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, is_system_package};
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
@@ -974,7 +974,7 @@ impl TemporaryStore<'_> {
         // total amount of SUI in output objects, including both coins and storage rebates
         let mut total_output_sui = 0;
 
-        // settlement input/output sui is used by the settlement transactions to accound for
+        // settlement input/output sui is used by the settlement transactions to account for
         // Sui that has been gathered from the accumulator writes of transactions which it is
         // settling.
         total_input_sui += self.execution_results.settlement_input_sui;
@@ -1101,9 +1101,12 @@ impl Storage for TemporaryStore<'_> {
         TemporaryStore::save_wrapped_object_containers(self, wrapped_object_containers)
     }
 
-    fn check_coin_deny_list(&self, written_objects: &BTreeMap<ObjectID, Object>) -> DenyListResult {
+    fn check_coin_deny_list(
+        &self,
+        receiving_funds_type_and_owners: BTreeMap<TypeTag, BTreeSet<SuiAddress>>,
+    ) -> DenyListResult {
         let result = check_coin_deny_list_v2_during_execution(
-            written_objects,
+            receiving_funds_type_and_owners,
             self.cur_epoch,
             self.store.as_object_store(),
         );
