@@ -8,7 +8,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::Vanilla,
     package::RootPackage,
-    schema::{Environment, EnvironmentName},
+    schema::{Environment, EnvironmentName, ModeName},
 };
 use clap::Parser;
 
@@ -22,6 +22,9 @@ pub struct Build {
     /// dependencies will be updated.
     #[arg(name = "environment", short = 'e', long = "environment")]
     environment: EnvironmentName,
+
+    #[arg(name = "mode")]
+    mode: Option<ModeName>,
 }
 
 impl Build {
@@ -39,7 +42,12 @@ impl Build {
 
         let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
-        let mut root_pkg = RootPackage::<Vanilla>::load(&path, environment).await?;
+        let mut root_pkg = RootPackage::<Vanilla>::load(
+            &path,
+            environment,
+            self.mode.clone().map(|mode| vec![mode]).unwrap_or(vec![]),
+        )
+        .await?;
 
         for pkg in root_pkg.packages()? {
             println!("Package {}", pkg.name());

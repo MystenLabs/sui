@@ -8,15 +8,18 @@ mod package_info;
 mod rename_from;
 mod to_lockfile;
 
+use derive_where::derive_where;
 pub use linkage::{LinkageError, LinkageTable};
 pub use package_info::{NamedAddress, PackageInfo};
+use petgraph::Direction;
+use petgraph::graph::EdgeIndex;
 pub use rename_from::RenameError;
 
 use tracing::{debug, warn};
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::schema::Publication;
+use crate::schema::{ModeName, Publication};
 use crate::{
     dependency::PinnedDependencyInfo,
     errors::PackageResult,
@@ -35,6 +38,7 @@ use petgraph::{
 /// The graph of all packages. May include multiple versions of "the same" package. Guaranteed to
 /// be a rooted dag
 #[derive(Debug)]
+#[derive_where(Clone)]
 pub(crate) struct PackageGraph<F: MoveFlavor> {
     /// The root of the dag
     root_index: NodeIndex,
@@ -120,10 +124,66 @@ impl<F: MoveFlavor> PackageGraph<F> {
         }
     }
 
-    /// Return a copy of `self` with all nodes replaced using `linkage`
+    /// Return a copy of `self` with all moded dependencies that don't match `mode` filtered out
     #[allow(unused)]
-    pub fn apply_linkage(&self, linkage: &LinkageTable<F>) -> Self {
-        let inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo> = DiGraph::new();
+    pub fn filter_for_mode(&self, modes: Vec<ModeName>) -> Self {
+        let mut result = self.clone();
+
+        for edge_index in result.inner.edge_indices() {
+            let Some(dep_modes) = self
+                .inner
+                .edge_weight(edge_index)
+                .expect("edges are present")
+                .modes()
+            else {
+                // if dependency has no `modes` field, it should be included regardless of mode
+                continue;
+            };
+
+            if !modes.iter().any(|mode| dep_modes.contains(&mode)) {
+                // none of the modes in `dep_modes` is in `modes`, so we drop the dep
+                result.drop_edge(edge_index);
+            }
+        }
+
+        result
+    }
+
+    /// Remove the edge from the graph, and also remove any orphaned nodes.
+    fn drop_edge(&mut self, edge_index: EdgeIndex) {
+        let target_index = self
+            .inner
+            .edge_endpoints(edge_index)
+            .expect("edges are present in the graph")
+            .1;
+
+        self.inner.remove_edge(edge_index);
+
+        if self
+            .inner
+            .edges_directed(target_index, Direction::Incoming)
+            .next()
+            .is_none()
+        {
+            // target no longer has incoming edges; delete the outgoing edges from the node and
+            // then delete the node itself
+            let mut children = self
+                .inner
+                .neighbors_directed(target_index, Direction::Outgoing)
+                .detach();
+            while let Some(child_edge) = children.next_edge(&self.inner) {
+                self.drop_edge(child_edge)
+            }
+
+            self.inner.remove_node(target_index);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_drop_edge() {
         todo!()
     }
 }

@@ -10,7 +10,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::Vanilla,
     package::RootPackage,
-    schema::{Environment, EnvironmentName},
+    schema::{Environment, EnvironmentName, ModeName},
 };
 
 /// Re-pin the dependencies of this package.
@@ -23,6 +23,9 @@ pub struct UpdateDeps {
     /// dependencies will be updated.
     #[arg(name = "environment", short = 'e', long = "environment")]
     environment: EnvironmentName,
+
+    #[arg(name = "mode")]
+    mode: Option<ModeName>,
 }
 
 impl UpdateDeps {
@@ -40,7 +43,12 @@ impl UpdateDeps {
 
         let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
-        let mut root_package = RootPackage::<Vanilla>::load_force_repin(&path, environment).await?;
+        let mut root_package = RootPackage::<Vanilla>::load_force_repin(
+            &path,
+            environment,
+            self.mode.clone().map(|mode| vec![mode]).unwrap_or(vec![]),
+        )
+        .await?;
         root_package.update_lockfile()?;
 
         Ok(())
