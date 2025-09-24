@@ -11,6 +11,7 @@ use std::{collections::BTreeMap, fmt::Debug};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::schema::{EnvironmentID, EnvironmentName, PackageName, ReplacementDependency};
+use indexmap::IndexMap;
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move
@@ -35,7 +36,7 @@ pub trait MoveFlavor: Debug + Send + Sync {
 
     /// Return the default environments for the flavor.
     /// Used for populating new manifests & migration purposes.
-    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID>;
+    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID>;
 
     /// Return ALL the system dependencies for the requested environment.
     fn system_dependencies(

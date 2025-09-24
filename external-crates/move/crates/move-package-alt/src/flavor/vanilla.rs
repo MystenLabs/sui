@@ -14,6 +14,7 @@ use crate::schema::{
 };
 
 use super::MoveFlavor;
+use indexmap::IndexMap;
 
 pub const DEFAULT_ENV_NAME: &str = "_test_env";
 pub const DEFAULT_ENV_ID: &str = "_test_env_id";
@@ -49,8 +50,8 @@ impl MoveFlavor for Vanilla {
         "vanilla".to_string()
     }
 
-    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID> {
-        let mut envs = BTreeMap::new();
+    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+        let mut envs = IndexMap::new();
         envs.insert(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string());
         envs
     }

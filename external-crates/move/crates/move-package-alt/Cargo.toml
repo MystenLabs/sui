@@ -15,6 +15,7 @@ clap.workspace = true
 codespan-reporting.workspace = true
 derive-where.workspace = true
 futures.workspace = true
+indexmap.workspace = true
 indoc.workspace = true
 itertools.workspace = true
 jsonrpc.workspace = true

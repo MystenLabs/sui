@@ -11,6 +11,7 @@ pub mod profile;
 pub mod summary;
 pub mod test;
 
+use anyhow::bail;
 use move_package_alt::{
     flavor::MoveFlavor,
     package::{RootPackage, layout::SourcePackageLayout},
@@ -38,8 +39,14 @@ pub fn find_env<F: MoveFlavor>(path: &Path, config: &BuildConfig) -> anyhow::Res
         if let Some(env) = envs.get(e) {
             Environment::new(e.to_string(), env.to_string())
         } else {
-            let (name, id) = envs.first_key_value().expect("At least one default env");
-            Environment::new(name.to_string(), id.to_string())
+            bail!(
+                "Cannot find environment '{}'. Available environments: {}",
+                e,
+                envs.keys()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
     } else {
         let (name, id) = envs.first_key_value().expect("At least one default env");

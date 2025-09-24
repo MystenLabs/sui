@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::reroot_path;
+use super::{find_env, reroot_path};
 use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
@@ -165,18 +165,7 @@ pub fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     // Build the resolution graph (resolution graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer)
 
-    let envs = RootPackage::<F>::environments(pkg_path)?;
-    let env = if let Some(ref e) = build_config.environment {
-        if let Some(env) = envs.get(e) {
-            Environment::new(e.to_string(), env.to_string())
-        } else {
-            let (name, id) = envs.first_key_value().expect("At least one default env");
-            Environment::new(name.to_string(), id.to_string())
-        }
-    } else {
-        let (name, id) = envs.first_key_value().expect("At least one default env");
-        Environment::new(name.to_string(), id.to_string())
-    };
+    let env = find_env(pkg_path, &build_config)?;
 
     let root_pkg = RootPackage::<F>::load_sync(pkg_path.to_path_buf(), env)?;
     let package_name = Symbol::from(root_pkg.name().as_str());

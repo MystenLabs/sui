@@ -17,6 +17,7 @@ use crate::{
 };
 
 use super::*;
+use indexmap::IndexMap;
 use serde_spanned::Spanned;
 
 // TODO: replace this with something more strongly typed
@@ -91,7 +92,7 @@ impl Manifest {
     }
 
     /// The entries from the `[environments]` section
-    pub fn environments(&self) -> BTreeMap<EnvironmentName, EnvironmentID> {
+    pub fn environments(&self) -> IndexMap<EnvironmentName, EnvironmentID> {
         self.inner
             .environments
             .iter()

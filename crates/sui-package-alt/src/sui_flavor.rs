@@ -6,6 +6,7 @@ use std::{
     path::PathBuf,
 };
 
+use indexmap::IndexMap;
 use move_package_alt::{
     dependency::{self, CombinedDependency, PinnedDependencyInfo},
     errors::{FileHandle, PackageResult},
@@ -92,8 +93,8 @@ impl MoveFlavor for SuiFlavor {
 
     type PackageMetadata = (); // TODO
 
-    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID> {
-        BTreeMap::from([
+    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+        IndexMap::from([
             ("testnet".to_string(), "4c78adac".to_string()),
             ("mainnet".to_string(), "35834a8a".to_string()),
         ])

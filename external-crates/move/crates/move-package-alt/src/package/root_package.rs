@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 use std::{collections::BTreeMap, fmt, path::Path};
 
+use indexmap::IndexMap;
 use tracing::debug;
 
 use super::paths::PackagePath;
@@ -73,7 +74,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
 impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     pub fn environments(
         path: impl AsRef<Path>,
-    ) -> PackageResult<BTreeMap<EnvironmentName, EnvironmentID>> {
+    ) -> PackageResult<IndexMap<EnvironmentName, EnvironmentID>> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let mut environments = F::default_environments();
 

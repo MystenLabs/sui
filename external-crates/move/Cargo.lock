@@ -2604,6 +2604,7 @@ dependencies = [
  "derive-where",
  "futures",
  "heck 0.3.3",
+ "indexmap 2.8.0",
  "indoc",
  "insta",
  "itertools 0.10.5",
