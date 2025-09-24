@@ -249,7 +249,7 @@ impl AuthorityPerpetualTables {
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
                     KeySpaceConfig::new()
-                        .disable_unload()
+                        .with_unloaded_iterator(true)z
                         .with_compactor(Box::new(objects_compactor))
                         .with_relocation_bloom_filter(0.001, 2_000_000_000),
                 ),
