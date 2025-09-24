@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{find_env, reroot_path};
+use super::reroot_path;
 use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
@@ -16,7 +16,7 @@ use move_compiler::{
 use move_core_types::account_address::AccountAddress;
 use move_coverage::coverage_map::{CoverageMap, output_map_to_file};
 use move_package_alt::{flavor::MoveFlavor, graph::NamedAddress, package::RootPackage};
-use move_package_alt_compilation::{build_config::BuildConfig, build_plan::BuildPlan};
+use move_package_alt_compilation::{build_config::BuildConfig, build_plan::BuildPlan, find_env};
 use move_symbol_pool::Symbol;
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;

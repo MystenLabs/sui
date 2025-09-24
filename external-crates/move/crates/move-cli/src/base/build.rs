@@ -1,10 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base::{find_env, reroot_path};
+use crate::base::reroot_path;
 use clap::*;
 use move_package_alt::flavor::MoveFlavor;
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 use std::path::Path;
 
 /// Build the package at `path`. If no path is provided defaults to current directory.

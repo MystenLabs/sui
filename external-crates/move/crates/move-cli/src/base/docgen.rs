@@ -8,10 +8,10 @@ use std::{
 
 use clap::*;
 
-use crate::base::{find_env, reroot_path};
+use crate::base::reroot_path;
 use move_docgen::{DocgenFlags, DocgenOptions};
 use move_package_alt::flavor::MoveFlavor;
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 
 /// Generate javadoc style documentation for Move packages
 #[derive(Parser)]

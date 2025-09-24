@@ -9,14 +9,14 @@ use std::{
 use clap::*;
 use serde::Serialize;
 
-use crate::base::{find_env, reroot_path};
+use crate::base::reroot_path;
 
 use move_binary_format::CompiledModule;
 use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals, find_filenames};
 use move_core_types::account_address::AccountAddress;
 use move_model_2 as M2;
 use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 use move_symbol_pool::Symbol;
 
 const COMMAND_NAME: &str = "summary";

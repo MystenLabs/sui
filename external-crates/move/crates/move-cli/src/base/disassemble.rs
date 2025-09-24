@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::reroot_path;
-use crate::base::find_env;
 use clap::*;
 use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_compiler::compiled_unit::NamedCompiledModule;
 use move_disassembler::disassembler::Disassembler;
 use move_package_alt::flavor::MoveFlavor;
 use move_package_alt_compilation::{
-    build_config::BuildConfig, compiled_package::CompiledUnitWithSource,
+    build_config::BuildConfig, compiled_package::CompiledUnitWithSource, find_env,
 };
 use std::path::Path;
 

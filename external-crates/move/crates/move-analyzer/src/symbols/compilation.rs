@@ -53,6 +53,7 @@ use move_package_alt_compilation::{
     build_config::BuildConfig,
     build_plan::BuildPlan,
     compilation::{compiler_flags, make_deps_for_compiler},
+    find_env,
     source_discovery::get_sources,
 };
 
@@ -961,22 +962,7 @@ fn load_root_pkg<F: MoveFlavor>(
     build_config: &BuildConfig,
     path: &PathBuf,
 ) -> anyhow::Result<RootPackage<F>> {
-    let envs = RootPackage::<F>::environments(path)?;
-    let env = if let Some(ref e) = build_config.environment {
-        if let Some(env) = envs.get(e) {
-            Environment::new(e.to_string(), env.to_string())
-        } else {
-            anyhow::bail!(
-                "No environment named `{e}` in the manifest. Available environments are {:?}",
-                envs.keys()
-            );
-        }
-    } else {
-        let (name, id) = envs.first_key_value().expect("At least one default env");
-        Environment::new(name.to_string(), id.to_string())
-    };
-
-    // we need to block here to compile the package, which requires to fetch dependencies
+    let env = find_env::<F>(path, build_config)?;
     let root_pkg = RootPackage::<F>::load_sync(path.to_path_buf(), env)?;
 
     root_pkg.save_to_disk()?;
