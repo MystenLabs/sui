@@ -1896,9 +1896,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         //   setting `SUI_USE_NEW_COMMIT_HANDLER` in the environment. This is so that we can test the
         //   new commit handler in prod before it is fully deployed.
         let use_new_commit_handler = if in_test_configuration() {
-            let name = self.epoch_store.name;
-            let authority_index = self.epoch_store.committee().authority_index(&name).unwrap();
-            authority_index < 2
+            false
         } else if self.epoch_store.protocol_config().use_new_commit_handler() {
             true
         } else {
