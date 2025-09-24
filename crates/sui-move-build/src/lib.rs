@@ -186,7 +186,8 @@ impl BuildConfig {
     pub fn build(self, path: &Path) -> anyhow::Result<CompiledPackage> {
         let env = find_env::<SuiFlavor>(path, &self.config)?;
         // we need to block here to compile the package, which requires to fetch dependencies
-        let root_pkg = RootPackage::<SuiFlavor>::load_sync(path.to_path_buf(), env)?;
+        let root_pkg =
+            RootPackage::<SuiFlavor>::load_sync(path.to_path_buf(), env, self.config.mode_set())?;
 
         let result = if self.print_diags_to_stderr {
             self.compile_package(&root_pkg, &mut std::io::stderr())
@@ -534,7 +535,7 @@ impl CompiledPackage {
         );
         error_message.extend(errors);
         error_message.push(
-            "If these packages really are unpublished, their self-addresses should be not 
+            "If these packages really are unpublished, their self-addresses should be not
             explicitly set when publishing. If they are already published, ensure they specify the \
             address in the `published-at` of their Published.toml file."
                 .into(),
