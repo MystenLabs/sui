@@ -1,0 +1,106 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// TODO: eventually should live in public sui-rust-sdk repo
+
+syntax = "proto3";
+package sui.rpc.alpha;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+
+// EventService provides paginated access to authenticated events per stream.
+service EventService {
+  // Returns authenticated events for a given event stream ID.
+  rpc ListAuthenticatedEvents(ListAuthenticatedEventsRequest) returns (ListAuthenticatedEventsResponse);
+}
+
+// Request authenticated events for a stream within a checkpoint range.
+message ListAuthenticatedEventsRequest {
+  // Required. Stream identifier (Sui address) that owns the event stream.
+  optional string stream_id = 1;
+
+  // Inclusive start checkpoint (default: 0)
+  optional uint64 start_checkpoint = 2;
+
+  // Number of checkpoints to return per page (default: 50, max: 1000)
+  optional uint32 page_size = 3;
+
+  // Page token for pagination. Use the next_page_token from previous response.
+  optional bytes page_token = 4;
+}
+
+// Response containing events and the stream head metadata.
+message ListAuthenticatedEventsResponse {
+  repeated AuthenticatedEvent events = 1;
+  // A placeholder for an eventual inclusion proof. For now, it wraps the EventStreamHead.
+  optional Proof proof = 2;
+  // The last checkpoint in this range.
+  optional uint64 last_checkpoint = 3;
+  // Token for fetching the next page of results. Empty if no more pages.
+  optional bytes next_page_token = 4;
+}
+
+// Single authenticated Move event entry.
+message AuthenticatedEvent {
+  // The checkpoint sequence number where this event was recorded.
+  optional uint64 checkpoint = 1;
+
+  // Index of the transaction within the checkpoint where the event was emitted.
+  optional uint32 transaction_idx = 2;
+
+  // Index of the event within the transaction's event list.
+  optional uint32 event_index = 3;
+
+  // The event payload.
+  optional Event event = 4;
+
+  // The stream identifier (owner address) for which this event is authenticated.
+  optional string stream_id = 5;
+}
+
+// Event stream head metadata corresponding to sui::accumulator_settlement::EventStreamHead.
+message EventStreamHead {
+  // The MMR of all events in the stream (roots per level, left-aligned).
+  repeated bytes mmr = 1;
+
+  // The last checkpoint sequence included in the stream head.
+  optional uint64 checkpoint_seq = 2;
+
+  // The total number of events in the stream.
+  optional uint64 num_events = 3;
+}
+
+// Inclusion proof placeholder carrying the EventStreamHead for now.
+message Proof {
+  optional EventStreamHead event_stream_head = 1;
+}
+
+// An event.
+// TODO: Copied from sui-rust-sdk; we should use the existing struct.
+message Event {
+  // Package ID of the top-level function invoked by a `MoveCall` command that triggered this
+  // event to be emitted.
+  optional string package_id = 1;
+
+  // Module name of the top-level function invoked by a `MoveCall` command that triggered this
+  // event to be emitted.
+  optional string module = 2;
+
+  // Address of the account that sent the transaction where this event was emitted.
+  optional string sender = 3;
+
+  // The type of the event emitted.
+  optional string event_type = 4;
+
+  // BCS serialized bytes of the event.
+  optional Bcs contents = 5;
+
+  // JSON rendering of the event.
+  optional google.protobuf.Value json = 6;
+}
+
+// BCS-encoded bytes
+message Bcs {
+  optional bytes value = 1;
+}
