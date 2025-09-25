@@ -109,15 +109,16 @@ impl Query {
         last: Option<u64>,
         before: Option<CCheckpoint>,
         filter: Option<CheckpointFilter>,
-    ) -> Result<Connection<String, Checkpoint>, RpcError> {
+    ) -> Result<Option<Connection<String, Checkpoint>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "checkpoints");
         let page = Page::from_params(limits, first, after, last, before)?;
 
         let filter = filter.unwrap_or_default();
-
-        Checkpoint::paginate(ctx, scope, page, filter).await
+        Checkpoint::paginate(ctx, scope, page, filter)
+            .await
+            .map(Some)
     }
 
     /// Fetch the CoinMetadata for a given coin type.
@@ -169,13 +170,15 @@ impl Query {
         last: Option<u64>,
         before: Option<CEvent>,
         filter: Option<EventFilter>,
-    ) -> Result<Connection<String, Event>, RpcError> {
+    ) -> Result<Option<Connection<String, Event>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "events");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
+        Event::paginate(ctx, scope, page, filter.unwrap_or_default())
+            .await
+            .map(Some)
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -529,7 +532,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Result<Connection<String, Transaction>, RpcError> {
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "transactions");
@@ -537,8 +540,9 @@ impl Query {
 
         // Use the filter if provided, otherwise use default (unfiltered)
         let filter = filter.unwrap_or_default();
-
-        Transaction::paginate(ctx, scope, page, filter).await
+        Transaction::paginate(ctx, scope, page, filter)
+            .await
+            .map(Some)
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.

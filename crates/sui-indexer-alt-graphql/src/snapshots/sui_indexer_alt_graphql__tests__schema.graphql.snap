@@ -3109,7 +3109,7 @@ type Query {
 	"""
 	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
 	"""
-	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection!
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection
 	"""
 	Fetch the CoinMetadata for a given coin type.
 	
@@ -3129,7 +3129,7 @@ type Query {
 	"""
 	Paginate events that are emitted in the network, optionally filtered by event filters.
 	"""
-	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
+	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	"""
 	Fetch checkpoints by their sequence numbers.
 	
@@ -3267,7 +3267,7 @@ type Query {
 	"""
 	The transactions that exist in the network, optionally filtered by transaction filters.
 	"""
-	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	Fetch a structured representation of a concrete type, including its layout information.
 	
