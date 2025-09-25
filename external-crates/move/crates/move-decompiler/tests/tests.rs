@@ -129,13 +129,12 @@ fn run_bytecode_test(file_path: &Path) -> datatest_stable::Result<()> {
     // invoke decompiler
     let paths = move_decompiler::generate_from_files(&input, &output)?;
     let [path] = paths.as_slice() else {
-        panic!("Expected exactly one output file");
+        panic!("Expected exactly one output file, got: {:#?}", paths);
     };
     let decompiled = std::fs::read_to_string(path)?;
     insta_assert! {
         input_path: file_path,
         contents: decompiled,
-
     };
     Ok(())
 }
