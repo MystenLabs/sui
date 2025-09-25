@@ -174,8 +174,8 @@ pub(crate) async fn store_checkpoint_in_object_store(
         .into()
     });
 
-    let file_name =
-        object_store::path::Path::from(format!("{}.zst", checkpoint.summary.sequence_number));
+    let sequence_number = checkpoint.summary.sequence_number;
+    let file_name = object_store::path::Path::from(format!("{sequence_number}.zst"));
     let level = config
         .checkpoint_upload_config
         .as_ref()
@@ -184,13 +184,18 @@ pub(crate) async fn store_checkpoint_in_object_store(
 
     let checkpoint = sui_rpc::proto::sui::rpc::v2::Checkpoint::merge_from(checkpoint, &MASK);
 
-    let blob = tokio::task::spawn_blocking(move || compress_message(&checkpoint, level))
-        .await
-        .unwrap()?;
+    let blob: object_store::PutPayload = Bytes::from(
+        tokio::task::spawn_blocking(move || compress_message(&checkpoint, level))
+            .await
+            .unwrap()?,
+    )
+    .into();
 
-    object_store
-        .put(&file_name, Bytes::from(blob).into())
-        .await?;
+    // retry forever
+    while let Err(e) = object_store.put(&file_name, blob.clone()).await {
+        tracing::error!("error pushing checkpoint {sequence_number} to remove store: {e}");
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
 
     Ok(())
 }
