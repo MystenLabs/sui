@@ -201,7 +201,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Newly active JWKs (JSON Web Keys).
 	"""
-	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection
 	"""
 	Consensus round of the authenticator state update.
 	"""
@@ -366,7 +366,7 @@ type ChangeEpochTransaction {
 	"""
 	System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
 	"""
-	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
 }
 
 """
@@ -1025,7 +1025,7 @@ type EndOfEpochTransaction {
 	"""
 	The list of system transactions that are allowed to run at the end of the epoch.
 	"""
-	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection!
+	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection
 }
 
 union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction
@@ -2998,22 +2998,22 @@ type ProgrammableSystemTransaction {
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection
 	"""
 	Input objects or primitive values.
 	"""
-	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection
 }
 
 type ProgrammableTransaction {
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection
 	"""
 	Input objects or primitive values.
 	"""
-	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection
 }
 
 """
@@ -4210,7 +4210,7 @@ type ValidatorSet {
 	"""
 	The current list of active validators.
 	"""
-	activeValidators(first: Int, after: String, last: Int, before: String): ValidatorConnection!
+	activeValidators(first: Int, after: String, last: Int, before: String): ValidatorConnection
 	"""
 	Object ID of the `Table` storing the inactive staking pools.
 	"""
