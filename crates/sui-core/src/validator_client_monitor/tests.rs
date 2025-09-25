@@ -524,6 +524,96 @@ mod client_stats_tests {
             assert!(validator2_latency > 0.0);
         }
     }
+
+    #[tokio::test]
+    async fn test_reliability_weight() {
+        let validators = create_test_validator_names(2);
+        let validator = validators[0];
+        let metrics = create_test_metrics();
+
+        println!("Case 1: Test with reliability_weight = 0.5");
+        {
+            let config_half_weight = ValidatorClientMonitorConfig {
+                reliability_weight: 0.5,
+                ..Default::default()
+            };
+            let mut stats = ClientObservedStats::new(config_half_weight);
+
+            // Good validator - no failures
+            stats.record_interaction_result(
+                OperationFeedback {
+                    authority_name: validator,
+                    display_name: validator.concise().to_string(),
+                    operation: OperationType::FastPath,
+                    result: Ok(Duration::from_millis(100)), // 0.1s
+                },
+                &metrics,
+            );
+
+            stats.record_interaction_result(
+                OperationFeedback {
+                    authority_name: validator,
+                    display_name: validator.concise().to_string(),
+                    operation: OperationType::Submit,
+                    result: Err(()), // failure
+                },
+                &metrics,
+            );
+
+            let committee = Committee::new_for_testing_with_normalized_voting_power(
+                0,
+                validators.iter().map(|v| (*v, 1)).collect(),
+            );
+
+            // Get latencies for both configurations
+            let latencies = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+            // max penalty = 1.0 / 0.66 = 1.5
+            // reliability_weight=0.5: penalty = 1.0 + 0.5 * (1.5 - 1.0) = 1.0 + 0.5 * 0.5 = 1.25
+            // latency = 0.1 * 1.25 = 0.125
+            let latency = *latencies.get(&validator).unwrap();
+            assert!((latency - 0.125).abs() < 0.001);
+        }
+
+        println!("Case 2: Test with reliability_weight = 0.0, should have no penalty");
+        {
+            let config_zero_weight = ValidatorClientMonitorConfig {
+                reliability_weight: 0.0,
+                ..Default::default()
+            };
+            let mut stats = ClientObservedStats::new(config_zero_weight);
+
+            stats.record_interaction_result(
+                OperationFeedback {
+                    authority_name: validator,
+                    display_name: validator.concise().to_string(),
+                    operation: OperationType::FastPath,
+                    result: Ok(Duration::from_millis(100)),
+                },
+                &metrics,
+            );
+
+            stats.record_interaction_result(
+                OperationFeedback {
+                    authority_name: validator,
+                    display_name: validator.concise().to_string(),
+                    operation: OperationType::Submit,
+                    result: Err(()), // failure
+                },
+                &metrics,
+            );
+
+            let committee = Committee::new_for_testing_with_normalized_voting_power(
+                0,
+                validators.iter().map(|v| (*v, 1)).collect(),
+            );
+
+            // no penalty = 1.0
+            // latency = 0.1 * 1.0 = 0.1
+            let latencies = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+            let latency = *latencies.get(&validator).unwrap();
+            assert_eq!(latency, 0.1);
+        }
+    }
 }
 
 #[cfg(test)]
