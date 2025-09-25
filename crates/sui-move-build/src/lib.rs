@@ -8,7 +8,6 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::bail;
 use fastcrypto::encoding::Base64;
 use serde_reflection::Registry;
 
@@ -32,7 +31,6 @@ use move_package_alt::{
     flavor::MoveFlavor,
     graph::NamedAddress,
     package::RootPackage,
-    schema::Environment,
 };
 use move_package_alt_compilation::{
     build_config::BuildConfig as MoveBuildConfig, build_plan::BuildPlan,

@@ -8379,11 +8379,13 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stackless-bytecode",
  "move-symbol-pool",
  "move-vm-runtime",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
