@@ -1181,7 +1181,7 @@ macro_rules! impl_deep_subst {
     ($ty:ident) => {
         impl TypeSubst for $ty {
             fn clone_impl(&self, depth: usize) -> PartialVMResult<Type> {
-                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), depth)
+                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), depth + 1)
             }
 
             fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
