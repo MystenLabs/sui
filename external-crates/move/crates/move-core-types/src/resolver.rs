@@ -46,35 +46,6 @@ pub struct SerializedPackage {
 }
 
 impl SerializedPackage {
-    /// TODO(vm-rewrite): This is a shim to use as we move over to storing metadata and then
-    /// reading that back in when loading a package. Remove this when no longer needed.
-    pub fn raw_package(
-        modules: BTreeMap<Identifier, Vec<u8>>,
-        original_id: AccountAddress,
-        version_id: AccountAddress,
-        version: u64,
-    ) -> Self {
-        Self {
-            modules,
-            original_id,
-            version_id,
-            linkage_table: BTreeMap::new(),
-            type_origin_table: IndexMap::new(),
-            version,
-        }
-    }
-
-    pub fn empty(original_id: AccountAddress, version_id: AccountAddress, version: u64) -> Self {
-        Self {
-            modules: BTreeMap::new(),
-            version_id,
-            original_id,
-            linkage_table: BTreeMap::new(),
-            type_origin_table: IndexMap::new(),
-            version,
-        }
-    }
-
     pub fn get_module_by_name(&self, name: &Identifier) -> Option<&Vec<u8>> {
         self.modules.get(name)
     }
