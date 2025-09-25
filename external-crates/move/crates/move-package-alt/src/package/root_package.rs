@@ -267,16 +267,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let linkage = filtered_graph.linkage()?;
         unfiltered_graph.check_rename_from()?;
 
-        let deps_ids = linkage
-            .iter()
-            .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
-            .collect();
+        let deps_published_ids = linkage.keys().cloned().collect();
 
         Ok(Self {
             package_path,
             environment: env,
             lockfile,
-            deps_ids,
+            deps_published_ids,
             pubs: PublicationSource::Published(pubs),
             unfiltered_graph,
             filtered_graph,
@@ -424,6 +421,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.lockfile
     }
 
+    pub fn lockfile(&self) -> &ParsedLockfile {
+        &self.lockfile
+    }
+
     /// Return the publication information for the root package in the current environment
     pub fn publication(&self) -> Option<&Publication<F>> {
         self.filtered_graph.root_package().publication()
@@ -555,7 +556,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         for name in names {
             let pkg_path = root_path.join("packages").join(name);
-            let package = RootPackage::<Vanilla>::load(&pkg_path, env.clone(), None)
+            let package = RootPackage::<Vanilla>::load(&pkg_path, env.clone(), vec![])
                 .await
                 .unwrap();
             assert_eq!(
@@ -572,7 +573,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // Test loading root package with check for environment existing in manifest
         let pkg_path = root_path.join("packages").join("graph");
-        let root = RootPackage::<Vanilla>::load(&pkg_path, env, None)
+        let root = RootPackage::<Vanilla>::load(&pkg_path, env, vec![])
             .await
             .unwrap();
 
@@ -591,7 +592,7 @@ pkg_b = { local = "../pkg_b" }"#,
         let (env, root_path) = setup_test_move_project().await;
         let pkg_path = root_path.join("packages").join("graph");
 
-        let root = RootPackage::<Vanilla>::load(&pkg_path, env, None)
+        let root = RootPackage::<Vanilla>::load(&pkg_path, env, vec![])
             .await
             .unwrap();
 
@@ -611,7 +612,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(
                 &path,
                 Environment::new("devnet".to_string(), "abcd1234".to_string()),
-                None
+                vec![]
             )
             .await
             .is_err()
@@ -630,7 +631,7 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_deps([("a", "b")])
             .build();
 
-        RootPackage::<Vanilla>::load(scenario.path_for("a"), default_environment(), None)
+        RootPackage::<Vanilla>::load(scenario.path_for("a"), default_environment(), vec![])
             .await
             .unwrap_err();
     }
@@ -700,7 +701,7 @@ pkg_b = { local = "../pkg_b" }"#,
             root_pkg_manifest.replace("../pkg_git", pkg_git.as_ref().root_path_str());
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
-        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone(), None)
+        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone(), vec![])
             .await
             .unwrap();
 
@@ -722,7 +723,7 @@ pkg_b = { local = "../pkg_b" }"#,
         );
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
-        let mut root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone(), None)
+        let mut root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone(), vec![])
             .await
             .unwrap();
 
@@ -747,7 +748,7 @@ pkg_b = { local = "../pkg_b" }"#,
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
         // check if update deps works as expected
-        let root_pkg = RootPackage::<Vanilla>::load_force_repin(&root_pkg_path, env, None)
+        let root_pkg = RootPackage::<Vanilla>::load_force_repin(&root_pkg_path, env, vec![])
             .await
             .unwrap();
 
@@ -795,7 +796,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await
         .unwrap();
@@ -844,7 +845,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await
         .unwrap();
@@ -889,7 +890,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await
         .unwrap();
@@ -938,7 +939,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await
         .unwrap();
@@ -982,7 +983,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await
         .unwrap();
@@ -1032,7 +1033,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await
         .unwrap();
@@ -1073,7 +1074,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await;
 
@@ -1109,7 +1110,7 @@ pkg_b = { local = "../pkg_b" }"#,
             Some(DEFAULT_ENV_NAME.to_string()),
             "localnet".into(),
             ephemeral.as_path(),
-            None,
+            vec![],
         )
         .await
         .unwrap();
@@ -1152,7 +1153,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await
         .unwrap();
@@ -1213,7 +1214,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await;
 
@@ -1242,7 +1243,7 @@ pkg_b = { local = "../pkg_b" }"#,
             Some(DEFAULT_ENV_NAME.to_string()),
             "localnet".into(),
             ephemeral.path(),
-            None,
+            vec![],
         )
         .await;
 
@@ -1264,7 +1265,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.join("nonexistent.toml"),
-            None,
+            vec![],
         )
         .await;
 
@@ -1286,7 +1287,7 @@ pkg_b = { local = "../pkg_b" }"#,
             Some("unknown environment".into()),
             "localnet".into(),
             ephemeral,
-            None,
+            vec![],
         )
         .await;
 
