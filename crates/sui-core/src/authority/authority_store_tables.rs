@@ -249,7 +249,8 @@ impl AuthorityPerpetualTables {
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
                     KeySpaceConfig::new()
-                        .with_unloaded_iterator(true)z
+                        .with_unloaded_iterator(true)
+                        .with_max_dirty_keys(4048)
                         .with_compactor(Box::new(objects_compactor))
                         .with_relocation_bloom_filter(0.001, 2_000_000_000),
                 ),
@@ -262,6 +263,7 @@ impl AuthorityPerpetualTables {
                     KeyType::uniform(default_cells_per_mutex() * 4),
                     bloom_config
                         .clone()
+                        .with_max_dirty_keys(4048)
                         .with_relocation_bloom_filter(0.001, 100_000),
                 ),
             ),
@@ -381,7 +383,7 @@ impl AuthorityPerpetualTables {
                     mutexes,
                     epoch_prefix_key,
                     apply_relocation_filter(
-                        KeySpaceConfig::default(),
+                        bloom_config.clone(),
                         pruner_watermark.clone(),
                         |(epoch_id, _): (EpochId, FullObjectKey)| epoch_id,
                         true,
