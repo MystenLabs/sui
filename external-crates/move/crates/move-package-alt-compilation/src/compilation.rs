@@ -42,7 +42,7 @@ use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
 use tracing::debug;
 use vfs::VfsPath;
 
-pub async fn compile_package<W: Write, F: MoveFlavor>(
+pub async fn compile_package<W: Write + Send, F: MoveFlavor>(
     path: &Path,
     build_config: &BuildConfig,
     env: &Environment,
@@ -52,7 +52,7 @@ pub async fn compile_package<W: Write, F: MoveFlavor>(
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
-pub fn compile_from_root_package<W: Write, F: MoveFlavor>(
+pub fn compile_from_root_package<W: Write + Send, F: MoveFlavor>(
     root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
     writer: &mut W,
@@ -75,7 +75,7 @@ pub fn compiler_flags(build_config: &BuildConfig) -> Flags {
         .set_modes(build_config.modes.clone())
 }
 
-pub fn build_all<W: Write, F: MoveFlavor>(
+pub fn build_all<W: Write + Send, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
     root_pkg: &RootPackage<F>,
@@ -190,7 +190,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
 }
 
 #[allow(unreachable_code)] // TODO
-pub fn build_for_driver<W: Write, T, F: MoveFlavor>(
+pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
     build_config: &BuildConfig,
@@ -344,7 +344,7 @@ fn check_filepaths_ok(
 }
 
 /// Return a list of package paths for the transitive dependencies.
-pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
+pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
     w: &mut W,
     packages: Vec<PackageInfo<'_, F>>,
     build_config: &BuildConfig,

@@ -2047,11 +2047,10 @@ pub(crate) async fn compile_package(
     // };
 
     let mut stdout = std::io::stdout();
-    let mut writer: &mut dyn std::io::Write = &mut stdout;
     let package = move_package_alt_compilation::compile_from_root_package::<
-        &mut dyn std::io::Write,
+        std::io::Stdout,
         SuiFlavor,
-    >(root_pkg, &build_config, &mut writer)
+    >(root_pkg, &build_config, &mut stdout)
     .unwrap();
 
     let dependency_ids = PackageDependencies::new(root_pkg)?;

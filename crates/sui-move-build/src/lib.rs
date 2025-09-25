@@ -150,7 +150,7 @@ impl BuildConfig {
         fn_info_map
     }
 
-    fn compile_package<W: Write, F: MoveFlavor>(
+    fn compile_package<W: Write + Send, F: MoveFlavor>(
         &self,
         root_pkg: &RootPackage<F>,
         writer: &mut W,

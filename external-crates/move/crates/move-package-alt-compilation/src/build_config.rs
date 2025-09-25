@@ -109,7 +109,7 @@ pub struct BuildConfig {
 }
 
 impl BuildConfig {
-    pub async fn compile_package<F: MoveFlavor, W: Write>(
+    pub async fn compile_package<F: MoveFlavor, W: Write + Send>(
         &self,
         path: &Path,
         env: &Environment,
@@ -120,7 +120,7 @@ impl BuildConfig {
     }
 
     /// Migrate the package at `path`.
-    pub async fn migrate_package<F: MoveFlavor, W: Write, R: BufRead>(
+    pub async fn migrate_package<F: MoveFlavor, W: Write + Send, R: BufRead>(
         mut self,
         path: &Path,
         env: Environment,
@@ -136,7 +136,7 @@ impl BuildConfig {
         Ok(())
     }
 
-    pub async fn move_model_from_path<F: MoveFlavor, W: Write>(
+    pub async fn move_model_from_path<F: MoveFlavor, W: Write + Send>(
         &self,
         path: &Path,
         env: Environment,
@@ -146,7 +146,7 @@ impl BuildConfig {
         self.move_model_from_root_pkg(&root_pkg, writer).await
     }
 
-    pub async fn move_model_from_root_pkg<F: MoveFlavor, W: Write>(
+    pub async fn move_model_from_root_pkg<F: MoveFlavor, W: Write + Send>(
         &self,
         root_pkg: &RootPackage<F>,
         writer: &mut W,

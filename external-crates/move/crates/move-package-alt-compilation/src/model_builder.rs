@@ -18,7 +18,7 @@ use std::io::Write;
 // across all packages and build the Move model from that.
 // TODO: In the future we will need a better way to do this to support renaming in packages
 // where we want to support building a Move model.
-pub fn build<W: Write, F: MoveFlavor>(
+pub fn build<W: Write + Send, F: MoveFlavor>(
     writer: &mut W,
     root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
