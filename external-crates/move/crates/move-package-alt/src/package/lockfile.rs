@@ -36,6 +36,10 @@ impl Lockfiles {
         };
 
         convert_legacy_lockfile::<F>(path)?;
+        if !lockfile_name.exists() {
+            return Ok(None);
+        }
+
         let file_id = FileHandle::new(lockfile_name)?;
         let main: ParsedLockfile = toml_edit::de::from_str(file_id.source())?;
 
