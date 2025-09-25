@@ -11,6 +11,7 @@ use async_graphql::{
 };
 use diesel::{sql_types::BigInt, QueryableByName};
 use fastcrypto::encoding::{Base58, Encoding};
+use futures::future::try_join_all;
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
     pg_reader::PgReader,
@@ -206,7 +207,6 @@ impl Transaction {
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
         let mut conn = Connection::new(false, false);
@@ -227,7 +227,8 @@ impl Transaction {
             affected_object,
             sent_address,
         } = filter;
-        let tx_digest_keys = if let Some(function) = function {
+
+        let tx_sequence_numbers = if let Some(function) = function {
             tx_call(ctx, query, &page, function, sent_address).await?
         } else if let Some(kind) = kind {
             tx_kind(ctx, query, &page, kind, sent_address).await?
@@ -241,29 +242,15 @@ impl Transaction {
             tx_unfiltered(ctx, query, &page).await?
         };
 
+        let digests = tx_digests(ctx, &tx_sequence_numbers).await?;
+
         // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination.
-        let (prev, next, results) = page.paginate_results(tx_digest_keys, |&t| JsonCursor::new(t));
-
-        let results: Vec<_> = results.collect();
-        let tx_digest_keys: Vec<TxDigestKey> =
-            results.iter().map(|(_, sq)| TxDigestKey(*sq)).collect();
-
-        // Load the transaction digests for the paginated tx_sequence_numbers
-        let digest_map = pg_loader
-            .load_many(tx_digest_keys)
-            .await
-            .context("Failed to load transaction digests")?;
+        let (prev, next, results) = page.paginate_results(digests, |d| JsonCursor::new(d.0));
 
         // Convert the transaction digests to Transaction objects
-        for (cursor, tx_sequence_number) in results {
-            let key = TxDigestKey(tx_sequence_number);
-            if let Some(stored) = digest_map.get(&key) {
-                let transaction_digest = TransactionDigest::try_from(stored.tx_digest.clone())
-                    .context("Failed to deserialize transaction digest")?;
-                let transaction = Self::with_id(scope.clone(), transaction_digest);
-                conn.edges
-                    .push(Edge::new(cursor.encode_cursor(), transaction));
-            }
+        for (cursor, (_, tx_digest)) in results {
+            let tx = Self::with_id(scope.clone(), tx_digest);
+            conn.edges.push(Edge::new(cursor.encode_cursor(), tx));
         }
 
         conn.has_previous_page = prev;
@@ -335,6 +322,27 @@ impl From<TransactionEffects> for Transaction {
             contents: TransactionContents { scope, contents },
         }
     }
+}
+
+pub(crate) async fn tx_digests(
+    ctx: &Context<'_>,
+    tx_sequence_numbers: &[u64],
+) -> Result<Vec<(u64, TransactionDigest)>, RpcError> {
+    let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+
+    try_join_all(tx_sequence_numbers.iter().map(|&tx| async move {
+        let stored = pg_loader
+            .load_one(TxDigestKey(tx))
+            .await
+            .context("Failed to load transaction digest")?
+            .context("Failed to find transaction digest")?;
+
+        let digest = TransactionDigest::try_from(stored.tx_digest)
+            .context("Failed to deserialize transaction digest")?;
+
+        Ok((tx, digest))
+    }))
+    .await
 }
 
 async fn tx_affected_address(
