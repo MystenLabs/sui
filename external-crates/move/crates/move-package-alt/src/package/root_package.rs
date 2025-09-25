@@ -96,7 +96,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             path.as_ref(),
             std::env::current_dir()
         );
-        let _mutx = PackageLock::lock(); // held until function returns
+        let _mutx = PackageLock::lock().await; // held until function returns
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 

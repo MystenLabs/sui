@@ -4,7 +4,7 @@
 
 use named_lock::{NamedLock, NamedLockGuard};
 use once_cell::sync::Lazy;
-use std::sync::{Mutex, MutexGuard};
+use tokio::sync::{Mutex, MutexGuard};
 use whoami::username;
 
 const PACKAGE_LOCK_NAME: &str = "move_pkg_lock";
@@ -29,9 +29,9 @@ pub(crate) struct PackageLock {
 }
 
 impl PackageLock {
-    pub(crate) fn lock() -> PackageLock {
+    pub(crate) async fn lock() -> PackageLock {
         Self {
-            _thread_lock: PACKAGE_THREAD_MUTEX.lock().unwrap(),
+            _thread_lock: PACKAGE_THREAD_MUTEX.lock().await,
             _process_lock: PACKAGE_PROCESS_MUTEX.lock().unwrap(),
         }
     }
