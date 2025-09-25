@@ -224,7 +224,7 @@ impl AuthorityPerpetualTables {
         let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
             let mut retain = HashSet::new();
             let mut previous: Option<&[u8]> = None;
-            const OID_SIZE: usize = 32;
+            const OID_SIZE: usize = 16;
             for (key, _) in index.iter().rev() {
                 if let Some(prev) = previous {
                     if prev == &key[..OID_SIZE] {
@@ -240,12 +240,16 @@ impl AuthorityPerpetualTables {
         digest_prefix[7] = 32;
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
         let epoch_prefix_key = KeyType::prefix_uniform(10, 4);
+        let object_indexing = KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
+        // todo can figure way to scramble off 8 bytes in the middle
+        let obj_ref_size = 32 + 8 + 32 + 8;
+        let owned_object_transaction_locks_indexing = KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
 
         let configs = vec![
             (
                 "objects".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8,
+                ThConfig::new_with_config_indexing(
+                    object_indexing,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
                     KeySpaceConfig::new()
@@ -256,8 +260,8 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "owned_object_transaction_locks".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8 + 32 + 8,
+                ThConfig::new_with_config_indexing(
+                    owned_object_transaction_locks_indexing,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
                     bloom_config.clone()
