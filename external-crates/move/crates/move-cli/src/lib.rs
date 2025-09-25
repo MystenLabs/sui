@@ -12,8 +12,8 @@ use clap::Parser;
 
 use crate::base::test::Test;
 use base::{
-    build::Build, coverage::Coverage, disassemble::Disassemble, docgen::Docgen, migrate::Migrate,
-    new::New, profile::Profile, summary::Summary,
+    build::Build, coverage::Coverage, decompile::Decompile, disassemble::Disassemble,
+    docgen::Docgen, migrate::Migrate, new::New, profile::Profile, summary::Summary,
 };
 
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
@@ -63,6 +63,7 @@ pub enum Command {
     Build(Build),
     Coverage(Coverage),
     Disassemble(Disassemble),
+    Decompile(Decompile),
     Docgen(Docgen),
     Migrate(Migrate),
     New(New),
@@ -98,6 +99,9 @@ pub async fn run_cli<F: MoveFlavor>(
         Command::Coverage(c) => {
             c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
                 .await
+        }
+        Command::Decompile(c) => {
+            c.execute(move_args.package_path.as_deref(), move_args.build_config)
         }
         Command::Disassemble(c) => {
             c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)

@@ -211,20 +211,25 @@ pub struct FieldRef<S: Hash + Eq> {
     pub instantiation: Signature<S>,
 }
 
-// Functions can reference external modules. We don't track the exact type parameters and the like
-// since we know they can't change, or don't matter since:
-// * Either we allow compatible upgrades in which case the changing of the call parameters/types
-//   doesn't matter since this will align with the callee signature, and that callee must go through
-//   the compatibility checker for any upgrades.
-// * We are in an inclusion scenario. In which case either:
-//   - The callee is in the same package as this call, in which case the callee couldn't have changed; or
-//   - The callee was in a different package and therefore public, and therefore the API of that
-//   function must not have changed by compatibility rules.
+// Functions can reference external modules.
+// We track the module, function name, type arguments, parameters, and return types. Note though
+// that the parameters and return types are not used for equivalence checking since either (a) they
+// cannot change or (b) it does not matter:
+// (a) We are in an inclusion scenario. In which case either:
+//     - The callee is in the same package as this call, in which case the callee couldn't have
+//       changed; or
+//     - The callee was in a different package and therefore public, and therefore the API of that
+//       function must not have changed by compatibility rules.
+// (b) We are in a mode allowing compatible upgrades in which case the changing of the call
+//     parameters/types doesn't matter since this will align with the callee signature, and that
+//     callee must go through the compatibility checker for any upgrades.
 #[derive(Clone, Debug)]
 pub struct FunctionRef<S> {
     pub module: ModuleId<S>,
     pub function: S,
     pub type_arguments: Signature<S>,
+    pub parameters: Signature<S>,
+    pub return_: Signature<S>,
 }
 
 /// Normalized version of a `VariantRef` and `VariantInstantiationHandle`.
@@ -1209,10 +1214,14 @@ impl<S: Hash + Eq> FunctionRef<S> {
         let type_arguments = type_arguments
             .map(|idx| tables.signatures[idx.0 as usize].clone())
             .unwrap_or_else(|| tables.empty_signature.clone());
+        let parameters = tables.signatures[function_handle.parameters.0 as usize].clone();
+        let return_ = tables.signatures[function_handle.return_.0 as usize].clone();
         Self {
             module,
             function,
             type_arguments,
+            parameters,
+            return_,
         }
     }
 
@@ -1232,11 +1241,15 @@ impl<S: Hash + Eq> FunctionRef<S> {
         )
     }
 
+    /// Equivalence, but excludes parameter types and return types.
+    /// See the comment on `FunctionRef` for an explanation.
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             module,
             function,
             type_arguments,
+            parameters: _,
+            return_: _,
         } = self;
         module == &other.module
             && function == &other.function

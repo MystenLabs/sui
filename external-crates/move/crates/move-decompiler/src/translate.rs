@@ -3,6 +3,7 @@
 
 use crate::{
     ast as Out,
+    config::{Config, print_heading},
     structuring::{
         ast::{self as D},
         term_reconstruction,
@@ -20,12 +21,21 @@ use std::collections::{BTreeMap, HashSet};
 // -------------------------------------------------------------------------------------------------
 
 pub fn model<S: SourceKind>(model: Model<S>) -> anyhow::Result<Out::Decompiled<S>> {
+    let config = Config::default();
+    model_with_config(&config, model)
+}
+
+pub fn model_with_config<S: SourceKind>(
+    config: &Config,
+    model: Model<S>,
+) -> anyhow::Result<Out::Decompiled<S>> {
     let stackless = move_stackless_bytecode_2::from_model(&model, /* optimize */ true)?;
-    let packages = packages(&model, stackless);
+    let packages = packages(config, &model, stackless);
     Ok(Out::Decompiled { model, packages })
 }
 
 fn packages<S: SourceKind>(
+    config: &Config,
     model: &Model<S>,
     stackless: SB::StacklessBytecode,
 ) -> Vec<Out::Package> {
@@ -35,11 +45,11 @@ fn packages<S: SourceKind>(
 
     sb_packages
         .into_iter()
-        .map(|pkg| package(model, pkg))
+        .map(|pkg| package(config, model, pkg))
         .collect()
 }
 
-fn package<S: SourceKind>(_model: &Model<S>, sb_pkg: SB::Package) -> Out::Package {
+fn package<S: SourceKind>(config: &Config, _model: &Model<S>, sb_pkg: SB::Package) -> Out::Package {
     let SB::Package {
         name,
         address,
@@ -48,7 +58,7 @@ fn package<S: SourceKind>(_model: &Model<S>, sb_pkg: SB::Package) -> Out::Packag
     let modules = modules
         .into_iter()
         .map(|(module_name, m)| {
-            let decompiled_module = module(m);
+            let decompiled_module = module(config, m);
             (module_name, decompiled_module)
         })
         .collect();
@@ -63,12 +73,12 @@ fn package<S: SourceKind>(_model: &Model<S>, sb_pkg: SB::Package) -> Out::Packag
 // Module
 // -------------------------------------------------------------------------------------------------
 
-pub fn module(module: SB::Module) -> Out::Module {
+pub fn module(config: &Config, module: SB::Module) -> Out::Module {
     let SB::Module { name, functions } = module;
 
     let functions = functions
         .into_iter()
-        .map(|(name, fun)| (name, function(fun)))
+        .map(|(name, fun)| (name, function(config, fun)))
         .collect();
 
     Out::Module { name, functions }
@@ -78,20 +88,32 @@ pub fn module(module: SB::Module) -> Out::Module {
 // Function
 // -------------------------------------------------------------------------------------------------
 
-fn function(fun: SB::Function) -> Out::Function {
-    println!("Decompiling function {}", fun.name);
-    println!("-- stackless bytecode ------------------");
-    for (lbl, blk) in &fun.basic_blocks {
-        println!("Block {}:\n{blk}", lbl);
+fn function(config: &Config, fun: SB::Function) -> Out::Function {
+    if config.debug_print.print_function_heading() {
+        println!("DECOMPILING FUNCTION {}", fun.name);
     }
-    println!("----------------------------------------");
+    if config.debug_print.stackless {
+        print_heading("stackless bytecode");
+        for (lbl, blk) in &fun.basic_blocks {
+            println!("Block {}:\n{blk}", lbl);
+        }
+    }
     let (name, terms, input, entry) = make_input(fun);
-    println!("Input: {input:?}");
-    let structured = crate::structuring::structure(input, entry);
-    // println!("{}", structured.to_test_string());
+    if config.debug_print.input {
+        print_heading("input");
+        println!("{input:?}");
+    }
+    let structured = crate::structuring::structure(config, input, entry);
+    if config.debug_print.structured {
+        print_heading("structured");
+        println!("{}", structured.to_test_string());
+    }
     let mut code = generate_output(terms, structured);
     crate::refinement::refine(&mut code);
-    // println!("Function {name}:\n{code}");
+    if config.debug_print.decompiled_code {
+        print_heading("refined code");
+        println!("{code}");
+    }
     Out::Function { name, code }
 }
 

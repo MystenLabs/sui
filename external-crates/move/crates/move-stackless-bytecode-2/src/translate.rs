@@ -14,6 +14,7 @@ use move_binary_format::{
 
 use move_model_2::{
     model::{Model, Module, Package},
+    normalized,
     source_kind::SourceKind,
 };
 use move_symbol_pool::Symbol;
@@ -390,47 +391,31 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Call(function_ref) => {
-            let name = &function_ref.module.name;
-            let mut modules = ctxt.model.modules();
-            let module = modules
-                .find(|m| {
-                    m.compiled().name() == (&function_ref.module.name)
-                        && *m.compiled().address() == function_ref.module.address
-                })
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Module {} with address {} not found in the model",
-                        name, function_ref.module.address
-                    )
-                });
-            let compiled = module.compiled();
-            let function = compiled
-                .functions
-                .get(&function_ref.function)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Function {} not found in module {}",
-                        function_ref.function, name
-                    )
-                });
+            let modules = ctxt.model.modules();
+            if let Some(function) = find_function(modules, function_ref) {
+                let args = make_vec!(function.parameters.len(), R(pop!()));
 
-            let args = make_vec!(function.parameters.len(), R(pop!()));
+                let type_params = function_ref
+                    .type_arguments
+                    .iter()
+                    .map(|ty| ty.as_ref().clone())
+                    .collect::<Vec<_>>();
+                let lhs = function
+                    .return_
+                    .iter()
+                    .map(|ty| push!(ty.clone().subst(&type_params).into()))
+                    .collect::<Vec<_>>();
 
-            let type_params = function_ref
-                .type_arguments
-                .iter()
-                .map(|ty| ty.as_ref().clone())
-                .collect::<Vec<_>>();
-            let lhs = function
-                .return_
-                .iter()
-                .map(|ty| push!(ty.clone().subst(&type_params).into()))
-                .collect::<Vec<_>>();
-
-            let target = (function_ref.module, function.name);
-            Instruction::AssignReg {
-                lhs,
-                rhs: RValue::Call { target, args },
+                let target = (function_ref.module, function.name);
+                Instruction::AssignReg {
+                    lhs,
+                    rhs: RValue::Call { target, args },
+                }
+            } else {
+                panic!(
+                    "Function not found: {}::{}",
+                    function_ref.module.name, function_ref.function
+                );
             }
         }
 
@@ -737,6 +722,18 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::MoveFromDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
     }
+}
+
+fn find_function<'a, K: SourceKind>(
+    mut modules: impl Iterator<Item = Module<'a, K>>,
+    function_ref: &normalized::FunctionRef,
+) -> Option<&'a normalized::Function> {
+    let module = modules.find(|m| {
+        m.compiled().name() == (&function_ref.module.name)
+            && *m.compiled().address() == function_ref.module.address
+    })?;
+    let compiled = module.compiled();
+    compiled.functions.get(&function_ref.function).map(|v| &**v)
 }
 
 fn struct_ref_to_type(struct_ref: &N::StructRef<Symbol>) -> N::Type<Symbol> {

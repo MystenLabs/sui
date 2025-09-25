@@ -171,6 +171,7 @@ move-command-line-common = { path = "crates/move-command-line-common" }
 move-compiler = { path = "crates/move-compiler" }
 move-core-types = { path = "crates/move-core-types" }
 move-coverage = { path = "crates/move-coverage" }
+move-decompiler = { path = "crates/move-decompiler" }
 move-disassembler = { path = "crates/move-disassembler" }
 move-docgen = { path = "crates/move-docgen" }
 move-docgen-tests = { path = "crates/move-docgen-tests" }

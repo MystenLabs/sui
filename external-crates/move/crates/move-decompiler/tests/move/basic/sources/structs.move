@@ -40,6 +40,7 @@ public struct S3 has copy, drop {
 #[allow(unused)]
 public struct S4(u64, u64, u64) has copy, drop;
 
+#[allow(unused_function)]
 fun unpack(s: S1): u32 {
     let S1 { x: a, y: b, z: c} = s;
     a + b + c
