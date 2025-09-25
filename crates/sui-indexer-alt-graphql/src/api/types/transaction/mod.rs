@@ -4,11 +4,7 @@
 use std::{ops::Deref, sync::Arc};
 
 use anyhow::Context as _;
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    dataloader::DataLoader,
-    Context, Object,
-};
+use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
 use diesel::{sql_types::BigInt, QueryableByName};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::future::try_join_all;
@@ -209,12 +205,10 @@ impl Transaction {
     ) -> Result<Connection<String, Transaction>, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
-        let mut conn = Connection::new(false, false);
-
         let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
 
         let Some(query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(conn);
+            return Ok(Connection::new(false, false));
         };
 
         let TransactionFilter {
@@ -242,21 +236,11 @@ impl Transaction {
             tx_unfiltered(ctx, query, &page).await?
         };
 
-        let digests = tx_digests(ctx, &tx_sequence_numbers).await?;
-
-        // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination.
-        let (prev, next, results) = page.paginate_results(digests, |d| JsonCursor::new(d.0));
-
-        // Convert the transaction digests to Transaction objects
-        for (cursor, (_, tx_digest)) in results {
-            let tx = Self::with_id(scope.clone(), tx_digest);
-            conn.edges.push(Edge::new(cursor.encode_cursor(), tx));
-        }
-
-        conn.has_previous_page = prev;
-        conn.has_next_page = next;
-
-        Ok(conn)
+        page.paginate_results(
+            tx_digests(ctx, &tx_sequence_numbers).await?,
+            |(s, _)| JsonCursor::new(*s),
+            |(_, d)| Ok(Self::with_id(scope.clone(), d)),
+        )
     }
 }
 
