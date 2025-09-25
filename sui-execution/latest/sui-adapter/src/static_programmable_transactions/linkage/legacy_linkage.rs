@@ -13,9 +13,13 @@ use crate::{
         loading::ast::Type,
     },
 };
-use move_binary_format::binary_config::BinaryConfig;
+use move_binary_format::{binary_config::BinaryConfig, file_format::Visibility};
+use move_core_types::identifier::IdentStr;
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
-use sui_types::{base_types::ObjectID, error::ExecutionError};
+use sui_types::{
+    base_types::ObjectID,
+    error::{ExecutionError, ExecutionErrorKind},
+};
 
 #[derive(Debug)]
 pub struct LegacyLinkage {
@@ -26,13 +30,19 @@ impl LinkageAnalysis for LegacyLinkage {
     fn compute_call_linkage(
         &self,
         package: &ObjectID,
+        module_name: &IdentStr,
+        function_name: &IdentStr,
         type_args: &[Type],
         store: &dyn PackageStore,
     ) -> Result<ExecutableLinkage, ExecutionError> {
         Ok(ExecutableLinkage::new(
-            ResolvedLinkage::from_resolution_table(
-                self.compute_call_linkage(package, type_args, store)?,
-            ),
+            ResolvedLinkage::from_resolution_table(self.compute_call_linkage(
+                package,
+                module_name,
+                function_name,
+                type_args,
+                store,
+            )?),
         ))
     }
 
@@ -70,6 +80,8 @@ impl LegacyLinkage {
     fn compute_call_linkage(
         &self,
         package: &ObjectID,
+        module_name: &IdentStr,
+        function_name: &IdentStr,
         type_args: &[Type],
         store: &dyn PackageStore,
     ) -> Result<ResolutionTable, ExecutionError> {
@@ -82,7 +94,8 @@ impl LegacyLinkage {
             object_id: &ObjectID,
             store: &dyn PackageStore,
             resolution_table: &mut ResolutionTable,
-            resolution_fn: fn(&VerifiedPackage) -> Option<ConflictResolution>,
+            self_resolution_fn: fn(&VerifiedPackage) -> Option<ConflictResolution>,
+            dep_resolution_fn: fn(&VerifiedPackage) -> Option<ConflictResolution>,
         ) -> Result<(), ExecutionError> {
             let pkg = get_package(object_id, store)?;
             let transitive_deps = pkg
@@ -91,17 +104,43 @@ impl LegacyLinkage {
                 .map(|version_id| ObjectID::from(*version_id))
                 .collect::<Vec<_>>();
             for object_id in transitive_deps.iter() {
-                add_and_unify(object_id, store, resolution_table, resolution_fn)?;
+                add_and_unify(object_id, store, resolution_table, dep_resolution_fn)?;
             }
-            add_and_unify(object_id, store, resolution_table, resolution_fn)?;
+            add_and_unify(object_id, store, resolution_table, self_resolution_fn)?;
             Ok(())
         }
+
+        let pkg = get_package(package, store)?;
+        let fn_not_found_err = || {
+            ExecutionError::new_with_source(
+                ExecutionErrorKind::FunctionNotFound,
+                format!(
+                    "Could not resolve function '{}' in module {}::{}",
+                    function_name, package, module_name
+                ),
+            )
+        };
+        let fdef = pkg
+            .modules()
+            .iter()
+            .find(|m| m.0.name() == module_name)
+            .ok_or_else(fn_not_found_err)?
+            .1
+            .compiled_module()
+            .find_function_def_by_name(function_name.as_str())
+            .ok_or_else(fn_not_found_err)?;
+
+        let dep_resolution_fn = match fdef.1.visibility {
+            Visibility::Public => ConflictResolution::at_least,
+            Visibility::Private | Visibility::Friend => ConflictResolution::exact,
+        };
 
         add_package(
             package,
             store,
             &mut resolution_table,
             ConflictResolution::exact,
+            dep_resolution_fn,
         )?;
 
         for type_defining_id in type_args.iter().flat_map(|ty| ty.all_addresses()) {
@@ -110,6 +149,7 @@ impl LegacyLinkage {
                 &ObjectID::from(type_defining_id),
                 store,
                 &mut resolution_table,
+                ConflictResolution::at_least,
                 ConflictResolution::at_least,
             )?;
         }
