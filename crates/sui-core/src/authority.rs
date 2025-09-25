@@ -41,6 +41,7 @@ use serde::{Deserialize, Serialize};
 use shared_object_version_manager::AssignedVersions;
 use shared_object_version_manager::Schedulable;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -1020,11 +1021,42 @@ impl AuthorityState {
             &self.config.verifier_signing_config,
         )?;
 
+        self.handle_coin_deny_list_checks(
+            tx_data,
+            &checked_input_objects,
+            &receiving_objects,
+            epoch_store,
+        )?;
+
+        Ok(checked_input_objects)
+    }
+
+    fn handle_coin_deny_list_checks(
+        &self,
+        tx_data: &TransactionData,
+        checked_input_objects: &CheckedInputObjects,
+        receiving_objects: &ReceivingObjects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<()> {
+        let funds_withdraw_types = tx_data
+            .get_funds_withdrawals()
+            .into_iter()
+            .filter_map(|withdraw| {
+                withdraw
+                    .type_arg
+                    .get_balance_type_param()
+                    // unwrap safe because we already verified the transaction.
+                    .unwrap()
+                    .map(|ty| ty.to_canonical_string(false))
+            })
+            .collect::<BTreeSet<_>>();
+
         if epoch_store.coin_deny_list_v1_enabled() {
             check_coin_deny_list_v1(
                 tx_data.sender(),
-                &checked_input_objects,
-                &receiving_objects,
+                checked_input_objects,
+                receiving_objects,
+                funds_withdraw_types.clone(),
                 &self.get_object_store(),
             )?;
         }
@@ -1032,13 +1064,14 @@ impl AuthorityState {
         if epoch_store.protocol_config().enable_coin_deny_list_v2() {
             check_coin_deny_list_v2_during_signing(
                 tx_data.sender(),
-                &checked_input_objects,
-                &receiving_objects,
+                checked_input_objects,
+                receiving_objects,
+                funds_withdraw_types.clone(),
                 &self.get_object_store(),
             )?;
         }
 
-        Ok(checked_input_objects)
+        Ok(())
     }
 
     /// This is a private method and should be kept that way. It doesn't check whether
