@@ -28,7 +28,7 @@ const MAX_LATENCY: f64 = 10.0;
 /// Complete client-observed statistics for validator interactions.
 ///
 /// This struct maintains client-side metrics for all validators in the network,
-/// including reliability scores, latency measurements, and failure tracking
+/// including latency measurements, reliability measurements, and failure tracking
 /// as observed from the client's perspective. It uses exponential moving averages (EMA)
 /// to smooth out transient spikes while still responding to sustained changes.
 #[derive(Debug, Clone)]
@@ -128,7 +128,7 @@ impl ClientObservedStats {
             .set(validator_stats.consecutive_failures as i64);
     }
 
-    /// Get validator scores for all validators in the committee for the provided tx type.
+    /// Get validator latencies for all validators in the committee for the provided tx type.
     ///
     /// Returns a map of all tracked validators to their stats. For a validator
     pub fn get_all_validator_stats(
@@ -145,7 +145,7 @@ impl ClientObservedStats {
             .collect()
     }
 
-    /// Calculate latency-based score for a single validator for the provided tx type.
+    /// Calculate latency-based latency for a single validator for the provided tx type.
     ///
     /// Returns the average latency for relevant operations (Consensus and FastPath only)
     /// with reliability penalty applied. Lower values are better.
@@ -192,11 +192,6 @@ impl ClientObservedStats {
             };
 
             final_latency = (base_latency * penalty_factor).min(final_latency);
-
-            println!(
-                "base_latency: {}, reliability: {}, reliability_weight: {}, penalty_factor: {}",
-                base_latency, reliability, reliability_weight, penalty_factor
-            );
         }
 
         final_latency

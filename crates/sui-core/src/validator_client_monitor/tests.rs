@@ -203,8 +203,8 @@ mod client_stats_tests {
 
         // Should be excluded (max latency should be assigned)
         let all_stats = stats.get_all_validator_stats(&committee, TxType::SharedObject);
-        let score = *all_stats.get(&validator).unwrap();
-        assert_eq!(score, 10.0);
+        let latency = *all_stats.get(&validator).unwrap();
+        assert_eq!(latency, 10.0);
 
         // Wait for cooldown
         sleep(Duration::from_millis(150)).await;
@@ -277,7 +277,7 @@ mod client_stats_tests {
     }
 
     #[tokio::test]
-    async fn test_score_calculation_with_missing_operations() {
+    async fn test_latency_calculation_with_missing_operations() {
         let config = ValidatorClientMonitorConfig::default();
         let mut stats = ClientObservedStats::new(config);
         let metrics = create_test_metrics();
@@ -303,9 +303,9 @@ mod client_stats_tests {
         );
 
         let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
-        // Should have a partial score even with only one operation type
-        let score = *all_stats.get(&validator).unwrap();
-        assert!(score > 0.0);
+        // Should have a partial latency even with only one operation type
+        let latency = *all_stats.get(&validator).unwrap();
+        assert!(latency > 0.0);
     }
 
     #[tokio::test]
@@ -571,7 +571,7 @@ mod client_monitor_tests {
             }
         }
 
-        // Force update cached scores (in production this happens in the health check loop)
+        // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Select validators with k=2
@@ -619,7 +619,7 @@ mod client_monitor_tests {
             }
         }
 
-        // Force update cached scores (in production this happens in the health check loop)
+        // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Select validators with k=3
@@ -636,7 +636,7 @@ mod client_monitor_tests {
         assert!(top_3_positions.contains(&validators[0])); // Best performer with success
         assert!(top_3_positions.contains(&validators[1])); // Second best with success
 
-        // Remaining positions should have the failed validators in score order
+        // Remaining positions should have the failed validators in latency order
         // Since they all have 0 reliability, they'll be ordered by latency
     }
 
@@ -677,7 +677,7 @@ mod client_monitor_tests {
             }
         }
 
-        // Force update cached scores (in production this happens in the health check loop)
+        // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Should still select validators from the provided committee
@@ -713,7 +713,7 @@ mod client_monitor_tests {
             }
         }
 
-        // Force update cached scores (in production this happens in the health check loop)
+        // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Request more validators than available
@@ -753,7 +753,7 @@ mod client_monitor_tests {
             });
         }
 
-        // Force update cached scores (in production this happens in the health check loop)
+        // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Select validators with k=2 for the shared object tx type
@@ -850,7 +850,7 @@ mod client_monitor_tests {
         assert!(monitor.has_validator_stats(&initial_validators[1]));
         assert!(!monitor.has_validator_stats(&initial_validators[2]));
 
-        // Calculate the scores for the validators and ensure this is successful
+        // Calculate the latencies for the validators and ensure this is successful
         monitor.force_update_cached_latencies(&initial_auth_agg);
     }
 

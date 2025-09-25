@@ -240,7 +240,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// is called, and we need to maintain an invariant that the selected
     /// validators are always in the committee passed in.
     ///
-    /// Also the tx type is passed in so that we can select validators based on their respective scores
+    /// Also the tx type is passed in so that we can select validators based on their respective latencies
     /// for the transaction type.
     ///
     /// We shuffle the top k validators to avoid the same validator being selected

@@ -129,7 +129,7 @@ pub struct ValidatorClientMonitorConfig {
 
     /// Weight for reliability.
     ///
-    /// Controls importance of reliability when calculating the validator's latency for transaction submission 
+    /// Controls importance of reliability when calculating the validator's latency for transaction submission
     /// selection reasons. The higher the weight, the more importance is given to the reliability.
     /// Value shoudl be between 0.0 and 1.0.
     #[serde(default = "default_reliability_weight")]
