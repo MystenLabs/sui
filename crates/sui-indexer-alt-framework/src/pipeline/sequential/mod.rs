@@ -11,7 +11,7 @@ use super::{processor::processor, CommitterConfig, Processor, PIPELINE_BUFFER};
 
 use crate::{
     metrics::IndexerMetrics,
-    store::{CommitterWatermark, Store, TransactionalStore},
+    store::{Store, TransactionalStore},
     types::full_checkpoint_content::CheckpointData,
 };
 
@@ -102,7 +102,7 @@ pub struct SequentialConfig {
 /// channels close, or any of its independent tasks fail.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    initial_watermark: Option<CommitterWatermark>,
+    next_checkpoint: u64,
     config: SequentialConfig,
     db: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
@@ -122,7 +122,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let committer = committer::<H>(
         config,
-        initial_watermark,
+        next_checkpoint,
         committer_rx,
         watermark_tx,
         db,
