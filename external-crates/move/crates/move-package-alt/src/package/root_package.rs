@@ -261,7 +261,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let pubs = Self::load_pubfile(&package_path)?;
 
         // apply mode filter
-        let filtered_graph = unfiltered_graph.filter_for_mode(modes);
+        let filtered_graph = unfiltered_graph.filter_for_mode(&modes);
 
         // check that there is a consistent linkage
         let linkage = filtered_graph.linkage()?;

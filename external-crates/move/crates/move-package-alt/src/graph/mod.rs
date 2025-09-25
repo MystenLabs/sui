@@ -11,8 +11,7 @@ mod to_lockfile;
 use derive_where::derive_where;
 pub use linkage::{LinkageError, LinkageTable};
 pub use package_info::{NamedAddress, PackageInfo};
-use petgraph::Direction;
-use petgraph::graph::EdgeIndex;
+use petgraph::visit::EdgeRef;
 pub use rename_from::RenameError;
 
 use tracing::{debug, warn};
@@ -125,65 +124,185 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return a copy of `self` with all moded dependencies that don't match `mode` filtered out
-    #[allow(unused)]
-    pub fn filter_for_mode(&self, modes: Vec<ModeName>) -> Self {
-        let mut result = self.clone();
+    pub fn filter_for_mode(&self, modes: &Vec<ModeName>) -> Self {
+        let mut result = Self {
+            root_index: NodeIndex::from(0),
+            package_ids: BiBTreeMap::new(),
+            inner: DiGraph::new(),
+        };
 
-        for edge_index in result.inner.edge_indices() {
-            let Some(dep_modes) = self
-                .inner
-                .edge_weight(edge_index)
-                .expect("edges are present")
-                .modes()
-            else {
-                // if dependency has no `modes` field, it should be included regardless of mode
-                continue;
-            };
-
-            if !modes.iter().any(|mode| dep_modes.contains(&mode)) {
-                // none of the modes in `dep_modes` is in `modes`, so we drop the dep
-                result.drop_edge(edge_index);
-            }
-        }
+        result.root_index = self.copy_moded(&mut result, self.root_index, &modes);
 
         result
     }
 
-    /// Remove the edge from the graph, and also remove any orphaned nodes.
-    fn drop_edge(&mut self, edge_index: EdgeIndex) {
-        let target_index = self
-            .inner
-            .edge_endpoints(edge_index)
-            .expect("edges are present in the graph")
-            .1;
+    /// Copy subgraph rooted at `node` into `dest`, filtering out dependencies that don't match
+    /// `modes`. Returns the index for `node` in the new graph
+    fn copy_moded(&self, dest: &mut Self, node: NodeIndex, modes: &Vec<ModeName>) -> NodeIndex {
+        let package_id = self
+            .package_ids
+            .get_by_right(&node)
+            .expect("node is in the graph");
 
-        self.inner.remove_edge(edge_index);
+        if let Some(index) = dest.package_ids.get_by_left(package_id) {
+            return *index;
+        }
 
-        if self
-            .inner
-            .edges_directed(target_index, Direction::Incoming)
-            .next()
-            .is_none()
-        {
-            // target no longer has incoming edges; delete the outgoing edges from the node and
-            // then delete the node itself
-            let mut children = self
-                .inner
-                .neighbors_directed(target_index, Direction::Outgoing)
-                .detach();
-            while let Some(child_edge) = children.next_edge(&self.inner) {
-                self.drop_edge(child_edge)
+        let index = dest.inner.add_node(self.inner[node].clone());
+        dest.package_ids.insert(package_id.clone(), index);
+
+        for edge in self.inner.edges(node) {
+            if let Some(dep_modes) = edge.weight().modes() {
+                if !modes.iter().any(|mode| dep_modes.contains(&mode)) {
+                    // dependency is moded but doesn't contain the modes we're allowing;
+                    // skip adding the dep to the new graph
+                    continue;
+                }
             }
 
-            self.inner.remove_node(target_index);
+            let dst_index = self.copy_moded(dest, edge.target(), modes);
+            dest.inner.add_edge(index, dst_index, edge.weight().clone());
         }
+
+        index
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn test_drop_edge() {
-        todo!()
+    use test_log::test;
+
+    use crate::{schema::PackageID, test_utils::graph_builder::TestPackageGraph};
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    ///     a -->|test| b --> c
+    ///     a --> d --> |spec| e
+    /// ```
+    ///
+    /// If an edge has a mode, it should be dropped if there are no modes passed, so after calling
+    /// `filter_modes([])`, the graph should look like
+    /// ```mermaid
+    ///     root --> a --> d
+    /// ```
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_mode_filter_no_modes() {
+        let scenario = TestPackageGraph::new(["root", "a", "b", "c", "d", "e"])
+            .add_deps([("root", "a"), ("b", "c"), ("a", "d")])
+            .add_dep("a", "b", |dep| dep.modes(["test"]))
+            .add_dep("d", "e", |dep| dep.modes(["spec"]))
+            .build();
+
+        let graph = scenario.graph_for("root").await;
+        let filtered = graph.filter_for_mode(&vec![]);
+
+        let ids: Vec<PackageID> = filtered
+            .package_ids
+            .into_iter()
+            .map(|(pkg, _)| pkg)
+            .collect();
+
+        assert_eq!(ids, ["a", "d", "root"]);
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    ///     a -->|test| b --> c
+    ///     a --> d --> |spec| e
+    /// ```
+    ///
+    /// If an edge has a mode but some other mode is passed, we should drop the edge, so after
+    /// calling `filter_modes(["test"])`, the graph should look like
+    /// ```mermaid
+    ///     root --> a --> b --> c
+    ///     a --> d
+    /// ```
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_mode_filter_one_mode() {
+        let scenario = TestPackageGraph::new(["root", "a", "b", "c", "d", "e"])
+            .add_deps([("root", "a"), ("b", "c"), ("a", "d")])
+            .add_dep("a", "b", |dep| dep.modes(["test"]))
+            .add_dep("d", "e", |dep| dep.modes(["spec"]))
+            .build();
+
+        let graph = scenario.graph_for("root").await;
+        let filtered = graph.filter_for_mode(&vec!["test".into()]);
+
+        let ids: Vec<PackageID> = filtered
+            .package_ids
+            .into_iter()
+            .map(|(pkg, _)| pkg)
+            .collect();
+
+        assert_eq!(ids, ["a", "b", "c", "d", "root"]);
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    ///     a -->|test| b --> c
+    ///     a --> d --> |spec| e
+    /// ```
+    ///
+    /// If we pass multiple modes, we should include all edges that match any of the passed modes,
+    /// so after calling `filter_modes(["test", "spec"])`, the graph should look like
+    /// ```mermaid
+    ///     root --> a --> b --> c
+    ///     a --> d --> e
+    /// ```
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_mode_filter_multimodes() {
+        let scenario = TestPackageGraph::new(["root", "a", "b", "c", "d", "e"])
+            .add_deps([("root", "a"), ("b", "c"), ("a", "d")])
+            .add_dep("a", "b", |dep| dep.modes(["test"]))
+            .add_dep("d", "e", |dep| dep.modes(["spec"]))
+            .build();
+
+        let graph = scenario.graph_for("root").await;
+        let filtered = graph.filter_for_mode(&vec!["test".into(), "spec".into()]);
+
+        let ids: Vec<PackageID> = filtered
+            .package_ids
+            .into_iter()
+            .map(|(pkg, _)| pkg)
+            .collect();
+
+        assert_eq!(ids, ["a", "b", "c", "d", "e", "root"]);
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    ///     a -->|test, spec| b --> c
+    /// ```
+    ///
+    /// Here, `b` should be included for both `spec` and `test` modes, so after calling
+    /// `filter_modes(["test"])`, the graph should look like
+    /// ```mermaid
+    ///     root --> a --> b --> c
+    /// ```
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_multimode_filter() {
+        let scenario = TestPackageGraph::new(["root", "a", "b", "c"])
+            .add_deps([("root", "a"), ("b", "c")])
+            .add_dep("a", "b", |dep| dep.modes(["test", "spec"]))
+            .build();
+
+        let graph = scenario.graph_for("root").await;
+        let filtered = graph.filter_for_mode(&vec!["test".into()]);
+
+        let ids: Vec<PackageID> = filtered
+            .package_ids
+            .into_iter()
+            .map(|(pkg, _)| pkg)
+            .collect();
+
+        assert_eq!(ids, ["a", "b", "c", "root"]);
     }
 }

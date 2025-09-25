@@ -55,7 +55,7 @@ use crate::{
         vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
     },
     package::{EnvironmentID, EnvironmentName, RootPackage, paths::PackagePath},
-    schema::{OriginalID, PackageName, PublishAddresses, PublishedID},
+    schema::{ModeName, OriginalID, PackageName, PublishAddresses, PublishedID},
     test_utils::{Project, project},
 };
 
@@ -108,6 +108,9 @@ pub struct DepSpec {
 
     /// the `use-environment` field for the dep
     use_env: Option<EnvironmentName>,
+
+    /// the `modes` field for the dep
+    modes: Option<Vec<ModeName>>,
 }
 
 /// Information about a publication
@@ -383,7 +386,14 @@ impl TestPackageGraph {
             .map(|env| format!(r#", use-environment = "{env}""#))
             .unwrap_or("".to_string());
 
-        format!(r#"{env}{name} = {{ local = "../{path}"{is_override}{rename_from}{use_env} }}"#)
+        let modes = dep
+            .modes
+            .as_ref()
+            .map(|modes| format!(r#", modes = {modes:?}"#))
+            .unwrap_or("".to_string());
+        format!(
+            r#"{env}{name} = {{ local = "../{path}"{is_override}{rename_from}{use_env}{modes} }}"#
+        )
     }
 
     /// Output the dependency in the form
@@ -485,6 +495,7 @@ impl DepSpec {
             rename_from: None,
             in_env: None,
             use_env: None,
+            modes: None,
         }
     }
 
@@ -521,6 +532,17 @@ impl DepSpec {
     /// Change this to an external dependency using the mock resolver
     pub fn make_external(mut self) -> Self {
         todo!();
+        self
+    }
+
+    /// Add a `modes` field
+    pub fn modes(mut self, modes: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        self.modes = Some(
+            modes
+                .into_iter()
+                .map(|s| ModeName::from(s.as_ref()))
+                .collect(),
+        );
         self
     }
 }
@@ -601,6 +623,7 @@ mod tests {
                     .rename_from("b")
                     .in_env("foo")
                     .use_env("bar")
+                    .modes(vec!["test", "spec"])
             })
             .build();
 
@@ -616,7 +639,7 @@ mod tests {
         [dependencies]
 
         [dep-replacements]
-        foo.a_name_for_b = { local = "../b", override = true, rename-from = "b", use-environment = "bar" }
+        foo.a_name_for_b = { local = "../b", override = true, rename-from = "b", use-environment = "bar", modes = ["test", "spec"] }
         "###);
 
         assert_snapshot!(graph.read_file("b/Move.toml"), @r###"
