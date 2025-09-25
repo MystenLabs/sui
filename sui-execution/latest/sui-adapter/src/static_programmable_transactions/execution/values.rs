@@ -35,6 +35,7 @@ pub enum ByteValue {
 pub struct Local<'a>(&'a mut Locals, u16);
 
 /// A set of memory locations that can be borrowed or moved from. Used for inputs and results
+#[derive(Debug)]
 pub struct Locals {
     heap: VMBaseHeap,
     locations: BTreeMap<u16, BaseHeapId>,
