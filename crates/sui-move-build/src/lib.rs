@@ -208,6 +208,8 @@ impl BuildConfig {
             .publication()
             .map(|p| ObjectID::from_address(p.addresses.published_at.0));
 
+        root_pkg.save_to_disk()?;
+
         Ok(CompiledPackage {
             package,
             dependency_ids,
