@@ -114,6 +114,6 @@ pub fn compile_packages(
 ) -> BTreeMap<OriginalId, StoredPackage> {
     compile_packages_in_file(filename, dependencies)
         .into_iter()
-        .map(|p| (p.original_id, p))
+        .map(|p| (p.0.original_id, p))
         .collect()
 }

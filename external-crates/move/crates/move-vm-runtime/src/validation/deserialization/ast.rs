@@ -32,7 +32,7 @@ impl Package {
         Self {
             original_id,
             modules: modules.into_iter().map(|m| (m.self_id(), m)).collect(),
-            version_id: pkg.storage_id,
+            version_id: pkg.version_id,
             type_origin_table: pkg.type_origin_table,
             linkage_table: pkg.linkage_table,
         }

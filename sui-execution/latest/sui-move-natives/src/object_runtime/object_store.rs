@@ -3,9 +3,7 @@
 
 use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{
-    annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
-};
+use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
 use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
     collections::{btree_map, BTreeMap},
@@ -52,14 +50,7 @@ struct ConfigSetting {
 }
 
 #[derive(Debug)]
-pub(crate) struct ChildObjectEffectV0 {
-    pub(super) owner: ObjectID,
-    pub(super) ty: MoveObjectType,
-    pub(super) effect: Op<Value>,
-}
-
-#[derive(Debug)]
-pub(crate) struct ChildObjectEffectV1 {
+pub(crate) struct ChildObjectEffect {
     pub(super) owner: ObjectID,
     pub(super) ty: MoveObjectType,
     pub(super) final_value: Option<Value>,
@@ -67,14 +58,7 @@ pub(crate) struct ChildObjectEffectV1 {
     pub(super) object_changed: bool,
 }
 
-#[derive(Debug)]
-pub(crate) enum ChildObjectEffects {
-    // In this version, we accurately track mutations via WriteRef to the child object, or
-    // references rooted in the child object.
-    V0(BTreeMap<ObjectID, ChildObjectEffectV0>),
-    // In this version, we instead check always return the value, and report if it changed.
-    V1(BTreeMap<ObjectID, ChildObjectEffectV1>),
-}
+pub(crate) type ChildObjectEffects = BTreeMap<ObjectID, ChildObjectEffect>;
 
 struct Inner<'a> {
     // used for loading child objects
@@ -751,7 +735,7 @@ impl<'a> ChildObjectStore<'a> {
         &self.inner.wrapped_object_containers
     }
 
-    // retrieve the `Op` effects for the child objects
+    // retrieve the effects for the child objects
     pub(super) fn take_effects(&mut self) -> PartialVMResult<ChildObjectEffects> {
         let effects = std::mem::take(&mut self.store)
             .into_iter()
@@ -764,7 +748,7 @@ impl<'a> ChildObjectStore<'a> {
                 } = child_object;
                 let final_value = value.into_value();
                 let object_changed = fingerprint.object_has_changed(&owner, &ty, &final_value)?;
-                let child_effect = ChildObjectEffectV1 {
+                let child_effect = ChildObjectEffect {
                     owner,
                     ty,
                     final_value,
@@ -773,7 +757,7 @@ impl<'a> ChildObjectStore<'a> {
                 Ok((id, child_effect))
             })
             .collect::<PartialVMResult<_>>()?;
-        Ok(ChildObjectEffects::V1(effects))
+        Ok(effects)
     }
 
     pub(super) fn all_active_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
@@ -799,11 +783,5 @@ impl<'a> ChildObjectStore<'a> {
                 copied_value: copied_child_value,
             }
         })
-    }
-}
-
-impl ChildObjectEffects {
-    pub(crate) fn empty() -> Self {
-        ChildObjectEffects::V0(BTreeMap::new())
     }
 }
