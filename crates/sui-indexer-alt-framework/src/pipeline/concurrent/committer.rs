@@ -232,12 +232,12 @@ mod tests {
 
     use crate::{
         metrics::IndexerMetrics,
+        mocks::store::*,
         pipeline::{
             concurrent::{BatchedRows, Handler},
             Processor, WatermarkPart,
         },
         store::CommitterWatermark,
-        testing::mock_store::*,
         FieldCount,
     };
 

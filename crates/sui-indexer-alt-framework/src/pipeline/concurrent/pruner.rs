@@ -357,7 +357,7 @@ mod tests {
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{metrics::IndexerMetrics, pipeline::Processor, testing::mock_store::*, FieldCount};
+    use crate::{metrics::IndexerMetrics, mocks::store::*, pipeline::Processor, FieldCount};
 
     use super::*;
 
@@ -549,7 +549,7 @@ mod tests {
             pruner_hi: 0,
         };
         let store = MockStore {
-            watermarks: Arc::new(Mutex::new(watermark)),
+            watermark: Arc::new(Mutex::new(Some(watermark))),
             data: Arc::new(Mutex::new(test_data.clone())),
             ..Default::default()
         };
@@ -601,7 +601,7 @@ mod tests {
             assert!(data.contains_key(&3), "Checkpoint 3 should be preserved");
 
             // Check that the pruner_hi was updated past 1
-            let watermark = store.watermarks.lock().unwrap();
+            let watermark = store.watermark().unwrap();
             assert!(
                 watermark.pruner_hi > 1,
                 "Pruner watermark should be updated"
@@ -645,7 +645,7 @@ mod tests {
             pruner_hi: 0,
         };
         let store = MockStore {
-            watermarks: Arc::new(Mutex::new(watermark)),
+            watermark: Arc::new(Mutex::new(Some(watermark))),
             data: Arc::new(Mutex::new(test_data.clone())),
             ..Default::default()
         };
@@ -679,7 +679,7 @@ mod tests {
             assert!(data.contains_key(&3), "Checkpoint 3 should be preserved");
 
             // Check that the pruner_hi was updated past 1
-            let watermark = store.watermarks.lock().unwrap();
+            let watermark = store.watermark().unwrap();
             assert!(
                 watermark.pruner_hi > 1,
                 "Pruner watermark should be updated"
@@ -730,7 +730,7 @@ mod tests {
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
         let store = MockStore {
-            watermarks: Arc::new(Mutex::new(watermark)),
+            watermark: Arc::new(Mutex::new(Some(watermark))),
             data: Arc::new(Mutex::new(test_data.clone())),
             ..Default::default()
         }
@@ -754,7 +754,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(500)).await;
         {
             let data = store.data.lock().unwrap();
-            let watermarks = store.watermarks.lock().unwrap();
+            let watermarks = store.watermark().unwrap();
 
             // Verify watermark doesn't advance past the failed range [1,2)
             assert_eq!(
@@ -771,7 +771,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(3000)).await;
         {
             let data = store.data.lock().unwrap();
-            let watermarks = store.watermarks.lock().unwrap();
+            let watermarks = store.watermark().unwrap();
 
             // Verify watermark advances after all ranges complete successfully
             assert_eq!(

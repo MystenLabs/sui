@@ -114,7 +114,7 @@ mod tests {
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{metrics::IndexerMetrics, pipeline::Processor, testing::mock_store::*};
+    use crate::{metrics::IndexerMetrics, mocks::store::*, pipeline::Processor};
 
     use super::*;
 
@@ -162,7 +162,7 @@ mod tests {
         set_reader_watermark_failure_attempts: usize,
     ) -> TestSetup {
         let store = MockStore {
-            watermarks: Arc::new(Mutex::new(watermark)),
+            watermark: Arc::new(Mutex::new(Some(watermark))),
             set_reader_watermark_failure_attempts: Arc::new(Mutex::new(
                 set_reader_watermark_failure_attempts,
             )),
@@ -223,7 +223,7 @@ mod tests {
 
         // new reader_lo = checkpoint_hi_inclusive (10) - retention (5) + 1 = 6
         {
-            let watermarks = setup.store.watermarks.lock().unwrap();
+            let watermarks = setup.store.watermark().unwrap();
             assert_eq!(watermarks.reader_lo, 6);
         }
 
@@ -260,7 +260,7 @@ mod tests {
         // new reader_lo = checkpoint_hi_inclusive (10) - retention (5) + 1 = 6,
         // which is smaller than current reader_lo (7). Therefore, the reader_lo was not updated.
         {
-            let watermarks = setup.store.watermarks.lock().unwrap();
+            let watermarks = setup.store.watermark().unwrap();
             assert_eq!(
                 watermarks.reader_lo, 7,
                 "Reader watermark should not be updated when new value is smaller"
@@ -301,7 +301,7 @@ mod tests {
             .await;
 
         // Verify state before retry succeeds
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.watermark().unwrap();
         assert_eq!(
             watermark.reader_lo, 0,
             "Reader watermark should not be updated due to DB connection failure"
@@ -317,7 +317,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Verify state after retry succeeds
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.watermark().unwrap();
         assert_eq!(
             watermark.reader_lo, 6,
             "Reader watermark should be updated after retry succeeds"
@@ -355,7 +355,7 @@ mod tests {
 
         // Verify state before retry succeeds
         {
-            let watermarks = setup.store.watermarks.lock().unwrap();
+            let watermarks = setup.store.watermark().unwrap();
             assert_eq!(
                 watermarks.reader_lo, 0,
                 "Reader watermark should not be updated due to set_reader_watermark failure"
@@ -367,7 +367,7 @@ mod tests {
 
         // Verify state after retry succeeds
         {
-            let watermarks = setup.store.watermarks.lock().unwrap();
+            let watermarks = setup.store.watermark().unwrap();
             assert_eq!(watermarks.reader_lo, 6);
         }
 
