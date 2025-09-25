@@ -18,9 +18,21 @@ To install Sui from source, you first need to install the following prerequisite
 
 - [x] Download and install Cargo: `curl https://sh.rustup.rs -sSf | sh`
 
+- [x] Download and install [Homebrew](https://brew.sh/): `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
+
+- [x] Download and install [cURL](https://curl.se): `brew install curl`. Verify installation with `curl --version`
+
+- [x] Download and install CMake: `brew install cmake`. Verify installation with `cmake --version`
+
+- [x] Download and install **libpq**: `brew install libpq`. Verify installation with `libpq --version`
+
+- [x] Download and install Git: `brew install git`. Verify installation with `git --version`
+
+- [x] Download and install [PostgreSQL](https://wiki.postgresql.org/wiki/Main_Page).
+
 </TabItem>
 
-<TabItem label="Linux" value="lunux">
+<TabItem label="Linux" value="linux">
 
 These prerequisites use the `apt` package manager for Linux. Adjust the commands accordingly per your package manager.
 
@@ -76,7 +88,7 @@ You can install all of the prerequisites for Linux at once using the following c
 
 - [x] Download and install the [Git command line interface](https://git-scm.com/download/).
 
-- [x] Download and install [CMake](https://cmake.org/download/)/
+- [x] Download and install [CMake](https://cmake.org/download/).
 
 - [x] Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases) (`protoc-xx.x-win32.zip` or `protoc-xx.x-win64.zip`) and add the `\bin` directory to your Windows `PATH` environment variable.
 
@@ -91,84 +103,4 @@ You can install all of the prerequisites for Linux at once using the following c
 </Tabs>
 
 
-
-````
-<TabItem value="mac" label="macOS">
-
-The prerequisites needed for the macOS operating system include:
-
-- Rust and Cargo
-- Homebrew
-- cURL
-- CMake
-- libpq (optional)
-- Git CLI
-- PostgreSQL
-
-macOS includes a version of cURL you can use to install Homebrew. Use Homebrew to install other tools, including a newer version of cURL.
-
-#### Homebrew {#brew}
-
-Use the following command to install [Homebrew](https://brew.sh/):
-
-```sh
-$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-:::info
-
-If you used the commands in the [Install using Homebrew](#install-homebrew) section, you do not need to install anything else.
-
-:::
-
-#### All macOS prerequisites
-
-With Homebrew installed, you can install individual prerequisites from the following sections or install them all at once with this command:
-
-<ImportContent source="macos-deps.mdx" mode="snippet" />
-
-#### cURL {#curl-1}
-
-Use the following command to update the default [cURL](https://curl.se) on macOS:
-
-```sh
-$ brew install curl
-```
-
-#### CMake {#cmake-1}
-
-Use the following command to install CMake:
-
-```sh
-$ brew install cmake
-```
-
-To customize the installation, see [Installing CMake](https://cmake.org/install/) on the CMake website.
-
-#### libpq (optional) {#libpq-1}
-
-<ImportContent source="libpq-req.mdx" mode="snippet" />
-
-Use the following command to install libpq:
-```sh
-$ brew install libpq
-```
-
-#### Git CLI {#git-cli-1}
-
-Use the following command to install Git:
-
-```sh
-$ brew install git
-```
-
-After installing Git, download and install the [Git command line interface](https://git-scm.com/download/).
-
-#### PostgreSQL
-
-Visit the official [PostgreSQL website](https://wiki.postgresql.org/wiki/Main_Page) for instructions on downloading PostgreSQL.
-
-</TabItem>
-
-
-````
+## [add instructions for how to download source code and build it locally]
