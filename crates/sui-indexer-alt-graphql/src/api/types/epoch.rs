@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::try_join;
@@ -535,16 +534,10 @@ impl Epoch {
             return Ok(Some(Connection::new(false, false)));
         };
 
-        let cursors = page.paginate_indices(1 + latest_epoch.epoch_id as usize);
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-        for edge in cursors.edges {
-            let epoch = Epoch::with_id(scope.clone(), *edge.cursor as u64);
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), epoch));
-        }
-
-        Ok(Some(conn))
+        page.paginate_indices(1 + latest_epoch.epoch_id as usize, |id| {
+            Ok(Epoch::with_id(scope.clone(), id as u64))
+        })
+        .map(Some)
     }
 
     /// Get the epoch start information.

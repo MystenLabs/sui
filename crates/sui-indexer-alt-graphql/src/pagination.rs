@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use async_graphql::{
-    connection::{Connection, CursorType, Edge, EmptyFields},
+    connection::{Connection, CursorType, Edge},
     registry::MetaField,
     OutputType,
 };
@@ -178,18 +178,21 @@ impl<C> Page<C> {
 }
 
 impl Page<JsonCursor<usize>> {
-    /// Treat the cursors of this Page as indices into a range [0, total). Returns a connection
-    /// with the cursors filled out, but no data.
-    pub(crate) fn paginate_indices(
+    /// Treat the cursors of this Page as indices into a range [0, total).
+    ///
+    /// Returns a connection where the cursors correspond to a sub-range of indices and the
+    /// nodes are selected by calling `node` with each index in that sub-range.
+    pub(crate) fn paginate_indices<N: OutputType, E>(
         &self,
         total: usize,
-    ) -> Connection<JsonCursor<usize>, EmptyFields> {
+        node: impl Fn(usize) -> Result<N, E>,
+    ) -> Result<Connection<String, N>, E> {
         let mut lo = self.after().map_or(0, |a| a.saturating_add(1));
         let mut hi = self.before().map_or(total, |b| **b);
         let mut conn = Connection::new(false, false);
 
         if hi <= lo {
-            return conn;
+            return Ok(conn);
         } else if (hi - lo) > self.limit() {
             if self.is_from_front() {
                 hi = lo + self.limit();
@@ -201,10 +204,11 @@ impl Page<JsonCursor<usize>> {
         conn.has_previous_page = 0 < lo;
         conn.has_next_page = hi < total;
         for i in lo..hi {
-            conn.edges.push(Edge::new(JsonCursor::new(i), EmptyFields));
+            conn.edges
+                .push(Edge::new(JsonCursor::new(i).encode_cursor(), node(i)?));
         }
 
-        conn
+        Ok(conn)
     }
 }
 
