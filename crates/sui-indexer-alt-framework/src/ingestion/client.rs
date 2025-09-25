@@ -102,6 +102,13 @@ impl IngestionClient {
         Ok(Self::new_impl(Arc::new(client), metrics))
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(client: Arc<dyn IngestionClientTrait>) -> Self {
+        let registry = prometheus::Registry::new_custom(Some("test".to_string()), None).unwrap();
+        let metrics = IndexerMetrics::new(None, &registry);
+        Self::new_impl(client, metrics)
+    }
+
     fn new_impl(client: Arc<dyn IngestionClientTrait>, metrics: Arc<IndexerMetrics>) -> Self {
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new(
             metrics.ingested_checkpoint_timestamp_lag.clone(),

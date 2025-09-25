@@ -280,13 +280,12 @@ impl<S: Store> Indexer<S> {
 
         info!(first_checkpoint, last_checkpoint = ?self.last_checkpoint, "Ingestion range");
 
-        let (regulator_handle, broadcaster_handle) = self
+        let broadcaster_handle = self
             .ingestion_service
             .run(first_checkpoint..=last_checkpoint)
             .await
             .context("Failed to start ingestion service")?;
 
-        self.handles.push(regulator_handle);
         self.handles.push(broadcaster_handle);
 
         Ok(tokio::spawn(async move {
