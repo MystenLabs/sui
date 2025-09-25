@@ -15222,6 +15222,7 @@ dependencies = [
  "bytes",
  "clap",
  "env_logger",
+ "fastcrypto",
  "log",
  "move-binary-format",
  "move-core-types",
