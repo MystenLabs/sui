@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_store::cached_package_store::CachedPackageStore, execution_mode::ExecutionMode,
-    execution_value::ExecutionState, gas_charger::GasCharger,
+    data_store::{
+        cached_package_store::CachedPackageStore,
+        transaction_package_store::TransactionPackageStore,
+    },
+    execution_mode::ExecutionMode,
+    execution_value::ExecutionState,
+    gas_charger::GasCharger,
     static_programmable_transactions::env::Env,
 };
 use move_trace_format::format::MoveTraceBuilder;
@@ -33,7 +38,7 @@ pub fn execute<Mode: ExecutionMode>(
     txn: ProgrammableTransaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
-    let package_store = CachedPackageStore::new(Box::new(package_store));
+    let package_store = CachedPackageStore::new(vm, TransactionPackageStore::new(package_store));
     let linkage_analysis = linkage::analysis::linkage_analysis_for_protocol_config::<Mode>(
         protocol_config,
         &txn,

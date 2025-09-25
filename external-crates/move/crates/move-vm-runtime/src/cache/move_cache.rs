@@ -5,9 +5,7 @@
 // The package loader is responsible for the management of packages, package loading and caching,
 // and publishing packages to the VM.
 
-use crate::{
-    jit, natives::functions::NativeFunctions, shared::types::VersionId, validation::verification,
-};
+use crate::{jit, shared::types::VersionId, validation::verification};
 use move_vm_config::runtime::VMConfig;
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
@@ -28,9 +26,16 @@ type PackageCache = HashMap<VersionId, Arc<Package>>;
 /// and their types. This is then used to create the VTables for the VM.
 #[derive(Debug)]
 pub struct MoveCache {
-    pub(crate) natives: Arc<NativeFunctions>,
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) package_cache: Arc<RwLock<PackageCache>>,
+}
+
+#[derive(Debug)]
+pub enum ResolvedPackageResult {
+    /// The package was found, loaded, and cached.
+    Found(Arc<Package>),
+    /// The package was not found.
+    NotFound,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -38,9 +43,8 @@ pub struct MoveCache {
 // -------------------------------------------------------------------------------------------------
 
 impl MoveCache {
-    pub fn new(natives: Arc<NativeFunctions>, vm_config: Arc<VMConfig>) -> Self {
+    pub fn new(vm_config: Arc<VMConfig>) -> Self {
         Self {
-            natives,
             vm_config,
             package_cache: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -115,12 +119,10 @@ impl Clone for MoveCache {
     /// Makes a shallow copy of the VM Cache by cloning all the internal `Arc`s.
     fn clone(&self) -> Self {
         let MoveCache {
-            natives,
             vm_config,
             package_cache,
         } = self;
         Self {
-            natives: natives.clone(),
             vm_config: vm_config.clone(),
             package_cache: package_cache.clone(),
         }

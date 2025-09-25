@@ -62,9 +62,9 @@ pub fn type_linkage(
         let transitive_deps = pkg
             .linkage_table()
             .values()
-            .map(|info| info.upgraded_id)
+            .map(|version_id| ObjectID::from(*version_id))
             .collect::<Vec<_>>();
-        let package_id = pkg.id();
+        let package_id = pkg.version_id().into();
         add_and_unify(
             &package_id,
             store,

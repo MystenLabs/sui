@@ -4,6 +4,7 @@
 
 use crate::{DEFAULT_BUILD_DIR, DEFAULT_STORAGE_DIR};
 use anyhow::{Result, anyhow, bail};
+use indexmap::IndexMap;
 use move_binary_format::file_format::{CompiledModule, FunctionDefinitionIndex};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
@@ -11,7 +12,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
-    resolver::{ModuleResolver, SerializedPackage, TypeOrigin},
+    resolver::{IntraPackageName, ModuleResolver, SerializedPackage},
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -43,7 +44,8 @@ pub struct PackageInfo {
     version_id: VersionId,
     original_id: OriginalId,
     linkage_table: BTreeMap<OriginalId, VersionId>,
-    type_origin_table: BTreeMap<Identifier, BTreeMap<Identifier, AccountAddress>>,
+    type_origin_table: IndexMap<Identifier, BTreeMap<Identifier, AccountAddress>>,
+    version: u64,
 }
 
 impl OnDiskStateView {
@@ -155,14 +157,16 @@ impl OnDiskStateView {
         let metadata_path = self.get_metadata_path(&package_id);
         let metadata = Self::get_bytes(&metadata_path)?.unwrap();
         let info: PackageInfo = serde_yaml::from_slice(&metadata)?;
-        let mut type_origin_table = vec![];
+        let mut type_origin_table = IndexMap::new();
         for (module_name, type_map) in info.type_origin_table {
             for (type_name, origin_id) in type_map {
-                type_origin_table.push(TypeOrigin {
-                    module_name: module_name.clone(),
-                    type_name,
+                type_origin_table.insert(
+                    IntraPackageName {
+                        module_name: module_name.clone(),
+                        type_name,
+                    },
                     origin_id,
-                });
+                );
             }
         }
         let pkg = SerializedPackage {
@@ -171,6 +175,7 @@ impl OnDiskStateView {
             version_id: info.version_id,
             linkage_table: info.linkage_table,
             type_origin_table,
+            version: info.version,
         };
         Ok(Some(pkg))
     }
@@ -268,12 +273,14 @@ impl OnDiskStateView {
             }
             fs::write(module_path, module_bytes)?
         }
-        let mut type_origin_table = BTreeMap::new();
-        for TypeOrigin {
-            module_name,
-            type_name,
+        let mut type_origin_table = IndexMap::new();
+        for (
+            IntraPackageName {
+                module_name,
+                type_name,
+            },
             origin_id,
-        } in package.type_origin_table
+        ) in package.type_origin_table
         {
             let entry = type_origin_table
                 .entry(module_name)
@@ -285,6 +292,7 @@ impl OnDiskStateView {
             original_id: package.original_id,
             linkage_table: package.linkage_table,
             type_origin_table,
+            version: package.version,
         };
 
         let metadata_path = self.get_metadata_path(&pkg_id);

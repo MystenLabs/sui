@@ -6,7 +6,7 @@ use crate::static_programmable_transactions::linkage::resolution::{
 };
 use move_vm_runtime::shared::linkage_context::LinkageContext;
 use std::{collections::BTreeMap, rc::Rc};
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::ObjectID;
 
 #[derive(Clone, Debug)]
 pub struct ExecutableLinkage(pub Rc<ResolvedLinkage>);
@@ -28,7 +28,7 @@ pub struct ResolvedLinkage {
     // Note: Multiple packages can have the same runtime ID in this mapping, and domain of this map
     // is a superset of range of `linkage`.
     pub linkage_resolution: BTreeMap<ObjectID, ObjectID>,
-    pub versions: BTreeMap<ObjectID, SequenceNumber>,
+    pub versions: BTreeMap<ObjectID, u64>,
 }
 
 impl ResolvedLinkage {
