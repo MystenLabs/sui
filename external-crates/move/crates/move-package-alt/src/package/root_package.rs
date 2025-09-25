@@ -127,8 +127,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// A synchronous version of `load` that can be used to load a package while blocking in place.
-    pub fn load_sync(path: PathBuf, env: Environment) -> PackageResult<Self> {
-        block_on!(Self::load(path.as_path(), env))
+    pub fn load_sync(path: PathBuf, env: Environment, modes: Vec<ModeName>) -> PackageResult<Self> {
+        block_on!(Self::load(path.as_path(), env, modes))
     }
 
     /// Load the root package from `root` in environment `build_env`, but replace all the addresses
@@ -266,19 +266,22 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let pubs = Self::load_pubfile(&package_path)?;
 
         // apply mode filter
-        let filtered_graph = unfiltered_graph.filter_for_mode(modes);
+        let filtered_graph = unfiltered_graph.filter_for_mode(&modes);
 
         // check that there is a consistent linkage
         let linkage = filtered_graph.linkage()?;
         unfiltered_graph.check_rename_from()?;
 
-        let deps_published_ids = linkage.keys().cloned().collect();
+        let deps_ids = linkage
+            .iter()
+            .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
+            .collect();
 
         Ok(Self {
             package_path,
             environment: env,
             lockfile,
-            deps_published_ids,
+            deps_ids,
             pubs: PublicationSource::Published(pubs),
             unfiltered_graph,
             filtered_graph,
@@ -1297,5 +1300,38 @@ pkg_b = { local = "../pkg_b" }"#,
         .await;
 
         assert_snapshot!(root.unwrap_err().to_string(), @"Cannot build with build-env `unknown environment`: the recognized environments are <TODO>");
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a --> b --> c1
+    ///              a -->|test, override| c2
+    /// ```
+    ///
+    /// In this scenario, the test-only override dependency on c2 should be ignored when computing
+    /// the non-test linkage, so `c1` should be in the computed graph, and not c2
+    #[test(tokio::test)]
+    async fn mode_overrides_unaffected() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_published("c1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("c2", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a"), ("a", "b"), ("b", "c1")])
+            .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
+            .build();
+
+        let root =
+            RootPackage::<Vanilla>::load(scenario.path_for("root"), default_environment(), vec![])
+                .await
+                .unwrap();
+
+        let mut package_names: Vec<_> = root
+            .packages()
+            .unwrap()
+            .into_iter()
+            .map(|pkg| pkg.display_name().to_string())
+            .collect();
+        package_names.sort();
+
+        assert_eq!(package_names, ["a", "b", "c1", "root"]);
     }
 }
