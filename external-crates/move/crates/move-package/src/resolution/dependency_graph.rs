@@ -35,6 +35,9 @@ use super::{
     local_path,
 };
 
+const SYSTEM_DEPENDENCIES: [&str; 7] = ["Prover", "SuiProver", "Sui", "SuiSystem", "DeepBook", "MoveStdlib", "SuiSpecs"];
+const PRIORITIZED_MERGE_SYSTEM_DEPENDENCIES: [&str; 1] = ["MoveStdlib"];
+
 /// A representation of the transitive dependency graph of a Move package.  If successfully created,
 /// the resulting graph:
 ///
@@ -240,9 +243,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         dependencies: &PM::Dependencies,
         dev_dependencies: &PM::Dependencies,
     ) -> Result<()> {
-        let sui_packages = ["Sui", "SuiSystem", "Prover", "SuiProver", "DeepBook", "MoveStdlib", "SuiSpecs"];
-
-        if sui_packages.contains(&package_name.as_str()) {
+        if SYSTEM_DEPENDENCIES.contains(&package_name.as_str()) {
             return Ok(());
         }
 
@@ -250,7 +251,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
         // Check regular dependencies - flag ALL Sui dependencies, not just local ones
         for (dep_name, dep) in dependencies {
-            if sui_packages.contains(&dep_name.as_str()) {
+            if SYSTEM_DEPENDENCIES.contains(&dep_name.as_str()) {
                 match dep {
                     PM::Dependency::Internal(internal_dep) => {
                         let dep_type = match &internal_dep.kind {
@@ -269,7 +270,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
         // Check dev dependencies - same logic as above
         for (dep_name, dep) in dev_dependencies {
-            if sui_packages.contains(&dep_name.as_str()) {
+            if SYSTEM_DEPENDENCIES.contains(&dep_name.as_str()) {
                 match dep {
                     PM::Dependency::Internal(internal_dep) => {
                         if !internal_dep.dep_override {
@@ -893,6 +894,25 @@ impl DependencyGraph {
 
                 // it's the subsequent time package with pkg_name has been encountered
                 if pkg != existing_pkg {
+                    if PRIORITIZED_MERGE_SYSTEM_DEPENDENCIES.contains(&immediate_dep_name.as_str()) {
+                        // Check if this is a git vs local conflict that can be auto-resolved
+                        let existing_is_local = matches!(existing_pkg.kind, PM::DependencyKind::Local(_));
+                        let current_is_local = matches!(pkg.kind, PM::DependencyKind::Local(_));
+                        let existing_is_git = matches!(existing_pkg.kind, PM::DependencyKind::Git(_));
+                        let current_is_git = matches!(pkg.kind, PM::DependencyKind::Git(_));
+
+                        // Auto-resolve conflict: prefer external dependency over local dependency
+                        if (existing_is_local && current_is_git) || (existing_is_git && current_is_local) {
+                            if current_is_git {
+                                // Current dependency is external (git), prefer it over existing local dependency
+                                // Update existing_pkg_info to use the external dependency
+                                existing_pkg_info = Some((dep_id, &graph_info.g, pkg, graph_info.is_external));
+                            }
+                            // If existing is external and current is local, keep existing (do nothing)
+                            continue;
+                        }
+                    }
+
                     let existing_conflict_dep_orig_name =
                         get_original_dep_name(existing_graph, pkg_id).to_string();
                     let conflict_dep_orig_name =
