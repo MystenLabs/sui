@@ -713,8 +713,6 @@ impl MovePackage {
             return Ok(Connection::new(false, false));
         };
 
-        let mut conn = Connection::new(false, false);
-
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let pg_reader: &PgReader = ctx.data()?;
 
@@ -725,13 +723,13 @@ impl MovePackage {
         else {
             // No original ID record for this package, so it either doesn't exist on chain, or it
             // is not a package.
-            return Ok(conn);
+            return Ok(Connection::new(false, false));
         };
 
         // The original ID record exists but points to a package that is not visible at the
         // checkpoint being viewed.
         if original_id.cp_sequence_number as u64 > checkpoint_viewed_at {
-            return Ok(conn);
+            return Ok(Connection::new(false, false));
         }
 
         let mut query = p::kv_packages
@@ -780,20 +778,14 @@ impl MovePackage {
             results.reverse();
         }
 
-        let (prev, next, results) =
-            page.paginate_results(results, |p| JsonCursor::new(p.package_version as u64));
-
-        conn.has_previous_page = prev;
-        conn.has_next_page = next;
-
-        for (cursor, stored) in results {
-            let scope = scope.with_root_version(stored.package_version as u64);
-            if let Some(object) = Self::from_stored(scope, stored)? {
-                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
-            }
-        }
-
-        Ok(conn)
+        page.paginate_results(
+            results,
+            |p| JsonCursor::new(p.package_version as u64),
+            |p| {
+                let scope = scope.with_root_version(p.package_version as u64);
+                Ok(Self::from_stored(scope, p)?.context("Failed to instantiate package")?)
+            },
+        )
     }
 
     /// Paginate through all packages published in a range of checkpoints.
@@ -810,8 +802,6 @@ impl MovePackage {
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(Connection::new(false, false));
         };
-
-        let mut conn = Connection::new(false, false);
 
         let pg_reader: &PgReader = ctx.data()?;
 
@@ -872,24 +862,17 @@ impl MovePackage {
             results.reverse();
         }
 
-        let (prev, next, results) = page.paginate_results(results, |p| {
-            BcsCursor::new(PackageCursor {
-                cp_sequence_number: p.cp_sequence_number as u64,
-                original_id: p.original_id.clone(),
-                package_version: p.package_version as u64,
-            })
-        });
-
-        conn.has_previous_page = prev;
-        conn.has_next_page = next;
-
-        for (cursor, stored) in results {
-            if let Some(object) = Self::from_stored(scope.clone(), stored)? {
-                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
-            }
-        }
-
-        Ok(conn)
+        page.paginate_results(
+            results,
+            |p| {
+                BcsCursor::new(PackageCursor {
+                    cp_sequence_number: p.cp_sequence_number as u64,
+                    original_id: p.original_id.clone(),
+                    package_version: p.package_version as u64,
+                })
+            },
+            |p| Ok(Self::from_stored(scope.clone(), p)?.context("Failed to instantiate package")?),
+        )
     }
 
     /// Get the native MovePackage, loading it lazily if needed.
@@ -940,8 +923,6 @@ impl MovePackage {
         page: Page<CSysPackage>,
         checkpoint: u64,
     ) -> Result<Connection<String, MovePackage>, RpcError> {
-        let mut conn = Connection::new(false, false);
-
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut pagination = query!("");
@@ -1009,18 +990,10 @@ impl MovePackage {
             results.reverse();
         }
 
-        let (prev, next, results) =
-            page.paginate_results(results, |p| BcsCursor::new(p.original_id.clone()));
-
-        conn.has_previous_page = prev;
-        conn.has_next_page = next;
-
-        for (cursor, stored) in results {
-            if let Some(object) = Self::from_stored(scope.clone(), stored)? {
-                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
-            }
-        }
-
-        Ok(conn)
+        page.paginate_results(
+            results,
+            |p| BcsCursor::new(p.original_id.clone()),
+            |p| Ok(Self::from_stored(scope.clone(), p)?.context("Failed to instantiate package")?),
+        )
     }
 }

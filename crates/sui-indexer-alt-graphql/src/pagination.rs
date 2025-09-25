@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use async_graphql::{
     connection::{Connection, CursorType, Edge, EmptyFields},
     registry::MetaField,
+    OutputType,
 };
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
@@ -218,13 +219,15 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
     /// `results` should contain the elements of the page, in order, as well as at least one record
     /// either side of the page, if there is one.
     ///
-    /// Returns two booleans indicating whether there is a previous or next page, followed by an
-    /// iterator of values in the current page, accompanied by their cursors.
-    pub(crate) fn paginate_results<T>(
+    /// `cursor` is a function that extracts the cursor from an element of `results`, and `node` is
+    /// a function that extracts the node. Returns a GraphQL `Connection` populated with edges
+    /// derived from `results`.
+    pub(crate) fn paginate_results<T, N: OutputType, E>(
         &self,
         results: Vec<T>,
         cursor: impl Fn(&T) -> C,
-    ) -> (bool, bool, impl Iterator<Item = (C, T)>) {
+        node: impl Fn(T) -> Result<N, E>,
+    ) -> Result<Connection<String, N>, E> {
         let edges: Vec<_> = results.into_iter().map(|r| (cursor(&r), r)).collect();
         let first = edges.first().map(|(c, _)| c.clone());
         let last = edges.last().map(|(c, _)| c.clone());
@@ -235,19 +238,19 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
                 // cursors, so the bounds must have been invalid, no matter which end the page was
                 // drawn from.
                 (_, None, _, _, _) | (_, _, None, _, _) => {
-                    return (false, false, vec![].into_iter());
+                    return Ok(Connection::new(false, false));
                 }
 
                 // Page drawn from the front, and the cursor for the first element does not match
                 // `after`. This absence implies the bound was invalid, so we return an empty
                 // result.
                 (Some(a), Some(f), _, _, End::Front) if f != *a => {
-                    return (false, false, vec![].into_iter());
+                    return Ok(Connection::new(false, false));
                 }
 
                 // Similar to above case, but for back of results.
                 (_, _, Some(l), Some(b), End::Back) if l != *b => {
-                    return (false, false, vec![].into_iter());
+                    return Ok(Connection::new(false, false));
                 }
 
                 // From here onwards, we know that the results are non-empty. In the forward
@@ -286,7 +289,7 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
         // If there are no elements left after trimming, then forget whether there's a previous or
         // next page, because there will be no start or end cursor for this page to anchor on.
         if edges.len() == prefix + suffix {
-            return (false, false, vec![].into_iter());
+            return Ok(Connection::new(false, false));
         }
 
         // We finally made it -- trim the prefix and suffix edges from the result and send it!
@@ -298,7 +301,12 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
             edges.nth_back(suffix - 1);
         }
 
-        (prev, next, edges)
+        let mut conn = Connection::new(prev, next);
+        for (c, n) in edges {
+            conn.edges.push(Edge::new(c.encode_cursor(), node(n)?));
+        }
+
+        Ok(conn)
     }
 }
 
@@ -310,7 +318,19 @@ pub(crate) fn is_connection(field: &MetaField) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
+
     use super::*;
+
+    // Helper to create a node - identity function that can't fail
+    fn node<N>(n: N) -> Result<N, Infallible> {
+        Ok(n)
+    }
+
+    // Helper to create a (cursor, node) tuple for test expectations
+    fn edge(value: usize) -> (String, usize) {
+        (value.encode_cursor(), value)
+    }
 
     #[test]
     fn test_default_page() {
@@ -426,13 +446,14 @@ mod tests {
 
         let page: Page<usize> = Page::from_params(&limits, None, None, None, None).unwrap();
         let results = vec![0, 1, 2, 3, 4];
-        let expect = vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)];
+        let expect = vec![edge(0), edge(1), edge(2), edge(3), edge(4)];
 
-        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
-        let actual: Vec<_> = results.collect();
+        let conn = page.paginate_results(results, |r| *r, node).unwrap();
+        let actual: Vec<(String, usize)> =
+            conn.edges.into_iter().map(|e| (e.cursor, e.node)).collect();
 
-        assert!(!prev);
-        assert!(!next);
+        assert!(!conn.has_previous_page);
+        assert!(!conn.has_next_page);
         assert_eq!(expect, actual);
     }
 
@@ -446,13 +467,14 @@ mod tests {
         let page: Page<usize> = Page::from_params(&limits, None, None, None, None).unwrap();
 
         let results = vec![0, 1, 2];
-        let expect = vec![(0, 0), (1, 1), (2, 2)];
+        let expect = vec![edge(0), edge(1), edge(2)];
 
-        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
-        let actual: Vec<_> = results.collect();
+        let conn = page.paginate_results(results, |r| *r, node).unwrap();
+        let actual: Vec<(String, usize)> =
+            conn.edges.into_iter().map(|e| (e.cursor, e.node)).collect();
 
-        assert!(!prev);
-        assert!(!next);
+        assert!(!conn.has_previous_page);
+        assert!(!conn.has_next_page);
         assert_eq!(expect, actual);
     }
 
@@ -465,13 +487,14 @@ mod tests {
 
         let page: Page<usize> = Page::from_params(&limits, None, None, None, None).unwrap();
         let results = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-        let expect: Vec<_> = vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)];
+        let expect = vec![edge(0), edge(1), edge(2), edge(3), edge(4)];
 
-        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
-        let actual: Vec<_> = results.collect();
+        let conn = page.paginate_results(results, |r| *r, node).unwrap();
+        let actual: Vec<(String, usize)> =
+            conn.edges.into_iter().map(|e| (e.cursor, e.node)).collect();
 
-        assert!(!prev);
-        assert!(next);
+        assert!(!conn.has_previous_page);
+        assert!(conn.has_next_page);
         assert_eq!(expect, actual);
     }
 
@@ -486,13 +509,14 @@ mod tests {
             Page::from_params(&limits, None, None, Some(limits.default as u64), None).unwrap();
 
         let results = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-        let expect: Vec<_> = vec![(5, 5), (6, 6), (7, 7), (8, 8), (9, 9)];
+        let expect = vec![edge(5), edge(6), edge(7), edge(8), edge(9)];
 
-        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
-        let actual: Vec<_> = results.collect();
+        let conn = page.paginate_results(results, |r| *r, node).unwrap();
+        let actual: Vec<(String, usize)> =
+            conn.edges.into_iter().map(|e| (e.cursor, e.node)).collect();
 
-        assert!(prev);
-        assert!(!next);
+        assert!(conn.has_previous_page);
+        assert!(!conn.has_next_page);
         assert_eq!(expect, actual);
     }
 
@@ -506,13 +530,14 @@ mod tests {
         let page: Page<usize> = Page::from_params(&limits, Some(5), Some(2), None, None).unwrap();
 
         let results = vec![2, 3, 4, 5, 6, 7, 8, 9];
-        let expect = vec![(3, 3), (4, 4), (5, 5), (6, 6), (7, 7)];
+        let expect = vec![edge(3), edge(4), edge(5), edge(6), edge(7)];
 
-        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
-        let actual: Vec<_> = results.collect();
+        let conn = page.paginate_results(results, |r| *r, node).unwrap();
+        let actual: Vec<(String, usize)> =
+            conn.edges.into_iter().map(|e| (e.cursor, e.node)).collect();
 
-        assert!(prev);
-        assert!(next);
+        assert!(conn.has_previous_page);
+        assert!(conn.has_next_page);
         assert_eq!(expect, actual);
     }
 
@@ -526,13 +551,14 @@ mod tests {
         let page: Page<usize> = Page::from_params(&limits, None, Some(2), None, None).unwrap();
 
         let results = vec![4, 5];
-        let expect: Vec<(usize, usize)> = vec![];
+        let expect: Vec<(String, usize)> = vec![];
 
-        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
-        let actual: Vec<_> = results.collect();
+        let conn = page.paginate_results(results, |r| *r, node).unwrap();
+        let actual: Vec<(String, usize)> =
+            conn.edges.into_iter().map(|e| (e.cursor, e.node)).collect();
 
-        assert!(!prev);
-        assert!(!next);
+        assert!(!conn.has_previous_page);
+        assert!(!conn.has_next_page);
         assert_eq!(expect, actual);
     }
 
@@ -546,13 +572,14 @@ mod tests {
         let page: Page<usize> = Page::from_params(&limits, None, Some(2), None, Some(3)).unwrap();
 
         let results = vec![2, 3];
-        let expect: Vec<(usize, usize)> = vec![];
+        let expect: Vec<(String, usize)> = vec![];
 
-        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
-        let actual: Vec<_> = results.collect();
+        let conn = page.paginate_results(results, |r| *r, node).unwrap();
+        let actual: Vec<(String, usize)> =
+            conn.edges.into_iter().map(|e| (e.cursor, e.node)).collect();
 
-        assert!(!prev);
-        assert!(!next);
+        assert!(!conn.has_previous_page);
+        assert!(!conn.has_next_page);
         assert_eq!(expect, actual);
     }
 }
