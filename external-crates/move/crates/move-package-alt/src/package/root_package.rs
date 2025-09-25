@@ -1293,4 +1293,37 @@ pkg_b = { local = "../pkg_b" }"#,
 
         assert_snapshot!(root.unwrap_err().to_string(), @"Cannot build with build-env `unknown environment`: the recognized environments are <TODO>");
     }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a --> b --> c1
+    ///              a -->|test, override| c2
+    /// ```
+    ///
+    /// In this scenario, the test-only override dependency on c2 should be ignored when computing
+    /// the non-test linkage, so `c1` should be in the computed graph, and not c2
+    #[test(tokio::test)]
+    async fn mode_overrides_unaffected() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_published("c1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("c2", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a"), ("a", "b"), ("b", "c1")])
+            .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
+            .build();
+
+        let root =
+            RootPackage::<Vanilla>::load(scenario.path_for("root"), default_environment(), vec![])
+                .await
+                .unwrap();
+
+        let mut package_names: Vec<_> = root
+            .packages()
+            .unwrap()
+            .into_iter()
+            .map(|pkg| pkg.display_name().to_string())
+            .collect();
+        package_names.sort();
+
+        assert_eq!(package_names, ["a", "b", "c1", "root"]);
+    }
 }
