@@ -811,8 +811,8 @@ impl<K: SourceKind> Model<K> {
             let mut deps = BTreeMap::new();
             for immediate_dep in &module.immediate_dependencies {
                 deps.insert(*immediate_dep, true);
-                if let Some(acc) = acc.get(immediate_dep) {
-                    for transitive_dep in acc.get(immediate_dep).unwrap().keys() {
+                if let Some(imm_dep) = acc.get(immediate_dep) {
+                    for transitive_dep in imm_dep.keys() {
                         if *transitive_dep != id {
                             deps.insert(*transitive_dep, false);
                         }
