@@ -1551,4 +1551,80 @@ mod tests {
         let result = package(&natives, &link_context, input_package);
         assert!(result.is_ok());
     }
+
+    // Tests for flatten_and_renumber_blocks function
+
+    #[test]
+    fn test_flatten_and_renumber_blocks_empty() {
+        let blocks = BTreeMap::new();
+        let mut jump_tables = vec![];
+
+        let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_flatten_and_renumber_blocks_single_block() {
+        use crate::jit::optimization::ast as input;
+
+        let mut blocks = BTreeMap::new();
+        blocks.insert(0u16, vec![input::Bytecode::LdU64(42), input::Bytecode::Pop]);
+        let mut jump_tables = vec![];
+
+        let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+        assert_eq!(result.len(), 2);
+        assert!(matches!(result[0], input::Bytecode::LdU64(42)));
+        assert!(matches!(result[1], input::Bytecode::Pop));
+    }
+
+    #[test]
+    fn test_flatten_and_renumber_blocks_multiple_blocks() {
+        use crate::jit::optimization::ast as input;
+
+        let mut blocks = BTreeMap::new();
+        blocks.insert(0u16, vec![input::Bytecode::LdU64(42), input::Bytecode::Pop]);
+        blocks.insert(
+            10u16,
+            vec![
+                input::Bytecode::LdTrue,
+                input::Bytecode::Pop,
+                input::Bytecode::Ret,
+            ],
+        );
+        let mut jump_tables = vec![];
+
+        let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+        assert_eq!(result.len(), 5);
+        // Verify the blocks were flattened in order
+        assert!(matches!(result[0], input::Bytecode::LdU64(42)));
+        assert!(matches!(result[1], input::Bytecode::Pop));
+        assert!(matches!(result[2], input::Bytecode::LdTrue));
+        assert!(matches!(result[3], input::Bytecode::Pop));
+        assert!(matches!(result[4], input::Bytecode::Ret));
+    }
+
+    #[test]
+    fn test_flatten_and_renumber_blocks_branch_targets() {
+        use crate::jit::optimization::ast as input;
+
+        let mut blocks = BTreeMap::new();
+        blocks.insert(
+            0u16,
+            vec![input::Bytecode::LdTrue, input::Bytecode::BrTrue(10u16)],
+        );
+        blocks.insert(
+            10u16,
+            vec![input::Bytecode::LdU64(42), input::Bytecode::Ret],
+        );
+        let mut jump_tables = vec![];
+
+        let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+        assert_eq!(result.len(), 4);
+
+        // Verify that branch targets were renumbered
+        match &result[1] {
+            input::Bytecode::BrTrue(target) => assert_eq!(*target, 2), // Should point to offset 2
+            _ => panic!("Expected BrTrue with renumbered target"),
+        }
+    }
 }
