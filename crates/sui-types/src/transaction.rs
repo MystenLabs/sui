@@ -153,11 +153,12 @@ impl WithdrawalTypeArg {
         }
     }
 
-    /// Get the type parameter of the withdrawal type argument,
-    /// e.g. `Balance<T>` -> `T`
-    pub fn get_type_param(&self) -> anyhow::Result<TypeTag> {
+    /// If this is a Balance accumulator, return the type parameter of `Balance<T>`,
+    /// e.g. `Balance<T>` -> `Some(T)`
+    /// Otherwise, return `None`. This is not possible today, but in the future we will support other types of accumulators.
+    pub fn get_balance_type_param(&self) -> anyhow::Result<Option<TypeTag>> {
         match self {
-            WithdrawalTypeArg::Balance(type_param) => type_param.to_type_tag(),
+            WithdrawalTypeArg::Balance(type_param) => type_param.to_type_tag().map(Some),
         }
     }
 }
@@ -2412,20 +2413,19 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg> {
-        if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
-            pt.inputs
-                .iter()
-                .filter_map(|input| {
-                    if let CallArg::FundsWithdrawal(withdraw) = input {
-                        Some(withdraw.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        } else {
-            vec![]
-        }
+        let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
+            return vec![];
+        };
+        pt.inputs
+            .iter()
+            .filter_map(|input| {
+                if let CallArg::FundsWithdrawal(withdraw) = input {
+                    Some(withdraw.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {

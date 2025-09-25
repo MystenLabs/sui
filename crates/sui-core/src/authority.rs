@@ -1066,13 +1066,13 @@ impl AuthorityState {
         let funds_withdraw_types = tx_data
             .get_funds_withdrawals()
             .into_iter()
-            .map(|withdraw| {
+            .filter_map(|withdraw| {
                 withdraw
                     .type_arg
-                    .get_type_param()
+                    .get_balance_type_param()
                     // unwrap safe because we already verified the transaction.
                     .unwrap()
-                    .to_canonical_string(false)
+                    .map(|ty| ty.to_canonical_string(false))
             })
             .collect::<BTreeSet<_>>();
 
