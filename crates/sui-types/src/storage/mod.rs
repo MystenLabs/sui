@@ -14,9 +14,11 @@ use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
+use crate::full_checkpoint_content::ObjectSet;
 use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
 use crate::storage::error::Error as StorageError;
+use crate::transaction::TransactionData;
 use crate::transaction::{SenderSignedData, TransactionDataAPI};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -733,21 +735,42 @@ pub fn get_transaction_output_objects(
 }
 
 // Returns an iterator over the ObjectKey's of objects read or written by this transaction
-pub fn get_transaction_object_set<'a>(
+pub fn get_transaction_object_set(
+    transaction: &TransactionData,
     effects: &TransactionEffects,
-    unchanged_loaded_runtime_objects: &'a [ObjectKey],
-) -> impl Iterator<Item = (ObjectID, SequenceNumber)> + 'a {
+    unchanged_loaded_runtime_objects: &[ObjectKey],
+) -> BTreeSet<ObjectKey> {
+    // enumerate the full set of input objects in order to properly capture immutable objects that
+    // may not appear in the effects.
+    //
+    // This excludes packages
+    let input_objects = transaction
+        .input_objects()
+        .expect("txn was executed and must have valid input objects")
+        .into_iter()
+        .filter_map(|input| {
+            input
+                .version()
+                .map(|version| ObjectKey(input.object_id(), version))
+        });
+
+    // The full set of output/written objects as well as any of their initial versions
     let modified_set = effects
         .object_changes()
         .into_iter()
         .flat_map(|change| {
             [
-                change.input_version.map(|version| (change.id, version)),
-                change.output_version.map(|version| (change.id, version)),
+                change
+                    .input_version
+                    .map(|version| ObjectKey(change.id, version)),
+                change
+                    .output_version
+                    .map(|version| ObjectKey(change.id, version)),
             ]
         })
         .flatten();
 
+    // The set of unchanged consensus objects
     let unchanged_consensus =
         effects
             .unchanged_consensus_objects()
@@ -756,18 +779,17 @@ pub fn get_transaction_object_set<'a>(
                 if let crate::effects::UnchangedConsensusKind::ReadOnlyRoot((version, _)) =
                     unchanged.1
                 {
-                    Some((unchanged.0, version))
+                    Some(ObjectKey(unchanged.0, version))
                 } else {
                     None
                 }
             });
 
-    let unchanged_loaded_runtime_objects =
-        unchanged_loaded_runtime_objects.iter().map(|r| (r.0, r.1));
-
-    modified_set
+    input_objects
+        .chain(modified_set)
         .chain(unchanged_consensus)
-        .chain(unchanged_loaded_runtime_objects)
+        .chain(unchanged_loaded_runtime_objects.iter().copied())
+        .collect()
 }
 
 // A BackingStore to pass to execution in order to track all objects loaded during execution.
@@ -776,7 +798,7 @@ pub fn get_transaction_object_set<'a>(
 // execution.
 pub struct TrackingBackingStore<'a> {
     inner: &'a dyn crate::storage::BackingStore,
-    read_objects: std::cell::RefCell<BTreeMap<ObjectID, BTreeMap<u64, Object>>>,
+    read_objects: std::cell::RefCell<ObjectSet>,
 }
 
 impl<'a> TrackingBackingStore<'a> {
@@ -787,18 +809,12 @@ impl<'a> TrackingBackingStore<'a> {
         }
     }
 
-    pub fn into_read_objects(self) -> BTreeMap<ObjectID, BTreeMap<u64, Object>> {
+    pub fn into_read_objects(self) -> ObjectSet {
         self.read_objects.into_inner()
     }
 
     fn track_object(&self, object: &Object) {
-        let id = object.id();
-        let version = object.version().value();
-        self.read_objects
-            .borrow_mut()
-            .entry(id)
-            .or_default()
-            .insert(version, object.clone());
+        self.read_objects.borrow_mut().insert(object.clone());
     }
 }
 

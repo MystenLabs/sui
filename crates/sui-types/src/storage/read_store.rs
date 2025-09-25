@@ -227,13 +227,13 @@ pub trait ReadStore: ObjectStore {
                 .iter()
                 .flat_map(|tx| {
                     crate::storage::get_transaction_object_set(
+                        &tx.transaction,
                         &tx.effects,
                         &tx.unchanged_loaded_runtime_objects,
                     )
                 })
                 .collect::<BTreeSet<_>>()
                 .into_iter()
-                .map(|(id, version)| ObjectKey(id, version))
                 .collect::<Vec<_>>();
 
             let objects = self.multi_get_objects_by_key(&refs);
@@ -719,7 +719,6 @@ pub struct BalanceInfo {
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct TransactionInfo {
     pub checkpoint: u64,
-    // Deprecated, used balance_changes stored in perpetual_tables
     pub balance_changes: Vec<BalanceChange>,
     pub object_types: HashMap<ObjectID, ObjectType>,
 }

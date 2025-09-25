@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::base_types::{ExecutionData, ObjectID, ObjectRef};
+use crate::base_types::{ExecutionData, ObjectRef};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
@@ -221,24 +221,20 @@ pub struct ExecutedTransaction {
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct ObjectSet(BTreeMap<ObjectID, BTreeMap<u64, Object>>);
+pub struct ObjectSet(BTreeMap<ObjectKey, Object>);
 
 impl ObjectSet {
-    pub fn get(&self, object_id: &ObjectID, version: &u64) -> Option<&Object> {
-        self.0
-            .get(object_id)
-            .and_then(|versions| versions.get(version))
+    pub fn get(&self, key: &ObjectKey) -> Option<&Object> {
+        self.0.get(key)
     }
 
     pub fn insert(&mut self, object: Object) {
         self.0
-            .entry(object.id())
-            .or_default()
-            .insert(object.version().value(), object);
+            .insert(ObjectKey(object.id(), object.version()), object);
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Object> {
-        self.0.values().flat_map(|table| table.values())
+        self.0.values()
     }
 }
 
@@ -253,7 +249,10 @@ impl From<Checkpoint> for CheckpointData {
                     .modified_at_versions()
                     .into_iter()
                     .filter_map(|(object_id, version)| {
-                        value.object_set.get(&object_id, &version.value()).cloned()
+                        value
+                            .object_set
+                            .get(&ObjectKey(object_id, version))
+                            .cloned()
                     })
                     .collect::<Vec<_>>();
                 let output_objects = tx
@@ -261,10 +260,7 @@ impl From<Checkpoint> for CheckpointData {
                     .all_changed_objects()
                     .into_iter()
                     .filter_map(|(object_ref, _owner, _kind)| {
-                        value
-                            .object_set
-                            .get(&object_ref.0, &object_ref.1.value())
-                            .cloned()
+                        value.object_set.get(&object_ref.into()).cloned()
                     })
                     .collect::<Vec<_>>();
 

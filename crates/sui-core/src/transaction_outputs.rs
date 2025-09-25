@@ -232,8 +232,7 @@ pub fn unchanged_loaded_runtime_objects(
 ) -> Vec<ObjectKey> {
     let mut unchanged_loaded_runtime_objects: BTreeMap<_, _> = tracking_store
         .into_read_objects()
-        .values()
-        .flat_map(|table| table.values())
+        .iter()
         .map(|o| (o.id(), o.version()))
         .collect();
 

@@ -13,7 +13,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::full_checkpoint_content::{
     Checkpoint, CheckpointData, ExecutedTransaction, ObjectSet,
 };
-use sui_types::storage::{ObjectKey, ObjectStore};
+use sui_types::storage::ObjectStore;
 
 pub(crate) fn store_checkpoint_locally(
     path: impl AsRef<Path>,
@@ -84,8 +84,12 @@ pub(crate) fn load_checkpoint(
             events,
             unchanged_loaded_runtime_objects: transaction_cache_reader
                 .get_unchanged_loaded_runtime_objects(tx.digest())
-                //TODO Do we throw an error or just stub in an empty vector?
-                .unwrap_or_default(),
+                .ok_or_else(|| {
+                    sui_types::storage::error::Error::custom(format!(
+                        "unabled to load unchanged_loaded_runtime_objects for tx {}",
+                        tx.digest(),
+                    ))
+                })?,
         };
         transactions.push(transaction);
     }
@@ -95,13 +99,13 @@ pub(crate) fn load_checkpoint(
             .iter()
             .flat_map(|tx| {
                 sui_types::storage::get_transaction_object_set(
+                    &tx.transaction,
                     &tx.effects,
                     &tx.unchanged_loaded_runtime_objects,
                 )
             })
             .collect::<BTreeSet<_>>()
             .into_iter()
-            .map(|(id, version)| ObjectKey(id, version))
             .collect::<Vec<_>>();
 
         let objects = object_store.multi_get_objects_by_key(&refs);
