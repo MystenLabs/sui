@@ -15,7 +15,7 @@ use tracing::{debug, info, warn};
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
-    store::{CommitterWatermark, Connection, TransactionalStore},
+    store::{Connection, TransactionalStore},
 };
 
 use super::{Handler, SequentialConfig};
@@ -73,13 +73,11 @@ where
 
         // The task keeps track of the highest (inclusive) checkpoint it has added to the batch, and
         // whether that batch needs to be written out. By extension it also knows the next
-        // checkpoint to expect and add to the batch. Initially, this watermark is synthetic, and
-        // will be overwritten by a processed checkpoint.
-        let mut watermark = CommitterWatermark::default();
+        // checkpoint to expect and add to the batch.
 
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
-        let mut logger = WatermarkLogger::new("sequential_committer", &watermark);
+        let mut logger = WatermarkLogger::new("sequential_committer");
 
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
             &metrics.watermarked_checkpoint_timestamp_lag,
@@ -92,7 +90,7 @@ where
         let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
-        info!(pipeline = H::NAME, ?watermark, "Starting committer");
+        info!(pipeline = H::NAME, "Starting committer");
 
         loop {
             tokio::select! {
@@ -124,6 +122,8 @@ where
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
+                    let mut watermark = None;
+
                     // Push data into the next batch as long as it's from contiguous checkpoints,
                     // outside of the checkpoint lag and we haven't gathered information from too
                     // many checkpoints already.
@@ -152,7 +152,7 @@ where
                                 batch_rows += indexed.len();
                                 batch_checkpoints += 1;
                                 H::batch(&mut batch, indexed.values);
-                                watermark = indexed.watermark;
+                                watermark = Some(indexed.watermark);
                                 next_checkpoint += 1;
                             }
 
@@ -188,6 +188,10 @@ where
                         assert_eq!(batch_rows, 0);
                         continue;
                     }
+
+                    let Some(watermark) = watermark else {
+                        continue;
+                    };
 
                     metrics
                         .collector_batch_size
@@ -362,7 +366,7 @@ where
             }
         }
 
-        info!(pipeline = H::NAME, ?watermark, "Stopping committer");
+        info!(pipeline = H::NAME, "Stopping committer");
     })
 }
 
