@@ -44,6 +44,7 @@ pub(super) fn committer<H>(
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
+    task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()>
@@ -52,6 +53,8 @@ where
     H::Store: TransactionalStore + 'static,
 {
     tokio::spawn(async move {
+        let task = task.as_deref();
+
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
         let mut poll = interval(config.committer.collect_interval());
@@ -92,12 +95,12 @@ where
         let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
-        info!(pipeline = H::NAME, ?watermark, "Starting committer");
+        info!(pipeline = H::NAME, ?watermark, task, "Starting committer");
 
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received");
+                    info!(pipeline = H::NAME, task = task, "Shutdown received");
                     break;
                 }
 
@@ -107,13 +110,14 @@ where
                         && rx.is_empty()
                         && !can_process_pending(next_checkpoint, checkpoint_lag, &pending)
                     {
-                        info!(pipeline = H::NAME, "Process closed channel and no more data to commit");
+                        info!(pipeline = H::NAME, task = task, "Process closed channel and no more data to commit");
                         break;
                     }
 
                     if pending.len() > WARN_PENDING_WATERMARKS {
                         warn!(
                             pipeline = H::NAME,
+                            task = task,
                             pending = pending.len(),
                             "Pipeline has a large number of pending watermarks",
                         );
@@ -177,6 +181,7 @@ where
                         elapsed_ms = elapsed * 1000.0,
                         rows = batch_rows,
                         pending = pending_rows,
+                        task = task,
                         "Gathered batch",
                     );
 
@@ -226,7 +231,7 @@ where
 
                     let affected = store.transaction(|conn| {
                         async {
-                            conn.set_committer_watermark(H::NAME, watermark).await?;
+                            conn.set_committer_watermark(H::NAME, task, watermark).await?;
                             H::commit(&batch, conn).await
                         }.scope_boxed()
                     }).await;
@@ -240,6 +245,7 @@ where
                         Err(e) => {
                             warn!(
                                 pipeline = H::NAME,
+                                task = task,
                                 elapsed_ms = elapsed * 1000.0,
                                 attempt,
                                 committed = batch_rows,
@@ -259,6 +265,7 @@ where
 
                     debug!(
                         pipeline = H::NAME,
+                        task = task,
                         attempt,
                         affected,
                         committed = batch_rows,
@@ -362,7 +369,7 @@ where
             }
         }
 
-        info!(pipeline = H::NAME, ?watermark, "Stopping committer");
+        info!(pipeline = H::NAME, ?watermark, task, "Stopping committer");
     })
 }
 
@@ -461,6 +468,7 @@ mod tests {
             checkpoint_rx,
             watermark_tx,
             store_clone,
+            None,
             metrics,
             cancel,
         );
