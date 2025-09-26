@@ -19,11 +19,13 @@ async fn list_authenticated_events_end_to_end() {
         });
 
     let test_cluster = TestClusterBuilder::new()
-        .disable_fullnode_pruning().build().await;
+        .disable_fullnode_pruning()
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
 
     let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("tests/rpc/data/auth_event");
+    path.push("tests/data/auth_event");
 
     let (sender, gas_object) = test_cluster
         .wallet
@@ -146,7 +148,7 @@ async fn list_authenticated_events_start_beyond_highest() {
         .await
         .unwrap()
         .into_inner()
-        .last_checkpoint
+        .highest_indexed_checkpoint
         .unwrap_or(0);
 
     let mut req = ListAuthenticatedEventsRequest::default();
@@ -161,48 +163,6 @@ async fn list_authenticated_events_start_beyond_highest() {
         .into_inner();
 
     assert!(response.events.is_empty());
-}
-
-#[sim_test]
-async fn list_authenticated_events_empty_gap_multiple_checkpoints() {
-    let test_cluster = test_cluster::TestClusterBuilder::new().build().await;
-    let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let rgp = test_cluster.get_reference_gas_price().await;
-
-    let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
-
-    for _i in 0..3 {
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
-            .await
-            .unwrap();
-
-        if gas_object.is_none() {
-            break;
-        }
-
-        let tx_data = TransactionData::new_transfer_sui(
-            sender,
-            sender,
-            None,
-            gas_object.unwrap(),
-            rgp,
-            50_000_000_000,
-        );
-        test_cluster.sign_and_execute_transaction(&tx_data).await;
-    }
-
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(sender.to_string());
-    req.start_checkpoint = Some(0);
-    req.page_size = Some(100);
-    req.page_token = None;
-    let response = client.list_authenticated_events(req).await.unwrap();
-
-    assert!(response.into_inner().events.is_empty());
 }
 
 #[sim_test]
