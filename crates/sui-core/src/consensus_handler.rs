@@ -1481,6 +1481,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         txns.reserve(user_transactions.len());
         randomness_txns.reserve(user_transactions.len());
 
+        // There may be randomness transactions in `txns`, which were deferred due to congestion.
+        // They must be placed back into `randomness_txns`.
+        let mut txns: Vec<_> = txns
+            .into_iter()
+            .filter_map(|tx| {
+                if tx.transaction_data().uses_randomness() {
+                    randomness_txns.push(tx);
+                    None
+                } else {
+                    Some(tx)
+                }
+            })
+            .collect();
+
         for txn in user_transactions {
             if txn.transaction_data().uses_randomness() {
                 randomness_txns.push(txn);
