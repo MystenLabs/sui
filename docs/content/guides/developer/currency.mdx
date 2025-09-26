@@ -13,7 +13,7 @@ The `sui::token` module handles token creation on the network. Refer to the [Clo
 
 The registry system supports two currency creation methods:
 
-1. **Standard creation:** Call `new_currency<T>()` any time after publishing the coin type.
+1. **Standard creation:** Call `new_currency<T>()` when creating the coin outside of the init function of your package.
 2. **OTW creation:** Use `new_currency_with_otw<T>()` with a One-Time Witness for uniqueness proof.
 
 Both methods return a `CurrencyInitializer<T>` that allows configuration before finalization:
@@ -33,9 +33,9 @@ OTW currency creation
 </details>
 
 The initialization process allows for:
+
 - **Supply model selection:** Choose fixed, burn-only, or flexible supply
 - **Regulatory configuration:** Add deny list capabilities if needed
-- **Extension fields:** Include custom data for advanced use cases
 
 :::caution Important
 
