@@ -1,11 +1,14 @@
 ---
 title: Indexer Runtime and Performance
-description: something
+description: Learn how to optimize Sui custom indexer performance through runtime configuration, resource monitoring, and debugging tools. Covers ingestion settings, database tuning, Tokio console debugging, Prometheus metrics, and data pruning strategies.
+keywords: [ sui indexer performance, indexer optimization, tokio console debugging, prometheus metrics, database tuning, checkpoint ingestion, data pruning, indexer configuration, performance monitoring, sui blockchain indexing ]
 ---
+
+Proper configuration and resource monitoring delivers the most performant custom indexer possible. Runtime configuration options for ingestion, database connections, and pipeline selection, as well as purposeful use of debugging tools like `tokio_console` to analyze async workloads help dial in your indexer performance. A sensible strategy targeting efficient data pruning for your tables keeps them performant over time. Following best practices for exposing and extending Prometheus metrics helps you keep track of indexer performance. Together, these techniques help you run indexers that are fast, resource-efficient, and easier to monitor in both development and production.
 
 ## Fine-tuning configurations
 
-The indexing framework provides multiple levels of configuration to optimize performance for different use cases. This section covers basic configuration options, while complex pipeline-specific tuning is covered in dedicated sections within each pipeline architecture.
+The indexing framework provides multiple levels of configuration to optimize performance for different use cases. This section covers basic configuration options, while complex pipeline-specific tuning is covered in [Indexer Pipeline Architecture](/concepts/custom-indexer/pipeline-architecture.mdx).
 
 ### Ingestion layer configuration
 
@@ -26,9 +29,9 @@ let ingestion_config = IngestionConfig {
 
 **Tuning guidelines:**
 
-- `checkpoint_buffer_size`: Increase for high-throughput scenarios, decrease to reduce memory usage
-- `ingest_concurrency`: Higher values improve ingestion speed but increase network/storage load
-- `retry_interval_ms`: Lower values reduce latency for live data, higher values reduce unnecessary retries
+- `checkpoint_buffer_size`: Increase for high-throughput scenarios, decrease to reduce memory usage.
+- `ingest_concurrency`: Higher values improve ingestion speed but increase network/storage load.
+- `retry_interval_ms`: Lower values reduce latency for live data, higher values reduce unnecessary retries.
 
 ### Database connection configuration
 
@@ -47,11 +50,13 @@ let db_args = DbArgs {
 
 **Tuning guidelines:**
 
-- `db_connection_pool_size`: Size based on write_concurrency across all pipelines.
+- `db_connection_pool_size`: Size based on `write_concurrency` across all pipelines.
 - `db_connection_timeout_ms`: Reduce for faster failure detection in high-load scenarios.
 - `db_statement_timeout_ms`: Set based on expected query complexity and database performance.
 
 ### Command-line arguments
+
+Include the following command-line arguments to help focus processing. These values are for demonstration. Use values that make sense to your environment and goals. 
 
 ```sh
 # Checkpoint range control
@@ -83,18 +88,20 @@ For complex configuration scenarios requiring deep understanding of pipeline int
 
 For performance-sensitive pipelines or when troubleshooting async runtime issues, the `sui-indexer-alt-framework` integrates with `tokio-console`, a powerful debugger for async Rust applications. This tool provides real-time insights into task execution, helping identify performance bottlenecks, stuck tasks, and memory issues.
 
-[https://github.com/tokio-rs/console](https://github.com/tokio-rs/console)
+[GitHub repo for `tokio-console`](https://github.com/tokio-rs/console)
 
 ### When to use Tokio console
 
-Tokio Console is particularly useful for:
+The Tokio console is particularly useful for:
 
-- **Performance debugging:** Identifying slow or blocking tasks
-- **Memory analysis:** Finding tasks consuming excessive memory
-- **Concurrency issues:** Detecting tasks that never yield or wake themselves excessively
-- **Runtime behavior:** Understanding task scheduling and execution patterns
+- **Performance debugging:** Identifying slow or blocking tasks.
+- **Memory analysis:** Finding tasks consuming excessive memory.
+- **Concurrency issues:** Detecting tasks that never yield or wake themselves excessively.
+- **Runtime behavior:** Understanding task scheduling and execution patterns.
 
 ### Setup instructions
+
+Setup instructions should work in most cases. If you have issues, consult the [README](https://github.com/tokio-rs/console/blob/main/README.md) in the Tokio GitHub repo.
 
 1. Add dependencies
 
@@ -131,8 +138,8 @@ Tokio Console is particularly useful for:
 
     **Flag Explanations:**
 
-    - `TOKIO_CONSOLE=1` - Enables `tokio-console` integration in `telemetry_subscribers`
-    - `RUSTFLAGS="--cfg tokio_unstable"` - Required by `tokio-console` to collect task instrumentation data
+    - `TOKIO_CONSOLE=1`: Enables `tokio-console` integration in `telemetry_subscribers`.
+    - `RUSTFLAGS="--cfg tokio_unstable"`: Required by `tokio-console` to collect task instrumentation data.
 
 1. Launch the console dashboard
 
@@ -144,17 +151,17 @@ Tokio Console is particularly useful for:
     tokio-console
     ```
 
-    You should then observe this cool dashboard with information about every running Tokio tasks:
+    If successful, the dashboard appears with information about every running Tokio task:
 
-    IMAGE
+    ![Tokio console](./images/tokio.png)
 
 ### Console features
 
-For detailed information about the console dashboard, available views, warnings, and diagnostic capabilities, refer to the official `tokio-console` documentation (https://github.com/tokio-rs/console)
+For detailed information about the console dashboard, available views, warnings, and diagnostic capabilities, refer to the official [`tokio-console` documentation](https://github.com/tokio-rs/console)
 
 ### Production considerations
 
-`Tokio-console` introduces runtime overhead and should be used carefully in production. While it's safe to use regularly during development and staging, production usage requires careful evaluation. Before enabling in production, you should run performance benchmarks with and without console enabled to measure the impact on your specific workload, and consider enabling only during maintenance windows or targeted troubleshooting sessions while monitoring system resources.
+`Tokio-console` introduces runtime overhead and should be used carefully in production. While it's safe to use regularly during development and staging, production usage requires careful evaluation. Before enabling in production, you should run performance benchmarks with and without Tokio console enabled to measure the impact on your specific workload. Consider enabling only during maintenance windows or targeted troubleshooting sessions while monitoring system resources.
 
 ## Metrics
 
@@ -164,7 +171,7 @@ The `sui-indexer-alt-framework` provides built-in Prometheus metrics for monitor
 
 The framework tracks extensive metrics across ingestion, pipeline processing, database operations, and watermark management. For a complete list of available metrics with descriptions, refer to the `IndexerMetrics` struct in `sui-indexer-alt-framework/src/metrics.rs`.
 
-[https://github.com/MystenLabs/sui/blob/becbf213a55228879a8dededc21c5a0fb27194be/crates/sui-indexer-alt-framework/src/metrics.rs#L46](https://github.com/MystenLabs/sui/blob/becbf213a55228879a8dededc21c5a0fb27194be/crates/sui-indexer-alt-framework/src/metrics.rs#L46)
+<ImportContent source="crates/sui-indexer-alt-framework/src/metrics.rs" mode="code" struct="IndexerMetrics" />
 
 Key metric categories include:
 
@@ -179,18 +186,18 @@ By default, metrics are served on `0.0.0.0:9184/metrics` in [Prometheus format](
 
 - via command line:
 
-```sh
-cargo run --metrics-address "0.0.0.0:8080"
-```
+    ```sh
+    $ cargo run --metrics-address "0.0.0.0:8080"
+    ```
 
 - or via builder configuration:
 
-```rust
-let cluster = IndexerCluster::builder()
-    .with_metrics_args(MetricsArgs {
-        metrics_address: "0.0.0.0:8080".parse().unwrap(),
-    })
-```
+    ```rust
+    let cluster = IndexerCluster::builder()
+        .with_metrics_args(MetricsArgs {
+            metrics_address: "0.0.0.0:8080".parse().unwrap(),
+        })
+    ```
 
 ### Adding metric labels
 
@@ -201,7 +208,7 @@ let cluster = IndexerCluster::builder()
     .with_metric_label("my_custom_indexer")
 ```
 
-This prefixes all default metrics (e.g., my_custom_indexer_indexer_total_ingested_checkpoints).
+This prefixes all default metrics (for example, `my_custom_indexer_indexer_total_ingested_checkpoints`).
 
 ### Adding custom metrics
 
@@ -229,7 +236,7 @@ let custom_counter = register_int_counter_with_registry!(
 
 The framework only exposes metrics via HTTP, and you're responsible for collection and storage. For example, some indexers use the Alloy agent to scrape the `/metrics` endpoint and write to a metrics database for visualization and alerting.
 
-[Collect Prometheus metrics |  Grafana Alloy documentation](https://grafana.com/docs/alloy/latest/collect/prometheus-metrics/)
+See [Collect Prometheus metrics](https://grafana.com/docs/alloy/latest/collect/prometheus-metrics/) on the Grafana Labs website.
 
 ## Pruning best practices
 
@@ -337,3 +344,9 @@ FROM cron.job
 WHERE command = 'SELECT run_maintenance()';
 ```
 
+## Related links
+
+<RelatedLink to="/concepts/custom-indexing-framework.mdx" />
+<RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />
+<RelatedLink to="/guides/developer/advanced/custom-indexer/indexer-data-integration.mdx" />
+<RelatedLink to="/guides/developer/advanced/custom-indexer/indexer-walrus.mdx" />

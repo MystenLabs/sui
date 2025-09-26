@@ -1,6 +1,7 @@
 ---
 title: Indexer Data and Integration
-description: Stuff
+description: Learn how to integrate custom data sources and storage systems with Sui indexers. Covers checkpoint data sources, custom store implementations, and Move event deserialization for building flexible indexing solutions.
+keywords: [sui custom indexer, checkpoint data sources, custom storage backend, move event deserialization, BCS serialization, indexer integration, bring your own store, postgresql indexer, blockchain data ingestion, sui indexing framework]
 ---
 
 Building a custom indexer on Sui lets you take full control of data ingestion, storage, and processing. You can choose from multiple [checkpoint data sources](#checkpoint-data-sources)—remote store, local files, or direct RPC API access—depending on whether you're indexing Mainnet data, testing against known checkpoints, or working on a local network. 
@@ -279,4 +280,5 @@ But in checkpoint data, these events arrive as **raw BCS bytes** that need to be
 
 <RelatedLink to="/concepts/custom-indexing-framework.mdx" />
 <RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />
+<RelatedLink to="/guides/developer/advanced/custom-indexer/indexer-runtime-perf.mdx" />
 <RelatedLink to="/guides/developer/advanced/custom-indexer/indexer-walrus.mdx" />
