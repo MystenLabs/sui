@@ -127,7 +127,7 @@ fn get_object_impl(
         message.json = crate::grpc::v2::render_object_to_json(service, &object).map(Box::new);
     }
 
-    message.merge(object, read_mask);
+    message.merge(&object, read_mask);
 
     Ok(message)
 }

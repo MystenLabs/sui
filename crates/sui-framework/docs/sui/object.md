@@ -20,6 +20,7 @@ Sui object identifiers
 -  [Function `sui_accumulator_root_object_id`](#sui_object_sui_accumulator_root_object_id)
 -  [Function `sui_accumulator_root_address`](#sui_object_sui_accumulator_root_address)
 -  [Function `sui_coin_registry_object_id`](#sui_object_sui_coin_registry_object_id)
+-  [Function `sui_coin_registry_address`](#sui_object_sui_coin_registry_address)
 -  [Function `bridge`](#sui_object_bridge)
 -  [Function `uid_as_inner`](#sui_object_uid_as_inner)
 -  [Function `uid_to_inner`](#sui_object_uid_to_inner)
@@ -520,6 +521,30 @@ This should only be called once from <code><a href="../sui/coin_registry.md#sui_
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_COIN_REGISTRY_OBJECT_ID">SUI_COIN_REGISTRY_OBJECT_ID</a> },
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_object_sui_coin_registry_address"></a>
+
+## Function `sui_coin_registry_address`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_address">sui_coin_registry_address</a>(): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_address">sui_coin_registry_address</a>(): <b>address</b> {
+    <a href="../sui/object.md#sui_object_SUI_COIN_REGISTRY_OBJECT_ID">SUI_COIN_REGISTRY_OBJECT_ID</a>
 }
 </code></pre>
 

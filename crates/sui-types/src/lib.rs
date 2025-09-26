@@ -70,7 +70,6 @@ pub mod messages_consensus;
 pub mod messages_grpc;
 pub mod messages_safe_client;
 pub mod metrics;
-pub mod mock_checkpoint_builder;
 pub mod move_package;
 pub mod multisig;
 pub mod multisig_legacy;
@@ -137,9 +136,9 @@ built_in_ids! {
     SUI_AUTHENTICATOR_STATE_ADDRESS / SUI_AUTHENTICATOR_STATE_OBJECT_ID = 0x7;
     SUI_RANDOMNESS_STATE_ADDRESS / SUI_RANDOMNESS_STATE_OBJECT_ID = 0x8;
     SUI_BRIDGE_ADDRESS / SUI_BRIDGE_OBJECT_ID = 0x9;
+    SUI_COIN_REGISTRY_ADDRESS / SUI_COIN_REGISTRY_OBJECT_ID = 0xc;
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
-    SUI_COIN_REGISTRY_ADDRESS / SUI_COIN_REGISTRY_OBJECT_ID = 0xc;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;

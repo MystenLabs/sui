@@ -12,6 +12,7 @@ use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveTypeLay
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use mysten_common::debug_fatal;
+use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -624,9 +625,30 @@ pub struct ObjectInner {
     pub storage_rebate: u64,
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[derive(Eq, PartialEq, Clone, Deserialize, Serialize, Hash)]
 #[serde(from = "ObjectInner")]
 pub struct Object(Arc<ObjectInner>);
+
+fn is_object_debug_verbose() -> bool {
+    static SUI_OBJECT_DEBUG_VERBOSE: Lazy<bool> =
+        Lazy::new(|| std::env::var("SUI_OBJECT_DEBUG_VERBOSE").is_ok());
+    *SUI_OBJECT_DEBUG_VERBOSE
+}
+
+impl std::fmt::Debug for Object {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if is_object_debug_verbose() {
+            // Just call debug on ObjectInner for verbose debugging.
+            (*self.0).fmt(f)
+        } else {
+            f.debug_struct("Object")
+                .field("id", &self.id())
+                .field("version", &self.version())
+                .field("owner", &self.owner())
+                .finish()
+        }
+    }
+}
 
 impl From<ObjectInner> for Object {
     fn from(inner: ObjectInner) -> Self {

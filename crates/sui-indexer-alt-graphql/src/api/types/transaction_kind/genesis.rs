@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    Context, Object,
-};
+use async_graphql::{connection::Connection, Context, Object};
 use sui_types::transaction::GenesisTransaction as NativeGenesisTransaction;
 
 use crate::{
@@ -39,18 +36,12 @@ impl GenesisTransaction {
         let page = Page::from_params(limits, first, after, last, before)?;
 
         let objects = &self.native.objects;
-        let cursors = page.paginate_indices(objects.len());
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-
-        for edge in cursors.edges {
-            // Create Object from GenesisObject
-            let object =
-                Object::from_genesis_object(self.scope.clone(), objects[*edge.cursor].clone());
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), object));
-        }
-
-        Ok(Some(conn))
+        page.paginate_indices(objects.len(), |i| {
+            Ok(Object::from_genesis_object(
+                self.scope.clone(),
+                objects[i].clone(),
+            ))
+        })
+        .map(Some)
     }
 }

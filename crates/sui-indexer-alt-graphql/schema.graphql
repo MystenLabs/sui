@@ -201,7 +201,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Newly active JWKs (JSON Web Keys).
 	"""
-	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection
 	"""
 	Consensus round of the authenticator state update.
 	"""
@@ -366,7 +366,7 @@ type ChangeEpochTransaction {
 	"""
 	System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
 	"""
-	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
 }
 
 """
@@ -496,6 +496,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
+	"""
+	allowGlobalPause: Boolean
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -517,6 +521,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""
 	defaultSuinsName: String
+	"""
+	If the currency is regulated, this object represents the capability to modify the deny list. If a capability is known but wrapped, its address can be fetched but other fields will not be accessible.
+	"""
+	denyCap: MoveObject
 	"""
 	Description of the coin.
 	"""
@@ -612,6 +620,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
+	Whether the currency is regulated or not. `null` indicates that the regulatory status is unknown.
+	"""
+	regulatedState: RegulatedState
+	"""
 	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
 	"""
 	storageRebate: BigInt
@@ -619,6 +631,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	The overall balance of coins issued.
 	"""
 	supply: BigInt
+	"""
+	Future behavior of the supply. `null` indicates that the future behavior of the supply is not known because the currency's treasury still exists.
+	"""
+	supplyState: SupplyState
 	"""
 	Symbol for the coin.
 	"""
@@ -704,7 +720,7 @@ type CommandResult {
 }
 
 """
-Object is exclusively owned by a single adderss and sequenced via consensis.
+Object is exclusively owned by a single adderss and sequenced via consensus.
 """
 type ConsensusAddressOwner {
 	"""
@@ -1009,7 +1025,7 @@ type EndOfEpochTransaction {
 	"""
 	The list of system transactions that are allowed to run at the end of the epoch.
 	"""
-	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection!
+	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection
 }
 
 union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction
@@ -2982,22 +2998,22 @@ type ProgrammableSystemTransaction {
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection
 	"""
 	Input objects or primitive values.
 	"""
-	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection
 }
 
 type ProgrammableTransaction {
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection
 	"""
 	Input objects or primitive values.
 	"""
-	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection
 }
 
 """
@@ -3089,7 +3105,7 @@ type Query {
 	"""
 	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
 	"""
-	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection!
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection
 	"""
 	Fetch the CoinMetadata for a given coin type.
 	
@@ -3109,7 +3125,7 @@ type Query {
 	"""
 	Paginate events that are emitted in the network, optionally filtered by event filters.
 	"""
-	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
+	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	"""
 	Fetch checkpoints by their sequence numbers.
 	
@@ -3247,7 +3263,7 @@ type Query {
 	"""
 	The transactions that exist in the network, optionally filtered by transaction filters.
 	"""
-	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	Fetch a structured representation of a concrete type, including its layout information.
 	
@@ -3256,6 +3272,17 @@ type Query {
 	Fails if the type is malformed, returns `null` if a type mentioned does not exist.
 	"""
 	type(type: String!): MoveType
+	"""
+	Verify a zkLogin signature os from the given `author`.
+	
+	Returns a `ZkLoginVerifyResult` where `success` is `true` and `error` is empty if the signature is valid. If the signature is invalid, `success` is `false` and `error` contains the relevant error message.
+	
+	- `bytes` are either the bytes of a serialized personal message, or `TransactionData`, Base64-encoded.
+	- `signature` is a serialized zkLogin signature, also Base64-encoded.
+	- `intentScope` indicates whether `bytes` are to be parsed as a personal message or `TransactionData`.
+	- `author` is the signer's address.
+	"""
+	verifyZkLoginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
 }
 
 """
@@ -3309,6 +3336,20 @@ A Move object that can be received in this transaction.
 """
 type Receiving {
 	object: Object
+}
+
+"""
+Whether the currency is regulated or not.
+"""
+enum RegulatedState {
+	"""
+	A `DenyCap` or a `RegulatedCoinMetadata` exists for this currency.
+	"""
+	REGULATED
+	"""
+	The currency was created without a deny list.
+	"""
+	UNREGULATED
 }
 
 type SafeMode {
@@ -3569,6 +3610,20 @@ type StoreExecutionTimeObservationsTransaction {
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 """
 scalar SuiAddress
+
+"""
+Future behavior of a currency's supply.
+"""
+enum SupplyState {
+	"""
+	The supply can only decrease.
+	"""
+	BURN_ONLY
+	"""
+	The supply can neither increase nor decrease.
+	"""
+	FIXED
+}
 
 """
 Details of the system that are decided during genesis.
@@ -3960,6 +4015,136 @@ type UserSignature {
 	signatureBytes: Base64
 }
 
+type Validator implements IAddressable {
+	"""
+	The validator's address.
+	"""
+	address: SuiAddress!
+	"""
+	The number of epochs for which this validator has been below the low stake threshold.
+	"""
+	atRisk: UInt53
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The fee charged by the validator for staking services.
+	"""
+	commissionRate: Int
+	"""
+	Validator's set of credentials such as public keys, network addresses and others.
+	"""
+	credentials: ValidatorCredentials
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
+	Validator's description.
+	"""
+	description: String
+	"""
+	Number of exchange rates in the table.
+	"""
+	exchangeRatesSize: UInt53
+	"""
+	A wrapped object containing the validator's exchange rates. This is a table from epoch number to `PoolTokenExchangeRate` value.
+	The exchange rate is used to determine the amount of SUI tokens that each past SUI staker can withdraw in the future.
+	"""
+	exchangeRatesTable: Address
+	"""
+	The reference gas price for this epoch.
+	"""
+	gasPrice: BigInt
+	"""
+	Validator's url containing their custom image.
+	"""
+	imageUrl: String
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Validator's name.
+	"""
+	name: String
+	"""
+	The proposed next epoch fee for the validator's staking services.
+	"""
+	nextEpochCommissionRate: Int
+	"""
+	Validator's set of credentials for the next epoch.
+	"""
+	nextEpochCredentials: ValidatorCredentials
+	"""
+	The validator's gas price quote for the next epoch.
+	"""
+	nextEpochGasPrice: BigInt
+	"""
+	The total number of SUI tokens in this pool plus the pending stake amount for this epoch.
+	"""
+	nextEpochStake: BigInt
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The validator's current valid `Cap` object. Validators can delegate the operation ability to another address.
+	The address holding this `Cap` object can then update the reference gas price and tallying rule on behalf of the validator.
+	"""
+	operationCap: MoveObject
+	"""
+	Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingPoolTokenWithdraw: BigInt
+	"""
+	Pending stake amount for this epoch.
+	"""
+	pendingStake: BigInt
+	"""
+	Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingTotalSuiWithdraw: BigInt
+	"""
+	Total number of pool tokens issued by the pool.
+	"""
+	poolTokenBalance: BigInt
+	"""
+	Validator's homepage URL.
+	"""
+	projectUrl: String
+	"""
+	The epoch stake rewards will be added here at the end of each epoch.
+	"""
+	rewardsPool: BigInt
+	"""
+	The epoch at which this pool became active.
+	"""
+	stakingPoolActivationEpoch: UInt53
+	"""
+	The ID of this validator's `0x3::staking_pool::StakingPool`.
+	"""
+	stakingPoolId: SuiAddress!
+	"""
+	The total number of SUI tokens in this pool.
+	"""
+	stakingPoolSuiBalance: BigInt
+	"""
+	The voting power of this validator in basis points (e.g., 100 = 1% voting power).
+	"""
+	votingPower: Int
+}
+
 type ValidatorAggregatedSignature {
 	"""
 	The epoch when this aggregate signature was produced.
@@ -3975,10 +4160,57 @@ type ValidatorAggregatedSignature {
 	signersMap: [Int!]!
 }
 
+type ValidatorConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [ValidatorEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Validator!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+The credentials related fields associated with a validator.
+"""
+type ValidatorCredentials {
+	netAddress: String
+	networkPubKey: Base64
+	p2PAddress: String
+	primaryAddress: String
+	proofOfPossession: Base64
+	protocolPubKey: Base64
+	workerAddress: String
+	workerPubKey: Base64
+}
+
+"""
+An edge in a connection.
+"""
+type ValidatorEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Validator!
+}
+
 """
 Representation of `0x3::validator_set::ValidatorSet`.
 """
 type ValidatorSet {
+	"""
+	The current list of active validators.
+	"""
+	activeValidators(first: Int, after: String, last: Int, before: String): ValidatorConnection
 	"""
 	Object ID of the `Table` storing the inactive staking pools.
 	"""
@@ -3996,14 +4228,12 @@ type ValidatorSet {
 	"""
 	pendingActiveValidatorsSize: Int
 	"""
-	Validators that are pending removal from the active validator set, expressed as indices in
-	to `activeValidators`.
+	Validators that are pending removal from the active validator set, expressed as indices in to `activeValidators`.
 	"""
 	pendingRemovals: [Int!]
 	"""
-	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
-	of the corresponding validators. This is needed because a validator's address
-	can potentially change but the object ID of its pool will not.
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses of the corresponding validators.
+	This is needed because a validator's address can potentially change but the object ID of its pool will not.
 	"""
 	stakingPoolMappingsId: SuiAddress
 	"""
@@ -4036,6 +4266,34 @@ input VersionFilter {
 	Filter to versions that are strictly older than this one, defaults to fetching up to the latest version (inclusive).
 	"""
 	beforeVersion: UInt53
+}
+
+"""
+An enum that specifies the intent scope to be used to parse the bytes for signature verification.
+"""
+enum ZkLoginIntentScope {
+	"""
+	Indicates that the bytes are to be parsed as transaction data bytes.
+	"""
+	TRANSACTION_DATA
+	"""
+	Indicates that the bytes are to be parsed as a personal message.
+	"""
+	PERSONAL_MESSAGE
+}
+
+"""
+The result of the zkLogin signature verification.
+"""
+type ZkLoginVerifyResult {
+	"""
+	The error field capture reasons why the signature could not be verified, assuming the inputs are valid and there are no internal errors.
+	"""
+	error: String
+	"""
+	The boolean result of the verification. If true, errors should be empty.
+	"""
+	success: Boolean
 }
 
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

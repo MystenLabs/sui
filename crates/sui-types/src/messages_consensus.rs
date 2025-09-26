@@ -16,7 +16,7 @@ use crate::supported_protocol_versions::{
 use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
-use consensus_types::block::{BlockRef, TransactionIndex};
+use consensus_types::block::{BlockRef, TransactionIndex, PING_TRANSACTION_INDEX};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;
@@ -60,6 +60,16 @@ impl ConsensusPosition {
                 error: e.to_string(),
             })
             .map(Bytes::from)
+    }
+
+    // We reserve the max index for the "ping" transaction. This transaction is not included in the block, but we are
+    // simulating by assuming its position in the block as the max index.
+    pub fn ping(epoch: EpochId, block: BlockRef) -> Self {
+        Self {
+            epoch,
+            block,
+            index: PING_TRANSACTION_INDEX,
+        }
     }
 }
 
@@ -423,19 +433,7 @@ pub enum ConsensusTransactionKind {
     CheckpointSignatureV2(Box<CheckpointSignatureMessage>),
 }
 
-impl ConsensusTransactionKind {
-    pub fn is_dkg(&self) -> bool {
-        matches!(
-            self,
-            ConsensusTransactionKind::RandomnessDkgMessage(_, _)
-                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
-        )
-    }
-
-    pub fn is_user_transaction(&self) -> bool {
-        matches!(self, ConsensusTransactionKind::UserTransaction(_))
-    }
-}
+impl ConsensusTransactionKind {}
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
@@ -730,13 +728,24 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn is_executable_transaction(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
-            || matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+    pub fn is_dkg(&self) -> bool {
+        matches!(
+            self.kind,
+            ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
+        )
+    }
+
+    pub fn is_mfp_transaction(&self) -> bool {
+        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
     }
 
     pub fn is_user_transaction(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+        matches!(
+            self.kind,
+            ConsensusTransactionKind::UserTransaction(_)
+                | ConsensusTransactionKind::CertifiedTransaction(_)
+        )
     }
 
     pub fn is_end_of_publish(&self) -> bool {

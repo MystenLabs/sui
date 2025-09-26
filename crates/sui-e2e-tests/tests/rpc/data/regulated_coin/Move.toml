@@ -1,0 +1,9 @@
+[package]
+name = "regulated_coin"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+regulated_coin = "0x0"

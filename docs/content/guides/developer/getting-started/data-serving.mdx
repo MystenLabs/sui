@@ -60,6 +60,11 @@ Primary interfaces to access Sui access data in the future include:
 - [General-purpose Indexer](../../../concepts/graphql-indexer.mdx) is a performant and scalable implementation of the [custom indexing framework](../../../concepts/custom-indexing-framework.mdx). It is currently available in beta. Use it to load network data at scale into a Postgres relational database.
 - [GraphQL RPC](../../../concepts/graphql-indexer.mdx) includes a lightweight GraphQL RPC Server that you can use to read data from the General-purpose Indexer's relational database. It is currently available in beta. You can use it as an alternative to gRPC, including for migration from JSON-RPC for an existing application. Refer to the [high-level timeline for GraphQL availability](#graphql-rpc).
 
+:::info
+View the video below for a comparison of the old and new Sui data stacks. 
+<iframe width="560" height="315" src="https://www.youtube.com/embed/CL7H4QQSWd0?si=Mt2xo3HNfm2mbRtE" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+:::
+
 You could still utilize an [RPC provider](https://sui.io/developers#dev-tools) (filter by `RPC`) or a [Data indexer operator](https://github.com/sui-foundation/awesome-sui?tab=readme-ov-file#indexers--data-services) with these options, assuming some or all of those providers choose to operate the General-purpose Indexer and the GraphQL RPC Server.
 
 ### gRPC API
@@ -87,6 +92,11 @@ The target times indicated below are tentative and subject to updates based on p
 | :heavy_check_mark: July 2025 | Beta release of streaming APIs and the remaining set of polling-based APIs. | If your use case requires streaming low-latency data, this is an apt time to start validating that integration. Also, the functionality of the API coverage will be complete at this point, so you can start migrating your application in non-production environments. |
 | September-October 2025 | GA release of polling-based and streaming APIs. | Begin migration and cutover of your application in the production environment. **JSON-RPC will be deprecated at this point and migration notice period will start.** |
 | April 2026 | End of migration timeline. | **JSON-RPC will be fully deactivated at this point.** This timeline assumes about 7 months of migration notice period. |
+
+:::warning
+The gRPC and GraphQL RPC APIs will be replacing JSON-RPC soon! View the video below to learn more about the migration timeline and which API to use. 
+<iframe width="560" height="315" src="https://www.youtube.com/embed/_Ke9y8svtW8?si=ADqYvGiKMhKp1ap4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+:::
 
 ### General-purpose Indexer
 

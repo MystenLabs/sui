@@ -7,7 +7,9 @@ use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, 
 use anyhow::{anyhow, bail};
 use clap::Parser;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
+use sui_core::authority::authority_store_pruner::PrunerWatermarks;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_types::base_types::{EpochId, ObjectID};
@@ -310,7 +312,10 @@ pub fn print_object(path: &Path, opt: PrintObjectOptions) -> anyhow::Result<()> 
 }
 
 pub fn print_checkpoint(path: &Path, opt: PrintCheckpointOptions) -> anyhow::Result<()> {
-    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint_store = CheckpointStore::new(
+        &path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
     let checkpoint = checkpoint_store
         .get_checkpoint_by_digest(&opt.digest)?
         .ok_or(anyhow!(
@@ -331,7 +336,10 @@ pub fn print_checkpoint_content(
     path: &Path,
     opt: PrintCheckpointContentOptions,
 ) -> anyhow::Result<()> {
-    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint_store = CheckpointStore::new(
+        &path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
     let contents = checkpoint_store
         .get_checkpoint_contents(&opt.digest)?
         .ok_or(anyhow!(
@@ -378,7 +386,10 @@ pub async fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
     )
     .await?;
 
-    let checkpoint_db = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint_db = CheckpointStore::new(
+        &path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
     checkpoint_db.reset_db_for_execution_since_genesis()?;
 
     Ok(())
@@ -392,7 +403,10 @@ pub fn rewind_checkpoint_execution(
     epoch: EpochId,
     checkpoint_sequence_number: u64,
 ) -> anyhow::Result<()> {
-    let checkpoint_db = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint_db = CheckpointStore::new(
+        &path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
     let Some(checkpoint) =
         checkpoint_db.get_checkpoint_by_sequence_number(checkpoint_sequence_number)?
     else {
@@ -471,7 +485,10 @@ pub fn set_checkpoint_watermark(
     path: &Path,
     options: SetCheckpointWatermarkOptions,
 ) -> anyhow::Result<()> {
-    let checkpoint_db = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint_db = CheckpointStore::new(
+        &path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
 
     if let Some(highest_verified) = options.highest_verified {
         let Some(checkpoint) = checkpoint_db.get_checkpoint_by_sequence_number(highest_verified)?

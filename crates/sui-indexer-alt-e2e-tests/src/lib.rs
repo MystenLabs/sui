@@ -9,12 +9,11 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, ensure, Context};
+use anyhow::{ensure, Context};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer, BootstrapGenesis};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
@@ -45,11 +44,9 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    effects::TransactionEffects,
     error::ExecutionError,
-    execution_status::ExecutionStatus,
     messages_checkpoint::VerifiedCheckpoint,
-    object::Owner,
     transaction::Transaction,
 };
 use tempfile::TempDir;
@@ -60,6 +57,9 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use url::Url;
+
+pub mod coin_registry;
+pub mod find;
 
 /// A simulation of the network, accompanied by off-chain services (database, indexer, RPC),
 /// connected by local data ingestion.
@@ -538,33 +538,51 @@ impl OffchainCluster {
             .await
             .context("Request to GraphQL server failed")?;
 
-        #[derive(Serialize, Deserialize)]
-        struct Response {
-            data: Data,
-        }
-
-        #[derive(Serialize, Deserialize)]
-        struct Data {
-            checkpoint: Checkpoint,
-        }
-
-        #[derive(Serialize, Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Checkpoint {
-            sequence_number: i64,
-        }
-
-        let body: Response = response
+        let body: Value = response
             .json()
             .await
             .context("Failed to parse GraphQL response")?;
 
-        ensure!(
-            body.data.checkpoint.sequence_number != i64::MAX,
-            "Indexer has not started yet",
-        );
+        let sequence_number = body
+            .pointer("/data/checkpoint/sequenceNumber")
+            .context("Failed to find checkpoint sequence number in response")?;
 
-        Ok(body.data.checkpoint.sequence_number as u64)
+        let sequence_number: i64 = serde_json::from_value(sequence_number.clone())
+            .context("Failed to parse sequence number as i64")?;
+
+        ensure!(sequence_number != i64::MAX, "Indexer has not started yet");
+
+        Ok(sequence_number as u64)
+    }
+
+    /// Returns the latest epoch that the GraphQL service is aware of.
+    pub async fn latest_graphql_epoch(&self) -> anyhow::Result<u64> {
+        let query = json!({
+            "query": "query { epoch { epochId } }"
+        });
+
+        let client = Client::new();
+        let request = client.post(self.graphql_url()).json(&query);
+        let response = request
+            .send()
+            .await
+            .context("Request to GraphQL server failed")?;
+
+        let body: Value = response
+            .json()
+            .await
+            .context("Failed to parse GraphQL response")?;
+
+        let epoch_id = body
+            .pointer("/data/epoch/epochId")
+            .context("Failed to find epochId in response")?;
+
+        let epoch_id: i64 =
+            serde_json::from_value(epoch_id.clone()).context("Failed to parse epochId as i64")?;
+
+        ensure!(epoch_id != i64::MAX, "Indexer has not started yet");
+
+        Ok(epoch_id as u64)
     }
 
     /// Waits until the indexer has caught up to the given `checkpoint`, or the `timeout` is
@@ -667,58 +685,6 @@ impl Default for OffchainClusterConfig {
             bootstrap_genesis: None,
         }
     }
-}
-
-/// Returns the reference for the first address-owned object created in the effects, or an error if
-/// there is none.
-pub fn find_address_owned(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
-        bail!("Transaction failed: {error} (command {command:?})");
-    }
-
-    fx.created()
-        .into_iter()
-        .find_map(|(oref, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(oref))
-        .context("Could not find created object")
-}
-
-/// Returns the reference for the first immutable object created in the effects, or an error if
-/// there is none.
-pub fn find_immutable(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
-        bail!("Transaction failed: {error} (command {command:?})");
-    }
-
-    fx.created()
-        .into_iter()
-        .find_map(|(oref, owner)| matches!(owner, Owner::Immutable).then_some(oref))
-        .context("Could not find created object")
-}
-
-/// Returns the reference for the first shared object created in the effects, or an error if there
-/// is none.
-pub fn find_shared(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
-        bail!("Transaction failed: {error} (command {command:?})");
-    }
-
-    fx.created()
-        .into_iter()
-        .find_map(|(oref, owner)| matches!(owner, Owner::Shared { .. }).then_some(oref))
-        .context("Could not find created object")
-}
-
-/// Returns the reference for the first address-owned object mutated in the effects that is not a
-/// gas payment, or an error if there is none.
-pub fn find_address_mutated(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
-        bail!("Transaction failed: {error} (command {command:?})");
-    }
-
-    fx.mutated_excluding_gas()
-        .into_iter()
-        .find_map(|(oref, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(oref))
-        .context("Could not find mutated object")
 }
 
 /// Returns ClientArgs that use a temporary local ingestion path and the TempDir of that path.

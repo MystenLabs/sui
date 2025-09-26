@@ -13,7 +13,8 @@ use strum_macros::EnumString;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, PrunerWatermarks,
+    EPOCH_DURATION_MS_FOR_TESTING,
 };
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
@@ -199,7 +200,10 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         None,
     ));
-    let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
+    let checkpoint_store = CheckpointStore::new(
+        &db_path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
     let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let highest_pruned_checkpoint = checkpoint_store
         .get_highest_pruned_checkpoint_seq_number()?
@@ -236,7 +240,10 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         None,
     ));
-    let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
+    let checkpoint_store = CheckpointStore::new(
+        &db_path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
     let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
     info!("Pruning setup for db at path: {:?}", db_path.display());

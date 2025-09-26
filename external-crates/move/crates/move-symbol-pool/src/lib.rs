@@ -85,6 +85,7 @@ static_symbols!(
     "share_object",
     "event",
     "emit",
+    "emit_authenticated",
     "Receiving",
     "receive",
     "loop",
@@ -100,7 +101,8 @@ static_symbols!(
     "derived_object",
     "claim",
     "coin_registry",
-    "new_currency"
+    "new_currency",
+    "test"
 );
 
 /// The global, unique cache of strings.

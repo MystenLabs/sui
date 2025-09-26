@@ -212,7 +212,7 @@ impl<'backing> TemporaryStore<'backing> {
                      write,
                  }| {
                     (
-                        accumulator_obj,
+                        *accumulator_obj.inner(),
                         EffectsObjectChange::new_from_accumulator_write(write),
                     )
                 },

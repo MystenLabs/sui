@@ -29,6 +29,7 @@ prometheus.workspace = true
 object_store.workspace = true
 indicatif.workspace = true
 consensus-core.workspace = true
+mysten-metrics.workspace = true
 
 anemo-cli.workspace = true
 anemo.workspace = true

@@ -27,9 +27,6 @@ pub struct ValidatorClientMetrics {
 
     /// Consecutive failures per validator
     pub consecutive_failures: IntGaugeVec,
-
-    /// Time since last successful operation per validator
-    pub time_since_last_success: GaugeVec,
 }
 
 impl ValidatorClientMetrics {
@@ -63,7 +60,7 @@ impl ValidatorClientMetrics {
             performance_score: register_gauge_vec_with_registry!(
                 "validator_client_observed_score",
                 "Current client-observed score per validator",
-                &["validator"],
+                &["validator", "tx_type"],
                 registry,
             )
             .unwrap(),
@@ -71,14 +68,6 @@ impl ValidatorClientMetrics {
             consecutive_failures: register_int_gauge_vec_with_registry!(
                 "validator_client_consecutive_failures",
                 "Current consecutive failures observed by client per validator",
-                &["validator"],
-                registry,
-            )
-            .unwrap(),
-
-            time_since_last_success: register_gauge_vec_with_registry!(
-                "validator_client_time_since_last_success",
-                "Time in seconds since last successful client interaction",
                 &["validator"],
                 registry,
             )

@@ -42,6 +42,7 @@ object_store.workspace = true
 env_logger = "0.11.5"
 log = "0.4.22"
 tempfile = "3.8.0"
+fastcrypto.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -307,9 +307,10 @@ mod tests {
     use sui_types::messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
-        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
+        SubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        ValidatorHealthRequest, ValidatorHealthResponse, WaitForEffectsRequest,
+        WaitForEffectsResponse,
     };
     use sui_types::object::Object;
     use sui_types::sui_system_state::SuiSystemState;
@@ -329,10 +330,18 @@ mod tests {
     impl AuthorityAPI for MockAuthorityClient {
         async fn submit_transaction(
             &self,
-            _request: RawSubmitTxRequest,
+            _request: SubmitTxRequest,
             _client_addr: Option<SocketAddr>,
-        ) -> Result<RawSubmitTxResponse, SuiError> {
+        ) -> Result<SubmitTxResponse, SuiError> {
             unimplemented!();
+        }
+
+        async fn wait_for_effects(
+            &self,
+            _request: WaitForEffectsRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<WaitForEffectsResponse, SuiError> {
+            unimplemented!()
         }
 
         async fn handle_transaction(
@@ -393,14 +402,6 @@ mod tests {
             unimplemented!()
         }
 
-        async fn wait_for_effects(
-            &self,
-            _request: RawWaitForEffectsRequest,
-            _client_addr: Option<SocketAddr>,
-        ) -> Result<RawWaitForEffectsResponse, SuiError> {
-            unimplemented!()
-        }
-
         async fn handle_soft_bundle_certificates_v3(
             &self,
             _request: HandleSoftBundleCertificatesRequestV3,
@@ -446,20 +447,12 @@ mod tests {
 
         async fn validator_health(
             &self,
-            _request: sui_types::messages_grpc::RawValidatorHealthRequest,
-        ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
-            let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
-                num_inflight_consensus_transactions: 0,
-                num_inflight_execution_transactions: 0,
+            _request: ValidatorHealthRequest,
+        ) -> Result<ValidatorHealthResponse, SuiError> {
+            Ok(ValidatorHealthResponse {
                 last_committed_leader_round: 1000,
                 last_locally_built_checkpoint: 500,
-            };
-
-            typed_response.try_into().map_err(|e| {
-                sui_types::error::SuiError::GrpcMessageSerializeError {
-                    type_info: "ValidatorHealthResponse".to_string(),
-                    error: format!("Failed to convert to raw response: {}", e),
-                }
+                ..Default::default()
             })
         }
     }

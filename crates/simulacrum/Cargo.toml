@@ -19,6 +19,7 @@ serde.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 futures.workspace = true
+sui-core.workspace = true
 
 move-bytecode-utils.workspace = true
 shared-crypto.workspace = true

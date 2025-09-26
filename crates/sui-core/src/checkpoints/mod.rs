@@ -7,6 +7,7 @@ mod checkpoint_output;
 mod metrics;
 
 use crate::accumulators::AccumulatorSettlementTxBuilder;
+use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityState;
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
@@ -18,6 +19,7 @@ pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
 
+use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
@@ -35,12 +37,14 @@ use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
-use sui_types::messages_checkpoint::CheckpointCommitment;
+use sui_types::messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use tokio::sync::{mpsc, watch};
 use typed_store::rocks::{default_db_options, DBOptions, ReadWriteOptions};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_pruner::PrunerWatermarks;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
 use rand::seq::SliceRandom;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -173,24 +177,33 @@ fn full_checkpoint_content_table_default_config() -> DBOptions {
 
 impl CheckpointStoreTables {
     #[cfg(not(tidehunter))]
-    pub fn new(path: &Path, metric_name: &'static str) -> Self {
+    pub fn new(path: &Path, metric_name: &'static str, _: Arc<PrunerWatermarks>) -> Self {
         Self::open_tables_read_write(path.to_path_buf(), MetricConf::new(metric_name), None, None)
     }
 
     #[cfg(tidehunter)]
-    pub fn new(path: &Path, metric_name: &'static str) -> Self {
+    pub fn new(
+        path: &Path,
+        metric_name: &'static str,
+        pruner_watermarks: Arc<PrunerWatermarks>,
+    ) -> Self {
         tracing::warn!("Checkpoint DB using tidehunter");
+        use crate::authority::authority_store_pruner::apply_relocation_filter;
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, default_mutex_count, default_value_cache_size, KeySpaceConfig,
-            KeyType, ThConfig,
+            default_cells_per_mutex, default_mutex_count, default_value_cache_size, Decision,
+            KeySpaceConfig, KeyType, ThConfig,
         };
         let mutexes = default_mutex_count() * 4;
         let u64_sequence_key = KeyType::prefix_uniform(6, 0);
         let override_dirty_keys_config = KeySpaceConfig::new()
             .with_max_dirty_keys(64_000)
             .with_value_cache_size(default_value_cache_size());
-        let config_u64 =
-            ThConfig::new_with_config(8, mutexes, u64_sequence_key, override_dirty_keys_config);
+        let config_u64 = ThConfig::new_with_config(
+            8,
+            mutexes,
+            u64_sequence_key,
+            override_dirty_keys_config.clone(),
+        );
         let digest_config = ThConfig::new_with_rm_prefix(
             32,
             mutexes,
@@ -202,25 +215,81 @@ impl CheckpointStoreTables {
             .with_value_cache_size(10)
             .disable_unload();
         let lru_config = KeySpaceConfig::new().with_value_cache_size(default_value_cache_size());
-        let checkpoint_by_digest_config = digest_config.clone().with_config(lru_config.clone());
         let configs = vec![
-            ("checkpoint_content", digest_config.clone()),
+            (
+                "checkpoint_content",
+                digest_config.clone().with_config(
+                    KeySpaceConfig::default().with_relocation_filter(|_, _| Decision::Remove),
+                ),
+            ),
             (
                 "checkpoint_sequence_by_contents_digest",
-                digest_config.clone(),
+                digest_config.clone().with_config(apply_relocation_filter(
+                    KeySpaceConfig::default(),
+                    pruner_watermarks.checkpoint_id.clone(),
+                    |sequence_number: CheckpointSequenceNumber| sequence_number,
+                    false,
+                )),
             ),
-            ("full_checkpoint_content", config_u64.clone()),
-            ("certified_checkpoints", config_u64.clone()),
-            ("checkpoint_by_digest", checkpoint_by_digest_config),
-            ("locally_computed_checkpoints", config_u64.clone()),
+            (
+                "full_checkpoint_content",
+                config_u64.clone().with_config(apply_relocation_filter(
+                    override_dirty_keys_config.clone(),
+                    pruner_watermarks.checkpoint_id.clone(),
+                    |sequence_number: CheckpointSequenceNumber| sequence_number,
+                    true,
+                )),
+            ),
+            (
+                "certified_checkpoints",
+                config_u64.clone().with_config(apply_relocation_filter(
+                    override_dirty_keys_config.clone(),
+                    pruner_watermarks.checkpoint_id.clone(),
+                    |checkpoint: TrustedCheckpoint| checkpoint.inner().epoch,
+                    false,
+                )),
+            ),
+            (
+                "checkpoint_by_digest",
+                digest_config.clone().with_config(apply_relocation_filter(
+                    lru_config,
+                    pruner_watermarks.epoch_id.clone(),
+                    |checkpoint: TrustedCheckpoint| checkpoint.inner().epoch,
+                    false,
+                )),
+            ),
+            (
+                "locally_computed_checkpoints",
+                config_u64.clone().with_config(apply_relocation_filter(
+                    override_dirty_keys_config.clone(),
+                    pruner_watermarks.checkpoint_id.clone(),
+                    |checkpoint_id: CheckpointSequenceNumber| checkpoint_id,
+                    true,
+                )),
+            ),
             ("epoch_last_checkpoint_map", config_u64.clone()),
             (
                 "watermarks",
-                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config.clone()),
+                ThConfig::new_with_config(
+                    4,
+                    1,
+                    KeyType::uniform(1),
+                    apply_relocation_filter(
+                        watermarks_config.clone(),
+                        pruner_watermarks.checkpoint_id.clone(),
+                        |(watermark, _): (CheckpointSequenceNumber, CheckpointDigest)| watermark,
+                        false,
+                    ),
+                ),
             ),
             (
                 "transaction_fork_detected",
-                ThConfig::new_with_config(1, 1, KeyType::uniform(1), watermarks_config),
+                ThConfig::new_with_config(
+                    1,
+                    1,
+                    KeyType::uniform(1),
+                    watermarks_config.with_relocation_filter(|_, _| Decision::Remove),
+                ),
             ),
         ];
         Self::open_tables_read_write(
@@ -250,8 +319,8 @@ pub struct CheckpointStore {
 }
 
 impl CheckpointStore {
-    pub fn new(path: &Path) -> Arc<Self> {
-        let tables = CheckpointStoreTables::new(path, "checkpoint");
+    pub fn new(path: &Path, pruner_watermarks: Arc<PrunerWatermarks>) -> Arc<Self> {
+        let tables = CheckpointStoreTables::new(path, "checkpoint", pruner_watermarks);
         Arc::new(Self {
             tables,
             synced_checkpoint_notify_read: NotifyRead::new(),
@@ -261,11 +330,15 @@ impl CheckpointStore {
 
     pub fn new_for_tests() -> Arc<Self> {
         let ckpt_dir = mysten_common::tempdir().unwrap();
-        CheckpointStore::new(ckpt_dir.path())
+        CheckpointStore::new(ckpt_dir.path(), Arc::new(PrunerWatermarks::default()))
     }
 
     pub fn new_for_db_checkpoint_handler(path: &Path) -> Arc<Self> {
-        let tables = CheckpointStoreTables::new(path, "db_checkpoint");
+        let tables = CheckpointStoreTables::new(
+            path,
+            "db_checkpoint",
+            Arc::new(PrunerWatermarks::default()),
+        );
         Arc::new(Self {
             tables,
             synced_checkpoint_notify_read: NotifyRead::new(),
@@ -1377,14 +1450,25 @@ impl CheckpointBuilder {
         let tx_key =
             TransactionKey::AccumulatorSettlement(self.epoch_store.epoch(), checkpoint_height);
 
+        let epoch = self.epoch_store.epoch();
+        let accumulator_root_obj_initial_shared_version = self
+            .epoch_store
+            .epoch_start_config()
+            .accumulator_root_obj_initial_shared_version()
+            .expect("accumulator root object must exist");
+
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.effects_store.as_ref()),
             sorted_tx_effects_included_in_checkpoint,
         );
 
-        let settlements = builder.get_balance_settlements();
+        let accumulator_changes = builder.collect_accumulator_changes();
         let num_updates = builder.num_updates();
-        let settlement_txns = builder.build_tx(&self.epoch_store, checkpoint_height);
+        let settlement_txns = builder.build_tx(
+            epoch,
+            accumulator_root_obj_initial_shared_version,
+            checkpoint_height,
+        );
 
         let settlement_txns: Vec<_> = settlement_txns
             .into_iter()
@@ -1428,6 +1512,7 @@ impl CheckpointBuilder {
             }
         };
 
+        let mut next_accumulator_version = None;
         for fx in settlement_effects.iter() {
             assert!(
                 fx.status().is_ok(),
@@ -1435,7 +1520,23 @@ impl CheckpointBuilder {
                 fx.transaction_digest(),
                 fx
             );
+            if let Some(version) = fx
+                .mutated()
+                .iter()
+                .find_map(|(oref, _)| (oref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID).then_some(oref.1))
+            {
+                assert!(
+                    next_accumulator_version.is_none(),
+                    "Only one settlement transaction should mutate the accumulator root object"
+                );
+                next_accumulator_version = Some(version);
+            }
         }
+        let settlements = BalanceSettlement {
+            next_accumulator_version: next_accumulator_version
+                .expect("Accumulator root object should be mutated in the settlement transactions"),
+            balance_changes: accumulator_changes,
+        };
 
         self.state
             .execution_scheduler()
@@ -2048,6 +2149,18 @@ impl CheckpointBuilder {
                 .copied()
                 .collect();
 
+            let checkpoint_commitments = if self
+                .epoch_store
+                .protocol_config()
+                .include_checkpoint_artifacts_digest_in_summary()
+            {
+                let artifacts = CheckpointArtifacts::from(&effects[..]);
+                let artifacts_digest = artifacts.digest()?;
+                vec![artifacts_digest.into()]
+            } else {
+                Default::default()
+            };
+
             let summary = CheckpointSummary::new(
                 self.epoch_store.protocol_config(),
                 epoch,
@@ -2059,6 +2172,7 @@ impl CheckpointBuilder {
                 end_of_epoch_data,
                 timestamp_ms,
                 matching_randomness_rounds,
+                checkpoint_commitments,
             );
             summary.report_checkpoint_age(
                 &self.metrics.last_created_checkpoint_age,
@@ -3199,6 +3313,7 @@ mod tests {
                 None,
                 0,
                 Vec::new(),
+                Vec::new(),
             );
             store
                 .tables
@@ -3407,7 +3522,8 @@ mod tests {
         let store = Arc::new(store);
 
         let ckpt_dir = tempfile::tempdir().unwrap();
-        let checkpoint_store = CheckpointStore::new(ckpt_dir.path());
+        let checkpoint_store =
+            CheckpointStore::new(ckpt_dir.path(), Arc::new(PrunerWatermarks::default()));
         let epoch_store = state.epoch_store_for_testing();
 
         let global_state_hasher = Arc::new(GlobalStateHasher::new_for_tests(

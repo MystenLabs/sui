@@ -1,0 +1,38 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-39:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 15922000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 41:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 43-62:
+//# run-graphql
+Response: {
+  "data": {
+    "coinMetadata": {
+      "decimals": 2,
+      "name": "",
+      "symbol": "FAKE",
+      "description": "",
+      "iconUrl": null,
+      "supply": "0",
+      "supplyState": "FIXED",
+      "regulatedState": "REGULATED",
+      "allowGlobalPause": null,
+      "denyCap": {
+        "contents": null
+      }
+    }
+  }
+}

@@ -1,0 +1,104 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module while_cases {
+    public fun while_test () {
+        let l0 = U64(0);
+        while(l0 < U64(10)) {
+            l0 = l0 + U64(1);
+        }
+        return 
+    }
+
+    public fun while_test_2 () {
+        let l1 = U64(0);
+        loop {
+            if (l1 < U64(10)) {
+                let l0 = true;
+            } else {
+                l0 = l1 == U64(7);
+            }
+            if (l0) {
+                l1 = l1 + U64(1);
+                continue;
+            } else {
+            }
+            return 
+        }
+    }
+
+    public fun while_test_3 () {
+        let l0 = U64(0);
+        while(l0 < U64(10)) {
+            if (l0 % U64(2) == U64(0)) {
+                l0 = l0 + U64(1);
+                continue;
+            } else {
+                l0 = l0 + U64(2);
+                continue;
+            }
+        }
+        return 
+    }
+
+    public fun while_test_4 () {
+        let l1 = U64(0);
+        loop {
+            if (l1 < U64(10)) {
+                let l0 = true;
+            } else {
+                l0 = l1 == U64(7);
+            }
+            if (l0) {
+                if (l1 % U64(2) == U64(0)) {
+                    l1 = l1 + U64(1);
+                    continue;
+                } else {
+                    l1 = l1 + U64(2);
+                    continue;
+                }
+            } else {
+            }
+            return 
+        }
+    }
+
+    public fun while_test_5 () {
+        let l0 = U64(0);
+        let l1 = U64(0);
+        let l2 = U64(0);
+        loop {
+            if (l0 < U64(10)) {
+                loop {
+                    if (l1 < U64(10)) {
+                        l2 = l2 + l0 * l1 + l1;
+                        l1 = l1 + U64(1);
+                        continue;
+                    } else {
+                    }
+                    l0 = l0 + U64(1);
+                }
+            } else {
+            }
+            return 
+        }
+    }
+
+    public fun while_test_6 () {
+        let l1 = U64(0);
+        loop {
+            if (l1 < U64(10)) {
+                let l0 = true;
+            } else {
+                l0 = l1 == U64(7);
+            }
+            if (l0) {
+                l1 = l1 + U64(1);
+                continue;
+            } else {
+            }
+            return 
+        }
+    }
+
+}

@@ -160,6 +160,10 @@ public(package) fun sui_coin_registry_object_id(): UID {
     }
 }
 
+public(package) fun sui_coin_registry_address(): address {
+    SUI_COIN_REGISTRY_OBJECT_ID
+}
+
 #[allow(unused_function)]
 /// Create the `UID` for the singleton `Bridge` object.
 /// This should only be called once from `bridge`.

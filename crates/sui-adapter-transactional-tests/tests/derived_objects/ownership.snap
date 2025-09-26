@@ -1,0 +1,78 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-39:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8352400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 41:
+//# run a::m::create_parent --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 43:
+//# run a::m::derive_and_share --sender A --args object(2,0)
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 4, line 45:
+//# run a::m::derive_and_make_party --sender A --args object(2,0)
+created: object(4,0), object(4,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 5, lines 47-49:
+//# view-object 4,0
+Owner: ConsensusAddressOwner( 4, A )
+Version: 4
+Contents: a::m::Derived {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+}
+
+task 6, line 50:
+//# transfer-object 4,0 --sender A --recipient A
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
+
+task 7, line 52:
+//# view-object 4,0
+Owner: Account Address ( A )
+Version: 5
+Contents: a::m::Derived {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+}
+
+task 8, line 54:
+//# run a::m::derive_and_make_immutable --sender A --args object(2,0)
+created: object(8,0), object(8,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 9, line 56:
+//# view-object 8,0
+Owner: Immutable
+Version: 6
+Contents: a::m::Derived {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,0),
+        },
+    },
+}

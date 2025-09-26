@@ -36,13 +36,14 @@ use super::{
         move_type::{self, MoveType},
         name_service::name_to_address,
         object::{self, Object, ObjectKey, VersionFilter},
-        object_filter::{ObjectFilter, Validator as OFValidator},
+        object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::{
             filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
             CTransaction, Transaction,
         },
+        zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
     },
 };
 
@@ -108,15 +109,16 @@ impl Query {
         last: Option<u64>,
         before: Option<CCheckpoint>,
         filter: Option<CheckpointFilter>,
-    ) -> Result<Connection<String, Checkpoint>, RpcError> {
+    ) -> Result<Option<Connection<String, Checkpoint>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "checkpoints");
         let page = Page::from_params(limits, first, after, last, before)?;
 
         let filter = filter.unwrap_or_default();
-
-        Checkpoint::paginate(ctx, scope, page, filter).await
+        Checkpoint::paginate(ctx, scope, page, filter)
+            .await
+            .map(Some)
     }
 
     /// Fetch the CoinMetadata for a given coin type.
@@ -168,13 +170,15 @@ impl Query {
         last: Option<u64>,
         before: Option<CEvent>,
         filter: Option<EventFilter>,
-    ) -> Result<Connection<String, Event>, RpcError> {
+    ) -> Result<Option<Connection<String, Event>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "events");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
+        Event::paginate(ctx, scope, page, filter.unwrap_or_default())
+            .await
+            .map(Some)
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -528,7 +532,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Result<Connection<String, Transaction>, RpcError> {
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "transactions");
@@ -536,8 +540,9 @@ impl Query {
 
         // Use the filter if provided, otherwise use default (unfiltered)
         let filter = filter.unwrap_or_default();
-
-        Transaction::paginate(ctx, scope, page, filter).await
+        Transaction::paginate(ctx, scope, page, filter)
+            .await
+            .map(Some)
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.
@@ -588,6 +593,33 @@ impl Query {
                 .context("Failed to simulate transaction")
                 .into()),
         }
+    }
+
+    /// Verify a zkLogin signature os from the given `author`.
+    ///
+    /// Returns a `ZkLoginVerifyResult` where `success` is `true` and `error` is empty if the signature is valid. If the signature is invalid, `success` is `false` and `error` contains the relevant error message.
+    ///
+    /// - `bytes` are either the bytes of a serialized personal message, or `TransactionData`, Base64-encoded.
+    /// - `signature` is a serialized zkLogin signature, also Base64-encoded.
+    /// - `intentScope` indicates whether `bytes` are to be parsed as a personal message or `TransactionData`.
+    /// - `author` is the signer's address.
+    async fn verify_zk_login_signature(
+        &self,
+        ctx: &Context<'_>,
+        bytes: Base64,
+        signature: Base64,
+        intent_scope: ZkLoginIntentScope,
+        author: SuiAddress,
+    ) -> Result<ZkLoginVerifyResult, RpcError<zklogin::Error>> {
+        zklogin::verify_signature(
+            ctx,
+            self.scope(ctx)?,
+            bytes,
+            signature,
+            intent_scope,
+            author,
+        )
+        .await
     }
 }
 

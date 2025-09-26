@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    Context, Object,
-};
+use async_graphql::{connection::Connection, Context, Object};
 use move_binary_format::{errors::PartialVMResult, CompiledModule};
 use sui_types::{
     digests::TransactionDigest, object::Object as NativeObject,
@@ -82,16 +79,13 @@ impl ChangeEpochTransaction {
         after: Option<CSystemPackage>,
         last: Option<u64>,
         before: Option<CSystemPackage>,
-    ) -> Result<Connection<String, MovePackage>, RpcError> {
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("ChangeEpochTransaction", "systemPackages");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let cursors = page.paginate_indices(self.native.system_packages.len());
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-
-        for edge in cursors.edges {
-            let (version, modules, deps) = &self.native.system_packages[*edge.cursor];
+        page.paginate_indices(self.native.system_packages.len(), |i| {
+            let (version, modules, deps) = &self.native.system_packages[i];
 
             // Deserialize the compiled modules
             let compiled_modules = modules
@@ -112,10 +106,8 @@ impl ChangeEpochTransaction {
             let package = MovePackage::from_native_object(self.scope.clone(), native_object)
                 .context("Failed to create MovePackage from system package object")?;
 
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), package));
-        }
-
-        Ok(conn)
+            Ok(package)
+        })
+        .map(Some)
     }
 }

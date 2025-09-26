@@ -14,6 +14,7 @@ use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::Object;
+use sui_rpc::proto::sui::rpc::v2::ObjectSet;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
@@ -114,10 +115,10 @@ pub async fn execute_transaction(
             transaction: signed_transaction.try_into()?,
             include_events: mask.contains(ExecutedTransaction::EVENTS_FIELD.name),
             include_input_objects: mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-                || mask.contains(ExecutedTransaction::INPUT_OBJECTS_FIELD.name)
+                || mask.contains(ExecutedTransaction::OBJECTS_FIELD.name)
                 || mask.contains(ExecutedTransaction::EFFECTS_FIELD.name),
             include_output_objects: mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-                || mask.contains(ExecutedTransaction::OUTPUT_OBJECTS_FIELD.name)
+                || mask.contains(ExecutedTransaction::OBJECTS_FIELD.name)
                 || mask.contains(ExecutedTransaction::EFFECTS_FIELD.name),
             include_auxiliary_data: false,
         }
@@ -239,24 +240,25 @@ pub async fn execute_transaction(
         message.effects = effects;
         message.events = events;
         message.balance_changes = balance_changes;
-        message.input_objects = mask
-            .subtree(ExecutedTransaction::INPUT_OBJECTS_FIELD.name)
+        message.objects = mask
+            .subtree(
+                ExecutedTransaction::path_builder()
+                    .objects()
+                    .objects()
+                    .finish(),
+            )
             .map(|mask| {
-                input_objects
+                let set: std::collections::BTreeMap<_, _> = input_objects
                     .into_iter()
-                    .map(|o| Object::merge_from(o, &mask))
-                    .collect()
-            })
-            .unwrap_or_default();
-        message.output_objects = mask
-            .subtree(ExecutedTransaction::OUTPUT_OBJECTS_FIELD.name)
-            .map(|mask| {
-                output_objects
-                    .into_iter()
-                    .map(|o| Object::merge_from(o, &mask))
-                    .collect()
-            })
-            .unwrap_or_default();
+                    .chain(output_objects.into_iter())
+                    .map(|object| ((object.object_id(), object.version()), object))
+                    .collect();
+                ObjectSet::default().with_objects(
+                    set.into_values()
+                        .map(|o| Object::merge_from(o, &mask))
+                        .collect(),
+                )
+            });
         Some(message)
     } else {
         None

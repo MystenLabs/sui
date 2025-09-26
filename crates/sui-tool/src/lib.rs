@@ -63,8 +63,10 @@ use sui_types::messages_grpc::{
 };
 
 use crate::formal_snapshot_util::{read_summaries_for_list_no_verify, FormalSnapshotWorker};
+use sui_core::authority::authority_store_pruner::PrunerWatermarks;
 use sui_types::storage::ReadStore;
 use tracing::info;
+use typed_store::DBMetrics;
 
 pub mod commands;
 #[cfg(not(tidehunter))]
@@ -837,6 +839,14 @@ pub async fn download_formal_snapshot(
     if path.exists() {
         fs::remove_dir_all(path.clone())?;
     }
+
+    // Start prometheus server so that we can serve metrics during snapshot download
+    let registry_service =
+        mysten_metrics::start_prometheus_server("127.0.0.1:9184".parse().unwrap());
+    let prometheus_registry = registry_service.default_registry();
+    DBMetrics::init(registry_service.clone());
+    mysten_metrics::init_metrics(&prometheus_registry);
+
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
         &path.join("store"),
         None,
@@ -849,7 +859,10 @@ pub async fn download_formal_snapshot(
         &genesis_committee,
         None,
     ));
-    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint_store = CheckpointStore::new(
+        &path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
 
     let summaries_handle = start_summary_sync(
         perpetual_db.clone(),

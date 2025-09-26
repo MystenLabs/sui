@@ -25,6 +25,9 @@ on:
         type: string
         required: true
 
+permissions:
+  contents: write
+
 env:
   SUI_COMMIT: "${{ github.event.client_payload.sui_commit || inputs.sui_commit }}"
   TAG_NAME: "${{ github.event.client_payload.tag_name || inputs.tag_name }}"
@@ -37,12 +40,15 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      with:
+        fetch-depth: 1
+        ref: ${{ env.SUI_COMMIT }}
 
     - name: Tag
-      uses: julbme/gh-action-manage-tag@v1
-      with:
-        name: ${{ env.TAG_NAME }}
-        state: present
-        from: ${{ env.SUI_COMMIT }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git tag -f "${{ env.TAG_NAME }}" "${{ env.SUI_COMMIT }}"
+        git push origin -f "${{ env.TAG_NAME }}"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -41,6 +41,7 @@ pub fn save_trace_output(
         gas_status: _,
         object_cache,
         inner_store: tmp_store,
+        checkpoint: _,
     } = context_and_effects;
 
     // grab all packages from the transaction and save them locally for debug

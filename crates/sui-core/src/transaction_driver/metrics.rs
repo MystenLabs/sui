@@ -16,14 +16,14 @@ const SUBMIT_TRANSACTION_RETRIES_BUCKETS: &[f64] = &[
 #[derive(Clone)]
 pub struct TransactionDriverMetrics {
     pub(crate) settlement_finality_latency: HistogramVec,
-    pub(crate) total_transactions_submitted: IntCounter,
+    pub(crate) total_transactions_submitted: IntCounterVec,
     pub(crate) submit_transaction_retries: Histogram,
     pub(crate) submit_transaction_latency: Histogram,
     pub(crate) validator_submit_transaction_errors: IntCounterVec,
     pub(crate) validator_submit_transaction_successes: IntCounterVec,
     pub(crate) executed_transactions: IntCounter,
-    pub(crate) rejection_acks: IntCounter,
-    pub(crate) expiration_acks: IntCounter,
+    pub(crate) rejection_acks: IntCounterVec,
+    pub(crate) expiration_acks: IntCounterVec,
     pub(crate) effects_digest_mismatches: IntCounter,
     pub(crate) transaction_retries: HistogramVec,
     pub(crate) transaction_fastpath_acked: IntCounterVec,
@@ -32,6 +32,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) certified_effects_ack_successes: IntCounterVec,
     pub(crate) validator_selections: IntCounterVec,
     pub(crate) submit_amplification_factor: Histogram,
+    pub(crate) latency_check_runs: IntCounterVec,
 }
 
 impl TransactionDriverMetrics {
@@ -40,14 +41,15 @@ impl TransactionDriverMetrics {
             settlement_finality_latency: register_histogram_vec_with_registry!(
                 "transaction_driver_settlement_finality_latency",
                 "Settlement finality latency observed from transaction driver",
-                &["tx_type"],
+                &["tx_type", "ping"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            total_transactions_submitted: register_int_counter_with_registry!(
+            total_transactions_submitted: register_int_counter_vec_with_registry!(
                 "transaction_driver_total_transactions_submitted",
                 "Total number of transactions submitted through the transaction driver",
+                &["tx_type", "ping"],
                 registry,
             )
             .unwrap(),
@@ -70,14 +72,14 @@ impl TransactionDriverMetrics {
             validator_submit_transaction_errors: register_int_counter_vec_with_registry!(
                 "transaction_driver_validator_submit_transaction_errors",
                 "Number of submit transaction errors by validator",
-                &["validator", "error_type"],
+                &["validator", "error_type", "tx_type", "ping"],
                 registry,
             )
             .unwrap(),
             validator_submit_transaction_successes: register_int_counter_vec_with_registry!(
                 "transaction_driver_validator_submit_transaction_successes",
                 "Number of successful submit transactions by validator",
-                &["validator"],
+                &["validator", "tx_type", "ping"],
                 registry,
             )
             .unwrap(),
@@ -87,15 +89,17 @@ impl TransactionDriverMetrics {
                 registry,
             )
             .unwrap(),
-            rejection_acks: register_int_counter_with_registry!(
+            rejection_acks: register_int_counter_vec_with_registry!(
                 "transaction_driver_rejected_acks",
                 "Number of rejection acknowledgments observed by the transaction driver",
+                &["tx_type", "ping"],
                 registry,
             )
             .unwrap(),
-            expiration_acks: register_int_counter_with_registry!(
+            expiration_acks: register_int_counter_vec_with_registry!(
                 "transaction_driver_expiration_acks",
                 "Number of expiration acknowledgments observed by the transaction driver",
+                &["tx_type", "ping"],
                 registry,
             )
             .unwrap(),
@@ -108,7 +112,7 @@ impl TransactionDriverMetrics {
             transaction_retries: register_histogram_vec_with_registry!(
                 "transaction_driver_transaction_retries",
                 "Number of retries per transaction attempt in drive_transaction",
-                &["result"],
+                &["result", "tx_type", "ping"],
                 SUBMIT_TRANSACTION_RETRIES_BUCKETS.to_vec(),
                 registry,
             )
@@ -116,14 +120,14 @@ impl TransactionDriverMetrics {
             transaction_fastpath_acked: register_int_counter_vec_with_registry!(
                 "transaction_driver_transaction_fastpath_acked",
                 "Number of transactions that were executed using fast path",
-                &["validator"],
+                &["validator", "ping"],
                 registry,
             )
             .unwrap(),
             certified_effects_ack_latency: register_histogram_vec_with_registry!(
                 "transaction_driver_certified_effects_ack_latency",
                 "Latency in seconds for getting certified effects acknowledgment",
-                &["tx_type"],
+                &["tx_type", "ping"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -131,21 +135,21 @@ impl TransactionDriverMetrics {
             certified_effects_ack_attempts: register_int_counter_vec_with_registry!(
                 "transaction_driver_certified_effects_ack_attempts",
                 "Total number of transactions that went through certified effects ack process",
-                &["tx_type"],
+                &["tx_type", "ping"],
                 registry,
             )
             .unwrap(),
             certified_effects_ack_successes: register_int_counter_vec_with_registry!(
                 "transaction_driver_certified_effects_ack_successes",
                 "Number of successful certified effects acknowledgments",
-                &["tx_type"],
+                &["tx_type", "ping"],
                 registry,
             )
             .unwrap(),
             validator_selections: register_int_counter_vec_with_registry!(
                 "transaction_driver_validator_selections",
                 "Number of times each validator was selected for transaction submission",
-                &["validator"],
+                &["validator", "tx_type", "ping"],
                 registry,
             )
             .unwrap(),
@@ -153,6 +157,13 @@ impl TransactionDriverMetrics {
                 "transaction_driver_submit_amplification_factor",
                 "The amplification factor used by transaction driver to submit to validators",
                 COUNT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            latency_check_runs: register_int_counter_vec_with_registry!(
+                "transaction_driver_latency_check_runs",
+                "Number of times the latency check runs",
+                &["tx_type"],
                 registry,
             )
             .unwrap(),

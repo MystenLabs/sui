@@ -89,7 +89,7 @@ function addIdToHtmlHeading(tagOpen, level, attrs, inner, id) {
 // Convert Markdown heading (## ...) to an HTML heading with id
 function mdHeadingToHtml(hashes, innerHtml, id) {
   const level = hashes.length;
-  return `<h${level} id="${id}">${innerHtml}</h${level}>`;
+  return `<h${level} id="${id}">${innerHtml.trim()}</h${level}>`;
 }
 
 // Ensure Struct/Function/Constants headings have the exact IDs
@@ -293,7 +293,7 @@ const frameworkPlugin = (_context, _options) => {
             }
           );
 
-          // Do NOT strip <p> or convert other <a name=...> to <a id=...>; avoid MDX HTML-mode pitfalls
+           // Do NOT strip <p> or convert other <a name=...> to <a id=...>; avoid MDX HTML-mode pitfalls
 
           // crate-relative link rewriting
           reMarkdown = reMarkdown
@@ -310,6 +310,10 @@ const frameworkPlugin = (_context, _options) => {
           // Ensure headings have ids (HTML-first), then inject HTML TOC
           reMarkdown = ensureHeadingIdsHtml(reMarkdown);
           reMarkdown = injectToc(reMarkdown);
+
+          // FINAL STEP: Convert backticks to inline code AFTER all other processing
+          // This prevents <code><a href="...">text</a></code> which Docusaurus converts to blocks
+          reMarkdown = reMarkdown.replace(/`([^`\n]+)`/g, '<span className="code-inline">$1</span>');
 
           // Write to prefixed path
           const filename = absFile.replace(/.*\/docs\/(.*)$/, `$1`);
@@ -338,9 +342,9 @@ const frameworkPlugin = (_context, _options) => {
                 const top = relParts[0] || parts[0] || "";
                 const topUnpref = top.replace(/^sui_/, "");
 
-                // Category label: "sui:<lowercased dirname without sui_ prefix>"
+                // Category label: lowercased dirname without sui_ prefix
                 const unprefixed = part.replace(/^sui_/, "");
-                const label = `sui:${unprefixed.toLowerCase()}`;
+                const label = unprefixed.toLowerCase();
 
                 const category = {
                   label,

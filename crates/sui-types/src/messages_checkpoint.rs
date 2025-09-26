@@ -24,8 +24,8 @@ use crate::sui_serde::Readable;
 use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
+use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::MultisetHash;
-use fastcrypto::hash::{Blake2b256, HashFunction};
 use fastcrypto::merkle::MerkleTree;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
@@ -218,12 +218,7 @@ impl CheckpointArtifacts {
             .map(|a| a.digest())
             .collect::<Result<Vec<_>, _>>()?;
 
-        let bytes =
-            bcs::to_bytes(&digests).map_err(|e| SuiError::from(format!("BCS error: {}", e)))?;
-
-        Ok(CheckpointArtifactsDigest::new(
-            Blake2b256::digest(&bytes).into(),
-        ))
+        CheckpointArtifactsDigest::from_artifact_digests(digests)
     }
 }
 
@@ -368,6 +363,7 @@ impl CheckpointSummary {
         end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
         randomness_rounds: Vec<RandomnessRound>,
+        checkpoint_commitments: Vec<CheckpointCommitment>,
     ) -> CheckpointSummary {
         let content_digest = *transactions.digest();
 
@@ -392,7 +388,7 @@ impl CheckpointSummary {
             end_of_epoch_data,
             timestamp_ms,
             version_specific_data,
-            checkpoint_commitments: Default::default(),
+            checkpoint_commitments,
         }
     }
 
@@ -966,6 +962,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -1001,6 +998,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             0,
+            Vec::new(),
             Vec::new(),
         );
 
@@ -1043,6 +1041,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -1082,6 +1081,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             100,
+            Vec::new(),
             Vec::new(),
         )
     }

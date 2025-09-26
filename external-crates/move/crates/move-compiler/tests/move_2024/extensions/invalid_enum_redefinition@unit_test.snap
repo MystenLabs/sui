@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/extensions/invalid_enum_redefinition.move:7:17
+  │
+2 │     public enum E { A() }
+  │                 - Alias previously defined here
+  ·
+7 │     public enum E { B() }
+  │                 ^ Duplicate module member or alias 'E'. Top level names in a namespace must be unique

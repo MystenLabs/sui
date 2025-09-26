@@ -24,9 +24,11 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
 pub const ACCUMULATOR_SETTLEMENT_MODULE: &IdentStr = ident_str!("accumulator_settlement");
+pub const ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD: &IdentStr = ident_str!("EventStreamHead");
 pub const ACCUMULATOR_ROOT_CREATE_FUNC: &IdentStr = ident_str!("create");
 pub const ACCUMULATOR_ROOT_SETTLE_U128_FUNC: &IdentStr = ident_str!("settle_u128");
 pub const ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC: &IdentStr = ident_str!("settlement_prologue");
+pub const ACCUMULATOR_ROOT_SETTLEMENT_SETTLE_EVENTS_FUNC: &IdentStr = ident_str!("settle_events");
 
 const ACCUMULATOR_KEY_TYPE: &IdentStr = ident_str!("Key");
 const ACCUMULATOR_U128_TYPE: &IdentStr = ident_str!("U128");
@@ -83,8 +85,22 @@ impl MoveTypeTagTrait for U128 {
     }
 }
 
+/// New-type for ObjectIDs that are known to have been properly derived as an Balance accumulator field.
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct AccumulatorObjId(ObjectID);
+
+impl AccumulatorObjId {
+    pub fn new_unchecked(id: ObjectID) -> Self {
+        Self(id)
+    }
+
+    pub fn inner(&self) -> &ObjectID {
+        &self.0
+    }
+}
+
 impl AccumulatorValue {
-    pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> SuiResult<ObjectID> {
+    pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> SuiResult<AccumulatorObjId> {
         if !Balance::is_balance_type(type_) {
             return Err(SuiError::TypeError {
                 error: "only Balance<T> is supported".to_string(),
@@ -92,13 +108,15 @@ impl AccumulatorValue {
         }
 
         let key = AccumulatorKey { owner };
-        Ok(DynamicFieldKey(
-            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            key,
-            AccumulatorKey::get_type_tag(&[type_.clone()]),
-        )
-        .into_unbounded_id()?
-        .as_object_id())
+        Ok(AccumulatorObjId(
+            DynamicFieldKey(
+                SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                key,
+                AccumulatorKey::get_type_tag(&[type_.clone()]),
+            )
+            .into_unbounded_id()?
+            .as_object_id(),
+        ))
     }
 
     pub fn exists(
@@ -126,14 +144,14 @@ impl AccumulatorValue {
     pub fn load_by_id<T>(
         child_object_resolver: &dyn ChildObjectResolver,
         version_bound: Option<SequenceNumber>,
-        id: ObjectID,
+        id: AccumulatorObjId,
     ) -> SuiResult<Option<T>>
     where
         T: Serialize + DeserializeOwned,
     {
         BoundedDynamicFieldID::<AccumulatorKey>::new(
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            id,
+            id.0,
             version_bound.unwrap_or(SequenceNumber::MAX),
         )
         .load_object(child_object_resolver)?
