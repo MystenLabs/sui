@@ -7,12 +7,11 @@ use move_binary_format::{
     compatibility::{self, Compatibility, InclusionCheck},
     normalized, CompiledModule,
 };
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::BuildConfig;
 
 pub const TEST_DIR: &str = "tests";
 
 fn run_test(path: &Path) -> datatest_stable::Result<()> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut pathbuf = path.to_path_buf();
     pathbuf.pop();
     pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(pathbuf);

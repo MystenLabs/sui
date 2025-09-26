@@ -1,9 +1,7 @@
 [package]
-name = "C"
-edition = "2024.beta"
+name = "c"
+edition = "2024"
 
 [dependencies]
-B = { local = "../B_A1"}
-
-[addresses]
-c = "0x0"
+sui = { local = "../../system-packages/sui-framework" }
+b = { local = "../B_A1"}

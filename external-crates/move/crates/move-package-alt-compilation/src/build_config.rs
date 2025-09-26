@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::BTreeMap,
     io::{BufRead, Write},
     path::{Path, PathBuf},
 };
@@ -12,6 +13,7 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 
 use move_compiler::editions::{Edition, Flavor};
+use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
 use move_package_alt::schema::EnvironmentName;
 use move_symbol_pool::Symbol;
@@ -74,6 +76,10 @@ pub struct BuildConfig {
     #[clap(long = move_compiler::command_line::JSON_ERRORS, global = true)]
     pub json_errors: bool,
 
+    /// Additional named address mapping. Useful for tools in rust
+    #[clap(skip)]
+    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
+
     #[clap(flatten)]
     pub lint_flag: LintFlag,
 
@@ -103,7 +109,7 @@ pub struct BuildConfig {
 }
 
 impl BuildConfig {
-    pub async fn compile<F: MoveFlavor, W: Write>(
+    pub async fn compile_package<F: MoveFlavor, W: Write + Send>(
         &self,
         path: &Path,
         env: &Environment,
@@ -114,7 +120,7 @@ impl BuildConfig {
     }
 
     /// Migrate the package at `path`.
-    pub async fn migrate_package<F: MoveFlavor, W: Write, R: BufRead>(
+    pub async fn migrate_package<F: MoveFlavor, W: Write + Send, R: BufRead>(
         mut self,
         path: &Path,
         env: Environment,
@@ -130,7 +136,7 @@ impl BuildConfig {
         Ok(())
     }
 
-    pub async fn move_model_from_path<F: MoveFlavor, W: Write>(
+    pub async fn move_model_from_path<F: MoveFlavor, W: Write + Send>(
         &self,
         path: &Path,
         env: Environment,
@@ -140,7 +146,7 @@ impl BuildConfig {
         self.move_model_from_root_pkg(&root_pkg, writer).await
     }
 
-    pub async fn move_model_from_root_pkg<F: MoveFlavor, W: Write>(
+    pub async fn move_model_from_root_pkg<F: MoveFlavor, W: Write + Send>(
         &self,
         root_pkg: &RootPackage<F>,
         writer: &mut W,

@@ -109,7 +109,20 @@ impl ValidationMode {
     fn root_address(&self, package: &CompiledPackage) -> Result<Option<AccountAddress>, Error> {
         match self {
             Self::Root { at: Some(addr), .. } => Ok(Some(*addr)),
-            Self::Root { at: None, .. } => Ok(Some(*package.published_at.clone()?)),
+            Self::Root { at: None, .. } => {
+                let addr = package.published_at;
+
+                let address = if let Some(a) = addr {
+                    Some(AccountAddress::from_hex(a.to_hex()).map_err(|e| {
+                        Error::PublishedAt(sui_package_management::PublishedAtError::Invalid(
+                            format!("{e}"),
+                        ))
+                    })?)
+                } else {
+                    None
+                };
+                Ok(address)
+            }
             Self::Deps => Ok(None),
         }
     }
@@ -234,16 +247,24 @@ impl ValidationMode {
                     }
                 })?;
 
+            // TODO: pkg-alt does this still work correctly given that pkg names might have
+            // changed?
             // only keep modules that are actually used
             let deps_compiled_units: Vec<_> = deps_compiled_units
                 .into_iter()
-                .filter(|pkg| sui_package.dependency_ids.published.contains_key(&pkg.0))
+                .filter(|pkg| {
+                    sui_package
+                        .dependency_ids
+                        .published
+                        .contains_key(&Symbol::from(pkg.0.as_str()))
+                })
                 .collect();
 
             for (package, local_unit) in deps_compiled_units {
                 let m = &local_unit.unit;
                 let module = m.name;
                 let address = m.address.into_inner();
+                let package = Symbol::from(package.as_str());
 
                 // Skip modules with on 0x0 because they are treated as part of the root package,
                 // even if they are a source dependency.
@@ -252,19 +273,6 @@ impl ValidationMode {
                 }
 
                 map.insert((address, module), (package, m.module.clone()));
-            }
-
-            // Include bytecode dependencies.
-            for (package, module) in sui_package.bytecode_deps.iter() {
-                let address = *module.address();
-                if address == AccountAddress::ZERO {
-                    continue;
-                }
-
-                map.insert(
-                    (address, Symbol::from(module.name().as_str())),
-                    (*package, module.clone()),
-                );
             }
         }
 

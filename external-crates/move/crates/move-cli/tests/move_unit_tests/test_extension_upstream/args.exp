@@ -1,6 +1,6 @@
 Command `test`:
-INCLUDING DEPENDENCY testing
 INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY testing
 BUILDING a
 Running Move unit tests
 [ PASS    ] a::n::destroy
