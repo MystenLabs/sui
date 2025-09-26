@@ -11,31 +11,31 @@ version = 4
 [pinned._test_env.depends_a_b]
 source = { local = "../depends_a_b" }
 use_environment = "_test_env"
-manifest_digest = "CF50A4AC7C6E92B28547E1268F7541B45808BA19313B9A01420CFC00550294E4"
+manifest_digest = "F2EF8F0D0C888597660599EB6EA33D4C0AC668E3398242EC5D1052C6CF5D4014"
 deps = { pkg_a = "pkg_a", pkg_b = "pkg_b" }
 
 [pinned._test_env.graph]
 source = { root = true }
 use_environment = "_test_env"
-manifest_digest = "9480B8140638CDD3A654FCB1B81E8CBD43A18085BEFA23D22C5D1B72F090F679"
+manifest_digest = "08871DE0E64BEAB7C25E6BFB277ED2DD12AA4F21AA0B87413B56CFD2D86BCC45"
 deps = { depends_a_b = "depends_a_b", nodeps = "nodeps" }
 
 [pinned._test_env.nodeps]
 source = { local = "../nodeps" }
 use_environment = "_test_env"
-manifest_digest = "EC43EDB7195E995D4D16226A449189E342ABB1C0AC9A838B3C8E941BBF93F580"
+manifest_digest = "2ED0A025740E41744B0018D05935C39BA6A54F6BD4FC8027591A4629393C30C6"
 deps = {}
 
 [pinned._test_env.pkg_a]
 source = { local = "../pkg_a" }
 use_environment = "_test_env"
-manifest_digest = "7A03DEE37ACE7D696A4C9D8DE5CCC6329C71FB4C16019F930E7B050B59A7CA3C"
+manifest_digest = "7D50EF0096D1D1BB330E29BAE19CBA20CE623CF34389C584B4435053B5B60135"
 deps = {}
 
 [pinned._test_env.pkg_b]
 source = { local = "../pkg_b" }
 use_environment = "_test_env"
-manifest_digest = "EFE826236308D87BA97A54B432ACEA856935B5E1267AFFECD3743C2D43702CFB"
+manifest_digest = "35B02EEF9E4B76BEEC2729E3F434DC5492CA0399FA275C3842FE4AFC47DA5A45"
 deps = {}
 
 [pinned.mainnet.depends_a_b]

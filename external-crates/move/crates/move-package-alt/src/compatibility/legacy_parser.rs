@@ -21,11 +21,13 @@ use serde_spanned::Spanned;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
+    str::FromStr,
 };
 use toml::Value as TV;
 use tracing::debug;
 
 use super::{legacy::LegacyData, parse_address_literal};
+use move_compiler::editions::Edition;
 
 const EMPTY_ADDR_STR: &str = "_";
 
@@ -59,7 +61,7 @@ const LEGACY_SYSTEM_DEPS_NAMES: [&str; 5] =
 
 pub struct LegacyPackageMetadata {
     pub legacy_name: String,
-    pub edition: String,
+    pub edition: Option<Edition>,
     pub published_at: Option<String>,
     pub unrecognized_fields: BTreeMap<String, toml::Value>,
 }
@@ -293,8 +295,13 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
 
             let edition = table
                 .remove("edition")
-                .map(|v| v.as_str().unwrap_or_default().to_string())
-                .unwrap_or("legacy".to_string());
+                .map(|v| {
+                    let s = v
+                        .as_str()
+                        .ok_or_else(|| format_err!("'edition' must be a string"))?;
+                    Edition::from_str(s).map_err(|err| format_err!("Invalid 'edition'. {err}"))
+                })
+                .transpose()?;
 
             Ok(LegacyPackageMetadata {
                 legacy_name: name.clone(),
