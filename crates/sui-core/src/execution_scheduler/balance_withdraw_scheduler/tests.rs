@@ -20,7 +20,7 @@ use sui_types::{
 };
 use tokio::sync::oneshot;
 use tokio::time::timeout;
-use tracing::debug;
+use tracing::{debug, info};
 
 /// A test scheduler that runs multiple schedulers in parallel and waits for all results to be received.
 /// It internally checks that all schedulers return the same results.
@@ -33,10 +33,14 @@ struct TestScheduler {
 impl TestScheduler {
     fn new(init_version: SequenceNumber, init_balances: BTreeMap<ObjectID, u128>) -> Self {
         let mock_read = Arc::new(MockBalanceRead::new(init_version, init_balances));
-        let naive_scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), init_version);
+        let naive_scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), init_version, false);
+        let eager_scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), init_version, true);
         Self {
             mock_read,
-            schedulers: BTreeMap::from([("naive_scheduler".to_string(), naive_scheduler)]),
+            schedulers: BTreeMap::from([
+                ("naive_scheduler".to_string(), naive_scheduler),
+                ("eager_scheduler".to_string(), eager_scheduler),
+            ]),
         }
     }
 
@@ -381,11 +385,18 @@ async fn balance_withdraw_scheduler_stress_test() {
     let num_accounts = 5;
     let num_transactions = 20000;
 
+    info!(
+        "Running stress test with num_accounts: {:?}, num_transactions: {:?}",
+        num_accounts, num_transactions
+    );
+
     let StressTestEnv {
         init_balances,
         accounts,
         withdraws,
     } = StressTestEnv::new(num_accounts, num_transactions);
+
+    info!("Starting stress test");
 
     // Repeat the process many times to ensure deterministic results.
     let mut expected_results: Option<BTreeMap<TransactionDigest, ScheduleStatus>> = None;
