@@ -111,6 +111,8 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         .start_timer();
 
                     let mut watermark_needs_update = false;
+                    // Concurrent pipelines are more lax about succeeding every watermark update, so
+                    // we can keep the variable within the loop.
                     let mut watermark = None;
                     while let Some(pending) = precommitted.first_entry() {
                         let part = pending.get();
@@ -150,8 +152,16 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                     let elapsed = guard.stop_and_record();
 
+                    if rx.is_closed() && rx.is_empty() {
+                        info!(pipeline = H::NAME, "Committer closed channel");
+                        break;
+                    }
+
                     // Only start reporting once we have a real watermark.
-                    if let Some(watermark) = watermark {
+                    let Some(watermark) = watermark else {
+                        continue;
+                    };
+
                     metrics
                         .watermark_epoch
                         .with_label_values(&[H::NAME])
@@ -232,12 +242,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                             }
                             Ok(false) => {}
                         }
-                    }
-                }
-
-                    if rx.is_closed() && rx.is_empty() {
-                        info!(pipeline = H::NAME, "Committer closed channel");
-                        break;
                     }
                 }
 
@@ -442,6 +446,89 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark().unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.commit_watermark_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_committer_retries_on_commit_watermark_failure() {
+        let config = CommitterConfig {
+            watermark_interval_ms: 1_000, // Long polling interval to test connection retry
+            ..Default::default()
+        };
+        // Create store with transaction failure configuration
+        let store = MockStore::default().with_commit_watermark_failures(1); // Will fail once before succeeding
+        let setup = setup_test::<DataPipeline>(config, 10, store);
+
+        let part = WatermarkPart {
+            watermark: CommitterWatermark {
+                checkpoint_hi_inclusive: 10,
+                ..Default::default()
+            },
+            batch_rows: 1,
+            total_rows: 1,
+        };
+        setup.watermark_tx.send(vec![part]).await.unwrap();
+
+        // Wait for initial poll to be over
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        let watermark = setup.store.watermark();
+        assert!(watermark.is_none());
+
+        // Wait for retries to complete
+        tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
+
+        // Verify watermark is still none
+        let watermark = setup.store.watermark();
+        assert!(watermark.is_none());
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.commit_watermark_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_committer_retries_on_commit_watermark_failure_advances() {
+        let config = CommitterConfig {
+            watermark_interval_ms: 1_000, // Long polling interval to test connection retry
+            ..Default::default()
+        };
+        // Create store with transaction failure configuration
+        let store = MockStore::default().with_commit_watermark_failures(1); // Will fail once before succeeding
+        let setup = setup_test::<DataPipeline>(config, 10, store);
+
+        let part = WatermarkPart {
+            watermark: CommitterWatermark {
+                checkpoint_hi_inclusive: 10,
+                ..Default::default()
+            },
+            batch_rows: 1,
+            total_rows: 1,
+        };
+        setup.watermark_tx.send(vec![part]).await.unwrap();
+
+        // Wait for initial poll to be over
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        let watermark = setup.store.watermark();
+        assert!(watermark.is_none());
+
+        let part = WatermarkPart {
+            watermark: CommitterWatermark {
+                checkpoint_hi_inclusive: 11,
+                ..Default::default()
+            },
+            batch_rows: 1,
+            total_rows: 1,
+        };
+        setup.watermark_tx.send(vec![part]).await.unwrap();
+
+        // Wait for retries to complete
+        tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
+
+        let watermark = setup.store.watermark().unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 11);
 
         // Clean up
         setup.cancel.cancel();
