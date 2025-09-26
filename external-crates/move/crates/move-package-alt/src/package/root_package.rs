@@ -98,7 +98,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Load the root package for `env` using the "normal" path - we first try to load from the
     /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
-    /// TODO: update documentation
+    ///
+    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
     pub async fn load(
         path: impl AsRef<Path>,
         env: Environment,
@@ -132,7 +133,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// If `pubfile` does not exist, one is created with the provided `chain_id` and `build_env`;
     /// If the file does exist but these fields differ, then an error is returned.
-    /// TODO: update documentation
+    ///
+    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
     pub async fn load_ephemeral(
         root: impl AsRef<Path>,
         build_env: Option<EnvironmentName>,
@@ -184,7 +186,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// does not write to the lockfile; you should call [Self::save_to_disk] to save the results.
     ///
     /// TODO: We should load from lockfiles instead of manifests for deps.
-    /// TODO: update docs
+    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
     pub async fn load_force_repin(
         path: impl AsRef<Path>,
         env: Environment,
@@ -206,7 +208,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// Note that this still fetches all of the dependencies, it just doesn't look at their
     /// manifests.
-    /// TODO: documentation
+    ///
+    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
     pub async fn load_ignore_digests(
         path: impl AsRef<Path>,
         env: Environment,
@@ -1305,6 +1308,8 @@ pkg_b = { local = "../pkg_b" }"#,
     ///
     /// In this scenario, the test-only override dependency on c2 should be ignored when computing
     /// the non-test linkage, so `c1` should be in the computed graph, and not c2
+    ///
+    /// See also [mode_overrides_affected]
     #[test(tokio::test)]
     async fn mode_overrides_unaffected() {
         let scenario = TestPackageGraph::new(["root", "a", "b"])
@@ -1328,5 +1333,42 @@ pkg_b = { local = "../pkg_b" }"#,
         package_names.sort();
 
         assert_eq!(package_names, ["a", "b", "c1", "root"]);
+    }
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a --> b --> c1
+    ///              a -->|test, override| c2
+    /// ```
+    ///
+    /// In this scenario, the test-only override dependency on c2 should NOT be ignored when computing
+    /// the test linkage, so `c2` should be in the computed graph, and not c1
+    ///
+    /// See also [mode_overrides_unaffected]
+    #[test(tokio::test)]
+    async fn mode_overrides_affected() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_published("c1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("c2", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a"), ("a", "b"), ("b", "c1")])
+            .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
+            .build();
+
+        let root = RootPackage::<Vanilla>::load(
+            scenario.path_for("root"),
+            default_environment(),
+            vec!["test".to_string()],
+        )
+        .await
+        .unwrap();
+
+        let mut package_names: Vec<_> = root
+            .packages()
+            .unwrap()
+            .into_iter()
+            .map(|pkg| pkg.display_name().to_string())
+            .collect();
+        package_names.sort();
+
+        assert_eq!(package_names, ["a", "b", "c2", "root"]);
     }
 }
