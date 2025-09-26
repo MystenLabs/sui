@@ -674,7 +674,10 @@ pub trait RpcIndexes: Send + Sync {
         &self,
         stream_id: SuiAddress,
         start_checkpoint: u64,
+        start_transaction_idx: Option<u32>,
+        start_event_idx: Option<u32>,
         end_checkpoint: u64,
+        limit: u32,
     ) -> Result<Box<dyn Iterator<Item = Result<AuthenticatedEventRecord, TypedStoreError>> + '_>>;
 }
 
