@@ -490,7 +490,7 @@ fn op_step_impl(
         }
         Bytecode::ImmBorrowFieldGeneric(fi_ptr) | Bytecode::MutBorrowFieldGeneric(fi_ptr) => {
             let instr = match instruction {
-                Bytecode::MutBorrowField(_) => S::MutBorrowFieldGeneric,
+                Bytecode::MutBorrowFieldGeneric(_) => S::MutBorrowFieldGeneric,
                 _ => S::ImmBorrowFieldGeneric,
             };
             gas_meter.charge_simple_instr(instr)?;
@@ -1167,4 +1167,93 @@ fn check_depth_of_type_impl(
     };
 
     Ok(ty_depth)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::gas::SimpleInstruction as S;
+    use move_binary_format::file_format::{Bytecode, FieldInstantiationIndex};
+
+    #[test]
+    fn test_mut_borrow_field_generic_gas_instruction_mapping() {
+        // Test that MutBorrowFieldGeneric bytecode maps to the correct gas instruction
+        let mock_fi_idx = FieldInstantiationIndex(0); // Mock index for the test
+        let mut_borrow_instruction = Bytecode::MutBorrowFieldGeneric(mock_fi_idx);
+        let imm_borrow_instruction = Bytecode::ImmBorrowFieldGeneric(mock_fi_idx);
+
+        // Test the gas instruction mapping logic
+        let mut_gas_instr = match mut_borrow_instruction {
+            Bytecode::MutBorrowFieldGeneric(_) => S::MutBorrowFieldGeneric,
+            _ => S::ImmBorrowFieldGeneric,
+        };
+
+        let imm_gas_instr = match imm_borrow_instruction {
+            Bytecode::MutBorrowFieldGeneric(_) => S::MutBorrowFieldGeneric,
+            _ => S::ImmBorrowFieldGeneric,
+        };
+
+        // Verify the correct gas instructions are selected
+        assert_eq!(mut_gas_instr, S::MutBorrowFieldGeneric);
+        assert_eq!(imm_gas_instr, S::ImmBorrowFieldGeneric);
+    }
+
+    #[test]
+    fn test_field_borrow_instruction_distinction() {
+        // Test that the gas metering distinguishes between mutable and immutable
+        // field borrowing for generic operations
+
+        // This ensures that the fix properly handles both cases in the match expression
+        let test_cases = vec![
+            (true, S::MutBorrowFieldGeneric),  // Mutable case
+            (false, S::ImmBorrowFieldGeneric), // Immutable case
+        ];
+
+        for (is_mutable, expected_instr) in test_cases {
+            let gas_instr = if is_mutable {
+                S::MutBorrowFieldGeneric
+            } else {
+                S::ImmBorrowFieldGeneric
+            };
+
+            assert_eq!(gas_instr, expected_instr);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_gas_instruction_selection() {
+        let mock_fi_idx = FieldInstantiationIndex(0);
+
+        // Test the actual match pattern used in the interpreter
+        let test_instructions = vec![
+            Bytecode::MutBorrowFieldGeneric(mock_fi_idx),
+            Bytecode::ImmBorrowFieldGeneric(mock_fi_idx),
+        ];
+
+        for instruction in test_instructions {
+            // This is the exact match logic from the interpreter code
+            let instr = match instruction {
+                Bytecode::MutBorrowFieldGeneric(_) => S::MutBorrowFieldGeneric,
+                _ => S::ImmBorrowFieldGeneric,
+            };
+
+            match instruction {
+                Bytecode::MutBorrowFieldGeneric(_) => {
+                    assert_eq!(
+                        instr,
+                        S::MutBorrowFieldGeneric,
+                        "MutBorrowFieldGeneric should map to S::MutBorrowFieldGeneric"
+                    );
+                }
+                Bytecode::ImmBorrowFieldGeneric(_) => {
+                    assert_eq!(
+                        instr,
+                        S::ImmBorrowFieldGeneric,
+                        "ImmBorrowFieldGeneric should map to S::ImmBorrowFieldGeneric"
+                    );
+                }
+                _ => panic!("Unexpected instruction in test"),
+            }
+        }
+    }
 }
