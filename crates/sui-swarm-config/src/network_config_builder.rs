@@ -14,7 +14,9 @@ use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::Chain;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
-use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, KeypairTraits, PublicKey};
+use sui_types::crypto::{
+    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, KeypairTraits, PublicKey,
+};
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
@@ -24,13 +26,27 @@ use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
 use crate::network_config::NetworkConfig;
 use crate::node_config_builder::ValidatorConfigBuilder;
 
+pub struct KeyPairWrapper {
+    pub account_key_pair: AccountKeyPair,
+    pub protocol_key_pair: Option<AuthorityKeyPair>,
+}
+
+impl Clone for KeyPairWrapper {
+    fn clone(&self) -> Self {
+        Self {
+            account_key_pair: self.account_key_pair.copy(),
+            protocol_key_pair: self.protocol_key_pair.as_ref().map(|k| k.copy()),
+        }
+    }
+}
+
 pub enum CommitteeConfig {
     Size(NonZeroUsize),
     Validators(Vec<ValidatorGenesisConfig>),
     AccountKeys(Vec<AccountKeyPair>),
     /// Indicates that a committee should be deterministically generated, using the provided rng
     /// as a source of randomness as well as generating deterministic network port information.
-    Deterministic((NonZeroUsize, Option<Vec<AccountKeyPair>>)),
+    Deterministic((NonZeroUsize, Option<Vec<KeyPairWrapper>>)),
 }
 
 pub type SupportedProtocolVersionsCallback = Arc<
@@ -134,7 +150,7 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn deterministic_committee_validators(mut self, keys: Vec<AccountKeyPair>) -> Self {
+    pub fn deterministic_committee_validators(mut self, keys: Vec<KeyPairWrapper>) -> Self {
         self.committee = CommitteeConfig::Deterministic((
             NonZeroUsize::new(keys.len()).expect("Validator keys should be non empty"),
             Some(keys),
@@ -372,21 +388,27 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     })
                     .collect::<Vec<_>>()
             }
-            CommitteeConfig::Deterministic((size, keys)) => {
+            CommitteeConfig::Deterministic((size, key_pair_wrappers)) => {
                 // If no keys are provided, generate them.
-                let keys = keys.unwrap_or(
+                let keys = key_pair_wrappers.unwrap_or_else(|| {
                     (0..size.get())
-                        .map(|_| get_key_pair_from_rng(&mut rng).1)
-                        .collect(),
-                );
+                        .map(|_| KeyPairWrapper {
+                            account_key_pair: get_key_pair_from_rng(&mut rng).1,
+                            protocol_key_pair: None,
+                        })
+                        .collect()
+                });
 
                 let mut configs = vec![];
                 for (i, key) in keys.into_iter().enumerate() {
                     let port_offset = 8000 + i * 10;
                     let mut builder = ValidatorGenesisConfigBuilder::new()
                         .with_ip("127.0.0.1".to_owned())
-                        .with_account_key_pair(key)
+                        .with_account_key_pair(key.account_key_pair)
                         .with_deterministic_ports(port_offset as u16);
+                    if let Some(protocol_key_pair) = key.protocol_key_pair {
+                        builder = builder.with_protocol_key_pair(protocol_key_pair);
+                    }
                     if let Some(rgp) = self.reference_gas_price {
                         builder = builder.with_gas_price(rgp);
                     }
