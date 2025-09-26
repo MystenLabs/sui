@@ -1532,6 +1532,7 @@ mod checked {
             })
             .collect();
 
+        // TODO(address-balances): Also check deny list v2 for funds transfers.
         let accumulator_events = accumulator_events
             .into_iter()
             .map(|accum_event| {

@@ -68,6 +68,8 @@ pub(crate) struct ConsensusCommitOutput {
     // TODO: If we delay committing consensus output until after all deferrals have been loaded,
     // we can move deferred_txns to the ConsensusOutputCache and save disk bandwidth.
     deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
+    // TODO(commit-handler-rewrite): remove the original once we no longer need to support the old consensus handler
+    deferred_txns_v2: Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>,
     // deferred txns that have been loaded and can be removed
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
@@ -109,7 +111,7 @@ impl ConsensusCommitOutput {
     }
 
     pub fn has_deferred_transactions(&self) -> bool {
-        !self.deferred_txns.is_empty()
+        !self.deferred_txns.is_empty() || !self.deferred_txns_v2.is_empty()
     }
 
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
@@ -176,6 +178,12 @@ impl ConsensusCommitOutput {
         self.consensus_messages_processed.insert(key);
     }
 
+    pub fn get_consensus_messages_processed(
+        &self,
+    ) -> impl Iterator<Item = &SequencedConsensusTransactionKey> {
+        self.consensus_messages_processed.iter()
+    }
+
     pub fn set_next_shared_object_versions(
         &mut self,
         next_versions: HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
@@ -190,6 +198,14 @@ impl ConsensusCommitOutput {
         transactions: Vec<VerifiedSequencedConsensusTransaction>,
     ) {
         self.deferred_txns.push((key, transactions));
+    }
+
+    pub fn defer_transactions_v2(
+        &mut self,
+        key: DeferralKey,
+        transactions: Vec<VerifiedExecutableTransaction>,
+    ) {
+        self.deferred_txns_v2.push((key, transactions));
     }
 
     pub fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
@@ -285,8 +301,28 @@ impl ConsensusCommitOutput {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
         }
 
-        batch.delete_batch(&tables.deferred_transactions, self.deleted_deferred_txns)?;
+        // TODO(consensus-handler-rewrite): delete the old structures once commit handler rewrite is complete
+        batch.delete_batch(&tables.deferred_transactions, &self.deleted_deferred_txns)?;
+        batch.delete_batch(
+            &tables.deferred_transactions_v2,
+            &self.deleted_deferred_txns,
+        )?;
+
         batch.insert_batch(&tables.deferred_transactions, self.deferred_txns)?;
+        batch.insert_batch(
+            &tables.deferred_transactions_v2,
+            self.deferred_txns_v2.into_iter().map(|(key, txs)| {
+                (
+                    key,
+                    txs.into_iter()
+                        .map(|tx| {
+                            let tx: TrustedExecutableTransaction = tx.serializable();
+                            tx
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            }),
+        )?;
 
         if let Some((round, commit_timestamp)) = self.next_randomness_round {
             batch.insert_batch(&tables.randomness_next_round, [(SINGLETON_KEY, round)])?;
@@ -366,11 +402,16 @@ impl ConsensusCommitOutput {
 pub(crate) struct ConsensusOutputCache {
     // deferred transactions is only used by consensus handler so there should never be lock contention
     // - hence no need for a DashMap.
-    pub(super) deferred_transactions:
+    // TODO(consensus-handler-rewrite): remove this once we no longer need to support the old consensus handler
+    pub(crate) deferred_transactions:
         Mutex<BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>>>,
+
+    pub(crate) deferred_transactions_v2:
+        Mutex<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>>,
+
     // user_signatures_for_checkpoints is written to by consensus handler and read from by checkpoint builder
     // The critical sections are small in both cases so a DashMap is probably not helpful.
-    pub(super) user_signatures_for_checkpoints:
+    pub(crate) user_signatures_for_checkpoints:
         Mutex<HashMap<TransactionDigest, Vec<GenericSignature>>>,
 
     executed_in_epoch: RwLock<DashMap<TransactionDigest, ()>>,
@@ -386,6 +427,10 @@ impl ConsensusOutputCache {
             .get_all_deferred_transactions()
             .expect("load deferred transactions cannot fail");
 
+        let deferred_transactions_v2 = tables
+            .get_all_deferred_transactions_v2()
+            .expect("load deferred transactions cannot fail");
+
         assert!(
             epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch(),
             "This version of sui-node can only run after data quarantining has been enabled. Please run version 1.45.0 or later to the end of the current epoch and retry"
@@ -395,6 +440,7 @@ impl ConsensusOutputCache {
 
         Self {
             deferred_transactions: Mutex::new(deferred_transactions),
+            deferred_transactions_v2: Mutex::new(deferred_transactions_v2),
             user_signatures_for_checkpoints: Default::default(),
             executed_in_epoch: RwLock::new(DashMap::with_shard_amount(2048)),
             executed_in_epoch_cache: MokaCache::builder(8)
@@ -491,7 +537,7 @@ impl ConsensusOutputQuarantine {
 // There are only two sources! ConsensusHandler and CheckpointBuilder.
 impl ConsensusOutputQuarantine {
     // Push all data gathered from a consensus commit into the quarantine.
-    pub(super) fn push_consensus_output(
+    pub(crate) fn push_consensus_output(
         &mut self,
         output: ConsensusCommitOutput,
         epoch_store: &AuthorityPerEpochStore,
@@ -917,6 +963,75 @@ impl ConsensusOutputQuarantine {
                 }
             })
             .flatten()
+            .collect();
+        shared_input_object_ids.sort();
+        shared_input_object_ids.dedup();
+
+        let results = do_fallback_lookup(
+            &shared_input_object_ids,
+            |object_id| {
+                if let Some(debt) = hash_table.get(object_id) {
+                    CacheResult::Hit(Some(debt.into_v1()))
+                } else {
+                    CacheResult::Miss
+                }
+            },
+            |object_ids| {
+                db_table
+                    .multi_get(object_ids)
+                    .expect("db error")
+                    .into_iter()
+                    .map(|debt| debt.map(|debt| debt.into_v1()))
+                    .collect()
+            },
+        );
+
+        Ok(results
+            .into_iter()
+            .zip(shared_input_object_ids)
+            .filter_map(|(debt, object_id)| debt.map(|debt| (debt, object_id)))
+            .map(move |((round, debt), object_id)| {
+                // Stored debts already account for the budget of the round in which
+                // they were accumulated. Application of budget from future rounds to
+                // the debt is handled here.
+                assert!(current_round > round);
+                let num_rounds = current_round - round - 1;
+                let debt = debt.saturating_sub(per_commit_budget * num_rounds);
+                (object_id, debt)
+            }))
+    }
+
+    // TODO: Remove the above version and rename this without _v2
+    pub(crate) fn load_initial_object_debts_v2(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        current_round: Round,
+        for_randomness: bool,
+        transactions: &[VerifiedExecutableTransaction],
+    ) -> SuiResult<impl IntoIterator<Item = (ObjectID, u64)>> {
+        let protocol_config = epoch_store.protocol_config();
+        let tables = epoch_store.tables()?;
+        let default_per_commit_budget = protocol_config
+            .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
+            .unwrap_or(0);
+        let (hash_table, db_table, per_commit_budget) = if for_randomness {
+            (
+                &self.congestion_control_randomness_object_debts,
+                &tables.congestion_control_randomness_object_debts,
+                protocol_config
+                    .max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_as_option()
+                    .unwrap_or(default_per_commit_budget),
+            )
+        } else {
+            (
+                &self.congestion_control_object_debts,
+                &tables.congestion_control_object_debts,
+                default_per_commit_budget,
+            )
+        };
+        let mut shared_input_object_ids: Vec<_> = transactions
+            .iter()
+            .flat_map(|tx| tx.shared_input_objects().map(|obj| obj.id))
             .collect();
         shared_input_object_ids.sort();
         shared_input_object_ids.dedup();

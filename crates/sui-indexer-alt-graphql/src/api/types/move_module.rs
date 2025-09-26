@@ -282,11 +282,8 @@ impl MoveModule {
         let runtime_id = *bytecode.self_id().address();
 
         let friends = bytecode.friend_decls();
-        let cursors = page.paginate_indices(friends.len());
-
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-        for edge in cursors.edges {
-            let decl = &friends[*edge.cursor];
+        page.paginate_indices(friends.len(), |i| {
+            let decl = &friends[i];
             let friend_pkg = bytecode.address_identifier_at(decl.address);
             let friend_mod = bytecode.identifier_at(decl.name);
 
@@ -294,12 +291,12 @@ impl MoveModule {
                 return Err(anyhow!("Cross-package friend modules").into());
             }
 
-            let friend = MoveModule::with_fq_name(self.package.clone(), friend_mod.to_string());
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), friend));
-        }
-
-        Ok(Some(conn))
+            Ok(MoveModule::with_fq_name(
+                self.package.clone(),
+                friend_mod.to_string(),
+            ))
+        })
+        .map(Some)
     }
 
     /// The function named `name` in this module.

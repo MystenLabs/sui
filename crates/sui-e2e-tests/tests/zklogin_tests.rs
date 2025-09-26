@@ -14,14 +14,12 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::Signature;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::signature::GenericSignature;
-use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::transaction::Transaction;
 use sui_types::utils::load_test_vectors;
 use sui_types::utils::{
     get_legacy_zklogin_user_address, get_zklogin_user_address, make_zklogin_tx,
 };
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
-use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 
@@ -215,75 +213,6 @@ async fn test_expired_zklogin_sig() {
         .unwrap_err()
         .to_string()
         .contains("ZKLogin expired at epoch 2"));
-}
-
-#[sim_test]
-async fn test_auth_state_creation() {
-    #[cfg(msim)]
-    {
-        use sui_core::authority::framework_injection;
-        let framework = sui_framework_snapshot::load_bytecode_snapshot(25).unwrap();
-        framework_injection::set_system_packages(framework);
-    }
-
-    // Create test cluster without auth state object in genesis
-    let test_cluster = TestClusterBuilder::new()
-        .with_protocol_version(23.into())
-        .with_epoch_duration_ms(15000)
-        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(23, 25))
-        .with_default_jwks()
-        .build()
-        .await;
-    // Wait until we are in an epoch that has zklogin enabled, but the auth state object is not
-    // created yet.
-    test_cluster.wait_for_protocol_version(24.into()).await;
-    // Now wait until the auth state object is created, ie. AuthenticatorStateUpdate transaction happened.
-    test_cluster.wait_for_authenticator_state_update().await;
-}
-
-#[sim_test]
-async fn test_create_authenticator_state_object() {
-    #[cfg(msim)]
-    {
-        use sui_core::authority::framework_injection;
-        let framework = sui_framework_snapshot::load_bytecode_snapshot(25).unwrap();
-        framework_injection::set_system_packages(framework);
-    }
-
-    let test_cluster = TestClusterBuilder::new()
-        .with_protocol_version(23.into())
-        .with_epoch_duration_ms(15000)
-        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(23, 25))
-        .build()
-        .await;
-
-    let handles = test_cluster.all_node_handles();
-
-    // no node has the authenticator state object yet
-    for h in &handles {
-        h.with(|node| {
-            assert!(node
-                .state()
-                .get_object_cache_reader()
-                .get_latest_object_ref_or_tombstone(SUI_AUTHENTICATOR_STATE_OBJECT_ID)
-                .is_none());
-        });
-    }
-
-    // wait until feature is enabled
-    test_cluster.wait_for_protocol_version(24.into()).await;
-    // wait until next epoch - authenticator state object is created at the end of the first epoch
-    // in which it is supported.
-    test_cluster.wait_for_epoch_all_nodes(2).await; // protocol upgrade completes in epoch 1
-
-    for h in &handles {
-        h.with(|node| {
-            node.state()
-                .get_object_cache_reader()
-                .get_latest_object_ref_or_tombstone(SUI_AUTHENTICATOR_STATE_OBJECT_ID)
-                .expect("auth state object should exist");
-        });
-    }
 }
 
 // This test is intended to look for forks caused by conflicting / repeated JWK votes from

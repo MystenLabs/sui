@@ -117,9 +117,13 @@ pub fn check_coin_deny_list_v2_during_signing(
     address: SuiAddress,
     input_objects: &CheckedInputObjects,
     receiving_objects: &ReceivingObjects,
+    funds_withdraw_types: BTreeSet<String>,
     object_store: &dyn ObjectStore,
 ) -> UserInputResult {
-    let coin_types = input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
+    let mut coin_types =
+        input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
+    coin_types.extend(funds_withdraw_types);
+
     for coin_type in coin_types {
         let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
             continue;
