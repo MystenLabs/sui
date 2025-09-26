@@ -20,6 +20,7 @@ use parking_lot::Mutex;
 use rand::rngs::StdRng;
 use rand::{thread_rng, Rng, SeedableRng};
 use sui_macros::sim_test;
+use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
@@ -103,7 +104,7 @@ pub async fn test_certificates_with_gas_objects(
         .unwrap();
 
         let transaction = epoch_store
-            .verify_transaction(to_sender_signed_transaction(data, &keypair))
+            .verify_transaction_require_no_aliases(to_sender_signed_transaction(data, &keypair))
             .unwrap();
 
         // Submit the transaction and assemble a certificate.
@@ -130,7 +131,10 @@ pub async fn test_user_transaction(
     keypair: &AccountKeyPair,
     gas_object: Object,
     input_objects: Vec<Object>,
-) -> VerifiedTransaction {
+) -> (
+    VerifiedTransaction,
+    Vec<(SuiAddress, Option<SequenceNumber>)>,
+) {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let rgp = epoch_store.reference_gas_price();
 
@@ -179,7 +183,7 @@ pub async fn test_user_transaction(
     .unwrap();
 
     epoch_store
-        .verify_transaction(to_sender_signed_transaction(data, keypair))
+        .verify_transaction_with_current_aliases(to_sender_signed_transaction(data, keypair))
         .unwrap()
 }
 

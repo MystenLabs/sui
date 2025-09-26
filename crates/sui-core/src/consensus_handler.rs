@@ -2450,6 +2450,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // processing newly-received transactions at this time).
                     match &parsed.transaction.kind {
                         ConsensusTransactionKind::UserTransaction(_)
+                        | ConsensusTransactionKind::UserTransactionV2(_, _)
                         | ConsensusTransactionKind::CertifiedTransaction(_)
                         // deprecated and ignore later, but added for exhaustive match
                         | ConsensusTransactionKind::CapabilityNotification(_)
@@ -2697,6 +2698,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 VerifiedExecutableTransaction::new_from_consensus(tx, epoch);
                             commit_handler_input.user_transactions.push(transaction);
                         }
+                        ConsensusTransactionKind::UserTransactionV2(tx, used_alias_versions) => {
+                            todo!() // TODO-DNS propagate used_alias_versions into commit handler, and use default `None`s for old version
+                        }
 
                         // === State machines ===
                         ConsensusTransactionKind::EndOfPublish(authority_public_key_bytes) => {
@@ -2939,7 +2943,8 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
         ConsensusTransactionKind::RandomnessDkgMessage(_, _) => "randomness_dkg_message",
         ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => "randomness_dkg_confirmation",
-        ConsensusTransactionKind::UserTransaction(tx) => {
+        ConsensusTransactionKind::UserTransaction(tx)
+        | ConsensusTransactionKind::UserTransactionV2(tx, _) => {
             if tx.is_consensus_tx() {
                 "shared_user_transaction"
             } else {
@@ -3500,8 +3505,12 @@ mod tests {
         let mut blocks = Vec::new();
         for (i, consensus_transaction) in user_transactions
             .iter()
-            .map(|t| {
-                ConsensusTransaction::new_user_transaction_message(&state.name, t.inner().clone())
+            .map(|(t, a)| {
+                ConsensusTransaction::new_user_transaction_v2_message(
+                    &state.name,
+                    t.inner().clone(),
+                    a.clone(),
+                )
             })
             .chain(
                 certified_transactions
@@ -3574,7 +3583,7 @@ mod tests {
         );
 
         // THEN check for execution status of user transactions.
-        for (i, t) in user_transactions.iter().enumerate() {
+        for (i, (t, _)) in user_transactions.iter().enumerate() {
             let digest = t.digest();
             if let Ok(Ok(_)) = tokio::time::timeout(
                 std::time::Duration::from_secs(10),
@@ -3672,11 +3681,12 @@ mod tests {
 
         let serialized_transactions: Vec<_> = transactions
             .iter()
-            .map(|t| {
+            .map(|(t, a)| {
                 Transaction::new(
-                    bcs::to_bytes(&ConsensusTransaction::new_user_transaction_message(
+                    bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
                         &state.name,
                         t.inner().clone(),
+                        a.clone(),
                     ))
                     .unwrap(),
                 )
@@ -3733,7 +3743,7 @@ mod tests {
         }
 
         // THEN check for status of transactions that should have been executed.
-        for (i, t) in transactions.iter().enumerate() {
+        for (i, (t, _)) in transactions.iter().enumerate() {
             // Do not expect shared transactions or rejected transactions to be executed.
             if i % 2 == 1 || rejected_transactions.contains(&(i as TransactionIndex)) {
                 continue;
@@ -3756,7 +3766,7 @@ mod tests {
         state.execution_scheduler().check_empty_for_testing();
 
         // THEN check that rejected transactions are not executed.
-        for (i, t) in transactions.iter().enumerate() {
+        for (i, (t, _)) in transactions.iter().enumerate() {
             // Expect shared transactions or rejected transactions to not have executed.
             if i % 2 == 0 && !rejected_transactions.contains(&(i as TransactionIndex)) {
                 continue;

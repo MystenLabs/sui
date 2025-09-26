@@ -953,7 +953,8 @@ impl ConsensusOutputQuarantine {
                         tx.shared_input_objects().map(|obj| obj.id),
                     )),
                     SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                        kind: ConsensusTransactionKind::UserTransaction(tx),
+                        kind: ConsensusTransactionKind::UserTransaction(tx)
+                              | ConsensusTransactionKind::UserTransactionV2(tx, _),
                         ..
                     // Bug fix that required a protocol flag.
                     }) if protocol_config.use_mfp_txns_in_load_initial_object_debts() => Some(

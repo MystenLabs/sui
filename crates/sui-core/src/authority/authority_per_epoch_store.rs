@@ -37,7 +37,7 @@ use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
 use sui_types::base_types::{
     AuthorityName, ConsensusObjectSequenceKey, EpochId, FullObjectID, ObjectID, SequenceNumber,
-    TransactionDigest,
+    SuiAddress, TransactionDigest,
 };
 use sui_types::base_types::{ConciseableName, ObjectRef};
 use sui_types::committee::Committee;
@@ -1065,6 +1065,7 @@ impl AuthorityPerEpochStore {
 
         let signature_verifier = SignatureVerifier::new(
             committee.clone(),
+            object_store.clone(),
             signature_verifier_metrics,
             supported_providers,
             zklogin_env,
@@ -1073,6 +1074,7 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_passkey_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
             protocol_config.additional_multisig_checks(),
+            protocol_config.account_aliases(),
         );
 
         let authenticator_state_exists = epoch_start_configuration
@@ -3104,9 +3106,25 @@ impl AuthorityPerEpochStore {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn verify_transaction(&self, tx: Transaction) -> SuiResult<VerifiedTransaction> {
+    pub fn verify_transaction_with_current_aliases(
+        &self,
+        tx: Transaction,
+    ) -> SuiResult<(
+        VerifiedTransaction,
+        Vec<(SuiAddress, Option<SequenceNumber>)>,
+    )> {
         self.signature_verifier
-            .verify_tx(tx.data())
+            .verify_tx_with_current_aliases(tx.data())
+            .map(|aliases_used| (VerifiedTransaction::new_from_verified(tx), aliases_used))
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn verify_transaction_require_no_aliases(
+        &self,
+        tx: Transaction,
+    ) -> SuiResult<VerifiedTransaction> {
+        self.signature_verifier
+            .verify_tx_require_no_aliases(tx.data())
             .map(|_| VerifiedTransaction::new_from_verified(tx))
     }
 
@@ -3127,7 +3145,9 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(_tx),
+                kind:
+                    ConsensusTransactionKind::UserTransaction(_tx)
+                    | ConsensusTransactionKind::UserTransactionV2(_tx, _),
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -4546,6 +4566,14 @@ impl AuthorityPerEpochStore {
                     shared_object_congestion_tracker,
                     execution_time_estimator,
                     authority_metrics,
+                )
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransactionV2(_, _),
+                ..
+            }) => {
+                unimplemented!(
+                    "UserTransactionV2 not supported by old version of consensus handler"
                 )
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {

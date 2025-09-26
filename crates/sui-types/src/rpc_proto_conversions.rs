@@ -2052,6 +2052,13 @@ impl From<crate::messages_consensus::ConsensusDeterminedVersionAssignments>
                     .collect();
                 2
             }
+            A::VersionAssignmentsV3 {
+                canceled_transactions: _,
+                out_of_order_alias_versions: _,
+            } => {
+                // TODO: Implement support for VersionAssignmentsV3 in sui-rust-sdk.
+                unimplemented!()
+            }
         };
 
         message.version = Some(version);

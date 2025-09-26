@@ -1461,7 +1461,9 @@ async fn test_handle_sponsored_transaction() {
     );
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
-    let dual_signed_tx = epoch_store.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = epoch_store
+        .verify_transaction_require_no_aliases(dual_signed_tx)
+        .unwrap();
 
     authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
@@ -1510,7 +1512,9 @@ async fn test_handle_sponsored_transaction() {
     );
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &wrong_owner_key]);
-    let dual_signed_tx = epoch_store.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = epoch_store
+        .verify_transaction_require_no_aliases(dual_signed_tx)
+        .unwrap();
     let error = authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
@@ -1539,7 +1543,9 @@ async fn test_handle_sponsored_transaction() {
     );
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &third_party_key]);
-    let dual_signed_tx = epoch_store.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = epoch_store
+        .verify_transaction_require_no_aliases(dual_signed_tx)
+        .unwrap();
     let error = authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
@@ -1646,7 +1652,9 @@ async fn test_objected_owned_gas() {
     );
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -1844,7 +1852,9 @@ async fn test_publish_non_existing_dependent_module() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
 
     let err = authority
         .handle_transaction(&epoch_store, transaction)
@@ -2241,7 +2251,9 @@ async fn test_missing_package() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -2289,7 +2301,9 @@ async fn test_type_argument_dependencies() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &s1_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
     authority_state
         .handle_transaction(&epoch_store, transaction)
         .await
@@ -2315,7 +2329,9 @@ async fn test_type_argument_dependencies() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &s2_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
     authority_state
         .handle_transaction(&epoch_store, transaction)
         .await
@@ -2341,7 +2357,9 @@ async fn test_type_argument_dependencies() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &s3_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -2999,7 +3017,9 @@ async fn test_invalid_mutable_clock_parameter() {
     .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3046,7 +3066,9 @@ async fn test_invalid_authenticator_state_parameter() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3101,7 +3123,9 @@ async fn test_invalid_randomness_parameter() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3188,7 +3212,9 @@ async fn test_valid_immutable_clock_parameter() {
     .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
     authority_state
         .handle_transaction(&epoch_store, transaction)
         .await
@@ -3248,7 +3274,9 @@ async fn test_transfer_sui_no_amount() {
 
     // Make sure transaction handling works as usual.
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap();
     authority_state
         .handle_transaction(&epoch_store, transaction.clone())
         .await
@@ -4871,7 +4899,9 @@ async fn make_test_transaction(
     for authority in authorities {
         let epoch_store = authority.load_epoch_store_one_call_per_task();
         let transaction = transaction.clone();
-        let transaction = epoch_store.verify_transaction(transaction).unwrap();
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(transaction)
+            .unwrap();
         let response = authority
             .handle_transaction(&epoch_store, transaction.clone())
             .await
@@ -6673,6 +6703,33 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
             ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(assignment) => {
                 assert_eq!(
                     assignment,
+                    &vec![(
+                        *cancelled_txn.digest(),
+                        vec![
+                            (
+                                (
+                                    shared_objects[0].id(),
+                                    shared_objects[0].owner().start_version().unwrap()
+                                ),
+                                SequenceNumber::CONGESTED
+                            ),
+                            (
+                                (
+                                    shared_objects[1].id(),
+                                    shared_objects[1].owner().start_version().unwrap()
+                                ),
+                                SequenceNumber::CANCELLED_READ
+                            ),
+                        ]
+                    )]
+                )
+            }
+            ConsensusDeterminedVersionAssignments::VersionAssignmentsV3 {
+                canceled_transactions,
+                out_of_order_alias_versions: _,
+            } => {
+                assert_eq!(
+                    canceled_transactions,
                     &vec![(
                         *cancelled_txn.digest(),
                         vec![

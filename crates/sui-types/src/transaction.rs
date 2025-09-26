@@ -2179,7 +2179,7 @@ pub trait TransactionDataAPI {
     fn into_kind(self) -> TransactionKind;
 
     /// Transaction signer and Gas owner
-    fn signers(&self) -> NonEmpty<SuiAddress>;
+    fn required_signers(&self) -> NonEmpty<SuiAddress>;
 
     fn gas_data(&self) -> &GasData;
 
@@ -2265,7 +2265,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     /// Transaction signer and Gas owner
-    fn signers(&self) -> NonEmpty<SuiAddress> {
+    fn required_signers(&self) -> NonEmpty<SuiAddress> {
         let mut signers = nonempty![self.sender];
         if self.gas_owner() != self.sender {
             signers.push(self.gas_owner());
@@ -3112,6 +3112,7 @@ impl Transaction {
             current_epoch,
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
+            vec![],
         )
     }
 
@@ -3136,6 +3137,7 @@ impl SignedTransaction {
             committee.epoch(),
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
+            vec![],
         )?;
 
         self.auth_sig().verify_secure(
@@ -3182,6 +3184,9 @@ impl CertifiedTransaction {
             committee.epoch(),
             verify_params,
             zklogin_inputs_cache,
+            // TODO-DNS Verify where this is called from, on MFP we want to disable verification of
+            // sigs on certified tx
+            vec![],
         )?;
         self.auth_sig().verify_secure(
             self.data(),
@@ -3807,7 +3812,7 @@ impl TransactionKey {
     pub fn unwrap_digest(&self) -> &TransactionDigest {
         match self {
             TransactionKey::Digest(d) => d,
-            _ => panic!("called expect_digest on a non-Digest TransactionKey: {self:?}"),
+            _ => panic!("called unwrap_digest on a non-Digest TransactionKey: {self:?}"),
         }
     }
 

@@ -9,9 +9,10 @@ use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_types::{
+    base_types::{SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
-    transaction::Transaction,
+    transaction::{Transaction, TransactionDataAPI},
 };
 use tap::TapFallible;
 use tracing::{info, instrument, warn};
@@ -99,7 +100,8 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
 
-                ConsensusTransactionKind::UserTransaction(_tx) => {
+                ConsensusTransactionKind::UserTransaction(_tx)
+                | ConsensusTransactionKind::UserTransactionV2(_tx, _) => {
                     if !epoch_store.protocol_config().mysticeti_fastpath() {
                         return Err(SuiError::UnexpectedMessage(
                             "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
@@ -164,11 +166,24 @@ impl SuiTxValidator {
 
         let mut result = Vec::new();
         for (i, tx) in txs.into_iter().enumerate() {
-            let ConsensusTransactionKind::UserTransaction(tx) = tx else {
-                continue;
+            let (tx, required_alias_versions) = match tx {
+                ConsensusTransactionKind::UserTransaction(tx) => {
+                    let no_aliases_allowed = tx
+                        .intent_message()
+                        .value
+                        .required_signers()
+                        .into_iter()
+                        .map(|s| (s, None))
+                        .collect();
+                    (tx, no_aliases_allowed)
+                }
+                ConsensusTransactionKind::UserTransactionV2(tx, used_alias_versions) => {
+                    (tx, used_alias_versions)
+                }
+                _ => continue,
             };
 
-            if let Err(error) = self.vote_transaction(&epoch_store, tx) {
+            if let Err(error) = self.vote_transaction(&epoch_store, tx, required_alias_versions) {
                 result.push(i as TransactionIndex);
 
                 // Cache the rejection vote reason (error) for the transaction
@@ -191,6 +206,7 @@ impl SuiTxValidator {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx: Box<Transaction>,
+        required_alias_versions: Vec<(SuiAddress, Option<SequenceNumber>)>,
     ) -> SuiResult<()> {
         // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
         // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
@@ -202,7 +218,10 @@ impl SuiTxValidator {
             self.authority_state.check_system_overload_at_signing(),
         )?;
 
-        let tx = epoch_store.verify_transaction(*tx)?;
+        let (tx, alias_versions) = epoch_store.verify_transaction_with_current_aliases(*tx)?;
+        if alias_versions != required_alias_versions {
+            return Err(SuiError::AliasesChanged);
+        }
 
         self.authority_state
             .handle_vote_transaction(epoch_store, tx)?;
@@ -442,10 +461,11 @@ mod tests {
         let transactions = vec![valid_transaction, invalid_transaction];
         let serialized_transactions: Vec<_> = transactions
             .into_iter()
-            .map(|t| {
-                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_message(
+            .map(|(t, a)| {
+                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
                     &state.name,
                     t.inner().clone(),
+                    a.clone(),
                 ))
                 .unwrap()
             })

@@ -303,8 +303,8 @@ where
         client_addr: Option<SocketAddr>,
     ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
         let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
-        let verified_transaction = epoch_store
-            .verify_transaction(request.transaction.clone())
+        let (verified_transaction, _) = epoch_store
+            .verify_transaction_with_current_aliases(request.transaction.clone())
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *verified_transaction.digest();
 
