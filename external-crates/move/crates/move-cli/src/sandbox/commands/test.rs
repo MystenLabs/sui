@@ -108,7 +108,7 @@ fn collect_coverage(
 /// so that for each `i`, `{result}/{p_i}` cleans to a path with no `..`
 ///
 /// For example, if `paths` is  [`foo`, `../bar`, `../../../../baz`], then `make_dir_prefix(paths)`
-/// would be `dir/dir/dir/dir` so that `0/1/2/3/../../../../baz` would clean to `baz`.
+/// would be `dir/dir/dir/dir` so that `dir/dir/dir/dir/../../../../baz` would clean to `baz`.
 fn make_dir_prefix(paths: impl IntoIterator<Item = impl AsRef<Path>>) -> PathBuf {
     let mut max_depth = 0;
     for path in paths {
