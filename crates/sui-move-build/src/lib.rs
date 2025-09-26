@@ -181,6 +181,13 @@ impl BuildConfig {
         Ok((compiled_pkg, fn_info.unwrap()))
     }
 
+    pub async fn build_async(self, path: &Path) -> anyhow::Result<CompiledPackage> {
+        let env = find_env::<SuiFlavor>(path, &self.config)?;
+        let root_pkg = RootPackage::<SuiFlavor>::load(path.to_path_buf(), env).await?;
+
+        self.internal_build(&root_pkg)
+    }
+
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: &Path) -> anyhow::Result<CompiledPackage> {
@@ -188,6 +195,10 @@ impl BuildConfig {
         // we need to block here to compile the package, which requires to fetch dependencies
         let root_pkg = RootPackage::<SuiFlavor>::load_sync(path.to_path_buf(), env)?;
 
+        self.internal_build(&root_pkg)
+    }
+
+    fn internal_build(self, root_pkg: &RootPackage<SuiFlavor>) -> anyhow::Result<CompiledPackage> {
         let result = if self.print_diags_to_stderr {
             self.compile_package(&root_pkg, &mut std::io::stderr())
         } else {
