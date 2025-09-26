@@ -13,7 +13,7 @@ use super::{EnvironmentID, manifest::Manifest};
 use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
 use crate::graph::{LinkageTable, PackageInfo};
 use crate::package::block_on;
-// use crate::package::package_lock::PackageLock;
+use crate::package::package_lock::PackageLock;
 use crate::schema::{
     Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
     Publication, RenderToml,
@@ -96,7 +96,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             path.as_ref(),
             std::env::current_dir()
         );
-        // let _mutx = PackageLock::lock().await; // held until function returns
+        let _mutx = PackageLock::lock().await; // held until function returns
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
