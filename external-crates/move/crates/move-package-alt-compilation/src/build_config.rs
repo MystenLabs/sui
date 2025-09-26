@@ -100,6 +100,10 @@ pub struct BuildConfig {
         help = "Environment to use for building packages"
     )]
     pub environment: Option<EnvironmentName>,
+
+    /// If set, any dependencies that are not published will have their address set to 0x0.
+    #[clap(skip)]
+    pub set_unpublished_deps_to_zero: bool,
 }
 
 impl BuildConfig {
