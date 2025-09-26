@@ -15,7 +15,7 @@ The Coin Registry shared object is located at address `0xc`.
 
 <details>
 <summary>
-`sui::coin_registry` module
+`sui::coin_registry` package
 </summary>
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" />
 </details>
@@ -238,9 +238,9 @@ Mitigate possible exploits with the following security concepts.
 
 ### Capability security
 
-- **`MetadataCap`:** Protect metadata capabilities as they control coin branding.
-- **`TreasuryCap`:** Treasury capabilities determine minting/burning permissions.
-- **`DenyCapV2`:** Deny capabilities can restrict coin usage.
+- `MetadataCap`: Protect metadata capabilities as they control coin branding.
+- `TreasuryCap`: Treasury capabilities determine minting/burning permissions.
+- `DenyCapV2`: Deny capabilities can restrict coin usage.
 
 ### Validation
 
@@ -257,4 +257,3 @@ The registry enforces several important validations:
 - **Capability proof:** Metadata deletion requires capability ownership.
 - **State consistency:** Regulatory state migration prevents double-setting.
 
-The coin registry system represents a significant evolution in Sui's approach to coin management, providing a robust, extensible, and user-friendly foundation for the ecosystem's monetary infrastructure.

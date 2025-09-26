@@ -114,7 +114,14 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-exports.returnFunctions = (source, functions, language) => {
+const cutAtBodyStart = (text) => {
+  const brace = text.indexOf("{");
+  if (brace !== -1) return text.slice(0, brace).trimEnd();
+  const semi = text.indexOf(";");
+  return semi !== -1 ? text.slice(0, semi + 1).trimEnd() : text.trimEnd();
+};
+
+exports.returnFunctions = (source, functions, language, sig) => {
   if (!functions) {
     return source;
   }
@@ -144,9 +151,11 @@ exports.returnFunctions = (source, functions, language) => {
       if (bracePos === -1) continue;
       const block = captureBalanced(sub.slice(bracePos));
       if (!block) continue;
-      const full = sub.slice(0, bracePos) + block; // header through matching `}`
+      const header = sub.slice(0, bracePos);
+      const full = header + block;
       const pre = capturePrepend(m, source);
-      funContent.push(removeLeadingSpaces(full, pre));
+      const out = sig ? cutAtBodyStart(full) : full;
+      funContent.push(removeLeadingSpaces(out, pre));
       continue;
     } else if (language === "ts") {
       funStr = `^(\\s*)(async )?(export (default )?)?function \\b${escapeRegex(fn)}\\b[\\s\\S]*?\\n\\1\\}`;
@@ -159,7 +168,11 @@ exports.returnFunctions = (source, functions, language) => {
       const funMatch = funRE.exec(source);
       if (funMatch) {
         let pre = capturePrepend(funMatch, source);
-        funContent.push(removeLeadingSpaces(funMatch[0], pre));
+        let matched = funMatch[0];
+        if (sig) {
+          matched = cutAtBodyStart(matched);
+        }
+        funContent.push(removeLeadingSpaces(matched, pre));
       }
     }
   }
