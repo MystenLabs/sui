@@ -1,5 +1,5 @@
 Command `summary -o yaml`:
-INCLUDING DEPENDENCY std
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING summaries
 
 Summary generation successful. Summaries stored in 'package_summaries'

@@ -3,4 +3,4 @@ name = "summaries"
 edition = "2024"
 
 [dependencies]
-MoveStdlib = { local = "../../../../move-stdlib" }
+std = { local = "../../../../move-stdlib" }

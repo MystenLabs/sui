@@ -1,5 +1,5 @@
 Command `summary`:
-BUILDING summary_pkg
+BUILDING summaries
 
 Summary generation successful. Summaries stored in 'package_summaries'
 External Command `ls -1 package_summaries/`:
