@@ -97,6 +97,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
     // TODO: We probably want a deduplication function, and then we can just use `all_packages` for
     // this
+    //
     pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
         Ok(self.linkage()?.values().cloned().collect())
     }
@@ -131,7 +132,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
             inner: DiGraph::new(),
         };
 
-        result.root_index = self.copy_moded(&mut result, self.root_index, &modes);
+        result.root_index = self.copy_moded(&mut result, self.root_index, modes);
 
         result
     }
@@ -153,7 +154,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
         for edge in self.inner.edges(node) {
             if let Some(dep_modes) = edge.weight().modes() {
-                if !modes.iter().any(|mode| dep_modes.contains(&mode)) {
+                if !modes.iter().any(|mode| dep_modes.contains(mode)) {
                     // dependency is moded but doesn't contain the modes we're allowing;
                     // skip adding the dep to the new graph
                     continue;
