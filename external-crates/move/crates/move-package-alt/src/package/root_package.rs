@@ -610,7 +610,7 @@ pkg_b = { local = "../pkg_b" }"#,
                     r#"
                     [package]
                     name = "pkg_dep_on_git"
-                    edition = "2025"
+                    edition = "2024"
                     license = "Apache-2.0"
                     authors = ["Move Team"]
                     version = "0.0.1"
