@@ -32,10 +32,11 @@ use move_compiler::{
     },
     sui_mode,
 };
+use move_core_types::account_address::AccountAddress;
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, graph::PackageInfo, package::RootPackage,
-    schema::Environment,
+    errors::PackageResult, flavor::MoveFlavor, graph::{PackageInfo, NamedAddress}, package::RootPackage,
+    schema::{Environment, OriginalID},
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -360,7 +361,28 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
             writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
         }
 
-        let addresses: BuildNamedAddresses = pkg.named_addresses()?.into();
+        let mut named_addresses = pkg.named_addresses()?;
+
+        // If set_unpublished_deps_to_zero is enabled, transform the addresses
+        if build_config.set_unpublished_deps_to_zero {
+            // Set root package to 0x0 if unpublished
+            if pkg.is_root() {
+                if let Some(root_addr) = named_addresses.get_mut(pkg.name()) {
+                    if matches!(root_addr, NamedAddress::RootPackage(_)) {
+                        *root_addr = NamedAddress::Defined(OriginalID(AccountAddress::ZERO));
+                    }
+                }
+            }
+
+            // Set all unpublished dependencies to 0x0
+            for (_, addr) in named_addresses.iter_mut() {
+                if matches!(addr, NamedAddress::Unpublished { .. }) {
+                    *addr = NamedAddress::Defined(OriginalID(AccountAddress::ZERO));
+                }
+            }
+        }
+
+        let addresses: BuildNamedAddresses = named_addresses.into();
 
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {
