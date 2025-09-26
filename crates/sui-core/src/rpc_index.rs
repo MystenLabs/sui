@@ -220,8 +220,26 @@ pub struct PackageVersionInfo {
     pub storage_id: ObjectID,
 }
 
+#[derive(Default, Clone)]
+pub struct IndexStoreOptions {
+    pub events_compaction_filter: Option<EventsCompactionFilter>,
+}
+
 fn default_table_options() -> typed_store::rocks::DBOptions {
     typed_store::rocks::default_db_options().disable_write_throttling()
+}
+
+fn events_table_options(compaction_filter: Option<EventsCompactionFilter>) -> typed_store::rocks::DBOptions {
+    let mut options = default_table_options();
+    if let Some(filter) = compaction_filter {
+        options.options.set_compaction_filter("events_by_stream", move |_, key, value| {
+            match filter.filter(key, value) {
+                Ok(decision) => decision,
+                Err(_) => Decision::Keep,
+            }
+        });
+    }
+    options
 }
 
 fn balance_delta_merge_operator(
@@ -353,7 +371,6 @@ struct IndexStoreTables {
 
     /// Authenticated events index by (stream_id, checkpoint_seq, transaction_idx, event_index)
     /// Value is the full sui_types::event::Event
-    #[default_options_override_fn = "default_table_options"]
     events_by_stream: DBMap<EventIndexKey, Event>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
@@ -366,6 +383,29 @@ pub struct EventIndexKey {
     pub checkpoint_seq: u64,
     pub transaction_idx: u32,
     pub event_index: u32,
+}
+
+/// Compaction filter for automatic pruning of old authenticated events during RocksDB compaction.
+#[derive(Clone)]
+pub struct EventsCompactionFilter {
+    pruning_watermark: Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl EventsCompactionFilter {
+    pub fn new(pruning_watermark: Arc<std::sync::atomic::AtomicU64>) -> Self {
+        Self { pruning_watermark }
+    }
+
+    pub fn filter(&self, key: &[u8], _value: &[u8]) -> anyhow::Result<Decision> {
+        let event_key: EventIndexKey = bcs::from_bytes(key)?;
+        let watermark = self.pruning_watermark.load(std::sync::atomic::Ordering::Relaxed);
+
+        if event_key.checkpoint_seq <= watermark {
+            Ok(Decision::Remove)
+        } else {
+            Ok(Decision::Keep)
+        }
+    }
 }
 
 impl IndexStoreTables {
@@ -409,12 +449,20 @@ impl IndexStoreTables {
         None
     }
 
-    fn open<P: Into<PathBuf>>(path: P) -> Self {
+
+    fn open_with_index_options<P: Into<PathBuf>>(path: P, index_options: IndexStoreOptions) -> Self {
+        let mut table_options = std::collections::BTreeMap::new();
+        table_options.insert("balance".to_string(), balance_table_options());
+        table_options.insert(
+            "events_by_stream".to_string(),
+            events_table_options(index_options.events_compaction_filter),
+        );
+
         IndexStoreTables::open_tables_read_write(
             path.into(),
             MetricConf::new("rpc-index"),
             None,
-            None,
+            Some(DBMapTableConfigMap::new(table_options)),
         )
     }
 
@@ -574,15 +622,6 @@ impl IndexStoreTables {
             &self.watermark,
             [(Watermark::Pruned, pruned_checkpoint_watermark)],
         )?;
-
-        let to_delete: Vec<EventIndexKey> = self
-            .events_by_stream
-            .safe_iter()
-            .filter_map(|res| res.ok().map(|(k, _)| k))
-            .filter(|key| key.checkpoint_seq <= pruned_checkpoint_watermark)
-            .collect();
-
-        batch.delete_batch(&self.events_by_stream, to_delete)?;
 
         batch.write()
     }
@@ -1051,10 +1090,31 @@ impl RpcIndexStore {
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
         index_config: Option<&RpcIndexInitConfig>,
     ) -> Self {
+        Self::new_with_options(
+            dir,
+            authority_store,
+            checkpoint_store,
+            epoch_store,
+            package_store,
+            index_config,
+            IndexStoreOptions::default(),
+        )
+        .await
+    }
+
+    pub async fn new_with_options(
+        dir: &Path,
+        authority_store: &AuthorityStore,
+        checkpoint_store: &CheckpointStore,
+        epoch_store: &AuthorityPerEpochStore,
+        package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        index_config: Option<&RpcIndexInitConfig>,
+        index_options: IndexStoreOptions,
+    ) -> Self {
         let path = Self::db_path(dir);
 
         let tables = {
-            let tables = IndexStoreTables::open(&path);
+            let tables = IndexStoreTables::open_with_index_options(&path, index_options.clone());
 
             // If the index tables are uninitialized or on an older version then we need to
             // populate them
@@ -1205,6 +1265,11 @@ impl RpcIndexStore {
                     );
                     table_config_map.insert("balance".to_string(), balance_options);
 
+                    table_config_map.insert(
+                        "events_by_stream".to_string(),
+                        events_table_options(index_options.events_compaction_filter.clone()),
+                    );
+
                     IndexStoreTables::open_with_options(
                         &path,
                         options,
@@ -1246,7 +1311,7 @@ impl RpcIndexStore {
                 }
 
                 // Reopen the DB with default options (eg without `unordered_write`s enabled)
-                let reopened_tables = IndexStoreTables::open(&path);
+                let reopened_tables = IndexStoreTables::open_with_index_options(&path, index_options);
 
                 // Sanity check: verify the database version was persisted correctly
                 let stored_version = reopened_tables
@@ -1273,8 +1338,12 @@ impl RpcIndexStore {
     }
 
     pub fn new_without_init(dir: &Path) -> Self {
+        Self::new_without_init_with_options(dir, IndexStoreOptions::default())
+    }
+
+    pub fn new_without_init_with_options(dir: &Path, index_options: IndexStoreOptions) -> Self {
         let path = Self::db_path(dir);
-        let tables = IndexStoreTables::open(path);
+        let tables = IndexStoreTables::open_with_index_options(path, index_options);
 
         Self {
             tables,
@@ -1418,6 +1487,32 @@ impl RpcIndexStore {
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
         self.tables.watermark.get(&Watermark::Indexed)
+    }
+
+    pub async fn new_with_compaction_filter(
+        dir: &Path,
+        authority_store: &AuthorityStore,
+        checkpoint_store: &CheckpointStore,
+        epoch_store: &AuthorityPerEpochStore,
+        package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        index_config: Option<&RpcIndexInitConfig>,
+        pruning_watermark: Arc<std::sync::atomic::AtomicU64>,
+    ) -> Self {
+        let events_filter = EventsCompactionFilter::new(pruning_watermark);
+        let index_options = IndexStoreOptions {
+            events_compaction_filter: Some(events_filter),
+        };
+
+        Self::new_with_options(
+            dir,
+            authority_store,
+            checkpoint_store,
+            epoch_store,
+            package_store,
+            index_config,
+            index_options,
+        )
+        .await
     }
 }
 
@@ -1668,5 +1763,119 @@ fn get_balance_and_type_if_coin(object: &Object) -> Result<Option<(StructTag, u6
                 e
             )))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicU64;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::event::Event;
+
+    #[tokio::test]
+    async fn test_events_compaction_filter() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path();
+        let db_path = path.join("rpc-index");
+
+        let pruning_watermark = Arc::new(AtomicU64::new(5));
+        let compaction_filter = EventsCompactionFilter::new(pruning_watermark.clone());
+
+        let index_options = IndexStoreOptions {
+            events_compaction_filter: Some(compaction_filter),
+        };
+
+        let tables = IndexStoreTables::open_with_index_options(&db_path, index_options);
+        let stream_id = SuiAddress::random_for_testing_only();
+        let test_events: Vec<_> = [1, 3, 5, 10, 15]
+            .iter()
+            .map(|&checkpoint_seq| {
+                (
+                    EventIndexKey {
+                        stream_id,
+                        checkpoint_seq,
+                        transaction_idx: 0,
+                        event_index: 0,
+                    },
+                    Event::random_for_testing(),
+                )
+            })
+            .collect();
+
+        let mut batch = tables.events_by_stream.batch();
+        for (key, event) in &test_events {
+            batch.insert_batch(&tables.events_by_stream, [(key.clone(), event.clone())]).unwrap();
+        }
+        batch.write().unwrap();
+
+        tables.events_by_stream.flush().unwrap();
+        let mut events_before_compaction = 0;
+        for result in tables.events_by_stream.safe_iter() {
+            if result.is_ok() {
+                events_before_compaction += 1;
+            }
+        }
+        assert_eq!(events_before_compaction, 5, "Should have 5 events before compaction");
+        let start_key = EventIndexKey {
+            stream_id: SuiAddress::ZERO,
+            checkpoint_seq: 0,
+            transaction_idx: 0,
+            event_index: 0,
+        };
+        let end_key = EventIndexKey {
+            stream_id: SuiAddress::random_for_testing_only(),
+            checkpoint_seq: u64::MAX,
+            transaction_idx: u32::MAX,
+            event_index: u32::MAX,
+        };
+
+        tables.events_by_stream.compact_range(&start_key, &end_key).unwrap();
+        let mut events_after_compaction = Vec::new();
+        for result in tables.events_by_stream.safe_iter() {
+            if let Ok((key, _event)) = result {
+                events_after_compaction.push(key);
+            }
+        }
+
+        println!("Events after compaction: {}", events_after_compaction.len());
+        assert!(events_after_compaction.len() >= 2, "Should have at least the events that shouldn't be pruned");
+        pruning_watermark.store(20, std::sync::atomic::Ordering::Relaxed);
+        let watermark_after = pruning_watermark.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(watermark_after, 20, "Watermark should be updated");
+    }
+
+    #[test]
+    fn test_events_compaction_filter_logic() {
+        let watermark = Arc::new(AtomicU64::new(100));
+        let filter = EventsCompactionFilter::new(watermark.clone());
+
+        let old_key = EventIndexKey {
+            stream_id: SuiAddress::random_for_testing_only(),
+            checkpoint_seq: 50,
+            transaction_idx: 0,
+            event_index: 0,
+        };
+        let old_key_bytes = bcs::to_bytes(&old_key).unwrap();
+        let decision = filter.filter(&old_key_bytes, &[]).unwrap();
+        assert!(matches!(decision, Decision::Remove), "Event with checkpoint 50 should be removed when watermark is 100");
+        let new_key = EventIndexKey {
+            stream_id: SuiAddress::random_for_testing_only(),
+            checkpoint_seq: 150,
+            transaction_idx: 0,
+            event_index: 0,
+        };
+        let new_key_bytes = bcs::to_bytes(&new_key).unwrap();
+        let decision = filter.filter(&new_key_bytes, &[]).unwrap();
+        assert!(matches!(decision, Decision::Keep), "Event with checkpoint 150 should be kept when watermark is 100");
+        let boundary_key = EventIndexKey {
+            stream_id: SuiAddress::random_for_testing_only(),
+            checkpoint_seq: 100,
+            transaction_idx: 0,
+            event_index: 0,
+        };
+        let boundary_key_bytes = bcs::to_bytes(&boundary_key).unwrap();
+        let decision = filter.filter(&boundary_key_bytes, &[]).unwrap();
+        assert!(matches!(decision, Decision::Remove), "Event with checkpoint equal to watermark should be removed");
     }
 }
