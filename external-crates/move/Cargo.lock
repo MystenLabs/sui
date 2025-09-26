@@ -2600,6 +2600,7 @@ dependencies = [
  "itertools 0.10.5",
  "jsonrpc",
  "move-command-line-common",
+ "move-compiler",
  "move-core-types",
  "named-lock",
  "once_cell",
