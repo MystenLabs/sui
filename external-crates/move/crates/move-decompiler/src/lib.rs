@@ -16,7 +16,6 @@ use move_model_2::{
     model::{self as M, Model},
     source_kind::SourceKind,
 };
-
 use pretty_simple::{Doc, ToDoc};
 
 use std::{
@@ -99,12 +98,10 @@ pub fn generate_from_model<S: SourceKind>(
         let name = pkg
             .name
             .map(|name| name.as_str().to_owned())
-            .unwrap_or_else(|| format!("anon_{}", pkg.address));
+            .unwrap_or_else(|| format!("{}", pkg.address));
 
         // Ensure the package directory exists and is empty: output/pkg_name
         let pkg_dir = output.join(&name);
-        std::fs::create_dir_all(&pkg_dir)?;
-        std::fs::remove_dir(&pkg_dir)?;
         std::fs::create_dir_all(&pkg_dir)?;
 
         let Some(model_pkg) = model.maybe_package(&pkg.address) else {
@@ -116,7 +113,6 @@ pub fn generate_from_model<S: SourceKind>(
             let path = pkg_dir.join(format!("{module_name}.move"));
             // If generate_output returns a Result, use `?`; otherwise drop it
             output_paths.push(generate_module(model_pkg, &path, &name, module)?);
-            output_paths.push(path);
         }
     }
 
@@ -150,56 +146,63 @@ fn generate_module<S: SourceKind>(
         .concat(D::line())
         .concat(D::line());
 
-    doc = doc
-        .concat(D::text("// -- structs -- "))
-        .concat(D::line())
-        .concat(D::line());
+    if model_mod.structs().into_iter().next().is_some() {
+        doc = doc
+            .concat(D::text("// -- structs -- "))
+            .concat(D::line())
+            .concat(D::line());
 
-    let structs = {
-        let mut doc = D::nil();
-        for s in model_mod.structs() {
-            let s_doc = s.to_doc();
-            doc = doc.concat(s_doc).concat(D::line()).concat(D::line());
-        }
-        doc
-    };
-    doc = doc.concat(structs);
+        let structs = {
+            let mut doc = D::nil();
+            for s in model_mod.structs() {
+                let s_doc = s.to_doc();
+                doc = doc.concat(s_doc).concat(D::line()).concat(D::line());
+            }
+            doc
+        };
+        doc = doc.concat(structs);
+    }
 
-    doc = doc
-        .concat(D::text("// -- enums -- "))
-        .concat(D::line())
-        .concat(D::line());
+    if model_mod.enums().into_iter().next().is_some() {
+        doc = doc
+            .concat(D::text("// -- enums -- "))
+            .concat(D::line())
+            .concat(D::line());
 
-    let enums = {
-        let mut doc = D::nil();
-        for e in model_mod.enums() {
-            let e_doc = e.to_doc();
-            doc = doc.concat(e_doc).concat(D::line()).concat(D::line());
-        }
-        doc
-    };
-    doc = doc.concat(enums);
+        let enums = {
+            let mut doc = D::nil();
+            for e in model_mod.enums() {
+                let e_doc = e.to_doc();
+                doc = doc.concat(e_doc).concat(D::line()).concat(D::line());
+            }
+            doc
+        };
+        doc = doc.concat(enums);
+    }
 
-    doc = doc
-        .concat(D::text("// -- functions -- "))
-        .concat(D::line())
-        .concat(D::line());
+    if !functions.is_empty() {
+        doc = doc
+            .concat(D::text("// -- functions -- "))
+            .concat(D::line())
+            .concat(D::line());
 
-    let functions = {
-        let mut doc = D::nil();
-        for (name, fun) in functions {
-            let Some(model_fun) = model_mod.maybe_function(*name) else {
-                anyhow::bail!("Function {} not found in module {}", name, module.name);
-            };
-            let f_doc = generate_function(&model_fun, fun);
-            doc = doc.concat(f_doc).concat(D::line()).concat(D::line());
-        }
-        doc
-    };
-    doc = doc.concat(functions);
+        let functions = {
+            let mut doc = D::nil();
+            for (name, fun) in functions {
+                let Some(model_fun) = model_mod.maybe_function(*name) else {
+                    anyhow::bail!("Function {} not found in module {}", name, module.name);
+                };
+                let f_doc = generate_function(&model_fun, fun);
+                doc = doc.concat(f_doc).concat(D::line()).concat(D::line());
+            }
+            doc
+        };
+        doc = doc.concat(functions);
+    }
 
     let output = doc.render(100);
     println!("- {}", path.display());
+    let _ = std::fs::remove_file(path); // ignore error if file does not exist
     std::fs::write(path, output)?;
     Ok(path.into())
 }

@@ -5,8 +5,6 @@ source: crates/move-decompiler/tests/tests.rs
 
 module enums::colors;
 
-// -- structs -- 
-
 // -- enums -- 
 
 public enum Color has copy, drop {

@@ -14,7 +14,6 @@ use move_binary_format::{
 
 use move_model_2::{
     model::{Model, Module, Package},
-    normalized,
     source_kind::SourceKind,
 };
 use move_symbol_pool::Symbol;
