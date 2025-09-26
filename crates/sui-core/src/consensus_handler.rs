@@ -1913,6 +1913,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let name = self.epoch_store.name;
             let authority_index = self.epoch_store.committee().authority_index(&name).unwrap();
             authority_index < 2
+                && self
+                    .epoch_store
+                    .epoch_start_config()
+                    .use_commit_handler_v2()
         } else if self.epoch_store.protocol_config().use_new_commit_handler() {
             true
         } else {

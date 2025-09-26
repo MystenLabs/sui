@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use enum_dispatch::enum_dispatch;
+use mysten_common::in_test_configuration;
 use serde::{Deserialize, Serialize};
 use sui_config::NodeConfig;
 use sui_types::accumulator_root::get_accumulator_root_obj_initial_shared_version;
@@ -101,7 +102,7 @@ impl EpochFlag {
     fn default_flags_impl() -> Vec<Self> {
         let mut flags = vec![EpochFlag::DataQuarantineFromBeginningOfEpoch];
 
-        if std::env::var("SUI_USE_NEW_COMMIT_HANDLER").is_ok() {
+        if std::env::var("SUI_USE_NEW_COMMIT_HANDLER").is_ok() || in_test_configuration() {
             flags.push(EpochFlag::UseCommitHandlerV2);
         }
 
