@@ -102,7 +102,8 @@ impl Summary {
         } else {
             let root_pkg = RootPackage::<F>::load(&path, env, config.mode_set()).await?;
             // Get named addresses from the root package graph
-            let named_addresses = root_pkg.package_info().named_addresses()?;
+            let named_addresses: BuildNamedAddresses =
+                root_pkg.package_info().named_addresses()?.into();
 
             // Convert NamedAddress to AccountAddress mapping
             let original_address_mapping = named_addresses

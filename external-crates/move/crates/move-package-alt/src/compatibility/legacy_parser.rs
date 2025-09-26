@@ -143,19 +143,21 @@ fn parse_source_manifest(
                 .transpose()
                 .context("Error parsing '[build]' section of manifest")?;
 
-            let dependencies = table
+            let mut dependencies = table
                 .remove(DEPENDENCY_NAME)
                 .map(|deps| parse_dependencies(deps, None))
                 .transpose()
                 .context("Error parsing '[dependencies]' section of manifest")?
                 .unwrap_or_default();
 
-            let _dev_dependencies = table
+            let dev_dependencies = table
                 .remove(DEV_DEPENDENCY_NAME)
                 .map(|deps| parse_dependencies(deps, Some("test")))
                 .transpose()
                 .context("Error parsing '[dev-dependencies]' section of manifest")?
                 .unwrap_or_default();
+
+            dependencies.extend(dev_dependencies);
 
             let modern_name = derive_modern_name(&addresses, path)?
                 .unwrap_or(PackageName::new(NO_NAME_LEGACY_PACKAGE_NAME).expect("Cannot fail"));

@@ -119,12 +119,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
-        Ok(Self::_validate_and_construct(
-            package_path,
-            env,
-            graph,
-            modes,
-        )?)
+        Self::_validate_and_construct(package_path, env, graph, modes)
     }
 
     /// A synchronous version of `load` that can be used to load a package while blocking in place.
@@ -200,12 +195,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load_from_manifests(&package_path, &env).await?;
 
-        Ok(Self::_validate_and_construct(
-            package_path,
-            env,
-            graph,
-            modes,
-        )?)
+        Self::_validate_and_construct(package_path, env, graph, modes)
     }
 
     /// Loads the root lockfile only, ignoring all manifests. Returns an error if the lockfile
@@ -247,7 +237,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// This helps validate:
     /// 1. TODO: Fill this in! (deduplicate nodes etc)
-    /// TODO: document arguments
     fn _validate_and_construct(
         package_path: PackagePath,
         env: Environment,
@@ -279,6 +268,16 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             .iter()
             .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
             .collect();
+
+        debug!(
+            "packages (unfiltered): {:?}",
+            unfiltered_graph
+                .packages()
+                .expect("linkage succeeds")
+                .iter()
+                .map(|pkg| pkg.display_name())
+                .collect::<Vec<_>>()
+        );
 
         Ok(Self {
             package_path,
