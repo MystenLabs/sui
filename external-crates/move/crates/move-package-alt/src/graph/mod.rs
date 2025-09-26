@@ -97,6 +97,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
     // TODO: We probably want a deduplication function, and then we can just use `all_packages` for
     // this
+    //
     pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
         Ok(self.linkage()?.values().cloned().collect())
     }

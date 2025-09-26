@@ -275,6 +275,16 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
             .collect();
 
+        debug!(
+            "packages (unfiltered): {:?}",
+            unfiltered_graph
+                .packages()
+                .expect("linkage succeeds")
+                .iter()
+                .map(|pkg| pkg.display_name())
+                .collect::<Vec<_>>()
+        );
+
         Ok(Self {
             package_path,
             environment: env,
