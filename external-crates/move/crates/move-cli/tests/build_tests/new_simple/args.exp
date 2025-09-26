@@ -1,6 +1,5 @@
-External Command `echo TODO: pkg-alt revisit this test; test of `move new` should be revised`:
+External Command `echo TODO: pkg-alt revisit this test; test of "move new" should be revised`:
 TODO: pkg-alt revisit this test
-sh: move: command not found
 sh: line 0: test: too many arguments
 Command `new P1`:
 External Command `cat P1/Move.toml`:
