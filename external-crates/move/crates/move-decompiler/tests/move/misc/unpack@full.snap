@@ -11,8 +11,6 @@ public struct Foo { val: u64 }
 
 public struct Bar { val: u64, other: u64 }
 
-// -- enums -- 
-
 // -- functions -- 
 
 public fun unpack(l0: misc::unpack::Foo): u64 {

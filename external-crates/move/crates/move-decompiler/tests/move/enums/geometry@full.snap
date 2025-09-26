@@ -5,8 +5,6 @@ source: crates/move-decompiler/tests/tests.rs
 
 module enums::geometry;
 
-// -- structs -- 
-
 // -- enums -- 
 
 public enum Shape has copy, drop {

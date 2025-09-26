@@ -5,10 +5,6 @@ source: crates/move-decompiler/tests/tests.rs
 
 module loops::infinite_loop;
 
-// -- structs -- 
-
-// -- enums -- 
-
 // -- functions -- 
 
 public fun inf_loop_0() {

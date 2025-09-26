@@ -228,26 +228,29 @@ fn comma_sep<I: IntoIterator<Item = Doc>>(it: I) -> Doc {
 }
 
 pub fn data_op_doc(op: &DataOp, args: &[Exp]) -> Doc {
-    match op {
-        DataOp::Pack(_) => D::text("/* TODO: pack */"),
-        DataOp::Unpack(_) => D::text("/* TODO: unpack */"),
+    fn maybe_parens(e: &Exp) -> Doc {
+        match e {
+            Exp::Variable(_) | Exp::Value(_) | Exp::Constant(_) => e.to_doc(),
+            _ => D::parens(e.to_doc()),
+        }
+    }
 
-        DataOp::ReadRef => D::text("*").concat(args[0].to_doc()),
+    match op {
+        DataOp::ReadRef => D::text("*").concat(maybe_parens(&args[0])),
 
         DataOp::WriteRef => D::text("*")
-            .concat(args[0].to_doc())
+            .concat(maybe_parens(&args[0]))
             .concat_space(D::text("="))
             .concat_space(args[1].to_doc()),
-
         DataOp::FreezeRef => D::text("freeze").concat_space(D::parens(args[0].to_doc())),
 
         DataOp::MutBorrowField(field_ref) => D::text("&mut ")
-            .concat(D::parens(args[0].to_doc()))
+            .concat(maybe_parens(&args[0]))
             .concat(D::text("."))
             .concat(D::text(field_ref.field.name.as_str())),
 
         DataOp::ImmBorrowField(field_ref) => D::text("&")
-            .concat(D::parens(args[0].to_doc()))
+            .concat(maybe_parens(&args[0]))
             .concat(D::text("."))
             .concat(D::text(field_ref.field.name.as_str())),
 
@@ -258,44 +261,83 @@ pub fn data_op_doc(op: &DataOp, args: &[Exp]) -> Doc {
         DataOp::VecLen(_) => args[0].to_doc().concat(D::text(".len()")),
 
         DataOp::VecImmBorrow(_) => D::text("&")
-            .concat(args[0].to_doc())
+            .concat(maybe_parens(&args[0]))
             .concat(D::text("["))
             .concat(args[1].to_doc())
             .concat(D::text("]")),
 
         DataOp::VecMutBorrow(_) => D::text("&mut ")
-            .concat(args[0].to_doc())
+            .concat(maybe_parens(&args[0]))
             .concat(D::text("["))
             .concat(args[1].to_doc())
             .concat(D::text("]")),
 
-        DataOp::VecPushBack(_) => args[0]
-            .to_doc()
+        DataOp::VecPushBack(_) => maybe_parens(&args[0])
             .concat(D::text(".push_back("))
             .concat(args[1].to_doc())
             .concat(D::text(")")),
 
-        DataOp::VecPopBack(_) => args[0]
-            .to_doc()
+        DataOp::VecPopBack(_) => maybe_parens(&args[0])
             .concat(D::text(".pop_back("))
             .concat(args[1].to_doc())
             .concat(D::text(")")),
 
-        DataOp::VecUnpack(_) => D::text("/* unreachable: VecUnpack */"),
-
-        DataOp::VecSwap(_) => args[0]
-            .to_doc()
+        DataOp::VecSwap(_) => maybe_parens(&args[0])
             .concat(D::text(".swap("))
             .concat(args[1].to_doc())
             .concat(D::text(", "))
             .concat(args[2].to_doc())
             .concat(D::text(")")),
 
-        DataOp::PackVariant(_) => D::text("/* TODO: PackVariant E::V { ... } */"),
+        DataOp::PackVariant(variant) => {
+            let fields = &variant.variant.fields.0;
+            assert!(fields.len() == args.len());
+            let enum_name = variant.enum_.name;
+            let variant_name = variant.variant.name;
+            D::text(format!("{enum_name}::{variant_name}")).concat_space(if fields.is_empty() {
+                D::nil().braces()
+            } else {
+                D::space()
+                    .concat(D::intersperse(
+                        fields.iter().zip(args.iter()).map(|((name, _ty), exp)| {
+                            D::text(name.as_str())
+                                .concat(D::text(":"))
+                                .concat_space(exp.to_doc())
+                        }),
+                        D::text(",").concat(D::space()),
+                    ))
+                    .concat(D::space())
+                    .braces()
+            })
+        }
+
+        DataOp::Pack(struct_) => {
+            let fields = &struct_.struct_.fields.0;
+            assert!(fields.len() == args.len());
+            let struct_name = struct_.struct_.name;
+            D::text(format!("{struct_name}")).concat_space(if fields.is_empty() {
+                D::nil().braces()
+            } else {
+                D::space()
+                    .concat(D::intersperse(
+                        fields.iter().zip(args.iter()).map(|((name, _ty), exp)| {
+                            D::text(name.as_str())
+                                .concat(D::text(":"))
+                                .concat_space(exp.to_doc())
+                        }),
+                        D::text(",").concat(D::space()),
+                    ))
+                    .concat(D::space())
+                    .braces()
+            })
+        }
+
+        DataOp::Unpack(_) => unreachable!("Unpack"),
+        DataOp::VecUnpack(_) => unreachable!("VecUnpack"),
 
         DataOp::UnpackVariant(_)
         | DataOp::UnpackVariantImmRef(_)
-        | DataOp::UnpackVariantMutRef(_) => D::text("/* unreachable: unpack variant */"),
+        | DataOp::UnpackVariantMutRef(_) => unreachable!("Unpack variant"),
     }
 }
 
