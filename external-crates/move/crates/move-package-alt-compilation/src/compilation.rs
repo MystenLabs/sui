@@ -35,7 +35,10 @@ use move_compiler::{
 use move_core_types::account_address::AccountAddress;
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, graph::{PackageInfo, NamedAddress}, package::RootPackage,
+    errors::PackageResult,
+    flavor::MoveFlavor,
+    graph::{NamedAddress, PackageInfo},
+    package::RootPackage,
     schema::{Environment, OriginalID},
 };
 use move_symbol_pool::Symbol;
