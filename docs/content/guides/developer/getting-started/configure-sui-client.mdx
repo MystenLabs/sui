@@ -1,19 +1,137 @@
-## Configure a Sui client
+---
+title: Configure a Sui client
+description: 
+keywords: [  ]
+---
 
-- Brief introduction as to why you need to configure the client and what configuring it does
-    - Generates address, connects to network
-- First, check for Sui installation
-    - Link to page on how to upgrade Sui if installed already
-    - Link to page on Install Sui if not installed
-- `sui client`
-    - When you first run the Sui CLI with `sui client` it will ask you to create a wallet address, a network environment configuration
-        - It will store all of these in `~/.sui/sui_config/client.yaml`
-            - What to do if `client.yaml` file already exists from previous installation/configuration
-        - Alternative instructions for Windows
-- Connect to Testnet
-    - Links to devnet/mainnet/local network instructions elsewhere
-    - Explain the difference between the different networks
-        - Include how long data exists on Testnet/Devnet
-- Next steps
-    - Link to next page Create a Sui address
-    - Link to hello, world! - explain why you would go here
+You must [download and install](/guides/developer/getting-started/sui-install) Sui before you can configure it. You must configure the client because the configuration specifies which network to connect to and which address will send transactions. Once the client is configured after installation, you will not need to alter the configuration unless you'd like to change the network information. 
+
+## Configuration 
+
+First, confirm that Sui has been installed successfully:
+
+```
+$ sui --version
+```
+
+If this command returns `sui not found`, then Sui is not installed and you must [follow the installation instructions](/guides/developer/getting-started/sui-install).
+
+## `sui client` 
+
+<Tabs>
+
+<TabItem label="macOS/Linux" value="macos-linux">
+
+Run the Sui CLI with the command:
+
+```
+$ sui client
+```
+
+The CLI prompts you to create a new wallet address and setup a network environment configuration. This information is stored in the `~/.sui/sui_config/client.yaml` file by default. You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
+
+The wallet address will have a key stored in a separate file, `~/.sui/sui_config/sui.keystore`. Learn more about wallet addresses in [Create a Sui Address](/guides/developer/getting-started/get-address).
+
+:::caution 
+
+If you already have a `client.yaml` file stored locally from a previous Sui installation, you will receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
+
+:::
+
+</TabItem>
+
+<TabItem label="Windows" value="windows">
+
+Run the Sui CLI with the command:
+
+```
+$ sui client
+```
+
+The CLI prompts you to create a new wallet address and setup a network environment configuration. This information is stored in the `%USERPROFILE%\.sui\sui_config\client.yaml` file by default. You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
+
+The wallet address will have a key stored in a separate file, `~/.sui/sui_config/sui.keystore`. Learn more about wallet addresses in [Create a Sui Address](/guides/developer/getting-started/get-address).
+
+:::caution
+
+If you already have a `client.yaml` file stored locally from a previous Sui installation, you will receive the `sui client --help` output in the console. You can delete the existing `%USERPROFILE%\.sui\sui_config\client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
+
+:::
+
+</TabItem>
+</Tabs>
+
+
+### Configuration options
+
+The first prompt will confirm if you'd like to create the `client.yaml` file, select `Y`:
+
+```
+Config file ["<PATH-TO-FILE>/client.yaml"] doesn't exist, do you want to connect to a Sui full node server [y/N]?
+```
+
+The second prompt configures the network server URL that you'd like to connect to:
+
+```
+Sui full node server URL (Defaults to Sui Testnet if not specified) :
+```
+
+By default, the Testnet is used if nothing is specified. Using the Testnet is recommended for developers new to Sui that do not have a project already developed and ready for deployment on the Mainnet. 
+
+The options are:
+
+- `https://fullnode.testnet.sui.io:443`: The RPC URL for the Testnet network.
+
+- `https://fullnode.devnet.sui.io:443`: The RPC URL for the Devnet network. Devnet is not recommended for new Sui developers, as it is better suited for more advanced use cases and data is wiped weekly as part of the network's update process.
+
+- `https://fullnode.mainnet.sui.io:443`: The RPC URL for the Mainnet network. Deploying applications to the Mainnet costs real SUI tokens. 
+
+- `http://0.0.0.0:9000`: The RPC URL for a Localnet network, if configured. [Learn how to setup a local network](/guides/developer/sui-101/local-network).
+
+<ImportContent source="data-wipe.mdx" mode="snippet" />
+
+The final prompt is to select an encryption scheme. Once selected, the client will generate a new wallet address using that scheme for the address's key pair. Press **0**, **1**, or **2** to select a key scheme:
+
+```
+Select key scheme to generate key pair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
+```
+
+The options are:
+
+- `ed25519`: Small key size and compact signatures. 
+
+- `secp256k1`: Provides security through generating and verifying keys using ECDSA. 
+
+- `secp256r1`: Uses randomly generated curves to generate keys.
+
+The client will return your new address and 12-word recovery phrase:
+
+```
+Generated new key pair for address with scheme "ed25519" [0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442]
+Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud speed grocery]
+```
+
+[Learn more about Sui addresses, key generation, and recovery phrases](/guides/developer/getting-started/get-address).
+
+Your Sui client is now configured. The `client.yaml` file will contain the following configuration information:
+
+```yaml
+keystore:
+  File: /Users/your_user/.sui/sui_config/sui.keystore
+external_keys: ~
+envs:
+  - alias: testnet
+    rpc: "https://fullnode.testnet.sui.io:443"
+    ws: ~
+    basic_auth: ~
+active_env: testnet
+active_address: "0x7df01d3935b7ab3cd1da6828eed763ee2cc556670528a47baa6af8c251866e48"
+```
+
+## Next steps 
+
+Next, [learn more about your Sui address].
+
+Or, [clone the Hello, world!] project if you are already familiar with wallet addresses and best practices.
+
+
