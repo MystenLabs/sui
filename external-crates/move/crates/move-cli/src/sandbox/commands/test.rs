@@ -109,7 +109,6 @@ fn collect_coverage(
 ///
 /// For example, if `paths` is  [`foo`, `../bar`, `../../../../baz`], then `make_dir_prefix(paths)`
 /// would be `dir/dir/dir/dir` so that `0/1/2/3/../../../../baz` would clean to `baz`.
-#[allow(unused)]
 fn make_dir_prefix(paths: impl IntoIterator<Item = impl AsRef<Path>>) -> PathBuf {
     let mut max_depth = 0;
     for path in paths {
@@ -123,7 +122,7 @@ fn make_dir_prefix(paths: impl IntoIterator<Item = impl AsRef<Path>>) -> PathBuf
         max_depth = max(max_depth, depth);
     }
     let mut result = PathBuf::new();
-    for i in [0..max_depth - 1] {
+    for _ in 0..max_depth - 1 {
         result.push("dir");
     }
     result
