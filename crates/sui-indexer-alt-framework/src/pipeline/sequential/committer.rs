@@ -70,10 +70,12 @@ where
         let mut batch = H::Batch::default();
         let mut batch_rows = 0;
         let mut batch_checkpoints = 0;
-
-        // The task keeps track of the highest (inclusive) checkpoint it has added to the batch, and
-        // whether that batch needs to be written out. By extension it also knows the next
-        // checkpoint to expect and add to the batch.
+        // The task keeps track of the highest (inclusive) checkpoint it has added to the batch
+        // through `next_checkpoint`, and whether that batch needs to be written out. By extension
+        // it also knows the next checkpoint to expect and add to the batch. In case of db txn
+        // failures, we need to know the watermark update that failed, cached to this variable. in
+        // case of db txn failures.
+        let mut watermark = None;
 
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
@@ -92,8 +94,6 @@ where
 
         info!(pipeline = H::NAME, "Starting committer");
 
-        // Cache current watermark in case of db txn failures.
-        let mut watermark = None;
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
@@ -183,7 +183,8 @@ where
                     // If there is no new data to commit, we can skip the rest of the process. Note
                     // that we cannot use batch_rows for the check, since it is possible that there
                     // are empty checkpoints with no new rows added, but the watermark still needs
-                    // to be updated.
+                    // to be updated. Conversely, if there is no watermark to be updated, we know
+                    // there is no data to write out.
                     if batch_checkpoints == 0 {
                         assert_eq!(batch_rows, 0);
                         continue;
