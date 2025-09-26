@@ -15,8 +15,8 @@ use crate::graph::{LinkageTable, PackageInfo};
 use crate::package::block_on;
 use crate::package::package_lock::PackageLock;
 use crate::schema::{
-    Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
-    Publication, RenderToml,
+    Environment, ModeName, OriginalID, PackageID, PackageName, ParsedEphemeralPubs,
+    ParsedPublishedFile, Publication, RenderToml,
 };
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
@@ -55,8 +55,16 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     package_path: PackagePath,
     /// The environment we're operating on for this root package.
     environment: Environment,
-    /// The dependency graph for this package.
-    graph: PackageGraph<F>,
+
+    /// The full dependency graph, which may include multiple packages with the same original ID
+    /// and edges that don't match a mode filter
+    unfiltered_graph: PackageGraph<F>,
+
+    /// The reduced dependency graph, which has had mode filters applied, but hasn't yet had
+    /// overrides applied.
+    /// TODO: we should apply overrides here as well
+    filtered_graph: PackageGraph<F>,
+
     /// The lockfile we're operating on
     /// Invariant: lockfile.pinned matches graph, except that digests may differ
     lockfile: ParsedLockfile,
@@ -90,7 +98,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Load the root package for `env` using the "normal" path - we first try to load from the
     /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
-    pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
+    ///
+    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
+    pub async fn load(
+        path: impl AsRef<Path>,
+        env: Environment,
+        modes: Vec<ModeName>,
+    ) -> PackageResult<Self> {
         debug!(
             "Loading RootPackage for {:?} (CWD: {:?}",
             path.as_ref(),
@@ -100,12 +114,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
-        Ok(Self::_validate_and_construct(package_path, env, graph)?)
+        Self::_validate_and_construct(package_path, env, graph, modes)
     }
 
     /// A synchronous version of `load` that can be used to load a package while blocking in place.
-    pub fn load_sync(path: PathBuf, env: Environment) -> PackageResult<Self> {
-        block_on!(Self::load(path.as_path(), env))
+    pub fn load_sync(path: PathBuf, env: Environment, modes: Vec<ModeName>) -> PackageResult<Self> {
+        block_on!(Self::load(path.as_path(), env, modes))
     }
 
     /// Load the root package from `root` in environment `build_env`, but replace all the addresses
@@ -114,11 +128,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// If `pubfile` does not exist, one is created with the provided `chain_id` and `build_env`;
     /// If the file does exist but these fields differ, then an error is returned.
+    ///
+    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
     pub async fn load_ephemeral(
         root: impl AsRef<Path>,
         build_env: Option<EnvironmentName>,
         chain_id: EnvironmentID,
         pubfile_path: impl AsRef<Path>,
+        mode: Vec<ModeName>,
     ) -> PackageResult<Self> {
         // Load the publication file
         let pubfile =
@@ -140,12 +157,17 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         };
 
         // load the package as if in the build_env
-        let mut result = Self::load(root, build_env).await?;
+        let mut result = Self::load(root, build_env, mode).await?;
 
         // update the packages to use the ephemeral addresses
         result
-            .graph
+            .unfiltered_graph
             .add_publish_overrides(localpubs_to_publications(&pubfile));
+
+        result
+            .filtered_graph
+            .add_publish_overrides(localpubs_to_publications(&pubfile));
+
         result.pubs = PublicationSource::Ephemeral {
             file: pubfile_path.as_ref().to_path_buf(),
             pubs: pubfile,
@@ -159,11 +181,16 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// does not write to the lockfile; you should call [Self::save_to_disk] to save the results.
     ///
     /// TODO: We should load from lockfiles instead of manifests for deps.
-    pub async fn load_force_repin(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
+    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
+    pub async fn load_force_repin(
+        path: impl AsRef<Path>,
+        env: Environment,
+        modes: Vec<ModeName>,
+    ) -> PackageResult<Self> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load_from_manifests(&package_path, &env).await?;
 
-        Ok(Self::_validate_and_construct(package_path, env, graph)?)
+        Self::_validate_and_construct(package_path, env, graph, modes)
     }
 
     /// Loads the root lockfile only, ignoring all manifests. Returns an error if the lockfile
@@ -171,9 +198,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// Note that this still fetches all of the dependencies, it just doesn't look at their
     /// manifests.
+    ///
+    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
     pub async fn load_ignore_digests(
         path: impl AsRef<Path>,
         env: Environment,
+        modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
 
@@ -188,9 +218,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             )));
         };
 
-        Self::_validate_and_construct(package_path, env, graph)
+        Self::_validate_and_construct(package_path, env, graph, modes)
         // Note: we do not sync the lockfile here because we haven't repinned so we don't want to
         // update the digests
+    }
+
+    /// The metadata for the root package in [PackageInfo] form
+    pub fn package_info(&self) -> PackageInfo<F> {
+        self.filtered_graph.root_package_info()
     }
 
     /// Central validation point for a RootPackage.
@@ -200,46 +235,66 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     fn _validate_and_construct(
         package_path: PackagePath,
         env: Environment,
-        graph: PackageGraph<F>,
+        unfiltered_graph: PackageGraph<F>,
+        modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
         debug!(
             "creating RootPackage at {:?} (CWD: {:?})",
             package_path.path(),
             std::env::current_dir()
         );
+        // TODO: think more carefully about when we convert the legacy lockfile
+        convert_legacy_lockfile::<F>(&package_path)?;
+
         let mut lockfile = Self::load_lockfile(&package_path)?;
-        lockfile.pinned.insert(env.name.clone(), graph.to_pins()?);
+        lockfile
+            .pinned
+            .insert(env.name.clone(), unfiltered_graph.to_pins()?);
         let pubs = Self::load_pubfile(&package_path)?;
 
-        // check that there is a consistent linkage
-        let _linkage = graph.linkage()?;
-        graph.check_rename_from()?;
+        // apply mode filter
+        let filtered_graph = unfiltered_graph.filter_for_mode(&modes);
 
-        let deps_ids = _linkage
+        // check that there is a consistent linkage
+        let linkage = filtered_graph.linkage()?;
+        unfiltered_graph.check_rename_from()?;
+
+        let deps_ids = linkage
             .iter()
             .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
             .collect();
 
+        debug!(
+            "packages (unfiltered): {:?}",
+            unfiltered_graph
+                .packages()
+                .expect("linkage succeeds")
+                .iter()
+                .map(|pkg| pkg.display_name())
+                .collect::<Vec<_>>()
+        );
+
         Ok(Self {
             package_path,
             environment: env,
-            graph,
             lockfile,
             deps_ids,
             pubs: PublicationSource::Published(pubs),
+            unfiltered_graph,
+            filtered_graph,
         })
     }
 
     /// The id of the root package (TODO: perhaps this method is poorly named; check where it's
     /// used and decide if they should be using `id` or `display_name`)
     pub fn name(&self) -> &PackageID {
-        self.package_graph().root_package_info().id()
+        self.package_info().id()
     }
 
     /// Returns the `display_name` for the root package.
     /// Invariant: For modern packages, this is always equal to `name().as_str()`
     pub fn display_name(&self) -> &str {
-        self.package_graph().root_package().display_name()
+        self.filtered_graph.root_package().display_name()
     }
 
     /// The path to the root of the package
@@ -250,23 +305,24 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Return the list of all packages in the root package's package graph (including itself and all
     /// transitive dependencies). This includes the non-duplicate addresses only.
     pub fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
-        self.graph.packages()
+        self.filtered_graph.packages()
     }
 
     /// Return the linkage table for the root package. This contains an entry for each package that
     /// this package depends on (transitively). Returns an error if any of the packages that this
     /// package depends on is unpublished.
     pub fn linkage(&self) -> PackageResult<LinkageTable<F>> {
-        Ok(self.graph.linkage()?)
+        Ok(self.filtered_graph.linkage()?)
     }
 
     /// Update the dependencies in the lockfile for this environment to match the dependency graph
     /// represented by `self`.
-    pub fn update_lockfile(&self) -> PackageResult<()> {
+    pub fn update_lockfile(&mut self) -> PackageResult<()> {
         let mut lockfile: ParsedLockfile = Self::load_lockfile(self.package_path())?;
-        lockfile
-            .pinned
-            .insert(self.environment.name.clone(), self.graph.to_pins()?);
+        lockfile.pinned.insert(
+            self.environment.name.clone(),
+            self.filtered_graph.to_pins()?,
+        );
 
         std::fs::write(self.path().lockfile_path(), lockfile.render_as_toml())?;
         Ok(())
@@ -297,9 +353,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// Read the lockfile from the root directory, returning an empty structure if none exists
+    /// Assumes that legacy lockfiles have already been converted (which should happen during
+    /// package load)
     fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile> {
-        convert_legacy_lockfile::<F>(package_path)?;
-
         let path = package_path.lockfile_path();
         debug!("loading lockfile {:?}", path);
 
@@ -370,19 +426,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.lockfile
     }
 
-    /// Return the package graph for `env`
-    // TODO: what's the right API here?
-    pub fn package_graph(&self) -> &PackageGraph<F> {
-        &self.graph
-    }
-
     pub fn lockfile(&self) -> &ParsedLockfile {
         &self.lockfile
     }
 
     /// Return the publication information for the root package in the current environment
     pub fn publication(&self) -> Option<&Publication<F>> {
-        self.graph.root_package().publication()
+        self.filtered_graph.root_package().publication()
     }
 
     // *** PATHS RELATED FUNCTIONS ***
@@ -394,7 +444,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Return a list of sorted package names
     pub fn sorted_deps(&self) -> Vec<&PackageName> {
-        self.package_graph().sorted_deps()
+        self.filtered_graph.sorted_deps()
     }
 
     // TODO: what is the spec of this function?
@@ -511,7 +561,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         for name in names {
             let pkg_path = root_path.join("packages").join(name);
-            let package = RootPackage::<Vanilla>::load(&pkg_path, env.clone())
+            let package = RootPackage::<Vanilla>::load(&pkg_path, env.clone(), vec![])
                 .await
                 .unwrap();
             assert_eq!(
@@ -528,7 +578,9 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // Test loading root package with check for environment existing in manifest
         let pkg_path = root_path.join("packages").join("graph");
-        let root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
+        let root = RootPackage::<Vanilla>::load(&pkg_path, env, vec![])
+            .await
+            .unwrap();
 
         // Test environment operations
         assert!(
@@ -545,7 +597,9 @@ pkg_b = { local = "../pkg_b" }"#,
         let (env, root_path) = setup_test_move_project().await;
         let pkg_path = root_path.join("packages").join("graph");
 
-        let root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
+        let root = RootPackage::<Vanilla>::load(&pkg_path, env, vec![])
+            .await
+            .unwrap();
 
         let new_lockfile = root.lockfile().clone();
 
@@ -562,7 +616,8 @@ pkg_b = { local = "../pkg_b" }"#,
         assert!(
             RootPackage::<Vanilla>::load(
                 &path,
-                Environment::new("devnet".to_string(), "abcd1234".to_string())
+                Environment::new("devnet".to_string(), "abcd1234".to_string()),
+                vec![]
             )
             .await
             .is_err()
@@ -581,7 +636,7 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_deps([("a", "b")])
             .build();
 
-        RootPackage::<Vanilla>::load(scenario.path_for("a"), default_environment())
+        RootPackage::<Vanilla>::load(scenario.path_for("a"), default_environment(), vec![])
             .await
             .unwrap_err();
     }
@@ -651,7 +706,7 @@ pkg_b = { local = "../pkg_b" }"#,
             root_pkg_manifest.replace("../pkg_git", pkg_git.as_ref().root_path_str());
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
-        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone())
+        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone(), vec![])
             .await
             .unwrap();
 
@@ -673,7 +728,7 @@ pkg_b = { local = "../pkg_b" }"#,
         );
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
-        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone())
+        let mut root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone(), vec![])
             .await
             .unwrap();
 
@@ -698,7 +753,7 @@ pkg_b = { local = "../pkg_b" }"#,
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
         // check if update deps works as expected
-        let root_pkg = RootPackage::<Vanilla>::load_force_repin(&root_pkg_path, env)
+        let root_pkg = RootPackage::<Vanilla>::load_force_repin(&root_pkg_path, env, vec![])
             .await
             .unwrap();
 
@@ -746,14 +801,14 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await
         .unwrap();
 
         // check the root package's named address
         let root_addr = root
-            .package_graph()
-            .root_package_info()
+            .package_info()
             .named_addresses()
             .unwrap()
             .into_iter()
@@ -795,6 +850,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await
         .unwrap();
@@ -802,7 +858,7 @@ pkg_b = { local = "../pkg_b" }"#,
         // check the dependency's addresses
 
         let dep_addrs = root
-            .package_graph()
+            .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
             .unwrap()
             .published()
@@ -839,6 +895,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await
         .unwrap();
@@ -846,7 +903,7 @@ pkg_b = { local = "../pkg_b" }"#,
         // check the dependency's addresses
 
         let dep_addrs = root
-            .package_graph()
+            .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
             .unwrap()
             .published()
@@ -887,6 +944,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await
         .unwrap();
@@ -894,7 +952,7 @@ pkg_b = { local = "../pkg_b" }"#,
         // check the dependency's addresses
 
         let dep_addrs = root
-            .package_graph()
+            .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
             .unwrap()
             .published()
@@ -930,13 +988,14 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await
         .unwrap();
 
         // check the dependency's addresses
         assert!(
-            root.package_graph()
+            root.filtered_graph
                 .package_info_by_id(&PackageID::from("dep"))
                 .unwrap()
                 .published()
@@ -979,6 +1038,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await
         .unwrap();
@@ -1019,6 +1079,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await;
 
@@ -1054,13 +1115,14 @@ pkg_b = { local = "../pkg_b" }"#,
             Some(DEFAULT_ENV_NAME.to_string()),
             "localnet".into(),
             ephemeral.as_path(),
+            vec![],
         )
         .await
         .unwrap();
 
         // check the dependency's addresses
         let dep_addrs = root
-            .package_graph()
+            .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
             .unwrap()
             .published()
@@ -1096,6 +1158,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await
         .unwrap();
@@ -1156,6 +1219,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await;
 
@@ -1184,6 +1248,7 @@ pkg_b = { local = "../pkg_b" }"#,
             Some(DEFAULT_ENV_NAME.to_string()),
             "localnet".into(),
             ephemeral.path(),
+            vec![],
         )
         .await;
 
@@ -1205,6 +1270,7 @@ pkg_b = { local = "../pkg_b" }"#,
             None,
             "localnet".into(),
             ephemeral.join("nonexistent.toml"),
+            vec![],
         )
         .await;
 
@@ -1226,9 +1292,82 @@ pkg_b = { local = "../pkg_b" }"#,
             Some("unknown environment".into()),
             "localnet".into(),
             ephemeral,
+            vec![],
         )
         .await;
 
         assert_snapshot!(root.unwrap_err().to_string(), @"Cannot build with build-env `unknown environment`: the recognized environments are <TODO>");
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a --> b --> c1
+    ///              a -->|test, override| c2
+    /// ```
+    ///
+    /// In this scenario, the test-only override dependency on c2 should be ignored when computing
+    /// the non-test linkage, so `c1` should be in the computed graph, and not c2
+    ///
+    /// See also [mode_overrides_affected]
+    #[test(tokio::test)]
+    async fn mode_overrides_unaffected() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_published("c1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("c2", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a"), ("a", "b"), ("b", "c1")])
+            .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
+            .build();
+
+        let root =
+            RootPackage::<Vanilla>::load(scenario.path_for("root"), default_environment(), vec![])
+                .await
+                .unwrap();
+
+        let mut package_names: Vec<_> = root
+            .packages()
+            .unwrap()
+            .into_iter()
+            .map(|pkg| pkg.display_name().to_string())
+            .collect();
+        package_names.sort();
+
+        assert_eq!(package_names, ["a", "b", "c1", "root"]);
+    }
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a --> b --> c1
+    ///              a -->|test, override| c2
+    /// ```
+    ///
+    /// In this scenario, the test-only override dependency on c2 should NOT be ignored when computing
+    /// the test linkage, so `c2` should be in the computed graph, and not c1
+    ///
+    /// See also [mode_overrides_unaffected]
+    #[test(tokio::test)]
+    async fn mode_overrides_affected() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_published("c1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("c2", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a"), ("a", "b"), ("b", "c1")])
+            .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
+            .build();
+
+        let root = RootPackage::<Vanilla>::load(
+            scenario.path_for("root"),
+            default_environment(),
+            vec!["test".to_string()],
+        )
+        .await
+        .unwrap();
+
+        let mut package_names: Vec<_> = root
+            .packages()
+            .unwrap()
+            .into_iter()
+            .map(|pkg| pkg.display_name().to_string())
+            .collect();
+        package_names.sort();
+
+        assert_eq!(package_names, ["a", "b", "c2", "root"]);
     }
 }
