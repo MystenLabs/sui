@@ -15,7 +15,6 @@ use sui_rpc::proto::sui::rpc::v2::{
 use sui_sdk::SUI_COIN_TYPE;
 use sui_sdk_types::Address;
 use sui_types::base_types::SuiAddress;
-use tracing::info;
 
 use crate::errors::Error;
 use crate::types::{
@@ -23,7 +22,6 @@ use crate::types::{
     Amount, Coin, CoinID, CoinIdentifier, Currencies, Currency, SubAccountType, SubBalance,
 };
 use crate::{OnlineServerContext, SuiEnv};
-use std::time::Duration;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
@@ -38,35 +36,14 @@ pub async fn balance(
     env.check_network_identifier(&request.network_identifier)?;
     let address = request.account_identifier.address;
     let currencies = &request.currencies;
-    let mut retry_attempts = 5;
-    //TODO this retry logic should probably be ripped out.
-    while retry_attempts > 0 {
-        let balances_first = get_balances(&mut ctx, &request, address, currencies.clone()).await?;
-        let checkpoint1 = get_checkpoint(&mut ctx).await?;
-        let mut checkpoint2 = get_checkpoint(&mut ctx).await?;
-        while checkpoint2 <= checkpoint1 {
-            checkpoint2 = get_checkpoint(&mut ctx).await?;
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-        let balances_second = get_balances(&mut ctx, &request, address, currencies.clone()).await?;
-        if balances_first.eq(&balances_second) {
-            info!(
-                "same balance for account {} at checkpoint {}",
-                address, checkpoint2
-            );
-            return Ok(AccountBalanceResponse {
-                block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
-                balances: balances_first,
-            });
-        } else {
-            info!(
-                "different balance for account {} at checkpoint {}",
-                address, checkpoint2
-            );
-            retry_attempts -= 1;
-        }
-    }
-    Err(Error::RetryExhausted(String::from("retry")))
+
+    let checkpoint = get_checkpoint(&mut ctx).await?;
+    let balances = get_balances(&mut ctx, &request, address, currencies.clone()).await?;
+
+    Ok(AccountBalanceResponse {
+        block_identifier: ctx.blocks().create_block_identifier(checkpoint).await?,
+        balances,
+    })
 }
 
 async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
