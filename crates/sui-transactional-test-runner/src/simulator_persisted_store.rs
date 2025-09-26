@@ -11,12 +11,11 @@ use std::num::NonZeroUsize;
 use sui_config::genesis;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_swarm_config::genesis_config::AccountConfig;
-use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_swarm_config::network_config_builder::{ConfigBuilder, KeyPairWrapper};
 use sui_types::storage::{ReadStore, RpcStateReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
-    crypto::AccountKeyPair,
     digests::{ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::{SuiError, UserInputError},
@@ -105,7 +104,7 @@ impl PersistedStore {
         chain_start_timestamp_ms: u64,
         protocol_version: ProtocolVersion,
         account_configs: Vec<AccountConfig>,
-        validator_keys: Option<Vec<AccountKeyPair>>,
+        key_pair_wrappers: Vec<KeyPairWrapper>,
         reference_gas_price: Option<u64>,
         path: Option<PathBuf>,
         enable_accumulators: bool,
@@ -123,8 +122,8 @@ impl PersistedStore {
             .with_protocol_version(protocol_version)
             .with_accounts(account_configs);
 
-        if let Some(validator_keys) = validator_keys {
-            builder = builder.deterministic_committee_validators(validator_keys)
+        if !key_pair_wrappers.is_empty() {
+            builder = builder.deterministic_committee_validators(key_pair_wrappers)
         };
         if let Some(reference_gas_price) = reference_gas_price {
             builder = builder.with_reference_gas_price(reference_gas_price)
@@ -176,7 +175,7 @@ impl PersistedStore {
             chain_start_timestamp_ms,
             protocol_version,
             account_configs,
-            None,
+            vec![],
             None,
             path,
             enable_accumulators,
