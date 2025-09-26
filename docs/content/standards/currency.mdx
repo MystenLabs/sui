@@ -155,6 +155,7 @@ The fields of the metadata objects include the following:
 | `symbol`      | Symbol for the coin. This might be the same as `name`, but is typically fewer than five all capital letters. For example, `SUI` is the `symbol` for the native coin on Sui but its `name` is also `SUI`. |
 | `description` | A short description to describe the token.                                                                                                                                                               |
 | `icon_url`    | The URL for the token's icon, used for display in wallets, explorers, and other apps.                                                                                                                    |
+
 ## Minting and burning coins
 
 The Coin Registry supports advanced supply management models:
@@ -394,7 +395,7 @@ The destruction of legacy `CoinMetadata` objects is only permitted after the cor
 
 This design preserves backward compatibility while enabling a smooth transition to the centralized registry system, protecting existing governance mechanisms until owners are ready to migrate fully to the new system.
 
-Some of the benfits to migrate to the Coin Registry include:
+Some of the benefits to migrate to the Coin Registry include:
 
 - **Centralized management:** Single source of truth for all coin information.
 - **Enhanced features:** Access to advanced supply models and regulatory tracking.
