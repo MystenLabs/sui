@@ -45,8 +45,8 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
-use typed_store::rocksdb::{MergeOperands, WriteOptions};
 use typed_store::rocksdb::compaction_filter::Decision;
+use typed_store::rocksdb::{MergeOperands, WriteOptions};
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
@@ -230,15 +230,18 @@ fn default_table_options() -> typed_store::rocks::DBOptions {
     typed_store::rocks::default_db_options().disable_write_throttling()
 }
 
-fn events_table_options(compaction_filter: Option<EventsCompactionFilter>) -> typed_store::rocks::DBOptions {
+fn events_table_options(
+    compaction_filter: Option<EventsCompactionFilter>,
+) -> typed_store::rocks::DBOptions {
     let mut options = default_table_options();
     if let Some(filter) = compaction_filter {
-        options.options.set_compaction_filter("events_by_stream", move |_, key, value| {
-            match filter.filter(key, value) {
+        options.options.set_compaction_filter(
+            "events_by_stream",
+            move |_, key, value| match filter.filter(key, value) {
                 Ok(decision) => decision,
                 Err(_) => Decision::Keep,
-            }
-        });
+            },
+        );
     }
     options
 }
@@ -385,7 +388,9 @@ impl EventsCompactionFilter {
 
     pub fn filter(&self, key: &[u8], _value: &[u8]) -> anyhow::Result<Decision> {
         let event_key: EventIndexKey = bcs::from_bytes(key)?;
-        let watermark = self.pruning_watermark.load(std::sync::atomic::Ordering::Relaxed);
+        let watermark = self
+            .pruning_watermark
+            .load(std::sync::atomic::Ordering::Relaxed);
 
         if event_key.checkpoint_seq <= watermark {
             Ok(Decision::Remove)
@@ -436,8 +441,10 @@ impl IndexStoreTables {
         None
     }
 
-
-    fn open_with_index_options<P: Into<PathBuf>>(path: P, index_options: IndexStoreOptions) -> Self {
+    fn open_with_index_options<P: Into<PathBuf>>(
+        path: P,
+        index_options: IndexStoreOptions,
+    ) -> Self {
         let mut table_options = std::collections::BTreeMap::new();
         table_options.insert("balance".to_string(), balance_table_options());
         table_options.insert(
@@ -907,25 +914,31 @@ impl IndexStoreTables {
     fn event_iter(
         &self,
         stream_id: SuiAddress,
-        start: u64,
-        end: u64,
+        start_checkpoint: u64,
+        start_transaction_idx: u32,
+        start_event_idx: u32,
+        end_checkpoint: u64,
+        limit: u32,
     ) -> Result<
         impl Iterator<Item = Result<(EventIndexKey, Event), TypedStoreError>> + '_,
         TypedStoreError,
     > {
         let lower = EventIndexKey {
             stream_id,
-            checkpoint_seq: start,
-            transaction_idx: 0,
-            event_index: 0,
+            checkpoint_seq: start_checkpoint,
+            transaction_idx: start_transaction_idx,
+            event_index: start_event_idx,
+        };
+        let upper = EventIndexKey {
+            stream_id,
+            checkpoint_seq: end_checkpoint,
+            transaction_idx: u32::MAX,
+            event_index: u32::MAX,
         };
         Ok(self
             .events_by_stream
-            .safe_iter_with_bounds(Some(lower), None)
-            .take_while(move |item| match item {
-                Ok((key, _)) => key.stream_id == stream_id && key.checkpoint_seq <= end,
-                Err(_) => true,
-            }))
+            .safe_iter_with_bounds(Some(lower), Some(upper))
+            .take(limit as usize))
     }
 
     fn owner_iter(
@@ -1298,7 +1311,8 @@ impl RpcIndexStore {
                 }
 
                 // Reopen the DB with default options (eg without `unordered_write`s enabled)
-                let reopened_tables = IndexStoreTables::open_with_index_options(&path, index_options);
+                let reopened_tables =
+                    IndexStoreTables::open_with_index_options(&path, index_options);
 
                 // Sanity check: verify the database version was persisted correctly
                 let stored_version = reopened_tables
@@ -1461,13 +1475,23 @@ impl RpcIndexStore {
     pub fn event_iter(
         &self,
         stream_id: SuiAddress,
-        start: u64,
-        end: u64,
+        start_checkpoint: u64,
+        start_transaction_idx: u32,
+        start_event_idx: u32,
+        end_checkpoint: u64,
+        limit: u32,
     ) -> Result<
         impl Iterator<Item = Result<(EventIndexKey, Event), TypedStoreError>> + '_,
         TypedStoreError,
     > {
-        self.tables.event_iter(stream_id, start, end)
+        self.tables.event_iter(
+            stream_id,
+            start_checkpoint,
+            start_transaction_idx,
+            start_event_idx,
+            end_checkpoint,
+            limit,
+        )
     }
 
     pub fn get_highest_indexed_checkpoint_seq_number(
@@ -1792,7 +1816,9 @@ mod tests {
 
         let mut batch = tables.events_by_stream.batch();
         for (key, event) in &test_events {
-            batch.insert_batch(&tables.events_by_stream, [(key.clone(), event.clone())]).unwrap();
+            batch
+                .insert_batch(&tables.events_by_stream, [(key.clone(), event.clone())])
+                .unwrap();
         }
         batch.write().unwrap();
 
@@ -1803,7 +1829,10 @@ mod tests {
                 events_before_compaction += 1;
             }
         }
-        assert_eq!(events_before_compaction, 5, "Should have 5 events before compaction");
+        assert_eq!(
+            events_before_compaction, 5,
+            "Should have 5 events before compaction"
+        );
         let start_key = EventIndexKey {
             stream_id: SuiAddress::ZERO,
             checkpoint_seq: 0,
@@ -1817,16 +1846,20 @@ mod tests {
             event_index: u32::MAX,
         };
 
-        tables.events_by_stream.compact_range(&start_key, &end_key).unwrap();
+        tables
+            .events_by_stream
+            .compact_range(&start_key, &end_key)
+            .unwrap();
         let mut events_after_compaction = Vec::new();
-        for result in tables.events_by_stream.safe_iter() {
-            if let Ok((key, _event)) = result {
-                events_after_compaction.push(key);
-            }
+        for (key, _event) in tables.events_by_stream.safe_iter().flatten() {
+            events_after_compaction.push(key);
         }
 
         println!("Events after compaction: {}", events_after_compaction.len());
-        assert!(events_after_compaction.len() >= 2, "Should have at least the events that shouldn't be pruned");
+        assert!(
+            events_after_compaction.len() >= 2,
+            "Should have at least the events that shouldn't be pruned"
+        );
         pruning_watermark.store(20, std::sync::atomic::Ordering::Relaxed);
         let watermark_after = pruning_watermark.load(std::sync::atomic::Ordering::Relaxed);
         assert_eq!(watermark_after, 20, "Watermark should be updated");
@@ -1845,7 +1878,10 @@ mod tests {
         };
         let old_key_bytes = bcs::to_bytes(&old_key).unwrap();
         let decision = filter.filter(&old_key_bytes, &[]).unwrap();
-        assert!(matches!(decision, Decision::Remove), "Event with checkpoint 50 should be removed when watermark is 100");
+        assert!(
+            matches!(decision, Decision::Remove),
+            "Event with checkpoint 50 should be removed when watermark is 100"
+        );
         let new_key = EventIndexKey {
             stream_id: SuiAddress::random_for_testing_only(),
             checkpoint_seq: 150,
@@ -1854,7 +1890,10 @@ mod tests {
         };
         let new_key_bytes = bcs::to_bytes(&new_key).unwrap();
         let decision = filter.filter(&new_key_bytes, &[]).unwrap();
-        assert!(matches!(decision, Decision::Keep), "Event with checkpoint 150 should be kept when watermark is 100");
+        assert!(
+            matches!(decision, Decision::Keep),
+            "Event with checkpoint 150 should be kept when watermark is 100"
+        );
         let boundary_key = EventIndexKey {
             stream_id: SuiAddress::random_for_testing_only(),
             checkpoint_seq: 100,
@@ -1863,6 +1902,9 @@ mod tests {
         };
         let boundary_key_bytes = bcs::to_bytes(&boundary_key).unwrap();
         let decision = filter.filter(&boundary_key_bytes, &[]).unwrap();
-        assert!(matches!(decision, Decision::Remove), "Event with checkpoint equal to watermark should be removed");
+        assert!(
+            matches!(decision, Decision::Remove),
+            "Event with checkpoint equal to watermark should be removed"
+        );
     }
 }
