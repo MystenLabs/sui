@@ -754,25 +754,26 @@ mod tests {
         "###);
     }
 
-    // /// package.edition must be present
-    // #[test]
-    // fn parse_no_edition() {
-    //     let error = toml_edit::de::from_str::<ParsedManifest>(
-    //         r#"
-    //         [package]
-    //         name = "test"
-    //         "#,
-    //     )
-    //     .unwrap_err()
-    //     .to_string();
-    //     assert_snapshot!(error, @r###"
-    //     TOML parse error at line 2, column 13
-    //       |
-    //     2 |             [package]
-    //       |             ^^^^^^^^^
-    //     missing field `edition`
-    //     "###);
-    // }
+    /// package.edition not allowed
+    #[test]
+    fn parse_unsupported_edition() {
+        let error = toml_edit::de::from_str::<ParsedManifest>(
+            r#"
+            [package]
+            name = "test"
+            edition = "2025"
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert_snapshot!(error, @r###"
+        TOML parse error at line 4, column 23
+          |
+        4 |             edition = "2025"
+          |                       ^^^^^^
+        Unsupported edition "2025". Current supported editions include: "legacy", "2024.alpha", "2024.beta", and "2024"
+        "###);
+    }
 
     /// package edition must be recognized
     #[test]
