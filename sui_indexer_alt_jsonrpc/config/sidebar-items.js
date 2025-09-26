@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CLIENT_SDK_TYPE_HEADER"],"struct":["CoinsConfig","CoinsLayer","DynamicFieldsConfig","DynamicFieldsLayer","NameServiceConfig","NameServiceLayer","NodeConfig","NodeLayer","ObjectsConfig","ObjectsLayer","PackageResolverLayer","RpcConfig","RpcLayer","TransactionsConfig","TransactionsLayer"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["address_mutated","address_owned","address_owned_by","immutable","shared"]};

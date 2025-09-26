@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_adapter","run_ptb_v2_test","run_tasks_with_adapter","run_test","run_test_impl"],"mod":["args","cursor","offchain_state","programmable_transaction_test_parser","test_adapter"],"struct":["ValidatorWithFullnode"],"trait":["TransactionalAdapter"]};

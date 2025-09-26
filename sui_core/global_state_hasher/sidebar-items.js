@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["accumulate_effects"],"struct":["GlobalStateHashMetrics","GlobalStateHasher","WrappedObject"],"trait":["GlobalStateHashStore"]};
