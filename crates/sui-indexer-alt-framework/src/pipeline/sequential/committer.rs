@@ -15,7 +15,7 @@ use tracing::{debug, info, warn};
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
-    store::{CommitterWatermark, Connection, TransactionalStore},
+    store::{Connection, TransactionalStore},
 };
 
 use super::{Handler, SequentialConfig};
@@ -70,16 +70,16 @@ where
         let mut batch = H::Batch::default();
         let mut batch_rows = 0;
         let mut batch_checkpoints = 0;
-
-        // The task keeps track of the highest (inclusive) checkpoint it has added to the batch, and
-        // whether that batch needs to be written out. By extension it also knows the next
-        // checkpoint to expect and add to the batch. Initially, this watermark is synthetic, and
-        // will be overwritten by a processed checkpoint.
-        let mut watermark = CommitterWatermark::default();
+        // The task keeps track of the highest (inclusive) checkpoint it has added to the batch
+        // through `next_checkpoint`, and whether that batch needs to be written out. By extension
+        // it also knows the next checkpoint to expect and add to the batch. In case of db txn
+        // failures, we need to know the watermark update that failed, cached to this variable. in
+        // case of db txn failures.
+        let mut watermark = None;
 
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
-        let mut logger = WatermarkLogger::new("sequential_committer", &watermark);
+        let mut logger = WatermarkLogger::new("sequential_committer");
 
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
             &metrics.watermarked_checkpoint_timestamp_lag,
@@ -92,7 +92,7 @@ where
         let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
-        info!(pipeline = H::NAME, ?watermark, "Starting committer");
+        info!(pipeline = H::NAME, "Starting committer");
 
         loop {
             tokio::select! {
@@ -152,7 +152,7 @@ where
                                 batch_rows += indexed.len();
                                 batch_checkpoints += 1;
                                 H::batch(&mut batch, indexed.values);
-                                watermark = indexed.watermark;
+                                watermark = Some(indexed.watermark);
                                 next_checkpoint += 1;
                             }
 
@@ -183,11 +183,16 @@ where
                     // If there is no new data to commit, we can skip the rest of the process. Note
                     // that we cannot use batch_rows for the check, since it is possible that there
                     // are empty checkpoints with no new rows added, but the watermark still needs
-                    // to be updated.
+                    // to be updated. Conversely, if there is no watermark to be updated, we know
+                    // there is no data to write out.
                     if batch_checkpoints == 0 {
                         assert_eq!(batch_rows, 0);
                         continue;
                     }
+
+                    let Some(watermark) = watermark else {
+                        continue;
+                    };
 
                     metrics
                         .collector_batch_size
@@ -362,7 +367,7 @@ where
             }
         }
 
-        info!(pipeline = H::NAME, ?watermark, "Stopping committer");
+        info!(pipeline = H::NAME, "Stopping committer");
     })
 }
 
@@ -770,10 +775,10 @@ mod tests {
         // Create store with transaction failure configuration
         let store = MockStore::default().with_transaction_failures(1); // Will fail once before succeeding
 
-        let mut setup = setup_test(0, config, store);
+        let mut setup = setup_test(10, config, store);
 
         // Send a checkpoint
-        send_checkpoint(&mut setup, 0).await;
+        send_checkpoint(&mut setup, 10).await;
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -785,12 +790,12 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1_200)).await;
 
         // Verify data is written after retries complete on next polling
-        assert_eq!(setup.store.get_sequential_data(), vec![0]);
+        assert_eq!(setup.store.get_sequential_data(), vec![10]);
 
         // Verify watermark is updated
         let watermark = setup.watermark_rx.recv().await.unwrap();
         assert_eq!(watermark.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(watermark.1, 0, "Watermark should be at checkpoint 0");
+        assert_eq!(watermark.1, 10, "Watermark should be at checkpoint 10");
 
         // Clean up
         drop(setup.checkpoint_tx);
