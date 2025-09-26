@@ -91,6 +91,10 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                 }
 
                 _ = poll.tick() => {
+                    // The presence of a watermark means that we can update the watermark in db.
+                    // However, concurrent pipelines do not need every watermark update to succeed.
+                    let mut watermark = None;
+
                     if precommitted.len() > WARN_PENDING_WATERMARKS {
                         warn!(
                             pipeline = H::NAME,
@@ -110,10 +114,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let mut watermark_needs_update = false;
-                    // Concurrent pipelines are more lax about succeeding every watermark update, so
-                    // we can keep the variable within the loop.
-                    let mut watermark = None;
                     while let Some(pending) = precommitted.first_entry() {
                         let part = pending.get();
 
@@ -129,7 +129,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                             // This is the next checkpoint -- include it.
                             Ordering::Equal => {
                                 watermark = Some(pending.remove().watermark);
-                                watermark_needs_update = true;
                                 next_checkpoint += 1;
                             }
 
@@ -152,46 +151,36 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                     let elapsed = guard.stop_and_record();
 
-                    if rx.is_closed() && rx.is_empty() {
-                        info!(pipeline = H::NAME, "Committer closed channel");
-                        break;
-                    }
+                    if let Some(watermark) = watermark {
+                        metrics
+                            .watermark_epoch
+                            .with_label_values(&[H::NAME])
+                            .set(watermark.epoch_hi_inclusive as i64);
 
-                    // Only start reporting once we have a real watermark.
-                    let Some(watermark) = watermark else {
-                        continue;
-                    };
+                        metrics
+                            .watermark_checkpoint
+                            .with_label_values(&[H::NAME])
+                            .set(watermark.checkpoint_hi_inclusive as i64);
 
-                    metrics
-                        .watermark_epoch
-                        .with_label_values(&[H::NAME])
-                        .set(watermark.epoch_hi_inclusive as i64);
+                        metrics
+                            .watermark_transaction
+                            .with_label_values(&[H::NAME])
+                            .set(watermark.tx_hi as i64);
 
-                    metrics
-                        .watermark_checkpoint
-                        .with_label_values(&[H::NAME])
-                        .set(watermark.checkpoint_hi_inclusive as i64);
+                        metrics
+                            .watermark_timestamp_ms
+                            .with_label_values(&[H::NAME])
+                            .set(watermark.timestamp_ms_hi_inclusive as i64);
 
-                    metrics
-                        .watermark_transaction
-                        .with_label_values(&[H::NAME])
-                        .set(watermark.tx_hi as i64);
+                        debug!(
+                            pipeline = H::NAME,
+                            elapsed_ms = elapsed * 1000.0,
+                            watermark = watermark.checkpoint_hi_inclusive,
+                            timestamp = %watermark.timestamp(),
+                            pending = precommitted.len(),
+                            "Gathered watermarks",
+                        );
 
-                    metrics
-                        .watermark_timestamp_ms
-                        .with_label_values(&[H::NAME])
-                        .set(watermark.timestamp_ms_hi_inclusive as i64);
-
-                    debug!(
-                        pipeline = H::NAME,
-                        elapsed_ms = elapsed * 1000.0,
-                        watermark = watermark.checkpoint_hi_inclusive,
-                        timestamp = %watermark.timestamp(),
-                        pending = precommitted.len(),
-                        "Gathered watermarks",
-                    );
-
-                    if watermark_needs_update {
                         let guard = metrics
                             .watermark_commit_latency
                             .with_label_values(&[H::NAME])
@@ -242,6 +231,11 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                             }
                             Ok(false) => {}
                         }
+                    }
+
+                    if rx.is_closed() && rx.is_empty() {
+                        info!(pipeline = H::NAME, "Committer closed channel");
+                        break;
                     }
                 }
 
