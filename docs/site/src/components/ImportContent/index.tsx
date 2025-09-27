@@ -59,6 +59,7 @@ type Props = {
   org?: string;
   repo?: string;
   ref?: string;
+  signatureOnly?: boolean; // if included, only display function signature
 };
 
 export default function ImportContent({
@@ -83,6 +84,7 @@ export default function ImportContent({
   org,
   repo,
   ref,
+  signatureOnly,
 }: Props) {
   const md = React.useMemo(
     () => new MarkdownIt({ html: true, linkify: true, typographer: true }),
@@ -221,7 +223,7 @@ export default function ImportContent({
   }
 
   if (fun) {
-    out = utils.returnFunctions(out, fun, language);
+    out = utils.returnFunctions(out, fun, language, signatureOnly);
   }
 
   if (variable) {

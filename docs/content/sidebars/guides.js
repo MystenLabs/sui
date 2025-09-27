@@ -79,13 +79,13 @@ const guides = [
 			},
 			{
 				type: 'category',
-				label: 'Coins and Tokens',
+				label: 'Currencies and Tokens',
 				link: {
 					type: 'doc',
 					id: 'guides/developer/coin-index',
 				},
 				items: [
-					'guides/developer/coin',
+					'guides/developer/currency',
 					'guides/developer/coin/regulated',
 					'guides/developer/coin/in-game-token',
 					'guides/developer/coin/loyalty',
