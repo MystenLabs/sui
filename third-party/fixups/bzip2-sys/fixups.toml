@@ -1,0 +1,74 @@
+# [env]
+# OUT_DIR = ""
+
+buildscript = []
+# TODO all platforms
+[[platform_fixup.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.buildscript]]
+[platform_fixup.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.buildscript.cxx_library]
+name = "bzip2-sys-x64_64-linux"
+srcs=[
+    "bzip2-1.0.8/blocksort.c",
+    "bzip2-1.0.8/huffman.c",
+    "bzip2-1.0.8/crctable.c",
+    "bzip2-1.0.8/randtable.c",
+    "bzip2-1.0.8/compress.c",
+    "bzip2-1.0.8/decompress.c",
+    "bzip2-1.0.8/bzlib.c",
+]
+headers = ["bzip2-1.0.8/**/bzlib.h.h"]
+include_paths = [
+    "bzip2-1.0.8/",
+]
+
+compiler_flags = [
+    "-D_FILE_OFFSET_BITS=64",
+    "-DBZ_NO_STDIO",
+    "-Wno-error",
+    # "-stdlib=libstdc++",
+]
+
+[[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "linux"))'.buildscript]]
+[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "linux"))'.buildscript.cxx_library]
+name = "bzip2-sys-amd64-linux"
+srcs=[
+    "bzip2-1.0.8/blocksort.c",
+    "bzip2-1.0.8/huffman.c",
+    "bzip2-1.0.8/crctable.c",
+    "bzip2-1.0.8/randtable.c",
+    "bzip2-1.0.8/compress.c",
+    "bzip2-1.0.8/decompress.c",
+    "bzip2-1.0.8/bzlib.c",
+]
+headers = ["bzip2-1.0.8/**/bzlib.h.h"]
+include_paths = [
+    "bzip2-1.0.8/",
+]
+
+compiler_flags = [
+    "-D_FILE_OFFSET_BITS=64",
+    "-DBZ_NO_STDIO",
+    "-Wno-error",
+]
+
+[[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.buildscript]]
+[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.buildscript.cxx_library]
+name = "bzip2-sys-amd64-macos"
+srcs=[
+    "bzip2-1.0.8/blocksort.c",
+    "bzip2-1.0.8/huffman.c",
+    "bzip2-1.0.8/crctable.c",
+    "bzip2-1.0.8/randtable.c",
+    "bzip2-1.0.8/compress.c",
+    "bzip2-1.0.8/decompress.c",
+    "bzip2-1.0.8/bzlib.c",
+]
+headers = ["bzip2-1.0.8/**/bzlib.h.h"]
+include_paths = [
+    "bzip2-1.0.8/",
+]
+
+compiler_flags = [
+    "-D_FILE_OFFSET_BITS=64",
+    "-DBZ_NO_STDIO",
+    "-Wno-error",
+]

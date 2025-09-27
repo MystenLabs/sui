@@ -1,0 +1,4 @@
+cargo_env = true
+extra_srcs = ["Cargo.toml", "README.md", "LICENSE"]
+[env]
+CARGO = "/Users/joehrbek/.cargo/bin/cargo"

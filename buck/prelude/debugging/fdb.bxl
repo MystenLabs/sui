@@ -1,0 +1,105 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under both the MIT license found in the
+# LICENSE-MIT file in the root directory of this source tree and the Apache
+# License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+# of this source tree.
+
+# Bxl script in this file is addressing the problem of retrieving additional information
+# from language rule providers in order to correctly setup debugging tools
+# Typical use case is:
+#   - a user wants to debug "buck run `//some:target`" or "buck test //some:test"
+#   - depending on the language and/or platform used //some:target could be a macros wrapping a rule provider
+#   - actual language rule might have relevant information / artifacts in order to make debugging possible.
+# So this script provides various hooks to let debugging tool
+#   1) traverse targets and rules based on  //some:target
+#   2) inspect rule providers and extract information required for seamless debugging setup
+# Example:
+# buck2 bxl prelude//debugging/fdb.bxl:inspect_target -- --target=//some:target
+# This outputs file containing JSON serialized `ExecInfo` (see types.bzl)
+
+load("@prelude//debugging/common.bzl", "rule_type")
+load("@prelude//debugging/inspect_dbg_exec.bzl", "inspect_dbg_exec")
+load("@prelude//debugging/inspect_default.bzl", "inspect_default")
+load("@prelude//debugging/inspect_java.bzl", "inspect_java_rule")
+load("@prelude//debugging/labels.bzl", "DBG_INFO_EXEC", "DBG_INFO_REF", "get_info_ref", "get_label_or_mark")
+load("@prelude//debugging/types.bzl", "ScriptSettings")
+
+def inspect_alias_rule(ctx: bxl.Context, actions: AnalysisActions, target: bxl.ConfiguredTargetNode, settings: ScriptSettings):
+    attrs = target.attrs_lazy()
+    actual = attrs.get("actual")
+    return inspect_any_target(ctx, actions, ctx.configured_targets(actual.value().configured_target()), settings)
+
+INSPECT_BY_RULE = {
+    "prelude//rules.bzl:alias": inspect_alias_rule,
+    "prelude//rules.bzl:android_binary": inspect_java_rule,
+    "prelude//rules.bzl:android_instrumentation_apk": inspect_java_rule,
+    "prelude//rules.bzl:android_instrumentation_test": inspect_java_rule,
+    "prelude//rules.bzl:android_library": inspect_java_rule,
+    "prelude//rules.bzl:apk_genrule": inspect_java_rule,
+    "prelude//rules.bzl:configured_alias": inspect_alias_rule,
+    "prelude//rules.bzl:java_binary": inspect_java_rule,
+    "prelude//rules.bzl:java_library": inspect_java_rule,
+    "prelude//rules.bzl:java_test": inspect_java_rule,
+    "prelude//rules.bzl:kotlin_binary": inspect_java_rule,
+    "prelude//rules.bzl:kotlin_library": inspect_java_rule,
+    "prelude//rules.bzl:kotlin_test": inspect_java_rule,
+    "prelude//rules.bzl:robolectric_test": inspect_java_rule,
+}
+
+def inspect_info_ref_rule(ctx: bxl.Context, actions: AnalysisActions, target: bxl.ConfiguredTargetNode, settings: ScriptSettings):
+    aliased_target_label = get_info_ref(target.attrs_lazy().get("labels").value())
+    if not aliased_target_label:
+        return inspect_default(
+            ctx,
+            actions,
+            target,
+            settings,
+        )
+
+    aliases_target = ctx.configured_targets(aliased_target_label)
+    return inspect_any_target(
+        ctx,
+        actions,
+        aliases_target,
+        settings,
+    )
+
+INSPECT_BY_LABEL = {
+    DBG_INFO_REF: inspect_info_ref_rule,
+    DBG_INFO_EXEC: inspect_dbg_exec,
+}
+
+def inspect_any_target(ctx: bxl.Context, actions: AnalysisActions, target: bxl.ConfiguredTargetNode, settings: ScriptSettings):
+    attrs = target.attrs_lazy()
+    labels = attrs.get("labels").value() if attrs.get("labels") else []
+    inspect_func = INSPECT_BY_RULE.get(rule_type(target), inspect_default)
+    for label in labels:
+        inspect_func = INSPECT_BY_LABEL.get(get_label_or_mark(label), inspect_func)
+
+    return inspect_func(ctx, actions, target, settings)
+
+def inspect(ctx: bxl.Context, actions: AnalysisActions, target: bxl.ConfiguredTargetNode, settings: ScriptSettings):
+    result = inspect_any_target(ctx, actions, target, settings)
+
+    # when getting ExecInfo based on external action it's not possible to provide result as ExecInfo
+    # in this case we'll return the artifact which is assumed to have ExecInfo serialized in it
+    if type(result) == "artifact":
+        return result
+    return actions.write_json("out.json", result)
+
+def inspect_target_impl(ctx: bxl.Context):
+    actions = ctx.bxl_actions().actions
+    node = ctx.configured_targets(ctx.cli_args.target)
+    ctx.output.print(ctx.output.ensure(inspect(ctx, actions, node, ScriptSettings(
+        target = node,
+        args = ctx.cli_args.args if ctx.cli_args.args else [],
+    ))).abs_path())
+
+inspect_target = bxl_main(
+    impl = inspect_target_impl,
+    cli_args = {
+        "args": cli_args.option(cli_args.list(cli_args.string())),
+        "target": cli_args.target_label(),
+    },
+)
