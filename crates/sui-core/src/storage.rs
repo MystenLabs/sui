@@ -615,4 +615,38 @@ impl RpcIndexes for RpcIndexStore {
                 as _,
         )
     }
+
+    fn get_highest_indexed_checkpoint_seq_number(
+        &self,
+    ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
+        self.get_highest_indexed_checkpoint_seq_number()
+            .map_err(Into::into)
+    }
+
+    fn authenticated_event_iter(
+        &self,
+        stream_id: SuiAddress,
+        start_checkpoint: u64,
+        start_transaction_idx: Option<u32>,
+        start_event_idx: Option<u32>,
+        end_checkpoint: u64,
+        limit: u32,
+    ) -> sui_types::storage::error::Result<
+        Box<
+            dyn Iterator<Item = Result<(u64, u32, u32, sui_types::event::Event), TypedStoreError>>
+                + '_,
+        >,
+    > {
+        let iter = self
+            .event_iter(
+                stream_id,
+                start_checkpoint,
+                start_transaction_idx.unwrap_or(0),
+                start_event_idx.unwrap_or(0),
+                end_checkpoint,
+                limit,
+            )?
+            .map(|res| res.map(|(k, v)| (k.checkpoint_seq, k.transaction_idx, k.event_index, v)));
+        Ok(Box::new(iter))
+    }
 }
