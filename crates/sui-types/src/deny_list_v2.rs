@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{EpochId, ObjectID, SuiAddress};
+use crate::base_types::{EpochId, SuiAddress};
 use crate::coin::COIN_MODULE_NAME;
 use crate::config::{Config, Setting};
 use crate::deny_list_v1::{
@@ -9,8 +9,8 @@ use crate::deny_list_v1::{
 };
 use crate::dynamic_field::{get_dynamic_field_from_store, DOFWrapper};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
+use crate::gas_coin::GAS;
 use crate::id::UID;
-use crate::object::Object;
 use crate::storage::{DenyListResult, ObjectStore};
 use crate::transaction::{CheckedInputObjects, ReceivingObjects};
 use crate::{
@@ -142,36 +142,29 @@ pub fn check_coin_deny_list_v2_during_signing(
 ///         2) the deny lists checked
 ///         2) the number of regulated coin owners checked.
 pub fn check_coin_deny_list_v2_during_execution(
-    written_objects: &BTreeMap<ObjectID, Object>,
+    receiving_funds_type_and_owners: BTreeMap<TypeTag, BTreeSet<SuiAddress>>,
     cur_epoch: EpochId,
     object_store: &dyn ObjectStore,
 ) -> DenyListResult {
-    let mut new_coin_owners = BTreeMap::new();
-    for obj in written_objects.values() {
-        if obj.is_gas_coin() {
-            continue;
-        }
-        let Some(coin_type) = obj.coin_type_maybe() else {
-            continue;
-        };
-        let Ok(owner) = obj.owner.get_address_owner_address() else {
-            continue;
-        };
-        new_coin_owners
-            .entry(coin_type.to_canonical_string(false))
-            .or_insert_with(BTreeSet::new)
-            .insert(owner);
-    }
-    let num_non_gas_coin_owners = new_coin_owners.values().map(|v| v.len() as u64).sum();
-    let new_regulated_coin_owners = new_coin_owners
+    let non_gas_coin_owners = receiving_funds_type_and_owners
+        .into_iter()
+        .filter_map(|(ty, owners)| {
+            if GAS::is_gas_type(&ty) {
+                None
+            } else {
+                Some((ty.to_canonical_string(false), owners))
+            }
+        })
+        .collect::<BTreeMap<_, _>>();
+    let num_non_gas_coin_owners = non_gas_coin_owners.values().map(|v| v.len() as u64).sum();
+    let regulated_coin_owners = non_gas_coin_owners
         .into_iter()
         .filter_map(|(coin_type, owners)| {
             let deny_list_config = get_per_type_coin_deny_list_v2(&coin_type, object_store)?;
             Some((coin_type, (deny_list_config, owners)))
         })
         .collect::<BTreeMap<_, _>>();
-    let result =
-        check_new_regulated_coin_owners(new_regulated_coin_owners, cur_epoch, object_store);
+    let result = check_new_regulated_coin_owners(regulated_coin_owners, cur_epoch, object_store);
     // `num_non_gas_coin_owners` is used to charge for gas. As such we must be extremely careful
     // to not use a number that is not consistent across all validators. For example, relying on
     // the number of coins with a deny list is _not_ consistent since the deny list is created

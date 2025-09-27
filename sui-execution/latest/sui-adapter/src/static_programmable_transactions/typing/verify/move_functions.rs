@@ -7,6 +7,9 @@ use crate::sp;
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
 use move_binary_format::{CompiledModule, file_format::Visibility};
 use sui_types::{
+    balance::{
+        BALANCE_MODULE_NAME, SEND_TO_ACCOUNT_FUNCTION_NAME, WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME,
+    },
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
 };
@@ -234,10 +237,20 @@ fn check_visibility<Mode: ExecutionMode>(
         // cannot call private or friend if not entry
         (Visibility::Private | Visibility::Friend, false) => {
             if !Mode::allow_arbitrary_function_calls() {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    "Can only call `entry` or `public` functions",
-                ));
+                // Special case: allow private accumulator entrypoints in test/simtest environments
+                // TODO: delete this as soon as the accumulator Move API is available
+                if env.protocol_config.allow_private_accumulator_entrypoints()
+                    && module.self_id().name() == BALANCE_MODULE_NAME
+                    && (function.name.as_ident_str() == SEND_TO_ACCOUNT_FUNCTION_NAME
+                        || function.name.as_ident_str() == WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME)
+                {
+                    // Allow these specific functions
+                } else {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::NonEntryFunctionInvoked,
+                        "Can only call `entry` or `public` functions",
+                    ));
+                }
             }
         }
     };

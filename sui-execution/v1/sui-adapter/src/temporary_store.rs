@@ -27,6 +27,7 @@ use sui_types::{
     object::Owner,
     storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
     transaction::InputObjects,
+    TypeTag,
 };
 use sui_types::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
 
@@ -1128,7 +1129,7 @@ impl Storage for TemporaryStore<'_> {
 
     fn check_coin_deny_list(
         &self,
-        _written_objects: &BTreeMap<ObjectID, Object>,
+        _receiving_funds_type_and_owners: BTreeMap<TypeTag, BTreeSet<SuiAddress>>,
     ) -> DenyListResult {
         unreachable!("Coin denylist v2 is not supported in sui-execution v1");
     }
