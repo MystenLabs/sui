@@ -7,11 +7,13 @@ use crate::base_types::{ExecutionData, ObjectRef};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
+use crate::signature::GenericSignature;
 use crate::storage::error::Error as StorageError;
+use crate::storage::ObjectKey;
 use crate::storage::{BackingPackageStore, EpochInfo};
 use crate::sui_system_state::get_sui_system_state;
 use crate::sui_system_state::SuiSystemStateTrait;
-use crate::transaction::{Transaction, TransactionDataAPI, TransactionKind};
+use crate::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
 use serde::{Deserialize, Serialize};
 use tap::Pipe;
 
@@ -188,5 +190,93 @@ impl BackingPackageStore for CheckpointData {
             .cloned()
             .map(crate::storage::PackageObject::new)
             .pipe(Ok)
+    }
+}
+
+// Never remove these asserts!
+// These data structures are meant to be used in-memory, for structures that can be persisted in
+// storage you should look at the protobuf versions.
+static_assertions::assert_not_impl_any!(Checkpoint: serde::Serialize, serde::de::DeserializeOwned);
+static_assertions::assert_not_impl_any!(ExecutedTransaction: serde::Serialize, serde::de::DeserializeOwned);
+static_assertions::assert_not_impl_any!(ObjectSet: serde::Serialize, serde::de::DeserializeOwned);
+
+#[derive(Clone, Debug)]
+pub struct Checkpoint {
+    pub summary: CertifiedCheckpointSummary,
+    pub contents: CheckpointContents,
+    pub transactions: Vec<ExecutedTransaction>,
+    pub object_set: ObjectSet,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutedTransaction {
+    /// The input Transaction
+    pub transaction: TransactionData,
+    pub signatures: Vec<GenericSignature>,
+    /// The effects produced by executing this transaction
+    pub effects: TransactionEffects,
+    /// The events, if any, emitted by this transactions during execution
+    pub events: Option<TransactionEvents>,
+    pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct ObjectSet(BTreeMap<ObjectKey, Object>);
+
+impl ObjectSet {
+    pub fn get(&self, key: &ObjectKey) -> Option<&Object> {
+        self.0.get(key)
+    }
+
+    pub fn insert(&mut self, object: Object) {
+        self.0
+            .insert(ObjectKey(object.id(), object.version()), object);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Object> {
+        self.0.values()
+    }
+}
+
+impl From<Checkpoint> for CheckpointData {
+    fn from(value: Checkpoint) -> Self {
+        let transactions = value
+            .transactions
+            .into_iter()
+            .map(|tx| {
+                let input_objects = tx
+                    .effects
+                    .modified_at_versions()
+                    .into_iter()
+                    .filter_map(|(object_id, version)| {
+                        value
+                            .object_set
+                            .get(&ObjectKey(object_id, version))
+                            .cloned()
+                    })
+                    .collect::<Vec<_>>();
+                let output_objects = tx
+                    .effects
+                    .all_changed_objects()
+                    .into_iter()
+                    .filter_map(|(object_ref, _owner, _kind)| {
+                        value.object_set.get(&object_ref.into()).cloned()
+                    })
+                    .collect::<Vec<_>>();
+
+                CheckpointTransaction {
+                    transaction: Transaction::from_generic_sig_data(tx.transaction, tx.signatures),
+                    effects: tx.effects,
+                    events: tx.events,
+                    input_objects,
+                    output_objects,
+                }
+            })
+            .collect();
+        Self {
+            checkpoint_summary: value.summary,
+            checkpoint_contents: value.contents,
+            transactions,
+        }
     }
 }

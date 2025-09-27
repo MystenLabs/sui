@@ -2804,4 +2804,11 @@ impl ReadStore for SuiTestAdapter {
         self.executor
             .get_full_checkpoint_contents(sequence_number, digest)
     }
+
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<sui_types::storage::ObjectKey>> {
+        self.executor.get_unchanged_loaded_runtime_objects(digest)
+    }
 }

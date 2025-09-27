@@ -8,7 +8,7 @@ use crate::object::Object;
 use crate::object::Owner;
 use move_core_types::language_storage::TypeTag;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BalanceChange {
     /// Owner of the balance change
     pub address: SuiAddress,
@@ -20,6 +20,16 @@ pub struct BalanceChange {
     ///
     /// A negative amount means spending coin value and positive means receiving coin value.
     pub amount: i128,
+}
+
+impl std::fmt::Debug for BalanceChange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BalanceChange")
+            .field("address", &self.address)
+            .field("coin_type", &self.coin_type.to_canonical_string(true))
+            .field("amount", &self.amount)
+            .finish()
+    }
 }
 
 fn coins(objects: &[Object]) -> impl Iterator<Item = (&SuiAddress, TypeTag, u64)> + '_ {

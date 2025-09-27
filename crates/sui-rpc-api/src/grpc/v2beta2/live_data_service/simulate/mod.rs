@@ -166,6 +166,7 @@ pub fn simulate_transaction(
         effects,
         execution_result,
         mock_gas_id: _,
+        ..
     } = executor
         .simulate_transaction(transaction.clone(), checks)
         .map_err(anyhow::Error::from)?;

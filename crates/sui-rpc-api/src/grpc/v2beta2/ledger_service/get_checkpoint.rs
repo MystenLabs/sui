@@ -83,10 +83,11 @@ pub fn get_checkpoint(
         }
 
         if let Some(submask) = read_mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
-            let checkpoint_data = service
+            let checkpoint_data: sui_types::full_checkpoint_content::CheckpointData = service
                 .reader
                 .inner()
-                .get_checkpoint_data(verified_summary, core_contents)?;
+                .get_checkpoint_data(verified_summary, core_contents)?
+                .into();
 
             checkpoint.transactions = checkpoint_data
                 .transactions

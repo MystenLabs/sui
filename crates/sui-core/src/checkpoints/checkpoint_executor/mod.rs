@@ -32,7 +32,7 @@ use sui_macros::fail_point;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
 use sui_types::{
@@ -57,7 +57,7 @@ mod data_ingestion_handler;
 pub mod metrics;
 pub(crate) mod utils;
 
-use data_ingestion_handler::{load_checkpoint_data, store_checkpoint_locally};
+use data_ingestion_handler::{load_checkpoint, store_checkpoint_locally};
 use metrics::CheckpointExecutorMetrics;
 use utils::*;
 
@@ -86,7 +86,7 @@ pub(crate) struct CheckpointExecutionState {
     pub data: CheckpointExecutionData,
 
     state_hasher: Option<GlobalStateHash>,
-    full_data: Option<CheckpointData>,
+    full_data: Option<Checkpoint>,
 }
 
 impl CheckpointExecutionState {
@@ -130,7 +130,10 @@ pub struct CheckpointExecutor {
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
-    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
+    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+
+    // a remote object store (s3 or gcs) to save checkpoints to
+    remote_object_store: Option<Box<dyn object_store::ObjectStore>>,
 }
 
 impl CheckpointExecutor {
@@ -142,8 +145,19 @@ impl CheckpointExecutor {
         backpressure_manager: Arc<BackpressureManager>,
         config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
-        subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
+        subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
     ) -> Self {
+        let remote_object_store = config
+            .checkpoint_upload_config
+            .as_ref()
+            .map(|upload_config| {
+                sui_data_ingestion_core::create_remote_store_client(
+                    upload_config.url.clone(),
+                    upload_config.remote_store_options.clone(),
+                    10,
+                )
+                .expect("failed to create remote store client")
+            });
         Self {
             epoch_store,
             state: state.clone(),
@@ -157,6 +171,7 @@ impl CheckpointExecutor {
             metrics,
             tps_estimator: Mutex::new(TPSEstimator::default()),
             subscription_service_checkpoint_sender,
+            remote_object_store,
         }
     }
 
@@ -561,7 +576,9 @@ impl CheckpointExecutor {
 
         finish_stage!(pipeline_handle, FinalizeTransactions);
 
-        ckpt_state.full_data = self.process_checkpoint_data(&ckpt_state.data, &tx_data);
+        ckpt_state.full_data = self
+            .process_checkpoint_data(&ckpt_state.data, &tx_data)
+            .await;
 
         finish_stage!(pipeline_handle, ProcessCheckpointData);
 
@@ -596,16 +613,16 @@ impl CheckpointExecutor {
     }
 
     #[instrument(level = "info", skip_all)]
-    fn process_checkpoint_data(
+    async fn process_checkpoint_data(
         &self,
         ckpt_data: &CheckpointExecutionData,
         tx_data: &CheckpointTransactionData,
-    ) -> Option<CheckpointData> {
+    ) -> Option<Checkpoint> {
         if !self.checkpoint_data_enabled() {
             return None;
         }
 
-        let checkpoint_data = load_checkpoint_data(
+        let checkpoint = load_checkpoint(
             ckpt_data,
             tx_data,
             self.state.get_object_store(),
@@ -613,7 +630,18 @@ impl CheckpointExecutor {
         )
         .expect("failed to load checkpoint data");
 
+        if let Some(remote_object_store) = &self.remote_object_store {
+            data_ingestion_handler::store_checkpoint_in_object_store(
+                remote_object_store.as_ref(),
+                &self.config,
+                &checkpoint,
+            )
+            .await
+            .expect("failed to store checkpoint to remote store");
+        }
+
         if self.state.rpc_index.is_some() || self.config.data_ingestion_dir.is_some() {
+            let checkpoint_data = checkpoint.clone().into();
             // Index the checkpoint. this is done out of order and is not written and committed to the
             // DB until later (committing must be done in-order)
             if let Some(rpc_index) = &self.state.rpc_index {
@@ -633,7 +661,7 @@ impl CheckpointExecutor {
             }
         }
 
-        Some(checkpoint_data)
+        Some(checkpoint)
     }
 
     // Load all required transaction and effects data for the checkpoint.
@@ -955,11 +983,11 @@ impl CheckpointExecutor {
     #[instrument(level = "info", skip_all)]
     async fn commit_index_updates_and_enqueue_to_subscription_service(
         &self,
-        checkpoint: CheckpointData,
+        checkpoint: Checkpoint,
     ) {
         if let Some(rpc_index) = &self.state.rpc_index {
             rpc_index
-                .commit_update_for_checkpoint(checkpoint.checkpoint_summary.sequence_number)
+                .commit_update_for_checkpoint(checkpoint.summary.sequence_number)
                 .expect("failed to update rpc_indexes");
         }
 

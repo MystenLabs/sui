@@ -167,6 +167,7 @@ pub fn simulate_transaction(
         effects,
         execution_result,
         mock_gas_id: _,
+        unchanged_loaded_runtime_objects,
     } = executor
         .simulate_transaction(transaction.clone(), checks)
         .map_err(anyhow::Error::from)?;
@@ -194,6 +195,14 @@ pub fn simulate_transaction(
                 .subtree(ExecutedTransaction::EFFECTS_FIELD)
                 .map(|mask| {
                     let mut effects = TransactionEffects::merge_from(&effects, &mask);
+
+                    if submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD)
+                    {
+                        effects.unchanged_loaded_runtime_objects = unchanged_loaded_runtime_objects
+                            .iter()
+                            .map(Into::into)
+                            .collect();
+                    }
 
                     if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
                         for changed_object in effects.changed_objects.iter_mut() {
