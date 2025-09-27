@@ -2,15 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
-use rocksdb::{properties, properties::num_files_at_level, AsColumnFamilyRef, PerfContext};
-use std::cell::RefCell;
+use rocksdb::{properties, properties::num_files_at_level, AsColumnFamilyRef};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, warn};
-
-thread_local! {
-    static PER_THREAD_ROCKS_PERF_CONTEXT: std::cell::RefCell<rocksdb::PerfContext>  = RefCell::new(PerfContext::default());
-}
 
 // Constants for periodic metrics reporting
 const CF_METRICS_REPORT_PERIOD_SECS: u64 = 30;
