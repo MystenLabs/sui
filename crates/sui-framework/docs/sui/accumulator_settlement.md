@@ -108,7 +108,7 @@ Called by settlement transactions to ensure that the settlement transaction has 
 digest.
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settlement_prologue">settlement_prologue</a>(_epoch: u64, _checkpoint_height: u64, _idx: u64, input_sui: u64, output_sui: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settlement_prologue">settlement_prologue</a>(_accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, _epoch: u64, _checkpoint_height: u64, _idx: u64, input_sui: u64, output_sui: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -118,6 +118,7 @@ digest.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settlement_prologue">settlement_prologue</a>(
+    _accumulator_root: &<b>mut</b> AccumulatorRoot,
     _epoch: u64,
     _checkpoint_height: u64,
     _idx: u64,

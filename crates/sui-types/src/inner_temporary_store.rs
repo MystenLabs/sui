@@ -27,7 +27,7 @@ pub type TxCoins = (ObjectMap, WrittenObjects);
 pub struct InnerTemporaryStore {
     pub input_objects: ObjectMap,
     pub stream_ended_consensus_objects: BTreeMap<ObjectID, SequenceNumber /* start_version */>,
-    pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
+    pub mutated_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
     pub loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,

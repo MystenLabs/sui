@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use std::collections::HashSet;
 use std::sync::Arc;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::base_types::{FullObjectID, ObjectRef};
+use sui_types::base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
 use sui_types::storage::{FullObjectKey, InputKey, MarkerValue, ObjectKey};
@@ -29,6 +29,11 @@ pub struct TransactionOutputs {
     // Temporarily needed to notify TxManager about the availability of objects.
     // TODO: Remove this once we ship the new ExecutionScheduler.
     pub output_keys: Vec<InputKey>,
+
+    // Which objects/versions were written non-exclusively?
+    // Required for notifying the execution scheduler so that it knows when
+    // to run the barrier transaction.
+    pub non_exclusive_writes: Vec<(ObjectID, SequenceNumber)>,
 }
 
 impl TransactionOutputs {
@@ -37,13 +42,14 @@ impl TransactionOutputs {
         transaction: VerifiedTransaction,
         effects: TransactionEffects,
         inner_temporary_store: InnerTemporaryStore,
+        non_exclusive_writes: Vec<(ObjectID, SequenceNumber)>,
     ) -> TransactionOutputs {
         let output_keys = inner_temporary_store.get_output_keys(&effects);
 
         let InnerTemporaryStore {
             input_objects,
             stream_ended_consensus_objects,
-            mutable_inputs,
+            mutated_inputs: mutable_inputs,
             written,
             events,
             accumulator_events,
@@ -195,6 +201,7 @@ impl TransactionOutputs {
             new_locks_to_init,
             written,
             output_keys,
+            non_exclusive_writes,
         }
     }
 
@@ -216,6 +223,7 @@ impl TransactionOutputs {
             new_locks_to_init: vec![],
             written: WrittenObjects::new(),
             output_keys: vec![],
+            non_exclusive_writes: vec![],
         }
     }
 }

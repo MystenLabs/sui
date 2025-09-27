@@ -794,6 +794,9 @@ pub struct ExecutionEnv {
     pub scheduling_source: SchedulingSource,
     /// Status of the balance withdraw scheduling of the transaction.
     pub withdraw_status: BalanceWithdrawStatus,
+    /// The number of non-exclusive writes (on a per-object basis) preceding this
+    /// transaction that must finish before this transaction can be executed.
+    pub barrier_count: BTreeMap<ObjectID, u32>,
 }
 
 impl Default for ExecutionEnv {
@@ -803,6 +806,7 @@ impl Default for ExecutionEnv {
             expected_effects_digest: None,
             scheduling_source: SchedulingSource::NonFastPath,
             withdraw_status: BalanceWithdrawStatus::NoWithdraw,
+            barrier_count: BTreeMap::new(),
         }
     }
 }
@@ -837,6 +841,11 @@ impl ExecutionEnv {
 
     pub fn with_insufficient_balance(mut self) -> Self {
         self.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
+        self
+    }
+
+    pub fn with_barrier_count(mut self, barrier_count: BTreeMap<ObjectID, u32>) -> Self {
+        self.barrier_count = barrier_count;
         self
     }
 }
@@ -1850,7 +1859,11 @@ impl AuthorityState {
         fail_point!("crash");
 
         self.get_cache_writer()
-            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
+            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs.clone());
+
+        for (id, version) in transaction_outputs.non_exclusive_writes.iter().cloned() {
+            self.execution_scheduler.notify_barrier((id, version));
+        }
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
@@ -1934,6 +1947,8 @@ impl AuthorityState {
         // TODO: We need to move this to a more appropriate place to avoid redundant checks.
         let tx_data = certificate.data().transaction_data();
         tx_data.validity_check(epoch_store.protocol_config())?;
+
+        let non_exclusive_writes = input_objects.non_exclusive_writes().collect::<Vec<_>>();
 
         // The cost of partially re-auditing a transaction before execution is tolerated.
         // This step is required for correctness because, for example, ConsensusAddressOwner
@@ -2084,6 +2099,7 @@ impl AuthorityState {
             certificate.clone().into_unsigned(),
             effects,
             inner_temp_store,
+            non_exclusive_writes,
         );
 
         let elapsed = prepare_certificate_start_time.elapsed().as_micros() as f64;

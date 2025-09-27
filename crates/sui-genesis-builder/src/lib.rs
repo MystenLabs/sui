@@ -935,7 +935,7 @@ fn create_genesis_transaction(
                 &mut None,
             );
         assert!(inner_temp_store.input_objects.is_empty());
-        assert!(inner_temp_store.mutable_inputs.is_empty());
+        assert!(inner_temp_store.mutated_inputs.is_empty());
         assert!(effects.mutated().is_empty());
         assert!(effects.unwrapped().is_empty());
         assert!(effects.deleted().is_empty());
