@@ -3,7 +3,7 @@
 
 use crate::{
     TModuleId,
-    model::{self, NamedConstantData, PackageData},
+    model::{self, ModelBuilderConfig, NamedConstantData, PackageData},
     normalized,
     source_kind::WithSource,
     summary,
@@ -53,6 +53,24 @@ pub struct NamedConstant<'a> {
 
 impl Model {
     pub fn from_source(
+        files: MappedFiles,
+        root_package_name: Option<Symbol>,
+        root_named_address_map: BTreeMap<Symbol, AccountAddress>,
+        info: Arc<TypingProgramInfo>,
+        compiled_units_vec: Vec<(/* file */ PathBuf, CompiledUnit)>,
+    ) -> anyhow::Result<Self> {
+        Self::from_source_with_config(
+            &ModelBuilderConfig::default(),
+            files,
+            root_package_name,
+            root_named_address_map,
+            info,
+            compiled_units_vec,
+        )
+    }
+
+    pub fn from_source_with_config(
+        builder_config: &model::ModelBuilderConfig,
         files: MappedFiles,
         root_package_name: Option<Symbol>,
         root_named_address_map: BTreeMap<Symbol, AccountAddress>,
@@ -130,7 +148,7 @@ impl Model {
             summary: OnceCell::new(),
             _phantom: std::marker::PhantomData,
         };
-        model.compute_dependencies();
+        model.compute_dependencies(builder_config);
         model.compute_function_dependencies();
         model.check_invariants();
         Ok(model)
