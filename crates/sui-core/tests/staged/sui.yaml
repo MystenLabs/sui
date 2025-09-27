@@ -1227,6 +1227,20 @@ TransactionExpiration:
     1:
       Epoch:
         NEWTYPE: U64
+    2:
+      ValidDuring:
+        STRUCT:
+          - min_epoch:
+              OPTION: U64
+          - max_epoch:
+              OPTION: U64
+          - min_timestamp_seconds:
+              OPTION: U64
+          - max_timestamp_seconds:
+              OPTION: U64
+          - chain:
+              TYPENAME: ChainIdentifier
+          - nonce: U32
 TransactionKind:
   ENUM:
     0:
