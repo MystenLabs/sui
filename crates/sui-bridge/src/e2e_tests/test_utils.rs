@@ -55,7 +55,7 @@ use sui_types::bridge::BridgeSummary;
 use sui_types::bridge::BridgeTrait;
 use sui_types::bridge::{get_bridge, BRIDGE_MODULE_NAME};
 use sui_types::bridge::{TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT};
-use sui_types::committee::TOTAL_VOTING_POWER;
+use sui_types::committee::{ProtocolVersion, TOTAL_VOTING_POWER};
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::ToFromBytes;
 use sui_types::digests::TransactionDigest;
@@ -72,7 +72,6 @@ use tracing::info;
 use crate::config::{BridgeNodeConfig, EthConfig, SuiConfig};
 use crate::node::run_bridge_node;
 use crate::sui_client::SuiBridgeClient;
-use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use anyhow::anyhow;
 use ethers::prelude::*;
 use move_core_types::ident_str;
@@ -883,7 +882,7 @@ pub struct TestClusterWrapperBuilder {
 impl TestClusterWrapperBuilder {
     pub fn new() -> Self {
         Self {
-            protocol_version: BRIDGE_ENABLE_PROTOCOL_VERSION,
+            protocol_version: ProtocolVersion::MAX.as_u64(),
             bridge_authority_keys: vec![],
             deploy_tokens: false,
         }

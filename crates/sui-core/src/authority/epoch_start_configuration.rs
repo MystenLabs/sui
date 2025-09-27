@@ -38,6 +38,10 @@ pub trait EpochStartConfigTrait {
         self.flags()
             .contains(&EpochFlag::DataQuarantineFromBeginningOfEpoch)
     }
+
+    fn use_commit_handler_v2(&self) -> bool {
+        self.flags().contains(&EpochFlag::UseCommitHandlerV2)
+    }
 }
 
 // IMPORTANT: Assign explicit values to each variant to ensure that the values are stable.
@@ -67,9 +71,12 @@ pub enum EpochFlag {
     // beginning of the epoch.
     DataQuarantineFromBeginningOfEpoch = 9,
 
+    // This flag indicates whether the new commit handler is enabled.
+    UseCommitHandlerV2 = 10,
+
     // Used for `test_epoch_flag_upgrade`.
     #[cfg(msim)]
-    DummyFlag = 10,
+    DummyFlag = 11,
 }
 
 impl EpochFlag {
@@ -92,11 +99,18 @@ impl EpochFlag {
     }
 
     fn default_flags_impl() -> Vec<Self> {
-        vec![
-            EpochFlag::DataQuarantineFromBeginningOfEpoch,
-            #[cfg(msim)]
-            EpochFlag::DummyFlag,
-        ]
+        let mut flags = vec![EpochFlag::DataQuarantineFromBeginningOfEpoch];
+
+        if std::env::var("SUI_USE_NEW_COMMIT_HANDLER").is_ok() {
+            flags.push(EpochFlag::UseCommitHandlerV2);
+        }
+
+        #[cfg(msim)]
+        {
+            flags.push(EpochFlag::DummyFlag);
+        }
+
+        flags
     }
 }
 
@@ -133,6 +147,9 @@ impl fmt::Display for EpochFlag {
             }
             EpochFlag::DataQuarantineFromBeginningOfEpoch => {
                 write!(f, "DataQuarantineFromBeginningOfEpoch")
+            }
+            EpochFlag::UseCommitHandlerV2 => {
+                write!(f, "UseCommitHandlerV2")
             }
             #[cfg(msim)]
             EpochFlag::DummyFlag => {
