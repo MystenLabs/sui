@@ -106,7 +106,7 @@ impl Synchronizer {
             .last_watermarks
             .values()
             .map(|w| w.map_or(self.first_checkpoint, |w| w.checkpoint_hi_inclusive))
-            .max()
+            .min()
         else {
             bail!("No pipelines registered with the synchronizer");
         };
