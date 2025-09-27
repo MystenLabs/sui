@@ -196,6 +196,15 @@ impl Node {
         }
     }
 
+    pub fn network_name(&self) -> String {
+        match self {
+            Node::Mainnet => "mainnet".to_string(),
+            Node::Testnet => "testnet".to_string(),
+            // Node::Devnet => "devnet".to_string(),
+            Node::Custom(url) => format!("custom({})", url),
+        }
+    }
+
     pub fn rpc_url(&self) -> &str {
         match self {
             Node::Mainnet => MAINNET_GQL_URL,
@@ -378,6 +387,7 @@ pub async fn handle_replay_config(
                 &gql_store,
                 &output_root_dir,
                 &digests,
+                node,
                 *overwrite_existing,
                 *trace,
                 *verbose,
@@ -395,6 +405,7 @@ pub async fn handle_replay_config(
                 &store,
                 &output_root_dir,
                 &digests,
+                node,
                 *overwrite_existing,
                 *trace,
                 *verbose,
@@ -409,6 +420,7 @@ pub async fn handle_replay_config(
                 &fs_store,
                 &output_root_dir,
                 &digests,
+                node,
                 *overwrite_existing,
                 *trace,
                 *verbose,
@@ -428,6 +440,7 @@ pub async fn handle_replay_config(
                 &store,
                 &output_root_dir,
                 &digests,
+                node,
                 *overwrite_existing,
                 *trace,
                 *verbose,
@@ -444,6 +457,7 @@ async fn run_replay<S>(
     data_store: &S,
     output_root_dir: &Path,
     digests: &[String],
+    node: &Node,
     overwrite_existing: bool,
     trace: bool,
     verbose: bool,
@@ -457,9 +471,15 @@ where
         let tx_dir = output_root_dir.join(tx_digest);
         let artifact_manager = ArtifactManager::new(&tx_dir, overwrite_existing)?;
         let span = info_span!("replay", tx_digest = %tx_digest);
-        let result = replay_transaction(&artifact_manager, tx_digest, data_store, trace)
-            .instrument(span)
-            .await;
+        let result = replay_transaction(
+            &artifact_manager,
+            tx_digest,
+            data_store,
+            node.network_name(),
+            trace,
+        )
+        .instrument(span)
+        .await;
         match result {
             Err(e) if terminate_early => {
                 error!(tx_digest = %tx_digest, error = ?e, "Replay error; terminating early");

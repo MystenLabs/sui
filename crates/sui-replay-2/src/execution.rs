@@ -41,7 +41,7 @@ use sui_types::{
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
-    transaction::{CheckedInputObjects, TransactionDataAPI},
+    transaction::{CheckedInputObjects, TransactionData, TransactionDataAPI},
 };
 use tracing::{debug, debug_span, trace};
 
@@ -56,6 +56,7 @@ pub struct ReplayExecutor {
 // Transaction data and effects (both expected and actual) and the caches containing
 // the objects used during execution.
 pub struct TxnContextAndEffects {
+    pub txn_data: TransactionData,             // original transaction data
     pub execution_effects: TransactionEffects, // effects of the replay execution
     pub expected_effects: TransactionEffects,  // expected effects as found in the transaction data
     pub gas_status: SuiGasStatus,              // gas status of the replay execution
@@ -98,6 +99,7 @@ pub struct CacheEntry {
 pub struct ReplayCacheSummary {
     pub epoch_id: u64,
     pub checkpoint: u64,
+    pub network: String,
     /// List of objects accessed during replay with their version and type information
     pub cache_entries: Vec<CacheEntry>,
 }
@@ -107,6 +109,7 @@ impl ReplayCacheSummary {
     pub fn from_cache(
         epoch_id: u64,
         checkpoint: u64,
+        network: String,
         object_cache: &BTreeMap<ObjectID, BTreeMap<u64, Object>>,
     ) -> Self {
         let mut cache_entries = Vec::new();
@@ -144,6 +147,7 @@ impl ReplayCacheSummary {
         Self {
             epoch_id,
             checkpoint,
+            network,
             cache_entries,
         }
     }
@@ -237,11 +241,31 @@ pub fn execute_transaction_to_effects(
         checkpoint: _,
         store: _,
     } = store;
-    let object_cache = object_cache.into_inner();
+    let mut object_cache = object_cache.into_inner();
+
+    // Get created objects from transaction effects
+    for (object_ref, _owner) in effects.created() {
+        let object_id = object_ref.0;
+        // Look for the created object in inner_store's written objects
+        if let Some(object) = inner_store.written.get(&object_id) {
+            object_cache
+                .entry(object_id)
+                .or_default()
+                .insert(object.version().value(), object.clone());
+        } else {
+            // Return error if created object is not found in inner_store
+            return Err(anyhow::anyhow!(
+                "Created object {} not found in inner_store written objects",
+                object_id
+            ));
+        }
+    }
+
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((
         result,
         TxnContextAndEffects {
+            txn_data,
             execution_effects: effects,
             expected_effects,
             gas_status,
@@ -423,6 +447,15 @@ impl ChildObjectResolver for ReplayStore<'_> {
             .next()
             .unwrap()
             .map(|(obj, _version)| obj);
+
+        // Add object to cache if it exists and not already cached
+        if let Some(ref obj) = object {
+            self.object_cache
+                .borrow_mut()
+                .entry(obj.id())
+                .or_default()
+                .insert(obj.version().value(), obj.clone());
+        }
         Ok(object)
     }
 

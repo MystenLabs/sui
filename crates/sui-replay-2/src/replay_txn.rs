@@ -66,6 +66,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     artifact_manager: &ArtifactManager<'_>,
     tx_digest: &str,
     data_store: &S,
+    network: String,
     trace: bool,
 ) -> anyhow::Result<()> {
     let _span = info_span!("replay_tx", tx_digest = %tx_digest).entered();
@@ -110,6 +111,12 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     log_replay_metrics(tx_digest, total_ms, exec_ms);
 
     artifact_manager
+        .member(Artifact::TransactionData)
+        .serialize_artifact(&context_and_effects.txn_data)
+        .transpose()?
+        .unwrap();
+
+    artifact_manager
         .member(Artifact::TransactionEffects)
         .serialize_artifact(&context_and_effects.execution_effects)
         .transpose()?
@@ -125,6 +132,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     let cache_summary = ReplayCacheSummary::from_cache(
         context_and_effects.expected_effects.executed_epoch(),
         context_and_effects.checkpoint,
+        network,
         &context_and_effects.object_cache,
     );
     artifact_manager
