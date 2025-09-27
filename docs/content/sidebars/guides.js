@@ -153,6 +153,8 @@ const guides = [
 					'guides/developer/advanced/move-2024-migration',
 					'guides/developer/advanced/custom-indexer',
 					'guides/developer/advanced/custom-indexer/indexer-walrus',
+					'guides/developer/advanced/custom-indexer/indexer-data-integration',
+					'guides/developer/advanced/custom-indexer/indexer-runtime-perf',
 					'guides/developer/advanced/randomness-onchain',
 					'guides/developer/getting-started/graphql-rpc',
 					'guides/developer/advanced/local-fee-markets',
