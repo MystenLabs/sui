@@ -369,7 +369,7 @@ pub enum SuiClientCommands {
         processing: TxProcessingArgs,
     },
 
-    /// Pay SUI coins to recipients following following specified amounts, with input coins.
+    /// Pay SUI coins to recipients following specified amounts, with input coins.
     /// Length of recipients must be the same as that of amounts.
     /// The input coins also include the coin for gas payment, so no extra gas coin is required.
     PaySui {

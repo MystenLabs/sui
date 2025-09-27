@@ -640,7 +640,7 @@ impl ObjectRuntimeState {
             settlement_output_sui,
         } = self;
 
-        // The set of new ids is a a subset of the generated ids.
+        // The set of new ids is a subset of the generated ids.
         debug_assert!(new_ids.is_subset(&generated_ids));
 
         // Check new owners from transfers, reports an error on cycles.

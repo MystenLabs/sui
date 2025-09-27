@@ -614,7 +614,7 @@ pub(crate) mod tests {
     fn proto_value_to_json_value(proto: Value) -> serde_json::Value {
         match proto.kind {
             Some(Kind::NullValue(_)) | None => serde_json::Value::Null,
-            // Move doesn't support floats so for these tests can can do a convert to u32
+            // Move doesn't support floats so for these tests can do a convert to u32
             Some(Kind::NumberValue(n)) => serde_json::Value::from(n as u32),
             Some(Kind::StringValue(s)) => serde_json::Value::from(s),
             Some(Kind::BoolValue(b)) => serde_json::Value::from(b),

@@ -76,7 +76,7 @@ pub struct NodeMetric {
 
 /// The ProtobufDecoder will decode message delimited protobuf messages from prom_model.proto types
 /// They are delimited by size, eg a format is such:
-/// []byte{size, data, size, data, size, data}, etc etc
+/// []byte{size, data, size, data, size, data}, etc
 pub struct ProtobufDecoder {
     buf: Reader<Bytes>,
 }

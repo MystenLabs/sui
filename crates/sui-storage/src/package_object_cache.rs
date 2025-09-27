@@ -72,7 +72,7 @@ impl PackageObjectCache {
                 self.cache.write().push(package_id, PackageObject::new(p));
             }
             // It's possible that a package is not found if it's newly added system package ID
-            // that hasn't got created yet. This should be very very rare though.
+            // that hasn't got created yet. This should be very rare though.
         }
     }
 }
