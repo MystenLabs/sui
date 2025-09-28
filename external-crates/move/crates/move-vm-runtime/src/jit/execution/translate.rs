@@ -918,7 +918,8 @@ fn function_bodies(
     };
 
     // Track which functions have been processed to avoid cloning the entire optimized_fns map
-    let mut remaining_optimized_indices: std::collections::HashSet<_> = optimized_fns.keys().copied().collect();
+    let mut remaining_optimized_indices: std::collections::HashSet<_> =
+        optimized_fns.keys().copied().collect();
 
     for fun in functions.iter_mut() {
         let Some(opt_fun) = optimized_fns.get(&fun.index) else {
@@ -1438,4 +1439,370 @@ fn make_arena_type(
         }
     };
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jit::optimization::ast as input;
+    use crate::natives::functions::NativeFunctions;
+    use indexmap::IndexMap;
+    use move_binary_format::file_format::{
+        AddressIdentifierIndex, Bytecode as FFBytecode, CodeUnit, CompiledModule,
+        FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex, ModuleHandle,
+        ModuleHandleIndex, Signature, SignatureIndex, Visibility,
+    };
+    use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+    use std::collections::BTreeMap;
+
+    fn create_test_package_context() -> PackageContext<'static> {
+        let natives = Box::leak(Box::new(NativeFunctions::new([]).unwrap()));
+        PackageContext {
+            natives,
+            version_id: AccountAddress::ONE,
+            original_id: AccountAddress::ONE,
+            loaded_modules: IndexMap::new(),
+            package_arena: Arena::new(),
+            vtable_funs: DefinitionMap::empty(),
+            vtable_types: DefinitionMap::empty(),
+            type_origin_table: HashMap::new(),
+        }
+    }
+
+    fn create_test_definitions() -> Definitions {
+        Definitions {
+            structs: vec![],
+            struct_instantiations: vec![],
+            enums: vec![],
+            enum_instantiations: vec![],
+            variants: vec![],
+            variant_instantiations: vec![],
+            field_handles: vec![],
+            field_instantiations: vec![],
+            function_instantiations: vec![],
+            signatures: vec![],
+            constants: vec![],
+        }
+    }
+
+    fn create_empty_module() -> CompiledModule {
+        CompiledModule {
+            version: 6,
+            publishable: true,
+            module_handles: vec![ModuleHandle {
+                address: AddressIdentifierIndex(0),
+                name: IdentifierIndex(0),
+            }],
+            self_module_handle_idx: ModuleHandleIndex(0),
+            datatype_handles: vec![],
+            function_handles: vec![],
+            field_handles: vec![],
+            friend_decls: vec![],
+            struct_def_instantiations: vec![],
+            function_instantiations: vec![],
+            field_instantiations: vec![],
+            signatures: vec![],
+            identifiers: vec![Identifier::new("EmptyModule").unwrap()],
+            address_identifiers: vec![AccountAddress::ONE],
+            constant_pool: vec![],
+            metadata: vec![],
+            struct_defs: vec![],
+            function_defs: vec![],
+            enum_defs: vec![],
+            enum_def_instantiations: vec![],
+            variant_handles: vec![],
+            variant_instantiation_handles: vec![],
+        }
+    }
+
+    fn create_simple_module() -> CompiledModule {
+        CompiledModule {
+            version: 6,
+            publishable: true,
+            module_handles: vec![ModuleHandle {
+                address: AddressIdentifierIndex(0),
+                name: IdentifierIndex(0),
+            }],
+            self_module_handle_idx: ModuleHandleIndex(0),
+            datatype_handles: vec![],
+            function_handles: vec![FunctionHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(1),
+                parameters: SignatureIndex(0),
+                return_: SignatureIndex(0),
+                type_parameters: vec![],
+            }],
+            field_handles: vec![],
+            friend_decls: vec![],
+            struct_def_instantiations: vec![],
+            function_instantiations: vec![],
+            field_instantiations: vec![],
+            signatures: vec![Signature(vec![])],
+            identifiers: vec![
+                Identifier::new("TestModule").unwrap(),
+                Identifier::new("test_func").unwrap(),
+            ],
+            address_identifiers: vec![AccountAddress::ONE],
+            constant_pool: vec![],
+            metadata: vec![],
+            struct_defs: vec![],
+            function_defs: vec![FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            }],
+            enum_defs: vec![],
+            enum_def_instantiations: vec![],
+            variant_handles: vec![],
+            variant_instantiation_handles: vec![],
+        }
+    }
+
+    // Tests for flatten_and_renumber_blocks helper function
+    #[test]
+    fn test_flatten_and_renumber_blocks_basic() {
+        let mut blocks = BTreeMap::new();
+        blocks.insert(0, vec![input::Bytecode::LdU8(42), input::Bytecode::Ret]);
+        blocks.insert(1, vec![input::Bytecode::LdU8(1), input::Bytecode::Pop]);
+
+        let result = flatten_and_renumber_blocks(blocks);
+
+        assert_eq!(result.len(), 4);
+        assert!(matches!(result[0], input::Bytecode::LdU8(42)));
+        assert!(matches!(result[1], input::Bytecode::Ret));
+        assert!(matches!(result[2], input::Bytecode::LdU8(1)));
+        assert!(matches!(result[3], input::Bytecode::Pop));
+    }
+
+    #[test]
+    fn test_flatten_and_renumber_blocks_with_branches() {
+        let mut blocks = BTreeMap::new();
+        blocks.insert(0, vec![input::Bytecode::BrTrue(2)]);
+        blocks.insert(1, vec![input::Bytecode::Pop]);
+        blocks.insert(2, vec![input::Bytecode::Branch(1)]);
+
+        let result = flatten_and_renumber_blocks(blocks);
+
+        assert_eq!(result.len(), 3);
+        assert!(matches!(result[0], input::Bytecode::BrTrue(2))); // Points to new offset 2
+        assert!(matches!(result[1], input::Bytecode::Pop));
+        assert!(matches!(result[2], input::Bytecode::Branch(1))); // Points to new offset 1
+    }
+
+    // Tests for the main functions() function
+    #[test]
+    fn test_functions_empty_module() {
+        let compiled_module = create_empty_module();
+        let input_module = input::Module {
+            compiled_module,
+            functions: BTreeMap::new(),
+        };
+
+        let mut package_context = create_test_package_context();
+        let module_name = intern_identifier(&Identifier::new("EmptyModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+
+        let result = functions(
+            &mut package_context,
+            &module_name,
+            &input_module,
+            definitions,
+        );
+        assert!(result.is_ok());
+        let loaded_functions = result.unwrap();
+        assert_eq!(loaded_functions.len(), 0);
+    }
+
+    #[test]
+    fn test_functions_single_function_no_code() {
+        let compiled_module = create_simple_module();
+        let mut optimized_functions = BTreeMap::new();
+
+        let function_index = FunctionDefinitionIndex(0);
+        let opt_function = input::Function {
+            ndx: function_index,
+            code: None, // No optimized code
+        };
+        optimized_functions.insert(function_index, opt_function);
+
+        let input_module = input::Module {
+            compiled_module,
+            functions: optimized_functions,
+        };
+
+        let mut package_context = create_test_package_context();
+        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+
+        let result = functions(
+            &mut package_context,
+            &module_name,
+            &input_module,
+            definitions,
+        );
+        assert!(result.is_ok());
+        let loaded_functions = result.unwrap();
+        assert_eq!(loaded_functions.len(), 1);
+
+        let function = &loaded_functions[0];
+        assert_eq!(function.index, FunctionDefinitionIndex(0));
+        assert!(!function.is_entry);
+        assert_eq!(function.visibility, Visibility::Public);
+        assert_eq!(function.code.len(), 0); // No code generated when opt_code is None
+    }
+
+    #[test]
+    fn test_functions_single_function_with_empty_code() {
+        let compiled_module = create_simple_module();
+        let mut optimized_functions = BTreeMap::new();
+
+        let function_index = FunctionDefinitionIndex(0);
+        let opt_function = input::Function {
+            ndx: function_index,
+            code: Some(input::Code {
+                code: BTreeMap::new(), // Empty code blocks
+                jump_tables: vec![],
+            }),
+        };
+        optimized_functions.insert(function_index, opt_function);
+
+        let input_module = input::Module {
+            compiled_module,
+            functions: optimized_functions,
+        };
+
+        let mut package_context = create_test_package_context();
+        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+
+        let result = functions(
+            &mut package_context,
+            &module_name,
+            &input_module,
+            definitions,
+        );
+        assert!(result.is_ok());
+        let loaded_functions = result.unwrap();
+        assert_eq!(loaded_functions.len(), 1);
+
+        let function = &loaded_functions[0];
+        assert_eq!(function.index, FunctionDefinitionIndex(0));
+        assert_eq!(function.code.len(), 0); // Empty code blocks result in empty code
+    }
+
+    #[test]
+    fn test_functions_missing_optimized_function() {
+        let compiled_module = create_simple_module();
+        let input_module = input::Module {
+            compiled_module,
+            functions: BTreeMap::new(), // Empty - missing optimized function
+        };
+
+        let mut package_context = create_test_package_context();
+        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+
+        let result = functions(
+            &mut package_context,
+            &module_name,
+            &input_module,
+            definitions,
+        );
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert_eq!(
+            error.major_status(),
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR
+        );
+    }
+
+    #[test]
+    fn test_functions_extra_optimized_function() {
+        let compiled_module = create_simple_module();
+        let mut optimized_functions = BTreeMap::new();
+
+        // Add required optimized function
+        optimized_functions.insert(
+            FunctionDefinitionIndex(0),
+            input::Function {
+                ndx: FunctionDefinitionIndex(0),
+                code: None,
+            },
+        );
+
+        // Add extra optimized function that doesn't match any function definition
+        optimized_functions.insert(
+            FunctionDefinitionIndex(99),
+            input::Function {
+                ndx: FunctionDefinitionIndex(99),
+                code: None,
+            },
+        );
+
+        let input_module = input::Module {
+            compiled_module,
+            functions: optimized_functions,
+        };
+
+        let mut package_context = create_test_package_context();
+        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+
+        let result = functions(
+            &mut package_context,
+            &module_name,
+            &input_module,
+            definitions,
+        );
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert_eq!(
+            error.major_status(),
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR
+        );
+    }
+
+    #[test]
+    fn test_functions_vtable_insertion() {
+        let compiled_module = create_simple_module();
+        let mut optimized_functions = BTreeMap::new();
+        optimized_functions.insert(
+            FunctionDefinitionIndex(0),
+            input::Function {
+                ndx: FunctionDefinitionIndex(0),
+                code: None,
+            },
+        );
+
+        let input_module = input::Module {
+            compiled_module,
+            functions: optimized_functions,
+        };
+
+        let mut package_context = create_test_package_context();
+        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+
+        // Verify vtable is initially empty
+        assert_eq!(package_context.vtable_funs.len(), 0);
+
+        let result = functions(
+            &mut package_context,
+            &module_name,
+            &input_module,
+            definitions,
+        );
+        assert!(result.is_ok());
+
+        // Verify function was inserted into vtable
+        assert_eq!(package_context.vtable_funs.len(), 1);
+    }
 }
