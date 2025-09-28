@@ -115,7 +115,7 @@ pub fn end_transaction(
     // * Remove all allocated_tickets in the test inventories.
     // * For each allocated ticket, if the ticket's object ID is loaded, move it to `received`.
     // * Otherwise re-insert the allocated ticket into the objects inventory, and mark it to be
-    //   removed from the backing storage (deferred due to needing to have acces to `context` which
+    //   removed from the backing storage (deferred due to needing to have access to `context` which
     //   has outstanding references at this point).
     let allocated_tickets =
         std::mem::take(&mut object_runtime_ref.test_inventories.allocated_tickets);
