@@ -378,7 +378,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         self.execute_transaction(tx.into())
             .expect("advancing the epoch cannot fail");
 
-        let new_epoch_state = EpochState::new(self.store.get_system_state());
+        let new_epoch_state = EpochState::new_with_protocol_config(
+            self.store.get_system_state(),
+            self.epoch_state.protocol_config().clone(),
+        );
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: new_epoch_state.committee().voting_rights.clone(),
             next_epoch_protocol_version,
