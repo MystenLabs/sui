@@ -1516,6 +1516,39 @@ mod tests {
     }
 
     fn create_simple_module() -> CompiledModule {
+        create_module(vec![FunctionDefinition {
+            function: FunctionHandleIndex(0),
+            visibility: Visibility::Public,
+            is_entry: false,
+            acquires_global_resources: vec![],
+            code: Some(CodeUnit {
+                locals: SignatureIndex(0),
+                code: vec![FFBytecode::Ret],
+                jump_tables: vec![],
+            }),
+        }])
+    }
+
+    fn create_module(function_defs: Vec<FunctionDefinition>) -> CompiledModule {
+        let function_count = function_defs.len();
+
+        // Create function handles for each function definition
+        let function_handles: Vec<FunctionHandle> = (0..function_count)
+            .map(|i| FunctionHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex(1 + i as u16), // Start from index 1 (0 is module name)
+                parameters: SignatureIndex(0),
+                return_: SignatureIndex(0),
+                type_parameters: vec![],
+            })
+            .collect();
+
+        // Create identifiers: module name + function names
+        let mut identifiers = vec![Identifier::new("TestModule").unwrap()];
+        for i in 0..function_count {
+            identifiers.push(Identifier::new(format!("func_{}", i)).unwrap());
+        }
+
         CompiledModule {
             version: 6,
             publishable: true,
@@ -1525,38 +1558,19 @@ mod tests {
             }],
             self_module_handle_idx: ModuleHandleIndex(0),
             datatype_handles: vec![],
-            function_handles: vec![FunctionHandle {
-                module: ModuleHandleIndex(0),
-                name: IdentifierIndex(1),
-                parameters: SignatureIndex(0),
-                return_: SignatureIndex(0),
-                type_parameters: vec![],
-            }],
+            function_handles,
             field_handles: vec![],
             friend_decls: vec![],
             struct_def_instantiations: vec![],
             function_instantiations: vec![],
             field_instantiations: vec![],
             signatures: vec![Signature(vec![])],
-            identifiers: vec![
-                Identifier::new("TestModule").unwrap(),
-                Identifier::new("test_func").unwrap(),
-            ],
+            identifiers,
             address_identifiers: vec![AccountAddress::ONE],
             constant_pool: vec![],
             metadata: vec![],
             struct_defs: vec![],
-            function_defs: vec![FunctionDefinition {
-                function: FunctionHandleIndex(0),
-                visibility: Visibility::Public,
-                is_entry: false,
-                acquires_global_resources: vec![],
-                code: Some(CodeUnit {
-                    locals: SignatureIndex(0),
-                    code: vec![FFBytecode::Ret],
-                    jump_tables: vec![],
-                }),
-            }],
+            function_defs,
             enum_defs: vec![],
             enum_def_instantiations: vec![],
             variant_handles: vec![],
@@ -1804,5 +1818,302 @@ mod tests {
 
         // Verify function was inserted into vtable
         assert_eq!(package_context.vtable_funs.len(), 1);
+    }
+
+    #[test]
+    fn test_functions_multiple_functions_all_tracked() {
+        // Create a module with 5 functions
+        let function_defs = vec![
+            FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+            FunctionDefinition {
+                function: FunctionHandleIndex(1),
+                visibility: Visibility::Private,
+                is_entry: true,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::LdTrue, FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+            FunctionDefinition {
+                function: FunctionHandleIndex(2),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: None, // Native function
+            },
+            FunctionDefinition {
+                function: FunctionHandleIndex(3),
+                visibility: Visibility::Friend,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::LdU8(42), FFBytecode::Pop, FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+            FunctionDefinition {
+                function: FunctionHandleIndex(4),
+                visibility: Visibility::Public,
+                is_entry: true,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::Nop, FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+        ];
+
+        let compiled_module = create_module(function_defs);
+        let mut optimized_functions = BTreeMap::new();
+
+        // Add optimized functions for all 5 functions
+        for i in 0..5 {
+            optimized_functions.insert(
+                FunctionDefinitionIndex(i),
+                input::Function {
+                    ndx: FunctionDefinitionIndex(i),
+                    code: if i == 2 {
+                        None
+                    } else {
+                        // Native function has no code
+                        Some(input::Code {
+                            code: BTreeMap::new(),
+                            jump_tables: vec![],
+                        })
+                    },
+                },
+            );
+        }
+
+        let input_module = input::Module {
+            compiled_module,
+            functions: optimized_functions,
+        };
+
+        let mut package_context = create_test_package_context();
+        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+
+        let result = functions(
+            &mut package_context,
+            &module_name,
+            &input_module,
+            definitions,
+        );
+        assert!(result.is_ok());
+        let loaded_functions = result.unwrap();
+
+        // Verify all 5 functions were loaded
+        assert_eq!(loaded_functions.len(), 5);
+
+        // Verify function properties
+        assert_eq!(loaded_functions[0].visibility, Visibility::Public);
+        assert!(!loaded_functions[0].is_entry);
+
+        assert_eq!(loaded_functions[1].visibility, Visibility::Private);
+        assert!(loaded_functions[1].is_entry);
+
+        assert_eq!(loaded_functions[2].visibility, Visibility::Public);
+        assert!(loaded_functions[2].def_is_native);
+        assert!(!loaded_functions[2].is_entry);
+
+        assert_eq!(loaded_functions[3].visibility, Visibility::Friend);
+        assert!(!loaded_functions[3].is_entry);
+
+        assert_eq!(loaded_functions[4].visibility, Visibility::Public);
+        assert!(loaded_functions[4].is_entry);
+
+        // Verify all functions were inserted into vtable
+        assert_eq!(package_context.vtable_funs.len(), 5);
+
+        // Verify function indices are correct
+        for (i, function) in loaded_functions.iter().enumerate() {
+            assert_eq!(function.index, FunctionDefinitionIndex(i as u16));
+        }
+    }
+
+    #[test]
+    fn test_functions_multiple_functions_with_missing_optimized() {
+        // Create a module with 3 functions
+        let function_defs = vec![
+            FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+            FunctionDefinition {
+                function: FunctionHandleIndex(1),
+                visibility: Visibility::Private,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+            FunctionDefinition {
+                function: FunctionHandleIndex(2),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+        ];
+
+        let compiled_module = create_module(function_defs);
+        let mut optimized_functions = BTreeMap::new();
+
+        // Only add optimized functions for functions 0 and 2 (missing function 1)
+        optimized_functions.insert(
+            FunctionDefinitionIndex(0),
+            input::Function {
+                ndx: FunctionDefinitionIndex(0),
+                code: None,
+            },
+        );
+        optimized_functions.insert(
+            FunctionDefinitionIndex(2),
+            input::Function {
+                ndx: FunctionDefinitionIndex(2),
+                code: None,
+            },
+        );
+
+        let input_module = input::Module {
+            compiled_module,
+            functions: optimized_functions,
+        };
+
+        let mut package_context = create_test_package_context();
+        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+
+        let result = functions(
+            &mut package_context,
+            &module_name,
+            &input_module,
+            definitions,
+        );
+
+        // Should fail because function 1 is missing from optimized functions
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(
+            error.major_status(),
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR
+        );
+    }
+
+    #[test]
+    fn test_functions_optimization_tracking_with_extra_functions() {
+        // Create a module with 2 functions
+        let function_defs = vec![
+            FunctionDefinition {
+                function: FunctionHandleIndex(0),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+            FunctionDefinition {
+                function: FunctionHandleIndex(1),
+                visibility: Visibility::Private,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(0),
+                    code: vec![FFBytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            },
+        ];
+
+        let compiled_module = create_module(function_defs);
+        let mut optimized_functions = BTreeMap::new();
+
+        // Add optimized functions for the 2 required functions
+        optimized_functions.insert(
+            FunctionDefinitionIndex(0),
+            input::Function {
+                ndx: FunctionDefinitionIndex(0),
+                code: None,
+            },
+        );
+        optimized_functions.insert(
+            FunctionDefinitionIndex(1),
+            input::Function {
+                ndx: FunctionDefinitionIndex(1),
+                code: None,
+            },
+        );
+
+        // Add extra optimized functions that don't correspond to any function definition
+        optimized_functions.insert(
+            FunctionDefinitionIndex(5),
+            input::Function {
+                ndx: FunctionDefinitionIndex(5),
+                code: None,
+            },
+        );
+        optimized_functions.insert(
+            FunctionDefinitionIndex(10),
+            input::Function {
+                ndx: FunctionDefinitionIndex(10),
+                code: None,
+            },
+        );
+
+        let input_module = input::Module {
+            compiled_module,
+            functions: optimized_functions,
+        };
+
+        let mut package_context = create_test_package_context();
+        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+
+        let result = functions(
+            &mut package_context,
+            &module_name,
+            &input_module,
+            definitions,
+        );
+
+        // Should fail because there are extra optimized functions (5, 10) that don't match any function definition
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(
+            error.major_status(),
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR
+        );
     }
 }
