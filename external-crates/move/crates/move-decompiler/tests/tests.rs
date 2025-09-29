@@ -127,7 +127,7 @@ fn run_bytecode_test(file_path: &Path) -> datatest_stable::Result<()> {
     let input = vec![file_path.into()];
     let output = Path::new("tests/bytecode/output");
     // invoke decompiler
-    let paths = move_decompiler::generate_from_files(&input, &output)?;
+    let paths = move_decompiler::generate_from_files(&input, output)?;
     let [path] = paths.as_slice() else {
         panic!("Expected exactly one output file, got: {:#?}", paths);
     };

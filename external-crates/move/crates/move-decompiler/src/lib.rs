@@ -146,7 +146,7 @@ fn generate_module<S: SourceKind>(
         .concat(D::line())
         .concat(D::line());
 
-    if model_mod.structs().into_iter().next().is_some() {
+    if model_mod.structs().next().is_some() {
         doc = doc
             .concat(D::text("// -- structs -- "))
             .concat(D::line())
@@ -163,7 +163,7 @@ fn generate_module<S: SourceKind>(
         doc = doc.concat(structs);
     }
 
-    if model_mod.enums().into_iter().next().is_some() {
+    if model_mod.enums().next().is_some() {
         doc = doc
             .concat(D::text("// -- enums -- "))
             .concat(D::line())
