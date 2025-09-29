@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
-use sui_config::RpcIndexInitConfig;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -625,6 +624,7 @@ impl IndexStoreTables {
         &self,
         checkpoint: &CheckpointData,
         _resolver: &mut dyn LayoutResolver,
+        rpc_config: &sui_config::RpcConfig,
     ) -> Result<typed_store::rocks::DBBatch, StorageError> {
         debug!(
             checkpoint = checkpoint.checkpoint_summary.sequence_number,
@@ -636,7 +636,9 @@ impl IndexStoreTables {
         self.index_epoch(checkpoint, &mut batch)?;
         self.index_transactions(checkpoint, &mut batch)?;
         self.index_objects(checkpoint, &mut batch)?;
-        self.index_authenticated_events(checkpoint, &mut batch)?;
+        if rpc_config.authenticated_events_indexing() {
+            self.index_authenticated_events(checkpoint, &mut batch)?;
+        }
 
         batch.insert_batch(
             &self.watermark,
@@ -1074,6 +1076,7 @@ impl IndexStoreTables {
 pub struct RpcIndexStore {
     tables: IndexStoreTables,
     pending_updates: Mutex<BTreeMap<u64, typed_store::rocks::DBBatch>>,
+    rpc_config: sui_config::RpcConfig,
 }
 
 impl RpcIndexStore {
@@ -1088,7 +1091,7 @@ impl RpcIndexStore {
         checkpoint_store: &CheckpointStore,
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-        index_config: Option<&RpcIndexInitConfig>,
+        rpc_config: sui_config::RpcConfig,
     ) -> Self {
         Self::new_with_options(
             dir,
@@ -1096,8 +1099,8 @@ impl RpcIndexStore {
             checkpoint_store,
             epoch_store,
             package_store,
-            index_config,
             IndexStoreOptions::default(),
+            rpc_config,
         )
         .await
     }
@@ -1108,10 +1111,11 @@ impl RpcIndexStore {
         checkpoint_store: &CheckpointStore,
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-        index_config: Option<&RpcIndexInitConfig>,
         index_options: IndexStoreOptions,
+        rpc_config: sui_config::RpcConfig,
     ) -> Self {
         let path = Self::db_path(dir);
+        let index_config = rpc_config.index_initialization_config();
 
         let tables = {
             let tables = IndexStoreTables::open_with_index_options(&path, index_options.clone());
@@ -1335,20 +1339,18 @@ impl RpcIndexStore {
         Self {
             tables,
             pending_updates: Default::default(),
+            rpc_config,
         }
     }
 
     pub fn new_without_init(dir: &Path) -> Self {
-        Self::new_without_init_with_options(dir, IndexStoreOptions::default())
-    }
-
-    pub fn new_without_init_with_options(dir: &Path, index_options: IndexStoreOptions) -> Self {
         let path = Self::db_path(dir);
-        let tables = IndexStoreTables::open_with_index_options(path, index_options);
+        let tables = IndexStoreTables::open_with_index_options(path, IndexStoreOptions::default());
 
         Self {
             tables,
             pending_updates: Default::default(),
+            rpc_config: sui_config::RpcConfig::default(),
         }
     }
 
@@ -1373,7 +1375,7 @@ impl RpcIndexStore {
         let sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let batch = self
             .tables
-            .index_checkpoint(checkpoint, resolver)
+            .index_checkpoint(checkpoint, resolver, &self.rpc_config)
             .expect("db error");
 
         self.pending_updates
@@ -1506,8 +1508,8 @@ impl RpcIndexStore {
         checkpoint_store: &CheckpointStore,
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-        index_config: Option<&RpcIndexInitConfig>,
         pruning_watermark: Arc<std::sync::atomic::AtomicU64>,
+        rpc_config: sui_config::RpcConfig,
     ) -> Self {
         let events_filter = EventsCompactionFilter::new(pruning_watermark);
         let index_options = IndexStoreOptions {
@@ -1520,8 +1522,8 @@ impl RpcIndexStore {
             checkpoint_store,
             epoch_store,
             package_store,
-            index_config,
             index_options,
+            rpc_config,
         )
         .await
     }
