@@ -319,6 +319,12 @@ pub(crate) fn bytecode<K: SourceKind>(
         }};
     }
 
+    macro_rules! ty_params {
+        ($e:expr) => {
+            &$e.iter().map(|ty| ty.as_ref().clone()).collect::<Vec<_>>()
+        };
+    }
+
     // TODO: Everywhere we call pop!() we should check that the type is what we expect
     // TODO: Almost everywhere we call pop!() appears to be out of order -- we should reverse the
     // order we grab inputs.
@@ -397,12 +403,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Call(function_ref) => {
-            let type_params = function_ref
-                .type_arguments
-                .iter()
-                .map(|ty| ty.as_ref().clone())
-                .collect::<Vec<_>>();
-
+            let type_params = ty_params!(function_ref.type_arguments);
             let args = pop_n!(function_ref.parameters.len());
 
             let lhs = function_ref
@@ -429,11 +430,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Unpack(struct_ref) => {
-            let type_params = struct_ref
-                .type_arguments
-                .iter()
-                .map(|ty| ty.as_ref().clone())
-                .collect::<Vec<_>>();
+            let type_params = ty_params!(struct_ref.type_arguments);
             let rhs = RValue::Data {
                 op: DataOp::Unpack(struct_ref.clone()),
                 args: vec![R(pop!())],
@@ -519,7 +516,12 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::MutBorrowField(field_ref) => {
-            let ref_type = Type::Reference(true, field_ref.field.type_.clone().into());
+            let ty = field_ref
+                .field
+                .type_
+                .clone()
+                .subst(ty_params!(field_ref.instantiation));
+            let ref_type = Type::Reference(true, ty.into());
             assign_reg!(
                 [push!(ref_type.into())] =
                     data_op!(DataOp::MutBorrowField(field_ref.clone()), R(pop!()))
@@ -527,7 +529,12 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::ImmBorrowField(field_ref) => {
-            let ref_type = Type::Reference(false, field_ref.field.type_.clone().into());
+            let ty = field_ref
+                .field
+                .type_
+                .clone()
+                .subst(ty_params!(field_ref.instantiation));
+            let ref_type = Type::Reference(false, ty.into());
             assign_reg!(
                 [push!(ref_type.into())] =
                     data_op!(DataOp::ImmBorrowField(field_ref.clone()), R(pop!()))
@@ -578,10 +585,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::Nop => Instruction::Nop,
 
         IB::VecPack(bx) => {
-            let mut args = vec![];
-            for _ in 0..bx.1 {
-                args.push(R(pop!()));
-            }
+            let args = pop_n!(bx.1);
             assign_reg!(
                 [push!(bx.0.clone())] = RValue::Data {
                     op: DataOp::VecPack(bx.0.clone()),
@@ -598,22 +602,28 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::VecImmBorrow(rc_type) => {
             let ref_type = Type::Reference(false, rc_type.as_ref().clone().into());
+            let arg = R(pop!());
+            let vec = R(pop!());
             assign_reg!(
                 [push!(ref_type.into())] =
-                    data_op!(DataOp::VecImmBorrow(rc_type.clone()), R(pop!()), R(pop!()))
+                    data_op!(DataOp::VecImmBorrow(rc_type.clone()), vec, arg)
             )
         }
 
         IB::VecMutBorrow(rc_type) => {
             let ref_type = Type::Reference(true, rc_type.as_ref().clone().into());
+            let arg = R(pop!());
+            let vec = R(pop!());
             assign_reg!(
                 [push!(ref_type.into())] =
-                    data_op!(DataOp::VecMutBorrow(rc_type.clone()), R(pop!()), R(pop!()))
+                    data_op!(DataOp::VecMutBorrow(rc_type.clone()), vec, arg)
             )
         }
 
         IB::VecPushBack(rc_type) => {
-            assign_reg!([] = data_op!(DataOp::VecPushBack(rc_type.clone()), R(pop!()), R(pop!())))
+            let arg = R(pop!());
+            let vec = R(pop!());
+            assign_reg!([] = data_op!(DataOp::VecPushBack(rc_type.clone()), vec, arg))
         }
 
         IB::VecPopBack(rc_type) => {
@@ -675,11 +685,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         ib
         @ (IB::UnpackVariant(bx) | IB::UnpackVariantImmRef(bx) | IB::UnpackVariantMutRef(bx)) => {
-            let type_params = bx
-                .instantiation
-                .iter()
-                .map(|ty| ty.as_ref().clone())
-                .collect::<Vec<_>>();
+            let type_params = ty_params!(bx.instantiation);
             let rhs = RValue::Data {
                 op: DataOp::UnpackVariant(bx.clone()),
                 args: vec![R(pop!())],

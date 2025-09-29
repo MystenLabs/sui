@@ -8,11 +8,11 @@ public enum Exp has copy, drop {
     Mul,
 }
 
-fun pop_back(stack: &mut vector<u64>): u64 {
+fun pop_back(_stack: &mut vector<u64>): u64 {
     abort 0
 }
 
-fun push_back(stack: &mut vector<u64>, value: u64) {
+fun push_back(_stack: &mut vector<u64>, _value: u64) {
     abort 0
 }
 
