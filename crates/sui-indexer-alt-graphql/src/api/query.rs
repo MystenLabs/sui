@@ -11,7 +11,7 @@ use sui_types::digests::ChainIdentifier;
 use crate::{
     api::{
         mutation::TransactionInputError,
-        scalars::json::Json,
+        scalars::{base64::Base64, json::Json},
         types::{
             epoch::CEpoch, simulation_result::SimulationResult,
             transaction_effects::TransactionEffects,
@@ -47,11 +47,6 @@ use super::{
         zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
     },
 };
-
-/// Input for simulating a transaction, supporting both BCS and JSON formats.
-///
-/// Two input formats are supported:
-/// - `bcs`: Base64-encoded BCS serialization of a `TransactionData` object
 
 #[derive(Default)]
 pub struct Query {
@@ -566,7 +561,7 @@ impl Query {
 
     /// Simulate a transaction to preview its effects without executing it on chain.
     ///
-    /// Accepts a JSON transaction matching the [Sui gRPC API schema](https://docs.sui.io/references/fullnode-protocol#sui-rpc-v2beta2-Transaction).
+    /// Accepts a JSON transaction matching the [Sui gRPC API schema](https://docs.sui.io/references/fullnode-protocol#sui-rpc-v2-Transaction).
     /// The JSON format allows for partial transaction specification where certain fields can be automatically resolved by the server.
     ///
     /// Alternatively, for already serialized transactions, you can pass BCS-encoded data:
@@ -580,11 +575,11 @@ impl Query {
     ) -> Result<SimulationResult, RpcError<TransactionInputError>> {
         let fullnode_client: &FullnodeClient = ctx.data()?;
 
-        // Convert Json to string and parse as proto::Transaction
-        let json_str = transaction
-            .to_string()
+        // Convert Json to serde_json::Value and parse as proto::Transaction
+        let json_value: serde_json::Value = transaction
+            .try_into()
             .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionJson(err)))?;
-        let proto_tx: proto::Transaction = serde_json::from_str(&json_str)
+        let proto_tx: proto::Transaction = serde_json::from_value(json_value)
             .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionJson(err)))?;
 
         // Simulate transaction using proto

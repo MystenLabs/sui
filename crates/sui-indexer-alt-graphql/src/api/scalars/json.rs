@@ -30,12 +30,10 @@ impl From<Value> for Json {
     }
 }
 
-impl Json {
-    /// Convert the JSON value to a string representation
-    pub(crate) fn to_string(&self) -> serde_json::Result<String> {
-        match &self.0 {
-            Value::String(s) => Ok(s.clone()),
-            other => serde_json::to_string(other),
-        }
+impl TryInto<serde_json::Value> for Json {
+    type Error = serde_json::Error;
+
+    fn try_into(self) -> Result<serde_json::Value, Self::Error> {
+        self.0.into_json()
     }
 }
