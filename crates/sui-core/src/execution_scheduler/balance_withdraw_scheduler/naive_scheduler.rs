@@ -56,7 +56,7 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
             for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
                 let _ = sender.send(ScheduleResult {
                     tx_digest: withdraw.tx_digest,
-                    status: ScheduleStatus::AlreadyExecuted,
+                    status: ScheduleStatus::AlreadySettled,
                 });
             }
             return;

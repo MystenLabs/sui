@@ -232,8 +232,8 @@ async fn test_already_executed() {
     wait_for_results(
         receivers,
         BTreeMap::from([
-            (withdraw1.tx_digest, ScheduleStatus::AlreadyExecuted),
-            (withdraw2.tx_digest, ScheduleStatus::AlreadyExecuted),
+            (withdraw1.tx_digest, ScheduleStatus::AlreadySettled),
+            (withdraw2.tx_digest, ScheduleStatus::AlreadySettled),
         ]),
     )
     .await;
