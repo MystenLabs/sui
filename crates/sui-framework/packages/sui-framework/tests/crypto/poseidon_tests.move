@@ -39,82 +39,6 @@ fun test_poseidon_bn254_hash() {
     let expected = 4203130618016961831408770638653325366880478848856764494148034853759773445968u256;
     let actual = poseidon_bn254(&msg);
     assert!(actual == expected);
-
-    let msg = vector[
-        0u256,
-        1u256,
-        2u256,
-        3u256,
-        4u256,
-        5u256,
-        6u256,
-        7u256,
-        8u256,
-        9u256,
-        10u256,
-        11u256,
-        12u256,
-        13u256,
-        14u256,
-        15u256,
-        16u256,
-        17u256,
-        18u256,
-        19u256,
-        20u256,
-        21u256,
-        22u256,
-        23u256,
-        24u256,
-        25u256,
-        26u256,
-        27u256,
-        28u256,
-        29u256,
-    ];
-    let expected = 4123755143677678663754455867798672266093104048057302051129414708339780424023u256;
-    let actual = poseidon_bn254(&msg);
-    assert!(actual == expected);
-
-    let msg = vector[
-        0u256,
-        1u256,
-        2u256,
-        3u256,
-        4u256,
-        5u256,
-        6u256,
-        7u256,
-        8u256,
-        9u256,
-        10u256,
-        11u256,
-        12u256,
-        13u256,
-        14u256,
-        15u256,
-        16u256,
-        17u256,
-        18u256,
-        19u256,
-        20u256,
-        21u256,
-        22u256,
-        23u256,
-        24u256,
-        25u256,
-        26u256,
-        27u256,
-        28u256,
-        29u256,
-        30u256,
-        31u256,
-        32u256,
-    ];
-    let expected =
-        15368023340287843142129781602124963668572853984788169144128906033251913623349u256;
-    let actual = poseidon_bn254(&msg);
-    assert!(actual == expected);
 }
 
 #[test]
@@ -142,5 +66,29 @@ fun test_poseidon_bn254_non_canonical_input() {
 #[expected_failure(abort_code = sui::poseidon::EEmptyInput)]
 fun test_poseidon_bn254_empty_input() {
     let msg = vector[];
+    poseidon_bn254(&msg);
+}
+
+#[test]
+#[expected_failure(abort_code = sui::poseidon::ETooManyInputs)]
+fun test_poseidon_bn254_too_many_inputs() {
+    let msg = vector[
+        1u256,
+        2u256,
+        3u256,
+        4u256,
+        5u256,
+        6u256,
+        7u256,
+        8u256,
+        9u256,
+        10u256,
+        11u256,
+        12u256,
+        13u256,
+        14u256,
+        15u256,
+        16u256,
+    ];
     poseidon_bn254(&msg);
 }
