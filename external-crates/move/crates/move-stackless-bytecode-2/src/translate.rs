@@ -686,8 +686,14 @@ pub(crate) fn bytecode<K: SourceKind>(
         ib
         @ (IB::UnpackVariant(bx) | IB::UnpackVariantImmRef(bx) | IB::UnpackVariantMutRef(bx)) => {
             let type_params = ty_params!(bx.instantiation);
+            let op = match ib {
+                IB::UnpackVariant(_) => DataOp::UnpackVariant(bx.clone()),
+                IB::UnpackVariantImmRef(_) => DataOp::UnpackVariantImmRef(bx.clone()),
+                IB::UnpackVariantMutRef(_) => DataOp::UnpackVariantMutRef(bx.clone()),
+                _ => unreachable!(),
+            };
             let rhs = RValue::Data {
-                op: DataOp::UnpackVariant(bx.clone()),
+                op,
                 args: vec![R(pop!())],
             };
 
