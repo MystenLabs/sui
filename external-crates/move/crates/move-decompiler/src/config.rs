@@ -69,13 +69,13 @@ impl Default for Config {
 impl Default for DebugPrintFlags {
     fn default() -> Self {
         Self {
-            stackless: true,
-            input: true,
-            structured: true,
+            stackless: false,
+            input: false,
+            structured: false,
             decompiled_code: false,
-            control_flow_graph: true,
-            structuring: true,
-            dominators: true,
+            control_flow_graph: false,
+            structuring: false,
+            dominators: false,
         }
     }
 }
