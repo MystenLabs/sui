@@ -773,8 +773,6 @@ async fn test_simulate_transaction_json_transfer() {
         }
     });
 
-    let tx_json_string = serde_json::to_string(&tx_json).unwrap();
-
     let result = graphql_cluster
         .execute_graphql(
             r#"
@@ -796,7 +794,7 @@ async fn test_simulate_transaction_json_transfer() {
             }
         "#,
             json!({
-                "txJson": tx_json_string
+                "txJson": tx_json
             }),
         )
         .await

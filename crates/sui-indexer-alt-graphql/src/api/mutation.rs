@@ -14,6 +14,7 @@ use crate::api::scalars::base64::Base64;
 use crate::error::{bad_user_input, upcast, RpcError};
 
 /// Error type for user input validation in transaction operations
+#[allow(clippy::enum_variant_names)]
 #[derive(thiserror::Error, Debug)]
 pub enum TransactionInputError {
     #[error("Invalid BCS-encoded TransactionData: {0}")]
