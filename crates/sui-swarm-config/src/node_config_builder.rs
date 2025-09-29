@@ -294,6 +294,7 @@ pub struct FullnodeConfigBuilder {
     disable_pruning: bool,
     chain_override: Option<Chain>,
     transaction_driver_config: Option<TransactionDriverConfig>,
+    rpc_config: Option<sui_config::RpcConfig>,
 }
 
 impl FullnodeConfigBuilder {
@@ -321,6 +322,11 @@ impl FullnodeConfigBuilder {
     pub fn with_rpc_addr(mut self, addr: SocketAddr) -> Self {
         assert!(self.rpc_addr.is_none() && self.rpc_port.is_none());
         self.rpc_addr = Some(addr);
+        self
+    }
+
+    pub fn with_rpc_config(mut self, rpc_config: sui_config::RpcConfig) -> Self {
+        self.rpc_config = Some(rpc_config);
         self
     }
 
@@ -551,9 +557,11 @@ impl FullnodeConfigBuilder {
             indexer_max_subscriptions: Default::default(),
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: Default::default(),
-            rpc: Some(sui_rpc_api::Config {
-                enable_indexing: Some(true),
-                ..Default::default()
+            rpc: self.rpc_config.or_else(|| {
+                Some(sui_rpc_api::Config {
+                    enable_indexing: Some(true),
+                    ..Default::default()
+                })
             }),
             // note: not used by fullnodes.
             jwk_fetch_interval_seconds: 3600,

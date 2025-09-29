@@ -10,6 +10,14 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::TransactionData;
 use test_cluster::TestClusterBuilder;
 
+fn create_rpc_config_with_authenticated_events() -> sui_config::RpcConfig {
+    sui_config::RpcConfig {
+        authenticated_events_indexing: Some(true),
+        enable_indexing: Some(true),
+        ..Default::default()
+    }
+}
+
 #[sim_test]
 async fn list_authenticated_events_end_to_end() {
     let _guard: sui_protocol_config::OverrideGuard =
@@ -18,8 +26,11 @@ async fn list_authenticated_events_end_to_end() {
             cfg
         });
 
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
+        .with_rpc_config(rpc_config)
         .build()
         .await;
     let rgp = test_cluster.get_reference_gas_price().await;
@@ -109,7 +120,12 @@ async fn list_authenticated_events_end_to_end() {
 
 #[sim_test]
 async fn list_authenticated_events_page_size_validation() {
-    let test_cluster = test_cluster::TestClusterBuilder::new().build().await;
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
+    let test_cluster = test_cluster::TestClusterBuilder::new()
+        .with_rpc_config(rpc_config)
+        .build()
+        .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
     let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
@@ -131,7 +147,12 @@ async fn list_authenticated_events_page_size_validation() {
 
 #[sim_test]
 async fn list_authenticated_events_start_beyond_highest() {
-    let test_cluster = test_cluster::TestClusterBuilder::new().build().await;
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
+    let test_cluster = test_cluster::TestClusterBuilder::new()
+        .with_rpc_config(rpc_config)
+        .build()
+        .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
     let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
@@ -167,7 +188,12 @@ async fn list_authenticated_events_start_beyond_highest() {
 
 #[sim_test]
 async fn list_authenticated_events_pruned_checkpoint_error() {
-    let test_cluster = test_cluster::TestClusterBuilder::new().build().await;
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
+    let test_cluster = test_cluster::TestClusterBuilder::new()
+        .with_rpc_config(rpc_config)
+        .build()
+        .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
     let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
@@ -183,4 +209,38 @@ async fn list_authenticated_events_pruned_checkpoint_error() {
     let response = client.list_authenticated_events(req).await.unwrap();
 
     assert!(response.into_inner().events.is_empty());
+}
+
+#[sim_test]
+async fn authenticated_events_disabled_test() {
+    let _guard: sui_protocol_config::OverrideGuard =
+        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_authenticated_event_streams_for_testing();
+            cfg
+        });
+
+    let test_cluster = test_cluster::TestClusterBuilder::new().build().await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+
+    let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let mut req = ListAuthenticatedEventsRequest::default();
+    req.stream_id = Some(sender.to_string());
+    req.start_checkpoint = Some(0);
+    req.page_size = Some(10);
+    req.page_token = None;
+
+    let response = client.list_authenticated_events(req).await;
+    assert!(
+        response.is_err(),
+        "Expected error when authenticated events indexing is disabled"
+    );
+
+    let error = response.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::Unimplemented);
+    assert!(error
+        .message()
+        .contains("Authenticated events indexing is disabled"));
 }

@@ -73,6 +73,12 @@ pub fn list_authenticated_events(
     service: &RpcService,
     request: ListAuthenticatedEventsRequest,
 ) -> Result<ListAuthenticatedEventsResponse, RpcError> {
+    if !service.config.authenticated_events_indexing() {
+        return Err(RpcError::new(
+            tonic::Code::Unimplemented,
+            "Authenticated events indexing is disabled".to_string(),
+        ));
+    }
     let stream_id = request.stream_id.ok_or_else(|| {
         RpcError::new(
             tonic::Code::InvalidArgument,
