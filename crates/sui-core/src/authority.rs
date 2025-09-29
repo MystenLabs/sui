@@ -1209,6 +1209,47 @@ impl AuthorityState {
             .check_system_overload_at_execution
     }
 
+    pub(crate) fn check_system_overload_for_ping(
+        &self,
+        consensus_overload_checker: &(impl ConsensusOverloadChecker + ?Sized),
+        do_authority_overload_check: bool,
+    ) -> SuiResult {
+        if do_authority_overload_check {
+            if !self.overload_info.is_overload.load(Ordering::Relaxed) {
+                return Ok(());
+            }
+
+            let load_shedding_percentage = self
+                .overload_info
+                .load_shedding_percentage
+                .load(Ordering::Relaxed);
+
+            // We assign the ZERO digest to the ping request as a best effort.
+            overload_monitor_accept_tx(load_shedding_percentage, TransactionDigest::ZERO).tap_err(
+                |_| {
+                    self.update_overload_metrics("ping");
+                },
+            )?;
+        }
+
+        consensus_overload_checker
+            .check_consensus_overload()
+            .tap_err(|_| {
+                self.update_overload_metrics("consensus");
+            })?;
+
+        let pending_tx_count = self
+            .get_cache_commit()
+            .approximate_pending_transaction_count();
+        if pending_tx_count > self.config.execution_cache.backpressure_threshold_for_rpc() {
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 10,
+            });
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn check_system_overload(
         &self,
         consensus_overload_checker: &(impl ConsensusOverloadChecker + ?Sized),
