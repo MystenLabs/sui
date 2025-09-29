@@ -4042,12 +4042,12 @@ impl ProtocolConfig {
 
                     // Enable Mysticeti fastpath handlers on mainnet.
                     cfg.feature_flags.mysticeti_fastpath = true;
-
-                    // Enable the Poseidon hash function on all networks.
-                    cfg.feature_flags.enable_poseidon = true;
                 }
                 97 => {
                     cfg.event_emit_auth_stream_cost = Some(52);
+
+                    // Enable the Poseidon hash function on all networks.
+                    cfg.feature_flags.enable_poseidon = true;
                 }
                 // Use this template when making changes:
                 //
