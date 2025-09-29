@@ -89,6 +89,7 @@ fun test_poseidon_bn254_too_many_inputs() {
         14u256,
         15u256,
         16u256,
+        17u256,
     ];
     poseidon_bn254(&msg);
 }
