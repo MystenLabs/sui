@@ -1102,7 +1102,7 @@ impl IndexStore {
             TxSequenceNumber::MIN
         });
 
-        let max_string = "Z".repeat(self.max_type_length.try_into().unwrap());
+        let max_string = "z".repeat(self.max_type_length.try_into().unwrap());
         let module_val = module.clone().unwrap_or(if reverse {
             max_string.clone()
         } else {
