@@ -218,7 +218,9 @@ impl CheckpointStoreTables {
             (
                 "checkpoint_content",
                 digest_config.clone().with_config(
-                    lru_config.clone().with_relocation_filter(|_, _| Decision::Remove),
+                    lru_config
+                        .clone()
+                        .with_relocation_filter(|_, _| Decision::Remove),
                 ),
             ),
             (
