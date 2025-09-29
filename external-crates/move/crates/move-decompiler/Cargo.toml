@@ -8,6 +8,7 @@ license = "Apache-2.0"
 anyhow.workspace = true
 bcs.workspace = true
 clap.workspace = true
+indexmap.workspace = true
 petgraph.workspace = true
 pretty_simple.workspace = true
 tempfile.workspace = true

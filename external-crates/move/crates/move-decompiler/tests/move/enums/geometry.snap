@@ -18,7 +18,7 @@ module geometry {
                 let l2 = reg_15 : 0x0::geometry::Shape;
                 let l5 = reg_14 : 0x0::geometry::Shape;
                 let l6 = l2;
-                l1 = l5 * l6 / U64(2);
+                l1 = l5 * l6 / 2u64;
             },
         }
         return l1

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ast::{self, BasicBlock, Instruction, RValue, Register, Value},
+    ast::{self, BasicBlock, Instruction, RValue, Register},
     optimizations::optimize,
 };
 
@@ -11,7 +11,7 @@ use move_binary_format::{
     file_format::JumpTableInner,
     normalized::{self as N, Bytecode as IB, Type},
 };
-
+use move_core_types::runtime_value::MoveValue as Value;
 use move_model_2::{
     model::{Model, Module, Package},
     source_kind::SourceKind,
