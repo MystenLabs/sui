@@ -7,7 +7,7 @@ use move_core_types::runtime_value::MoveValue as Value;
 use move_model_2::{model, source_kind::SourceKind, summary};
 use move_stackless_bytecode_2::ast::{DataOp, PrimitiveOp};
 use move_symbol_pool::Symbol;
-use pretty_simple::{Doc, Doc as D, ToDoc, to_list};
+use pretty_simple::{Doc, Doc as D, ToDoc};
 
 use indexmap::IndexMap;
 
@@ -57,7 +57,7 @@ pub fn module<S: SourceKind>(
     let context = {
         let constant_table: IndexMap<*const Constant<Symbol>, String> = constant_table
             .iter()
-            .map(|(k, (name, _))| (k.clone(), name.clone()))
+            .map(|(k, (name, _))| (*k, name.clone()))
             .collect();
 
         Context { constant_table }
@@ -119,7 +119,7 @@ pub fn module<S: SourceKind>(
             .concat(D::line());
 
         let constants = {
-            let summary_context = summary::Context::new(&model);
+            let summary_context = summary::Context::new(model);
 
             let mut doc = D::nil();
             for (_, (name, constant)) in constant_table.iter() {
@@ -173,7 +173,7 @@ fn function<S: SourceKind>(
         move_model_2::pretty_printer::fun_header(model_fun, /* use_param_names */ false);
 
     let crate::ast::Function { name: _, code } = fun;
-    let exp_doc = exp(&context, code);
+    let exp_doc = exp(context, code);
 
     header
         .concat_space(Doc::text("{"))
@@ -376,7 +376,7 @@ fn fields(fields: &[(Symbol, String)]) -> Doc {
     D::space().concat(doc).concat(D::space()).braces()
 }
 
-pub fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
+fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
     fn maybe_parens(context: &Context, e: &Exp) -> Doc {
         match e {
             Exp::Variable(_) | Exp::Value(_) | Exp::Constant(_) => exp(context, e),
@@ -490,7 +490,7 @@ pub fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
     }
 }
 
-pub fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
+fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
     let bin = |lhs: &Exp, sym: &str, rhs: &Exp| {
         exp(context, lhs)
             .concat_space(D::text(sym.to_string()))
