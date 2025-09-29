@@ -11,13 +11,11 @@ pub mod testing;
 pub mod translate;
 
 use anyhow::anyhow;
-use indexmap::IndexMap;
 use move_model_2::{
     compiled_model as CM,
     model::{self as M, Model},
     source_kind::SourceKind,
 };
-use pretty_simple::Doc;
 
 use std::{
     collections::BTreeMap,
@@ -127,8 +125,6 @@ fn generate_module<S: SourceKind>(
     pkg_name: &str,
     module: &crate::ast::Module,
 ) -> anyhow::Result<PathBuf> {
-    use Doc as D;
-
     let Some(model_mod) = pkg.maybe_module(module.name) else {
         anyhow::bail!("Module {} not found in package {}", module.name, pkg_name);
     };
