@@ -1510,15 +1510,6 @@ mod checked {
             // let deleted = deleted_object_ids.contains(&id);
         }
 
-        if protocol_config.enable_coin_deny_list_v2() {
-            let DenyListResult {
-                result,
-                num_non_gas_coin_owners,
-            } = state_view.check_coin_deny_list(&written_objects);
-            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-            result?;
-        }
-
         let user_events: Vec<Event> = user_events
             .into_iter()
             .map(|(module_id, tag, contents)| {
@@ -1532,10 +1523,16 @@ mod checked {
             })
             .collect();
 
-        // TODO(address-balances): Also check deny list v2 for funds transfers.
+        let mut receiving_funds_type_and_owners = BTreeMap::new();
         let accumulator_events = accumulator_events
             .into_iter()
             .map(|accum_event| {
+                if let Some(ty) = Balance::maybe_get_balance_type_param(&accum_event.target_ty) {
+                    receiving_funds_type_and_owners
+                        .entry(ty)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(accum_event.target_addr.into());
+                }
                 let value = match accum_event.value {
                     MoveAccumulatorValue::U64(amount) => AccumulatorValue::Integer(amount),
                     MoveAccumulatorValue::EventRef(event_idx) => {
@@ -1565,6 +1562,25 @@ mod checked {
                 ))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
+
+        if protocol_config.enable_coin_deny_list_v2() {
+            for object in written_objects.values() {
+                let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
+                let owner = object.owner.get_address_owner_address();
+                if let (Some(ty), Ok(owner)) = (coin_type, owner) {
+                    receiving_funds_type_and_owners
+                        .entry(ty)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(owner);
+                }
+            }
+            let DenyListResult {
+                result,
+                num_non_gas_coin_owners,
+            } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
+            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+            result?;
+        }
 
         Ok(ExecutionResults::V2(ExecutionResultsV2 {
             written_objects,
