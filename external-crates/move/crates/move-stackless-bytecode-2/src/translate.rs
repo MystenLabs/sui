@@ -404,6 +404,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::Call(function_ref) => {
             let type_params = ty_params!(function_ref.type_arguments);
+
             let args = pop_n!(function_ref.parameters.len());
 
             let lhs = function_ref
@@ -431,6 +432,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::Unpack(struct_ref) => {
             let type_params = ty_params!(struct_ref.type_arguments);
+
             let rhs = RValue::Data {
                 op: DataOp::Unpack(struct_ref.clone()),
                 args: vec![R(pop!())],
@@ -692,6 +694,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 IB::UnpackVariantMutRef(_) => DataOp::UnpackVariantMutRef(bx.clone()),
                 _ => unreachable!(),
             };
+
             let rhs = RValue::Data {
                 op,
                 args: vec![R(pop!())],
