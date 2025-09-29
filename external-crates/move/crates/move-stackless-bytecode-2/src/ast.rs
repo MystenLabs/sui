@@ -4,7 +4,7 @@
 use crate::utils::comma_separated;
 
 use move_binary_format::normalized::{Constant, FieldRef, ModuleId, StructRef, Type, VariantRef};
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue};
 use move_symbol_pool::Symbol;
 
 use std::{collections::BTreeMap, rc::Rc, vec};
@@ -76,7 +76,7 @@ pub enum Instruction {
 #[derive(Debug, Clone)]
 pub enum Trivial {
     Register(Register),
-    Immediate(Value),
+    Immediate(MoveValue),
 }
 
 #[derive(Debug, Clone)]
@@ -170,21 +170,6 @@ pub enum DataOp {
     UnpackVariant(Box<VariantRef<Symbol>>),
     UnpackVariantImmRef(Box<VariantRef<Symbol>>),
     UnpackVariantMutRef(Box<VariantRef<Symbol>>),
-}
-
-#[derive(Debug, Clone)]
-pub enum Value {
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    U128(u128),
-    U256(move_core_types::u256::U256), // Representing as two u128s for simplicity
-    Bool(bool),
-    Address(AccountAddress),
-    Empty, // empty added for the pop
-    NotImplemented(String),
-    Vector(Vec<Value>), // Added to represent vector values
 }
 
 pub type Label = usize;
@@ -324,24 +309,6 @@ impl std::fmt::Display for Trivial {
 impl std::fmt::Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} : {}", self.name(), self.ty)
-    }
-}
-
-impl std::fmt::Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Value::U8(n) => write!(f, "U8({n})"),
-            Value::U16(n) => write!(f, "U16({n})"),
-            Value::U32(n) => write!(f, "U32({n})"),
-            Value::U64(n) => write!(f, "U64({n})"),
-            Value::U128(n) => write!(f, "U128({n})"),
-            Value::U256(n) => write!(f, "U256({n})"),
-            Value::Bool(bool) => write!(f, "{bool}"),
-            Value::Empty => write!(f, "Empty"),
-            Value::Address(addr) => write!(f, "Address({})", addr.to_canonical_string(true)),
-            Value::NotImplemented(msg) => write!(f, "NotImplemented({})", msg),
-            Value::Vector(vec) => write!(f, "Vector[{}]", comma_separated(vec)),
-        }
     }
 }
 
