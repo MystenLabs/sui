@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
+use insta::assert_json_snapshot;
 use prometheus::Registry;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use sui_indexer_alt_graphql::{
     config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
 };
@@ -133,12 +135,6 @@ struct ObjectChangeNode {
 struct ObjectState {
     version: u64,
     as_move_object: Option<Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct FieldLayout {
-    name: String,
-    layout: Value,
 }
 
 struct GraphQlTestCluster {
@@ -887,51 +883,196 @@ async fn test_package_resolver_finds_newly_published_package() {
         .as_array()
         .unwrap();
 
-    // Look for the SimpleObject - its type resolution requires fetching the newly published package
-    let simple_object = object_changes
-        .iter()
-        .find(|node| {
-            node.pointer("/outputState/asMoveObject/contents/type/repr")
-                .and_then(|t| t.as_str())
-                .map(|type_str| type_str.contains("::resolver_test::SimpleObject"))
-                .unwrap_or(false)
-        })
-        .unwrap();
-    let fields: Vec<FieldLayout> = serde_json::from_value(
-        simple_object
-            .pointer("/outputState/asMoveObject/contents/type/layout/struct/fields")
-            .unwrap()
-            .clone(),
-    )
-    .unwrap();
-
-    assert_eq!(
-        fields.len(),
-        2,
-        "SimpleObject should have 2 fields (id and value)"
-    );
-
-    // Verify the 'id' field is of type UID
-    assert_eq!(fields[0].name, "id");
-    assert_eq!(
-        fields[0]
-            .layout
-            .pointer("/struct/type")
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
-    );
-
-    // Verify the 'value' field is of type NestedObject
-    assert_eq!(fields[1].name, "value");
-    assert!(fields[1]
-        .layout
-        .pointer("/struct/type")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .contains("::resolver_test::NestedObject"));
+    // Use snapshot testing for the object changes
+    assert_json_snapshot!(object_changes, @r#"
+    [
+      {
+        "outputState": {
+          "address": "0x4208b6b5d6e557f62ebd644bff650cb07de9fa8bee5931c9625279fc6f4fd9fb",
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                "layout": {
+                  "struct": {
+                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                    "fields": [
+                      {
+                        "name": "id",
+                        "layout": {
+                          "struct": {
+                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                            "fields": [
+                              {
+                                "name": "id",
+                                "layout": {
+                                  "struct": {
+                                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID",
+                                    "fields": [
+                                      {
+                                        "name": "bytes",
+                                        "layout": "address"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "name": "balance",
+                        "layout": {
+                          "struct": {
+                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                            "fields": [
+                              {
+                                "name": "value",
+                                "layout": "u64"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "outputState": {
+          "address": "0x5c7311c49b47591a50338c5f09da6cca367b6a58a7bd7d1eeafc7a1bf7444a2f",
+          "asMoveObject": null
+        }
+      },
+      {
+        "outputState": {
+          "address": "0xcc37bec20f078b9e0c986e33b14a3ef68b91b3c1cc155f7023628b0df7e30854",
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x5c7311c49b47591a50338c5f09da6cca367b6a58a7bd7d1eeafc7a1bf7444a2f::resolver_test::SimpleObject",
+                "layout": {
+                  "struct": {
+                    "type": "0x5c7311c49b47591a50338c5f09da6cca367b6a58a7bd7d1eeafc7a1bf7444a2f::resolver_test::SimpleObject",
+                    "fields": [
+                      {
+                        "name": "id",
+                        "layout": {
+                          "struct": {
+                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                            "fields": [
+                              {
+                                "name": "id",
+                                "layout": {
+                                  "struct": {
+                                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID",
+                                    "fields": [
+                                      {
+                                        "name": "bytes",
+                                        "layout": "address"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "name": "value",
+                        "layout": {
+                          "struct": {
+                            "type": "0x5c7311c49b47591a50338c5f09da6cca367b6a58a7bd7d1eeafc7a1bf7444a2f::resolver_test::NestedObject",
+                            "fields": [
+                              {
+                                "name": "dummy_field",
+                                "layout": "bool"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "outputState": {
+          "address": "0xd6949b9b73caec82c74fcb43252406ed08a4ecb79ca3e297f56d14f054fc7b3d",
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap",
+                "layout": {
+                  "struct": {
+                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap",
+                    "fields": [
+                      {
+                        "name": "id",
+                        "layout": {
+                          "struct": {
+                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                            "fields": [
+                              {
+                                "name": "id",
+                                "layout": {
+                                  "struct": {
+                                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID",
+                                    "fields": [
+                                      {
+                                        "name": "bytes",
+                                        "layout": "address"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "name": "package",
+                        "layout": {
+                          "struct": {
+                            "type": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID",
+                            "fields": [
+                              {
+                                "name": "bytes",
+                                "layout": "address"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "name": "version",
+                        "layout": "u64"
+                      },
+                      {
+                        "name": "policy",
+                        "layout": "u8"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+    "#);
 
     graphql_cluster.stopped().await;
 }
