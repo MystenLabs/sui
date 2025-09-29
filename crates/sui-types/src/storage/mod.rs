@@ -8,7 +8,8 @@ mod shared_in_memory_store;
 mod write_store;
 
 use crate::base_types::{
-    ConsensusObjectSequenceKey, FullObjectID, FullObjectRef, TransactionDigest, VersionNumber,
+    ConsensusObjectSequenceKey, FullObjectID, FullObjectRef, SuiAddress, TransactionDigest,
+    VersionNumber,
 };
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -25,7 +26,7 @@ use crate::{
 };
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
-use move_core_types::language_storage::ModuleId;
+use move_core_types::language_storage::{ModuleId, TypeTag};
 pub use object_store_trait::ObjectStore;
 pub use read_store::BalanceInfo;
 pub use read_store::BalanceIterator;
@@ -226,9 +227,12 @@ pub trait Storage {
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     );
 
-    /// Check coin denylist during execution,
-    /// and the number of non-gas-coin owners.
-    fn check_coin_deny_list(&self, written_objects: &BTreeMap<ObjectID, Object>) -> DenyListResult;
+    /// Given the set of all coin types and owners that are receiving the coins during execution,
+    /// Check coin denylist v2, and return the number of non-gas-coin owners.
+    fn check_coin_deny_list(
+        &self,
+        receiving_funds_type_and_owners: BTreeMap<TypeTag, BTreeSet<SuiAddress>>,
+    ) -> DenyListResult;
 
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>);
 }
