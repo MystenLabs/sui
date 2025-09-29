@@ -275,10 +275,6 @@ pub(crate) fn bytecode<K: SourceKind>(
         };
     }
 
-    macro_rules! make_vec {
-        ($n:expr, $e:expr) => {{ (0..$n).map(|_| $e).collect::<Vec<_>>() }};
-    }
-
     macro_rules! push {
         ($ty:expr) => {
             ctxt.push_register($ty)
@@ -289,6 +285,17 @@ pub(crate) fn bytecode<K: SourceKind>(
         () => {
             ctxt.pop_register()
         };
+    }
+
+    macro_rules! pop_n {
+        ($n:expr) => {{
+            (0..$n)
+                .map(|_| R(pop!()))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<_>>()
+        }};
     }
 
     macro_rules! binary_op_type_assert {
@@ -321,7 +328,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::Ret => {
             // TODO: check if this needs to be reversed?
-            let returned_vars = make_vec!(fdef.return_.len(), R(pop!()));
+            let returned_vars = pop_n!(fdef.return_.len());
             Instruction::Return(returned_vars)
         }
 
@@ -396,7 +403,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .map(|ty| ty.as_ref().clone())
                 .collect::<Vec<_>>();
 
-            let args = make_vec!(function_ref.parameters.len(), R(pop!()));
+            let args = pop_n!(function_ref.parameters.len());
 
             let lhs = function_ref
                 .return_
@@ -412,7 +419,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Pack(struct_ref) => {
-            let args = make_vec!(struct_ref.struct_.fields.0.len(), R(pop!()));
+            let args = pop_n!(struct_ref.struct_.fields.0.len());
             assign_reg!(
                 [push!(struct_ref_to_type(struct_ref).into())] = RValue::Data {
                     op: DataOp::Pack(struct_ref.clone()),
@@ -422,6 +429,11 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Unpack(struct_ref) => {
+            let type_params = struct_ref
+                .type_arguments
+                .iter()
+                .map(|ty| ty.as_ref().clone())
+                .collect::<Vec<_>>();
             let rhs = RValue::Data {
                 op: DataOp::Unpack(struct_ref.clone()),
                 args: vec![R(pop!())],
@@ -431,7 +443,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .fields
                 .0
                 .iter()
-                .map(|(_, field)| push!(field.type_.clone().into()))
+                .map(|(_, field)| push!(field.type_.clone().subst(&type_params).into()))
                 .collect::<Vec<_>>();
 
             Instruction::AssignReg { rhs, lhs }
@@ -621,7 +633,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::VecSwap(rc_type) => {
-            let args = make_vec!(3, R(pop!()));
+            let args = pop_n!(3);
             Instruction::AssignReg {
                 rhs: RValue::Data {
                     op: DataOp::VecSwap(rc_type.clone()),
@@ -651,7 +663,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::PackVariant(bx) => {
-            let args = make_vec!(bx.variant.fields.0.len(), R(pop!()));
+            let args = pop_n!(bx.variant.fields.0.len());
             Instruction::AssignReg {
                 lhs: vec![push!(variant_ref_to_type(bx).into())],
                 rhs: RValue::Data {
@@ -661,35 +673,43 @@ pub(crate) fn bytecode<K: SourceKind>(
             }
         }
 
-        IB::UnpackVariant(bx) => {
+        ib
+        @ (IB::UnpackVariant(bx) | IB::UnpackVariantImmRef(bx) | IB::UnpackVariantMutRef(bx)) => {
+            let type_params = bx
+                .instantiation
+                .iter()
+                .map(|ty| ty.as_ref().clone())
+                .collect::<Vec<_>>();
             let rhs = RValue::Data {
                 op: DataOp::UnpackVariant(bx.clone()),
                 args: vec![R(pop!())],
             };
-            let lhs = make_vec!(
-                bx.variant.fields.0.len(),
-                push!(variant_ref_to_type(bx).into())
-            );
-            Instruction::AssignReg { lhs, rhs }
-        }
 
-        IB::UnpackVariantImmRef(bx) => {
-            let rhs = RValue::Data {
-                op: DataOp::UnpackVariantImmRef(bx.clone()),
-                args: vec![R(pop!())],
-            };
-            let ref_type = Type::Reference(false, variant_ref_to_type(bx).into());
-            let lhs = make_vec!(bx.variant.fields.0.len(), push!(ref_type.clone().into()));
-            Instruction::AssignReg { lhs, rhs }
-        }
+            let tys = bx
+                .variant
+                .fields
+                .0
+                .iter()
+                .map(|(_, field)| field.type_.clone().subst(type_params.as_slice()))
+                .collect::<Vec<Type<Symbol>>>();
 
-        IB::UnpackVariantMutRef(bx) => {
-            let rhs = RValue::Data {
-                op: DataOp::UnpackVariant(bx.clone()),
-                args: vec![R(pop!())],
+            let tys = match ib {
+                IB::UnpackVariantImmRef(_) => tys
+                    .iter()
+                    .map(|ty| Type::Reference(false, ty.clone().into()).into())
+                    .collect::<Vec<Type<Symbol>>>(),
+                IB::UnpackVariantMutRef(_) => tys
+                    .iter()
+                    .map(|ty| Type::Reference(true, ty.clone().into()).into())
+                    .collect::<Vec<Type<Symbol>>>(),
+                IB::UnpackVariant(_) => tys,
+                _ => unreachable!(),
             };
-            let ref_type = Type::Reference(true, variant_ref_to_type(bx).into());
-            let lhs = make_vec!(bx.variant.fields.0.len(), push!(ref_type.clone().into()));
+
+            let lhs = tys
+                .iter()
+                .map(|ty| push!(Rc::new(ty.clone().into())))
+                .collect::<Vec<_>>();
             Instruction::AssignReg { lhs, rhs }
         }
 
