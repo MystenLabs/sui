@@ -231,8 +231,8 @@ async fn test_simulate_transaction_basic() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -249,7 +249,11 @@ async fn test_simulate_transaction_basic() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -296,8 +300,8 @@ async fn test_simulate_transaction_with_events() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -311,7 +315,11 @@ async fn test_simulate_transaction_with_events() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -343,15 +351,19 @@ async fn test_simulate_transaction_input_validation() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects { digest }
                     error
                 }
             }
         "#,
             json!({
-                "txData": "invalid_base64!"
+                "txData": {
+                    "bcs": {
+                        "value": "invalid_base64!"
+                    }
+                }
             }),
         )
         .await
@@ -378,8 +390,8 @@ async fn test_simulate_transaction_object_changes() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -415,7 +427,11 @@ async fn test_simulate_transaction_object_changes() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -589,8 +605,8 @@ async fn test_simulate_transaction_command_results() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects { status }
                     outputs {
                         returnValues {
@@ -619,7 +635,13 @@ async fn test_simulate_transaction_command_results() {
                 }
             }
         "#,
-            json!({ "txData": tx_bytes.encoded() }),
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
         )
         .await
         .unwrap();
@@ -688,6 +710,115 @@ async fn test_simulate_transaction_command_results() {
             _ => panic!("Unexpected command index: {}", i),
         }
     }
+
+    graphql_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_simulate_transaction_json_transfer() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    let sender = validator_cluster.get_address_0();
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Create a JSON Transaction following the proto schema for a simple transfer
+    let tx_json = json!({
+        "sender": sender.to_string(),
+         "gas_payment": {
+            "budget": 3000000,
+            "owner": sender.to_string()
+        },
+        "kind": {
+            "programmable_transaction": {
+                "inputs": [
+                    {
+                        "literal": 1000000  // Amount to transfer as a number literal
+                    },
+                    {
+                        "literal": recipient.to_string()  // Recipient address as string literal
+                    }
+                ],
+                "commands": [
+                    {
+                        "split_coins": {
+                            "coin": {
+                                "kind": "GAS"
+                            },
+                            "amounts": [
+                                {
+                                    "kind": "INPUT",
+                                    "input": 0
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "transfer_objects": {
+                            "objects": [
+                                {
+                                    "kind": "RESULT",
+                                    "result": 0,
+                                    "subresult": 0
+                                }
+                            ],
+                            "address": {
+                                "kind": "INPUT",
+                                "input": 1
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    });
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txJson: JSON!) {
+                simulateTransaction(transaction: $txJson) {
+                    effects {
+                        digest
+                        status
+                        transaction {
+                            sender { address }
+                            gasInput { gasBudget }
+                            signatures {
+                                signatureBytes
+                            }
+                        }
+                    }
+                    error
+                }
+            }
+        "#,
+            json!({
+                "txJson": tx_json
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    let simulation_result: SimulationResult =
+        serde_json::from_value(result.pointer("/data/simulateTransaction").unwrap().clone())
+            .unwrap();
+
+    // Verify simulation was successful
+    let effects = simulation_result.effects.unwrap();
+    assert_eq!(effects.status, "SUCCESS");
+    assert!(simulation_result.error.is_none());
+
+    // Verify transaction data matches original
+    let transaction = effects.transaction.unwrap();
+    assert_eq!(
+        transaction.sender.address,
+        validator_cluster.get_address_0().to_string()
+    );
+    assert_eq!(transaction.gas_input.gas_budget, "3000000");
+
+    // For simulation, signatures should be empty since we don't provide them
+    assert_eq!(transaction.signatures.len(), 0);
 
     graphql_cluster.stopped().await;
 }
