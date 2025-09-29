@@ -243,7 +243,8 @@ impl AuthorityPerpetualTables {
         let object_indexing = KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
         // todo can figure way to scramble off 8 bytes in the middle
         let obj_ref_size = 32 + 8 + 32 + 8;
-        let owned_object_transaction_locks_indexing = KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
+        let owned_object_transaction_locks_indexing =
+            KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
 
         let configs = vec![
             (
