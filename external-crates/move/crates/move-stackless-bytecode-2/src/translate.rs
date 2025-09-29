@@ -692,7 +692,6 @@ pub(crate) fn bytecode<K: SourceKind>(
                 IB::UnpackVariantMutRef(_) => DataOp::UnpackVariantMutRef(bx.clone()),
                 _ => unreachable!(),
             };
-
             let rhs = RValue::Data {
                 op,
                 args: vec![R(pop!())],
