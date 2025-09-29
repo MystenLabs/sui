@@ -11,6 +11,7 @@ pub mod testing;
 pub mod translate;
 
 use anyhow::anyhow;
+use indexmap::IndexMap;
 use move_model_2::{
     compiled_model as CM,
     model::{self as M, Model},
