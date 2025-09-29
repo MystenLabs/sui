@@ -8,12 +8,12 @@ use anyhow::Result;
 use clap::Parser;
 use sui_indexer_alt_framework::{
     ingestion::{ClientArgs, IngestionConfig},
-    pipeline::{concurrent::ConcurrentConfig, CommitterConfig},
+    pipeline::concurrent::ConcurrentConfig,
     Indexer, IndexerArgs,
 };
 use url::Url;
 
-use handlers::TransactionDigestHandler;
+use handlers::TxDigests;
 use store::ClickHouseStore;
 
 #[derive(clap::Parser, Debug, Clone)]
@@ -63,11 +63,9 @@ async fn main() -> Result<()> {
     // This processes checkpoints with separate reader and pruner components
     indexer
         .concurrent_pipeline(
-            TransactionDigestHandler,
-            ConcurrentConfig {
-                committer: CommitterConfig::default(),
-                pruner: None, // No pruning for this simple example
-            },
+            TxDigests,
+            // ConcurrentConfig default comes with no pruning.
+            ConcurrentConfig::default(),
         )
         .await?;
 

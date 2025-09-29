@@ -16,43 +16,45 @@ use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::store::ClickHouseStore;
 
-/// Structure representing a transaction record in ClickHouse
-/// This matches the transactions table schema we created
-#[derive(Row, Serialize, Clone, Debug)]
-pub struct Transaction {
-    pub checkpoint_sequence_number: u64,
-    pub transaction_digest: String,
-}
-
-impl FieldCount for Transaction {
-    const FIELD_COUNT: usize = 2;
+/// Structure representing a transaction digest record in ClickHouse
+/// Aligned with sui-indexer-alt's StoredTxDigest structure
+#[derive(Row, Serialize, Clone, Debug, FieldCount)]
+pub struct StoredTxDigest {
+    pub tx_sequence_number: i64,
+    pub tx_digest: Vec<u8>,
 }
 
 /// Handler that processes checkpoint data and extracts transaction digests
+/// Named to align with sui-indexer-alt's TxDigests handler
 #[derive(Clone, Default)]
-pub struct TransactionDigestHandler;
+pub struct TxDigests;
 
-impl Processor for TransactionDigestHandler {
-    const NAME: &'static str = "transaction_digest_handler";
-    type Value = Transaction;
+impl Processor for TxDigests {
+    const NAME: &'static str = "tx_digests";
+    type Value = StoredTxDigest;
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+        let CheckpointData {
+            transactions,
+            checkpoint_summary,
+            ..
+        } = checkpoint.as_ref();
 
-        let mut transactions = Vec::new();
-        for txn in &checkpoint.transactions {
-            transactions.push(Transaction {
-                checkpoint_sequence_number: checkpoint_seq,
-                transaction_digest: txn.transaction.digest().to_string(),
-            });
-        }
+        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
 
-        Ok(transactions)
+        Ok(transactions
+            .iter()
+            .enumerate()
+            .map(|(i, tx)| StoredTxDigest {
+                tx_sequence_number: (first_tx + i) as i64,
+                tx_digest: tx.transaction.digest().inner().to_vec(),
+            })
+            .collect())
     }
 }
 
 #[async_trait]
-impl Handler for TransactionDigestHandler {
+impl Handler for TxDigests {
     type Store = ClickHouseStore;
 
     async fn commit<'a>(
@@ -65,9 +67,9 @@ impl Handler for TransactionDigestHandler {
         }
 
         // Use ClickHouse inserter for efficient bulk inserts
-        let mut inserter = conn.client.inserter("transactions")?;
-        for transaction in values {
-            inserter.write(transaction)?;
+        let mut inserter = conn.client.inserter("tx_digests")?;
+        for tx_digest in values {
+            inserter.write(tx_digest)?;
         }
         inserter.end().await?;
 

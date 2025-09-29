@@ -173,6 +173,8 @@ impl Connection for ClickHouseConnection {
         delay: Duration,
     ) -> Result<Option<PrunerWatermark>> {
         // Follow PostgreSQL pattern: calculate wait_for_ms on database side
+        // We do this so that we can rely on the database to keep a consistent sense of time.
+        // Using own clocks can potentially be subject to some clock skew.
         let delay_ms = delay.as_millis() as i64;
         let mut cursor = self
             .client
