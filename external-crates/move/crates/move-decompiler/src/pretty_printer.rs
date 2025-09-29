@@ -87,9 +87,6 @@ pub fn module<S: SourceKind>(
         let structs = {
             let mut doc = D::nil();
             for s in model_mod.structs() {
-                println!("Struct: {}", s.name());
-                println!("Compiled: {:#?}", s.compiled());
-                println!("Compiled: {:#?}", s.summary());
                 let s_doc = s.to_doc();
                 doc = doc.concat(s_doc).concat(D::line()).concat(D::line());
             }
