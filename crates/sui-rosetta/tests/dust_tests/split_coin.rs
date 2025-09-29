@@ -5,8 +5,7 @@ use anyhow::{anyhow, Result};
 use prost_types::FieldMask;
 
 use crate::test_utils::{
-    execute_transaction_grpc, extract_object_ref_from_changed_objects, get_all_coins,
-    get_coin_value,
+    execute_transaction, extract_object_ref_from_changed_objects, get_all_coins, get_coin_value,
 };
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::{AccountKeystore, Keystore};
@@ -72,7 +71,7 @@ pub async fn split_coins(
         .await?;
 
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let grpc_resp = execute_transaction_grpc(client, &signed_transaction).await?;
+    let grpc_resp = execute_transaction(client, &signed_transaction).await?;
 
     Ok(grpc_resp)
 }
@@ -405,10 +404,7 @@ async fn test_make_change_remainder_div() -> Result<()> {
 
     let requests: Vec<GetObjectRequest> = all_coins
         .iter()
-        .map(|id| {
-            let request = GetObjectRequest::default().with_object_id(id.to_string());
-            request
-        })
+        .map(|id| GetObjectRequest::default().with_object_id(id.to_string()))
         .collect();
 
     let batch_request = BatchGetObjectsRequest::default()

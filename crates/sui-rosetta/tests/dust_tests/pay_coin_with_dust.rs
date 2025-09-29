@@ -4,7 +4,7 @@
 use std::num::NonZeroUsize;
 use std::path::Path;
 
-use crate::test_utils::wait_for_transaction_grpc;
+use crate::test_utils::wait_for_transaction;
 use prost_types::FieldMask;
 use serde_json::json;
 use sui_json_rpc_types::SuiExecutionStatus;
@@ -49,12 +49,7 @@ async fn test_pay_custom_coin_with_multiple_coins() -> anyhow::Result<()> {
     let total_balance = n_coins as i128 * coin_balance as i128;
     let balances_to = vec![(coin_balance, sender); n_coins];
     // Create 10 coins to transfer later at once
-    let mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
-        .await
-        .unwrap();
-
-    // Wait for the transaction to be indexed
-    wait_for_transaction_grpc(&mut client, mint_res.digest())
+    let _mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
         .await
         .unwrap();
 
@@ -103,7 +98,7 @@ async fn test_pay_custom_coin_with_multiple_coins() -> anyhow::Result<()> {
         .unwrap();
 
     // Wait for transaction to be indexed
-    wait_for_transaction_grpc(&mut client, &submit.transaction_identifier.hash.to_string())
+    wait_for_transaction(&mut client, &submit.transaction_identifier.hash.to_string())
         .await
         .unwrap();
 
@@ -305,12 +300,7 @@ async fn test_pay_custom_coin_with_multiple_merge_chunks() -> anyhow::Result<()>
     }
     init_ret.changed_objects.extend(new_changed_objects);
 
-    let mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
-        .await
-        .unwrap();
-
-    // Wait for the transaction to be indexed
-    wait_for_transaction_grpc(&mut client, mint_res.digest())
+    let _mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
         .await
         .unwrap();
 
@@ -359,7 +349,7 @@ async fn test_pay_custom_coin_with_multiple_merge_chunks() -> anyhow::Result<()>
         .unwrap();
 
     // Wait for transaction to be indexed
-    wait_for_transaction_grpc(&mut client, &submit.transaction_identifier.hash.to_string())
+    wait_for_transaction(&mut client, &submit.transaction_identifier.hash.to_string())
         .await
         .unwrap();
 

@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use sui_rpc::client::v2::Client;
+use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::rpc_proto_conversions::ObjectReferenceExt;
@@ -38,6 +39,18 @@ impl TryConstructTransaction for PaySui {
             amounts,
         } = self;
 
+        // PaySui needs enough SUI to cover both payment amount and gas. We select up to 1500
+        // coins (we observed ~1650 coins in a single transaction hits transaction size limits)
+        // and merge them all together, then split off the payment amount.
+        //
+        // This handles cases where the user has sufficient total balance but no single coin or
+        // simple combination covers payment + gas without merging/splitting. For example, with
+        // [40, 35, 25] SUI coins and needing to pay 50 + gas, no discrete set works - we must
+        // merge first to create a coin large enough to split appropriately.
+        //
+        // This approach is optimal because storage refunds from merging dust outweigh smashing
+        // costs by an order of magnitude, and ensures we can handle fragmented balances.
+        // Use the full Coin<SUI> struct tag
         let all_coins = client
             .select_up_to_n_largest_coins(
                 &Address::from(sender),
@@ -55,9 +68,8 @@ impl TryConstructTransaction for PaySui {
         let gas_coins = iter
             .by_ref()
             .take(MAX_GAS_COINS)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Error::from)?;
-        let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>().map_err(Error::from)?;
+            .collect::<Result<Vec<_>, _>>()?;
+        let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>()?;
 
         // Simulate to get budget if necessary and validate we can cover payment + gas amount.
         let pt = pay_sui_pt(recipients, amounts, &extra_gas_coins)?;
@@ -66,11 +78,7 @@ impl TryConstructTransaction for PaySui {
 
         let gas_coins = gas_coin_objs
             .iter()
-            .map(|obj| {
-                obj.object_reference()
-                    .try_to_object_ref()
-                    .map_err(Error::from)
-            })
+            .map(|obj| obj.object_reference().try_to_object_ref())
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(TransactionObjectData {

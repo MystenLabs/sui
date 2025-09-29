@@ -37,9 +37,7 @@ use sui_types::transaction::{
 };
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use test_cluster::TestClusterBuilder;
-use test_utils::{
-    execute_transaction_grpc, find_module_object, find_published_package, get_random_sui,
-};
+use test_utils::{execute_transaction, find_module_object, find_published_package, get_random_sui};
 
 #[tokio::test]
 async fn test_transfer_sui() {
@@ -715,7 +713,7 @@ async fn test_transaction(
         balances.insert(addr, get_balance(&mut client, addr).await);
     }
 
-    let response = execute_transaction_grpc(
+    let response = execute_transaction(
         &mut client.clone(),
         &Transaction::from_data(data.clone(), vec![signature]),
     )

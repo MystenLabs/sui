@@ -27,8 +27,7 @@ use test_cluster::TestClusterBuilder;
 use super::rosetta_client::{start_rosetta_test_server, RosettaError};
 use super::split_coin::{make_change, DEFAULT_GAS_BUDGET};
 use crate::test_utils::{
-    execute_transaction_grpc, get_all_coins, get_coin_value, get_object_ref,
-    wait_for_transaction_grpc,
+    execute_transaction, get_all_coins, get_coin_value, get_object_ref, wait_for_transaction,
 };
 
 static MAX_GAS_BUDGET: Lazy<u64> =
@@ -84,14 +83,7 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
             .sign_secure(&sender, &tx_data, Intent::sui_transaction())
             .await?;
         let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-        let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-        // Check that the transaction was successful
-        let effects = resp.effects();
-        if !effects.status().success() {
-            let error = effects.status().error_opt();
-            panic!("Something went wrong sending coins: {:?}", error);
-        }
+        let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
         gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
             .await?
@@ -138,7 +130,7 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     let sender_change = (-amount_to_send).to_string();
 
     // Split balance to something that will need more than 255 coins to execute:
-    let resps = make_change(
+    let _resps = make_change(
         &mut client.clone(),
         keystore,
         sender,
@@ -147,20 +139,6 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
         split_amount,
     )
     .await?;
-
-    for resp in resps {
-        assert!(
-            resp.effects().status().success(),
-            "Something went wrong splitting coins to change"
-        );
-
-        // Wait for each make_change transaction to be indexed
-        if let Some(digest) = resp.digest_opt() {
-            wait_for_transaction_grpc(&mut client, digest)
-                .await
-                .unwrap();
-        }
-    }
 
     // Now send coin previously been used as gas, in order to only have
     // the change coins.
@@ -186,14 +164,7 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-    // Check that the transaction was successful
-    let effects = resp.effects();
-    assert!(
-        effects.status().success(),
-        "Something went wrong sending coins"
-    );
+    let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
     // Test rosetta can handle using many "small" coins for payment
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
@@ -222,7 +193,7 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
         .unwrap();
 
     // Wait for the transaction to be available in the ledger
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -352,14 +323,7 @@ async fn test_limit_many_small_coins() -> Result<()> {
             .sign_secure(&sender, &tx_data, Intent::sui_transaction())
             .await?;
         let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-        let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-        // Check that the transaction was successful
-        let effects = resp.effects();
-        if !effects.status().success() {
-            let error = effects.status().error_opt();
-            panic!("Something went wrong sending coins: {:?}", error);
-        }
+        let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
         gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
             .await?
@@ -399,14 +363,21 @@ async fn test_limit_many_small_coins() -> Result<()> {
     let gas_for_split_tx = second_coin_obj
         .bcs()
         .deserialize::<sui_types::object::Object>()?;
-    let new_coins = 2048;
-    let split_amount = get_coin_value(&coin_to_split) / new_coins;
-    let amount_to_send = split_amount as i128 * 1200;
+    // To test the 1500 coin limit, we need to create MORE than 1500 actual coins
+    // But not too many or the test will take forever. Target ~2000 coins.
+    // With 150K SUI, we want split_amount that gives us ~2000 coins
+    let target_coins = 2000u64;
+    let split_amount = get_coin_value(&coin_to_split) / (target_coins + 1);
+
+    // Request payment that uses most of the 1500 coin limit but leaves room for gas
+    // We have ~2000 coins total, rosetta will select up to 1500
+    // Send amount for ~1400 coins to leave buffer for gas
+    let amount_to_send = split_amount as i128 * 1400;
     let recipient_change = amount_to_send.to_string();
     let sender_change = (-amount_to_send).to_string();
 
     // Split balance to something that will need more than 255 coins to execute:
-    let resps = make_change(
+    let _resps = make_change(
         &mut client.clone(),
         keystore,
         sender,
@@ -415,20 +386,6 @@ async fn test_limit_many_small_coins() -> Result<()> {
         split_amount,
     )
     .await?;
-
-    for resp in resps {
-        assert!(
-            resp.effects().status().success(),
-            "Something went wrong splitting coins to change"
-        );
-
-        // Wait for each make_change transaction to be indexed
-        if let Some(digest) = resp.digest_opt() {
-            wait_for_transaction_grpc(&mut client, digest)
-                .await
-                .unwrap();
-        }
-    }
 
     // Now send coin previously been used as gas, in order to only have
     // the change coins.
@@ -454,14 +411,7 @@ async fn test_limit_many_small_coins() -> Result<()> {
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-    // Check that the transaction was successful
-    let effects = resp.effects();
-    assert!(
-        effects.status().success(),
-        "Something went wrong sending coins"
-    );
+    let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
     // Test rosetta can handle using many "small" coins for payment
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
@@ -490,7 +440,7 @@ async fn test_limit_many_small_coins() -> Result<()> {
         .unwrap();
 
     // Wait for the transaction to be available in the ledger
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -608,14 +558,7 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
             .sign_secure(&sender, &tx_data, Intent::sui_transaction())
             .await?;
         let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-        let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-        // Check that the transaction was successful
-        let effects = resp.effects();
-        if !effects.status().success() {
-            let error = effects.status().error_opt();
-            panic!("Something went wrong sending coins: {:?}", error);
-        }
+        let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
     }
 
     // Fetch the updated state of the first two coins directly from the ledger
@@ -659,7 +602,7 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
     let sender_change = (-amount_to_send).to_string();
 
     // Split balance to something that will need more than 255 coins to execute:
-    let resps = make_change(
+    let _resps = make_change(
         &mut client.clone(),
         keystore,
         sender,
@@ -668,20 +611,6 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
         split_amount,
     )
     .await?;
-
-    for resp in resps {
-        assert!(
-            resp.effects().status().success(),
-            "Something went wrong splitting coins to change"
-        );
-
-        // Wait for each make_change transaction to be indexed
-        if let Some(digest) = resp.digest_opt() {
-            wait_for_transaction_grpc(&mut client, digest)
-                .await
-                .unwrap();
-        }
-    }
 
     // Now send coin previously been used as gas, in order to only have
     // the change coins.
@@ -707,35 +636,11 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-    // Check that the transaction was successful
-    let effects = resp.effects();
-    assert!(
-        effects.status().success(),
-        "Something went wrong sending coins"
-    );
+    let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
     // Test rosetta can handle using many "small" coins for payment
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
-
-    let debug_coins = get_all_coins(&mut client.clone(), sender).await?;
-    println!("=== DEBUG: Sender coins before rosetta call ===");
-    println!("Sender address: {}", sender);
-    println!("Number of coins: {}", debug_coins.len());
-    println!(
-        "Expected split_amount: {}, new_coins: {}",
-        split_amount, new_coins
-    );
-    println!("Budget: {}", budget);
-    for (i, coin) in debug_coins.iter().enumerate() {
-        println!("  Coin {}: {} MIST", i, get_coin_value(coin));
-    }
-    let total_balance: u64 = debug_coins.iter().map(|c| get_coin_value(c)).sum();
-    println!("Total balance: {} MIST", total_balance);
-    println!("Amount to send: {} MIST", amount_to_send);
-    println!("===============================================");
 
     let ops = serde_json::from_value(json!(
         [{
@@ -766,7 +671,7 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
         .unwrap();
 
     // Wait for the transaction to be available in the ledger
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -893,14 +798,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
             .sign_secure(&sender, &tx_data, Intent::sui_transaction())
             .await?;
         let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-        let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-        // Check that the transaction was successful
-        let effects = resp.effects();
-        if !effects.status().success() {
-            let error = effects.status().error_opt();
-            panic!("Something went wrong sending coins: {:?}", error);
-        }
+        let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
         gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
             .await?
@@ -938,7 +836,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
+    let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
     // Check that the transaction was successful
     let effects = resp.effects();
     if !effects.status().success() {
@@ -983,9 +881,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
 
         // Wait for each make_change transaction to be indexed
         if let Some(digest) = resp.digest_opt() {
-            wait_for_transaction_grpc(&mut client, digest)
-                .await
-                .unwrap();
+            wait_for_transaction(&mut client, digest).await.unwrap();
         }
     }
 
@@ -1013,14 +909,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-    // Check that the transaction was successful
-    let effects = resp.effects();
-    assert!(
-        effects.status().success(),
-        "Something went wrong sending coins"
-    );
+    let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
     let effects_bcs = resp.effects().bcs();
     let effects: sui_types::effects::TransactionEffects = effects_bcs.deserialize().unwrap();
     let tx_cost_summary = effects.gas_cost_summary().net_gas_usage();
@@ -1050,16 +939,12 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
 
     let resps = rosetta_client.rosetta_flow(&ops, keystore, None).await;
 
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&resps.preprocess.as_ref().unwrap().as_ref().unwrap())?
-    );
     let Some(Err(err)) = resps.metadata else {
         panic!("Expected metadata to exists and error");
     };
 
     let details = Some(
-        json!({ "error": "ExecutionError: Kind: InsufficientCoinBalance, Description: No description" }),
+        json!({ "error": "ExecutionError: Kind: INSUFFICIENT_COIN_BALANCE, Description: No description" }),
     );
     assert_eq!(
         err,
@@ -1109,14 +994,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
             .sign_secure(&sender, &tx_data, Intent::sui_transaction())
             .await?;
         let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-        let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-        // Check that the transaction was successful
-        let effects = resp.effects();
-        if !effects.status().success() {
-            let error = effects.status().error_opt();
-            panic!("Something went wrong sending coins: {:?}", error);
-        }
+        let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
         gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
             .await?
@@ -1154,7 +1032,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
+    let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
     // Check that the transaction was successful
     let effects = resp.effects();
     if !effects.status().success() {
@@ -1181,7 +1059,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
     let initial_balance = get_coin_value(&coin_to_split);
 
     // Split balance to something that will need more than 255 coins to execute:
-    let resps = make_change(
+    let _resps = make_change(
         &mut client.clone(),
         keystore,
         sender,
@@ -1190,20 +1068,6 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
         split_amount,
     )
     .await?;
-
-    for resp in resps {
-        assert!(
-            resp.effects().status().success(),
-            "Something went wrong splitting coins to change"
-        );
-
-        // Wait for each make_change transaction to be indexed
-        if let Some(digest) = resp.digest_opt() {
-            wait_for_transaction_grpc(&mut client, digest)
-                .await
-                .unwrap();
-        }
-    }
 
     // Now send coin previously been used as gas, in order to only have
     // the change coins.
@@ -1229,14 +1093,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-    // Check that the transaction was successful
-    let effects = resp.effects();
-    assert!(
-        effects.status().success(),
-        "Something went wrong sending coins"
-    );
+    let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
     let effects_bcs = resp.effects().bcs();
     let effects: sui_types::effects::TransactionEffects = effects_bcs.deserialize().unwrap();
     let tx_cost_summary = effects.gas_cost_summary().net_gas_usage();
@@ -1275,7 +1132,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
         .await;
 
     let details = Some(json!({
-        "error": "ExecutionError: Kind: InsufficientCoinBalance, Description: No description"
+        "error": "ExecutionError: Kind: INSUFFICIENT_COIN_BALANCE, Description: No description"
     }));
     let Some(Err(e)) = resps.metadata else {
         panic!("Expected metadata to exist and error")
@@ -1328,14 +1185,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
             .sign_secure(&sender, &tx_data, Intent::sui_transaction())
             .await?;
         let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-        let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-        // Check that the transaction was successful
-        let effects = resp.effects();
-        if !effects.status().success() {
-            let error = effects.status().error_opt();
-            panic!("Something went wrong sending coins: {:?}", error);
-        }
+        let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
         gas_for_transfers = get_object_ref(&mut client.clone(), all_coins_sender[0].id())
             .await?
@@ -1373,7 +1223,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
+    let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
     // Check that the transaction was successful
     let effects = resp.effects();
     if !effects.status().success() {
@@ -1400,7 +1250,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
     let initial_balance = get_coin_value(&coin_to_split);
 
     // Split balance to something that will need more than 255 coins to execute:
-    let resps = make_change(
+    let _resps = make_change(
         &mut client.clone(),
         keystore,
         sender,
@@ -1409,20 +1259,6 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
         split_amount,
     )
     .await?;
-
-    for resp in resps {
-        assert!(
-            resp.effects().status().success(),
-            "Something went wrong splitting coins to change"
-        );
-
-        // Wait for each make_change transaction to be indexed
-        if let Some(digest) = resp.digest_opt() {
-            wait_for_transaction_grpc(&mut client, digest)
-                .await
-                .unwrap();
-        }
-    }
 
     // Now send coin previously been used as gas, in order to only have
     // the change coins.
@@ -1448,14 +1284,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
-
-    // Check that the transaction was successful
-    let effects = resp.effects();
-    assert!(
-        effects.status().success(),
-        "Something went wrong sending coins"
-    );
+    let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
     let effects_bcs = resp.effects().bcs();
     let effects: sui_types::effects::TransactionEffects = effects_bcs.deserialize().unwrap();
     let tx_cost_summary = effects.gas_cost_summary().net_gas_usage();
@@ -1502,7 +1331,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
         .await;
 
     let Some(Err(err)) = rosetta_resp.metadata else {
-        panic!("Expected submit to error with dry-run: InsufficientGas");
+        panic!("Expected submit to error with dry-run: INSUFFICIENT_GAS");
     };
 
     assert_eq!(
@@ -1513,7 +1342,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
             description: None,
             retriable: false,
             details: Some(
-                json!({"error": "ExecutionError: Kind: InsufficientGas, Description: No description"})
+                json!({"error": "ExecutionError: Kind: INSUFFICIENT_GAS, Description: No description"})
             )
         }
     );

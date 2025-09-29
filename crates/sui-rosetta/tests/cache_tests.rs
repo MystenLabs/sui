@@ -19,7 +19,7 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
 };
 use test_cluster::TestClusterBuilder;
-use test_utils::{execute_transaction_grpc, get_random_sui};
+use test_utils::{execute_transaction, get_random_sui};
 
 #[tokio::test]
 async fn test_cache() {
@@ -70,7 +70,7 @@ async fn test_cache() {
         .await
         .unwrap();
     let signed_tx = Transaction::from_data(data.clone(), vec![signature]);
-    let response = execute_transaction_grpc(&mut client, &signed_tx)
+    let response = execute_transaction(&mut client, &signed_tx)
         .await
         .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();

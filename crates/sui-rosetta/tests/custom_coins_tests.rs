@@ -26,7 +26,7 @@ use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::SUI;
 use test_cluster::TestClusterBuilder;
 use test_coin_utils::{init_package, mint, TEST_COIN_DECIMALS};
-use test_utils::wait_for_transaction_grpc;
+use test_utils::wait_for_transaction;
 
 use crate::rosetta_client::{start_rosetta_test_server, RosettaEndpoint};
 
@@ -75,7 +75,7 @@ async fn test_mint() {
         .find(|obj| {
             obj.owner_opt()
                 .and_then(|owner| owner.address_opt())
-                .is_some_and(|addr| addr == &address1.to_string())
+                .is_some_and(|addr| addr == address1.to_string())
         })
         .unwrap();
     let coin2 = coins
@@ -83,7 +83,7 @@ async fn test_mint() {
         .find(|obj| {
             obj.owner_opt()
                 .and_then(|owner| owner.address_opt())
-                .is_some_and(|addr| addr == &address2.to_string())
+                .is_some_and(|addr| addr == address2.to_string())
         })
         .unwrap();
     assert!(coin1.object_type().contains("::test_coin::TEST_COIN"));
@@ -264,13 +264,8 @@ async fn test_custom_coin_transfer() {
     .unwrap();
 
     let flow_response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
-
-    // Debug print all responses
-
     let response = flow_response.submit.unwrap().unwrap();
-
-    // Wait for transaction to be indexed
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -364,11 +359,6 @@ async fn test_custom_coin_without_symbol() {
 
     let balances_to = vec![(COIN1_BALANCE, sender)];
     let mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
-        .await
-        .unwrap();
-
-    // Wait for the transaction to be indexed
-    wait_for_transaction_grpc(&mut client, mint_res.digest())
         .await
         .unwrap();
 
@@ -491,7 +481,7 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
         .find(|obj| {
             obj.owner_opt()
                 .and_then(|owner| owner.address_opt())
-                .is_some_and(|addr| addr == &address1.to_string())
+                .is_some_and(|addr| addr == address1.to_string())
         })
         .unwrap();
     let coin2 = coins
@@ -499,7 +489,7 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
         .find(|obj| {
             obj.owner_opt()
                 .and_then(|owner| owner.address_opt())
-                .is_some_and(|addr| addr == &address2.to_string())
+                .is_some_and(|addr| addr == address2.to_string())
         })
         .unwrap();
     assert!(coin1.object_type().contains("::test_coin::TEST_COIN"));

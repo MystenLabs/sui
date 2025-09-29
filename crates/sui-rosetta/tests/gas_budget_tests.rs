@@ -267,13 +267,13 @@ async fn test_pay_with_gas_budget_fail() {
                 "Expected error code 11 for dry run error"
             );
             assert_eq!(rosetta_error.message, "Transaction dry run error");
-            assert_eq!(rosetta_error.retriable, false);
+            assert!(!rosetta_error.retriable);
 
             // Check the details field contains the InsufficientGas error
             if let Some(details) = &rosetta_error.details {
                 let details_str = serde_json::to_string(details).unwrap();
                 assert!(
-                    details_str.contains("InsufficientGas"),
+                    details_str.contains("INSUFFICIENT_GAS"),
                     "Expected InsufficientGas in error details, got: {}",
                     details_str
                 );

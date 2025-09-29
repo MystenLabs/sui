@@ -113,11 +113,7 @@ impl TryConstructTransaction for WithdrawStake {
         let total_sui_balance = gas_coin_objs.iter().map(|c| c.balance()).sum::<u64>() as i128;
         let gas_coins = gas_coin_objs
             .iter()
-            .map(|obj| {
-                obj.object_reference()
-                    .try_to_object_ref()
-                    .map_err(Error::from)
-            })
+            .map(|obj| obj.object_reference().try_to_object_ref())
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(TransactionObjectData {

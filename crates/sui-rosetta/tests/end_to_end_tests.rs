@@ -36,8 +36,7 @@ use sui_types::utils::to_sender_signed_transaction;
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use test_cluster::TestClusterBuilder;
 use test_utils::{
-    execute_transaction_grpc, get_all_coins, get_object_ref, get_random_sui,
-    wait_for_transaction_grpc,
+    execute_transaction, get_all_coins, get_object_ref, get_random_sui, wait_for_transaction,
 };
 
 use crate::rosetta_client::RosettaEndpoint;
@@ -154,7 +153,7 @@ async fn test_get_staked_sui() -> Result<()> {
         gas_price,
     );
     let tx = to_sender_signed_transaction(delegation_tx, keystore.export(&address)?);
-    execute_transaction_grpc(&mut client.clone(), &tx).await?;
+    execute_transaction(&mut client.clone(), &tx).await?;
 
     let response = rosetta_client
         .get_balance(
@@ -214,7 +213,7 @@ async fn test_stake() {
         .unwrap();
 
     // Wait for transaction to be indexed
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -329,7 +328,7 @@ async fn test_stake_all() {
         .unwrap();
 
     // Wait for transaction to be indexed
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -434,7 +433,7 @@ async fn test_withdraw_stake() {
         .unwrap();
 
     // Wait for transaction to be indexed
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -507,7 +506,7 @@ async fn test_withdraw_stake() {
         .unwrap();
 
     // Wait for transaction to be indexed
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -605,7 +604,7 @@ async fn test_pay_sui() {
         .unwrap();
 
     // Wait for transaction to be indexed
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -695,7 +694,7 @@ async fn test_pay_sui_multiple_times() {
             .unwrap();
 
         // Wait for transaction to be indexed
-        wait_for_transaction_grpc(
+        wait_for_transaction(
             &mut client,
             &response.transaction_identifier.hash.to_string(),
         )
@@ -788,7 +787,7 @@ async fn test_transfer_single_gas_coin() {
         .unwrap();
 
     let signed_transaction = Transaction::from_data(data.clone(), vec![signature]);
-    let response = execute_transaction_grpc(&mut client.clone(), &signed_transaction)
+    let response = execute_transaction(&mut client.clone(), &signed_transaction)
         .await
         .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();

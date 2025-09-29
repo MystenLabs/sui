@@ -21,9 +21,7 @@ use sui_types::{
 };
 use test_cluster::TestClusterBuilder;
 
-use crate::test_utils::{
-    execute_transaction_grpc, get_all_coins, get_object_ref, wait_for_transaction_grpc,
-};
+use crate::test_utils::{execute_transaction, get_all_coins, get_object_ref, wait_for_transaction};
 use crate::{
     rosetta_client::start_rosetta_test_server,
     split_coin::{make_change, DEFAULT_GAS_BUDGET},
@@ -96,7 +94,7 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
             .sign_secure(&sender, &tx_data, Intent::sui_transaction())
             .await?;
         let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-        let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
+        let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
         // Check that the transaction was successful
         let effects = resp.effects();
@@ -182,7 +180,7 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
+    let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
     // Check that the transaction was successful
     let effects = resp.effects();
@@ -231,7 +229,7 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
         .unwrap();
 
     // Wait for transaction to be indexed
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )
@@ -370,7 +368,7 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
             .sign_secure(&sender, &tx_data, Intent::sui_transaction())
             .await?;
         let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-        let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
+        let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
         // Check that the transaction was successful
         let effects = resp.effects();
@@ -437,7 +435,7 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
-    let resp = execute_transaction_grpc(&mut client.clone(), &signed_transaction).await?;
+    let resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
     // Check that the transaction was successful
     let effects = resp.effects();
@@ -486,7 +484,7 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
         .unwrap();
 
     // Wait for transaction to be indexed
-    wait_for_transaction_grpc(
+    wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
     )

@@ -4,8 +4,10 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 use sui_rpc::client::v2::Client;
+use sui_sdk_types::{Address, TypeTag};
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::rpc_proto_conversions::ObjectReferenceExt;
@@ -41,15 +43,13 @@ impl TryConstructTransaction for PayCoin {
         } = self;
 
         let amount = amounts.iter().sum::<u64>();
+        let coin_type = TypeTag::from_str(&currency.metadata.coin_type)
+            .map_err(|e| Error::DataError(format!("Invalid coin type: {}", e)))?;
         let coin_objs: Vec<ObjectRef> = client
             .select_coins(&Address::from(sender), &coin_type, amount, &[])
             .await?
             .iter()
-            .map(|obj| {
-                obj.object_reference()
-                    .try_to_object_ref()
-                    .map_err(Error::from)
-            })
+            .map(|obj| obj.object_reference().try_to_object_ref())
             .collect::<Result<Vec<_>, _>>()?;
 
         // If budget is provided, we still need to select gas coins
@@ -60,11 +60,7 @@ impl TryConstructTransaction for PayCoin {
         let total_sui_balance = gas_coin_objs.iter().map(|c| c.balance()).sum::<u64>() as i128;
         let gas_coins = gas_coin_objs
             .iter()
-            .map(|obj| {
-                obj.object_reference()
-                    .try_to_object_ref()
-                    .map_err(Error::from)
-            })
+            .map(|obj| obj.object_reference().try_to_object_ref())
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(TransactionObjectData {

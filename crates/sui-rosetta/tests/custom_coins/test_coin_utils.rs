@@ -6,15 +6,11 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Result};
 
-use prost_types::FieldMask;
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_move_build::BuildConfig;
 use sui_rpc::client::v2::Client as GrpcClient;
-use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2::{
-    Bcs, ExecuteTransactionRequest, ExecutedTransaction, UserSignature,
-};
+use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::COIN_MODULE_NAME;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -73,23 +69,15 @@ pub async fn init_package(
         .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
         .await?;
 
-    let _signed_tx = Transaction::from_data(tx_data.clone(), vec![sig.clone()]);
-    let bcs = Bcs::default()
-        .with_name("UserSignature".to_string())
-        .with_value(bcs::to_bytes(&sig)?);
-    let user_signature = UserSignature::default().with_bcs(bcs);
-    let request = ExecuteTransactionRequest::default()
-        .with_transaction(tx_data)
-        .with_signatures(vec![user_signature])
-        .with_read_mask(FieldMask::from_paths(["*"]));
+    let signed_tx = Transaction::from_data(tx_data, vec![sig]);
+    let response = crate::test_utils::execute_transaction(client, &signed_tx).await?;
 
-    let response = client
-        .execution_client()
-        .execute_transaction(request)
-        .await?
-        .into_inner();
-
-    let effects = response.transaction().effects();
+    let effects = response.effects();
+    assert!(
+        effects.status().success(),
+        "Transaction failed: {:?}",
+        effects.status().error()
+    );
 
     // Extract all object IDs that were changed by the init transaction
     let mut changed_object_ids = Vec::new();
@@ -175,26 +163,14 @@ pub async fn mint(
         .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
         .await?;
 
-    let _signed_tx = Transaction::from_data(tx_data.clone(), vec![sig.clone()]);
-    let bcs = Bcs::default()
-        .with_name("UserSignature".to_string())
-        .with_value(bcs::to_bytes(&sig)?);
-    let user_signature = UserSignature::default().with_bcs(bcs);
-    let request = ExecuteTransactionRequest::default()
-        .with_transaction(tx_data)
-        .with_signatures(vec![user_signature])
-        .with_read_mask(FieldMask::from_paths(["*"]));
+    let signed_tx = Transaction::from_data(tx_data, vec![sig]);
+    let executed_tx = crate::test_utils::execute_transaction(client, &signed_tx).await?;
 
-    let response = client
-        .execution_client()
-        .execute_transaction(request)
-        .await?
-        .into_inner();
+    assert!(
+        executed_tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        executed_tx.effects().status().error()
+    );
 
-    let submitted_tx = response
-        .transaction
-        .ok_or_else(|| anyhow!("No transaction in response"))?;
-
-    // Return the submitted transaction directly
-    Ok(submitted_tx)
+    Ok(executed_tx)
 }

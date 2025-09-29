@@ -173,7 +173,7 @@ pub async fn get_object_ref(client: &mut GrpcClient, object_id: ObjectID) -> Res
 
 /// Execute a transaction using gRPC with WaitForLocalExecution behavior
 /// This replaces execute_transaction_block calls with native gRPC implementation
-pub async fn execute_transaction_grpc(
+pub async fn execute_transaction(
     client: &mut GrpcClient,
     signed_transaction: &Transaction,
 ) -> Result<ExecutedTransaction> {
@@ -211,7 +211,7 @@ pub async fn execute_transaction_grpc(
 }
 
 /// Wait for a transaction to be available in the ledger AND indexed (equivalent to WaitForLocalExecution)
-pub async fn wait_for_transaction_grpc(client: &mut GrpcClient, digest: &str) -> Result<()> {
+pub async fn wait_for_transaction(client: &mut GrpcClient, digest: &str) -> Result<()> {
     const WAIT_FOR_LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
     const WAIT_FOR_LOCAL_EXECUTION_DELAY: Duration = Duration::from_millis(200);
     const WAIT_FOR_LOCAL_EXECUTION_INTERVAL: Duration = Duration::from_millis(500);

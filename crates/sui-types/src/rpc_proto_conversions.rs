@@ -1885,7 +1885,11 @@ impl Merge<&crate::transaction::TransactionData> for Transaction {
 impl From<&crate::transaction::GasData> for GasPayment {
     fn from(value: &crate::transaction::GasData) -> Self {
         let mut message = Self::default();
-        message.objects = value.payment.into_iter().map(|obj_ref| obj_ref.to_proto()).collect();
+        message.objects = value
+            .payment
+            .into_iter()
+            .map(|obj_ref| obj_ref.to_proto())
+            .collect();
         message.owner = Some(value.owner.to_string());
         message.price = Some(value.price);
         message.budget = Some(value.budget);

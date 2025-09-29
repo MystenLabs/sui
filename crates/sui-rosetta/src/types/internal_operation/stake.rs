@@ -4,6 +4,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sui_rpc::client::v2::Client;
+use sui_sdk_types::{Address, StructTag};
 
 use sui_types::base_types::ObjectRef;
 use sui_types::governance::ADD_STAKE_FUN_NAME;
@@ -43,6 +44,18 @@ impl TryConstructTransaction for Stake {
             amount,
         } = self;
 
+        // Staking needs enough SUI to cover both the stake amount and gas. We select up to 1500
+        // coins (we observed ~1650 coins in a single transaction hits transaction size limits)
+        // and merge them all together, then split off the stake amount.
+        //
+        // This handles cases where the user has sufficient total balance but no single coin or
+        // simple combination covers stake + gas without merging/splitting. For example, with
+        // [8, 6, 4] SUI coins and wanting to stake 10 + gas, no discrete set works - we must
+        // merge first to create a coin large enough to split appropriately.
+        //
+        // This approach is optimal because storage refunds from merging dust outweigh smashing
+        // costs by an order of magnitude, and ensures we can handle fragmented balances.
+        // Use the full Coin<SUI> struct tag
         let all_coins = client
             .select_up_to_n_largest_coins(
                 &Address::from(sender),
@@ -60,9 +73,8 @@ impl TryConstructTransaction for Stake {
         let gas_coins = iter
             .by_ref()
             .take(MAX_GAS_COINS)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Error::from)?;
-        let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>().map_err(Error::from)?;
+            .collect::<Result<Vec<_>, _>>()?;
+        let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>()?;
 
         // Always simulate to validate the transaction
         // For stake_all (amount is None), simulate with minimal amount
