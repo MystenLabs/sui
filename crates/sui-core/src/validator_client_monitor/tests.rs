@@ -414,7 +414,7 @@ mod client_stats_tests {
         let config = ValidatorClientMonitorConfig {
             failure_cooldown: Duration::from_millis(100),
             max_consecutive_failures: 2,
-            reliability_weight: 1.0,
+            reliability_weight: 0.5,
             ..Default::default()
         };
         let mut stats = ClientObservedStats::new(config);
@@ -493,8 +493,8 @@ mod client_stats_tests {
 
             let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
             let validator2_latency = *latency.get(&validator2).unwrap();
-            // Reliability should be 0.66, so latency = 0.1 / 0.66 = 0.15
-            assert!((validator2_latency - 0.15).abs() < 0.001);
+            // Reliability should be 0.66, so latency = 0.1 + (1.0 - 0.66) * 0.5 * 10.0 = 0.1 + 0.34 * 0.5 * 10.0 = 0.1 + 1.7 = 1.8
+            assert!((validator2_latency - 1.766).abs() < 0.001);
         }
 
         println!("Case 5: Excluded validator should return MAX_LATENCY");
@@ -531,10 +531,10 @@ mod client_stats_tests {
         let validator = validators[0];
         let metrics = create_test_metrics();
 
-        println!("Case 1: Test with reliability_weight = 0.5");
+        println!("Case 1: Test with reliability_weight = 1.0");
         {
             let config_half_weight = ValidatorClientMonitorConfig {
-                reliability_weight: 0.5,
+                reliability_weight: 1.0,
                 ..Default::default()
             };
             let mut stats = ClientObservedStats::new(config_half_weight);
@@ -567,11 +567,8 @@ mod client_stats_tests {
 
             // Get latencies for both configurations
             let latencies = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
-            // max penalty = 1.0 / 0.66 = 1.5
-            // reliability_weight=0.5: penalty = 1.0 + 0.5 * (1.5 - 1.0) = 1.0 + 0.5 * 0.5 = 1.25
-            // latency = 0.1 * 1.25 = 0.125
             let latency = *latencies.get(&validator).unwrap();
-            assert!((latency - 0.125).abs() < 0.001);
+            assert!((latency - 3.433).abs() < 0.001);
         }
 
         println!("Case 2: Test with reliability_weight = 0.0, should have no penalty");
@@ -607,8 +604,6 @@ mod client_stats_tests {
                 validators.iter().map(|v| (*v, 1)).collect(),
             );
 
-            // no penalty = 1.0
-            // latency = 0.1 * 1.0 = 0.1
             let latencies = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
             let latency = *latencies.get(&validator).unwrap();
             assert_eq!(latency, 0.1);

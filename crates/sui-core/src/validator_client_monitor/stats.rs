@@ -22,7 +22,7 @@ use tracing::debug;
 const RELIABILITY_MOVING_WINDOW_SIZE: usize = 40;
 /// Size of the moving window for latency measurements
 const LATENCY_MOVING_WINDOW_SIZE: usize = 40;
-/// This is the maximum latency that is assigned to a validator that is completely unreliable (reliability = 0.0)
+/// Maximum adjusted latency from completely unreachable (reliability = 0.0) or very slow validators.
 const MAX_LATENCY: f64 = 10.0;
 
 /// Complete client-observed statistics for validator interactions.
@@ -145,7 +145,7 @@ impl ClientObservedStats {
             .collect()
     }
 
-    /// Calculate latency-based latency for a single validator for the provided tx type.
+    /// Calculate adjusted latency for a single validator for the provided tx type.
     ///
     /// Returns the average latency for relevant operations (Consensus and FastPath only)
     /// with reliability penalty applied. Lower values are better.
@@ -159,12 +159,12 @@ impl ClientObservedStats {
         let mut final_latency = MAX_LATENCY;
 
         let Some(stats) = self.validator_stats.get(validator) else {
-            return final_latency;
+            return MAX_LATENCY;
         };
 
         if let Some(exclusion_time) = stats.exclusion_time {
             if exclusion_time.elapsed() < self.config.failure_cooldown {
-                return final_latency;
+                return MAX_LATENCY;
             }
         }
 
@@ -179,19 +179,13 @@ impl ClientObservedStats {
             let reliability = stats.reliability.get();
             let reliability_weight = self.config.reliability_weight;
 
-            // Apply reliability penalty based on the configured weight
-            // reliability_weight = 0.0: no reliability consideration, use base latency
-            // reliability_weight = 1.0: full reliability penalty, divide by reliability
-            // reliability_weight in (0.0, 1.0): interpolate between base latency and reliability-penalized latency
-            let penalty_factor = if reliability > 0.0 && reliability_weight > 0.0 {
-                // Calculate the penalty factor: 1.0 (no penalty) to 1.0/reliability (full penalty)
-                let max_penalty = 1.0 / reliability;
-                1.0 + reliability_weight * (max_penalty - 1.0)
-            } else {
-                1.0
-            };
+            println!(
+                "base_latency: {}, reliability: {}, reliability_weight: {}",
+                base_latency, reliability, reliability_weight
+            );
 
-            final_latency = (base_latency * penalty_factor).min(final_latency);
+            final_latency = (base_latency + (1.0 - reliability) * reliability_weight * MAX_LATENCY)
+                .min(MAX_LATENCY);
         }
 
         final_latency

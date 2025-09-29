@@ -131,7 +131,7 @@ pub struct ValidatorClientMonitorConfig {
     ///
     /// Controls importance of reliability when calculating the validator's latency for transaction submission
     /// selection reasons. The higher the weight, the more importance is given to the reliability.
-    /// Value shoudl be between 0.0 and 1.0.
+    /// Default to 0.5. Value should be positive.
     #[serde(default = "default_reliability_weight")]
     pub reliability_weight: f64,
 }
@@ -166,5 +166,5 @@ fn default_max_consecutive_failures() -> u32 {
 }
 
 fn default_reliability_weight() -> f64 {
-    1.0
+    0.5
 }
