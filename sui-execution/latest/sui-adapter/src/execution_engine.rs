@@ -142,7 +142,7 @@ mod checked {
                 transaction_kind,
                 TransactionKind::ProgrammableTransaction(_)
             ) {
-            Some(transaction_signer)
+            Some(gas_data.owner)
         } else {
             None
         };

@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::identifier::Identifier;
+use shared_crypto::intent::Intent;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
@@ -20,7 +23,10 @@ use sui_types::{
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ChildObjectResolver,
-    transaction::{Argument, Command, TransactionData, TransactionKind},
+    transaction::{
+        Argument, Command, GasData, Transaction, TransactionData, TransactionDataV1,
+        TransactionExpiration, TransactionKind,
+    },
     SUI_FRAMEWORK_PACKAGE_ID,
 };
 use test_cluster::TestClusterBuilder;
@@ -55,7 +61,6 @@ fn create_transaction_with_expiration(
     chain_id: ChainIdentifier,
     nonce: u32,
 ) -> TransactionData {
-    use sui_types::transaction::{GasData, TransactionDataV1, TransactionExpiration};
     let mut builder = ProgrammableTransactionBuilder::new();
     let amount = builder.pure(1000u64).unwrap();
     let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
@@ -112,6 +117,17 @@ async fn test_deposits() {
 
     // ensure that no conservation failures are detected during reconfig.
     test_cluster.trigger_reconfiguration().await;
+}
+
+fn get_balance(child_object_resolver: &dyn ChildObjectResolver, owner: SuiAddress) -> u64 {
+    let sui_coin_type = Balance::type_tag(GAS::type_tag());
+    let accumulator_value =
+        AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
+            .expect("read cannot fail")
+            .expect("accumulator should exist");
+    match accumulator_value {
+        AccumulatorValue::U128(u128_val) => u128_val.value as u64,
+    }
 }
 
 fn verify_accumulator_exists(
@@ -430,7 +446,13 @@ async fn test_address_balance_gas() {
 
     let chain_id = test_cluster.get_chain_identifier();
 
-    let tx = create_storage_test_transaction_address_balance(sender, gas_package_id, rgp, chain_id);
+    let tx = create_storage_test_transaction_address_balance(
+        sender,
+        gas_package_id,
+        rgp,
+        chain_id,
+        None,
+    );
 
     let signed_tx = test_cluster.sign_transaction(&tx).await;
     let (effects, _) = test_cluster
@@ -459,6 +481,179 @@ async fn test_address_balance_gas() {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         verify_accumulator_exists(child_object_resolver, sender, expected_balance);
+    });
+
+    test_cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_sponsored_address_balance_storage_rebates() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_accumulators_for_testing();
+        cfg.enable_address_balance_gas_payments_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+
+    let addresses = test_cluster.wallet.get_addresses();
+    let sender = addresses[0];
+    let sponsor = addresses[1];
+
+    let chain_id = test_cluster.get_chain_identifier();
+    let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
+    let rgp = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+
+    let sender_gas = test_cluster
+        .wallet
+        .gas_objects(sender)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap()
+        .1
+        .object_ref();
+    let deposit_tx_sender = make_send_to_account_tx(10_000_000, sender, sender, sender_gas, rgp);
+    test_cluster
+        .sign_and_execute_transaction(&deposit_tx_sender)
+        .await;
+
+    let sponsor_gas = test_cluster
+        .wallet
+        .gas_objects(sponsor)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap()
+        .1
+        .object_ref();
+    let deposit_tx_sponsor =
+        make_send_to_account_tx(10_000_000, sponsor, sponsor, sponsor_gas, rgp);
+    test_cluster
+        .sign_and_execute_transaction(&deposit_tx_sponsor)
+        .await;
+
+    let create_txn = create_storage_test_transaction_address_balance(
+        sender,
+        gas_test_package_id,
+        rgp,
+        chain_id,
+        Some(sponsor),
+    );
+
+    let sender_sig = test_cluster
+        .wallet
+        .config
+        .keystore
+        .sign_secure(&sender, &create_txn, Intent::sui_transaction())
+        .await
+        .unwrap();
+    let sponsor_sig = test_cluster
+        .wallet
+        .config
+        .keystore
+        .sign_secure(&sponsor, &create_txn, Intent::sui_transaction())
+        .await
+        .unwrap();
+
+    let signed_create_txn = Transaction::from_data(create_txn, vec![sender_sig, sponsor_sig]);
+    let create_resp = test_cluster.execute_transaction(signed_create_txn).await;
+    let create_effects = create_resp.effects.as_ref().unwrap();
+
+    assert!(
+        create_effects.status().is_ok(),
+        "Sponsored storage transaction should succeed, but got error: {:?}",
+        create_effects.status()
+    );
+
+    let gas_summary = create_effects.gas_cost_summary();
+    let gas_used = calculate_total_gas_cost(gas_summary);
+
+    assert!(
+        gas_used > 0,
+        "Gas should be charged for sponsored transaction, got: {}",
+        gas_used
+    );
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+
+        let sponsor_actual = get_balance(child_object_resolver, sponsor);
+        let sender_actual = get_balance(child_object_resolver, sender);
+
+        assert!(
+            sponsor_actual < 10_000_000,
+            "Sponsor balance should have decreased from 10_000_000, got: {}",
+            sponsor_actual
+        );
+        assert_eq!(
+            sender_actual, 10_000_000,
+            "Sender balance should remain at 10_000_000, got: {}",
+            sender_actual
+        );
+    });
+
+    let created_objects: Vec<_> = create_effects.created().iter().collect();
+    assert_eq!(
+        created_objects.len(),
+        1,
+        "Should have created exactly one object"
+    );
+    let created_obj = created_objects[0].reference.to_object_ref();
+    let delete_txn = create_delete_transaction_address_balance(
+        sender,
+        gas_test_package_id,
+        created_obj,
+        rgp,
+        chain_id,
+        Some(sponsor),
+    );
+
+    let sender_delete_sig = test_cluster
+        .wallet
+        .config
+        .keystore
+        .sign_secure(&sender, &delete_txn, Intent::sui_transaction())
+        .await
+        .unwrap();
+    let sponsor_delete_sig = test_cluster
+        .wallet
+        .config
+        .keystore
+        .sign_secure(&sponsor, &delete_txn, Intent::sui_transaction())
+        .await
+        .unwrap();
+
+    let signed_delete_txn =
+        Transaction::from_data(delete_txn, vec![sender_delete_sig, sponsor_delete_sig]);
+    let delete_resp = test_cluster.execute_transaction(signed_delete_txn).await;
+    let delete_effects = delete_resp.effects.as_ref().unwrap();
+
+    assert!(
+        delete_effects.status().is_ok(),
+        "Sponsored delete transaction should succeed, but got error: {:?}",
+        delete_effects.status()
+    );
+
+    let delete_gas_summary = delete_effects.gas_cost_summary();
+    let _delete_gas_used = calculate_total_gas_cost(delete_gas_summary);
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+
+        let sponsor_final = get_balance(child_object_resolver, sponsor);
+        let sender_final = get_balance(child_object_resolver, sender);
+
+        assert_eq!(
+            sender_final, 10_000_000,
+            "Sender balance should remain unchanged at 10_000_000"
+        );
+        assert_ne!(
+            sponsor_final, 10_000_000,
+            "Sponsor balance should have changed from 10_000_000"
+        );
     });
 
     test_cluster.trigger_reconfiguration().await;
@@ -521,8 +716,6 @@ fn create_storage_test_transaction_gas(
     gas_coin: ObjectRef,
     rgp: u64,
 ) -> TransactionData {
-    use sui_types::transaction::{GasData, TransactionDataV1, TransactionExpiration};
-
     let tx = create_storage_test_transaction_kind(gas_test_package_id);
 
     TransactionData::V1(TransactionDataV1 {
@@ -543,17 +736,23 @@ fn create_storage_test_transaction_address_balance(
     gas_test_package_id: ObjectID,
     rgp: u64,
     chain_id: ChainIdentifier,
+    sponsor: Option<SuiAddress>,
 ) -> TransactionData {
-    use sui_types::transaction::{GasData, TransactionDataV1, TransactionExpiration};
-
     let tx = create_storage_test_transaction_kind(gas_test_package_id);
+    let gas_owner = sponsor.unwrap_or(sender);
+
+    let mut hasher = DefaultHasher::new();
+    sender.hash(&mut hasher);
+    gas_owner.hash(&mut hasher);
+    "storage".hash(&mut hasher);
+    let nonce = hasher.finish() as u32;
 
     TransactionData::V1(TransactionDataV1 {
         kind: tx,
         sender,
         gas_data: GasData {
             payment: vec![],
-            owner: sender,
+            owner: gas_owner,
             price: rgp,
             budget: 10000000,
         },
@@ -563,7 +762,7 @@ fn create_storage_test_transaction_address_balance(
             min_timestamp_seconds: None,
             max_timestamp_seconds: None,
             chain: chain_id,
-            nonce: 12345,
+            nonce,
         },
     })
 }
@@ -595,8 +794,6 @@ fn create_delete_transaction_gas(
     gas_coin: ObjectRef,
     rgp: u64,
 ) -> TransactionData {
-    use sui_types::transaction::{GasData, TransactionDataV1, TransactionExpiration};
-
     let tx = create_delete_test_transaction_kind(gas_test_package_id, object_to_delete);
 
     TransactionData::V1(TransactionDataV1 {
@@ -618,17 +815,24 @@ fn create_delete_transaction_address_balance(
     object_to_delete: ObjectRef,
     rgp: u64,
     chain_id: ChainIdentifier,
+    sponsor: Option<SuiAddress>,
 ) -> TransactionData {
-    use sui_types::transaction::{GasData, TransactionDataV1, TransactionExpiration};
-
     let tx = create_delete_test_transaction_kind(gas_test_package_id, object_to_delete);
+    let gas_owner = sponsor.unwrap_or(sender);
+
+    let mut hasher = DefaultHasher::new();
+    sender.hash(&mut hasher);
+    gas_owner.hash(&mut hasher);
+    object_to_delete.hash(&mut hasher);
+    "delete".hash(&mut hasher);
+    let nonce = hasher.finish() as u32;
 
     TransactionData::V1(TransactionDataV1 {
         kind: tx,
         sender,
         gas_data: GasData {
             payment: vec![],
-            owner: sender,
+            owner: gas_owner,
             price: rgp,
             budget: 10000000,
         },
@@ -638,7 +842,7 @@ fn create_delete_transaction_address_balance(
             min_timestamp_seconds: None,
             max_timestamp_seconds: None,
             chain: chain_id,
-            nonce: 54321,
+            nonce,
         },
     })
 }
@@ -649,17 +853,24 @@ fn create_abort_test_transaction_address_balance(
     rgp: u64,
     chain_id: ChainIdentifier,
     should_abort: bool,
+    sponsor: Option<SuiAddress>,
 ) -> TransactionData {
-    use sui_types::transaction::{GasData, TransactionDataV1, TransactionExpiration};
-
     let tx = create_abort_test_transaction_kind(gas_test_package_id, should_abort);
+    let gas_owner = sponsor.unwrap_or(sender);
+
+    let mut hasher = DefaultHasher::new();
+    sender.hash(&mut hasher);
+    gas_owner.hash(&mut hasher);
+    should_abort.hash(&mut hasher);
+    "abort".hash(&mut hasher);
+    let nonce = hasher.finish() as u32;
 
     TransactionData::V1(TransactionDataV1 {
         kind: tx,
         sender,
         gas_data: GasData {
             payment: vec![],
-            owner: sender,
+            owner: gas_owner,
             price: rgp,
             budget: 10000000,
         },
@@ -669,7 +880,7 @@ fn create_abort_test_transaction_address_balance(
             min_timestamp_seconds: None,
             max_timestamp_seconds: None,
             chain: chain_id,
-            nonce: 12345,
+            nonce,
         },
     })
 }
@@ -681,8 +892,6 @@ fn create_regular_gas_transaction_with_current_epoch(
     current_epoch: u64,
     chain_id: ChainIdentifier,
 ) -> TransactionData {
-    use sui_types::transaction::{GasData, TransactionDataV1, TransactionExpiration};
-
     let mut builder = ProgrammableTransactionBuilder::new();
 
     let amount = builder.pure(1000u64).unwrap();
@@ -1012,8 +1221,13 @@ async fn test_address_balance_gas_cost_parity() {
         coin_effects.status()
     );
 
-    let address_balance_tx =
-        create_storage_test_transaction_address_balance(sender, gas_test_package_id, rgp, chain_id);
+    let address_balance_tx = create_storage_test_transaction_address_balance(
+        sender,
+        gas_test_package_id,
+        rgp,
+        chain_id,
+        None,
+    );
     let address_balance_resp = test_cluster
         .sign_and_execute_transaction(&address_balance_tx)
         .await;
@@ -1091,6 +1305,7 @@ async fn test_address_balance_gas_cost_parity() {
         address_balance_created_obj,
         rgp,
         chain_id,
+        None,
     );
     let address_balance_delete_resp = test_cluster
         .sign_and_execute_transaction(&address_balance_delete_tx)
@@ -1157,6 +1372,7 @@ async fn test_address_balance_gas_charged_on_move_abort() {
         rgp,
         chain_id,
         true,
+        None,
     );
     let signed_tx = test_cluster.sign_transaction(&abort_tx).await;
     let (effects, _) = test_cluster
