@@ -6,6 +6,8 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(debug_assertions)]
+use mysten_common::in_test_configuration;
 use parking_lot::Mutex;
 use sui_types::{
     accumulator_root::AccumulatorObjId, base_types::SequenceNumber, digests::TransactionDigest,
@@ -48,9 +50,10 @@ struct AccountState {
     /// hence have not reserved any balance yet. We track them so that we could schedule them
     /// anytime we may have sufficient balance.
     pending_reservations: VecDeque<Arc<PendingWithdraw>>,
-    /// The minimum guaranteed balance that we could withdraw from this account.
+    /// The lower bound of the current balance of this account.
+    /// It is the amount of guaranteed balance that we could withdraw from this account at this point.
     /// This is maintained as the most recent settled balance, subtracted by the reserved balance.
-    min_guaranteed_balance: u128,
+    balance_lower_bound: u128,
 }
 
 struct PendingWithdraw {
@@ -96,7 +99,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
             for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
                 let _ = sender.send(ScheduleResult {
                     tx_digest: withdraw.tx_digest,
-                    status: ScheduleStatus::AlreadyExecuted,
+                    status: ScheduleStatus::AlreadySettled,
                 });
             }
             return;
@@ -118,6 +121,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                     .or_insert_with(|| {
                         // TODO: This will be doing a DF read while holding the state lock.
                         // We may need to look at ways to make the DF reads non-blocking.
+                        // We also need to get rid of the need to read old versions of the account balance.
                         AccountState::new(
                             self.balance_read.as_ref(),
                             account_id,
@@ -168,7 +172,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
             .remove(&cleanup_version)
             .unwrap_or_default();
         // Since we just bumped the accumulator version, any withdraws scheduled that depend
-        // on this version can now be deterministically scheduled, if not yet.
+        // on this version can now be deterministically scheduled.
         if let Some(current_version_accounts) = inner_state
             .pending_settlements
             .get(&next_accumulator_version)
@@ -199,12 +203,12 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                 .copied()
                 .unwrap_or_default();
             // Withdraw amounts must be bounded by reservations.
-            let net = u128::try_from(reserved + settled).unwrap();
-            account_state.min_guaranteed_balance += net;
+            let net = u128::try_from(reserved.checked_add(settled).unwrap()).unwrap();
+            account_state.balance_lower_bound += net;
             debug!(
                 account_id = ?object_id,
                 "Reserved balance: {:?}, settled balance: {:?}, new min guaranteed balance: {:?}",
-                reserved, settled, account_state.min_guaranteed_balance,
+                reserved, settled, account_state.balance_lower_bound,
             );
             while !account_state.pending_reservations.is_empty() {
                 let pending_withdraw = account_state.pending_reservations.pop_front().unwrap();
@@ -220,11 +224,12 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                 }
             }
 
-            #[cfg(debug_assertions)]
-            account_state.debug_check_account_state_invariants(
-                self.balance_read.as_ref(),
-                next_accumulator_version,
-            );
+            if in_test_configuration() {
+                account_state.debug_check_account_state_invariants(
+                    self.balance_read.as_ref(),
+                    next_accumulator_version,
+                );
+            }
 
             if account_state.is_empty() {
                 debug!(
@@ -263,7 +268,7 @@ impl AccountState {
             account_id,
             reserved_balance: HashMap::new(),
             pending_reservations: VecDeque::new(),
-            min_guaranteed_balance: balance,
+            balance_lower_bound: balance,
         }
     }
 
@@ -287,10 +292,10 @@ impl AccountState {
         debug!(
             "Trying to reserve {}, min_guaranteed_balance: {}, pending_reservations size: {}",
             to_reserve,
-            self.min_guaranteed_balance,
+            self.balance_lower_bound,
             self.pending_reservations.len(),
         );
-        let insufficient_balance = to_reserve > self.min_guaranteed_balance;
+        let insufficient_balance = to_reserve > self.balance_lower_bound;
         if insufficient_balance || has_blocking_reservations {
             if cur_accumulator_version == pending_withdraw.accumulator_version {
                 assert!(!has_blocking_reservations);
@@ -309,15 +314,15 @@ impl AccountState {
     fn commit_reservation(&mut self, pending_withdraw: &Arc<PendingWithdraw>) {
         let mut pending = pending_withdraw.pending.lock();
         let to_reserve = pending.remove(&self.account_id).unwrap() as u128;
-        assert!(self.min_guaranteed_balance >= to_reserve);
-        self.min_guaranteed_balance -= to_reserve;
-        self.reserved_balance
+        assert!(self.balance_lower_bound >= to_reserve);
+        self.balance_lower_bound -= to_reserve;
+        *self
+            .reserved_balance
             .entry(pending_withdraw.accumulator_version)
-            .and_modify(|v| *v += to_reserve)
-            .or_insert(to_reserve);
+            .or_default() += to_reserve;
         debug!(
             "Successfully reserved {} for account. New min guaranteed balance: {}",
-            to_reserve, self.min_guaranteed_balance
+            to_reserve, self.balance_lower_bound
         );
         if pending.is_empty() {
             debug!("Successfully reserved all accounts for withdraw transaction");
@@ -333,14 +338,13 @@ impl AccountState {
         self.reserved_balance.is_empty() && self.pending_reservations.is_empty()
     }
 
-    #[cfg(debug_assertions)]
     fn debug_check_account_state_invariants(
         &self,
         balance_read: &dyn AccountBalanceRead,
         last_settled_version: SequenceNumber,
     ) {
         let total_reserved = self.reserved_balance.values().sum::<u128>();
-        let expected_balance = self.min_guaranteed_balance + total_reserved;
+        let expected_balance = self.balance_lower_bound + total_reserved;
         let actual_balance =
             balance_read.get_account_balance(&self.account_id, last_settled_version);
         assert_eq!(expected_balance, actual_balance);
