@@ -11,7 +11,10 @@ use arc_swap::ArcSwap;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
@@ -39,7 +42,7 @@ pub struct ValidatorClientMonitor<A: Clone> {
     metrics: Arc<ValidatorClientMetrics>,
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
-    cached_latencies: RwLock<HashMap<TxType, HashMap<AuthorityName, f64>>>,
+    cached_latencies: RwLock<HashMap<TxType, HashMap<AuthorityName, Duration>>>,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -181,13 +184,13 @@ impl<A: Clone> ValidatorClientMonitor<A> {
                     "Validator {}, tx type {}: latency {}",
                     validator,
                     tx_type.as_str(),
-                    *latency
+                    latency.as_secs_f64()
                 );
                 let display_name = authority_agg.get_display_name(validator);
                 self.metrics
                     .performance
                     .with_label_values(&[&display_name, tx_type.as_str()])
-                    .set(*latency);
+                    .set(latency.as_secs_f64());
             }
 
             cached_latencies.insert(tx_type, latencies_map);
@@ -233,27 +236,24 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         client_stats.record_interaction_result(feedback, &self.metrics);
     }
 
-    /// Select validators based on client-observed performance with shuffled top k.
+    /// Select validators based on client-observed performance for the given transaction type.
     ///
-    /// We need to pass the current committee here because it is possible
-    /// that the fullnode is in the middle of a committee change when this
-    /// is called, and we need to maintain an invariant that the selected
-    /// validators are always in the committee passed in.
+    /// The current committee is passed in to ensure this function has the latest committee information.
     ///
     /// Also the tx type is passed in so that we can select validators based on their respective latencies
     /// for the transaction type.
     ///
-    /// We shuffle the top k validators to avoid the same validator being selected
-    /// too many times in a row and getting overloaded.
+    /// Validators with latencies within `delta` of the lowest latency in the given transaction type
+    /// are shuffled, to balance the load among the fastest validators.
     ///
-    /// Returns a vector containing:
-    /// 1. The top `k` validators by latency (shuffled)
-    /// 2. The remaining validators ordered by latency (not shuffled)
+    /// Returns a vector containing all validators, where
+    /// 1. Fast validators within `delta` of the lowest latency are shuffled.
+    /// 2. Remaining slow validators are sorted by latency in ascending order.
     pub fn select_shuffled_preferred_validators(
         &self,
         committee: &Committee,
-        k: usize,
         tx_type: TxType,
+        delta: f64,
     ) -> Vec<AuthorityName> {
         let mut rng = rand::thread_rng();
 
@@ -268,13 +268,35 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         // an out-of-date committee.
         let mut validator_with_latencies: Vec<_> = committee
             .names()
-            .map(|v| (*v, cached_latencies.get(v).cloned().unwrap_or(0.0)))
+            .map(|v| {
+                (
+                    *v,
+                    cached_latencies.get(v).cloned().unwrap_or(Duration::ZERO),
+                )
+            })
             .collect();
+        if validator_with_latencies.is_empty() {
+            return vec![];
+        }
+        // Shuffle the validators to balance the load among validators with the same latency.
+        validator_with_latencies.shuffle(&mut rng);
         // Sort by latency in ascending order. We want to select the validators with the lowest latencies.
-        validator_with_latencies.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        validator_with_latencies.sort_by_key(|(_, latency)| *latency);
 
-        let k = k.min(validator_with_latencies.len());
+        // Shuffle the validators within delta of the lowest latency, for load balancing.
+        let lowest_latency = validator_with_latencies[0].1;
+        let threshold = lowest_latency.mul_f64(1.0 + delta);
+        let k = validator_with_latencies
+            .iter()
+            .enumerate()
+            .find(|(_, (_, latency))| *latency > threshold)
+            .map(|(i, _)| i)
+            .unwrap_or(validator_with_latencies.len());
         validator_with_latencies[..k].shuffle(&mut rng);
+        self.metrics
+            .shuffled_validators
+            .with_label_values(&[tx_type.as_str()])
+            .observe(k as f64);
 
         validator_with_latencies
             .into_iter()
