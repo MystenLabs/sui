@@ -254,7 +254,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             .collect::<Result<Vec<_>, _>>()?;
         let vm = self
             .vm
-            .make_vm(&data_store, linkage_context)
+            .make_vm(data_store, linkage_context)
             .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
         let runtime_signature = vm
             .function_information(&runtime_id, name.as_ident_str(), &loaded_type_arguments)
@@ -688,11 +688,11 @@ fn convert_vm_error(
                     .cloned()
                     .unwrap_or_else(|| ObjectID::from_address(*id.address()));
                 store.get_package(&version_id).ok().flatten().and_then(|p| {
-                    p.modules().get(id).and_then(|module| {
+                    p.modules().get(id).map(|module| {
                         let module = module.compiled_module();
                         let fdef = module.function_def_at(function);
                         let fhandle = module.function_handle_at(fdef.function);
-                        Some(module.identifier_at(fhandle.name).to_string())
+                        module.identifier_at(fhandle.name).to_string()
                     })
                 })
             })
