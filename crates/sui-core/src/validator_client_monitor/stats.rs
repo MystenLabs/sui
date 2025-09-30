@@ -156,8 +156,6 @@ impl ClientObservedStats {
     ///
     /// Returns latency in seconds, with reliability penalty applied as a multiplier.
     fn calculate_client_latency(&self, validator: &AuthorityName, tx_type: TxType) -> f64 {
-        let mut final_latency = MAX_LATENCY;
-
         let Some(stats) = self.validator_stats.get(validator) else {
             return MAX_LATENCY;
         };
@@ -172,23 +170,16 @@ impl ClientObservedStats {
             TxType::SharedObject => OperationType::Consensus,
             TxType::SingleWriter => OperationType::FastPath,
         };
+        let Some(latency) = stats.average_latencies.get(&operation) else {
+            // For the target validator and operation type, no latency data has been recorded yet.
+            return MAX_LATENCY;
+        };
 
         // Get the latency for the relevant operation
-        if let Some(latency) = stats.average_latencies.get(&operation) {
-            let base_latency = latency.get();
-            let reliability = stats.reliability.get();
-            let reliability_weight = self.config.reliability_weight;
-
-            println!(
-                "base_latency: {}, reliability: {}, reliability_weight: {}",
-                base_latency, reliability, reliability_weight
-            );
-
-            final_latency = (base_latency + (1.0 - reliability) * reliability_weight * MAX_LATENCY)
-                .min(MAX_LATENCY);
-        }
-
-        final_latency
+        let base_latency = latency.get();
+        let reliability = stats.reliability.get();
+        let reliability_weight = self.config.reliability_weight;
+        (base_latency + (1.0 - reliability) * reliability_weight * MAX_LATENCY).min(MAX_LATENCY)
     }
 
     /// Retain only the specified validators, removing any others.
