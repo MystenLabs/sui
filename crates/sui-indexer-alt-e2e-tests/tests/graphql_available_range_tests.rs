@@ -7,7 +7,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig};
+use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster, OffchainClusterConfig};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{get_account_key_pair, Signature, Signer},
@@ -110,6 +110,8 @@ async fn test_available_range_with_pipelines() {
             .unwrap(),
         10
     );
+
+    cluster.stopped().await;
 }
 
 /// Set-up a cluster with a custom configuration for pipelines.
@@ -155,8 +157,7 @@ fn transfer_dust(
         .request_gas(sender, DEFAULT_GAS_BUDGET + 1)
         .expect("Failed to request gas");
 
-    let gas =
-        sui_indexer_alt_e2e_tests::find_address_owned(&fx).expect("Failed to find gas object");
+    let gas = find_address_owned(&fx).expect("Failed to find gas object");
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.transfer_sui(recipient, Some(1));
