@@ -4,6 +4,7 @@
 use nonempty::NonEmpty;
 use shared_crypto::intent::Intent;
 
+use crate::base_types::SuiAddress;
 use crate::committee::EpochId;
 use crate::digests::ZKLoginInputsDigest;
 use crate::error::{SuiError, SuiResult};
@@ -111,6 +112,7 @@ pub fn verify_sender_signed_data_message_signatures(
     current_epoch: EpochId,
     verify_params: &VerifyParams,
     zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+    aliased_addresses: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
 ) -> SuiResult {
     let intent_message = txn.intent_message();
     assert_eq!(intent_message.intent, Intent::sui_transaction());
@@ -122,7 +124,7 @@ pub fn verify_sender_signed_data_message_signatures(
     }
 
     // 2. One signature per signer is required.
-    let signers: NonEmpty<_> = txn.intent_message().value.signers();
+    let signers: NonEmpty<_> = txn.intent_message().value.required_signers();
     fp_ensure!(
         txn.inner().tx_signatures.len() == signers.len(),
         SuiError::SignerSignatureNumberMismatch {
@@ -131,12 +133,26 @@ pub fn verify_sender_signed_data_message_signatures(
         }
     );
 
-    // 3. Each signer must provide a signature.
+    // 3. Each signer must provide a signature from one of the set of allowed aliases.
     let present_sigs = txn.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
-    for s in signers {
-        if !present_sigs.contains_key(&s) {
+    let signer_aliases: Vec<_> = signers
+        .into_iter()
+        .map(|s| {
+            aliased_addresses
+                .iter()
+                .find(|(addr, _)| *addr == s)
+                .map(|(_, aliases)| aliases.clone())
+                .unwrap_or(NonEmpty::new(s))
+        })
+        .collect();
+    for s in signer_aliases {
+        if !s.iter().any(|s| present_sigs.contains_key(s)) {
             return Err(SuiError::SignerSignatureAbsent {
-                expected: s.to_string(),
+                expected: s
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" or "),
                 actual: present_sigs.keys().map(|s| s.to_string()).collect(),
             });
         }

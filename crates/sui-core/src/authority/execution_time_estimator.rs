@@ -1469,7 +1469,6 @@ mod tests {
     }
 
     #[tokio::test]
-    // TODO-DNS add tests for min stake amt
     async fn test_stake_weighted_median() {
         telemetry_subscribers::init_for_testing();
 
