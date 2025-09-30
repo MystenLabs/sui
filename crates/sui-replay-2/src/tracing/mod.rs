@@ -36,6 +36,7 @@ pub fn save_trace_output(
         .unwrap();
 
     let TxnContextAndEffects {
+        txn_data: _,
         execution_effects: _,
         expected_effects: _,
         gas_status: _,
