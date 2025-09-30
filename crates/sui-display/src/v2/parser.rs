@@ -64,8 +64,11 @@ pub enum Accessor<'s> {
     /// Index into a vector, VecMap, or dynamic field.
     Index(Chain<'s>),
 
+    /// Index into a dynamic field.
+    DFIndex(Chain<'s>),
+
     /// Index into a dynamic object field.
-    IIndex(Chain<'s>),
+    DOFIndex(Chain<'s>),
 }
 
 /// Literal forms are elements whose syntax determines their (outer) type.
@@ -208,8 +211,8 @@ macro_rules! match_token_opt {
 ///
 ///   accessor ::= '.' IDENT
 ///              | '.' NUM_DEC
-///              | '[' chain ']'
-///              | '[' '[' chain ']' ']'
+///              | '->' '[' chain ']'
+///              | '=>' '[' chain ']'
 ///
 ///   literal  ::= address | bool | number | string | vector | struct | enum
 ///
@@ -479,28 +482,36 @@ impl<'s> Parser<'s> {
                 }
             },
 
+            Tok(_, T::Arrow, _, _) => {
+                self.lexer.next();
+
+                match_token! { self.lexer; Tok(_, T::LBracket, _, _) => self.lexer.next() };
+                let chain = self.parse_chain(meter)?;
+                match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
+
+                meter.alloc()?;
+                Accessor::DFIndex(chain)
+            },
+
+            Tok(_, T::AArrow, _, _) => {
+                self.lexer.next();
+
+                match_token! { self.lexer; Tok(_, T::LBracket, _, _) => self.lexer.next() };
+                let chain = self.parse_chain(meter)?;
+                match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
+
+                meter.alloc()?;
+                Accessor::DOFIndex(chain)
+            },
+
             Tok(_, T::LBracket, _, _) => {
                 self.lexer.next();
 
-                let doubled = match_token_opt! { self.lexer;
-                    Tok(false, T::LBracket, _, _) => { self.lexer.next(); }
-                };
+                let chain = self.parse_chain(meter)?;
+                match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
 
-                if let Match::Tried(offset, doubled) = doubled {
-                    let chain = self.parse_chain(meter)
-                        .map_err(|e| e.also_tried(offset, doubled))?;
-                    match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
-
-                    meter.alloc()?;
-                    Accessor::Index(chain)
-                } else {
-                    let chain = self.parse_chain(meter)?;
-                    match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
-                    match_token! { self.lexer; Tok(false, T::RBracket, _, _) => self.lexer.next() };
-
-                    meter.alloc()?;
-                    Accessor::IIndex(chain)
-                }
+                meter.alloc()?;
+                Accessor::Index(chain)
             },
         })
     }
@@ -936,7 +947,8 @@ impl fmt::Debug for Chain<'_> {
                 A::Field(name) => write!(f, ".{name}")?,
                 A::Positional(index) => write!(f, ".{index}")?,
                 A::Index(chain) => write!(f, "[{chain:?}]")?,
-                A::IIndex(chain) => write!(f, "[[{chain:?}]]")?,
+                A::DFIndex(chain) => write!(f, "->[{chain:?}]")?,
+                A::DOFIndex(chain) => write!(f, "=>[{chain:?}]")?,
             }
         }
 
@@ -1275,7 +1287,7 @@ mod tests {
 
     #[test]
     fn test_metering_indexed_access() {
-        let (nodes, strands) = nodes("{foo[bar][[baz]]}");
+        let (nodes, strands) = nodes("{foo[bar]->[baz]}");
         assert_eq!(nodes, 9);
         assert_eq!(
             strands,
@@ -1288,7 +1300,7 @@ mod tests {
                             root: None,
                             accessors: vec![A::Field(ident_str!("bar"))],
                         }),
-                        A::IIndex(C {
+                        A::DFIndex(C {
                             root: None,
                             accessors: vec![A::Field(ident_str!("baz"))],
                         }),
@@ -1714,12 +1726,12 @@ mod tests {
 
     #[test]
     fn test_index_chain() {
-        assert_snapshot!(strands(r#"{foo[bar][[baz]].qux[quy]}"#));
+        assert_snapshot!(strands(r#"{foo[bar]=>[baz].qux->[quy]}"#));
     }
 
     #[test]
     fn test_index_with_root() {
-        assert_snapshot!(strands(r#"{true[[foo]][bar].baz}"#));
+        assert_snapshot!(strands(r#"{true=>[foo]->[bar].baz}"#));
     }
 
     #[test]
@@ -1764,23 +1776,13 @@ mod tests {
     }
 
     #[test]
-    fn test_spaced_out_left_double_index() {
-        assert_snapshot!(strands(r#"{foo[ [bar]]}"#));
+    fn test_arrow_missing_index() {
+        assert_snapshot!(strands(r#"{foo->bar}"#));
     }
 
     #[test]
-    fn test_spaced_out_right_double_index() {
-        assert_snapshot!(strands(r#"{foo[[bar] ]}"#));
-    }
-
-    #[test]
-    fn test_unbalanced_double_index() {
-        assert_snapshot!(strands(r#"{foo[[bar}"#));
-    }
-
-    #[test]
-    fn test_triple_index() {
-        assert_snapshot!(strands(r#"{foo[[[bar]]]}"#));
+    fn test_double_arrow_missing_index() {
+        assert_snapshot!(strands(r#"{foo=>}"#));
     }
 
     #[test]
