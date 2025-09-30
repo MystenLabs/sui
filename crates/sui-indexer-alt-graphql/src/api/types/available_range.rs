@@ -90,18 +90,23 @@ fn pipelines(type_: &str, field: Option<&str>, filters: Vec<String>, ps: &mut BT
             filters.push("affectedAddress".to_string());
             pipelines("Query", Some("transactions"), filters, ps);
         }
+        ("Address", Some("dynamicFields"), _) => {
+            pipelines("IMoveObject", Some("dynamicFields"), vec![], ps);
+        }
         ("Address", field, filters) => {
             pipelines("IAddressable", field, filters, ps);
         }
 
         // Checkpoint fields
         ("Checkpoint", Some("transactions"), mut filters) => {
-            pipelines("Checkpoint", None, vec![], ps);
             filters.push("atCheckpoint".to_string());
             pipelines("Query", Some("transactions"), filters, ps);
         }
 
         // CoinMetadata fields
+        ("CoinMetadata", Some("supply"), _) => {
+            pipelines("Query", Some("coinMetadata"), vec![], ps);
+        }
         ("CoinMetadata", field, filters) => {
             pipelines("IMoveObject", field, vec![], ps);
             pipelines("IAddressable", field, vec![], ps);
@@ -110,7 +115,6 @@ fn pipelines(type_: &str, field: Option<&str>, filters: Vec<String>, ps: &mut BT
 
         // Epoch fields
         ("Epoch", Some("checkpoints"), filters) => {
-            pipelines("Epoch", None, vec![], ps);
             pipelines("Query", Some("checkpoints"), filters, ps);
         }
 
@@ -148,9 +152,6 @@ fn pipelines(type_: &str, field: Option<&str>, filters: Vec<String>, ps: &mut BT
         }
 
         // Query fields
-        ("Query", Some("address"), _) => {
-            pipelines("Address", None, vec![], ps);
-        }
         ("Query", Some("checkpoints"), _) => {
             ps.insert("cp_sequence_numbers".to_string());
         }
