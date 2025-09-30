@@ -22,7 +22,7 @@ use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_rpc::proto::sui::rpc::v2::TransactionEffects;
 use sui_rpc::proto::sui::rpc::v2::TransactionEvents;
-use sui_types::balance_change::derive_balance_changes;
+use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -161,12 +161,12 @@ pub fn simulate_transaction(
     }
 
     let SimulateTransactionResult {
-        input_objects,
-        output_objects,
-        events,
         effects,
+        events,
+        objects,
         execution_result,
         mock_gas_id: _,
+        unchanged_loaded_runtime_objects,
     } = executor
         .simulate_transaction(transaction.clone(), checks)
         .map_err(anyhow::Error::from)?;
@@ -175,13 +175,10 @@ pub fn simulate_transaction(
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
 
-        let input_objects = input_objects.into_values().collect::<Vec<_>>();
-        let output_objects = output_objects.into_values().collect::<Vec<_>>();
-
         message.balance_changes = read_mask
             .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
             .then(|| {
-                derive_balance_changes(&effects, &input_objects, &output_objects)
+                derive_balance_changes_2(&effects, &objects)
                     .into_iter()
                     .map(Into::into)
                     .collect()
@@ -195,6 +192,14 @@ pub fn simulate_transaction(
                 .map(|mask| {
                     let mut effects = TransactionEffects::merge_from(&effects, &mask);
 
+                    if submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD)
+                    {
+                        effects.unchanged_loaded_runtime_objects = unchanged_loaded_runtime_objects
+                            .iter()
+                            .map(Into::into)
+                            .collect();
+                    }
+
                     if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
                         for changed_object in effects.changed_objects.iter_mut() {
                             let Ok(object_id) = changed_object.object_id().parse::<ObjectID>()
@@ -202,11 +207,7 @@ pub fn simulate_transaction(
                                 continue;
                             };
 
-                            if let Some(object) = input_objects
-                                .iter()
-                                .chain(&output_objects)
-                                .find(|o| o.id() == object_id)
-                            {
+                            if let Some(object) = objects.iter().find(|o| o.id() == object_id) {
                                 changed_object.object_type = Some(match object.struct_tag() {
                                     Some(struct_tag) => struct_tag.to_canonical_string(true),
                                     None => "package".to_owned(),
@@ -225,8 +226,7 @@ pub fn simulate_transaction(
                                 continue;
                             };
 
-                            if let Some(object) = input_objects.iter().find(|o| o.id() == object_id)
-                            {
+                            if let Some(object) = objects.iter().find(|o| o.id() == object_id) {
                                 unchanged_consensus_object.object_type =
                                     Some(match object.struct_tag() {
                                         Some(struct_tag) => struct_tag.to_canonical_string(true),
@@ -265,14 +265,10 @@ pub fn simulate_transaction(
                     .finish(),
             )
             .map(|mask| {
-                let set: std::collections::BTreeMap<_, _> = input_objects
-                    .into_iter()
-                    .chain(output_objects)
-                    .map(|object| ((object.id(), object.version()), object))
-                    .collect();
                 ObjectSet::default().with_objects(
-                    set.into_values()
-                        .map(|o| Object::merge_from(&o, &mask))
+                    objects
+                        .iter()
+                        .map(|o| Object::merge_from(o, &mask))
                         .collect(),
                 )
             });

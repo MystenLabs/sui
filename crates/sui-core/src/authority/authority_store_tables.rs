@@ -102,6 +102,9 @@ pub struct AuthorityPerpetualTables {
     // Events keyed by the digest of the transaction that produced them.
     pub(crate) events_2: DBMap<TransactionDigest, TransactionEvents>,
 
+    // Loaded (and unchanged) runtime object references.
+    pub(crate) unchanged_loaded_runtime_objects: DBMap<TransactionDigest, Vec<ObjectKey>>,
+
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
     /// Please do not add new accessors/callsites.
     /// When transaction is executed via checkpoint executor, we store association here
@@ -316,6 +319,16 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "events_2".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    mutexes,
+                    uniform_key,
+                    KeySpaceConfig::default().with_relocation_filter(|_, _| Decision::Remove),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "unchanged_loaded_runtime_objects".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32,
                     mutexes,

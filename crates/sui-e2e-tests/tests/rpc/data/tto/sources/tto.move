@@ -23,3 +23,6 @@ public fun receive(parent: &mut A, x: Receiving<Coin<SUI>>) {
     let coin = transfer::public_receive(&mut parent.id, x);
     transfer::public_transfer(coin, @tto);
 }
+
+public fun dont_receive(parent: &mut A, _x: Receiving<Coin<SUI>>) {
+}
