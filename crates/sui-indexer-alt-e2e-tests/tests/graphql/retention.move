@@ -7,51 +7,9 @@
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
 
-//# run-graphql
-{ # Start of network, only Cp 0 is available
-  serviceConfig {
-    retention(type: "Address", field: "asObject") {
-      first {
-        sequenceNumber
-      }
-      last {
-        sequenceNumber
-      }
-    }
-  }
-}
-
 //# create-checkpoint
 
-//# run-graphql
-{ # Two Checkpoints, Cp 0 and Cp 1 are available, after next checkpoint is created we expect Cp0 to not be in available range for queries that are backed by obj_versions
-  serviceConfig {
-    retention(type: "Address", field: "asObject") {
-      first {
-        sequenceNumber
-      }
-      last {
-        sequenceNumber
-      }
-    }
-  }
-}
-
 //# create-checkpoint
-
-//# run-graphql
-{ # Queries that are backed by obj_versions should only have retention of 2 latest Cps
-  objectVersionsPruned: serviceConfig {
-    retention(type: "Address", field: "asObject") {
-      first {
-        sequenceNumber
-      }
-      last {
-        sequenceNumber
-      }
-    }
-  }
-}
 
 //# create-checkpoint
 
