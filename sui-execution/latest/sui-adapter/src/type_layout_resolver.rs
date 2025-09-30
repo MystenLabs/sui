@@ -15,8 +15,8 @@ use sui_types::storage::{BackingPackageStore, PackageObject};
 use sui_types::{error::SuiError, layout_resolver::LayoutResolver};
 
 /// Retrieve a `MoveStructLayout` from a `Type`.
-pub struct TypeLayoutResolver<'state, 'vm> {
-    vm: &'vm MoveRuntime,
+pub struct TypeLayoutResolver<'state, 'runtime> {
+    vm: &'runtime MoveRuntime,
     state_view: Box<dyn TypeLayoutStore + 'state>,
 }
 
@@ -24,8 +24,8 @@ pub struct TypeLayoutResolver<'state, 'vm> {
 /// resolution and delegating backing package resolution to the trait object.
 struct NullSuiResolver<'a, 'state>(&'a (dyn TypeLayoutStore + 'state));
 
-impl<'state, 'vm> TypeLayoutResolver<'state, 'vm> {
-    pub fn new(vm: &'vm MoveRuntime, state_view: Box<dyn TypeLayoutStore + 'state>) -> Self {
+impl<'state, 'runtime> TypeLayoutResolver<'state, 'runtime> {
+    pub fn new(vm: &'runtime MoveRuntime, state_view: Box<dyn TypeLayoutStore + 'state>) -> Self {
         Self { vm, state_view }
     }
 }
@@ -42,7 +42,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
             .collect::<Vec<_>>();
         let null_resolver = NullSuiResolver(&self.state_view);
         let resolver =
-            CachedPackageStore::new(&self.vm, TransactionPackageStore::new(&null_resolver));
+            CachedPackageStore::new(self.vm, TransactionPackageStore::new(&null_resolver));
         let tag_linkage = type_linkage(&ids, &resolver)?;
         let link_context = tag_linkage.linkage_context();
         let data_store = TransactionPackageStore::new(&null_resolver);
