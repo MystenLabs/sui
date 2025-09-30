@@ -564,8 +564,14 @@ impl DatatypeTArg {
         idx: usize,
         ty: Type,
     ) -> Self {
+        let phantom = *context
+            .phantom_type_positions
+            .get(module)
+            .and_then(|m| m.get(name))
+            .and_then(|v| v.get(idx))
+            .unwrap_or_else(|| &false);
         Self {
-            phantom: context.phantom_type_positions[module][name][idx],
+            phantom,
             argument: ty,
         }
     }

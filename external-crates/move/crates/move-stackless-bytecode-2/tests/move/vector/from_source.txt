@@ -1,1 +1,1 @@
-vector_test
+tests
