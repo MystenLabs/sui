@@ -7,6 +7,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use sui_indexer_alt_graphql::{
     config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
 };
@@ -133,6 +134,12 @@ struct ObjectChangeNode {
 struct ObjectState {
     version: u64,
     as_move_object: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FieldLayout {
+    name: String,
+    layout: Value,
 }
 
 struct GraphQlTestCluster {
@@ -819,6 +826,117 @@ async fn test_simulate_transaction_json_transfer() {
 
     // For simulation, signatures should be empty since we don't provide them
     assert_eq!(transaction.signatures.len(), 0);
+
+    graphql_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_package_resolver_finds_newly_published_package() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    // Publish the test package
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["packages", "package_resolver_test"]);
+    let tx_data = validator_cluster
+        .test_transaction_builder()
+        .await
+        .publish(path)
+        .build();
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    // Execute the publish transaction and query for type LAYOUT
+    // The layout query will trigger PackageResolver::fetch() for the new package
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: Base64!) {
+                simulateTransaction(transaction: $txData) {
+                    effects {
+                        status
+                        objectChanges {
+                            nodes {
+                                outputState {
+                                    address
+                                    asMoveObject {
+                                        contents {
+                                            type {
+                                                repr
+                                                layout
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Find the SimpleObject created by the package's init function
+    let object_changes = result
+        .pointer("/data/simulateTransaction/effects/objectChanges/nodes")
+        .unwrap()
+        .as_array()
+        .unwrap();
+
+    // Look for the SimpleObject - its type resolution requires fetching the newly published package
+    let simple_object = object_changes
+        .iter()
+        .find(|node| {
+            node.pointer("/outputState/asMoveObject/contents/type/repr")
+                .and_then(|t| t.as_str())
+                .map(|type_str| type_str.contains("::resolver_test::SimpleObject"))
+                .unwrap_or(false)
+        })
+        .unwrap();
+    let fields: Vec<FieldLayout> = serde_json::from_value(
+        simple_object
+            .pointer("/outputState/asMoveObject/contents/type/layout/struct/fields")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        fields.len(),
+        2,
+        "SimpleObject should have 2 fields (id and value)"
+    );
+
+    // Verify the 'id' field is of type UID
+    assert_eq!(fields[0].name, "id");
+    assert_eq!(
+        fields[0]
+            .layout
+            .pointer("/struct/type")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+    );
+
+    // Verify the 'value' field is of type NestedObject
+    assert_eq!(fields[1].name, "value");
+    assert!(fields[1]
+        .layout
+        .pointer("/struct/type")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("::resolver_test::NestedObject"));
 
     graphql_cluster.stopped().await;
 }
