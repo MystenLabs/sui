@@ -475,7 +475,7 @@ impl GasMeter for GasStatus<'_> {
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         self.charge_instr_with_size(
-            Opcodes::VEC_PUSH_BACK,
+            Opcodes::VEC_UNPACK,
             u64::from(expect_num_elements).into(),
         )
     }
