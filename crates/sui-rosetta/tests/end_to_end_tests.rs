@@ -20,7 +20,6 @@ use sui_rosetta::CoinMetadataCache;
 use sui_rpc::client::v2::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{GetEpochRequest, GetTransactionRequest};
-use sui_sdk::rpc_types::SuiExecutionStatus;
 
 mod test_utils;
 use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
@@ -245,9 +244,10 @@ async fn test_stake() {
 
     println!("Sui TX: {tx:?}");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
 
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
@@ -360,9 +360,10 @@ async fn test_stake_all() {
 
     println!("Sui TX: {tx:?}");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
 
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
@@ -465,9 +466,10 @@ async fn test_withdraw_stake() {
 
     println!("Sui TX: {tx:?}");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
     // verify balance
     let network_identifier = NetworkIdentifier {
@@ -536,9 +538,10 @@ async fn test_withdraw_stake() {
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
     println!("Sui TX: {tx:?}");
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
@@ -634,9 +637,10 @@ async fn test_pay_sui() {
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
     println!("Sui TX: {tx:?}");
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
@@ -723,9 +727,10 @@ async fn test_pay_sui_multiple_times() {
             .transaction
             .expect("Response transaction should not be empty");
         println!("Sui TX: {tx:?}");
-        assert_eq!(
-            &SuiExecutionStatus::Success,
-            &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+        assert!(
+            tx.effects().status().success(),
+            "Transaction failed: {:?}",
+            tx.effects().status().error()
         );
         let ops2 = fetch_transaction_and_get_operations(
             &test_cluster,

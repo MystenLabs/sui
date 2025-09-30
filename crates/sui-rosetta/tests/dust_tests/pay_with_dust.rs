@@ -8,7 +8,6 @@ use once_cell::sync::Lazy;
 use prost_types::FieldMask;
 use serde_json::json;
 use shared_crypto::intent::Intent;
-use sui_json_rpc_types::SuiExecutionStatus;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::PreprocessMetadata;
@@ -223,9 +222,10 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
     // Create a gRPC client and fetch the transaction with gRPC
     let client_copy = GrpcClient::new(test_cluster.rpc_url()).unwrap();
@@ -470,9 +470,10 @@ async fn test_limit_many_small_coins() -> Result<()> {
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
     // Create a gRPC client and fetch the transaction with gRPC
     let client_copy = GrpcClient::new(test_cluster.rpc_url()).unwrap();
@@ -701,20 +702,13 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
-    // TODO: Fix gRPC transaction structure access
-    // assert_eq!(
-    //     tx.transaction.as_ref().unwrap().data.gas_data().budget,
-    //     budget
-    // );
 
-    // Create a gRPC client and fetch the transaction with gRPC
-    let client_copy = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let tx_digest = tx.digest;
-
     let mut grpc_request = GetTransactionRequest::default();
     grpc_request.digest = tx_digest.clone();
     grpc_request.read_mask = Some(FieldMask::from_paths([
@@ -727,7 +721,7 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
         "events.events.contents",
     ]));
 
-    let mut client_mut = client_copy.clone();
+    let mut client_mut = client.clone();
     let grpc_response = client_mut
         .ledger_client()
         .get_transaction(grpc_request)
@@ -735,7 +729,7 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
         .unwrap()
         .into_inner();
 
-    let coin_cache = CoinMetadataCache::new(client_copy.clone(), NonZeroUsize::new(2).unwrap());
+    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
     let executed_tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");

@@ -7,7 +7,6 @@ use anyhow::{anyhow, Result};
 use prost_types::FieldMask;
 use serde_json::json;
 use shared_crypto::intent::Intent;
-use sui_json_rpc_types::SuiExecutionStatus;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::{operations::Operations, CoinMetadataCache};
 use sui_rpc::client::v2::Client as GrpcClient;
@@ -259,9 +258,10 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
 
     // Create a gRPC client and fetch the transaction with gRPC
@@ -510,13 +510,14 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
         .unwrap()
         .into_inner();
 
-    let _tx = grpc_response
+    let tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
 
     Ok(())
@@ -742,14 +743,15 @@ async fn test_stake_with_coin_limit() -> Result<()> {
         .unwrap()
         .into_inner();
 
-    let _tx = grpc_response
+    let tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");
 
     // Verify the transaction succeeded
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
 
     Ok(())

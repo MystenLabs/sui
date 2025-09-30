@@ -3,7 +3,6 @@
 
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
-use std::str::FromStr;
 use std::string::ToString;
 use std::sync::Arc;
 
@@ -17,7 +16,7 @@ use tracing::info;
 
 use sui_rpc::client::v2::Client;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoRequest;
-use sui_sdk::SUI_COIN_TYPE;
+use sui_sdk_types::{StructTag, TypeTag as SDKTypeTag};
 
 use crate::errors::Error;
 use crate::errors::Error::MissingMetadata;
@@ -40,9 +39,7 @@ pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
     symbol: "SUI".to_string(),
     decimals: 9,
     metadata: CurrencyMetadata {
-        coin_type: sui_types::TypeTag::from_str(SUI_COIN_TYPE)
-            .map(|t| t.to_canonical_string(true))
-            .unwrap(),
+        coin_type: SDKTypeTag::from(StructTag::sui()).to_string(),
     },
 });
 

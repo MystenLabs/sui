@@ -14,11 +14,11 @@ use serde_json::Value;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
-use sui_json_rpc_types::SuiExecutionStatus;
 use sui_sdk_types::Address;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::transaction::TransactionKind;
 
@@ -765,11 +765,11 @@ pub enum OperationStatus {
     Failure,
 }
 
-impl From<SuiExecutionStatus> for OperationStatus {
-    fn from(es: SuiExecutionStatus) -> Self {
+impl From<ExecutionStatus> for OperationStatus {
+    fn from(es: ExecutionStatus) -> Self {
         match es {
-            SuiExecutionStatus::Success => OperationStatus::Success,
-            SuiExecutionStatus::Failure { .. } => OperationStatus::Failure,
+            ExecutionStatus::Success => OperationStatus::Success,
+            ExecutionStatus::Failure { .. } => OperationStatus::Failure,
         }
     }
 }

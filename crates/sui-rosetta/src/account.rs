@@ -12,8 +12,7 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{
     GetBalanceRequest, GetCheckpointRequest, GetEpochRequest, ListOwnedObjectsRequest,
 };
-use sui_sdk::SUI_COIN_TYPE;
-use sui_sdk_types::Address;
+use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::SuiAddress;
 
 use crate::errors::Error;
@@ -174,7 +173,7 @@ pub async fn coins(
 
     let coin_request = ListOwnedObjectsRequest::default()
         .with_owner(request.account_identifier.address.to_string())
-        .with_object_type(SUI_COIN_TYPE.to_string())
+        .with_object_type(StructTag::gas_coin().to_string())
         .with_page_size(5000u32)
         .with_read_mask(FieldMask::from_paths(["object_id", "version", "balance"]));
 

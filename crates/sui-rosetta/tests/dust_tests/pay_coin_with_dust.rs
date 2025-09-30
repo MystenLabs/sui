@@ -7,7 +7,6 @@ use std::path::Path;
 use crate::test_utils::wait_for_transaction;
 use prost_types::FieldMask;
 use serde_json::json;
-use sui_json_rpc_types::SuiExecutionStatus;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::CoinMetadataCache;
 use sui_rpc::client::v2::Client as GrpcClient;
@@ -125,9 +124,10 @@ async fn test_pay_custom_coin_with_multiple_coins() -> anyhow::Result<()> {
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
 
     // Create coin cache for testing Operations conversion
@@ -376,9 +376,10 @@ async fn test_pay_custom_coin_with_multiple_merge_chunks() -> anyhow::Result<()>
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
 
     // Create coin cache for testing Operations conversion

@@ -769,8 +769,7 @@ impl Operations {
             - gas_summary.storage_cost as i128
             - gas_summary.computation_cost as i128;
 
-        let sui_exec_status: sui_json_rpc_types::SuiExecutionStatus = effect.into_status().into();
-        let status = Some(sui_exec_status.into());
+        let status = Some(effect.into_status().into());
         let ops = Operations::try_from_data(tx_data.clone(), status)?;
         let ops = ops.into_iter();
 
@@ -1085,11 +1084,9 @@ mod tests {
     use super::*;
     use crate::types::ConstructionMetadata;
     use crate::SUI;
-    use move_core_types::annotated_value::MoveTypeLayout;
-    use sui_json_rpc_types::SuiCallArg;
     use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{CallArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
+    use sui_types::transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 
     #[tokio::test]
     async fn test_operation_data_parsing_pay_sui() -> Result<(), anyhow::Error> {
@@ -1193,14 +1190,5 @@ mod tests {
         assert_eq!(data, parsed_data);
 
         Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_sui_json() {
-        let arg1 = CallArg::Pure(bcs::to_bytes(&1000000u64).unwrap());
-        let arg2 = CallArg::Pure(bcs::to_bytes(&30215u64).unwrap());
-        let json1 = SuiCallArg::try_from(arg1, Some(&MoveTypeLayout::U64)).unwrap();
-        let json2 = SuiCallArg::try_from(arg2, Some(&MoveTypeLayout::U64)).unwrap();
-        println!("{:?}, {:?}", json1, json2);
     }
 }

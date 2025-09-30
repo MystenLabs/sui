@@ -14,7 +14,6 @@ use sui_rpc::client::v2::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 
-use sui_json_rpc_types::SuiExecutionStatus;
 use sui_rosetta::operations::Operations;
 mod test_utils;
 use sui_rosetta::types::{
@@ -295,9 +294,10 @@ async fn test_custom_coin_transfer() {
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
     println!("Sui TX: {tx:?}");
     // Create a gRPC client and fetch the transaction with gRPC
@@ -385,9 +385,10 @@ async fn test_custom_coin_without_symbol() {
         .transaction
         .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        &SuiExecutionStatus::Success // TODO: Fix gRPC response status access
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
     // Create a gRPC client and fetch the transaction with gRPC
     let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
