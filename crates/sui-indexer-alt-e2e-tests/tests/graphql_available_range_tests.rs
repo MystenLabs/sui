@@ -1,18 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! These tests check that GraphQL queries respond correctly to pruning, especially given that
-//! the implementation applies bounds based on the reader low watermark that needs to consider the
-//! progress of the pruner across multiple tables.
-
 use std::time::Duration;
 
 use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster, OffchainClusterConfig};
-use sui_move_build::BuildConfig;
+use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{get_account_key_pair, Signature, Signer},
@@ -48,7 +43,7 @@ const TRANSACTIONS_QUERY: &str = r#"
     }
 "#;
 
-/// Test available range queries with different pipeline configurations
+/// Test available range queries with retention configurations
 #[tokio::test]
 async fn test_available_range_with_pipelines() {
     const RETENTION: u64 = 5;
@@ -63,9 +58,6 @@ async fn test_available_range_with_pipelines() {
 
     let (a, akp) = get_account_key_pair();
     let (b, _) = get_account_key_pair();
-
-    // Publish the emit_event package in test setup
-    publish_emit_event_package(&mut cluster).await;
 
     // Create 10 checkpoints with transactions from `a` and `b`. Each checkpoint contains one
     // transactions from `a` to `b`.
@@ -150,37 +142,6 @@ fn concurrent_pipeline(retention: u64) -> ConcurrentLayer {
     }
 }
 
-/// Publish the emit_event package during test setup
-async fn publish_emit_event_package(cluster: &mut FullCluster) {
-    let (sender, kp, gas) = cluster
-        .funded_account(DEFAULT_GAS_BUDGET)
-        .expect("Failed to get account");
-
-    let mut builder = ProgrammableTransactionBuilder::new();
-    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packages/emit_event");
-    let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
-    let compiled_modules_bytes =
-        compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
-    let dependencies = compiled_package.get_dependency_storage_package_ids();
-
-    builder.publish_immutable(compiled_modules_bytes, dependencies);
-    let ptb = builder.finish();
-
-    let data = TransactionData::new_programmable(
-        sender,
-        vec![gas],
-        ptb,
-        DEFAULT_GAS_BUDGET,
-        cluster.reference_gas_price(),
-    );
-
-    let (fx, _) = cluster
-        .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
-        .expect("Failed to execute transaction");
-
-    assert!(fx.status().is_ok());
-}
-
 /// Request gas from the "faucet" in `cluster`, and craft a transaction transferring 1 MIST from
 /// `sender` (signed for with `signer`) to `recipient`, and returns the digest of the transaction as
 /// long as it succeeded.
@@ -194,7 +155,8 @@ fn transfer_dust(
         .request_gas(sender, DEFAULT_GAS_BUDGET + 1)
         .expect("Failed to request gas");
 
-    let gas = find_address_owned(&fx).expect("Failed to find gas object");
+    let gas =
+        sui_indexer_alt_e2e_tests::find_address_owned(&fx).expect("Failed to find gas object");
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.transfer_sui(recipient, Some(1));
