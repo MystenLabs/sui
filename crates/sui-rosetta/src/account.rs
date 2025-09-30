@@ -152,7 +152,6 @@ async fn get_sub_account_balances(
             .collect(),
     };
 
-    // Make sure there are always one amount returned
     Ok(if amounts.is_empty() {
         vec![Amount::new(0, None)]
     } else {

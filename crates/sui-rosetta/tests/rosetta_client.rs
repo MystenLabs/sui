@@ -150,7 +150,6 @@ impl RosettaClient {
             network: SuiEnv::LocalNet,
         };
         let mut resps = FlowResponses::default();
-        // Preprocess
         let preprocess = self
             .call(
                 RosettaEndpoint::Preprocess,

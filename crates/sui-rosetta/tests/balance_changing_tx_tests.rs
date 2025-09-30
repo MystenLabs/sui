@@ -46,7 +46,6 @@ async fn test_transfer_sui() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Transfer Sui
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
@@ -76,7 +75,6 @@ async fn test_transfer_sui_whole_coin() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test transfer sui whole coin
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
@@ -106,7 +104,6 @@ async fn test_transfer_object() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test transfer object
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
@@ -139,7 +136,6 @@ async fn test_publish_and_move_call() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test publish
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -168,7 +164,6 @@ async fn test_publish_and_move_call() {
     .await;
     let object_changes = response.effects().changed_objects.clone();
 
-    // Test move call (reuse published module from above test)
     let package = find_published_package(&object_changes).unwrap();
 
     let (_, treasury) = find_module_object(&object_changes, |type_str| {
@@ -216,7 +211,6 @@ async fn test_split_coin() {
     let keystore = &network.wallet.config.keystore;
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test spilt coin
     let sender = get_random_address(&network.get_addresses(), vec![]);
     let coin = get_random_sui(&mut client, sender, vec![]).await;
     let pt = {
@@ -245,7 +239,6 @@ async fn test_merge_coin() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test merge coin
     let sender = get_random_address(&network.get_addresses(), vec![]);
     let coin = get_random_sui(&mut client, sender, vec![]).await;
     let coin2 = get_random_sui(&mut client, sender, vec![coin.0]).await;
@@ -275,7 +268,6 @@ async fn test_pay() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
@@ -308,7 +300,6 @@ async fn test_pay_multiple_coin_multiple_recipient() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay multiple coin multiple recipient
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
@@ -347,7 +338,6 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay multiple coin same recipient
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
@@ -384,7 +374,6 @@ async fn test_pay_sui() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay Sui
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
@@ -419,7 +408,6 @@ async fn test_failed_pay_sui() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test failed Pay Sui
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
@@ -454,7 +442,6 @@ async fn test_stake_sui() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Delegate Sui
     let sender = get_random_address(&network.get_addresses(), vec![]);
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let coin1 = get_random_sui(&mut client, sender, vec![]).await;
@@ -476,10 +463,8 @@ async fn test_stake_sui() {
         .unwrap();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        // First merge the coins
         builder.merge_coins(coin1, vec![coin2]).unwrap();
 
-        // Call request_add_stake with the merged coin
         builder
             .move_call(
                 SUI_SYSTEM_PACKAGE_ID,
@@ -516,7 +501,6 @@ async fn test_stake_sui_with_none_amount() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Staking Sui
     let sender = get_random_address(&network.get_addresses(), vec![]);
     let coin1 = get_random_sui(&mut client, sender, vec![]).await;
     let coin2 = get_random_sui(&mut client, sender, vec![coin1.0]).await;
@@ -537,10 +521,8 @@ async fn test_stake_sui_with_none_amount() {
         .unwrap();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        // First merge the coins
         builder.merge_coins(coin1, vec![coin2]).unwrap();
 
-        // Call request_add_stake with the merged coin
         builder
             .move_call(
                 SUI_SYSTEM_PACKAGE_ID,
@@ -577,7 +559,6 @@ async fn test_pay_all_sui() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test Pay All Sui
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
@@ -705,7 +686,6 @@ async fn test_transaction(
         .await
         .unwrap();
 
-    // Balance before execution
     let mut balances = BTreeMap::new();
     let mut addr_to_check = addr_to_check;
     addr_to_check.push(sender);
@@ -732,7 +712,6 @@ async fn test_transaction(
     } else {
         assert!(!effects.status().success());
     }
-    // Create a gRPC client and fetch the transaction with gRPC
     let client = GrpcClient::new(network.rpc_url()).unwrap();
     let tx_digest = response.digest().to_string();
 

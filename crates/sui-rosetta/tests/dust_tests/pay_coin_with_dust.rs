@@ -96,12 +96,10 @@ async fn test_pay_custom_coin_with_multiple_coins() -> anyhow::Result<()> {
         .unwrap()
         .unwrap();
 
-    // Wait for transaction to be indexed
     wait_for_transaction(&mut client, &submit.transaction_identifier.hash.to_string())
         .await
         .unwrap();
 
-    // Fetch transaction using gRPC
     let grpc_request = GetTransactionRequest::default()
         .with_digest(submit.transaction_identifier.hash.to_string())
         .with_read_mask(FieldMask::from_paths([
@@ -348,12 +346,10 @@ async fn test_pay_custom_coin_with_multiple_merge_chunks() -> anyhow::Result<()>
         .unwrap()
         .unwrap();
 
-    // Wait for transaction to be indexed
     wait_for_transaction(&mut client, &submit.transaction_identifier.hash.to_string())
         .await
         .unwrap();
 
-    // Fetch transaction using gRPC
     let grpc_request = GetTransactionRequest::default()
         .with_digest(submit.transaction_identifier.hash.to_string())
         .with_read_mask(FieldMask::from_paths([

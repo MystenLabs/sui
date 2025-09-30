@@ -211,7 +211,6 @@ async fn test_stake() {
         .unwrap()
         .unwrap();
 
-    // Wait for transaction to be indexed
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
@@ -327,7 +326,6 @@ async fn test_stake_all() {
         .unwrap()
         .unwrap();
 
-    // Wait for transaction to be indexed
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
@@ -433,7 +431,6 @@ async fn test_withdraw_stake() {
         .unwrap()
         .unwrap();
 
-    // Wait for transaction to be indexed
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
@@ -507,7 +504,6 @@ async fn test_withdraw_stake() {
         .unwrap()
         .unwrap();
 
-    // Wait for transaction to be indexed
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
@@ -606,7 +602,6 @@ async fn test_pay_sui() {
         .unwrap()
         .unwrap();
 
-    // Wait for transaction to be indexed
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),

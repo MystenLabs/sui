@@ -62,7 +62,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
         budget: Some(budget),
     });
 
-    // Preprocess
     let preprocess_result: Result<ConstructionPreprocessResponse, RosettaError> = rosetta_client
         .call(
             RosettaEndpoint::Preprocess,
@@ -95,7 +94,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
         }
     };
 
-    // Metadata
     let metadata_result: Result<ConstructionMetadataResponse, RosettaError> = rosetta_client
         .call(
             RosettaEndpoint::Metadata,
@@ -121,7 +119,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
         }
     };
 
-    // Payloads
     let payloads_result: Result<ConstructionPayloadsResponse, RosettaError> = rosetta_client
         .call(
             RosettaEndpoint::Payloads,
@@ -152,7 +149,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
         }
     };
 
-    // Combine
     let bytes = Hex::decode(&signing_payload.hex_bytes)?;
     let signer = signing_payload.account_identifier.address;
     let signature = keystore.sign_hashed(&signer, &bytes).await?;
@@ -187,7 +183,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
         }
     };
 
-    // Submit
     let submit_result: Result<TransactionIdentifierResponse, RosettaError> = rosetta_client
         .call(
             RosettaEndpoint::Submit,
@@ -218,7 +213,6 @@ async fn test_pay_with_gas_budget() {
         .await
         .expect("Should not error during test setup");
 
-    // Verify all steps succeeded
     assert!(
         flow_responses.preprocess.as_ref().unwrap().is_ok(),
         "Preprocess should succeed"
@@ -248,13 +242,11 @@ async fn test_pay_with_gas_budget_fail() {
         .await
         .expect("Should not error during test setup");
 
-    // Verify preprocess succeeded
     assert!(
         flow_responses.preprocess.as_ref().unwrap().is_ok(),
         "Preprocess should succeed"
     );
 
-    // Verify the error occurs at metadata stage
     assert!(
         flow_responses.metadata.is_some(),
         "Metadata should be attempted"
@@ -269,7 +261,6 @@ async fn test_pay_with_gas_budget_fail() {
             assert_eq!(rosetta_error.message, "Transaction dry run error");
             assert!(!rosetta_error.retriable);
 
-            // Check the details field contains the InsufficientGas error
             if let Some(details) = &rosetta_error.details {
                 let details_str = serde_json::to_string(details).unwrap();
                 assert!(
@@ -284,7 +275,6 @@ async fn test_pay_with_gas_budget_fail() {
         Ok(_) => panic!("Expected metadata to fail due to insufficient gas budget"),
     }
 
-    // Verify subsequent steps were not executed after metadata failure
     assert!(
         flow_responses.payloads.is_none(),
         "Payloads should not be attempted after metadata failure"

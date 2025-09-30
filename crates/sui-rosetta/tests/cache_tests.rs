@@ -28,7 +28,6 @@ async fn test_cache() {
     let mut client = GrpcClient::new(network.rpc_url()).unwrap();
     let rgp = client.get_reference_gas_price().await.unwrap();
 
-    // Test publish
     let addresses = network.get_addresses();
     let sender = addresses[0];
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -86,7 +85,6 @@ async fn test_cache() {
                     if otype.contains("::coin::TreasuryCap<")
                         && otype.contains("::my_coin::MY_COIN>")
                     {
-                        // Extract the type parameter between < and >
                         let start = otype.find('<')?;
                         let end = otype.rfind('>')?;
                         let type_str = &otype[start + 1..end];

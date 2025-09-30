@@ -49,14 +49,11 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    // Get all owned objects for sender and filter for coins
     let all_coins_sender = get_all_coins(&mut client.clone(), sender).await?;
-    // Note: gRPC implementation handles pagination internally, so no need to check has_next_page
     let mut all_coins_iter = all_coins_sender.into_iter();
     let coin_to_split = all_coins_iter.next().unwrap();
     let _gas_for_split_tx = all_coins_iter.next().unwrap();
 
-    // Save the IDs of the first two coins for later use
     let coin_to_split_id = coin_to_split.id();
     let gas_for_split_tx_id = _gas_for_split_tx.id();
 
@@ -227,7 +224,6 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
         .unwrap()
         .unwrap();
 
-    // Wait for transaction to be indexed
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
@@ -328,9 +324,7 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    // Get all owned objects for sender and filter for coins
     let all_coins_sender = get_all_coins(&mut client.clone(), sender).await?;
-    // Note: gRPC implementation handles pagination internally, so no need to check has_next_page
     let mut all_coins_iter = all_coins_sender.into_iter();
     let coin_to_split = all_coins_iter.next().unwrap();
     let _gas_for_split_tx = all_coins_iter.next().unwrap();
@@ -483,7 +477,6 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
         .unwrap()
         .unwrap();
 
-    // Wait for transaction to be indexed
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),

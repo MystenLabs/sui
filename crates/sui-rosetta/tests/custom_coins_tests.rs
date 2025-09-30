@@ -91,7 +91,6 @@ async fn test_mint() {
 
 #[tokio::test]
 async fn test_custom_coin_balance() {
-    // mint coins to `test_culset.get_address_1()` and `test_culset.get_address_2()`
     const SUI_BALANCE: u64 = 150_000_000_000_000_000;
     const COIN1_BALANCE: u64 = 100_000_000;
     const COIN2_BALANCE: u64 = 200_000_000;
@@ -119,7 +118,6 @@ async fn test_custom_coin_balance() {
         .await
         .unwrap();
 
-    // setup AccountBalanceRequest
     let network_identifier = NetworkIdentifier {
         blockchain: "sui".to_string(),
         network: SuiEnv::LocalNet,
@@ -134,7 +132,6 @@ async fn test_custom_coin_balance() {
         },
     };
 
-    // Verify initial balance and stake
     let request = AccountBalanceRequest {
         network_identifier: network_identifier.clone(),
         account_identifier: AccountIdentifier {
@@ -172,7 +169,6 @@ async fn test_custom_coin_balance() {
 
 #[tokio::test]
 async fn test_default_balance() {
-    // mint coins to `test_culset.get_address_1()` and `test_culset.get_address_2()`
     const SUI_BALANCE: u64 = 150_000_000_000_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -212,7 +208,6 @@ async fn test_custom_coin_transfer() {
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    // TEST_COIN setup and mint
     let init_ret = init_package(&test_cluster, &mut client, keystore, sender, &{
         let mut test_coin_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         test_coin_path.push("tests/custom_coins/test_coin");
@@ -271,7 +266,6 @@ async fn test_custom_coin_transfer() {
     .await
     .unwrap();
 
-    // Fetch transaction using gRPC
     let grpc_request = GetTransactionRequest::default()
         .with_digest(response.transaction_identifier.hash.to_string())
         .with_read_mask(FieldMask::from_paths([
@@ -300,7 +294,6 @@ async fn test_custom_coin_transfer() {
         tx.effects().status().error()
     );
     println!("Sui TX: {tx:?}");
-    // Create a gRPC client and fetch the transaction with gRPC
     let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let tx_digest = tx.digest.expect("Expected transaction digest");
 
@@ -348,7 +341,6 @@ async fn test_custom_coin_without_symbol() {
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    // TEST_COIN setup and mint
     let init_ret = init_package(&test_cluster, &mut client, keystore, sender, &{
         let mut test_coin_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         test_coin_path.push("tests/custom_coins/test_coin_no_symbol");
@@ -362,7 +354,6 @@ async fn test_custom_coin_without_symbol() {
         .await
         .unwrap();
 
-    // Fetch transaction using gRPC
     let grpc_request = GetTransactionRequest::default()
         .with_digest(mint_res.digest().to_string())
         .with_read_mask(FieldMask::from_paths([
@@ -390,7 +381,6 @@ async fn test_custom_coin_without_symbol() {
         "Transaction failed: {:?}",
         tx.effects().status().error()
     );
-    // Create a gRPC client and fetch the transaction with gRPC
     let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let tx_digest = tx.digest.expect("Expected transaction digest");
 
@@ -496,7 +486,6 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
     assert!(coin1.object_type().contains("::test_coin::TEST_COIN"));
     assert!(coin2.object_type().contains("::test_coin::TEST_COIN"));
 
-    // Use the mint_res directly since it now has all the required BCS data
     let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
     let executed_tx = mint_res;

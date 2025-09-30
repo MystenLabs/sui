@@ -79,7 +79,6 @@ pub async fn init_package(
         effects.status().error()
     );
 
-    // Extract all object IDs that were changed by the init transaction
     let mut changed_object_ids = Vec::new();
     for obj in effects.changed_objects() {
         changed_object_ids.push(ObjectID::from_str(obj.object_id())?);
@@ -124,7 +123,6 @@ pub async fn mint(
     balances_to: Vec<(u64, SuiAddress)>,
 ) -> Result<ExecutedTransaction> {
     let treasury_cap_owner = init_ret.owner;
-    // Get a fresh gas object to avoid version conflicts - exclude all objects changed by init
     let price = client.get_reference_gas_price().await?;
     let budget = DEFAULT_GAS_BUDGET;
     let forbidden_objects = init_ret.changed_objects.iter().cloned().collect();
@@ -150,7 +148,6 @@ pub async fn mint(
     }
     let builder = ptb.finish();
 
-    // Sign transaction
     let tx_data = TransactionData::new_programmable(
         treasury_cap_owner,
         vec![gas_object],

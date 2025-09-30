@@ -55,11 +55,8 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    // Get all owned objects for sender and filter for coins
     let all_coins_sender = get_all_coins(&mut client.clone(), sender).await?;
-    // Note: gRPC implementation handles pagination internally, so no need to check has_next_page
 
-    // Save the first two coins for later use
     let first_coin_id = all_coins_sender[0].id();
     let second_coin_id = all_coins_sender[1].id();
 
@@ -67,7 +64,6 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
 
     let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
 
-    // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
@@ -89,8 +85,6 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
             .as_object_ref();
     }
 
-    // Fetch the updated state of the first two coins directly from the ledger
-    // This avoids relying on the potentially stale ownership index
     let mut first_coin_request = GetObjectRequest::default();
     first_coin_request.object_id = Some(first_coin_id.to_string());
 
@@ -115,7 +109,6 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     let first_coin_obj = objects[0].object();
     let second_coin_obj = objects[1].object();
 
-    // Convert the proto objects to Object
     let coin_to_split = first_coin_obj
         .bcs()
         .deserialize::<sui_types::object::Object>()?;
@@ -139,8 +132,6 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     )
     .await?;
 
-    // Now send coin previously been used as gas, in order to only have
-    // the change coins.
     let gas_object = test_cluster
         .wallet
         .get_one_gas_object_owned_by_address(sender)
@@ -165,7 +156,6 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
     let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
-    // Test rosetta can handle using many "small" coins for payment
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
@@ -191,7 +181,6 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
         .unwrap()
         .unwrap();
 
-    // Wait for the transaction to be available in the ledger
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
@@ -296,11 +285,8 @@ async fn test_limit_many_small_coins() -> Result<()> {
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    // Get all owned objects for sender and filter for coins
     let all_coins_sender = get_all_coins(&mut client.clone(), sender).await?;
-    // Note: gRPC implementation handles pagination internally, so no need to check has_next_page
 
-    // Save the first two coins for later use
     let first_coin_id = all_coins_sender[0].id();
     let second_coin_id = all_coins_sender[1].id();
 
@@ -308,7 +294,6 @@ async fn test_limit_many_small_coins() -> Result<()> {
 
     let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
 
-    // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
@@ -330,8 +315,6 @@ async fn test_limit_many_small_coins() -> Result<()> {
             .as_object_ref();
     }
 
-    // Fetch the updated state of the first two coins directly from the ledger
-    // This avoids relying on the potentially stale ownership index
     let mut first_coin_request = GetObjectRequest::default();
     first_coin_request.object_id = Some(first_coin_id.to_string());
 
@@ -356,7 +339,6 @@ async fn test_limit_many_small_coins() -> Result<()> {
     let first_coin_obj = objects[0].object();
     let second_coin_obj = objects[1].object();
 
-    // Convert the proto objects to Object
     let coin_to_split = first_coin_obj
         .bcs()
         .deserialize::<sui_types::object::Object>()?;
@@ -387,8 +369,6 @@ async fn test_limit_many_small_coins() -> Result<()> {
     )
     .await?;
 
-    // Now send coin previously been used as gas, in order to only have
-    // the change coins.
     let gas_object = test_cluster
         .wallet
         .get_one_gas_object_owned_by_address(sender)
@@ -413,7 +393,6 @@ async fn test_limit_many_small_coins() -> Result<()> {
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
     let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
-    // Test rosetta can handle using many "small" coins for payment
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
@@ -439,7 +418,6 @@ async fn test_limit_many_small_coins() -> Result<()> {
         .unwrap()
         .unwrap();
 
-    // Wait for the transaction to be available in the ledger
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
@@ -527,11 +505,8 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    // Get all owned objects for sender and filter for coins
     let all_coins_sender = get_all_coins(&mut client.clone(), sender).await?;
-    // Note: gRPC implementation handles pagination internally, so no need to check has_next_page
 
-    // Save the first two coins for later use
     let first_coin_id = all_coins_sender[0].id();
     let second_coin_id = all_coins_sender[1].id();
 
@@ -562,8 +537,6 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
         let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
     }
 
-    // Fetch the updated state of the first two coins directly from the ledger
-    // This avoids relying on the potentially stale ownership index
     let mut first_coin_request = GetObjectRequest::default();
     first_coin_request.object_id = Some(first_coin_id.to_string());
 
@@ -588,7 +561,6 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
     let first_coin_obj = objects[0].object();
     let second_coin_obj = objects[1].object();
 
-    // Convert the proto objects to Object
     let coin_to_split = first_coin_obj
         .bcs()
         .deserialize::<sui_types::object::Object>()?;
@@ -613,8 +585,6 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
     )
     .await?;
 
-    // Now send coin previously been used as gas, in order to only have
-    // the change coins.
     let gas_object = test_cluster
         .wallet
         .get_one_gas_object_owned_by_address(sender)
@@ -639,7 +609,6 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
     let signed_transaction = Transaction::from_data(tx_data, vec![sig]);
     let _resp = execute_transaction(&mut client.clone(), &signed_transaction).await?;
 
-    // Test rosetta can handle using many "small" coins for payment
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
@@ -671,7 +640,6 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
         .unwrap()
         .unwrap();
 
-    // Wait for the transaction to be available in the ledger
     wait_for_transaction(
         &mut client,
         &response.transaction_identifier.hash.to_string(),
@@ -777,7 +745,6 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
 
     let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
 
-    // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
@@ -973,7 +940,6 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
 
     let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
 
-    // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
@@ -1063,8 +1029,6 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
     )
     .await?;
 
-    // Now send coin previously been used as gas, in order to only have
-    // the change coins.
     let gas_object = test_cluster
         .wallet
         .get_one_gas_object_owned_by_address(sender)
@@ -1164,7 +1128,6 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
 
     let mut gas_for_transfers = all_coins_sender[0].compute_object_reference();
 
-    // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
@@ -1254,8 +1217,6 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
     )
     .await?;
 
-    // Now send coin previously been used as gas, in order to only have
-    // the change coins.
     let gas_object = test_cluster
         .wallet
         .get_one_gas_object_owned_by_address(sender)
