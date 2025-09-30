@@ -10,14 +10,23 @@
 module sui::authenticator_state;
 
 use std::string::{Self, String, utf8};
+use sui::derived_object;
 use sui::dynamic_field;
+use sui::party;
+use sui::vec_set;
 
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 const EWrongInnerVersion: u64 = 1;
 const EJwksNotSorted: u64 = 2;
+const ENoSuchAlias: u64 = 3;
+const EAliasAlreadyExists: u64 = 4;
+const ECannotRemoveLastAlias: u64 = 5;
+const ETooManyAliases: u64 = 6;
 
 const CurrentVersion: u64 = 1;
+
+const MaxAliases: u64 = 20;
 
 /// Singleton shared object which stores the global authenticator state.
 /// The actual state is stored in a dynamic field of type AuthenticatorStateInner to support
@@ -353,6 +362,56 @@ fun expire_jwks(
 fun get_active_jwks(self: &AuthenticatorState, ctx: &TxContext): vector<ActiveJwk> {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
     self.load_inner().active_jwks
+}
+
+/// Tracks the set of addresses allowed to act as a given sender.
+///
+/// An alias allows transactions signed by the alias address to act as the
+/// original address. For example, if address X sets an alias of address Y, then
+/// then a transaction signed by Y can set its sender address to X.
+public struct AddressAliases has key {
+    id: UID,
+    aliases: vec_set::VecSet<address>,
+}
+
+/// Internal key used for derivation of AddressAliases object addresses.
+public struct AliasKey(address) has copy, drop, store;
+
+/// Provides the initial set of address aliases for the sender address.
+///
+/// By default, an address is its own alias. However, the original address can
+/// be removed from the set of allowed aliases after initialization.
+entry fun init_aliases(authenticator_state: &mut AuthenticatorState, ctx: &TxContext) {
+    assert!(!derived_object::exists(&authenticator_state.id, ctx.sender()), EAliasAlreadyExists);
+    transfer::party_transfer(
+        AddressAliases {
+            id: derived_object::claim(&mut authenticator_state.id, AliasKey(ctx.sender())),
+            aliases: vec_set::singleton(ctx.sender()),
+        },
+        party::single_owner(ctx.sender()),
+    );
+}
+
+/// Adds the provided address to the set of aliases for the sender.
+entry fun add_alias(aliases: &mut AddressAliases, alias: address) {
+    assert!(!vec_set::contains(&aliases.aliases, &alias), EAliasAlreadyExists);
+    vec_set::insert(&mut aliases.aliases, alias);
+    assert!(vec_set::length(&aliases.aliases) <= MaxAliases, ETooManyAliases);
+}
+
+/// Overwrites the aliases for the sender's address with the given set.
+entry fun set_aliases(aliases: &mut AddressAliases, new_aliases: vector<address>) {
+    let new_aliases = vec_set::from_keys(new_aliases);
+    assert!(vec_set::length(&new_aliases) > 0, ECannotRemoveLastAlias);
+    assert!(vec_set::length(&new_aliases) <= MaxAliases, ETooManyAliases);
+    aliases.aliases = new_aliases;
+}
+
+/// Removes the given alias from the set of aliases for the sender's address.
+entry fun remove_alias(aliases: &mut AddressAliases, alias: address) {
+    assert!(vec_set::contains(&aliases.aliases, &alias), ENoSuchAlias);
+    assert!(vec_set::length(&aliases.aliases) > 1, ECannotRemoveLastAlias);
+    vec_set::remove(&mut aliases.aliases, &alias);
 }
 
 #[test_only]

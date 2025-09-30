@@ -13,7 +13,7 @@ use crate::messages_checkpoint::{
 use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
-use crate::transaction::{CertifiedTransaction, Transaction};
+use crate::transaction::{CertifiedTransaction, Transaction, TransactionWithAliases};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
 use consensus_types::block::{BlockRef, TransactionIndex, PING_TRANSACTION_INDEX};
@@ -120,7 +120,6 @@ pub struct ConsensusCommitPrologueV2 {
     pub consensus_commit_digest: ConsensusCommitDigest,
 }
 
-/// Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum ConsensusDeterminedVersionAssignments {
     // Cancelled transaction version assignment.
@@ -158,6 +157,26 @@ pub struct ConsensusCommitPrologueV3 {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ConsensusCommitPrologueV4 {
+    /// Epoch of the commit prologue transaction
+    pub epoch: u64,
+    /// Consensus round of the commit
+    pub round: u64,
+    /// The sub DAG index of the consensus commit. This field will be populated if there
+    /// are multiple consensus commits per round.
+    pub sub_dag_index: Option<u64>,
+    /// Unix timestamp from consensus commit.
+    pub commit_timestamp_ms: TimestampMs,
+    /// Digest of consensus output
+    pub consensus_commit_digest: ConsensusCommitDigest,
+    /// Stores consensus handler determined shared object version assignments.
+    pub consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
+    /// Digest of any additional state computed by the consensus handler.
+    /// Used to detect forking bugs as early as possible.
+    pub additional_state_digest: AdditionalConsensusStateDigest,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ConsensusCommitPrologueV5 {
     /// Epoch of the commit prologue transaction
     pub epoch: u64,
     /// Consensus round of the commit
@@ -467,6 +486,10 @@ pub enum ConsensusTransactionKind {
     ExecutionTimeObservation(ExecutionTimeObservation),
     // V2: dedup by authority + sequence + digest
     CheckpointSignatureV2(Box<CheckpointSignatureMessage>),
+
+    // UserTransactionV2 commits to specific AddressAliases object versions that were used
+    // to verify the transaction.
+    UserTransactionV2(Box<TransactionWithAliases>),
 }
 
 impl ConsensusTransactionKind {}
@@ -584,6 +607,21 @@ impl ConsensusTransaction {
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::UserTransaction(Box::new(tx)),
+        }
+    }
+
+    pub fn new_user_transaction_v2_message(
+        authority: &AuthorityName,
+        tx: TransactionWithAliases,
+    ) -> Self {
+        let mut hasher = DefaultHasher::new();
+        let tx_digest = tx.tx().digest();
+        tx_digest.hash(&mut hasher);
+        authority.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::UserTransactionV2(Box::new(tx)),
         }
     }
 
@@ -757,6 +795,12 @@ impl ConsensusTransaction {
                 // because existing usages of ConsensusTransactionKey should not differentiate
                 // between CertifiedTransaction and UserTransaction.
                 ConsensusTransactionKey::Certificate(*tx.digest())
+            }
+            ConsensusTransactionKind::UserTransactionV2(tx) => {
+                // Use the same key format as ConsensusTransactionKind::CertifiedTransaction,
+                // because existing usages of ConsensusTransactionKey should not differentiate
+                // between CertifiedTransaction and UserTransactionV2.
+                ConsensusTransactionKey::Certificate(*tx.tx().digest())
             }
             ConsensusTransactionKind::ExecutionTimeObservation(msg) => {
                 ConsensusTransactionKey::ExecutionTimeObservation(msg.authority, msg.generation)
