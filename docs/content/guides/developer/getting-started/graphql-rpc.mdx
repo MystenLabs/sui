@@ -97,7 +97,7 @@ As there is no longer a dedicated API for fetching the coins owned by an address
 
 ### Dry-run, gas estimation, and coin selection
 
-As well as being renamed to `simulateTransaction`, dry-run now supports the same input schema as `gRPC`'s `SimulateTransaction` -- [Transaction](/references/fullnode-protocol#sui-rpc-v2-Transaction) -- in JSON form. This means that it can also accept transactions where the inputs have not been fully resolved or serialized, perform gas estimation, and coin selection.
+Dry-run now supports the same input schema as `gRPC`'s [`SimulateTransaction`](/references/fullnode-protocol#sui-rpc-v2-Transaction) in JSON form. This means that it can also accept transactions where the inputs have not been fully resolved or serialized, perform gas estimation, and coin selection. The feature is now called `simulateTransaction`.
 
 ## Example queries
 
