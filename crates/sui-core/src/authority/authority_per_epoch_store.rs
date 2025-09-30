@@ -47,7 +47,8 @@ use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::executable_transaction::{
-    TrustedExecutableTransaction, VerifiedExecutableTransaction,
+    TrustedExecutableTransaction, TrustedExecutableTransactionWithAliases,
+    VerifiedExecutableTransaction, VerifiedExecutableTransactionWithAliases,
 };
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::global_state_hash::GlobalStateHash;
@@ -70,7 +71,7 @@ use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, ProgrammableTransaction,
     SenderSignedData, StoredExecutionTimeObservations, Transaction, TransactionData,
     TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
-    VerifiedSignedTransaction, VerifiedTransaction,
+    VerifiedSignedTransaction, VerifiedTransaction, VerifiedTransactionWithAliases, WithAliases,
 };
 use tap::TapOptional;
 use tokio::sync::{OnceCell, mpsc, oneshot};
@@ -546,6 +547,8 @@ pub struct AuthorityEpochTables {
 
     /// Transactions that are being deferred until some future time
     deferred_transactions_v2: DBMap<DeferralKey, Vec<TrustedExecutableTransaction>>,
+    deferred_transactions_with_aliases_v2:
+        DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
 
     // Tables for recording state for RandomnessManager.
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
@@ -949,11 +952,30 @@ impl AuthorityEpochTables {
 
     fn get_all_deferred_transactions_v2(
         &self,
-    ) -> SuiResult<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>> {
+    ) -> SuiResult<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>>> {
         Ok(self
             .deferred_transactions_v2
             .safe_iter()
-            .map(|item| item.map(|(key, txs)| (key, txs.into_iter().map(Into::into).collect())))
+            // Load any old items from the deprecated table. These must all have no aliases.
+            .map(|item| {
+                item.map(|(key, txs)| {
+                    (
+                        key,
+                        txs.into_iter()
+                            .map(|tx| {
+                                VerifiedExecutableTransactionWithAliases::no_aliases(tx.into())
+                            })
+                            .collect(),
+                    )
+                })
+            })
+            .chain(
+                self.deferred_transactions_with_aliases_v2
+                    .safe_iter()
+                    .map(|item| {
+                        item.map(|(key, txs)| (key, txs.into_iter().map(Into::into).collect()))
+                    }),
+            )
             .collect::<Result<_, _>>()?)
     }
 }
@@ -1052,6 +1074,7 @@ impl AuthorityPerEpochStore {
 
         let signature_verifier = SignatureVerifier::new(
             committee.clone(),
+            object_store.clone(),
             signature_verifier_metrics,
             supported_providers,
             zklogin_env,
@@ -1060,6 +1083,7 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_passkey_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
             protocol_config.additional_multisig_checks(),
+            protocol_config.account_aliases(),
         );
 
         let authenticator_state_exists = epoch_start_configuration
@@ -2298,7 +2322,7 @@ impl AuthorityPerEpochStore {
     pub(crate) fn load_deferred_transactions_for_randomness_v2(
         &self,
         output: &mut ConsensusCommitOutput,
-    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>> {
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>> {
         let (min, max) = DeferralKey::full_range_for_randomness();
         self.load_deferred_transactions_v2(output, min, max)
     }
@@ -2307,7 +2331,7 @@ impl AuthorityPerEpochStore {
         &self,
         output: &mut ConsensusCommitOutput,
         consensus_round: u64,
-    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>> {
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>> {
         let (min, max) = DeferralKey::range_for_up_to_consensus_round(consensus_round);
         self.load_deferred_transactions_v2(output, min, max)
     }
@@ -2318,7 +2342,7 @@ impl AuthorityPerEpochStore {
         output: &mut ConsensusCommitOutput,
         min: DeferralKey,
         max: DeferralKey,
-    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>> {
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>> {
         debug!("Query epoch store to load deferred txn {:?} {:?}", min, max);
 
         let (keys, txns) = {
@@ -2347,7 +2371,7 @@ impl AuthorityPerEpochStore {
             let mut seen = HashSet::new();
             for deferred_txn_batch in &txns {
                 for txn in &deferred_txn_batch.1 {
-                    assert!(seen.insert(txn.digest()));
+                    assert!(seen.insert(txn.tx().digest()));
                 }
             }
         }
@@ -2687,7 +2711,7 @@ impl AuthorityPerEpochStore {
         &self,
         transactions: &[VerifiedTransaction],
         digests: &[TransactionDigest],
-    ) -> Vec<Vec<GenericSignature>> {
+    ) -> Vec<Vec<(GenericSignature, Option<SequenceNumber>)>> {
         assert_eq!(transactions.len(), digests.len());
 
         fn is_signature_expected(transaction: &VerifiedTransaction) -> bool {
@@ -2716,7 +2740,10 @@ impl AuthorityPerEpochStore {
                         // available.
                         user_sigs.remove(d).expect("signature should be available")
                     } else {
-                        t.tx_signatures().to_vec()
+                        t.tx_signatures()
+                            .iter()
+                            .map(|s| (s.to_owned(), None))
+                            .collect()
                     }
                 })
                 .collect()
@@ -2916,7 +2943,7 @@ impl AuthorityPerEpochStore {
     pub fn test_insert_user_signature(
         &self,
         digest: TransactionDigest,
-        signatures: Vec<GenericSignature>,
+        signatures: Vec<(GenericSignature, Option<SequenceNumber>)>,
     ) {
         self.consensus_output_cache
             .user_signatures_for_checkpoints
@@ -2943,17 +2970,39 @@ impl AuthorityPerEpochStore {
             .expect("push_consensus_output should not fail");
     }
 
-    pub(crate) fn process_user_signatures<'a>(
+    // Implements user signature processing for old version of consesnus handler, where
+    // we can assume no aliases because the old consensus handler does not support aliases.
+    fn process_user_signatures_from_schedulables<'a>(
         &self,
         certificates: impl Iterator<Item = &'a Schedulable>,
     ) {
-        let sigs: Vec<_> = certificates
+        let txs: Vec<_> = certificates
             .filter_map(|s| match s {
-                Schedulable::Transaction(certificate) => {
-                    Some((*certificate.digest(), certificate.tx_signatures().to_vec()))
-                }
+                Schedulable::Transaction(certificate) => Some(
+                    VerifiedExecutableTransactionWithAliases::no_aliases(certificate.to_owned()),
+                ),
                 Schedulable::RandomnessStateUpdate(_, _) => None,
                 Schedulable::AccumulatorSettlement(_, _) => None,
+            })
+            .collect();
+        self.process_user_signatures(txs.iter())
+    }
+
+    pub(crate) fn process_user_signatures<'a>(
+        &self,
+        txs: impl Iterator<Item = &'a VerifiedExecutableTransactionWithAliases>,
+    ) {
+        let sigs: Vec<_> = txs
+            .map(|tx| {
+                (
+                    *tx.tx().digest(),
+                    tx.tx()
+                        .tx_signatures()
+                        .iter()
+                        .cloned()
+                        .zip(tx.aliases().iter().map(|(_, seq)| *seq))
+                        .collect(),
+                )
             })
             .collect();
 
@@ -3046,10 +3095,29 @@ impl AuthorityPerEpochStore {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn verify_transaction(&self, tx: Transaction) -> SuiResult<VerifiedTransaction> {
+    pub fn verify_transaction_with_current_aliases(
+        &self,
+        tx: Transaction,
+    ) -> SuiResult<VerifiedTransactionWithAliases> {
         self.signature_verifier
-            .verify_tx(tx.data())
-            .map(|_| VerifiedTransaction::new_from_verified(tx))
+            .verify_tx_with_current_aliases(tx.data())
+            .map(|aliases_used| {
+                WithAliases::new(VerifiedTransaction::new_from_verified(tx), aliases_used)
+            })
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn verify_transaction_require_no_aliases(
+        &self,
+        tx: Transaction,
+    ) -> SuiResult<VerifiedTransactionWithAliases> {
+        self.signature_verifier
+            .verify_tx_require_no_aliases(tx.data())
+            .map(|_| {
+                VerifiedTransactionWithAliases::no_aliases(VerifiedTransaction::new_from_verified(
+                    tx,
+                ))
+            })
     }
 
     /// Verifies transaction signatures and other data
@@ -3069,7 +3137,9 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(_tx),
+                kind:
+                    ConsensusTransactionKind::UserTransaction(_)
+                    | ConsensusTransactionKind::UserTransactionV2(_),
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {

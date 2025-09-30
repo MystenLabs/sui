@@ -1078,8 +1078,10 @@ async fn execute_transfer_with_price(
                 )
             })
     } else {
-        let tx = epoch_store.verify_transaction(tx).unwrap();
-
+        let tx = epoch_store
+            .verify_transaction_require_no_aliases(tx)
+            .unwrap()
+            .into_tx();
         authority_state
             .handle_transaction(&epoch_store, tx)
             .await

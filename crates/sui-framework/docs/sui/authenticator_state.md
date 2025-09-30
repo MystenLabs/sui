@@ -9,6 +9,8 @@ title: Module `sui::authenticator_state`
 -  [Struct `JWK`](#sui_authenticator_state_JWK)
 -  [Struct `JwkId`](#sui_authenticator_state_JwkId)
 -  [Struct `ActiveJwk`](#sui_authenticator_state_ActiveJwk)
+-  [Struct `AddressAliases`](#sui_authenticator_state_AddressAliases)
+-  [Struct `AliasKey`](#sui_authenticator_state_AliasKey)
 -  [Constants](#@Constants_0)
 -  [Function `active_jwk_equal`](#sui_authenticator_state_active_jwk_equal)
 -  [Function `jwk_equal`](#sui_authenticator_state_jwk_equal)
@@ -23,6 +25,10 @@ title: Module `sui::authenticator_state`
 -  [Function `deduplicate`](#sui_authenticator_state_deduplicate)
 -  [Function `expire_jwks`](#sui_authenticator_state_expire_jwks)
 -  [Function `get_active_jwks`](#sui_authenticator_state_get_active_jwks)
+-  [Function `init_aliases`](#sui_authenticator_state_init_aliases)
+-  [Function `add_alias`](#sui_authenticator_state_add_alias)
+-  [Function `set_aliases`](#sui_authenticator_state_set_aliases)
+-  [Function `remove_alias`](#sui_authenticator_state_remove_alias)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -32,6 +38,7 @@ title: Module `sui::authenticator_state`
 <b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="../sui/derived_object.md#sui_derived_object">sui::derived_object</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
@@ -39,6 +46,7 @@ title: Module `sui::authenticator_state`
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
+<b>use</b> <a href="../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
 </code></pre>
 
 
@@ -219,6 +227,69 @@ Must match the JwkId struct in fastcrypto-zkp
 
 </details>
 
+<a name="sui_authenticator_state_AddressAliases"></a>
+
+## Struct `AddressAliases`
+
+Tracks the set of addresses allowed to act as a given sender.
+
+An alias allows transactions signed by the alias address to act as the
+original address. For example, if address X sets an alias of address Y, then
+then a transaction signed by Y can set its sender address to X.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AddressAliases">AddressAliases</a> <b>has</b> key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>aliases: <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<b>address</b>&gt;</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_authenticator_state_AliasKey"></a>
+
+## Struct `AliasKey`
+
+Internal key used for derivation of AddressAliases object addresses.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AliasKey">AliasKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>0: <b>address</b></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -252,11 +323,56 @@ Sender is not @0x0 the system address.
 
 
 
+<a name="sui_authenticator_state_ENoSuchAlias"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_ENoSuchAlias">ENoSuchAlias</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="sui_authenticator_state_EAliasAlreadyExists"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_EAliasAlreadyExists">EAliasAlreadyExists</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="sui_authenticator_state_ECannotRemoveLastAlias"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_ECannotRemoveLastAlias">ECannotRemoveLastAlias</a>: u64 = 5;
+</code></pre>
+
+
+
+<a name="sui_authenticator_state_ETooManyAliases"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_ETooManyAliases">ETooManyAliases</a>: u64 = 6;
+</code></pre>
+
+
+
 <a name="sui_authenticator_state_CurrentVersion"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_CurrentVersion">CurrentVersion</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_authenticator_state_MaxAliases"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_MaxAliases">MaxAliases</a>: u64 = 20;
 </code></pre>
 
 
@@ -762,6 +878,123 @@ JWK state from the chain.
 <pre><code><b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_get_active_jwks">get_active_jwks</a>(self: &<a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">AuthenticatorState</a>, ctx: &TxContext): vector&lt;<a href="../sui/authenticator_state.md#sui_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/authenticator_state.md#sui_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
     self.<a href="../sui/authenticator_state.md#sui_authenticator_state_load_inner">load_inner</a>().active_jwks
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_authenticator_state_init_aliases"></a>
+
+## Function `init_aliases`
+
+Provides the initial set of address aliases for the sender address.
+
+By default, an address is its own alias. However, the original address can
+be removed from the set of allowed aliases after initialization.
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_init_aliases">init_aliases</a>(<a href="../sui/authenticator_state.md#sui_authenticator_state">authenticator_state</a>: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">sui::authenticator_state::AuthenticatorState</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_init_aliases">init_aliases</a>(<a href="../sui/authenticator_state.md#sui_authenticator_state">authenticator_state</a>: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">AuthenticatorState</a>, ctx: &TxContext) {
+    <b>assert</b>!(!<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&<a href="../sui/authenticator_state.md#sui_authenticator_state">authenticator_state</a>.id, ctx.sender()), <a href="../sui/authenticator_state.md#sui_authenticator_state_EAliasAlreadyExists">EAliasAlreadyExists</a>);
+    <a href="../sui/transfer.md#sui_transfer_party_transfer">transfer::party_transfer</a>(
+        <a href="../sui/authenticator_state.md#sui_authenticator_state_AddressAliases">AddressAliases</a> {
+            id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state">authenticator_state</a>.id, <a href="../sui/authenticator_state.md#sui_authenticator_state_AliasKey">AliasKey</a>(ctx.sender())),
+            aliases: <a href="../sui/vec_set.md#sui_vec_set_singleton">vec_set::singleton</a>(ctx.sender()),
+        },
+        <a href="../sui/party.md#sui_party_single_owner">party::single_owner</a>(ctx.sender()),
+    );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_authenticator_state_add_alias"></a>
+
+## Function `add_alias`
+
+Adds the provided address to the set of aliases for the sender.
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_add_alias">add_alias</a>(aliases: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AddressAliases">sui::authenticator_state::AddressAliases</a>, alias: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_add_alias">add_alias</a>(aliases: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AddressAliases">AddressAliases</a>, alias: <b>address</b>) {
+    <b>assert</b>!(!<a href="../sui/vec_set.md#sui_vec_set_contains">vec_set::contains</a>(&aliases.aliases, &alias), <a href="../sui/authenticator_state.md#sui_authenticator_state_EAliasAlreadyExists">EAliasAlreadyExists</a>);
+    <a href="../sui/vec_set.md#sui_vec_set_insert">vec_set::insert</a>(&<b>mut</b> aliases.aliases, alias);
+    <b>assert</b>!(<a href="../sui/vec_set.md#sui_vec_set_length">vec_set::length</a>(&aliases.aliases) &lt;= <a href="../sui/authenticator_state.md#sui_authenticator_state_MaxAliases">MaxAliases</a>, <a href="../sui/authenticator_state.md#sui_authenticator_state_ETooManyAliases">ETooManyAliases</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_authenticator_state_set_aliases"></a>
+
+## Function `set_aliases`
+
+Overwrites the aliases for the sender's address with the given set.
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_set_aliases">set_aliases</a>(aliases: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AddressAliases">sui::authenticator_state::AddressAliases</a>, new_aliases: vector&lt;<b>address</b>&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_set_aliases">set_aliases</a>(aliases: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AddressAliases">AddressAliases</a>, new_aliases: vector&lt;<b>address</b>&gt;) {
+    <b>let</b> new_aliases = <a href="../sui/vec_set.md#sui_vec_set_from_keys">vec_set::from_keys</a>(new_aliases);
+    <b>assert</b>!(<a href="../sui/vec_set.md#sui_vec_set_length">vec_set::length</a>(&new_aliases) &gt; 0, <a href="../sui/authenticator_state.md#sui_authenticator_state_ECannotRemoveLastAlias">ECannotRemoveLastAlias</a>);
+    <b>assert</b>!(<a href="../sui/vec_set.md#sui_vec_set_length">vec_set::length</a>(&new_aliases) &lt;= <a href="../sui/authenticator_state.md#sui_authenticator_state_MaxAliases">MaxAliases</a>, <a href="../sui/authenticator_state.md#sui_authenticator_state_ETooManyAliases">ETooManyAliases</a>);
+    aliases.aliases = new_aliases;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_authenticator_state_remove_alias"></a>
+
+## Function `remove_alias`
+
+Removes the given alias from the set of aliases for the sender's address.
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_remove_alias">remove_alias</a>(aliases: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AddressAliases">sui::authenticator_state::AddressAliases</a>, alias: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_remove_alias">remove_alias</a>(aliases: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AddressAliases">AddressAliases</a>, alias: <b>address</b>) {
+    <b>assert</b>!(<a href="../sui/vec_set.md#sui_vec_set_contains">vec_set::contains</a>(&aliases.aliases, &alias), <a href="../sui/authenticator_state.md#sui_authenticator_state_ENoSuchAlias">ENoSuchAlias</a>);
+    <b>assert</b>!(<a href="../sui/vec_set.md#sui_vec_set_length">vec_set::length</a>(&aliases.aliases) &gt; 1, <a href="../sui/authenticator_state.md#sui_authenticator_state_ECannotRemoveLastAlias">ECannotRemoveLastAlias</a>);
+    <a href="../sui/vec_set.md#sui_vec_set_remove">vec_set::remove</a>(&<b>mut</b> aliases.aliases, &alias);
 }
 </code></pre>
 
