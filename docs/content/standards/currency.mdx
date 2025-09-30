@@ -37,7 +37,7 @@ The registry is a system-level shared object located at address `0xc`.
 
 #### Core components
 
-**`CoinRegistry`:** The main system object that coordinates all currency-related operations. This shared object serves as the entry point for all registry operations and is created once during network initialization.
+**`CoinRegistry`:** The main system object that coordinates all currency-related operations. This shared object serves as the entry point for all registry operations and is created once during network initialization. It's address is `0xc`.
 
 **`Currency<T>`:** The core of the registry system, storing comprehensive information about each coin type including:
 - **Metadata management:** Basic currency information like name, symbol, decimals, description, and icon URL.
@@ -52,7 +52,7 @@ The registry supports three different supply management models:
 
 - **Fixed supply:** The total supply is permanently locked and cannot be changed.
 - **Burn-only supply:** New coins cannot be minted, but existing coins can be burned.
-- **Unknown supply:** Traditional model where the `TreasuryCap` holder controls minting and burning.
+- **Uncontrolled supply:** Traditional model where the `TreasuryCap` holder controls minting and burning.
 
 #### Regulatory states
 
@@ -68,7 +68,7 @@ The registry supports two different currency creation flows:
 
 - **Standard creation (recommended):**
 
-    Use the `new_currency` function at any time after the currency type is published. The function immediately creates a shared `Currency<T>` object.
+    Use the `new_currency` function at any time after the currency type is published. The function immediately creates a shared `Currency<T>` object. The type `T` must be a key-only type, as in `public struct MyCoin has key { id: UID }`.
 
     <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="new_currency" signatureOnly noComments />
 
@@ -80,7 +80,7 @@ The registry supports two different currency creation flows:
 
     :::
 
-    The `new_currency_with_otw` function uses an OTW for uniqueness proof.
+    The `new_currency_with_otw` function uses an OTW for uniqueness proof. See The Move Book for more information on [OTWs](https://move-book.com/programmability/one-time-witness).
 
     <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="new_currency_with_otw" signatureOnly noComments />
 
