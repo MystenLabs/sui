@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, Weak};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Weak,
+};
+use std::time::Duration;
 
 use mysten_common::{fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_macros::fail_point_async;
 use sui_types::error::SuiError;
-use tokio::sync::{mpsc::UnboundedReceiver, oneshot, Semaphore};
+use tokio::sync::{mpsc::UnboundedReceiver, oneshot, OwnedSemaphorePermit, Semaphore};
 use tracing::{error_span, info, trace, warn, Instrument};
 
 use crate::authority::AuthorityState;
@@ -20,6 +24,114 @@ mod execution_driver_tests;
 
 const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 
+/// Define dynamic concurrency controller
+#[derive(Clone)]
+pub struct DynamicConcurrencyController {
+    #[allow(dead_code)]
+    base_limit: usize, // cpu limit
+    current_limit: Arc<AtomicUsize>,
+    max_limit: usize,
+    min_limit: usize,
+    semaphore: Arc<Semaphore>,
+    exec_stats: Arc<ExecutionStats>,
+}
+#[derive(Default)]
+struct ExecutionStats {
+    success_count: AtomicUsize,
+    fail_count: AtomicUsize,
+}
+impl DynamicConcurrencyController {
+    pub fn new() -> Self {
+        let base_limit = num_cpus::get();
+        let max_limit = base_limit * 2;
+        let min_limit = base_limit.max(2);
+        let controller = Self {
+            base_limit,
+            current_limit: Arc::new(AtomicUsize::new(base_limit)),
+            max_limit,
+            min_limit,
+            semaphore: Arc::new(Semaphore::new(base_limit)),
+            exec_stats: Arc::new(ExecutionStats::default()),
+        };
+        controller.start_adjustment_task();
+        controller
+    }
+
+    fn start_adjustment_task(&self) {
+        let controller = self.clone();
+        spawn_monitored_task!(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                controller.adjust_concurrency_limit().await;
+            }
+        });
+    }
+    async fn adjust_concurrency_limit(&self) {
+        let success = self.exec_stats.success_count.swap(0, Ordering::Relaxed);
+        let failure = self.exec_stats.fail_count.swap(0, Ordering::Relaxed);
+        let total = success + failure;
+        if total == 0 {
+            return;
+        }
+
+        let failure_rate = failure as f64 / total as f64;
+        let current_limit = self.current_limit.load(Ordering::Relaxed);
+
+        let new_limit = if failure_rate > 0.1 {
+            current_limit.saturating_sub(1).max(self.min_limit)
+        } else if failure_rate < 0.05 {
+            current_limit.saturating_add(1).min(self.max_limit)
+        } else {
+            current_limit
+        };
+
+        if new_limit != current_limit {
+            let current_permits = self.semaphore.available_permits() as isize;
+            let target_permits = new_limit as isize - (current_limit as isize - current_permits);
+            if target_permits > current_permits {
+                for _ in current_permits..target_permits {
+                    self.semaphore.add_permits(1);
+                }
+            }
+
+            self.current_limit.store(new_limit, Ordering::Relaxed);
+
+            trace!(
+                "Adjust concurrency limit from {} to {}",
+                current_limit,
+                new_limit
+            );
+        }
+    }
+    pub async fn acquire(&self) -> OwnedSemaphorePermit {
+        self.semaphore.clone().acquire_owned().await.unwrap()
+    }
+    pub fn record_success(&self) {
+        self.exec_stats
+            .success_count
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_failure(&self) {
+        self.exec_stats.fail_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[allow(dead_code)]
+    pub fn current_limit(&self) -> usize {
+        self.current_limit.load(Ordering::Relaxed)
+    }
+
+    #[allow(dead_code)]
+    pub fn min_limit(&self) -> usize {
+        self.min_limit
+    }
+
+    #[allow(dead_code)]
+    pub fn max_limit(&self) -> usize {
+        self.max_limit
+    }
+}
+
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
 pub async fn execution_process(
@@ -29,8 +141,7 @@ pub async fn execution_process(
 ) {
     info!("Starting pending certificates execution process.");
 
-    // Rate limit concurrent executions to # of cpus.
-    let limit = Arc::new(Semaphore::new(num_cpus::get()));
+    let concurrency_controller = Arc::new(DynamicConcurrencyController::new());
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
@@ -86,10 +197,9 @@ pub async fn execution_process(
             continue;
         }
 
-        let limit = limit.clone();
-        // hold semaphore permit until task completes. unwrap ok because we never close
-        // the semaphore in this context.
-        let permit = limit.acquire_owned().await.unwrap();
+        let controller = concurrency_controller.clone();
+        // Acquire execution permit
+        let permit = controller.acquire().await;
 
         if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
             authority
@@ -124,12 +234,16 @@ pub async fn execution_process(
             ).await {
                 Err(SuiError::ValidatorHaltedAtEpochEnd) => {
                     warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
+                    controller.record_failure();
                     return;
                 }
                 Err(e) => {
+                    controller.record_failure();
                     fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
                 }
-                _ => (),
+                Ok(_) => {
+                    controller.record_success();
+                }
             }
             authority
                 .metrics
