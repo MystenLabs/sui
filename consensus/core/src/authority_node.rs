@@ -37,7 +37,7 @@ use crate::{
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
-    transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
+    transaction::{TransactionClient, TransactionVerifier},
     transaction_certifier::TransactionCertifier,
     CommitConsumerArgs,
 };
@@ -231,8 +231,7 @@ where
             .protocol_version
             .set(context.protocol_config.version.as_u64() as i64);
 
-        let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
-        let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (tx_client, tx_consumer) = TransactionClient::new(context.clone());
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 

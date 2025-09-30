@@ -267,30 +267,28 @@ pub enum ClientError {
 }
 
 impl TransactionClient {
-    pub(crate) fn new(context: Arc<Context>) -> (Self, Receiver<TransactionsGuard>) {
+    pub(crate) fn new(context: Arc<Context>) -> (Self, TransactionConsumer) {
         Self::new_with_max_pending_transactions(context, MAX_PENDING_TRANSACTIONS)
     }
 
     fn new_with_max_pending_transactions(
         context: Arc<Context>,
         max_pending_transactions: usize,
-    ) -> (Self, Receiver<TransactionsGuard>) {
+    ) -> (Self, TransactionConsumer) {
         let (sender, receiver) = channel("consensus_input", max_pending_transactions);
-        (
-            Self {
-                sender,
-                max_transaction_size: context.protocol_config.max_transaction_size_bytes(),
-
-                max_transactions_in_block_bytes: context
-                    .protocol_config
-                    .max_transactions_in_block_bytes(),
-                max_transactions_in_block_count: context
-                    .protocol_config
-                    .max_num_transactions_in_block(),
-                context: context.clone(),
-            },
-            receiver,
-        )
+        let client = Self {
+            sender,
+            max_transaction_size: context.protocol_config.max_transaction_size_bytes(),
+            max_transactions_in_block_bytes: context
+                .protocol_config
+                .max_transactions_in_block_bytes(),
+            max_transactions_in_block_count: context
+                .protocol_config
+                .max_num_transactions_in_block(),
+            context: context.clone(),
+        };
+        let consumer = TransactionConsumer::new(receiver, context);
+        (client, consumer)
     }
 
     /// Returns the current epoch of this client.
@@ -459,9 +457,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         // submit asynchronously the transactions and keep the waiters
         let mut included_in_block_waiters = FuturesUnordered::new();
         for i in 0..3 {
@@ -512,9 +508,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         // submit the transactions and include 2 of each on a new block
         let mut included_in_block_waiters = FuturesUnordered::new();
         for i in 1..=10 {
@@ -590,9 +584,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         // submit some transactions
         for i in 0..10 {
             let transaction =
@@ -648,8 +640,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         let mut all_receivers = Vec::new();
         // submit a few transactions individually.
         for i in 0..10 {
@@ -772,8 +763,7 @@ mod tests {
             });
 
             let context = Arc::new(Context::new_for_test(4).0);
-            let (client, tx_receiver) = TransactionClient::new(context.clone());
-            let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+            let (client, mut consumer) = TransactionClient::new(context.clone());
             let mut all_receivers = Vec::new();
 
             // create enough transactions
@@ -815,8 +805,7 @@ mod tests {
             });
 
             let context = Arc::new(Context::new_for_test(4).0);
-            let (client, tx_receiver) = TransactionClient::new(context.clone());
-            let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+            let (client, mut consumer) = TransactionClient::new(context.clone());
             let mut all_receivers = Vec::new();
 
             let max_transactions_in_block_bytes =
@@ -874,9 +863,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         let w_no_transactions = client
             .submit_no_wait(vec![])
             .await
@@ -929,12 +916,10 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new_with_max_pending_transactions(
+        let (client, mut consumer) = TransactionClient::new_with_max_pending_transactions(
             context.clone(),
             MAX_PENDING_TRANSACTIONS,
         );
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
         // Add 10 more transactions than the max number of transactions in a block.
         for i in 0..MAX_NUM_TRANSACTIONS_IN_BLOCK + 10 {
             println!("Submitting transaction {i}");

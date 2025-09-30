@@ -486,10 +486,11 @@ impl Core {
             .start_timer();
 
         // Ensure the new block has a higher round than the last proposed block.
-        let clock_round = {
+        let (clock_round, last_proposed_round) = {
             let dag_state = self.dag_state.read();
             let clock_round = dag_state.threshold_clock_round();
-            if clock_round <= dag_state.get_last_proposed_block().round() {
+            let last_proposed_round = dag_state.get_last_proposed_block().round();
+            if clock_round <= last_proposed_round {
                 debug!(
                     "Skipping block proposal for round {} as it is not higher than the last proposed block {}",
                     clock_round,
@@ -497,11 +498,16 @@ impl Core {
                 );
                 return None;
             }
-            clock_round
+            (clock_round, last_proposed_round)
         };
 
-        // There must be a quorum of blocks from the previous round.
-        let quorum_round = clock_round.saturating_sub(1);
+        // Select a round to propose at:
+        // - There must be a quorum of blocks at the selected round.
+        let quorum_round = last_proposed_round
+            // Do not try to propose close to the GC round.
+            .max(clock_round.saturating_sub(self.context.protocol_config.consensus_gc_depth() / 2))
+            // There must be a quorum of blocks from rounds before the clock round.
+            .min(clock_round.saturating_sub(1));
 
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
         // or because we are actually ready to produce the block (leader exists and min delay has passed).
@@ -1418,8 +1424,7 @@ impl CoreTextFixture {
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
                 .with_num_commits_per_schedule(10),
         );
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             mysten_metrics::monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier =
@@ -1511,8 +1516,7 @@ mod test {
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let mut block_status_subscriptions = FuturesUnordered::new();
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
@@ -1646,9 +1650,7 @@ mod test {
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         // Create test blocks for all authorities except our's (index = 0).
         let mut last_round_blocks = genesis_blocks(&context);
         let mut all_blocks = last_round_blocks.clone();
@@ -1787,8 +1789,7 @@ mod test {
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
-        let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier =
@@ -1968,8 +1969,7 @@ mod test {
         let context = Arc::new(context);
 
         let store = Arc::new(MemStore::new());
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let mut block_status_subscriptions = FuturesUnordered::new();
 
         let dag_str = "DAG {
@@ -2110,9 +2110,7 @@ mod test {
         let context = Arc::new(context);
 
         let store = Arc::new(MemStore::new());
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         // On round 1 we do produce the block for authority D but we do not link it until round 6. This is making round 6 unable to get processed
         // until leader of round 3 is committed where round 1 gets garbage collected.
         // Then we add more rounds so we can trigger a commit for leader of round 9 which will move the gc round to 7.
@@ -2271,8 +2269,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
@@ -2626,8 +2623,7 @@ mod test {
                 .with_num_commits_per_schedule(10),
         );
 
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier =
@@ -2923,8 +2919,7 @@ mod test {
                 .with_num_commits_per_schedule(10),
         );
 
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier =
@@ -3016,8 +3011,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier =
@@ -3086,8 +3080,7 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
@@ -3542,8 +3535,7 @@ mod test {
                 .with_num_commits_per_schedule(10),
         );
 
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, transaction_consumer) = TransactionClient::new(context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
