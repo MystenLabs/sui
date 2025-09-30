@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::SuiAddress;
 use crate::SUI_FRAMEWORK_ADDRESS;
 use move_core_types::annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout};
 use move_core_types::ident_str;
@@ -15,12 +16,12 @@ pub const WITHDRAWAL_STRUCT_NAME: &IdentStr = ident_str!("Withdrawal");
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Withdrawal {
-    pub owner: crate::base_types::SuiAddress,
+    pub owner: SuiAddress,
     pub limit: U256,
 }
 
 impl Withdrawal {
-    pub fn new(owner: crate::base_types::SuiAddress, limit: U256) -> Self {
+    pub fn new(owner: SuiAddress, limit: U256) -> Self {
         Self { owner, limit }
     }
 
@@ -52,7 +53,7 @@ impl Withdrawal {
         }
     }
 
-    pub fn owner(&self) -> crate::base_types::SuiAddress {
+    pub fn owner(&self) -> SuiAddress {
         self.owner
     }
 

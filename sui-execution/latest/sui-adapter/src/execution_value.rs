@@ -188,10 +188,9 @@ impl InputValue {
         }
     }
 
-    // TODO(address-balances): Populate withdraw reservation information.
-    pub fn withdrawal(withrdrawal_ty: RawValueType, owner: SuiAddress, limit: U256) -> Self {
+    pub fn withdrawal(withdrawal_ty: RawValueType, owner: SuiAddress, limit: U256) -> Self {
         let value = Value::Raw(
-            withrdrawal_ty,
+            withdrawal_ty,
             bcs::to_bytes(&Withdrawal::new(owner, limit)).unwrap(),
         );
         InputValue {
