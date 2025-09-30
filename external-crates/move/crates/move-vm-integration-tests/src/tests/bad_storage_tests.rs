@@ -199,7 +199,7 @@ fn test_missing_module_dependency() {
     }
 
     // Publish only N and try to call N::bar. The VM should fail to find M and raise
-    // an invariant violation.
+    // an verification error.
     {
         let mut storage = InMemoryStorage::new();
         storage.publish_or_overwrite_module(n.self_id(), blob_n);
@@ -218,7 +218,7 @@ fn test_missing_module_dependency() {
             )
             .unwrap_err();
 
-        assert_eq!(err.status_type(), StatusType::InvariantViolation);
+        assert_eq!(err.status_type(), StatusType::Verification);
     }
 }
 

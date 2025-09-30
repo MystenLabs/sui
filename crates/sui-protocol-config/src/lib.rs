@@ -265,6 +265,7 @@ const MAX_PROTOCOL_VERSION: u64 = 97;
 //             Create Coin Registry object
 //             Enable checkpoint artifacts digest in devnet.
 // Version 97: Add authenticated event streams support via emit_authenticated function.
+//             Add better error messages to the loader.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -823,6 +824,14 @@ struct FeatureFlags {
     // If true, use the new commit handler.
     #[serde(skip_serializing_if = "is_false")]
     use_new_commit_handler: bool,
+
+    // If true return a better error message when we encounter a loader error.
+    #[serde(skip_serializing_if = "is_false")]
+    better_loader_errors: bool,
+
+    // If true generate layouts for dynamic fields
+    #[serde(skip_serializing_if = "is_false")]
+    generate_df_type_layouts: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2247,6 +2256,14 @@ impl ProtocolConfig {
 
     pub fn use_new_commit_handler(&self) -> bool {
         self.feature_flags.use_new_commit_handler
+    }
+
+    pub fn better_loader_errors(&self) -> bool {
+        self.feature_flags.better_loader_errors
+    }
+
+    pub fn generate_df_type_layouts(&self) -> bool {
+        self.feature_flags.generate_df_type_layouts
     }
 }
 
@@ -4045,6 +4062,8 @@ impl ProtocolConfig {
                 }
                 97 => {
                     cfg.event_emit_auth_stream_cost = Some(52);
+                    cfg.feature_flags.better_loader_errors = true;
+                    cfg.feature_flags.generate_df_type_layouts = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4113,6 +4132,7 @@ impl ProtocolConfig {
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
+            better_loader_errors: self.better_loader_errors(),
         }
     }
 
