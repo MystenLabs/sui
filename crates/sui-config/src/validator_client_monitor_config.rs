@@ -113,12 +113,6 @@ pub struct ValidatorClientMonitorConfig {
     #[serde(default = "default_health_check_timeout")]
     pub health_check_timeout: Duration,
 
-    /// Weight configuration for score calculation.
-    ///
-    /// Determines how different factors contribute to validator selection.
-    #[serde(default)]
-    pub score_weights: ScoreWeights,
-
     /// Cooldown period after failures before considering a validator again.
     ///
     /// Should be long enough to allow transient issues to resolve,
@@ -132,55 +126,14 @@ pub struct ValidatorClientMonitorConfig {
     /// Higher values are more tolerant of intermittent issues.
     #[serde(default = "default_max_consecutive_failures")]
     pub max_consecutive_failures: u32,
-}
 
-/// Weights for different factors in score calculation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct ScoreWeights {
-    /// Weight for latency (lower is better).
+    /// Weight for reliability.
     ///
-    /// This is the overall weight for all latency scores combined.
-    /// Individual operation latencies are weighted separately below.
-    #[serde(default = "default_latency_weight")]
-    pub latency: f64,
-
-    /// Weight for success rate.
-    ///
-    /// Higher values prioritize reliability over performance.
+    /// Controls importance of reliability when adjusting the validator's latency for transaction submission
+    /// selection. The higher the weight, the more penalty is given to unreliable validators.
+    /// Default to 2.0. Value should be positive.
     #[serde(default = "default_reliability_weight")]
-    pub reliability: f64,
-
-    /// Weight for submit transaction latency.
-    ///
-    /// Controls importance of transaction submission speed.
-    #[serde(default = "default_submit_latency_weight")]
-    pub submit_latency_weight: f64,
-
-    /// Weight for effects retrieval latency.
-    ///
-    /// Controls importance of effects query speed.
-    /// Often the most critical operation for application responsiveness.
-    #[serde(default = "default_effects_latency_weight")]
-    pub effects_latency_weight: f64,
-
-    /// Weight for health check latency.
-    ///
-    /// Usually less critical than actual operations.
-    #[serde(default = "default_health_check_latency_weight")]
-    pub health_check_latency_weight: f64,
-
-    /// Weight for fast path latency.
-    ///
-    /// Controls importance of finalization speed.
-    #[serde(default = "default_fast_path_latency_weight")]
-    pub fast_path_latency_weight: f64,
-
-    /// Weight for consensus latency.
-    ///
-    /// Controls importance of consensus speed.
-    #[serde(default = "default_consensus_latency_weight")]
-    pub consensus_latency_weight: f64,
+    pub reliability_weight: f64,
 }
 
 impl Default for ValidatorClientMonitorConfig {
@@ -188,29 +141,14 @@ impl Default for ValidatorClientMonitorConfig {
         Self {
             health_check_interval: default_health_check_interval(),
             health_check_timeout: default_health_check_timeout(),
-            score_weights: ScoreWeights::default(),
             failure_cooldown: default_failure_cooldown(),
             max_consecutive_failures: default_max_consecutive_failures(),
-        }
-    }
-}
-
-impl Default for ScoreWeights {
-    fn default() -> Self {
-        Self {
-            latency: default_latency_weight(),
-            reliability: default_reliability_weight(),
-            submit_latency_weight: default_submit_latency_weight(),
-            effects_latency_weight: default_effects_latency_weight(),
-            health_check_latency_weight: default_health_check_latency_weight(),
-            fast_path_latency_weight: default_fast_path_latency_weight(),
-            consensus_latency_weight: default_consensus_latency_weight(),
+            reliability_weight: default_reliability_weight(),
         }
     }
 }
 
 // Default value functions
-
 fn default_health_check_interval() -> Duration {
     Duration::from_secs(10)
 }
@@ -227,30 +165,6 @@ fn default_max_consecutive_failures() -> u32 {
     100
 }
 
-fn default_latency_weight() -> f64 {
-    0.9
-}
-
 fn default_reliability_weight() -> f64 {
-    0.1
-}
-
-fn default_submit_latency_weight() -> f64 {
-    0.0
-}
-
-fn default_effects_latency_weight() -> f64 {
-    0.0
-}
-
-fn default_health_check_latency_weight() -> f64 {
-    0.0
-}
-
-fn default_fast_path_latency_weight() -> f64 {
-    1.0
-}
-
-fn default_consensus_latency_weight() -> f64 {
-    1.0
+    2.0
 }

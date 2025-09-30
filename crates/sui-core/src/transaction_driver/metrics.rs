@@ -18,7 +18,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) settlement_finality_latency: HistogramVec,
     pub(crate) total_transactions_submitted: IntCounterVec,
     pub(crate) submit_transaction_retries: Histogram,
-    pub(crate) submit_transaction_latency: Histogram,
+    pub(crate) submit_transaction_latency: HistogramVec,
     pub(crate) validator_submit_transaction_errors: IntCounterVec,
     pub(crate) validator_submit_transaction_successes: IntCounterVec,
     pub(crate) executed_transactions: IntCounter,
@@ -60,11 +60,12 @@ impl TransactionDriverMetrics {
                 registry,
             )
             .unwrap(),
-            submit_transaction_latency: register_histogram_with_registry!(
+            submit_transaction_latency: register_histogram_vec_with_registry!(
                 "transaction_driver_submit_transaction_latency",
                 "Time in seconds to successfully submit a transaction to a validator.\n\
                 Includes all retries and measures from the start of submission\n\
                 until a validator accepts the transaction.",
+                &["validator", "tx_type", "ping"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
