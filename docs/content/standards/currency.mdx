@@ -98,11 +98,11 @@ Both creation methods return a `CurrencyInitializer<T>` that allows for addition
 
 A currency is not complete until after you call the `finalize` function. The function returns the `MetadataCap<T>` for metadata management. If you used an OTW to create the currency, the function sends the currency to the coin registry, otherwise it creates the final shared `Currency<T>` object.
 
-<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize" />
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize" signatureOnly />
 
 If you publish a package that uses an OTW to create a currency in the package `init` function, then a call must be made to `finalize_registration` after initialization. The function transforms the currency into a shared object. 
 
-<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize_registration" />
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize_registration" signatureOnly />
 
 ## Regulated currency
 
@@ -152,9 +152,9 @@ The fields of the metadata objects include the following:
 | `registry`          | The `CoinRegistry` system object ID (`0x3`).                                                                                                                                                             |
 | `decimals`    | The number of decimals the token uses. If you set this field to `3`, then a token of value `1000` would display as `1.000`.                                                                              |
 | `name`        | Name of the coin.                                                                                                                                                                                        |
-| `symbol`      | Symbol for the coin. This might be the same as `name`, but is typically fewer than five all capital letters. For example, `SUI` is the `symbol` for the native coin on Sui but its `name` is also `SUI`. |
+| `symbol`      | Symbol for the coin. This might be the same value as `name`, but is typically fewer than five all capital letters. For example, `SUI` is the `symbol` for the native coin on Sui but its `name` is also `SUI`. **Only ASCII printable characters allowed**.|
 | `description` | A short description to describe the token.                                                                                                                                                               |
-| `icon_url`    | The URL for the token's icon, used for display in wallets, explorers, and other apps.                                                                                                                    |
+| `icon_url`    | **Required field**. The URL for the token's icon, used for display in wallets, explorers, and other apps.                                                                                                                    |
 
 ## Minting and burning coins
 
@@ -168,7 +168,7 @@ The Coin Registry supports advanced supply management models:
 
 Use the `coin::mint` function to create new coins.
 
-<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint" noComments />
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint" signatureOnly noComments />
 
 The signature shows that a `Coin<T>` results from calling the function with a `TreasuryCap`, value for the coin created, and the transaction context. The function updates the total supply in `TreasuryCap` automatically. Upon display, the coin `value` respects the `decimals` value in the metadata. So, if you supply 1000000 as the coin `value` that has a `decimal` value of `6`, the coin's value displays as `1.000000`.
 
@@ -275,13 +275,13 @@ Globally pausing coin activity is only applicable to regulated coin types.
 
 To pause activity across the network for a regulated coin type with the `allow_global_pause` field set to `true`, use `coin::deny_list_v2_enable_global_pause`. You must provide the `DenyCapV2` object for the coin type to initiate the pause. Transaction activity is paused immediately, and no addresses can receive the coin in the epoch that follows the call to pause.
 
-<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="deny_list_v2_enable_global_pause" noComments />
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="deny_list_v2_enable_global_pause" noComments signatureOnly />
 
 ### Unpause coin activity
 
 To restart network activity for a paused regulated coin, use the `coin::deny_list_v2_disable_global_pause` function. As with pausing, you must provide the `DenyCapV2` object for the coin type. Transaction activity resumes immediately, and addresses can begin receiving the coin in the epoch that follows the call to remove the pause.
 
-<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="deny_list_v2_disable_global_pause" noComments />
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="deny_list_v2_disable_global_pause" noComments signatureOnly />
 
 ## Registry query functions
 
@@ -383,6 +383,12 @@ Manage the metadata capability using:
 
     <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="delete_metadata_cap" noTitle noComments signatureOnly />
 
+    :::caution
+
+    Deleting the `MetadataCap` using `delete_metadata_cap<T>()` is an irreversible action.
+
+    :::
+
 ## Migration from Coin to Currency Standard
 
 The Currency Standard replaces the legacy Currency Standard. Sui provides a migration path from the `CoinMetadata<T>` system while maintaining backward compatibility.
@@ -427,7 +433,7 @@ Smart contracts should update logic that relies on the `coin` module to use the 
 
 ## Best practices
 
-### For coin creators
+### For currency creators
 
 - **Use OTW creation:** Prefer the OTW-based creation for better uniqueness guarantees.
 - **Set supply model early:** Decide on supply model during initialization (fixed, burn-only, or flexible).
