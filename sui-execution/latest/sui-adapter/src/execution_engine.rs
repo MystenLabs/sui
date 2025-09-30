@@ -178,21 +178,11 @@ mod checked {
             use ExecutionErrorKind as K;
             match error.kind() {
                 K::InvariantViolation | K::VMInvariantViolation => {
-                    if protocol_config.debug_fatal_on_move_invariant_violation() {
-                        debug_fatal!(
-                            "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
-                            transaction_digest,
-                            error.source(),
-                        );
-                    } else {
-                        #[skip_checked_arithmetic]
-                        tracing::error!(
-                            kind = ?error.kind(),
-                            tx_digest = ?transaction_digest,
-                            "INVARIANT VIOLATION! Source: {:?}",
-                            error.source(),
-                        );
-                    }
+                    debug_fatal!(
+                        "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
+                        transaction_digest,
+                        error.source(),
+                    );
                 }
 
                 K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
@@ -906,7 +896,6 @@ mod checked {
 
     pub fn construct_advance_epoch_safe_mode_pt(
         params: &AdvanceEpochParams,
-        protocol_config: &ProtocolConfig,
     ) -> Result<ProgrammableTransaction, ExecutionError> {
         let mut builder = ProgrammableTransactionBuilder::new();
         // Step 1: Create storage and computation rewards.
@@ -923,11 +912,9 @@ mod checked {
             CallArg::Pure(bcs::to_bytes(&params.non_refundable_storage_fee).unwrap()),
         ];
 
-        if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
-            args.push(CallArg::Pure(
-                bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap(),
-            ));
-        }
+        args.push(CallArg::Pure(
+            bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap(),
+        ));
 
         let call_arg_arguments = args
             .into_iter()
@@ -1004,57 +991,25 @@ mod checked {
             // Must reset the storage rebate since we are re-executing.
             gas_charger.reset_storage_cost_and_rebate();
 
-            if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
-                temporary_store.advance_epoch_safe_mode(&params, protocol_config);
-            } else {
-                let advance_epoch_safe_mode_pt =
-                    construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
-                SPT::execute::<execution_mode::System>(
-                    protocol_config,
-                    metrics.clone(),
-                    move_vm,
-                    temporary_store,
-                    store.as_backing_package_store(),
-                    tx_ctx.clone(),
-                    gas_charger,
-                    advance_epoch_safe_mode_pt,
-                    trace_builder_opt,
-                )
-                .map_err(|(e, _)| e)
-                .expect("Advance epoch with safe mode must succeed");
-            }
+            temporary_store.advance_epoch_safe_mode(&params, protocol_config);
         }
 
-        if protocol_config.fresh_vm_on_framework_upgrade() {
-            let new_vm = new_move_runtime(
-                all_natives(/* silent */ true, protocol_config),
-                protocol_config,
-            )
-            .expect("Failed to create new MoveRuntime");
-            process_system_packages(
-                change_epoch,
-                temporary_store,
-                store,
-                tx_ctx,
-                &new_vm,
-                gas_charger,
-                protocol_config,
-                metrics,
-                trace_builder_opt,
-            );
-        } else {
-            process_system_packages(
-                change_epoch,
-                temporary_store,
-                store,
-                tx_ctx,
-                move_vm,
-                gas_charger,
-                protocol_config,
-                metrics,
-                trace_builder_opt,
-            );
-        }
+        let new_vm = new_move_runtime(
+            all_natives(/* silent */ true, protocol_config),
+            protocol_config,
+        )
+        .expect("Failed to create new MoveRuntime");
+        process_system_packages(
+            change_epoch,
+            temporary_store,
+            store,
+            tx_ctx,
+            &new_vm,
+            gas_charger,
+            protocol_config,
+            metrics,
+            trace_builder_opt,
+        );
         Ok(())
     }
 

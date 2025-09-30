@@ -992,45 +992,43 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             upgrade_ticket_policy,
         )?;
 
-        if self.env.protocol_config.check_for_init_during_upgrade() {
-            // find newly added modules to the package,
-            // and error if they have init functions
-            let current_module_names: BTreeSet<&str> = current_package
-                .move_package()
-                .serialized_module_map()
-                .keys()
-                .map(|s| s.as_str())
-                .collect();
-            let upgrade_module_names: BTreeSet<&str> = package
-                .serialized_module_map()
-                .keys()
-                .map(|s| s.as_str())
-                .collect();
-            let new_module_names = upgrade_module_names
-                .difference(&current_module_names)
-                .copied()
-                .collect::<BTreeSet<&str>>();
-            let new_modules = modules
-                .iter()
-                .filter(|m| {
-                    let name = m.identifier_at(m.self_handle().name).as_str();
-                    new_module_names.contains(name)
-                })
-                .collect::<Vec<&CompiledModule>>();
-            let new_module_has_init = new_modules.iter().any(|module| {
-                module.function_defs.iter().any(|fdef| {
-                    let fhandle = module.function_handle_at(fdef.function);
-                    let fname = module.identifier_at(fhandle.name);
-                    fname == INIT_FN_NAME
-                })
-            });
-            if new_module_has_init {
-                // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::FeatureNotYetSupported,
-                    "`init` in new modules on upgrade is not yet supported",
-                ));
-            }
+        // find newly added modules to the package,
+        // and error if they have init functions
+        let current_module_names: BTreeSet<&str> = current_package
+            .move_package()
+            .serialized_module_map()
+            .keys()
+            .map(|s| s.as_str())
+            .collect();
+        let upgrade_module_names: BTreeSet<&str> = package
+            .serialized_module_map()
+            .keys()
+            .map(|s| s.as_str())
+            .collect();
+        let new_module_names = upgrade_module_names
+            .difference(&current_module_names)
+            .copied()
+            .collect::<BTreeSet<&str>>();
+        let new_modules = modules
+            .iter()
+            .filter(|m| {
+                let name = m.identifier_at(m.self_handle().name).as_str();
+                new_module_names.contains(name)
+            })
+            .collect::<Vec<&CompiledModule>>();
+        let new_module_has_init = new_modules.iter().any(|module| {
+            module.function_defs.iter().any(|fdef| {
+                let fhandle = module.function_handle_at(fdef.function);
+                let fname = module.identifier_at(fhandle.name);
+                fname == INIT_FN_NAME
+            })
+        });
+        if new_module_has_init {
+            // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::FeatureNotYetSupported,
+                "`init` in new modules on upgrade is not yet supported",
+            ));
         }
 
         self.env.linkable_store.package_store.push_package(
@@ -1839,24 +1837,22 @@ pub fn finish(
         })
         .collect::<Result<Vec<_>, ExecutionError>>()?;
 
-    if protocol_config.enable_coin_deny_list_v2() {
-        for object in written_objects.values() {
-            let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
-            let owner = object.owner.get_address_owner_address();
-            if let (Some(ty), Ok(owner)) = (coin_type, owner) {
-                receiving_funds_type_and_owners
-                    .entry(ty)
-                    .or_insert_with(BTreeSet::new)
-                    .insert(owner);
-            }
+    for object in written_objects.values() {
+        let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
+        let owner = object.owner.get_address_owner_address();
+        if let (Some(ty), Ok(owner)) = (coin_type, owner) {
+            receiving_funds_type_and_owners
+                .entry(ty)
+                .or_insert_with(BTreeSet::new)
+                .insert(owner);
         }
-        let DenyListResult {
-            result,
-            num_non_gas_coin_owners,
-        } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
-        gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-        result?;
     }
+    let DenyListResult {
+        result,
+        num_non_gas_coin_owners,
+    } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
+    gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+    result?;
 
     Ok(ExecutionResults::V2(ExecutionResultsV2 {
         written_objects,
@@ -1943,8 +1939,7 @@ pub fn check_compatibility(
 
     let existing_modules_len = current_normalized.len();
     let upgrading_modules_len = upgrading_modules.len();
-    let disallow_new_modules = protocol_config.disallow_new_modules_in_deps_only_packages()
-        && policy as u8 == UpgradePolicy::DEP_ONLY;
+    let disallow_new_modules = policy as u8 == UpgradePolicy::DEP_ONLY;
 
     if disallow_new_modules && existing_modules_len != upgrading_modules_len {
         return Err(ExecutionError::new_with_source(

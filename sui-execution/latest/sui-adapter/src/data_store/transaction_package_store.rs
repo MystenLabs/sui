@@ -22,6 +22,7 @@ use sui_types::{
 /// "loading" of those packages as well.
 ///
 /// It is used to provide package loading (from storage) for the Move VM.
+#[allow(clippy::type_complexity)]
 pub struct TransactionPackageStore<'a> {
     package_store: &'a dyn BackingPackageStore,
 
