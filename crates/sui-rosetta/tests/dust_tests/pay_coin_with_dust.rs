@@ -274,12 +274,6 @@ async fn test_pay_custom_coin_with_multiple_merge_chunks() -> anyhow::Result<()>
         })
         .expect("Expected changed_objects to contain TreasuryCap");
 
-    println!("Original treasury cap: {:?}", init_ret.treasury_cap);
-    println!(
-        "Updated treasury cap object: object_id={:?}, version={:?}, digest={:?}",
-        t_cap_obj.object_id, t_cap_obj.output_version, t_cap_obj.output_digest
-    );
-
     let t_cap_ref = (
         t_cap_obj.object_id().parse().unwrap(),       // new object_id
         t_cap_obj.output_version.unwrap_or(0).into(), // new version

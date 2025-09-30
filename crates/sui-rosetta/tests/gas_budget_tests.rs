@@ -75,7 +75,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
 
     let preprocess_options = match preprocess_result {
         Ok(resp) => {
-            println!("Preprocess : {resp:?}");
             assert_eq!(
                 resp.options
                     .as_ref()
@@ -107,7 +106,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
 
     let construction_metadata = match metadata_result {
         Ok(resp) => {
-            println!("Metadata : {resp:?}");
             assert_eq!(resp.metadata.budget, budget);
             let metadata = resp.metadata.clone();
             flow_responses.metadata = Some(Ok(resp));
@@ -133,7 +131,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
 
     let (unsigned_transaction, signing_payload) = match payloads_result {
         Ok(resp) => {
-            println!("Payload : {resp:?}");
             let signing_payload = resp
                 .payloads
                 .first()
@@ -172,7 +169,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
 
     let signed_transaction = match combine_result {
         Ok(resp) => {
-            println!("Combine : {resp:?}");
             let signed_transaction = resp.signed_transaction.clone();
             flow_responses.combine = Some(Ok(resp));
             signed_transaction
@@ -195,7 +191,6 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
 
     match submit_result {
         Ok(resp) => {
-            println!("Submit : {resp:?}");
             flow_responses.submit = Some(Ok(resp));
         }
         Err(e) => {

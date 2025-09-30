@@ -164,7 +164,6 @@ async fn test_get_staked_sui() -> Result<()> {
     assert_eq!(1, response.balances.len());
     assert_eq!(1_000_000_000, response.balances[0].value);
 
-    println!("{}", serde_json::to_string_pretty(&response)?);
     Ok(())
 }
 
@@ -241,8 +240,6 @@ async fn test_stake() {
         .transaction
         .expect("Response transaction should not be empty");
 
-    println!("Sui TX: {tx:?}");
-
     assert!(
         tx.effects().status().success(),
         "Transaction failed: {:?}",
@@ -263,8 +260,6 @@ async fn test_stake() {
         serde_json::to_string(&ops).unwrap(),
         serde_json::to_string(&ops2).unwrap()
     );
-
-    println!("{}", serde_json::to_string_pretty(&ops2).unwrap())
 }
 
 #[tokio::test]
@@ -356,8 +351,6 @@ async fn test_stake_all() {
         .transaction
         .expect("Response transaction should not be empty");
 
-    println!("Sui TX: {tx:?}");
-
     assert!(
         tx.effects().status().success(),
         "Transaction failed: {:?}",
@@ -378,8 +371,6 @@ async fn test_stake_all() {
         serde_json::to_string(&ops).unwrap(),
         serde_json::to_string(&ops2).unwrap()
     );
-
-    println!("{}", serde_json::to_string_pretty(&ops2).unwrap())
 }
 
 #[tokio::test]
@@ -461,8 +452,6 @@ async fn test_withdraw_stake() {
         .transaction
         .expect("Response transaction should not be empty");
 
-    println!("Sui TX: {tx:?}");
-
     assert!(
         tx.effects().status().success(),
         "Transaction failed: {:?}",
@@ -539,7 +528,6 @@ async fn test_withdraw_stake() {
         "Transaction failed: {:?}",
         tx.effects().status().error()
     );
-    println!("Sui TX: {tx:?}");
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
     let ops2 = fetch_transaction_and_get_operations(
         &test_cluster,
@@ -554,8 +542,6 @@ async fn test_withdraw_stake() {
         serde_json::to_string(&ops).unwrap(),
         serde_json::to_string(&ops2).unwrap()
     );
-
-    println!("{}", serde_json::to_string_pretty(&ops2).unwrap());
 
     // stake should be 0
     let response = rosetta_client
@@ -637,7 +623,6 @@ async fn test_pay_sui() {
         "Transaction failed: {:?}",
         tx.effects().status().error()
     );
-    println!("Sui TX: {tx:?}");
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
     let ops2 = fetch_transaction_and_get_operations(
         &test_cluster,
@@ -668,8 +653,7 @@ async fn test_pay_sui_multiple_times() {
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
 
-    for i in 1..20 {
-        println!("Iteration: {}", i);
+    for _i in 1..20 {
         let ops = serde_json::from_value(json!(
             [{
                 "operation_identifier":{"index":0},
@@ -721,7 +705,6 @@ async fn test_pay_sui_multiple_times() {
         let tx = grpc_response
             .transaction
             .expect("Response transaction should not be empty");
-        println!("Sui TX: {tx:?}");
         assert!(
             tx.effects().status().success(),
             "Transaction failed: {:?}",
@@ -800,7 +783,6 @@ async fn test_transfer_single_gas_coin() {
     )
     .await
     .unwrap();
-    // println!("operations: {operations:#?}");
 
     let mut balance = 0;
     operations.into_iter().for_each(|op| {
@@ -964,10 +946,6 @@ async fn test_balance_from_obj_paid_eq_gas() {
     let operations = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
         .await
         .unwrap();
-    // println!(
-    //     "operations: {}",
-    //     serde_json::to_string_pretty(&operations).unwrap()
-    // );
 
     let mut balance_changes: HashMap<SuiAddress, i128> = HashMap::new();
     operations.into_iter().for_each(|op| {

@@ -142,18 +142,10 @@ async fn test_custom_coin_balance() {
         currencies: Currencies(vec![sui_currency, test_coin_currency]),
     };
 
-    println!(
-        "request: {}",
-        serde_json::to_string_pretty(&request).unwrap()
-    );
     let response: AccountBalanceResponse = rosetta_client
         .call(RosettaEndpoint::Balance, &request)
         .await
         .unwrap();
-    println!(
-        "response: {}",
-        serde_json::to_string_pretty(&response).unwrap()
-    );
     assert_eq!(response.balances.len(), 2);
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
     assert_eq!(
@@ -191,10 +183,6 @@ async fn test_default_balance() {
         .call(RosettaEndpoint::Balance, &request)
         .await
         .unwrap();
-    println!(
-        "response: {}",
-        serde_json::to_string_pretty(&response).unwrap()
-    );
     assert_eq!(response.balances.len(), 1);
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
 }
@@ -293,7 +281,6 @@ async fn test_custom_coin_transfer() {
         "Transaction failed: {:?}",
         tx.effects().status().error()
     );
-    println!("Sui TX: {tx:?}");
     let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let tx_digest = tx.digest.expect("Expected transaction digest");
 
@@ -449,7 +436,6 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
         + gas_summary.storage_cost.unwrap_or(0)
         - gas_summary.storage_rebate.unwrap_or(0);
     let mut gas_used = gas_used_amount as i128;
-    println!("gas_used: {gas_used}");
 
     let coins = mint_res
         .objects_opt()

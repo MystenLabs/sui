@@ -98,8 +98,6 @@ pub async fn make_change(
     let mut coin_ref = coin_object.compute_object_reference();
     let mut gas_ref = gas;
     let ref_gas_price = client.get_reference_gas_price().await.unwrap();
-    let mut progress = 0;
-    let len = amounts_vec.len();
     for amounts in amounts_vec.into_iter() {
         let resp = split_coins(
             keystore,
@@ -112,14 +110,6 @@ pub async fn make_change(
             client,
         )
         .await?;
-        progress += 1;
-        if progress % 4 == 0 {
-            println!(
-                "Splitting progress: {}%",
-                progress as f32 * 100. / len as f32
-            );
-        }
-        // Check transaction success using gRPC response
         let effects = resp.effects();
         if !effects.status().success() {
             return Err(anyhow!("split_coins errored"));
