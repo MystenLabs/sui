@@ -1,6 +1,6 @@
 ---
 source: crates/sui-display/src/v2/parser.rs
-expression: "strands(r#\"{foo[bar][[baz]].qux[quy]}\"#)"
+expression: "strands(r#\"{foo[bar]=>[baz].qux->[quy]}\"#)"
 ---
-{ foo[bar][[baz]].qux[quy]
+{ foo[bar]=>[baz].qux->[quy]
 }
