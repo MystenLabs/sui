@@ -75,6 +75,7 @@ pub struct CostTable {
 impl CostTable {
     #[inline]
     pub fn instruction_cost(&self, instr_index: u8) -> &GasCost {
+        // The instruction index starts at 1.
         debug_assert!(instr_index > 0 && instr_index <= (self.instruction_table.len() as u8));
         &self.instruction_table[(instr_index - 1) as usize]
     }
@@ -187,8 +188,8 @@ impl<'a> GasStatus<'a> {
         size: AbstractMemorySize,
     ) -> PartialVMResult<()> {
         // Make sure that the size is always non-zero
-        let size = std::cmp::max(1.into(), size);
         debug_assert!(size > 0.into());
+        let size = std::cmp::max(1.into(), size);
         self.deduct_gas(
             InternalGasPerAbstractMemoryUnit::new(
                 self.cost_table.instruction_cost(opcode as u8).total(),
