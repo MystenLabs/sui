@@ -736,7 +736,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         )
     }
 
-    // TODO(vm-rewrite): Need to update the function call to pass deserialized args to the VM.
     fn execute_function_bypass_visibility_with_vm(
         &mut self,
         vm: &mut MoveVM<'env>,
