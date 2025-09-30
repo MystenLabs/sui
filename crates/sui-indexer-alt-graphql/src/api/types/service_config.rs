@@ -210,7 +210,7 @@ impl ServiceConfig {
         &self,
         ctx: &Context<'_>,
         type_: String,
-        field: String,
+        field: Option<String>,
         filters: Option<Vec<String>>,
     ) -> Result<AvailableRange, RpcError> {
         AvailableRange::new(

@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, InputObject, Object};
-use std::sync::Arc;
+use async_graphql::{Context, Object};
+use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{error::RpcError, scope::Scope, task::watermark::Watermarks};
 
@@ -11,13 +11,13 @@ use super::checkpoint::Checkpoint;
 /// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint)
 ///
 /// Both `type_` and `field` are required. The `filter` is optional and provides retention information for filtered queries.
-#[derive(InputObject, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct RetentionKey {
     /// The GraphQL type to check retention for
     pub(crate) type_: String,
 
     /// The specific field within the type to check retention for
-    pub(crate) field: String,
+    pub(crate) field: Option<String>,
 
     /// Optional filter to check retention for filtered queries
     pub(crate) filters: Option<Vec<String>>,
@@ -54,24 +54,25 @@ impl AvailableRange {
         retention_key: RetentionKey,
     ) -> Result<Self, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let pipelines = pipelines(
+        let mut ps = BTreeSet::new();
+        pipelines(
             &retention_key.type_,
-            &retention_key.field,
-            retention_key.filters,
+            retention_key.field.as_deref(),
+            retention_key.filters.unwrap_or_default(),
+            &mut ps,
         );
 
-        let lo_checkpoint =
-            pipelines
-                .iter()
-                .try_fold(0, |acc: u64, pipeline| -> Result<u64, RpcError> {
-                    let watermark = watermarks.pipeline_lo_watermark(pipeline)?;
-                    let checkpoint = watermark.checkpoint();
-                    Ok(acc.max(checkpoint))
-                })?;
+        let first = ps
+            .iter()
+            .try_fold(0, |acc: u64, pipeline| -> Result<u64, RpcError> {
+                let watermark = watermarks.pipeline_lo_watermark(pipeline)?;
+                let checkpoint = watermark.checkpoint();
+                Ok(acc.max(checkpoint))
+            })?;
 
         Ok(Self {
             scope: scope.clone(),
-            first: lo_checkpoint,
+            first,
         })
     }
 }
@@ -82,301 +83,294 @@ impl AvailableRange {
 /// The pipeline names are used to query watermark data to determine the
 /// checkpoint sequence range (available range) for which data is available.
 ///
-fn pipelines(type_: &str, field: &str, filters: Option<Vec<String>>) -> Vec<&'static str> {
-    let mut filters = filters.unwrap_or_default();
-    match (type_, field) {
+fn pipelines(type_: &str, field: Option<&str>, filters: Vec<String>, ps: &mut BTreeSet<String>) {
+    match (type_, field, filters) {
         // Address fields
-        ("Address", "address") => vec![],
-        ("Address", "asObject") => vec!["obj_versions"],
-        ("Address", "balance") => pipelines("IAddressable", "balance", None),
-        ("Address", "balances") => pipelines("IAddressable", "balances", None),
-        ("Address", "defaultSuiNsName") => pipelines("IAddressable", "defaultSuiNsName", None),
-        ("Address", "dynamicField") => vec!["obj_versions"],
-        ("Address", "dynamicFields") => vec!["consistent"],
-        ("Address", "dynamicObjectField") => vec!["obj_versions"],
-        ("Address", "multiGetDynamicFields") => vec!["obj_versions"],
-        ("Address", "multiGetDynamicObjectFields") => vec!["obj_versions"],
-        ("Address", "multiGetBalances") => pipelines("IAddressable", "multiGetBalances", None),
-        ("Address", "objects") => pipelines("IAddressable", "objects", Some(filters)),
-        ("Address", "transactions") => {
+        ("Address", Some("transactions"), mut filters) => {
             filters.push("affectedAddress".to_string());
-            pipelines("Query", "transactions", Some(filters))
+            pipelines("Query", Some("transactions"), filters, ps);
+        }
+        ("Address", field, filters) => {
+            pipelines("IAddressable", field, filters, ps);
         }
 
         // Checkpoint fields
-        ("Checkpoint", "artifactsDigest") => vec!["kv_checkpoints"],
-        ("Checkpoint", "digest") => vec!["kv_checkpoints"],
-        ("Checkpoint", "contentDigest") => vec!["kv_checkpoints"],
-        ("Checkpoint", "epoch") => vec!["kv_checkpoints"],
-        ("Checkpoint", "networkTotalTransactions") => vec!["kv_checkpoints"],
-        ("Checkpoint", "previousCheckpointDigest") => vec!["kv_checkpoints"],
-        ("Checkpoint", "query") => vec!["kv_checkpoints"],
-        ("Checkpoint", "rollingGasSummary") => vec!["kv_checkpoints"],
-        ("Checkpoint", "sequenceNumber") => vec!["kv_checkpoints"],
-        ("Checkpoint", "summaryBcs") => vec!["kv_checkpoints"],
-        ("Checkpoint", "timestamp") => vec!["kv_checkpoints"],
-        ("Checkpoint", "validatorSignatures") => vec!["kv_checkpoints, kv_epoch_starts"],
-        ("Checkpoint", "transactions") => pipelines("Query", "transactions", Some(filters)),
+        ("Checkpoint", Some("transactions"), mut filters) => {
+            pipelines("Checkpoint", None, vec![], ps);
+            filters.push("atCheckpoint".to_string());
+            pipelines("Query", Some("transactions"), filters, ps);
+        }
 
         // CoinMetadata fields
-        ("CoinMetadata", "address") => pipelines("IAddressable", "address", None),
-        ("CoinMetadata", "balance") => pipelines("IAddressable", "balance", None),
-        ("CoinMetadata", "balances") => pipelines("IAddressable", "balances", None),
-        ("CoinMetadata", "contents") => pipelines("IMoveObject", "contents", None),
-        ("CoinMetadata", "decimals") => pipelines("IMoveObject", "contents", None),
-        ("CoinMetadata", "defaultSuiNsName") => pipelines("IAddressable", "defaultSuiNsName", None),
-        ("CoinMetadata", "description") => pipelines("IMoveObject", "contents", None),
-        ("CoinMetadata", "dynamicField") => pipelines("IMoveObject", "dynamicField", None),
-        ("CoinMetadata", "dynamicFields") => pipelines("IMoveObject", "dynamicFields", None),
-        ("CoinMetadata", "dynamicObjectField") => {
-            pipelines("IMoveObject", "dynamicObjectField", None)
+        ("CoinMetadata", field, filters) => {
+            pipelines("IMoveObject", field, vec![], ps);
+            pipelines("IAddressable", field, vec![], ps);
+            pipelines("IObject", field, filters, ps);
         }
-        ("CoinMetadata", "hasPublicTransfer") => {
-            pipelines("IMoveObject", "hasPublicTransfer", None)
-        }
-        ("CoinMetadata", "multiGetDynamicFields") => {
-            pipelines("IMoveObject", "multiGetDynamicFields", None)
-        }
-        ("CoinMetadata", "multiGetBalances") => pipelines("IAddressable", "multiGetBalances", None),
-        ("CoinMetadata", "multiGetDynamicObjectFields") => {
-            pipelines("IMoveObject", "multiGetDynamicObjectFields", None)
-        }
-        ("CoinMetadata", "moveObjectBcs") => pipelines("IMoveObject", "moveObjectBcs", None),
-        ("CoinMetadata", "objectAt") => pipelines("IObject", "objectAt", None),
-        ("CoinMetadata", "objectVersionsAfter") => {
-            pipelines("IObject", "objectVersionsAfter", None)
-        }
-        ("CoinMetadata", "objectVersionsBefore") => {
-            pipelines("IObject", "objectVersionsBefore", None)
-        }
-        ("CoinMetadata", "objects") => pipelines("IObject", "objects", None),
-        ("CoinMetadata", "supply") => vec!["consistent"],
-        ("CoinMetadata", "transactions") => pipelines("Query", "transactions", Some(filters)),
 
         // Epoch fields
-        ("Epoch", "epochId") => vec!["kv_epoch_starts"],
-        ("Epoch", "checkpoints") => pipelines("Query", "checkpoints", Some(filters)),
-        ("Epoch", "coinDenyList") => {
-            vec!["kv_epoch_starts", "obj_versions"]
+        ("Epoch", Some("checkpoints"), filters) => {
+            pipelines("Epoch", None, vec![], ps);
+            pipelines("Query", Some("checkpoints"), filters, ps);
         }
-        ("Epoch", "endTimestamp") => vec!["kv_epoch_ends"],
-        ("Epoch", "fundInflow") => vec!["kv_epoch_ends"],
-        ("Epoch", "fundOutflow") => vec!["kv_epoch_ends"],
-        ("Epoch", "fundSize") => vec!["kv_epoch_ends"],
-        ("Epoch", "liveObjectSetDigest") => vec!["kv_epoch_ends"],
-        ("Epoch", "netInflow") => vec!["kv_epoch_ends"],
-        ("Epoch", "protocolConfigs") => vec!["kv_epoch_starts"],
-        ("Epoch", "referenceGasPrice") => vec!["kv_epoch_starts"],
-        ("Epoch", "safeMode") => vec!["kv_epoch_starts"],
-        ("Epoch", "startTimestamp") => vec!["kv_epoch_starts"],
-        ("Epoch", "storageFund") => vec!["kv_epoch_ends"],
-        ("Epoch", "systemPackages") => vec!["kv_epoch_starts", "kv_packages"],
-        ("Epoch", "systemParameters") => vec!["kv_epoch_starts"],
-        ("Epoch", "systemStakeSubsidy") => vec!["kv_epoch_starts"],
-        ("Epoch", "systemStateVersion") => vec!["kv_epoch_starts"],
-        ("Epoch", "totalCheckpoints") => vec!["kv_epoch_starts"],
-        ("Epoch", "totalGasFees") => vec!["kv_epoch_ends"],
-        ("Epoch", "totalStakeRewards") => vec!["kv_epoch_ends"],
-        ("Epoch", "totalStakeSubsidies") => vec!["kv_epoch_ends"],
-        ("Epoch", "totalTransactions") => vec!["cp_sequence_numbers", "kv_epoch_ends"],
-        ("Epoch", "transactions") => pipelines("Query", "transactions", None),
-        ("Epoch", "validatorSet") => vec!["kv_epoch_starts"],
 
         // Event fields
-        ("Event", "contents") => vec!["ev_struct_inst", "tx_digests"],
-        ("Event", "eventBcs") => vec!["ev_struct_inst", "tx_digests"],
-        ("Event", "sender") => vec!["ev_struct_inst", "ev_emit_mod", "tx_digests"],
-        ("Event", "sequenceNumber") => vec!["ev_struct_inst", "tx_digests"],
-        ("Event", "timestamp") => vec!["ev_struct_inst", "tx_digests"],
-        ("Event", "transaction") => vec!["ev_struct_inst", "ev_emit_mod", "tx_digests"],
-        ("Event", "transactionModule") => pipelines("IMoveObject", "contents", None),
+        ("Event", _, _) => {
+            ps.insert("ev_struct_inst".to_string());
+            ps.insert("ev_emit_mod".to_string());
+            ps.insert("tx_digests".to_string());
+        }
 
         // IAddressable fields
-        ("IAddressable", "address") => vec![],
-        ("IAddressable", "balance") => vec!["consistent"],
-        ("IAddressable", "balances") => vec!["consistent"],
-        ("IAddressable", "defaultSuiNsName") => vec!["obj_versions"],
-        ("IAddressable", "multiGetBalances") => vec!["consistent"],
-        ("IAddressable", "objects") => vec!["consistent"],
-
-        // IObject fields
-        ("IObject", "contents") => vec!["obj_versions"],
-        ("IObject", "digest") => vec!["obj_versions"],
-        ("IObject", "objectAt") => vec!["obj_versions"],
-        ("IObject", "objectBcs") => vec!["obj_versions"],
-        ("IObject", "objectVersionsAfter") => vec!["obj_versions"],
-        ("IObject", "objectVersionsBefore") => vec!["obj_versions"],
-        ("IObject", "objects") => vec!["consistent"],
-        ("IObject", "owner") => vec!["obj_versions"],
-        ("IObject", "previousTransaction") => vec!["obj_versions", "kv_transactions"],
-        ("IObject", "receivedTransactions") => {
-            filters.push("affectedAddress".to_string());
-            pipelines("Query", "transactions", Some(filters))
+        ("IAddressable", Some("balance"), _)
+        | ("IAddressable", Some("balances"), _)
+        | ("IAddressable", Some("multiGetBalances"), _)
+        | ("IAddressable", Some("objects"), _) => {
+            ps.insert("consistent".to_string());
         }
-        ("IObject", "storageRebate") => vec!["obj_versions"],
-        ("IObject", "version") => vec!["obj_versions"],
 
         // IMoveObject fields
-        ("IMoveObject", "contents") => vec!["obj_versions"],
-        ("IMoveObject", "dynamicField") => vec!["obj_versions"],
-        ("IMoveObject", "dynamicFields") => vec!["consistent"],
-        ("IMoveObject", "dynamicObjectField") => vec!["obj_versions"],
-        ("IMoveObject", "hasPublicTransfer") => vec!["obj_versions"],
-        ("IMoveObject", "moveObjectBcs") => vec!["obj_versions"],
-        ("IMoveObject", "multiGetDynamicFields") => vec!["obj_versions"],
-        ("IMoveObject", "multiGetDynamicObjectFields") => vec!["obj_versions"],
+        ("IMoveObject", Some("dynamicFields"), _) => {
+            ps.insert("consistent".to_string());
+        }
 
-        // Object fields
-        ("Object", "address") => pipelines("IAddressable", "address", None),
-        ("Object", "asMoveObject") => pipelines("IMoveObject", "contents", None),
-        ("Object", "asMovePackage") => pipelines("IMoveObject", "contents", None),
-        ("Object", "balance") => pipelines("IAddressable", "balance", None),
-        ("Object", "balances") => pipelines("IAddressable", "balances", None),
-        ("Object", "defaultSuiNsName") => pipelines("IAddressable", "defaultSuiNsName", None),
-        ("Object", "digest") => pipelines("IObject", "digest", None),
-        ("Object", "dynamicField") => pipelines("IMoveObject", "dynamicField", None),
-        ("Object", "dynamicFields") => pipelines("IMoveObject", "dynamicFields", None),
-        ("Object", "dynamicObjectField") => pipelines("IMoveObject", "dynamicObjectField", None),
-        ("Object", "multiGetBalances") => pipelines("IAddressable", "multiGetBalances", None),
-        ("Object", "multiGetDynamicFields") => {
-            pipelines("IMoveObject", "multiGetDynamicFields", None)
+        // IObject fields
+        ("IObject", Some("objects"), _) => {
+            ps.insert("consistent".to_string());
         }
-        ("Object", "multiGetDynamicObjectFields") => {
-            pipelines("IMoveObject", "multiGetDynamicObjectFields", None)
+        ("IObject", Some("receivedTransactions"), mut filters) => {
+            filters.push("affectedAddress".to_string());
+            pipelines("Query", Some("transactions"), filters, ps);
         }
-        ("Object", "objectAt") => pipelines("IObject", "objectAt", None),
-        ("Object", "objectBcs") => pipelines("IObject", "objectBcs", None),
-        ("Object", "objectVersionsAfter") => pipelines("IObject", "objectVersionsAfter", None),
-        ("Object", "objectVersionsBefore") => pipelines("IObject", "objectVersionsBefore", None),
-        ("Object", "objects") => pipelines("IObject", "objects", None),
-        ("Object", "owner") => pipelines("IObject", "owner", None),
-        ("Object", "previousTransaction") => pipelines("IObject", "previousTransaction", None),
-        ("Object", "receivedTransactions") => pipelines("IObject", "receivedTransactions", None),
-        ("Object", "storageRebate") => pipelines("IObject", "storageRebate", None),
-        ("Object", "version") => pipelines("IObject", "version", None),
 
         // Package fields
-        ("Package", "address") => pipelines("IAddressable", "address", None),
-        ("Package", "balance") => pipelines("IAddressable", "balance", None),
-        ("Package", "balances") => pipelines("IAddressable", "balances", None),
-        ("Package", "defaultSuiNsName") => pipelines("IAddressable", "defaultSuiNsName", None),
-        ("Package", "digest") => pipelines("IObject", "digest", None),
-        ("Package", "linkage") => pipelines("IObject", "contents", None),
-        ("Package", "module") => pipelines("IObject", "contents", None),
-        ("Package", "moduleBcs") => pipelines("IObject", "contents", None),
-        ("Package", "modules") => pipelines("IObject", "contents", None),
-        ("Package", "multiGetBalances") => pipelines("IAddressable", "multiGetBalances", None),
-        ("Package", "objectAt") => pipelines("IObject", "objectAt", None),
-        ("Package", "objectBcs") => pipelines("IObject", "objectBcs", None),
-        ("Package", "objectVersionsAfter") => pipelines("IObject", "objectVersionsAfter", None),
-        ("Package", "objectVersionsBefore") => pipelines("IObject", "objectVersionsBefore", None),
-        ("Package", "objects") => pipelines("IObject", "objects", None),
-        ("Package", "owner") => pipelines("IObject", "owner", None),
-        ("Package", "packageAt") => pipelines("IAddressable", "address", None),
-        ("Package", "packageBcs") => pipelines("IObject", "contents", None),
-        ("Package", "packageVersionsAfter") => pipelines("IObject", "version", None),
-        ("Package", "packageVersionsBefore") => pipelines("IObject", "version", None),
-        ("Package", "previousTransaction") => pipelines("IObject", "previousTransaction", None),
-        ("Package", "receivedTransactions") => pipelines("IObject", "receivedTransactions", None),
-        ("Package", "storageRebate") => pipelines("IObject", "storageRebate", None),
-        ("Package", "typeOrigins") => pipelines("IObject", "contents", None),
-        ("Package", "version") => pipelines("IObject", "version", None),
-
-        // Protocol config fields
-        ("ProtocolConfigs", "protocolVersion") => vec!["kv_epoch_starts"],
-        ("ProtocolConfigs", "featureFlags") => vec!["kv_epoch_starts"],
-        ("ProtocolConfigs", "configs") => vec!["kv_epoch_starts"],
-
-        // Queryable
-        ("Query", "address") => pipelines("IAddressable", "address", None),
-        ("Query", "checkpoint") => vec!["kv_checkpoints"],
-        ("Query", "checkpoints") => vec!["cp_sequence_numbers"],
-        ("Query", "coinMetadata") => {
-            vec!["consistent"]
+        ("Package", field, filters) => {
+            pipelines("IAddressable", field, vec![], ps);
+            pipelines("IObject", field, filters, ps);
         }
-        ("Query", "epoch") => vec!["kv_epoch_starts"],
-        ("Query", "epochs") => vec!["kv_epoch_starts"],
-        ("Query", "event") => vec!["ev_struct_inst", "ev_emit_mod"],
-        ("Query", "events") => {
-            let mut pipelines = vec!["ev_struct_inst"];
-            for filter in filters {
-                if filter == "module" || filter == "sender" {
-                    pipelines.push("ev_emit_mod");
+
+        // Query fields
+        ("Query", Some("address"), _) => {
+            pipelines("Address", None, vec![], ps);
+        }
+        ("Query", Some("checkpoints"), _) => {
+            ps.insert("cp_sequence_numbers".to_string());
+        }
+        ("Query", Some("coinMetadata"), _) => {
+            ps.insert("consistent".to_string());
+        }
+        ("Query", Some("events"), filters) => {
+            ps.insert("tx_digests".to_string());
+            if filters.is_empty() {
+                ps.insert("ev_struct_inst".to_string());
+            } else {
+                for filter in filters {
+                    if filter == "sender" {
+                        ps.insert("ev_emit_mod".to_string());
+                        ps.insert("ev_struct_inst".to_string());
+                    } else if filter == "module" {
+                        ps.insert("ev_emit_mod".to_string());
+                    } else if filter == "type" {
+                        ps.insert("ev_struct_inst".to_string());
+                    }
                 }
             }
-            pipelines
         }
-        ("Query", "multiGetCheckpoints") => pipelines("Query", "checkpoint", None),
-        ("Query", "multiGetEpochs") => pipelines("Query", "epoch", None),
-        ("Query", "multiGetObjects") => pipelines("Query", "object", None),
-        ("Query", "multiGetPackages") => pipelines("Query", "package", None),
-        ("Query", "multiGetTransactionEffects") => pipelines("Query", "transactionEffects", None),
-        ("Query", "multiGetTransactions") => pipelines("Query", "transaction", None),
-        ("Query", "multiGetTypes") => pipelines("Query", "type", None),
-        ("Query", "object") => vec!["obj_versions"],
-        ("Query", "objects") => vec!["consistent"],
-        ("Query", "objectVersions") => vec!["obj_versions"],
-        ("Query", "package") => vec!["kv_packages"],
-        ("Query", "packages") => vec!["kv_packages"],
-        ("Query", "packageVersions") => vec!["kv_packages"],
-        ("Query", "protocolConfigs") => vec!["kv_epoch_starts"],
-        ("Query", "simulateTransaction") => vec![],
-        ("Query", "suinsName") => vec!["obj_versions"],
-        ("Query", "transaction") => vec!["kv_transactions"],
-        ("Query", "transactionEffects") => vec!["kv_transactions"],
-        ("Query", "transactions") => {
-            let mut pipelines = vec!["tx_digests"];
+        ("Query", Some("objects"), _) => {
+            ps.insert("consistent".to_string());
+        }
+        ("Query", Some("transactions"), filters) => {
+            ps.insert("tx_digests".to_string());
             for filter in filters {
                 if filter == "affectedAddress" || filter == "sentAddress" || filter == "kind" {
-                    pipelines.push("tx_affected_addresses");
+                    ps.insert("tx_affected_addresses".to_string());
                 }
                 if filter == "kind" {
-                    pipelines.push("tx_kinds")
+                    ps.insert("tx_kinds".to_string());
                 }
                 if filter == "function" {
-                    pipelines.push("tx_calls")
+                    ps.insert("tx_calls".to_string());
                 }
                 if filter == "affectedObjects" {
-                    pipelines.push("tx_affected_objects")
+                    ps.insert("tx_affected_objects".to_string());
+                }
+                if filter == "atCheckpoint" {
+                    ps.insert("cp_sequence_numbers".to_string());
                 }
             }
-            pipelines
         }
-        ("Query", "type") => vec!["kv_packages"],
+        ("TransactionEffects", Some("balanceChanges"), _) => {
+            ps.insert("tx_balance_changes".to_string());
+            ps.insert("tx_digests".to_string());
+        }
+        (_, _, _) => (),
+    }
+}
 
-        // Transaction fields
-        ("Transaction", "digest") => vec!["kv_transactions"],
-        ("Transaction", "effects") => vec!["kv_transactions"],
-        ("Transaction", "expiration") => vec!["kv_transactions"],
-        ("Transaction", "gasInput") => vec!["kv_transactions"],
-        ("Transaction", "kind") => vec!["kv_transactions"],
-        ("Transaction", "sender") => vec!["kv_transactions"],
-        ("Transaction", "signatures") => vec!["kv_transactions"],
-        ("Transaction", "transactionBcs") => vec!["kv_transactions"],
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
 
-        // TransactionEffects fields
-        ("TransactionEffects", "balanceChanges") => vec!["tx_balance_changes", "tx_digests"],
-        ("TransactionEffects", "checkpoint") => vec!["kv_transactions"],
-        ("TransactionEffects", "dependencies") => vec!["kv_transactions"],
-        ("TransactionEffects", "digest") => vec!["kv_transactions"],
-        ("TransactionEffects", "effectsBcs") => vec!["kv_transactions"],
-        ("TransactionEffects", "effectsDigest") => vec!["kv_transactions"],
-        ("TransactionEffects", "epoch") => {
-            vec!["kv_transactions", "kv_epoch_starts"]
-        }
-        ("TransactionEffects", "events") => vec!["kv_transactions"],
-        ("TransactionEffects", "executionError") => {
-            vec!["kv_transactions", "kv_packages"]
-        }
-        ("TransactionEffects", "gasEffects") => vec!["kv_transactions"],
-        ("TransactionEffects", "lamportVersion") => vec!["kv_transactions"],
-        ("TransactionEffects", "objectChanges") => vec!["kv_transactions"],
-        ("TransactionEffects", "status") => vec!["kv_transactions"],
-        ("TransactionEffects", "timestamp") => vec!["kv_transactions"],
-        ("TransactionEffects", "transaction") => vec!["kv_transactions"],
-        ("TransactionEffects", "unchangedConsensusObjects") => {
-            vec!["kv_transactions"]
-        }
-        (_, _) => vec![],
+    fn test_pipelines(type_: &str, field: Option<&str>, filters: Vec<String>) -> BTreeSet<String> {
+        let mut ps = BTreeSet::new();
+        pipelines(type_, field, filters, &mut ps);
+        ps
+    }
+
+    #[test]
+    fn test_address_transactions() {
+        let result = test_pipelines("Address", Some("transactions"), vec![]);
+        assert!(result.contains("tx_digests"));
+        assert!(result.contains("tx_affected_addresses"));
+    }
+
+    #[test]
+    fn test_address_consistent_fields() {
+        let result = test_pipelines("Address", Some("balance"), vec![]);
+        assert!(result.contains("consistent"));
+    }
+
+    #[test]
+    fn test_address_other_fields() {
+        let result = test_pipelines("Address", Some("defaultSuinsName"), vec![]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_checkpoint_transactions() {
+        let result = test_pipelines("Checkpoint", Some("transactions"), vec![]);
+        assert!(result.contains("cp_sequence_numbers"));
+        assert!(result.contains("tx_digests"));
+    }
+
+    #[test]
+    fn test_coin_metadata() {
+        let result = test_pipelines("CoinMetadata", Some("balance"), vec![]);
+        assert!(result.contains("consistent"));
+    }
+
+    #[test]
+    fn test_epoch_checkpoints() {
+        let result = test_pipelines("Epoch", Some("checkpoints"), vec![]);
+        assert!(result.contains("cp_sequence_numbers"));
+    }
+
+    #[test]
+    fn test_event() {
+        let result = test_pipelines("Event", None, vec![]);
+        assert!(result.contains("ev_struct_inst"));
+        assert!(result.contains("ev_emit_mod"));
+        assert!(result.contains("tx_digests"));
+    }
+
+    #[test]
+    fn test_iobject_received_transactions() {
+        let result = test_pipelines("IObject", Some("receivedTransactions"), vec![]);
+        assert!(result.contains("tx_digests"));
+        assert!(result.contains("tx_affected_addresses"));
+    }
+
+    #[test]
+    fn test_package() {
+        let result = test_pipelines("Package", Some("balance"), vec![]);
+        assert!(result.contains("consistent"));
+    }
+
+    #[test]
+    fn test_query_address() {
+        let result = test_pipelines("Query", Some("address"), vec![]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_query_checkpoints() {
+        let result = test_pipelines("Query", Some("checkpoints"), vec![]);
+        assert!(result.contains("cp_sequence_numbers"));
+    }
+
+    #[test]
+    fn test_query_coin_metadata() {
+        let result = test_pipelines("Query", Some("coinMetadata"), vec![]);
+        assert!(result.contains("consistent"));
+    }
+
+    #[test]
+    fn test_query_events_no_filters() {
+        let result = test_pipelines("Query", Some("events"), vec![]);
+        assert!(result.contains("tx_digests"));
+        assert!(result.contains("ev_struct_inst"));
+    }
+
+    #[test]
+    fn test_query_events_with_module_filter() {
+        let result = test_pipelines("Query", Some("events"), vec!["module".to_string()]);
+        assert!(result.contains("tx_digests"));
+        assert!(result.contains("ev_emit_mod"));
+    }
+
+    #[test]
+    fn test_query_events_with_sender_filter() {
+        let result = test_pipelines("Query", Some("events"), vec!["sender".to_string()]);
+        assert!(result.contains("tx_digests"));
+        assert!(result.contains("ev_emit_mod"));
+        assert!(result.contains("ev_struct_inst"));
+    }
+
+    #[test]
+    fn test_query_objects() {
+        let result = test_pipelines("Query", Some("objects"), vec![]);
+        assert!(result.contains("consistent"));
+    }
+
+    #[test]
+    fn test_query_transactions_no_filters() {
+        let result = test_pipelines("Query", Some("transactions"), vec![]);
+        assert!(result.contains("tx_digests"));
+    }
+
+    #[test]
+    fn test_query_transactions_affected_objects_filter() {
+        let result = test_pipelines(
+            "Query",
+            Some("transactions"),
+            vec!["affectedObjects".to_string()],
+        );
+        assert!(result.contains("tx_digests"));
+        assert!(result.contains("tx_affected_objects"));
+    }
+
+    #[test]
+    fn test_query_transactions_multiple_filters() {
+        let result = test_pipelines(
+            "Query",
+            Some("transactions"),
+            vec![
+                "affectedAddress".to_string(),
+                "kind".to_string(),
+                "function".to_string(),
+                "atCheckpoint".to_string(),
+            ],
+        );
+        assert!(result.contains("tx_digests"));
+        assert!(result.contains("tx_affected_addresses"));
+        assert!(result.contains("tx_kinds"));
+        assert!(result.contains("tx_calls"));
+        assert!(result.contains("cp_sequence_numbers"));
+    }
+
+    #[test]
+    fn test_transaction_effects_balance_changes() {
+        let result = test_pipelines("TransactionEffects", Some("balanceChanges"), vec![]);
+        assert!(result.contains("tx_balance_changes"));
+        assert!(result.contains("tx_digests"));
+    }
+
+    #[test]
+    fn test_catch_all() {
+        let invalid: BTreeSet<String> = test_pipelines("UnknownType", Some("field"), vec![]);
+        assert!(invalid.is_empty());
+        let valid: BTreeSet<String> = test_pipelines("Address", Some("digests"), vec![]);
+        assert!(valid.is_empty());
     }
 }
