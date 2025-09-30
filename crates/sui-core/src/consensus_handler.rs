@@ -37,7 +37,10 @@ use sui_types::{
     },
     crypto::RandomnessRound,
     digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest},
-    executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
+    executable_transaction::{
+        TrustedExecutableTransaction, VerifiedExecutableTransaction,
+        VerifiedExecutableTransactionWithAliases,
+    },
     messages_checkpoint::CheckpointSignatureMessage,
     messages_consensus::{
         AuthorityCapabilitiesV2, AuthorityIndex, ConsensusDeterminedVersionAssignments,
@@ -45,7 +48,7 @@ use sui_types::{
         ExecutionTimeObservation,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
-    transaction::{SenderSignedData, VerifiedCertificate, VerifiedTransaction},
+    transaction::{SenderSignedData, VerifiedCertificate, VerifiedTransaction, WithAliases},
 };
 use tokio::{sync::MutexGuard, task::JoinSet};
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -666,7 +669,7 @@ impl<C> ConsensusHandler<C> {
 
 #[derive(Default)]
 struct CommitHandlerInput {
-    user_transactions: Vec<VerifiedExecutableTransaction>,
+    user_transactions: Vec<VerifiedExecutableTransactionWithAliases>,
     capability_notifications: Vec<AuthorityCapabilitiesV2>,
     execution_time_observations: Vec<ExecutionTimeObservation>,
     checkpoint_signature_messages: Vec<CheckpointSignatureMessage>,
@@ -1120,8 +1123,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state: &mut CommitHandlerState,
         execution_time_estimator: Option<&mut ExecutionTimeEstimator>,
         commit_info: &ConsensusCommitInfo,
-        authenticator_state_update_transaction: Option<VerifiedExecutableTransaction>,
-        user_transactions: Vec<VerifiedExecutableTransaction>,
+        authenticator_state_update_transaction: Option<VerifiedExecutableTransactionWithAliases>,
+        user_transactions: Vec<VerifiedExecutableTransactionWithAliases>,
     ) -> (Vec<Schedulable>, Vec<Schedulable>, AssignedTxAndVersions) {
         let protocol_config = self.epoch_store.protocol_config();
         let epoch = self.epoch_store.epoch();
@@ -1174,10 +1177,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             if state.dkg_failed {
                 debug!(
                     "Canceling randomness-using transaction {:?} because DKG failed",
-                    transaction.digest(),
+                    transaction.tx().digest(),
                 );
                 cancelled_txns.insert(
-                    *transaction.digest(),
+                    *transaction.tx().digest(),
                     CancelConsensusCertificateReason::DkgFailed,
                 );
                 // DONE(commit-handler-rewrite): cancelled txns must be scheduled for execution
@@ -1278,25 +1281,34 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             commit_info,
             transactions_to_schedule
                 .iter()
-                .map(Schedulable::Transaction),
+                .map(|tx| Schedulable::Transaction(tx.tx())),
             &cancelled_txns,
         );
-
-        let schedulables: Vec<_> = itertools::chain!(
+        let transactions_to_schedule: Vec<_> = itertools::chain!(
             consensus_commit_prologue.into_iter(),
             authenticator_state_update_transaction.into_iter(),
             transactions_to_schedule.into_iter(),
         )
-        .map(Schedulable::Transaction)
-        .chain(settlement)
         .collect();
 
+        // DONE(commit-handler-rewrite): store all user signatures for use by checkpoint builder
+        self.epoch_store.process_user_signatures(
+            transactions_to_schedule
+                .iter()
+                .chain(randomness_transactions_to_schedule.iter()),
+        );
+
+        let schedulables: Vec<_> = transactions_to_schedule
+            .into_iter()
+            .map(|tx| Schedulable::Transaction(tx.into_tx()))
+            .chain(settlement)
+            .collect();
         let randomness_schedulables: Vec<_> = randomness_state_update_transaction
             .into_iter()
             .chain(
                 randomness_transactions_to_schedule
                     .into_iter()
-                    .map(Schedulable::Transaction),
+                    .map(|tx| Schedulable::Transaction(tx.into_tx())),
             )
             .chain(randomness_settlement)
             .collect();
@@ -1313,10 +1325,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             )
             .expect("failed to assign shared object versions");
 
-        // DONE(commit-handler-rewrite): store all user signatures for use by checkpoint builder
-        self.epoch_store
-            .process_user_signatures(schedulables.iter().chain(randomness_schedulables.iter()));
-
         (schedulables, randomness_schedulables, assigned_versions)
     }
 
@@ -1329,7 +1337,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         commit_info: &'a ConsensusCommitInfo,
         schedulables: impl Iterator<Item = Schedulable<&'a VerifiedExecutableTransaction>>,
         cancelled_txns: &'a BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> Option<VerifiedExecutableTransaction> {
+    ) -> Option<VerifiedExecutableTransactionWithAliases> {
         {
             if commit_info.skip_consensus_commit_prologue_in_test {
                 return None;
@@ -1376,18 +1384,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             commit_info,
             state.indirect_state_observer.take().unwrap(),
         );
-        Some(transaction)
+        Some(VerifiedExecutableTransactionWithAliases::no_aliases(
+            transaction,
+        ))
     }
 
     fn handle_deferral_and_cancellation(
         &self,
         state: &mut CommitHandlerState,
         cancelled_txns: &mut BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-        deferred_txns: &mut BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>,
-        scheduled_txns: &mut Vec<VerifiedExecutableTransaction>,
+        deferred_txns: &mut BTreeMap<DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>>,
+        scheduled_txns: &mut Vec<VerifiedExecutableTransactionWithAliases>,
         protocol_config: &ProtocolConfig,
         commit_info: &ConsensusCommitInfo,
-        transaction: VerifiedExecutableTransaction,
+        transaction: VerifiedExecutableTransactionWithAliases,
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
@@ -1395,13 +1405,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // DONE(commit-handler-rewrite): check if transaction should be deferred
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
-            &transaction,
+            transaction.tx(),
             state.indirect_state_observer.as_mut().unwrap(),
         );
 
         let deferral_info = self.epoch_store.should_defer(
             tx_cost,
-            &transaction,
+            transaction.tx(),
             commit_info,
             state.dkg_failed,
             state.randomness_round.is_some(),
@@ -1412,7 +1422,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         if let Some((deferral_key, deferral_reason)) = deferral_info {
             debug!(
                 "Deferring consensus certificate for transaction {:?} until {:?}",
-                transaction.digest(),
+                transaction.tx().digest(),
                 deferral_key
             );
 
@@ -1439,12 +1449,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // Cancel the transaction that has been deferred for too long.
                         debug!(
                                 "Cancelling consensus transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
-                                transaction.digest(),
+                                transaction.tx().digest(),
                                 deferral_key,
                                 congested_objects
                             );
                         cancelled_txns.insert(
-                            *transaction.digest(),
+                            *transaction.tx().digest(),
                             CancelConsensusCertificateReason::CongestionOnObjects(
                                 congested_objects,
                             ),
@@ -1457,7 +1467,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         } else {
             // DONE(commit-handler-rewrite): update object execution cost for all scheduled transactions
             // This certificate will be scheduled. Update object execution cost.
-            shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, &transaction);
+            shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, transaction.tx());
             scheduled_txns.push(transaction);
         }
     }
@@ -1466,10 +1476,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
-        user_transactions: Vec<VerifiedExecutableTransaction>,
+        user_transactions: Vec<VerifiedExecutableTransactionWithAliases>,
     ) -> (
-        Vec<VerifiedExecutableTransaction>,
-        Vec<VerifiedExecutableTransaction>,
+        Vec<VerifiedExecutableTransactionWithAliases>,
+        Vec<VerifiedExecutableTransactionWithAliases>,
         HashMap<TransactionDigest, DeferralKey>,
     ) {
         let protocol_config = self.epoch_store.protocol_config();
@@ -1486,7 +1496,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut txns: Vec<_> = txns
             .into_iter()
             .filter_map(|tx| {
-                if tx.transaction_data().uses_randomness() {
+                if tx.tx().transaction_data().uses_randomness() {
                     randomness_txns.push(tx);
                     None
                 } else {
@@ -1496,7 +1506,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .collect();
 
         for txn in user_transactions {
-            if txn.transaction_data().uses_randomness() {
+            if txn.tx().transaction_data().uses_randomness() {
                 randomness_txns.push(txn);
             } else {
                 txns.push(txn);
@@ -1521,8 +1531,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
     ) -> (
-        Vec<VerifiedExecutableTransaction>,
-        Vec<VerifiedExecutableTransaction>,
+        Vec<VerifiedExecutableTransactionWithAliases>,
+        Vec<VerifiedExecutableTransactionWithAliases>,
         HashMap<TransactionDigest, DeferralKey>,
     ) {
         let mut previously_deferred_tx_digests = HashMap::new();
@@ -1538,13 +1548,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .into_iter()
             .flat_map(|(key, txns)| txns.into_iter().map(move |tx| (key, tx)))
             .map(|(key, tx)| {
-                previously_deferred_tx_digests.insert(*tx.digest(), key);
+                previously_deferred_tx_digests.insert(*tx.tx().digest(), key);
                 tx
             })
             .collect();
         trace!(
             "loading deferred transactions: {:?}",
-            deferred_txs.iter().map(|tx| tx.digest())
+            deferred_txs.iter().map(|tx| tx.tx().digest())
         );
 
         // DONE(commit-handler-rewrite): load all deferred randomness-using txns
@@ -1556,13 +1566,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .into_iter()
                 .flat_map(|(key, txns)| txns.into_iter().map(move |tx| (key, tx)))
                 .map(|(key, tx)| {
-                    previously_deferred_tx_digests.insert(*tx.digest(), key);
+                    previously_deferred_tx_digests.insert(*tx.tx().digest(), key);
                     tx
                 })
                 .collect();
             trace!(
                 "loading deferred randomness transactions: {:?}",
-                txns.iter().map(|tx| tx.digest())
+                txns.iter().map(|tx| tx.tx().digest())
             );
             txns
         } else {
@@ -1580,7 +1590,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         commit_info: &ConsensusCommitInfo,
         for_randomness: bool,
-        txns: &[VerifiedExecutableTransaction],
+        txns: &[VerifiedExecutableTransactionWithAliases],
     ) -> SharedObjectCongestionTracker {
         SharedObjectCongestionTracker::from_protocol_config(
             self.epoch_store
@@ -2327,7 +2337,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         last_committed_round: u64,
         commit_info: &ConsensusCommitInfo,
-    ) -> Option<VerifiedExecutableTransaction> {
+    ) -> Option<VerifiedExecutableTransactionWithAliases> {
         // Load all jwks that became active in the previous round, and commit them in this round.
         // We want to delay one round because none of the transactions in the previous round could
         // have been authenticated with the jwks that became active in that round.
@@ -2352,7 +2362,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 authenticator_state_update_transaction,
             );
 
-            Some(authenticator_state_update_transaction)
+            Some(VerifiedExecutableTransactionWithAliases::no_aliases(
+                authenticator_state_update_transaction,
+            ))
         } else {
             None
         }
@@ -2473,6 +2485,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // processing newly-received transactions at this time).
                     match &parsed.transaction.kind {
                         ConsensusTransactionKind::UserTransaction(_)
+                        | ConsensusTransactionKind::UserTransactionV2(_)
                         | ConsensusTransactionKind::CertifiedTransaction(_)
                         // deprecated and ignore later, but added for exhaustive match
                         | ConsensusTransactionKind::CapabilityNotification(_)
@@ -2710,7 +2723,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             let cert = VerifiedCertificate::new_unchecked(*cert);
                             let transaction =
                                 VerifiedExecutableTransaction::new_from_certificate(cert);
-                            commit_handler_input.user_transactions.push(transaction);
+                            commit_handler_input.user_transactions.push(
+                                VerifiedExecutableTransactionWithAliases::no_aliases(transaction),
+                            );
                         }
                         ConsensusTransactionKind::UserTransaction(tx) => {
                             // Safe because transactions are certified by consensus.
@@ -2718,7 +2733,23 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
                             let transaction =
                                 VerifiedExecutableTransaction::new_from_consensus(tx, epoch);
-                            commit_handler_input.user_transactions.push(transaction);
+                            commit_handler_input
+                                .user_transactions
+                                // Use of v1 UserTransaction implies commitment to no aliases.
+                                .push(VerifiedExecutableTransactionWithAliases::no_aliases(
+                                    transaction,
+                                ));
+                        }
+                        ConsensusTransactionKind::UserTransactionV2(tx) => {
+                            let (tx, used_alias_versions) = tx.into_inner();
+                            // Safe because transactions are certified by consensus.
+                            let tx = VerifiedTransaction::new_unchecked(tx);
+                            // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
+                            let transaction =
+                                VerifiedExecutableTransaction::new_from_consensus(tx, epoch);
+                            commit_handler_input
+                                .user_transactions
+                                .push(WithAliases::new(transaction, used_alias_versions));
                         }
 
                         // === State machines ===
@@ -2967,6 +2998,13 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
                 "shared_user_transaction"
             } else {
                 "owned_user_transaction"
+            }
+        }
+        ConsensusTransactionKind::UserTransactionV2(tx) => {
+            if tx.tx().is_consensus_tx() {
+                "shared_user_transaction_v2"
+            } else {
+                "owned_user_transaction_v2"
             }
         }
         ConsensusTransactionKind::ExecutionTimeObservation(_) => "execution_time_observation",
@@ -3523,9 +3561,8 @@ mod tests {
         let mut blocks = Vec::new();
         for (i, consensus_transaction) in user_transactions
             .iter()
-            .map(|t| {
-                ConsensusTransaction::new_user_transaction_message(&state.name, t.inner().clone())
-            })
+            .cloned()
+            .map(|t| ConsensusTransaction::new_user_transaction_v2_message(&state.name, t.into()))
             .chain(
                 certified_transactions
                     .iter()
@@ -3598,7 +3635,7 @@ mod tests {
 
         // THEN check for execution status of user transactions.
         for (i, t) in user_transactions.iter().enumerate() {
-            let digest = t.digest();
+            let digest = t.tx().digest();
             if let Ok(Ok(_)) = tokio::time::timeout(
                 std::time::Duration::from_secs(10),
                 state.notify_read_effects("", *digest),
@@ -3695,11 +3732,12 @@ mod tests {
 
         let serialized_transactions: Vec<_> = transactions
             .iter()
+            .cloned()
             .map(|t| {
                 Transaction::new(
-                    bcs::to_bytes(&ConsensusTransaction::new_user_transaction_message(
+                    bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
                         &state.name,
-                        t.inner().clone(),
+                        t.into(),
                     ))
                     .unwrap(),
                 )
@@ -3761,7 +3799,7 @@ mod tests {
             if i % 2 == 1 || rejected_transactions.contains(&(i as TransactionIndex)) {
                 continue;
             }
-            let digest = t.digest();
+            let digest = t.tx().digest();
             if tokio::time::timeout(
                 std::time::Duration::from_secs(10),
                 state
@@ -3784,7 +3822,7 @@ mod tests {
             if i % 2 == 0 && !rejected_transactions.contains(&(i as TransactionIndex)) {
                 continue;
             }
-            let digest = t.digest();
+            let digest = t.tx().digest();
             assert!(
                 !state.is_tx_already_executed(digest),
                 "Rejected transaction {} {} should not have been executed",
