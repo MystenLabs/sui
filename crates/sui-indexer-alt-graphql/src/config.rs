@@ -17,6 +17,8 @@ use crate::{
     pagination::{PageLimits, PaginationConfig},
 };
 
+pub use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+
 #[derive(Default)]
 pub struct RpcConfig {
     /// Constraints that the service will impose on requests.
@@ -30,6 +32,9 @@ pub struct RpcConfig {
 
     /// Configuration for the watermark task.
     pub watermark: WatermarkConfig,
+
+    /// Configuration for zkLogin verification.
+    pub zklogin: ZkLoginConfig,
 }
 
 #[DefaultConfig]
@@ -40,6 +45,7 @@ pub struct RpcLayer {
     pub health: HealthLayer,
     pub name_service: NameServiceLayer,
     pub watermark: WatermarkLayer,
+    pub zklogin: ZkLoginLayer,
 }
 
 #[derive(Clone)]
@@ -188,6 +194,19 @@ pub struct WatermarkLayer {
     pub watermark_polling_interval_ms: Option<u64>,
 }
 
+pub struct ZkLoginConfig {
+    pub env: ZkLoginEnv,
+    pub max_epoch_upper_bound_delta: Option<u64>,
+}
+
+#[DefaultConfig]
+#[derive(Default, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ZkLoginLayer {
+    pub env: Option<ZkLoginEnv>,
+    pub max_epoch_upper_bound_delta: Option<Option<u64>>,
+}
+
 impl RpcLayer {
     pub fn example() -> Self {
         Self {
@@ -195,6 +214,7 @@ impl RpcLayer {
             health: HealthConfig::default().into(),
             name_service: NameServiceConfig::default().into(),
             watermark: WatermarkConfig::default().into(),
+            zklogin: ZkLoginConfig::default().into(),
         }
     }
 
@@ -204,6 +224,7 @@ impl RpcLayer {
             health: self.health.finish(HealthConfig::default()),
             name_service: self.name_service.finish(NameServiceConfig::default()),
             watermark: self.watermark.finish(WatermarkConfig::default()),
+            zklogin: self.zklogin.finish(ZkLoginConfig::default()),
         }
     }
 }
@@ -355,6 +376,17 @@ impl WatermarkLayer {
     }
 }
 
+impl ZkLoginLayer {
+    pub(crate) fn finish(self, base: ZkLoginConfig) -> ZkLoginConfig {
+        ZkLoginConfig {
+            env: self.env.unwrap_or(base.env),
+            max_epoch_upper_bound_delta: self
+                .max_epoch_upper_bound_delta
+                .unwrap_or(base.max_epoch_upper_bound_delta),
+        }
+    }
+}
+
 impl From<HealthConfig> for HealthLayer {
     fn from(value: HealthConfig) -> Self {
         Self {
@@ -404,6 +436,15 @@ impl From<WatermarkConfig> for WatermarkLayer {
     fn from(value: WatermarkConfig) -> Self {
         Self {
             watermark_polling_interval_ms: Some(value.watermark_polling_interval.as_millis() as u64),
+        }
+    }
+}
+
+impl From<ZkLoginConfig> for ZkLoginLayer {
+    fn from(value: ZkLoginConfig) -> Self {
+        Self {
+            env: Some(value.env),
+            max_epoch_upper_bound_delta: Some(value.max_epoch_upper_bound_delta),
         }
     }
 }
@@ -472,6 +513,17 @@ impl Default for WatermarkConfig {
     fn default() -> Self {
         Self {
             watermark_polling_interval: Duration::from_millis(500),
+        }
+    }
+}
+
+impl Default for ZkLoginConfig {
+    fn default() -> Self {
+        Self {
+            env: ZkLoginEnv::Prod,
+            max_epoch_upper_bound_delta: max_across_protocol(
+                ProtocolConfig::zklogin_max_epoch_upper_bound_delta,
+            ),
         }
     }
 }

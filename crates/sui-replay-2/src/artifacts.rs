@@ -6,17 +6,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::execution::ReplayCacheSummary;
 use move_trace_format::format::{MoveTrace, MoveTraceReader};
 use sui_types::{effects::TransactionEffects, gas::GasUsageReport};
 
 pub const ARTIFACTS_ENCODING_EXT: &str = "json";
 pub const ARTIFACTS_ENCODING_COMPRESSION_EXT: &str = "json.zst";
 
-pub const ARTIFACTS: [Artifact; 4] = [
+pub const ARTIFACTS: [Artifact; 5] = [
     Artifact::Trace,
     Artifact::TransactionEffects,
     Artifact::TransactionGasReport,
     Artifact::ForkedTransactionEffects,
+    Artifact::ReplayCacheSummary,
 ];
 
 /// The types of artifacts that the replay tool knows about and may output.
@@ -26,6 +28,7 @@ pub enum Artifact {
     TransactionEffects,
     TransactionGasReport,
     ForkedTransactionEffects,
+    ReplayCacheSummary,
 }
 
 /// Encoding types for artifacts that may be output by the replay tool.
@@ -93,6 +96,7 @@ impl Artifact {
             Artifact::TransactionEffects => "transaction_effects",
             Artifact::ForkedTransactionEffects => "forked_transaction_effects",
             Artifact::TransactionGasReport => "transaction_gas_report",
+            Artifact::ReplayCacheSummary => "replay_cache_summary",
         }
     }
 
@@ -102,7 +106,8 @@ impl Artifact {
             Artifact::Trace => EncodingType::JsonCompressed,
             Artifact::ForkedTransactionEffects
             | Artifact::TransactionEffects
-            | Artifact::TransactionGasReport => EncodingType::Json,
+            | Artifact::TransactionGasReport
+            | Artifact::ReplayCacheSummary => EncodingType::Json,
         }
     }
 
@@ -181,6 +186,23 @@ impl ArtifactMember<'_, '_> {
                 serde_json::from_value::<GasUsageReport>(json).map_err(|e| {
                     anyhow::anyhow!(
                         "Failed to deserialize gas usage report from {}: {e}",
+                        self.artifact_path.display()
+                    )
+                })
+            }))
+        } else {
+            None
+        }
+    }
+
+    /// Try to get the ReplayCacheSummary if the artifact type is `ReplayCacheSummary`.
+    /// If the artifact type is not `ReplayCacheSummary` `None` is returned.
+    pub fn try_get_cache_summary(&self) -> Option<anyhow::Result<ReplayCacheSummary>> {
+        if self.artifact_type == Artifact::ReplayCacheSummary {
+            Some(self.get_json().and_then(|json| {
+                serde_json::from_value::<ReplayCacheSummary>(json).map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to deserialize replay cache summary from {}: {e}",
                         self.artifact_path.display()
                     )
                 })

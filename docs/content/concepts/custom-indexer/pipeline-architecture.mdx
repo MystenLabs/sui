@@ -448,7 +448,7 @@ Each channel has a fixed buffer size that automatically blocks when full:
 
 **`Regulator` to `Broadcaster`**: `ingest_concurrency` slots → `Regulator` stops signaling new fetches.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" struct="buff" highlight="ingest_concurrency" />
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="ingest_concurrency" />
     
 **`Broadcaster` to `Processor`**: `checkpoint_buffer_size` slots → `Broadcaster` blocks, upstream pressure.
 
@@ -456,7 +456,7 @@ Each channel has a fixed buffer size that automatically blocks when full:
     
 **`Processor` to `Collector`**: `FANOUT + PIPELINE_BUFFER` slots → All workers block on `send()`.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" variable="processor_tx" />
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="processor_tx" />
     
 **`Collector` to `Committer`**: `write_concurrency + PIPELINE_BUFFER` slots → `Collector` stops accepting.
 

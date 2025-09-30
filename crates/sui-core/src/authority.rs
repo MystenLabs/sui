@@ -41,6 +41,7 @@ use serde::{Deserialize, Serialize};
 use shared_object_version_manager::AssignedVersions;
 use shared_object_version_manager::Schedulable;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -90,7 +91,7 @@ use tracing::trace;
 use tracing::{debug, error, info, instrument, warn};
 
 use self::authority_store::ExecutionLockWriteGuard;
-use self::authority_store_pruner::AuthorityStorePruningMetrics;
+use self::authority_store_pruner::{AuthorityStorePruningMetrics, PrunerWatermarks};
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
@@ -994,39 +995,14 @@ impl AuthorityState {
         // Note: the deny checks may do redundant package loads but:
         // - they only load packages when there is an active package deny map
         // - the loads are cached anyway
-        let deny_status = sui_transaction_checks::deny::check_transaction_for_signing(
+        sui_transaction_checks::deny::check_transaction_for_signing(
             tx_data,
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
             &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
-        );
-
-        match deny_status {
-            Ok(_) => {}
-            // If the transaction was blocked, it may still be allowed if it is in
-            // the aliased address list.
-            // TODO: Delete this code after protocol version 86.
-            Err(e) => {
-                let allowed = transaction
-                    .inner()
-                    .data()
-                    .tx_signatures()
-                    .iter()
-                    .filter_map(|sig| sig.try_into().ok())
-                    .any(|signer: SuiAddress| {
-                        epoch_store.protocol_config().is_tx_allowed_via_aliasing(
-                            tx_data.sender().to_inner(),
-                            signer.to_inner(),
-                            tx_digest.inner(),
-                        )
-                    });
-                if !allowed {
-                    return Err(e);
-                }
-            }
-        }
+        )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             Some(tx_digest),
@@ -1045,11 +1021,42 @@ impl AuthorityState {
             &self.config.verifier_signing_config,
         )?;
 
+        self.handle_coin_deny_list_checks(
+            tx_data,
+            &checked_input_objects,
+            &receiving_objects,
+            epoch_store,
+        )?;
+
+        Ok(checked_input_objects)
+    }
+
+    fn handle_coin_deny_list_checks(
+        &self,
+        tx_data: &TransactionData,
+        checked_input_objects: &CheckedInputObjects,
+        receiving_objects: &ReceivingObjects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<()> {
+        let funds_withdraw_types = tx_data
+            .get_funds_withdrawals()
+            .into_iter()
+            .filter_map(|withdraw| {
+                withdraw
+                    .type_arg
+                    .get_balance_type_param()
+                    // unwrap safe because we already verified the transaction.
+                    .unwrap()
+                    .map(|ty| ty.to_canonical_string(false))
+            })
+            .collect::<BTreeSet<_>>();
+
         if epoch_store.coin_deny_list_v1_enabled() {
             check_coin_deny_list_v1(
                 tx_data.sender(),
-                &checked_input_objects,
-                &receiving_objects,
+                checked_input_objects,
+                receiving_objects,
+                funds_withdraw_types.clone(),
                 &self.get_object_store(),
             )?;
         }
@@ -1057,13 +1064,14 @@ impl AuthorityState {
         if epoch_store.protocol_config().enable_coin_deny_list_v2() {
             check_coin_deny_list_v2_during_signing(
                 tx_data.sender(),
-                &checked_input_objects,
-                &receiving_objects,
+                checked_input_objects,
+                receiving_objects,
+                funds_withdraw_types.clone(),
                 &self.get_object_store(),
             )?;
         }
 
-        Ok(checked_input_objects)
+        Ok(())
     }
 
     /// This is a private method and should be kept that way. It doesn't check whether
@@ -3360,6 +3368,7 @@ impl AuthorityState {
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
+        pruner_watermarks: Arc<PrunerWatermarks>,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -3391,6 +3400,7 @@ impl AuthorityState {
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
             pruner_db,
+            pruner_watermarks,
         );
         let input_loader =
             TransactionInputLoader::new(execution_cache_trait_pointers.object_cache_reader.clone());
@@ -3708,6 +3718,8 @@ impl AuthorityState {
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
+        self.execution_scheduler
+            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
@@ -3740,9 +3752,12 @@ impl AuthorityState {
                 .map(|c| *c.sequence_number())
                 .unwrap_or_default(),
         );
+        self.execution_scheduler
+            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
         let new_epoch = new_epoch_store.epoch();
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;
+
         *execution_lock = new_epoch;
     }
 
@@ -5333,6 +5348,25 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
+    fn create_coin_registry_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_coin_registry() {
+            info!("coin registry not enabled");
+            return None;
+        }
+
+        if epoch_store.coin_registry_exists() {
+            return None;
+        }
+
+        let tx = EndOfEpochTransactionKind::new_coin_registry_create();
+        info!("Creating CoinRegistryCreate tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
     fn create_bridge_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -5560,6 +5594,10 @@ impl AuthorityState {
             txns.push(tx);
         }
         if let Some(tx) = self.create_accumulator_root_tx(epoch_store) {
+            txns.push(tx);
+        }
+
+        if let Some(tx) = self.create_coin_registry_tx(epoch_store) {
             txns.push(tx);
         }
 

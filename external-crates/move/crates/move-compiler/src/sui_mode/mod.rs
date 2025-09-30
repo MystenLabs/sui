@@ -68,6 +68,11 @@ pub const ACCUMULATOR_CREATE: Symbol = symbol!("create");
 
 pub const EVENT_MODULE_NAME: Symbol = symbol!("event");
 pub const EVENT_FUNCTION_NAME: Symbol = symbol!("emit");
+pub const EVENT_AUTHENTICATED_FUNCTION_NAME: Symbol = symbol!("emit_authenticated");
+
+pub const COIN_REGISTRY_MODULE_NAME: Symbol = symbol!("coin_registry");
+pub const DYNAMIC_COIN_CREATION_FUNCTION_NAME: Symbol = symbol!("new_currency");
+pub const COIN_REGISTRY_CREATE: Symbol = symbol!("create");
 
 pub const TRANSFER_MODULE_NAME: Symbol = symbol!("transfer");
 pub const TRANSFER_FUNCTION_NAME: Symbol = symbol!("transfer");
@@ -158,6 +163,13 @@ pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
     /* category */ TYPING,
     /* code */ 9,
     "invalid private transfer call",
+);
+pub const DYNAMIC_COIN_CREATION_CALL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 10,
+    "invalid coin creation call",
 );
 
 // Bridge supported asset

@@ -4,6 +4,7 @@
 //# init --protocol-version 70 --addresses T=0x0 --accounts A B --simulator
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module T::test {
     use sui::coin;
 

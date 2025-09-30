@@ -26,6 +26,11 @@ AccumulatorValue:
         TUPLE:
           - U64
           - U64
+    2:
+      EventDigest:
+        TUPLE:
+          - U64
+          - TYPENAME: Digest
 AccumulatorWriteV1:
   STRUCT:
     - address:
@@ -465,6 +470,8 @@ EndOfEpochTransactionKind:
           TYPENAME: StoredExecutionTimeObservations
     8:
       AccumulatorRootCreate: UNIT
+    9:
+      CoinRegistryCreate: UNIT
 Event:
   STRUCT:
     - package_id:

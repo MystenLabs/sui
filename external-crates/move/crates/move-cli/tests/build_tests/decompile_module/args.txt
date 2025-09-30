@@ -1,0 +1,3 @@
+build
+decompile --input build/Test/bytecode_modules --output decompiled/
+> cat decompiled/anon_0000000000000000000000000000000000000000000000000000000000000042/m.move

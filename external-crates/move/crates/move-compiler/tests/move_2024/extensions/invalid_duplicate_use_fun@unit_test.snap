@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/extensions/invalid_duplicate_use_fun.move:4:9
+  │
+4 │     fun get_x(s: &S): &u64 { &s.x }
+  │         ^^^^^     - Function declarations create an implicit 'use fun' when their first argument is a type defined in the same module
+  │         │          
+  │         Duplicate 'use fun' for 'a::m::S.get_x'
+  ·
+9 │     use fun g as S.get_x;
+  │                    ----- Previously declared here

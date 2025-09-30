@@ -12,6 +12,7 @@ public struct MY_COIN has drop {}
 
 // Module initializer is called once on module publish. A treasury
 // cap is sent to the publisher, who then controls minting and burning.
+#[allow(deprecated_usage)]
 fun init(witness: MY_COIN, ctx: &mut TxContext) {
     let (mut treasury, metadata) = coin::create_currency(
         witness,

@@ -20,8 +20,6 @@ pub fn root() -> PathBuf {
 
 /// Common path and file operations
 pub trait PathExt {
-    fn to_url(&self) -> url::Url;
-
     fn rm_rf(&self);
     fn mkdir_p(&self);
 
@@ -31,10 +29,6 @@ pub trait PathExt {
 }
 
 impl PathExt for Path {
-    fn to_url(&self) -> url::Url {
-        url::Url::from_file_path(self).ok().unwrap()
-    }
-
     fn rm_rf(&self) {
         let meta = match self.symlink_metadata() {
             Ok(meta) => meta,
@@ -72,10 +66,6 @@ impl PathExt for Path {
 }
 
 impl PathExt for PathBuf {
-    fn to_url(&self) -> url::Url {
-        self.as_path().to_url()
-    }
-
     fn rm_rf(&self) {
         self.as_path().rm_rf()
     }

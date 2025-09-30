@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context as _};
 use async_graphql::{connection::Connection, Context, Object, Result};
 use futures::future::try_join_all;
 use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
-use sui_types::{digests::ChainIdentifier, transaction::TransactionData};
+use sui_rpc::proto::sui::rpc::v2beta2 as proto;
+use sui_types::digests::ChainIdentifier;
 
 use crate::{
     api::{
         mutation::TransactionInputError,
-        scalars::base64::Base64,
+        scalars::{base64::Base64, json::Json},
         types::{
             epoch::CEpoch, simulation_result::SimulationResult,
             transaction_effects::TransactionEffects,
@@ -36,13 +37,14 @@ use super::{
         move_type::{self, MoveType},
         name_service::name_to_address,
         object::{self, Object, ObjectKey, VersionFilter},
-        object_filter::{ObjectFilter, Validator as OFValidator},
+        object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::{
             filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
             CTransaction, Transaction,
         },
+        zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
     },
 };
 
@@ -108,15 +110,16 @@ impl Query {
         last: Option<u64>,
         before: Option<CCheckpoint>,
         filter: Option<CheckpointFilter>,
-    ) -> Result<Connection<String, Checkpoint>, RpcError> {
+    ) -> Result<Option<Connection<String, Checkpoint>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "checkpoints");
         let page = Page::from_params(limits, first, after, last, before)?;
 
         let filter = filter.unwrap_or_default();
-
-        Checkpoint::paginate(ctx, scope, page, filter).await
+        Checkpoint::paginate(ctx, scope, page, filter)
+            .await
+            .map(Some)
     }
 
     /// Fetch the CoinMetadata for a given coin type.
@@ -168,13 +171,15 @@ impl Query {
         last: Option<u64>,
         before: Option<CEvent>,
         filter: Option<EventFilter>,
-    ) -> Result<Connection<String, Event>, RpcError> {
+    ) -> Result<Option<Connection<String, Event>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "events");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
+        Event::paginate(ctx, scope, page, filter.unwrap_or_default())
+            .await
+            .map(Some)
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -528,7 +533,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Result<Connection<String, Transaction>, RpcError> {
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "transactions");
@@ -536,8 +541,9 @@ impl Query {
 
         // Use the filter if provided, otherwise use default (unfiltered)
         let filter = filter.unwrap_or_default();
-
-        Transaction::paginate(ctx, scope, page, filter).await
+        Transaction::paginate(ctx, scope, page, filter)
+            .await
+            .map(Some)
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.
@@ -555,27 +561,40 @@ impl Query {
 
     /// Simulate a transaction to preview its effects without executing it on chain.
     ///
-    /// - `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
+    /// Accepts a JSON transaction matching the [Sui gRPC API schema](https://docs.sui.io/references/fullnode-protocol#sui-rpc-v2-Transaction).
+    /// The JSON format allows for partial transaction specification where certain fields can be automatically resolved by the server.
+    ///
+    /// Alternatively, for already serialized transactions, you can pass BCS-encoded data:
+    /// `{"bcs": {"value": "<base64>"}}`
     ///
     /// Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
     async fn simulate_transaction(
         &self,
         ctx: &Context<'_>,
-        transaction_data_bcs: Base64,
+        transaction: Json,
     ) -> Result<SimulationResult, RpcError<TransactionInputError>> {
         let fullnode_client: &FullnodeClient = ctx.data()?;
 
-        // Parse transaction data from BCS
-        let tx_data: TransactionData = {
-            let bytes: &Vec<u8> = &transaction_data_bcs.0;
-            bcs::from_bytes(bytes)
-                .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionBcs(err)))?
-        };
+        // Convert Json to serde_json::Value and parse as proto::Transaction
+        let json_value: serde_json::Value = transaction
+            .try_into()
+            .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionJson(err)))?;
+        let proto_tx: proto::Transaction = serde_json::from_value(json_value)
+            .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionJson(err)))?;
 
-        // Simulate transaction - no signatures needed
-        match fullnode_client.simulate_transaction(tx_data.clone()).await {
+        // Simulate transaction using proto
+        match fullnode_client.simulate_transaction(proto_tx).await {
             Ok(response) => {
                 let scope = self.scope(ctx)?;
+                let tx_data = response
+                    .transaction
+                    .as_ref()
+                    .and_then(|executed_tx| executed_tx.transaction.as_ref())
+                    .and_then(|tx| tx.bcs.as_ref())
+                    .ok_or_else(|| anyhow!("Missing transaction or BCS in simulation response"))?
+                    .deserialize()
+                    .context("Failed to deserialize transaction from response")?;
+
                 SimulationResult::from_simulation_response(scope, response, tx_data).map_err(upcast)
             }
             Err(GrpcExecutionError(status)) => Ok(SimulationResult {
@@ -588,6 +607,33 @@ impl Query {
                 .context("Failed to simulate transaction")
                 .into()),
         }
+    }
+
+    /// Verify a zkLogin signature os from the given `author`.
+    ///
+    /// Returns a `ZkLoginVerifyResult` where `success` is `true` and `error` is empty if the signature is valid. If the signature is invalid, `success` is `false` and `error` contains the relevant error message.
+    ///
+    /// - `bytes` are either the bytes of a serialized personal message, or `TransactionData`, Base64-encoded.
+    /// - `signature` is a serialized zkLogin signature, also Base64-encoded.
+    /// - `intentScope` indicates whether `bytes` are to be parsed as a personal message or `TransactionData`.
+    /// - `author` is the signer's address.
+    async fn verify_zk_login_signature(
+        &self,
+        ctx: &Context<'_>,
+        bytes: Base64,
+        signature: Base64,
+        intent_scope: ZkLoginIntentScope,
+        author: SuiAddress,
+    ) -> Result<ZkLoginVerifyResult, RpcError<zklogin::Error>> {
+        zklogin::verify_signature(
+            ctx,
+            self.scope(ctx)?,
+            bytes,
+            signature,
+            intent_scope,
+            author,
+        )
+        .await
     }
 }
 

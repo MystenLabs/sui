@@ -1,0 +1,15 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module unpack {
+    public fun unpack () {
+        let 0x0::unpack::Foo { val: reg_1 } = l0;
+        return reg_1 : u64
+    }
+
+    public fun unpack_bar () {
+        let 0x0::unpack::Bar { val: reg_1, other: reg_2 } = l0;
+        return reg_2 : u64reg_1 : u64
+    }
+
+}

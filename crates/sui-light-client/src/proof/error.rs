@@ -64,4 +64,13 @@ pub enum ProofError {
 
     #[error("Checkpoint summary verification failed: {0}")]
     SummaryVerificationFailed(String),
+
+    #[error("Invalid proof")]
+    InvalidProof,
+
+    #[error("Artifact digest mismatch")]
+    ArtifactDigestMismatch,
+
+    #[error("General error: {0}")]
+    GeneralError(String),
 }

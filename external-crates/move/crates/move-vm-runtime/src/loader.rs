@@ -958,7 +958,7 @@ impl Loader {
         module: &CompiledModule,
         bundle_verified: &BTreeMap<ModuleId, &CompiledModule>,
         data_store: &impl DataStore,
-    ) -> VMResult<()> {
+    ) -> VMResult<BTreeSet<ModuleId>> {
         // Performs all verification steps to load the module without loading it, i.e., the new
         // module will NOT show up in `module_cache`.
         move_bytecode_verifier::verify_module_with_config_unmetered(
@@ -990,9 +990,9 @@ impl Loader {
         module: &CompiledModule,
         bundle_verified: &BTreeMap<ModuleId, &CompiledModule>,
         data_store: &impl DataStore,
-    ) -> VMResult<()> {
+    ) -> VMResult<BTreeSet<ModuleId>> {
         let module_cache = self.module_cache.read();
-        cyclic_dependencies::verify_module(module, |runtime_id| {
+        cyclic_dependencies::verify_module(&self.vm_config().verifier, module, |runtime_id| {
             let module = if let Some(bundled) = bundle_verified.get(runtime_id) {
                 Some(*bundled)
             } else {
@@ -1335,6 +1335,12 @@ impl Loader {
             allow_module_loading_failure,
         )?;
 
+        let allow_dep_module_loading_failure = if self.vm_config().verifier.better_loader_errors {
+            allow_module_loading_failure
+        } else {
+            false
+        };
+
         loop {
             // get the entry at the top of the stack
             let entry = module_loader.top_mut()?;
@@ -1366,7 +1372,10 @@ impl Loader {
                 if !entry.deps.is_empty() {
                     let dep_id = entry.deps.pop().unwrap();
                     module_loader.verify_and_push(
-                        dep_id, self, data_store, false, /* allow_loading_failure */
+                        dep_id,
+                        self,
+                        data_store,
+                        allow_dep_module_loading_failure, /* allow_loading_failure */
                     )?;
                     // loop with dep at the top of the stack
                     continue;

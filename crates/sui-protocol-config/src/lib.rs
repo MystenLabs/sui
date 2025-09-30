@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 96;
+const MAX_PROTOCOL_VERSION: u64 = 97;
 
 // Record history of protocol version allocations here:
 //
@@ -262,6 +262,10 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 // Version 95: Change type name id base cost to 52, increase max transactions per checkpoint to 20000.
 // Version 96: Enable authority capabilities v2.
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
+//             Create Coin Registry object
+//             Enable checkpoint artifacts digest in devnet.
+// Version 97: Add authenticated event streams support via emit_authenticated function.
+//             Add better error messages to the loader.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -742,6 +746,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
 
+    // Enable authenticated event streams
+    #[serde(skip_serializing_if = "is_false")]
+    enable_authenticated_event_streams: bool,
+
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
@@ -789,6 +797,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
 
+    // Enable including checkpoint artifacts digest in the summary.
+    #[serde(skip_serializing_if = "is_false")]
+    include_checkpoint_artifacts_digest_in_summary: bool,
+
     // If true, use MFP txns in load initial object debts.
     #[serde(skip_serializing_if = "is_false")]
     use_mfp_txns_in_load_initial_object_debts: bool,
@@ -796,6 +808,30 @@ struct FeatureFlags {
     // If true, cancel randomness-using txns when DKG has failed *before* doing other congestion checks.
     #[serde(skip_serializing_if = "is_false")]
     cancel_for_failed_dkg_early: bool,
+
+    // Enable coin registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_registry: bool,
+
+    // Use abstract size in the object runtime instead the legacy value size.
+    #[serde(skip_serializing_if = "is_false")]
+    abstract_size_in_object_runtime: bool,
+
+    // If true charge for loads into the cache (i.e., fetches from storage) in the object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    object_runtime_charge_cache_load_gas: bool,
+
+    // If true, use the new commit handler.
+    #[serde(skip_serializing_if = "is_false")]
+    use_new_commit_handler: bool,
+
+    // If true return a better error message when we encounter a loader error.
+    #[serde(skip_serializing_if = "is_false")]
+    better_loader_errors: bool,
+
+    // If true generate layouts for dynamic fields
+    #[serde(skip_serializing_if = "is_false")]
+    generate_df_type_layouts: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1281,6 +1317,7 @@ pub struct ProtocolConfig {
     event_emit_value_size_derivation_cost_per_byte: Option<u64>,
     event_emit_tag_size_derivation_cost_per_byte: Option<u64>,
     event_emit_output_cost_per_byte: Option<u64>,
+    event_emit_auth_stream_cost: Option<u64>,
 
     //  `object` module
     // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -1899,6 +1936,14 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_authenticated_event_streams(&self) -> bool {
+        self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
+    pub fn enable_coin_registry(&self) -> bool {
+        self.feature_flags.enable_coin_registry
+    }
+
     pub fn enable_coin_deny_list_v2(&self) -> bool {
         self.feature_flags.enable_coin_deny_list_v2
     }
@@ -2133,23 +2178,6 @@ impl ProtocolConfig {
         self.feature_flags.allow_unbounded_system_objects
     }
 
-    pub fn get_aliased_addresses(&self) -> &Vec<AliasedAddress> {
-        &self.aliased_addresses
-    }
-
-    pub fn is_tx_allowed_via_aliasing(
-        &self,
-        sender: [u8; 32],
-        signer: [u8; 32],
-        tx_digest: &[u8; 32],
-    ) -> bool {
-        self.aliased_addresses.iter().any(|addr| {
-            addr.original == sender
-                && addr.aliased == signer
-                && addr.allowed_tx_digests.contains(tx_digest)
-        })
-    }
-
     pub fn type_tags_in_object_runtime(&self) -> bool {
         self.feature_flags.type_tags_in_object_runtime
     }
@@ -2205,12 +2233,37 @@ impl ProtocolConfig {
             .consensus_checkpoint_signature_key_includes_digest
     }
 
+    pub fn include_checkpoint_artifacts_digest_in_summary(&self) -> bool {
+        self.feature_flags
+            .include_checkpoint_artifacts_digest_in_summary
+    }
+
     pub fn use_mfp_txns_in_load_initial_object_debts(&self) -> bool {
         self.feature_flags.use_mfp_txns_in_load_initial_object_debts
     }
 
     pub fn cancel_for_failed_dkg_early(&self) -> bool {
         self.feature_flags.cancel_for_failed_dkg_early
+    }
+
+    pub fn abstract_size_in_object_runtime(&self) -> bool {
+        self.feature_flags.abstract_size_in_object_runtime
+    }
+
+    pub fn object_runtime_charge_cache_load_gas(&self) -> bool {
+        self.feature_flags.object_runtime_charge_cache_load_gas
+    }
+
+    pub fn use_new_commit_handler(&self) -> bool {
+        self.feature_flags.use_new_commit_handler
+    }
+
+    pub fn better_loader_errors(&self) -> bool {
+        self.feature_flags.better_loader_errors
+    }
+
+    pub fn generate_df_type_layouts(&self) -> bool {
+        self.feature_flags.generate_df_type_layouts
     }
 }
 
@@ -2485,6 +2538,7 @@ impl ProtocolConfig {
             event_emit_value_size_derivation_cost_per_byte: Some(2),
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
             event_emit_output_cost_per_byte: Some(10),
+            event_emit_auth_stream_cost: None,
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -3992,10 +4046,24 @@ impl ProtocolConfig {
                     cfg.max_transactions_per_checkpoint = Some(20_000);
                 }
                 96 => {
+                    // Enable artifacts digest in devnet.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags
+                            .include_checkpoint_artifacts_digest_in_summary = true;
+                    }
                     cfg.feature_flags.correct_gas_payment_limit_check = true;
                     cfg.feature_flags.authority_capabilities_v2 = true;
                     cfg.feature_flags.use_mfp_txns_in_load_initial_object_debts = true;
                     cfg.feature_flags.cancel_for_failed_dkg_early = true;
+                    cfg.feature_flags.enable_coin_registry = true;
+
+                    // Enable Mysticeti fastpath handlers on mainnet.
+                    cfg.feature_flags.mysticeti_fastpath = true;
+                }
+                97 => {
+                    cfg.event_emit_auth_stream_cost = Some(52);
+                    cfg.feature_flags.better_loader_errors = true;
+                    cfg.feature_flags.generate_df_type_layouts = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4064,6 +4132,7 @@ impl ProtocolConfig {
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
+            better_loader_errors: self.better_loader_errors(),
         }
     }
 
@@ -4210,22 +4279,50 @@ impl ProtocolConfig {
         self.feature_flags.record_time_estimate_processed = val;
     }
 
-    pub fn push_aliased_addresses_for_testing(
+    pub fn set_prepend_prologue_tx_in_consensus_commit_in_checkpoints_for_testing(
         &mut self,
-        original: [u8; 32],
-        aliased: [u8; 32],
-        allowed_tx_digests: Vec<[u8; 32]>,
+        val: bool,
     ) {
-        self.aliased_addresses.push(AliasedAddress {
-            original,
-            aliased,
-            allowed_tx_digests,
-        });
+        self.feature_flags
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints = val;
     }
 
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
+    }
+
+    pub fn enable_authenticated_event_streams_for_testing(&mut self) {
+        self.enable_accumulators_for_testing();
+        self.feature_flags.enable_authenticated_event_streams = true;
+    }
+
+    pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .ignore_execution_time_observations_after_certs_closed = val;
+    }
+
+    pub fn set_consensus_checkpoint_signature_key_includes_digest_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .consensus_checkpoint_signature_key_includes_digest = val;
+    }
+
+    pub fn set_cancel_for_failed_dkg_early_for_testing(&mut self, val: bool) {
+        self.feature_flags.cancel_for_failed_dkg_early = val;
+    }
+
+    pub fn set_use_mfp_txns_in_load_initial_object_debts_for_testing(&mut self, val: bool) {
+        self.feature_flags.use_mfp_txns_in_load_initial_object_debts = val;
+    }
+
+    pub fn set_authority_capabilities_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.authority_capabilities_v2 = val;
     }
 }
 

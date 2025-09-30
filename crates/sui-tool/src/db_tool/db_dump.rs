@@ -13,7 +13,8 @@ use strum_macros::EnumString;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, PrunerWatermarks,
+    EPOCH_DURATION_MS_FOR_TESTING,
 };
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
@@ -188,14 +189,21 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> anyhow::Result<(usize, usi
 }
 
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
-    let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
+    let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None, None));
     AuthorityStorePruner::compact(&perpetual)?;
     Ok(())
 }
 
 pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
-    let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &db_path.join("store"),
+        None,
+        None,
+    ));
+    let checkpoint_store = CheckpointStore::new(
+        &db_path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
     let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let highest_pruned_checkpoint = checkpoint_store
         .get_highest_pruned_checkpoint_seq_number()?
@@ -227,8 +235,15 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
 }
 
 pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
-    let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &db_path.join("store"),
+        None,
+        None,
+    ));
+    let checkpoint_store = CheckpointStore::new(
+        &db_path.join("checkpoints"),
+        Arc::new(PrunerWatermarks::default()),
+    );
     let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
     info!("Pruning setup for db at path: {:?}", db_path.display());
@@ -307,7 +322,7 @@ mod test {
 
         // Open the DB for writing
         let _: AuthorityEpochTables = AuthorityEpochTables::open(0, &primary_path, None);
-        let _: AuthorityPerpetualTables = AuthorityPerpetualTables::open(&primary_path, None);
+        let _: AuthorityPerpetualTables = AuthorityPerpetualTables::open(&primary_path, None, None);
 
         // Get all the tables for AuthorityEpochTables
         let tables = {

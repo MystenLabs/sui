@@ -57,7 +57,7 @@ mod api;
 pub mod args;
 pub mod config;
 mod error;
-mod extensions;
+pub mod extensions;
 mod health;
 mod intersect;
 mod metrics;
@@ -188,6 +188,13 @@ where
             cancel,
         } = self;
 
+        if with_ide {
+            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
+            router = router.route("/graphql", get(graphiql));
+        } else {
+            info!("Skipping GraphiQL IDE setup");
+        }
+
         router = router
             .layer(Extension(schema.finish()))
             .layer(axum::middleware::from_fn_with_state(
@@ -200,13 +207,6 @@ where
                     .allow_origin(cors::Any)
                     .allow_headers(cors::Any),
             );
-
-        if with_ide {
-            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
-            router = router.route("/graphql", get(graphiql));
-        } else {
-            info!("Skipping GraphiQL IDE setup");
-        }
 
         info!("Starting GraphQL service on {rpc_listen_address}");
         let listener = TcpListener::bind(rpc_listen_address)
@@ -373,6 +373,7 @@ pub async fn start_rpc(
         .data(config.limits.pagination())
         .data(config.limits)
         .data(config.name_service)
+        .data(config.zklogin)
         .data(chain_identifier)
         .data(pg_reader)
         .data(consistent_reader)

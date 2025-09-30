@@ -19,6 +19,7 @@ use crate::{
 use futures::stream::{FuturesUnordered, StreamExt};
 use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
+use parking_lot::Mutex;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
@@ -44,7 +45,7 @@ pub struct ExecutionScheduler {
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
-    balance_withdraw_scheduler: Option<Arc<BalanceWithdrawScheduler>>,
+    balance_withdraw_scheduler: Arc<Mutex<Option<BalanceWithdrawScheduler>>>,
     metrics: Arc<AuthorityMetrics>,
 }
 
@@ -88,19 +89,12 @@ impl ExecutionScheduler {
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
-        let balance_accumulator_enabled = epoch_store.accumulators_enabled();
-        let balance_withdraw_scheduler = if balance_accumulator_enabled {
-            let starting_accumulator_version = object_cache_read
-                .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                .expect("Accumulator root object must be present if balance accumulator is enabled")
-                .version();
-            Some(BalanceWithdrawScheduler::new(
-                Arc::new(child_object_resolver),
-                starting_accumulator_version,
-            ))
-        } else {
-            None
-        };
+        let balance_withdraw_scheduler =
+            Arc::new(Mutex::new(Self::initialize_balance_withdraw_scheduler(
+                epoch_store,
+                &object_cache_read,
+                child_object_resolver,
+            )));
         Self {
             object_cache_read,
             transaction_cache_read,
@@ -109,6 +103,26 @@ impl ExecutionScheduler {
             balance_withdraw_scheduler,
             metrics,
         }
+    }
+
+    fn initialize_balance_withdraw_scheduler(
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        object_cache_read: &Arc<dyn ObjectCacheRead>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+    ) -> Option<BalanceWithdrawScheduler> {
+        let withdraw_scheduler_enabled =
+            epoch_store.is_validator() && epoch_store.accumulators_enabled();
+        if !withdraw_scheduler_enabled {
+            return None;
+        }
+        let starting_accumulator_version = object_cache_read
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .expect("Accumulator root object must be present if balance accumulator is enabled")
+            .version();
+        Some(BalanceWithdrawScheduler::new(
+            Arc::new(child_object_resolver),
+            starting_accumulator_version,
+        ))
     }
 
     async fn schedule_transaction(
@@ -236,10 +250,6 @@ impl ExecutionScheduler {
         if certs.is_empty() {
             return;
         }
-        let scheduler = self
-            .balance_withdraw_scheduler
-            .as_ref()
-            .expect("Balance withdraw scheduler must be enabled if there are withdraws");
         let mut withdraws = BTreeMap::new();
         let mut prev_version = None;
         for (cert, version, _) in &certs {
@@ -263,8 +273,15 @@ impl ExecutionScheduler {
                 });
         }
         let mut receivers = FuturesUnordered::new();
-        for (version, tx_withdraws) in withdraws {
-            receivers.extend(scheduler.schedule_withdraws(version, tx_withdraws));
+        {
+            let guard = self.balance_withdraw_scheduler.lock();
+            let withdraw_scheduler = guard
+                .as_ref()
+                .expect("Balance withdraw scheduler must be enabled if there are withdraws");
+            for (version, tx_withdraws) in withdraws {
+                receivers.extend(withdraw_scheduler.schedule_withdraws(version, tx_withdraws));
+            }
+            // guard will be dropped here
         }
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
@@ -500,9 +517,26 @@ impl ExecutionScheduler {
 
     pub fn settle_balances(&self, settlement: BalanceSettlement) {
         self.balance_withdraw_scheduler
+            .lock()
             .as_ref()
             .expect("Balance withdraw scheduler must be enabled if there are settlements")
             .settle_balances(settlement);
+    }
+
+    /// Reconfigure internal state at epoch start. This resets the balance withdraw scheduler
+    /// to the current accumulator root object version.
+    pub fn reconfigure(
+        &self,
+        new_epoch_store: &Arc<AuthorityPerEpochStore>,
+        child_object_resolver: &Arc<dyn ChildObjectResolver + Send + Sync>,
+    ) {
+        let scheduler = Self::initialize_balance_withdraw_scheduler(
+            new_epoch_store,
+            &self.object_cache_read,
+            child_object_resolver.clone(),
+        );
+        let mut guard = self.balance_withdraw_scheduler.lock();
+        *guard = scheduler;
     }
 
     pub fn check_execution_overload(
@@ -534,9 +568,12 @@ impl ExecutionScheduler {
 
 #[cfg(test)]
 mod test {
-    use std::{time::Duration, vec};
-
+    use super::{ExecutionScheduler, PendingCertificate};
     use crate::authority::shared_object_version_manager::AssignedVersions;
+    use crate::authority::ExecutionEnv;
+    use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
+    use crate::execution_scheduler::SchedulingSource;
+    use std::{time::Duration, vec};
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
@@ -553,12 +590,6 @@ mod test {
         sync::mpsc::{error::TryRecvError, unbounded_channel, UnboundedReceiver},
         time::sleep,
     };
-
-    use crate::authority::ExecutionEnv;
-    use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
-    use crate::execution_scheduler::SchedulingSource;
-
-    use super::{ExecutionScheduler, PendingCertificate};
 
     #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
     fn make_execution_scheduler(

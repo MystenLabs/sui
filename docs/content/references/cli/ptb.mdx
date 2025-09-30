@@ -16,109 +16,11 @@ The examples in this document were tested using a `bash` shell environment. Your
 
 The following list itemizes all the available args for the `sui client ptb` command. Use the `--help` for a long help version that includes some examples on how to use this command.
 
+```sh
+$ sui client ptb --help
 ```
-Build, preview, and execute programmable transaction blocks. Depending on your shell, you might have to use quotes around arrays or other passed values. Use --help to see examples for how to use the core functionality of this
-command.
 
-Usage: sui client ptb [OPTIONS]
-
-Options:
-      --assign <NAME> <VALUE>
-          Assign a value to a variable name to use later in the PTB.
-           If only a name is supplied, the result of the last transaction is bound to that name.
-           If a name and value are supplied, then the name is bound to that value.
-
-          Examples:
-           --assign MYVAR 100
-           --assign X [100,5000]
-           --split-coins gas [1000, 5000, 75000]
-           --assign new_coins # bound new_coins to the result of previous transaction
-
-      --dry-run
-          Perform a dry run of the PTB instead of executing it.
-
-      --gas-coin <ID>
-          The object ID of the gas coin to use. If not specified, it will try to use the first gas coin that it finds that has at least the requested gas-budget balance.
-
-      --gas-budget <MIST>
-          An optional gas budget for this PTB (in MIST). If gas budget is not provided, the tool will first perform a dry run to estimate the gas cost, and then it will execute the transaction. Please note that this incurs a small
-          cost in performance due to the additional dry run call.
-
-      --make-move-vec <TYPE> <[VALUES]>
-          Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified.
-
-          Examples:
-           --make-move-vec <u64> []
-           --make-move-vec <u64> [1, 2, 3, 4]
-           --make-move-vec <std::option::Option<u64>> [none,none]
-           --make-move-vec <sui::coin::Coin<sui::sui::SUI>> [gas]
-
-      --merge-coins <INTO_COIN> <[COIN OBJECTS]>
-          Merge N coins into the provided coin.
-
-          Examples:
-           --merge-coins @coin_object_id [@coin_obj_id1, @coin_obj_id2]
-
-      --move-call <PACKAGE::MODULE::FUNCTION> <TYPE_ARGS> <FUNCTION_ARGS>
-          Make a move call to a function.
-
-          Examples:
-           --move-call std::option::is_none <u64> none
-           --assign a none
-           --move-call std::option::is_none <u64> a
-
-      --split-coins <COIN> <[AMOUNT]>
-          Split the coin into N coins as per the given array of amounts.
-
-          Examples:
-           --split-coins gas [1000, 5000, 75000]
-           --assign new_coins # bounds the result of split-coins command to variable new_coins
-           --split-coins @coin_object_id [100]
-
-      --transfer-objects <[OBJECTS]> <TO>
-          Transfer objects to the specified address.
-
-          Examples:
-           --transfer-objects [obj1, obj2, obj3] @address
-
-           --split-coins gas [1000, 5000, 75000]
-           --assign new_coins # bound new_coins to result of split-coins to use next
-           --transfer-objects [new_coins.0, new_coins.1, new_coins.2] @to_address
-
-      --publish <MOVE_PACKAGE_PATH>
-          Publish the Move package. It takes as input the folder where the package exists.
-
-          Examples:
-           --move-call sui::tx_context::sender
-           --assign sender
-           --publish "."
-           --assign upgrade_cap
-           --transfer-objects "[upgrade_cap]" sender
-
-      --upgrade <MOVE_PACKAGE_PATH>
-          Upgrade the move package. It takes as input the folder where the package exists.
-
-      --preview
-          Preview the list of PTB transactions instead of executing them.
-
-      --serialize-unsigned-transaction
-          Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data using base64 encoding.
-
-      --serialize-signed-transaction
-          Instead of executing the transaction, serialize the bcs bytes of the signed transaction data using base64 encoding.
-
-      --summary
-          Show only a short summary (digest, execution status, gas cost). Do not use this flag when you need all the transaction data and the execution effects.
-
-      --warn-shadows
-          Enable shadow warning when the same variable name is declared multiple times. Off by default.
-
-      --json
-          Return command outputs in json format.
-
-  -h, --help
-          Print help (see a summary with '-h')
-```
+<ImportContent source="console-output/sui-client-ptb-help.mdx" mode="snippet" />
 
 ## Design philosophy and concepts
 

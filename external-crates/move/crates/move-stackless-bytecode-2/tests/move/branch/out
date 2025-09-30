@@ -1,0 +1,310 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test run_test::vector/modules.txt    ... [0m[32mok[0m
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Snapshot Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Snapshot Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Snapshot file: crates/move-stackless-bytecode-2/tests/move/counter/counter_counter@opt.sbir.snap
+Snapshot: counter_counter@opt.sbir
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Snapshot Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Snapshot file: crates/move-stackless-bytecode-2/tests/move/constants/counter_constants@opt.sbir.snap
+Snapshot: counter_constants@opt.sbir
+Snapshot file: crates/move-stackless-bytecode-2/tests/move/branch/branch_branch@opt.sbir.snap
+Snapshot: branch_branch@opt.sbir
+Source: crates/move-stackless-bytecode-2/tests/tests.rs:52
+Source: crates/move-stackless-bytecode-2/tests/tests.rs:52
+────────────────────────────────────────────────────────────────────────────────
+Source: crates/move-stackless-bytecode-2/tests/tests.rs:52
+────────────────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
++new results
+────────────┬───────────────────────────────────────────────────────────────────
++new results
+────────────┬───────────────────────────────────────────────────────────────────
+          0 │+          0 │++new results
+────────────┬───────────────────────────────────────────────────────────────────
+  Module: counter
+          1 │+  Module: branch
+          1 │+    Function: create (entry: LBL_0)
+          2 │+      Label LBL_0:
+          3 │+    Function: is_even (entry: LBL_0)
+          0 │+          2 │+  Module: constants
+          1 │+        reg_1 = Pack(Immediate(U64(0)))
+          4 │+      Label LBL_0:
+          3 │+        Return(reg_1)
+        lcl_2 = Immediate(U64(10))
+          4 │+          5 │+
+          6 │+
+          7 │+        reg_1 = Move(lcl_0)
+          5 │+    Function: increment (entry: LBL_0)
+          8 │+        reg_3 = Modulo(reg_1, Immediate(U64(2)))
+          6 │+      Label LBL_0:
+          9 │+        reg_5 = Equal(Immediate(U64(0)), reg_3)
+          7 │+        reg_0 = Copy(lcl_0)
+         10 │+        reg_1 = ImmBorrowField(reg_0)
+         11 │+        reg_2 = ReadRef(reg_1)
+    Function: compute (entry: LBL_0)
+        JumpIf(reg_5, LBL_8, LBL_13)
+          8 │+
+         12 │+          9 │+          2 │+        reg_4 = Add(Immediate(U64(1)), reg_2)
+         13 │+        reg_5 = Move(lcl_0)
+         14 │+        reg_6 = MutBorrowField(reg_5)
+      Label LBL_8:
+         10 │+      Label LBL_0:
+          3 │+        lcl_4 = Immediate(U64(0))
+          4 │+        lcl_3 = Immediate(U64(0))
+        reg_6 = Move(lcl_2)
+         11 │+          5 │+        reg_8 = Add(Immediate(U64(20)), reg_6)
+         12 │+        lcl_1 = reg_8
+        reg_2 = Copy(lcl_0)
+          6 │+         15 │+         13 │+        WriteRef(reg_6, reg_4)
+         16 │+        Return()
+        Jump(LBL_17)
+         14 │+         17 │+
+         18 │+
+         19 │+
+         15 │+        reg_3 = Constant(Constant { type_: U64, data: [100, 0, 0, 0, 0, 0, 0, 0] })
+    Function: set_value (entry: LBL_0)
+         20 │+      Label LBL_0:
+          7 │+         21 │+        reg_0 = Move(lcl_1)
+         22 │+        reg_1 = Move(lcl_0)
+         23 │+        reg_2 = MutBorrowField(reg_1)
+         24 │+        WriteRef(reg_2, reg_0)
+        reg_4 = LessThan(reg_3, reg_2)
+          8 │+      Label LBL_13:
+         16 │+        JumpIf(reg_4, LBL_8, LBL_13)
+        reg_9 = Move(lcl_2)
+         17 │+        reg_11 = Add(Immediate(U64(30)), reg_9)
+          9 │+         18 │+
+         10 │+         25 │+      Label LBL_8:
+        Return()
+         26 │+         11 │+
+        lcl_1 = reg_11
+         19 │+
+        reg_5 = Copy(lcl_1)
+         12 │+        reg_7 = LessThan(Immediate(U64(10)), reg_5)
+         13 │+        lcl_2 = reg_7
+         27 │+         14 │+
+         28 │+        Jump(LBL_15)
+         20 │+         15 │+
+    Function: value (entry: LBL_0)
+         29 │+      Label LBL_0:
+         30 │+         16 │+        reg_0 = Move(lcl_0)
+         31 │+      Label LBL_17:
+         21 │+        reg_12 = Move(lcl_1)
+      Label LBL_13:
+         17 │+         22 │+        lcl_2 = Immediate(false)
+        reg_14 = Multiply(reg_12, Immediate(U64(13)))
+         23 │+         18 │+
+        reg_1 = ImmBorrowField(reg_0)
+         32 │+         19 │+      Label LBL_15:
+         20 │+        reg_2 = ReadRef(reg_1)
+        Return(reg_14)
+────────────┴───────────────────────────────────────────────────────────────────
+         33 │+        reg_9 = Move(lcl_2)
+         21 │+        JumpIf(reg_9, LBL_17, LBL_32)
+         22 │+        Return(reg_2)
+         23 │+      Label LBL_17:
+         24 │+
+────────────┴───────────────────────────────────────────────────────────────────
+        reg_10 = Copy(lcl_3)
+         25 │+        reg_11 = Copy(lcl_1)
+         26 │+        reg_12 = LessThan(reg_11, reg_10)
+         27 │+        JumpIf(reg_12, LBL_21, LBL_34)
+         28 │+
+         29 │+      Label LBL_21:
+         30 │+        reg_13 = Move(lcl_4)
+         31 │+        reg_14 = Copy(lcl_0)
+         32 │+        reg_15 = Add(reg_14, reg_13)
+         33 │+        reg_16 = Constant(Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] })
+         34 │+        reg_17 = Add(reg_16, reg_15)
+         35 │+        lcl_4 = reg_17
+         36 │+        reg_18 = Move(lcl_3)
+         37 │+        reg_20 = Add(Immediate(U64(1)), reg_18)
+         38 │+        lcl_3 = reg_20
+         39 │+        Jump(LBL_17)
+         40 │+
+         41 │+      Label LBL_32:
+         42 │+        reg_21 = Constant(Constant { type_: U64, data: [100, 0, 0, 0, 0, 0, 0, 0] })
+         43 │+        lcl_4 = reg_21
+         44 │+
+         45 │+      Label LBL_34:
+         46 │+        reg_22 = Move(lcl_4)
+         47 │+        reg_23 = Move(lcl_0)
+         48 │+        reg_24 = Multiply(reg_22, reg_23)
+         49 │+        reg_25 = Move(lcl_1)
+         50 │+        reg_26 = Add(reg_25, reg_24)
+         51 │+        reg_27 = Constant(Constant { type_: U64, data: [0, 0, 0, 0, 0, 0, 0, 0] })
+         52 │+        reg_28 = Add(reg_27, reg_26)
+         53 │+To update snapshots run `cargo insta review`
+To update snapshots run `cargo insta review`
+        Return(reg_28)
+────────────┴───────────────────────────────────────────────────────────────────
+To update snapshots run `cargo insta review`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Snapshot Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Snapshot file: crates/move-stackless-bytecode-2/tests/move/branch/branch_branch@no_opt.sbir.snap
+Snapshot: branch_branch@no_opt.sbir
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Snapshot Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Snapshot file: crates/move-stackless-bytecode-2/tests/move/counter/counter_counter@no_opt.sbir.snap
+Snapshot: counter_counter@no_opt.sbir
+Source: crates/move-stackless-bytecode-2/tests/tests.rs:79
+────────────────────────────────────────────────────────────────────────────────
+Source: crates/move-stackless-bytecode-2/tests/tests.rs:79
+────────────────────────────────────────────────────────────────────────────────
++new results
+────────────┬───────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Snapshot Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Snapshot file: crates/move-stackless-bytecode-2/tests/move/constants/counter_constants@no_opt.sbir.snap
+Snapshot: counter_constants@no_opt.sbir
+          0 │+  Module: branch
+          1 │+    Function: is_even (entry: LBL_0)
+          2 │+Source: crates/move-stackless-bytecode-2/tests/tests.rs:79
++new results
+────────────┬───────────────────────────────────────────────────────────────────
+      Label LBL_0:
+          3 │+        reg_0 = Immediate(U64(10))
+          4 │+          0 │+────────────────────────────────────────────────────────────────────────────────
+        lcl_2 = reg_0
+          5 │+  Module: counter
+          1 │+        reg_1 = Move(lcl_0)
+          6 │+        reg_2 = Immediate(U64(2))
+          7 │+        reg_3 = Modulo(reg_1, reg_2)
+          8 │+        reg_4 = Immediate(U64(0))
+    Function: create (entry: LBL_0)
+          9 │+          2 │+        reg_5 = Equal(reg_4, reg_3)
+         10 │+      Label LBL_0:
+          3 │+        reg_0 = Immediate(U64(0))
+          4 │+        JumpIf(reg_5, LBL_8, LBL_13)
+         11 │+
+        reg_1 = Pack(reg_0)
+          5 │+        Return(reg_1)
+          6 │+
+          7 │+
+          8 │+         12 │++new results
+────────────┬───────────────────────────────────────────────────────────────────
+    Function: increment (entry: LBL_0)
+      Label LBL_8:
+         13 │+          0 │+        reg_6 = Move(lcl_2)
+         14 │+          9 │+        reg_7 = Immediate(U64(20))
+         15 │+        reg_8 = Add(reg_7, reg_6)
+         16 │+        lcl_1 = reg_8
+  Module: constants
+          1 │+         17 │+    Function: compute (entry: LBL_0)
+          2 │+      Label LBL_0:
+      Label LBL_0:
+         10 │+        reg_0 = Copy(lcl_0)
+         11 │+          3 │+        reg_1 = ImmBorrowField(reg_0)
+        reg_0 = Immediate(U64(0))
+          4 │+         12 │+        lcl_4 = reg_0
+          5 │+        reg_1 = Immediate(U64(0))
+        reg_2 = ReadRef(reg_1)
+         13 │+          6 │+        Jump(LBL_17)
+         18 │+        lcl_3 = reg_1
+          7 │+        reg_2 = Copy(lcl_0)
+        reg_3 = Immediate(U64(1))
+         14 │+          8 │+        reg_4 = Add(reg_3, reg_2)
+        reg_3 = Constant(Constant { type_: U64, data: [100, 0, 0, 0, 0, 0, 0, 0] })
+          9 │+        reg_4 = LessThan(reg_3, reg_2)
+
+         19 │+      Label LBL_13:
+         15 │+         20 │+        reg_5 = Move(lcl_0)
+         16 │+        reg_6 = MutBorrowField(reg_5)
+         10 │+         17 │+        reg_9 = Move(lcl_2)
+         21 │+        reg_10 = Immediate(U64(30))
+         22 │+        JumpIf(reg_4, LBL_8, LBL_13)
+         11 │+        reg_11 = Add(reg_10, reg_9)
+         23 │+        lcl_1 = reg_11
+         24 │+
+
+         12 │+      Label LBL_8:
+        WriteRef(reg_6, reg_4)
+         18 │+        Return()
+         25 │+         13 │+         19 │+        reg_5 = Copy(lcl_1)
+         14 │+        reg_6 = Immediate(U64(10))
+      Label LBL_17:
+         26 │+        reg_12 = Move(lcl_1)
+         27 │+         15 │+        reg_13 = Immediate(U64(13))
+         28 │+        reg_7 = LessThan(reg_6, reg_5)
+         16 │+
+        reg_14 = Multiply(reg_12, reg_13)
+        lcl_2 = reg_7
+         17 │+        Jump(LBL_15)
+         18 │+         29 │+         20 │+
+         21 │+    Function: set_value (entry: LBL_0)
+
+         19 │+      Label LBL_13:
+         20 │+         22 │+        reg_8 = Immediate(false)
+        Return(reg_14)
+────────────┴───────────────────────────────────────────────────────────────────
+         21 │+        lcl_2 = reg_8
+         22 │+      Label LBL_0:
+         23 │+        reg_0 = Move(lcl_1)
+         24 │+
+         23 │+      Label LBL_15:
+         24 │+        reg_1 = Move(lcl_0)
+         25 │+        reg_9 = Move(lcl_2)
+         25 │+        JumpIf(reg_9, LBL_17, LBL_32)
+         26 │+
+         27 │+        reg_2 = MutBorrowField(reg_1)
+         26 │+        WriteRef(reg_2, reg_0)
+         27 │+      Label LBL_17:
+         28 │+        reg_10 = Copy(lcl_3)
+         29 │+        reg_11 = Copy(lcl_1)
+         30 │+        reg_12 = LessThan(reg_11, reg_10)
+         31 │+        Return()
+         28 │+
+         29 │+
+         30 │+        JumpIf(reg_12, LBL_21, LBL_34)
+         32 │+
+         33 │+    Function: value (entry: LBL_0)
+         31 │+      Label LBL_21:
+         34 │+        reg_13 = Move(lcl_4)
+      Label LBL_0:
+         32 │+         35 │+To update snapshots run `cargo insta review`
+        reg_0 = Move(lcl_0)
+         33 │+        reg_14 = Copy(lcl_0)
+         36 │+        reg_1 = ImmBorrowField(reg_0)
+         34 │+        reg_15 = Add(reg_14, reg_13)
+         37 │+        reg_2 = ReadRef(reg_1)
+         35 │+        Return(reg_2)
+────────────┴───────────────────────────────────────────────────────────────────
+        reg_16 = Constant(Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] })
+         38 │+        reg_17 = Add(reg_16, reg_15)
+         39 │+        lcl_4 = reg_17
+         40 │+        reg_18 = Move(lcl_3)
+         41 │+        reg_19 = Immediate(U64(1))
+         42 │+        reg_20 = Add(reg_19, reg_18)
+         43 │+        lcl_3 = reg_20
+         44 │+        Jump(LBL_17)
+         45 │+
+         46 │+      Label LBL_32:
+         47 │+        reg_21 = Constant(Constant { type_: U64, data: [100, 0, 0, 0, 0, 0, 0, 0] })
+         48 │+        lcl_4 = reg_21
+         49 │+
+         50 │+      Label LBL_34:
+         51 │+        reg_22 = Move(lcl_4)
+         52 │+        reg_23 = Move(lcl_0)
+         53 │+        reg_24 = Multiply(reg_22, reg_23)
+         54 │+        reg_25 = Move(lcl_1)
+         55 │+        reg_26 = Add(reg_25, reg_24)
+         56 │+        reg_27 = Constant(Constant { type_: U64, data: [0, 0, 0, 0, 0, 0, 0, 0] })
+         57 │+        reg_28 = Add(reg_27, reg_26)
+         58 │+        Return(reg_28)
+To update snapshots run `cargo insta review`
+────────────┴───────────────────────────────────────────────────────────────────
+To update snapshots run `cargo insta review`
+test run_test::branch/modules.txt    ... [0m[32mok[0m
+test run_test::counter/modules.txt   ... [0m[32mok[0m
+test run_test::constants/modules.txt ... [0m[32mok[0m
+
+test result: [0m[32mok[0m. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

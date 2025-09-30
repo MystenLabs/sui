@@ -8,7 +8,7 @@ mod package_info;
 mod rename_from;
 mod to_lockfile;
 
-pub use linkage::LinkageError;
+pub use linkage::{LinkageError, LinkageTable};
 pub use package_info::{NamedAddress, PackageInfo};
 pub use rename_from::RenameError;
 
@@ -109,28 +109,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     // TODO: We probably want a deduplication function, and then we can just use `all_packages` for
     // this
     pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
-        let linkage = self.linkage()?;
-
-        // Populate ALL the linkage elements
-        let mut result: Vec<PackageInfo<F>> = linkage.values().cloned().collect();
-
-        // Add all nodes that exist but are not in the linkage table.
-        // This is done to support unpublished packages, as linkage only includes
-        // published packages.
-        for node in self.inner.node_indices() {
-            let package = &self.inner[node];
-
-            if package
-                .original_id()
-                .is_some_and(|oid| linkage.contains_key(oid))
-            {
-                continue;
-            }
-
-            result.push(self.package_info(node));
-        }
-
-        Ok(result)
+        Ok(self.linkage()?.values().cloned().collect())
     }
 
     /// Return the sorted list of dependencies' name

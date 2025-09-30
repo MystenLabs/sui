@@ -10,6 +10,7 @@
 //# init --protocol-version 51 --addresses P0=0x0 --accounts A B --simulator --objects-snapshot-min-checkpoint-lag 1
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module P0::fake {
     use sui::coin;
 

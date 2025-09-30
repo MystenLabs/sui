@@ -294,33 +294,43 @@ exports.returnStructs = (source, structList, language) => {
   const out = [];
 
   for (const name of names) {
-    // Tolerate generics `<...>`, abilities, where/suffix on same line, and even line breaks
-    const headerRe = new RegExp(
-      String.raw`^(\s*)public\s+struct\s+${escapeRegex(name)}\b[\s\S]*?\{`,
+    const shortStructRE = new RegExp(
+      String.raw`^\s*(?:pub(?:$begin:math:text$[^)]+$end:math:text$)?\s+)?struct\s+${escapeRegex(name)}\s*;[ \t]*(?:\r?\n|$)`,
       "m",
     );
-    const m = headerRe.exec(src);
+
+    const m = shortStructRE.exec(src);
+    let full, pre = "";
     if (!m) {
-      return "Struct not found. If code is formatted correctly, consider using code comments instead.";
+      const structBegRE = new RegExp(
+        String.raw`^\s*(?:pub(?:$begin:math:text$[^)]+$end:math:text$)?\s+)?struct\s+${escapeRegex(name)}\b[^\n]*\{`,
+        "m",
+      );
+      const ml = structBegRE.exec(src);
+      if (!ml) {
+        return "Struct not found. If code is formatted correctly, consider using code comments instead.";
+      } else {
+        const startIdx = ml.index;
+        const sub = src.slice(startIdx);
+
+        // headerRe included the first `{`, so find its position in `sub`
+        const bracePos = sub.indexOf("{");
+        if (bracePos === -1) {
+          return "Struct not found. If code is formatted correctly, consider using code comments instead.";
+        }
+
+        const block = captureBalanced(sub.slice(bracePos));
+        if (!block) {
+          return "Struct not found. If code is formatted correctly, consider using code comments instead.";
+        }
+
+        full = sub.slice(0, bracePos) + block; // header through matching `}`
+        pre = capturePrepend(ml, src);
+      }
+    } else {
+      full = m[0];
+      pre = capturePrepend(m, src);
     }
-
-    const startIdx = m.index;
-    const sub = src.slice(startIdx);
-
-    // headerRe included the first `{`, so find its position in `sub`
-    const bracePos = sub.indexOf("{");
-    if (bracePos === -1) {
-      return "Struct not found. If code is formatted correctly, consider using code comments instead.";
-    }
-
-    // Use your existing balanced-brace helper
-    const block = captureBalanced(sub.slice(bracePos));
-    if (!block) {
-      return "Struct not found. If code is formatted correctly, consider using code comments instead.";
-    }
-
-    const full = sub.slice(0, bracePos) + block; // header through matching `}`
-    const pre = capturePrepend(m, src);
     out.push(removeLeadingSpaces(full, pre));
   }
 

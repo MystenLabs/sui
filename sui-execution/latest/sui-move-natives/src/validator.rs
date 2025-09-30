@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -31,9 +31,7 @@ pub fn validate_metadata_bcs(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
-    let validator_validate_metadata_bcs_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let validator_validate_metadata_bcs_cost_params = get_extension!(context, NativesCostTable)?
         .validator_validate_metadata_bcs_cost_params
         .clone();
 

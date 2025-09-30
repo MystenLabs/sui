@@ -42,7 +42,9 @@ const concepts = [
 							type: 'doc',
 							id: 'concepts/transfers',
 						},
-						items: ['concepts/transfers/custom-rules', 'concepts/transfers/transfer-to-object'],
+						items: ['concepts/transfers/custom-rules', 
+								'concepts/transfers/transfer-policies',
+							    'concepts/transfers/transfer-to-object'],
 					},
 					'concepts/versioning',
 				],
@@ -77,7 +79,9 @@ const concepts = [
 						},
 						items: ['concepts/dynamic-fields/tables-bags'],
 					},
-					'concepts/sui-move-concepts/conventions',
+					'concepts/sui-move-concepts/derived-objects',
+					'concepts/sui-move-concepts/conventions'
+					
 				],
 			},
 			{

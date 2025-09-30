@@ -11,6 +11,9 @@ use sui::funds_accumulator::Withdrawal;
 /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
 public use fun sui::coin::from_balance as Balance.into_coin;
 
+/// Allows calling `.value()` on a `Supply` to get the value.
+public use fun supply_value as Supply.value;
+
 /// For when trying to destroy a non-zero balance.
 const ENonZero: u64 = 0;
 /// For when an overflow is happening on Supply operations.
@@ -117,6 +120,10 @@ public(package) fun withdraw_funds_from_object<T>(
 }
 
 // === SUI specific operations ===
+
+public(package) fun create_supply_internal<T>(): Supply<T> {
+    Supply { value: 0 }
+}
 
 const SUI_TYPE_NAME: vector<u8> =
     b"0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";

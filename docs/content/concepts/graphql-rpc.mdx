@@ -14,6 +14,7 @@ Jump to the following sections for more details:
 - [Fragments](#fragments)
 - [Pagination](#pagination)
 - [Limits](#limits)
+- [Retention](#retention)
 
 For more details on GraphQL fundamentals, see the introductory documentation from [GraphQL](https://graphql.org/learn/) and [GitHub](https://docs.github.com/en/graphql/guides/introduction-to-graphql).
 
@@ -185,7 +186,13 @@ fragment MoveValueFields on MoveValue {
 
 ## Pagination
 
-GraphQL supports queries that fetch multiple kinds of data, potentially nested. For example, the following query retrieves the first 20 transaction blocks (along with the digest, the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific transaction block at epoch `97`.
+GraphQL supports queries that fetch multiple kinds of potentially nested data. For example, the following query retrieves the first 10 transactions in epoch `97` along with the:
+
+- Digest
+- Sender's address
+- Gas object returned after paying for the transaction
+- Gas price
+- Gas budget
 
 ```graphql
 query {
@@ -242,26 +249,11 @@ Cursors are used to bound results from below (with `after`) and above (with `bef
 
 #### Consistency
 
-Cursors also guarantee **consistent** pagination. If the first paginated query reads the state of the network at checkpoint `X`, then a future call to fetch the next page of results using the cursors returned by the first query continues to read from the network at checkpoint `X`, even if data for future checkpoints is now available.
+Cursors for queries that paginate live objects also guarantee **consistent** pagination. 
+
+If a paginated query reads the state of the network at a specific checkpoint (i.e., checkpoint `X`), the query returns cursors that can be used by subsequent requests. When a future call fetches the next page of results, it uses the previous query's cursors and continues reading from the network as it existed at checkpoint `X`, even if newer checkpoints are available. Currently, the available range offers roughly 1 hour to finish pagination.
 
 This property requires that cursors that are used together (for example when supplying an `after` and `before` bound) are fixed on the same checkpoint, otherwise the query produces an error.
-
-#### Available range
-
-Different queries are subject to their own retention policies. For example, live object set queries only work for recent checkpoints (measured in minutes or hours), and transaction pagination might work going back to only a certain checkpoint (measured in weeks or months) with different retentions supported based on the filters applied. Data outside these ranges are pruned away. You can query the upper- and lower-bounds of that range for your query as follows:
-
-```graphql
-{
-  serviceConfig {
-    retention(type: "Query", field: "transactions", filter: "affectedAddress") {
-      first { sequenceNumber }
-      last { sequenceNumber }
-    }
-  }
-}
-```
-
-The results are the first and last checkpoint for which pagination continues to work and produce a consistent result. At the time of writing the available range offers a 5- to 15-minute buffer period to finish pagination.
 
 ### Page limits
 
@@ -309,6 +301,23 @@ In addition to rate limits, queries are also validated against a number of rules
   }
 }
 ```
+
+## Retention
+
+Different queries are subject to their own retention policies. For example, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination may be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned. You can query the upper- and lower-bounds of that range for your query as follows:
+
+```graphql
+{
+  serviceConfig {
+    retention(type: "Query", field: "transactions", filter: "affectedAddress") {
+      first { sequenceNumber }
+      last { sequenceNumber }
+    }
+  }
+}
+```
+
+The results are the first and last checkpoint for which pagination continues to work and produce a consistent result.
 
 ## Related links
 

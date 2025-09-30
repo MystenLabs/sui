@@ -51,7 +51,7 @@ use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A,
-    gas_algebra::InternalGas,
+    gas_algebra::{AbstractMemorySize, InternalGas},
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value as R,
@@ -66,6 +66,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     values::{Struct, Value},
+    views::{SizeConfig, ValueView},
 };
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -77,7 +78,7 @@ mod address;
 mod config;
 mod crypto;
 mod dynamic_field;
-mod event;
+pub mod event;
 mod funds_accumulator;
 mod object;
 pub mod object_runtime;
@@ -302,6 +303,9 @@ impl NativesCostTable {
                     .event_emit_output_cost_per_byte()
                     .into(),
                 event_emit_cost_base: protocol_config.event_emit_cost_base().into(),
+                event_emit_auth_stream_cost: protocol_config
+                    .event_emit_auth_stream_cost_as_option()
+                    .map(Into::into),
             },
 
             borrow_uid_cost_params: BorrowUidCostParams {
@@ -985,6 +989,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ("event", "emit", make_native!(event::emit)),
         (
             "event",
+            "emit_authenticated_impl",
+            make_native!(event::emit_authenticated_impl),
+        ),
+        (
+            "event",
             "events_by_type",
             make_native!(event::get_events_by_type),
         ),
@@ -1360,6 +1369,54 @@ macro_rules! make_native {
     };
 }
 
+#[macro_export]
+macro_rules! get_extension {
+    ($context: expr, $ext: ty) => {
+        $context.extensions().get::<$ext>()
+    };
+    ($context: expr) => {
+        $context.extensions().get()
+    };
+}
+
+#[macro_export]
+macro_rules! get_extension_mut {
+    ($context: expr, $ext: ty) => {
+        $context.extensions_mut().get_mut::<$ext>()
+    };
+    ($context: expr) => {
+        $context.extensions_mut().get_mut()
+    };
+}
+
+#[macro_export]
+macro_rules! charge_cache_or_load_gas {
+    ($context:ident, $cache_info:expr) => {
+        match $cache_info {
+            $crate::object_runtime::object_store::CacheInfo::Cached => (),
+            $crate::object_runtime::object_store::CacheInfo::Loaded(size) => {
+                let config = get_extension!($context, ObjectRuntime)?.protocol_config;
+                if config.object_runtime_charge_cache_load_gas() {
+                    let cost = size * config.obj_access_cost_read_per_byte() as usize;
+                    native_charge_gas_early_exit!($context, InternalGas::new(cost as u64));
+                }
+            }
+        }
+    };
+}
+
 pub(crate) fn legacy_test_cost() -> InternalGas {
     InternalGas::new(0)
+}
+
+pub(crate) fn abstract_size(protocol_config: &ProtocolConfig, v: &Value) -> AbstractMemorySize {
+    if protocol_config.abstract_size_in_object_runtime() {
+        v.abstract_memory_size(&SizeConfig {
+            include_vector_size: true,
+            traverse_references: false,
+        })
+    } else {
+        // TODO: Remove this (with glee!) in the next execution version cut.
+        v.legacy_size()
+    }
 }

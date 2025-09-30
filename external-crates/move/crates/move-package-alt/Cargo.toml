@@ -19,7 +19,9 @@ indoc.workspace = true
 itertools.workspace = true
 jsonrpc.workspace = true
 move-command-line-common.workspace = true
+move-compiler.workspace = true
 move-core-types.workspace = true
+named-lock.workspace = true
 once_cell.workspace = true
 path-clean.workspace = true
 petgraph.workspace = true
@@ -36,15 +38,15 @@ toml.workspace = true
 toml_edit.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+heck.workspace = true
+walkdir.workspace = true
+whoami.workspace = true
 
 [dev-dependencies]
-git2 = "0.20.2"
+aquamarine.workspace = true
 datatest-stable.workspace = true
 insta.workspace = true
 test-log.workspace = true
-url.workspace = true
-walkdir.workspace = true
-heck.workspace = true
 
 [[bin]]
 name = "mock-resolver"
