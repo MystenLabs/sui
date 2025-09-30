@@ -28,6 +28,7 @@ use super::{
     },
     types::{
         address::Address,
+        available_range::{AvailableRange, AvailableRangeKey},
         checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         coin_metadata::CoinMetadata,
         epoch::Epoch,
@@ -537,8 +538,13 @@ impl Query {
 
         // Use the filter if provided, otherwise use default (unfiltered)
         let filter = filter.unwrap_or_default();
+        let available_range = AvailableRange::new(
+            ctx,
+            &scope,
+            AvailableRangeKey::from_transaction_filter(&filter),
+        )?;
 
-        Transaction::paginate(ctx, scope, page, filter).await
+        Transaction::paginate(ctx, scope, page, filter, available_range).await
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.

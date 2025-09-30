@@ -53,6 +53,7 @@ use crate::{
 
 use super::{
     address::Address,
+    available_range::{AvailableRange, AvailableRangeKey},
     balance::{self, Balance},
     coin_metadata::CoinMetadata,
     dynamic_field::{DynamicField, DynamicFieldName},
@@ -593,9 +594,21 @@ impl Object {
             return Ok(Some(Connection::new(false, false)));
         };
 
-        Transaction::paginate(ctx, self.super_.scope.clone(), page, filter)
-            .await
-            .map(Some)
+        let available_range = AvailableRange::new(
+            ctx,
+            &self.super_.scope,
+            AvailableRangeKey::from_transaction_filter(&filter),
+        )?;
+
+        Transaction::paginate(
+            ctx,
+            self.super_.scope.clone(),
+            page,
+            filter,
+            available_range,
+        )
+        .await
+        .map(Some)
     }
 }
 

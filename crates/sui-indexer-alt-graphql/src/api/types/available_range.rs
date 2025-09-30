@@ -6,7 +6,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{error::RpcError, scope::Scope, task::watermark::Watermarks};
 
-use super::checkpoint::Checkpoint;
+use super::{checkpoint::Checkpoint, transaction::filter::TransactionFilter};
 
 /// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint)
 ///
@@ -27,6 +27,7 @@ pub(crate) struct AvailableRangeKey {
 pub struct AvailableRange {
     pub scope: Scope,
     pub first: u64,
+    pub pipelines: BTreeSet<String>,
 }
 
 /// Checkpoint range for which data is available.
@@ -74,7 +75,57 @@ impl AvailableRange {
         Ok(Self {
             scope: scope.clone(),
             first,
+            pipelines,
         })
+    }
+
+    // Get the lowest checkpoint for which data is available for the provided pipelines. Errors if
+    // no pipelines are found when instantiating the available range from the RententionKey.
+    pub(crate) fn reader_lo(&self) -> Result<u64, RpcError> {
+        if self.pipelines.is_empty() {
+            return Err(RpcError::InternalError(Arc::new(anyhow::anyhow!(
+                "At least one pipeline must be providedd to calculate the available range."
+            ))));
+        }
+        Ok(self.first)
+    }
+}
+
+impl AvailableRangeKey {
+    // TODO: (henrychen) Is there a better way to do this? We will need to add one per filter used in pagination APIs
+    pub(crate) fn from_transaction_filter(filter: &TransactionFilter) -> Self {
+        let mut filters = Vec::new();
+
+        if filter.affected_address.is_some() {
+            filters.push("affectedAddress".to_string());
+        }
+        if filter.sent_address.is_some() {
+            filters.push("sentAddress".to_string());
+        }
+        if filter.kind.is_some() {
+            filters.push("kind".to_string());
+        }
+        if filter.function.is_some() {
+            filters.push("function".to_string());
+        }
+        if filter.affected_object.is_some() {
+            filters.push("affectedObjects".to_string());
+        }
+        if filter.at_checkpoint.is_some() {
+            filters.push("atCheckpoint".to_string());
+        }
+        if filter.after_checkpoint.is_some() {
+            filters.push("afterCheckpoint".to_string());
+        }
+        if filter.before_checkpoint.is_some() {
+            filters.push("beforeCheckpoint".to_string());
+        }
+
+        Self {
+            type_: "Query".to_string(),
+            field: Some("transactions".to_string()),
+            filters: Some(filters),
+        }
     }
 }
 

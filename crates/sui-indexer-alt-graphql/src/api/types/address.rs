@@ -16,6 +16,7 @@ use crate::{
 };
 
 use super::{
+    available_range::{AvailableRange, AvailableRangeKey},
     balance::{self, Balance},
     coin_metadata::CoinMetadata,
     dynamic_field::{DynamicField, DynamicFieldName},
@@ -341,8 +342,13 @@ impl Address {
         let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
             return Ok(Some(Connection::new(false, false)));
         };
+        let available_range = AvailableRange::new(
+            ctx,
+            &self.scope,
+            AvailableRangeKey::from_transaction_filter(&filter),
+        )?;
 
-        Transaction::paginate(ctx, self.scope.clone(), page, filter)
+        Transaction::paginate(ctx, self.scope.clone(), page, filter, available_range)
             .await
             .map(Some)
     }
