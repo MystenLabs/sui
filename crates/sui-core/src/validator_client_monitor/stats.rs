@@ -23,7 +23,7 @@ const RELIABILITY_MOVING_WINDOW_SIZE: usize = 40;
 /// Size of the moving window for latency measurements
 const LATENCY_MOVING_WINDOW_SIZE: usize = 40;
 /// Maximum adjusted latency from completely unreachable (reliability = 0.0) or very slow validators.
-const MAX_LATENCY_SECS: f64 = 10.0;
+const MAX_LATENCY: Duration = Duration::from_secs(10);
 
 /// Complete client-observed statistics for validator interactions.
 ///
@@ -47,10 +47,9 @@ pub struct ClientObservedStats {
 #[derive(Debug, Clone)]
 pub struct ValidatorClientStats {
     /// Moving window of success rate (0.0 to 1.0)
-    pub reliability: MovingWindow,
+    pub reliability: MovingWindow<f64>,
     /// Moving window of latencies for each operation type (Submit, Effects, HealthCheck)
-    /// Latencies are measured in seconds.
-    pub average_latencies: HashMap<OperationType, MovingWindow>,
+    pub average_latencies: HashMap<OperationType, MovingWindow<Duration>>,
     /// Counter for consecutive failures - resets on success
     pub consecutive_failures: u32,
     /// Time when validator was temporarily excluded due to failures.
@@ -71,13 +70,10 @@ impl ValidatorClientStats {
     pub fn update_average_latency(&mut self, operation: OperationType, new_latency: Duration) {
         match self.average_latencies.entry(operation) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().add_value(new_latency.as_secs_f64());
+                entry.get_mut().add_value(new_latency);
             }
             Entry::Vacant(entry) => {
-                entry.insert(MovingWindow::new(
-                    new_latency.as_secs_f64(),
-                    LATENCY_MOVING_WINDOW_SIZE,
-                ));
+                entry.insert(MovingWindow::new(new_latency, LATENCY_MOVING_WINDOW_SIZE));
             }
         }
     }
@@ -136,7 +132,7 @@ impl ClientObservedStats {
         &self,
         committee: &Committee,
         tx_type: TxType,
-    ) -> HashMap<AuthorityName, f64> {
+    ) -> HashMap<AuthorityName, Duration> {
         committee
             .names()
             .map(|validator| {
@@ -156,14 +152,14 @@ impl ClientObservedStats {
     /// - FastPath operations (for SingleWriter transactions)
     ///
     /// Returns latency in seconds, with reliability penalty applied as a multiplier.
-    fn calculate_client_latency(&self, validator: &AuthorityName, tx_type: TxType) -> f64 {
+    fn calculate_client_latency(&self, validator: &AuthorityName, tx_type: TxType) -> Duration {
         let Some(stats) = self.validator_stats.get(validator) else {
-            return MAX_LATENCY_SECS;
+            return MAX_LATENCY;
         };
 
         if let Some(exclusion_time) = stats.exclusion_time {
             if exclusion_time.elapsed() < self.config.failure_cooldown {
-                return MAX_LATENCY_SECS;
+                return MAX_LATENCY;
             }
         }
 
@@ -173,14 +169,15 @@ impl ClientObservedStats {
         };
         let Some(latency) = stats.average_latencies.get(&operation) else {
             // For the target validator and operation type, no latency data has been recorded yet.
-            return MAX_LATENCY_SECS;
+            return MAX_LATENCY;
         };
 
         // Get the latency for the relevant operation
         let base_latency = latency.get();
         let reliability = stats.reliability.get();
         let reliability_weight = self.config.reliability_weight;
-        (base_latency + (1.0 - reliability) * reliability_weight * MAX_LATENCY_SECS).min(MAX_LATENCY_SECS)
+        let penalty = MAX_LATENCY.mul_f64((1.0 - reliability) * reliability_weight);
+        (base_latency + penalty).min(MAX_LATENCY)
     }
 
     /// Retain only the specified validators, removing any others.
