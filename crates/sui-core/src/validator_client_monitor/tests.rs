@@ -642,26 +642,20 @@ mod client_monitor_tests {
 
         // Record different performance for each validator
         for (i, validator) in validators.iter().enumerate() {
-            for op in [
-                OperationType::Submit,
-                OperationType::Effects,
-                OperationType::HealthCheck,
-            ] {
-                monitor.record_interaction_result(OperationFeedback {
-                    authority_name: *validator,
-                    display_name: auth_agg.get_display_name(validator),
-                    operation: op,
-                    result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
-                });
-            }
+            monitor.record_interaction_result(OperationFeedback {
+                authority_name: *validator,
+                display_name: auth_agg.get_display_name(validator),
+                operation: OperationType::FastPath,
+                result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
+            });
         }
 
         // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
-        // Select validators with k=2
+        // Select validators with delta = 100% (50, 100)
         let selected =
-            monitor.select_shuffled_preferred_validators(&committee, 2, TxType::SingleWriter);
+            monitor.select_shuffled_preferred_validators(&committee, TxType::SingleWriter, 1.0);
         assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
 
         // The first 2 positions should contain the best two validators (but shuffled)
@@ -686,30 +680,24 @@ mod client_monitor_tests {
 
         // Record different performance for each validator
         for (i, validator) in validators.iter().enumerate() {
-            for op in [
-                OperationType::Submit,
-                OperationType::Effects,
-                OperationType::HealthCheck,
-            ] {
-                monitor.record_interaction_result(OperationFeedback {
-                    authority_name: *validator,
-                    display_name: auth_agg.get_display_name(validator),
-                    operation: op,
-                    result: if i < 2 {
-                        Ok(Duration::from_millis((i as u64 + 1) * 50))
-                    } else {
-                        Err(())
-                    }, // First 2 validators succeed, others fail
-                });
-            }
+            monitor.record_interaction_result(OperationFeedback {
+                authority_name: *validator,
+                display_name: auth_agg.get_display_name(validator),
+                operation: OperationType::FastPath,
+                result: if i < 2 {
+                    Ok(Duration::from_millis((i as u64 + 1) * 50))
+                } else {
+                    Err(())
+                }, // First 2 validators succeed, others fail
+            });
         }
 
         // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
-        // Select validators with k=3
+        // Select validators with delta = 200% (50, 100, 150)
         let selected =
-            monitor.select_shuffled_preferred_validators(&committee, 3, TxType::SingleWriter);
+            monitor.select_shuffled_preferred_validators(&committee, TxType::SingleWriter, 2.0);
 
         // Should return all 5 validators
         assert_eq!(selected.len(), 5);
@@ -766,8 +754,11 @@ mod client_monitor_tests {
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Should still select validators from the provided committee
-        let selected =
-            monitor.select_shuffled_preferred_validators(&other_committee, 2, TxType::SingleWriter);
+        let selected = monitor.select_shuffled_preferred_validators(
+            &other_committee,
+            TxType::SingleWriter,
+            1.0,
+        );
         assert_eq!(selected.len(), 3); // Should return all 3 validators from other_committee
         for validator in &selected {
             assert!(other_committee.authority_exists(validator));
@@ -801,9 +792,9 @@ mod client_monitor_tests {
         // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
-        // Request more validators than available
+        // Request higher delta than actual values.
         let selected =
-            monitor.select_shuffled_preferred_validators(&committee, 5, TxType::SingleWriter);
+            monitor.select_shuffled_preferred_validators(&committee, TxType::SingleWriter, 1000.0);
         // Should return all available validators
         assert_eq!(selected.len(), 2);
         assert!(selected.contains(&validators[0]));
@@ -841,9 +832,9 @@ mod client_monitor_tests {
         // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
-        // Select validators with k=2 for the shared object tx type
+        // Select validators with delta = 100% for the shared object tx type
         let selected =
-            monitor.select_shuffled_preferred_validators(&committee, 2, TxType::SingleWriter);
+            monitor.select_shuffled_preferred_validators(&committee, TxType::SingleWriter, 1.0);
         assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
 
         // The first 2 positions should contain the best two validators (but shuffled)
@@ -851,9 +842,9 @@ mod client_monitor_tests {
         assert!(top_2_positions.contains(&validators[0])); // Best performer
         assert!(top_2_positions.contains(&validators[1])); // Second best
 
-        // Select the validators with k=2 for the single writer tx type
+        // Select the validators with delta = 100% for the single writer tx type
         let selected =
-            monitor.select_shuffled_preferred_validators(&committee, 2, TxType::SharedObject);
+            monitor.select_shuffled_preferred_validators(&committee, TxType::SharedObject, 1.0);
         assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
 
         // The first 2 positions should contain the best two validators (but shuffled)

@@ -23,7 +23,7 @@ const RELIABILITY_MOVING_WINDOW_SIZE: usize = 40;
 /// Size of the moving window for latency measurements
 const LATENCY_MOVING_WINDOW_SIZE: usize = 40;
 /// Maximum adjusted latency from completely unreachable (reliability = 0.0) or very slow validators.
-const MAX_LATENCY: f64 = 10.0;
+const MAX_LATENCY_SECS: f64 = 10.0;
 
 /// Complete client-observed statistics for validator interactions.
 ///
@@ -49,6 +49,7 @@ pub struct ValidatorClientStats {
     /// Moving window of success rate (0.0 to 1.0)
     pub reliability: MovingWindow,
     /// Moving window of latencies for each operation type (Submit, Effects, HealthCheck)
+    /// Latencies are measured in seconds.
     pub average_latencies: HashMap<OperationType, MovingWindow>,
     /// Counter for consecutive failures - resets on success
     pub consecutive_failures: u32,
@@ -157,12 +158,12 @@ impl ClientObservedStats {
     /// Returns latency in seconds, with reliability penalty applied as a multiplier.
     fn calculate_client_latency(&self, validator: &AuthorityName, tx_type: TxType) -> f64 {
         let Some(stats) = self.validator_stats.get(validator) else {
-            return MAX_LATENCY;
+            return MAX_LATENCY_SECS;
         };
 
         if let Some(exclusion_time) = stats.exclusion_time {
             if exclusion_time.elapsed() < self.config.failure_cooldown {
-                return MAX_LATENCY;
+                return MAX_LATENCY_SECS;
             }
         }
 
@@ -172,14 +173,14 @@ impl ClientObservedStats {
         };
         let Some(latency) = stats.average_latencies.get(&operation) else {
             // For the target validator and operation type, no latency data has been recorded yet.
-            return MAX_LATENCY;
+            return MAX_LATENCY_SECS;
         };
 
         // Get the latency for the relevant operation
         let base_latency = latency.get();
         let reliability = stats.reliability.get();
         let reliability_weight = self.config.reliability_weight;
-        (base_latency + (1.0 - reliability) * reliability_weight * MAX_LATENCY).min(MAX_LATENCY)
+        (base_latency + (1.0 - reliability) * reliability_weight * MAX_LATENCY_SECS).min(MAX_LATENCY_SECS)
     }
 
     /// Retain only the specified validators, removing any others.

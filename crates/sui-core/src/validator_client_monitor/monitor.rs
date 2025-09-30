@@ -39,6 +39,7 @@ pub struct ValidatorClientMonitor<A: Clone> {
     metrics: Arc<ValidatorClientMetrics>,
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
+    /// Latencies are measured in seconds.
     cached_latencies: RwLock<HashMap<TxType, HashMap<AuthorityName, f64>>>,
 }
 
@@ -252,8 +253,8 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     pub fn select_shuffled_preferred_validators(
         &self,
         committee: &Committee,
-        k: usize,
         tx_type: TxType,
+        delta: f64,
     ) -> Vec<AuthorityName> {
         let mut rng = rand::thread_rng();
 
@@ -270,10 +271,21 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             .names()
             .map(|v| (*v, cached_latencies.get(v).cloned().unwrap_or(0.0)))
             .collect();
+        if validator_with_latencies.is_empty() {
+            return vec![];
+        }
         // Sort by latency in ascending order. We want to select the validators with the lowest latencies.
-        validator_with_latencies.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        validator_with_latencies
+            .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
-        let k = k.min(validator_with_latencies.len());
+        // Shuffle validators within delta of the lowest latency, for load balancing.
+        let lowest_latency = validator_with_latencies[0].1;
+        let k = validator_with_latencies
+            .iter()
+            .enumerate()
+            .find(|(_, (_, latency))| *latency > (1.0 + delta) * lowest_latency)
+            .map(|(i, _)| i)
+            .unwrap_or(validator_with_latencies.len());
         validator_with_latencies[..k].shuffle(&mut rng);
 
         validator_with_latencies
