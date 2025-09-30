@@ -490,7 +490,7 @@ fn op_step_impl(
         }
         Bytecode::ImmBorrowFieldGeneric(fi_ptr) | Bytecode::MutBorrowFieldGeneric(fi_ptr) => {
             let instr = match instruction {
-                Bytecode::MutBorrowField(_) => S::MutBorrowFieldGeneric,
+                Bytecode::MutBorrowFieldGeneric(_) => S::MutBorrowFieldGeneric,
                 _ => S::ImmBorrowFieldGeneric,
             };
             gas_meter.charge_simple_instr(instr)?;
