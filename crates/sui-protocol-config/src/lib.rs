@@ -823,6 +823,10 @@ struct FeatureFlags {
     // If true, use the new commit handler.
     #[serde(skip_serializing_if = "is_false")]
     use_new_commit_handler: bool,
+
+    // Enables account aliases.
+    #[serde(skip_serializing_if = "is_false")]
+    account_aliases: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2247,6 +2251,21 @@ impl ProtocolConfig {
 
     pub fn use_new_commit_handler(&self) -> bool {
         self.feature_flags.use_new_commit_handler
+    }
+
+    pub fn account_aliases(&self) -> bool {
+        let account_aliases = self.feature_flags.account_aliases;
+        assert!(
+            !account_aliases || self.mysticeti_fastpath(),
+            "Account aliases requires Mysticeti fastpath to be enabled"
+        );
+        if account_aliases {
+            // TODO: when flag for disabling CertifiedTransaction is added, add assertion for it here.
+            unimplemented!(
+                "account_aliases depends on disabling CertifiedTransaction, which is not yet implemented"
+            );
+        }
+        account_aliases
     }
 }
 
