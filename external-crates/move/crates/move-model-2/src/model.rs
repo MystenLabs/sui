@@ -1103,10 +1103,10 @@ fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLa
         T::Bool => L::Bool,
         T::U8 => L::U8,
         T::U16 => L::U16,
-        T::U32 => L::U16,
+        T::U32 => L::U32,
         T::U64 => L::U64,
         T::U128 => L::U128,
-        T::U256 => L::U16,
+        T::U256 => L::U256,
         T::Address => L::Address,
         T::Vector(inner) => L::Vector(Box::new(annotated_constant_layout(inner))),
 
