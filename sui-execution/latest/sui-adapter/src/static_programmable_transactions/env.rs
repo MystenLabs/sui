@@ -10,10 +10,7 @@ use crate::{
     execution_value::ExecutionState,
     static_programmable_transactions::{
         execution::context::subst_signature,
-        linkage::{
-            analysis::{LinkageAnalysis, type_linkage},
-            resolved_linkage::ExecutableLinkage,
-        },
+        linkage::{analysis::LinkageAnalyzer, resolved_linkage::ExecutableLinkage},
         loading::ast::{self as L, Datatype, LoadedFunction, LoadedFunctionInstantiation, Type},
     },
 };
@@ -50,7 +47,7 @@ pub struct Env<'pc, 'vm, 'state, 'linkage> {
     pub vm: &'vm MoveRuntime,
     pub state_view: &'state mut dyn ExecutionState,
     pub linkable_store: &'linkage CachedPackageStore<'state, 'vm>,
-    pub linkage_analysis: &'linkage dyn LinkageAnalysis,
+    pub linkage_analysis: &'linkage LinkageAnalyzer,
     gas_coin_type: OnceCell<Type>,
     upgrade_ticket_type: OnceCell<Type>,
     upgrade_receipt_type: OnceCell<Type>,
@@ -76,7 +73,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         vm: &'vm MoveRuntime,
         state_view: &'state mut dyn ExecutionState,
         linkable_store: &'linkage CachedPackageStore<'state, 'vm>,
-        linkage_analysis: &'linkage dyn LinkageAnalysis,
+        linkage_analysis: &'linkage LinkageAnalyzer,
     ) -> Self {
         Self {
             protocol_config,
@@ -156,7 +153,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 }
                 TypeTag::Struct(struct_tag) => {
                     let objects = struct_tag.all_addresses();
-                    let tag_linkage = type_linkage(
+                    let tag_linkage = ExecutableLinkage::type_linkage(
                         &objects.iter().map(|a| (*a).into()).collect::<Vec<_>>(),
                         env.linkable_store,
                     )?;
@@ -201,7 +198,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 }
                 TypeTag::Struct(struct_tag) => {
                     let objects = struct_tag.all_addresses();
-                    let tag_linkage = type_linkage(
+                    let tag_linkage = ExecutableLinkage::type_linkage(
                         &objects.iter().map(|a| (*a).into()).collect::<Vec<_>>(),
                         env.linkable_store,
                     )?;
@@ -303,26 +300,6 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         })
     }
 
-    pub fn load_type_input(&self, idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
-        let (vm_type, vm_opt) = self.load_vm_type_from_type_input(idx, ty)?;
-        self.adapter_type_from_vm_type(&vm_opt, &vm_type)
-    }
-
-    /// We verify that all types in the `StructTag` are defining ID-based types.
-    pub fn load_type_from_struct(&self, tag: &StructTag) -> Result<Type, ExecutionError> {
-        let (vm_type, vm_opt) =
-            self.load_vm_type_from_type_tag(None, &TypeTag::Struct(Box::new(tag.clone())))?;
-        self.adapter_type_from_vm_type(&vm_opt, &vm_type)
-    }
-
-    pub fn type_layout_for_struct(
-        &self,
-        tag: &StructTag,
-    ) -> Result<MoveTypeLayout, ExecutionError> {
-        let ty: Type = self.load_type_from_struct(tag)?;
-        self.runtime_layout(&ty)
-    }
-
     pub fn gas_coin_type(&self) -> Result<Type, ExecutionError> {
         get_or_init_ty!(self, gas_coin_type, GasCoin::type_())
     }
@@ -364,6 +341,26 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             invariant_violation!("Object {:?} does not exist", id);
         };
         Ok(obj)
+    }
+
+    pub fn type_layout_for_struct(
+        &self,
+        tag: &StructTag,
+    ) -> Result<MoveTypeLayout, ExecutionError> {
+        let ty: Type = self.load_type_from_struct(tag)?;
+        self.runtime_layout(&ty)
+    }
+
+    pub fn load_type_input(&self, idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
+        let (vm_type, vm_opt) = self.load_vm_type_from_type_input(idx, ty)?;
+        self.adapter_type_from_vm_type(&vm_opt, &vm_type)
+    }
+
+    /// We verify that all types in the `StructTag` are defining ID-based types.
+    pub fn load_type_from_struct(&self, tag: &StructTag) -> Result<Type, ExecutionError> {
+        let (vm_type, vm_opt) =
+            self.load_vm_type_from_type_tag(None, &TypeTag::Struct(Box::new(tag.clone())))?;
+        self.adapter_type_from_vm_type(&vm_opt, &vm_type)
     }
 
     /// Takes an adapter Type and returns a VM runtime Type and the linkage for it.
@@ -416,7 +413,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             if addresses.is_empty() {
                 None
             } else {
-                let tag_linkage = type_linkage(&addresses, self.linkable_store)?;
+                let tag_linkage = ExecutableLinkage::type_linkage(&addresses, self.linkable_store)?;
                 let link_context = tag_linkage.linkage_context();
                 let move_store = &self.linkable_store.package_store;
                 Some((

@@ -3,7 +3,7 @@
 
 use crate::data_store::cached_package_store::CachedPackageStore;
 use crate::data_store::transaction_package_store::TransactionPackageStore;
-use crate::static_programmable_transactions::linkage::analysis::type_linkage;
+use crate::static_programmable_transactions::linkage::resolved_linkage::ExecutableLinkage;
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;
 use move_vm_runtime::runtime::MoveRuntime;
@@ -43,7 +43,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         let null_resolver = NullSuiResolver(&self.state_view);
         let resolver =
             CachedPackageStore::new(self.vm, TransactionPackageStore::new(&null_resolver));
-        let tag_linkage = type_linkage(&ids, &resolver)?;
+        let tag_linkage = ExecutableLinkage::type_linkage(&ids, &resolver)?;
         let link_context = tag_linkage.linkage_context();
         let data_store = TransactionPackageStore::new(&null_resolver);
         let Ok(vm) = self.vm.make_vm(data_store, link_context) else {
