@@ -116,9 +116,7 @@ fn pipelines(type_: &str, field: Option<&str>, filters: Vec<String>, ps: &mut BT
 
         // Event fields
         ("Event", _, _) => {
-            ps.insert("ev_struct_inst".to_string());
-            ps.insert("ev_emit_mod".to_string());
-            ps.insert("tx_digests".to_string());
+            pipelines("Query", Some("events"), vec![], ps);
         }
 
         // IAddressable fields
@@ -260,7 +258,6 @@ mod tests {
     fn test_event() {
         let result = test_pipelines("Event", None, vec![]);
         assert!(result.contains("ev_struct_inst"));
-        assert!(result.contains("ev_emit_mod"));
         assert!(result.contains("tx_digests"));
     }
 
