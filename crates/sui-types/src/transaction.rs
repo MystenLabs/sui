@@ -139,6 +139,8 @@ pub enum WithdrawalTypeArg {
 }
 
 impl WithdrawalTypeArg {
+    /// Convert the withdrawal type argument to a full type tag,
+    /// e.g. `Balance<T>` -> `0x2::balance::Balance<T>`
     pub fn to_type_tag(&self) -> UserInputResult<TypeTag> {
         match self {
             WithdrawalTypeArg::Balance(type_param) => {
@@ -148,6 +150,15 @@ impl WithdrawalTypeArg {
                     },
                 )?))
             }
+        }
+    }
+
+    /// If this is a Balance accumulator, return the type parameter of `Balance<T>`,
+    /// e.g. `Balance<T>` -> `Some(T)`
+    /// Otherwise, return `None`. This is not possible today, but in the future we will support other types of accumulators.
+    pub fn get_balance_type_param(&self) -> anyhow::Result<Option<TypeTag>> {
+        match self {
+            WithdrawalTypeArg::Balance(type_param) => type_param.to_type_tag().map(Some),
         }
     }
 }
@@ -2143,8 +2154,8 @@ impl TransactionData {
     }
 
     pub fn uses_randomness(&self) -> bool {
-        self.shared_input_objects()
-            .iter()
+        self.kind()
+            .shared_input_objects()
             .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
     }
 
@@ -2205,6 +2216,9 @@ pub trait TransactionDataAPI {
 
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
+
+    // Get all the funds withdrawals args in the transaction.
+    fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg>;
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
@@ -2330,25 +2344,17 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
-        let mut withdraws = Vec::new();
+        let withdraws = self.get_funds_withdrawals();
         // TODO(address-balances): Once we support paying gas using address balances,
         // we add gas reservations here.
         // TODO(address-balances): Use a protocol config parameter for max_withdraws.
         let max_withdraws = 10;
-        // First get all withdraw arguments.
-        if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
-            for input in &pt.inputs {
-                if let CallArg::FundsWithdrawal(withdraw) = input {
-                    withdraws.push(withdraw.clone());
-                    if withdraws.len() > max_withdraws {
-                        return Err(UserInputError::InvalidWithdrawReservation {
-                            error: format!(
-                                "Maximum number of balance withdraw reservations is {max_withdraws}"
-                            ),
-                        });
-                    }
-                }
-            }
+        if withdraws.len() > max_withdraws {
+            return Err(UserInputError::InvalidWithdrawReservation {
+                error: format!(
+                    "Maximum number of balance withdraw reservations is {max_withdraws}"
+                ),
+            });
         }
 
         // Accumulate all withdraws per account.
@@ -2404,6 +2410,22 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
         }
         false
+    }
+
+    fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg> {
+        let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
+            return vec![];
+        };
+        pt.inputs
+            .iter()
+            .filter_map(|input| {
+                if let CallArg::FundsWithdrawal(withdraw) = input {
+                    Some(withdraw.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
@@ -3090,7 +3112,6 @@ impl Transaction {
             current_epoch,
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
-            None,
         )
     }
 
@@ -3115,7 +3136,6 @@ impl SignedTransaction {
             committee.epoch(),
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
-            None,
         )?;
 
         self.auth_sig().verify_secure(
@@ -3156,14 +3176,12 @@ impl CertifiedTransaction {
         committee: &Committee,
         verify_params: &VerifyParams,
         zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-        aliased_addresses: Option<&BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>,
     ) -> SuiResult {
         verify_sender_signed_data_message_signatures(
             self.data(),
             committee.epoch(),
             verify_params,
             zklogin_inputs_cache,
-            aliased_addresses,
         )?;
         self.auth_sig().verify_secure(
             self.data(),
@@ -3181,7 +3199,6 @@ impl CertifiedTransaction {
             committee,
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
-            None,
         )?;
         Ok(VerifiedCertificate::new_from_verified(self))
     }

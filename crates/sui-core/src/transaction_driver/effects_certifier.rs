@@ -92,7 +92,7 @@ impl EffectsCertifier {
                 None => (None, None),
             },
             SubmitTxResult::Rejected { error } => {
-                return Err(TransactionDriverError::Internal {
+                return Err(TransactionDriverError::ClientInternal {
                     error: format!(
                         "Unexpected submission error in get_certified_finalized_effects(): {}",
                         error
@@ -242,7 +242,9 @@ impl EffectsCertifier {
                         Ok((effects_digest, details, fast_path))
                     } else {
                         tracing::debug!("Execution data not found, retrying...");
-                        Err(TransactionRequestError::ExecutionDataNotFound)
+                        Err(TransactionRequestError::ValidatorInternal(
+                            "Execution data not found".to_string(),
+                        ))
                     }
                 }
                 WaitForEffectsResponse::Rejected { error } => match error {
@@ -466,7 +468,7 @@ impl EffectsCertifier {
             if total_weight >= committee.quorum_threshold() {
                 // Try returning non-retriable aggregated error first.
                 if non_retriable_errors_aggregator.total_votes() >= committee.validity_threshold() {
-                    return Err(TransactionDriverError::InvalidTransaction {
+                    return Err(TransactionDriverError::RejectedByValidators {
                         submission_non_retriable_errors: aggregate_request_errors(
                             non_retriable_errors_aggregator.status_by_authority(),
                         ),

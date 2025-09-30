@@ -41,6 +41,7 @@ use serde::{Deserialize, Serialize};
 use shared_object_version_manager::AssignedVersions;
 use shared_object_version_manager::Schedulable;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -994,39 +995,14 @@ impl AuthorityState {
         // Note: the deny checks may do redundant package loads but:
         // - they only load packages when there is an active package deny map
         // - the loads are cached anyway
-        let deny_status = sui_transaction_checks::deny::check_transaction_for_signing(
+        sui_transaction_checks::deny::check_transaction_for_signing(
             tx_data,
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
             &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
-        );
-
-        match deny_status {
-            Ok(_) => {}
-            // If the transaction was blocked, it may still be allowed if it is in
-            // the aliased address list.
-            // TODO: Delete this code after protocol version 86.
-            Err(e) => {
-                let allowed = transaction
-                    .inner()
-                    .data()
-                    .tx_signatures()
-                    .iter()
-                    .filter_map(|sig| sig.try_into().ok())
-                    .any(|signer: SuiAddress| {
-                        epoch_store.protocol_config().is_tx_allowed_via_aliasing(
-                            tx_data.sender().to_inner(),
-                            signer.to_inner(),
-                            tx_digest.inner(),
-                        )
-                    });
-                if !allowed {
-                    return Err(e);
-                }
-            }
-        }
+        )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             Some(tx_digest),
@@ -1045,11 +1021,42 @@ impl AuthorityState {
             &self.config.verifier_signing_config,
         )?;
 
+        self.handle_coin_deny_list_checks(
+            tx_data,
+            &checked_input_objects,
+            &receiving_objects,
+            epoch_store,
+        )?;
+
+        Ok(checked_input_objects)
+    }
+
+    fn handle_coin_deny_list_checks(
+        &self,
+        tx_data: &TransactionData,
+        checked_input_objects: &CheckedInputObjects,
+        receiving_objects: &ReceivingObjects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<()> {
+        let funds_withdraw_types = tx_data
+            .get_funds_withdrawals()
+            .into_iter()
+            .filter_map(|withdraw| {
+                withdraw
+                    .type_arg
+                    .get_balance_type_param()
+                    // unwrap safe because we already verified the transaction.
+                    .unwrap()
+                    .map(|ty| ty.to_canonical_string(false))
+            })
+            .collect::<BTreeSet<_>>();
+
         if epoch_store.coin_deny_list_v1_enabled() {
             check_coin_deny_list_v1(
                 tx_data.sender(),
-                &checked_input_objects,
-                &receiving_objects,
+                checked_input_objects,
+                receiving_objects,
+                funds_withdraw_types.clone(),
                 &self.get_object_store(),
             )?;
         }
@@ -1057,13 +1064,14 @@ impl AuthorityState {
         if epoch_store.protocol_config().enable_coin_deny_list_v2() {
             check_coin_deny_list_v2_during_signing(
                 tx_data.sender(),
-                &checked_input_objects,
-                &receiving_objects,
+                checked_input_objects,
+                receiving_objects,
+                funds_withdraw_types.clone(),
                 &self.get_object_store(),
             )?;
         }
 
-        Ok(checked_input_objects)
+        Ok(())
     }
 
     /// This is a private method and should be kept that way. It doesn't check whether

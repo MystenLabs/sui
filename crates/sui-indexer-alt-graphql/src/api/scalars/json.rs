@@ -29,3 +29,11 @@ impl From<Value> for Json {
         Self(value)
     }
 }
+
+impl TryInto<serde_json::Value> for Json {
+    type Error = serde_json::Error;
+
+    fn try_into(self) -> Result<serde_json::Value, Self::Error> {
+        self.0.into_json()
+    }
+}

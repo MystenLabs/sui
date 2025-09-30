@@ -189,7 +189,7 @@ public struct Vault has key, store {
 
 // Creating a unique soulbound vault from address.
 public fun new(registry: &mut VaultRegistry, ctx: &mut TxContext) {
-  assert!(!derived_objects::exists(&registry.id, ctx.sender()), EVaultAlreadyExists);
+  assert!(!derived_object::exists(&registry.id, ctx.sender()), EVaultAlreadyExists);
 
   let vault = Vault {
     id: derived_object::claim(&mut registry.id, ctx.sender()),

@@ -5,7 +5,8 @@ source: crates/move-decompiler/tests/tests.rs
 loop {
     if (1) {
         continue;
+    } else {
+        break;
     }
-    break;
 }
 { 2 }

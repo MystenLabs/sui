@@ -1,7 +1,9 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
+
+use move_compiler::editions::Edition;
 
 use crate::compatibility::legacy::LegacyData;
 
@@ -44,7 +46,9 @@ pub struct ParsedManifest {
 #[serde(rename_all = "kebab-case")]
 pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
-    pub edition: String,
+
+    #[serde(default, deserialize_with = "from_str_option")]
+    pub edition: Option<Edition>,
 
     #[serde(default)]
     pub system_dependencies: Option<Vec<String>>,
@@ -194,6 +198,19 @@ impl From<ExternalDependency> for RField {
     }
 }
 
+fn from_str_option<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: FromStr,
+    T::Err: std::fmt::Display,
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        Some(s) => T::from_str(&s).map(Some).map_err(serde::de::Error::custom),
+        None => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
@@ -202,6 +219,8 @@ mod tests {
         DefaultDependency, ExternalDependency, ManifestDependencyInfo, ManifestGitDependency,
         ParsedManifest, ReplacementDependency,
     };
+    use move_compiler::editions::Edition;
+    use std::str::FromStr;
 
     impl ParsedManifest {
         /// (unsafe) convenience method for pulling out a dependency having given `name`
@@ -546,7 +565,7 @@ mod tests {
             r#"
             [package]
             name = "name"
-            edition = "2025"
+            edition = "2024"
 
             [package]
             "#,
@@ -613,7 +632,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(manifest.package.name.as_ref().as_str(), "name");
-        assert_eq!(manifest.package.edition, "2024");
+        assert_eq!(
+            manifest.package.edition,
+            Some(Edition::from_str("2024").unwrap())
+        );
 
         let unrecognized = manifest.package.unrecognized_fields.keys();
         assert_eq!(
@@ -732,23 +754,24 @@ mod tests {
         "###);
     }
 
-    /// package.edition must be present
+    /// package.edition not allowed
     #[test]
-    fn parse_no_edition() {
+    fn parse_unsupported_edition() {
         let error = toml_edit::de::from_str::<ParsedManifest>(
             r#"
             [package]
             name = "test"
+            edition = "2025"
             "#,
         )
         .unwrap_err()
         .to_string();
         assert_snapshot!(error, @r###"
-        TOML parse error at line 2, column 13
+        TOML parse error at line 4, column 23
           |
-        2 |             [package]
-          |             ^^^^^^^^^
-        missing field `edition`
+        4 |             edition = "2025"
+          |                       ^^^^^^
+        Unsupported edition "2025". Current supported editions include: "legacy", "2024.alpha", "2024.beta", and "2024"
         "###);
     }
 

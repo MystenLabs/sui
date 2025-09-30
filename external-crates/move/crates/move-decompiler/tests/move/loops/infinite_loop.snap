@@ -1,0 +1,15 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module infinite_loop {
+    public fun inf_loop_0 () {
+        loop {
+        }
+    }
+
+    public fun inf_loop_1 () {
+        loop {
+        }
+    }
+
+}

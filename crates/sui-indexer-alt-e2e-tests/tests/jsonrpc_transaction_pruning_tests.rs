@@ -11,7 +11,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster, OffchainClusterConfig};
+use sui_indexer_alt_e2e_tests::{find, FullCluster, OffchainClusterConfig};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{get_account_key_pair, Signature, Signer},
@@ -248,7 +248,7 @@ fn transfer_dust(
         .request_gas(sender, DEFAULT_GAS_BUDGET + 1)
         .expect("Failed to request gas");
 
-    let gas = find_address_owned(&fx).expect("Failed to find gas object");
+    let gas = find::address_owned(&fx).expect("Failed to find gas object");
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.transfer_sui(recipient, Some(1));

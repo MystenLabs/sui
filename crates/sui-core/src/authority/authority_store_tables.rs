@@ -248,7 +248,9 @@ impl AuthorityPerpetualTables {
                     32 + 8,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
-                    KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
+                    KeySpaceConfig::new()
+                        .with_compactor(Box::new(objects_compactor))
+                        .with_relocation_bloom_filter(0.001, 2_000_000_000),
                 ),
             ),
             (
@@ -257,7 +259,9 @@ impl AuthorityPerpetualTables {
                     32 + 8 + 32 + 8,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
-                    bloom_config.clone(),
+                    bloom_config
+                        .clone()
+                        .with_relocation_bloom_filter(0.001, 100_000),
                 ),
             ),
             (

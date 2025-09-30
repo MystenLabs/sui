@@ -1,0 +1,62 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module colors {
+    public fun is_blue () {
+        let l3 = l0;
+        let l2 = &l3;
+        match(l2: 0x0::colors::Color) {
+            0x0::colors::Color::Red => {
+                let l1 = false;
+            },
+            0x0::colors::Color::Green => {
+                l1 = false;
+            },
+            0x0::colors::Color::Blue => {
+                let 0x0::colors::Color::Blue {} = &l2;
+                let 0x0::colors::Color::Blue {} = l3;
+                l1 = true;
+            },
+        }
+        return l1
+    }
+
+    public fun is_green () {
+        let l3 = l0;
+        let l2 = &l3;
+        match(l2: 0x0::colors::Color) {
+            0x0::colors::Color::Red => {
+                let l1 = false;
+            },
+            0x0::colors::Color::Green => {
+                let 0x0::colors::Color::Green {} = &l2;
+                let 0x0::colors::Color::Green {} = l3;
+                l1 = true;
+            },
+            0x0::colors::Color::Blue => {
+                l1 = false;
+            },
+        }
+        return l1
+    }
+
+    public fun is_red () {
+        let l3 = l0;
+        let l2 = &l3;
+        match(l2: 0x0::colors::Color) {
+            0x0::colors::Color::Red => {
+                let 0x0::colors::Color::Red {} = &l2;
+                let 0x0::colors::Color::Red {} = l3;
+                let l1 = true;
+            },
+            0x0::colors::Color::Green => {
+                l1 = false;
+            },
+            0x0::colors::Color::Blue => {
+                l1 = false;
+            },
+        }
+        return l1
+    }
+
+}

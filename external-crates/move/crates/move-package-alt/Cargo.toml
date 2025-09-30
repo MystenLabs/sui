@@ -19,6 +19,7 @@ indoc.workspace = true
 itertools.workspace = true
 jsonrpc.workspace = true
 move-command-line-common.workspace = true
+move-compiler.workspace = true
 move-core-types.workspace = true
 named-lock.workspace = true
 once_cell.workspace = true

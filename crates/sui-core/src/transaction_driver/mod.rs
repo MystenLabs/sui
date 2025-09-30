@@ -10,7 +10,7 @@ mod transaction_submitter;
 /// Exports
 pub use error::TransactionDriverError;
 pub use metrics::*;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::strategy::ExponentialBackoff;
 
 use std::{
     net::SocketAddr,
@@ -26,8 +26,8 @@ use rand::Rng;
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
-    error::UserInputError,
-    messages_grpc::{PingType, SubmitTxRequest, TxType},
+    error::{ErrorCategory, UserInputError},
+    messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
     transaction::TransactionDataAPI as _,
 };
 use tokio::{
@@ -119,9 +119,9 @@ where
 
     // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
     async fn run_latency_checks(self: Arc<Self>) {
-        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_millis(15_000);
-        const MAX_DELAY_BETWEEN_REQUESTS_MS: u64 = 10_000;
-        const PING_REQUEST_TIMEOUT: Duration = Duration::from_millis(5_000);
+        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(15);
+        const MAX_JITTER: Duration = Duration::from_secs(10);
+        const PING_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
         let mut interval = interval(INTERVAL_BETWEEN_RUNS);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -132,12 +132,12 @@ where
             let mut tasks = JoinSet::new();
 
             for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
-                Self::execute_latency_for_tx_type(
+                Self::ping_for_tx_type(
                     self.clone(),
                     &mut tasks,
-                    MAX_DELAY_BETWEEN_REQUESTS_MS,
-                    PING_REQUEST_TIMEOUT,
                     tx_type,
+                    MAX_JITTER,
+                    PING_REQUEST_TIMEOUT,
                 );
             }
 
@@ -149,21 +149,26 @@ where
         }
     }
 
-    /// Executes a single round of latency checks for all validators and the provided transaction type.
-    fn execute_latency_for_tx_type(
+    /// Pings all validators for e2e latency with the provided transaction type.
+    fn ping_for_tx_type(
         self: Arc<Self>,
         tasks: &mut JoinSet<()>,
-        max_delay_ms: u64,
-        ping_timeout: Duration,
         tx_type: TxType,
+        max_jitter: Duration,
+        ping_timeout: Duration,
     ) {
         // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
         let auth_agg = self.authority_aggregator.load().clone();
         let validators = auth_agg.committee.names().cloned().collect::<Vec<_>>();
 
+        self.metrics
+            .latency_check_runs
+            .with_label_values(&[tx_type.as_str()])
+            .inc();
+
         for name in validators {
             let display_name = auth_agg.get_display_name(&name);
-            let delay_ms = rand::thread_rng().gen_range(0..max_delay_ms);
+            let delay_ms = rand::thread_rng().gen_range(0..max_jitter.as_millis()) as u64;
             let self_clone = self.clone();
 
             let task = async move {
@@ -258,7 +263,7 @@ where
         // Exponential backoff with jitter to prevent thundering herd on retries
         let mut backoff = ExponentialBackoff::from_millis(100)
             .max_delay(MAX_RETRY_DELAY)
-            .map(jitter);
+            .map(|duration| duration.mul_f64(rand::thread_rng().gen_range(0.5..1.0)));
         let mut attempts = 0;
         let mut latest_retriable_error = None;
 
@@ -283,7 +288,7 @@ where
                         return Ok(resp);
                     }
                     Err(e) => {
-                        if !e.is_retriable() {
+                        if !e.is_submission_retriable() {
                             // Record the number of retries for failed transaction
                             self.metrics
                                 .transaction_retries
@@ -302,7 +307,19 @@ where
                     }
                 }
 
-                sleep(backoff.next().unwrap_or(MAX_RETRY_DELAY)).await;
+                let overload = if let Some(e) = &latest_retriable_error {
+                    e.categorize() == ErrorCategory::ValidatorOverloaded
+                } else {
+                    false
+                };
+                let delay = if overload {
+                    // Increase delay during overload.
+                    backoff.next().unwrap_or(MAX_RETRY_DELAY) + MAX_RETRY_DELAY
+                } else {
+                    backoff.next().unwrap_or(MAX_RETRY_DELAY)
+                };
+                sleep(delay).await;
+
                 attempts += 1;
             }
         };
@@ -356,6 +373,11 @@ where
                 options,
             )
             .await?;
+        if let SubmitTxResult::Rejected { error } = &submit_txn_result {
+            return Err(TransactionDriverError::ClientInternal {
+                error: format!("SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}", error),
+            });
+        }
 
         // Wait for quorum effects using EffectsCertifier
         let result = self

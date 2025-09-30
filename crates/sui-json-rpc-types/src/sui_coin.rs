@@ -89,6 +89,12 @@ impl TryFrom<Object> for SuiCoinMetadata {
     type Error = SuiError;
     fn try_from(object: Object) -> Result<Self, Self::Error> {
         let metadata: CoinMetadata = object.try_into()?;
+        Ok(metadata.into())
+    }
+}
+
+impl From<CoinMetadata> for SuiCoinMetadata {
+    fn from(metadata: CoinMetadata) -> Self {
         let CoinMetadata {
             decimals,
             name,
@@ -97,14 +103,14 @@ impl TryFrom<Object> for SuiCoinMetadata {
             icon_url,
             id,
         } = metadata;
-        Ok(Self {
+        Self {
             id: Some(*id.object_id()),
             decimals,
             name,
             symbol,
             description,
             icon_url,
-        })
+        }
     }
 }
 

@@ -45,6 +45,10 @@ pub struct OperationFeedback {
     pub display_name: String,
     /// The operation type
     pub operation: OperationType,
-    /// Result of the operation: Ok(latency) if successful, Err(()) if failed
+    /// Result of the operation: Ok(latency) if successful, Err(()) if failed.
+    /// Only errors specific to the target validator should be recorded,
+    /// for example, timeout, unavailability or misbehavior from validators can be recorded.
+    /// But other errors unrelated to a specific validator, for example invalid user transaction,
+    /// should not be recorded.
     pub result: Result<Duration, ()>,
 }

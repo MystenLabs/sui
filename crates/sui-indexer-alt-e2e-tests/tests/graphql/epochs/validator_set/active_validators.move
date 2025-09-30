@@ -9,50 +9,62 @@
     epochId
     validatorSet {
       activeValidators {
-        address
-        balance(coinType: "0x2::sui::SUI") {
-          totalBalance
+        pageInfo {
+         hasPreviousPage
+         hasNextPage
+         startCursor
+         endCursor
         }
-        balances {
-          __typename
+        nodes {
+          address
+          balance(coinType: "0x2::sui::SUI") {
+            totalBalance
+          }
+          balances {
+            __typename
+          }
+          # todo DVX-1697 populate defaultSuinsName
+          defaultSuinsName
+          multiGetBalances(keys: ["0x2::sui::SUI"]) {
+            totalBalance
+          }
+          objects {
+            __typename
+          }
+          credentials { ...VC }
+          # todo DVX-1697 populate nextEpochCredentials
+          nextEpochCredentials { ...VC }
+          name
+          # todo DVX-1697 populate description
+          description
+          # todo DVX-1697 populate imageUrl
+          imageUrl
+          # todo DVX-1697 populate projectUrl
+          projectUrl
+          operationCap {
+            address
+          }
+          stakingPoolId
+          stakingPoolActivationEpoch
+          stakingPoolSuiBalance
+          # todo DVX-1697 populate rewardsPool
+          rewardsPool
+          poolTokenBalance
+          # todo DVX-1697 populate pendingStake
+          pendingStake
+          # todo DVX-1697 populate pendingTotalSuiWithdraw
+          pendingTotalSuiWithdraw
+          # todo DVX-1697 populate pendingPoolTokenWithdraw
+          pendingPoolTokenWithdraw
+          votingPower
+          gasPrice
+          commissionRate
+          nextEpochStake
+          nextEpochGasPrice
+          nextEpochCommissionRate
+          # todo DVX-1697 populate atRisk
+          atRisk
         }
-        # todo (ewall) populate defaultSuinsName
-        defaultSuinsName
-        multiGetBalances(keys: ["0x2::sui::SUI"]) {
-          totalBalance
-        }
-        objects {
-          __typename
-        }
-        credentials { ...VC }
-        # todo (ewall) populate nextEpochCredentials
-        nextEpochCredentials { ...VC }
-        name
-        # todo (ewall) populate description
-        description
-        # todo (ewall) populate imageUrl
-        imageUrl
-        # todo (ewall) populate projectUrl
-        projectUrl
-        stakingPoolId
-        exchangeRatesSize
-        stakingPoolActivationEpoch
-        stakingPoolSuiBalance
-        # todo (ewall) populate rewardsPool
-        rewardsPool
-        poolTokenBalance
-        # todo (ewall) populate pendingStake
-        pendingStake
-        # todo (ewall) populate pendingTotalSuiWithdraw
-        pendingTotalSuiWithdraw
-        # todo (ewall) populate pendingPoolTokenWithdraw
-        pendingPoolTokenWithdraw
-        votingPower
-        gasPrice
-        commissionRate
-        nextEpochStake
-        nextEpochGasPrice
-        nextEpochCommissionRate
       }
     }
   }

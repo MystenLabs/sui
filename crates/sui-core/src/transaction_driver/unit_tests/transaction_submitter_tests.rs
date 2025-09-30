@@ -535,7 +535,7 @@ async fn test_submit_transaction_invalid_input() {
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        TransactionDriverError::InvalidTransaction { .. } => {
+        TransactionDriverError::RejectedByValidators { .. } => {
             // Expected - non-retriable error
         }
         e => panic!("Expected InvalidTransaction error, got: {:?}", e),

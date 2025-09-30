@@ -3,8 +3,12 @@
 
 use std::{env, fmt};
 
-use crate::{error::SuiError, sui_serde::Readable};
+use crate::{
+    error::{SuiError, SuiResult},
+    sui_serde::Readable,
+};
 use fastcrypto::encoding::{Base58, Encoding, Hex};
+use fastcrypto::hash::{Blake2b256, HashFunction};
 use once_cell::sync::{Lazy, OnceCell};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -1140,6 +1144,12 @@ impl CheckpointArtifactsDigest {
 
     pub fn base58_encode(&self) -> String {
         Base58::encode(self.0)
+    }
+
+    pub fn from_artifact_digests(digests: Vec<Digest>) -> SuiResult<Self> {
+        let bytes =
+            bcs::to_bytes(&digests).map_err(|e| SuiError::from(format!("BCS error: {}", e)))?;
+        Ok(Self(Digest::new(Blake2b256::digest(&bytes).into())))
     }
 }
 

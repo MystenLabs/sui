@@ -9,8 +9,10 @@ use std::{
 };
 
 use async_graphql::Context;
+use async_trait::async_trait;
+use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
-use sui_package_resolver::{PackageStore, Resolver};
+use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore, Resolver};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     object::Object as NativeObject,
@@ -162,8 +164,8 @@ impl Scope {
     }
 
     /// A package resolver with access to the packages known at this scope.
-    pub(crate) fn package_resolver(&self) -> Resolver<Arc<dyn PackageStore>> {
-        Resolver::new_with_limits(self.package_store.clone(), self.resolver_limits.clone())
+    pub(crate) fn package_resolver(&self) -> Resolver<Self> {
+        Resolver::new_with_limits(self.clone(), self.resolver_limits.clone())
     }
 }
 
@@ -174,5 +176,33 @@ impl Debug for Scope {
             .field("root_version", &self.root_version)
             .field("resolver_limits", &self.resolver_limits)
             .finish()
+    }
+}
+
+#[async_trait]
+impl PackageStore for Scope {
+    /// Fetches a package, first checking execution context objects if available,
+    /// then falling back to the underlying package store.
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>, PackageResolverError> {
+        let object_id = ObjectID::from(id);
+
+        // First check execution context objects if we have any
+        if !self.execution_objects.is_empty() {
+            let latest_package = self
+                .execution_objects
+                .range((object_id, SequenceNumber::MIN)..=(object_id, SequenceNumber::MAX))
+                .last()
+                .and_then(|(_, object)| {
+                    // Check if this object is actually a package
+                    object.data.try_as_package()
+                });
+
+            if let Some(package) = latest_package {
+                return Package::read_from_package(package).map(Arc::new);
+            }
+        }
+
+        // Package not found in execution context, fall back to the underlying store
+        self.package_store.fetch(id).await
     }
 }

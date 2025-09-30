@@ -7,7 +7,7 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, BatchGetBalancesRequest, GetBalanceRequest,
     ListBalancesRequest,
 };
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
+use sui_indexer_alt_e2e_tests::{find, FullCluster};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
@@ -310,7 +310,7 @@ async fn test_transfers() {
 
     // Fund A with gas
     let mut gas_budget = DEFAULT_GAS_BUDGET;
-    let mut a_gas = find_address_owned(
+    let mut a_gas = find::address_owned(
         &cluster
             .request_gas(a, gas_budget)
             .expect("Failed to request gas"),
@@ -703,7 +703,7 @@ fn create_coin(cluster: &mut FullCluster, owner: SuiAddress, amount: u64) -> Obj
         .expect("Failed to execute transaction");
 
     assert!(fx.status().is_ok(), "create coin transaction failed");
-    sui_indexer_alt_e2e_tests::find_address_owned(&fx).expect("Failed to find created coin")
+    find::address_owned(&fx).expect("Failed to find created coin")
 }
 
 /// Helper to perform forward pagination over balances.

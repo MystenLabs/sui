@@ -132,6 +132,7 @@
       { "source": "/references/framework/bridge/:path*", "destination": "/references/framework/sui_bridge/:path*"},
       { "source": "/references/framework/std/:path*", "destination": "/references/framework/sui_std/:path*"},
       { "source": "/references/framework/sui/:path*", "destination": "/references/framework/sui_sui/:path*"},
-      { "source": "/references/framework/sui_system/:path*", "destination": "/references/framework/sui_sui_system/:path*"}
+      { "source": "/references/framework/sui_system/:path*", "destination": "/references/framework/sui_sui_system/:path*"},
+      { "source": "/standards/deepbookv3", "destination": "/standards/deepbook"}
     ]
   }

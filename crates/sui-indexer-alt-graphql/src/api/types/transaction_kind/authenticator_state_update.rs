@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    Context, Object,
-};
+use async_graphql::{connection::Connection, Context, Object};
 use sui_types::{
     authenticator_state::ActiveJwk as NativeActiveJwk,
     transaction::AuthenticatorStateUpdate as NativeAuthenticatorStateUpdate,
@@ -91,25 +88,19 @@ impl AuthenticatorStateUpdateTransaction {
         after: Option<CActiveJwk>,
         last: Option<u64>,
         before: Option<CActiveJwk>,
-    ) -> Result<Connection<String, ActiveJwk>, RpcError> {
+    ) -> Result<Option<Connection<String, ActiveJwk>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("AuthenticatorStateUpdateTransaction", "newActiveJwks");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let cursors = page.paginate_indices(self.native.new_active_jwks.len());
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-
-        for edge in cursors.edges {
+        page.paginate_indices(self.native.new_active_jwks.len(), |i| {
             let active_jwk = ActiveJwk {
-                native: self.native.new_active_jwks[*edge.cursor].clone(),
+                native: self.native.new_active_jwks[i].clone(),
                 scope: self.scope.clone(),
             };
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), active_jwk));
-        }
-
-        Ok(conn)
+            Ok(active_jwk)
+        })
+        .map(Some)
     }
 
     /// The initial version of the authenticator object that it was shared at.

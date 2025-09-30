@@ -22,8 +22,9 @@ pub struct ValidatorClientMetrics {
     /// Failure count per validator and operation type
     pub operation_failure: IntCounterVec,
 
-    /// Current performance score per validator
-    pub performance_score: GaugeVec,
+    /// Current performance per validator. The performance is the average latency of the validator
+    /// weighted by the reliability of the validator.
+    pub performance: GaugeVec,
 
     /// Consecutive failures per validator
     pub consecutive_failures: IntGaugeVec,
@@ -57,9 +58,10 @@ impl ValidatorClientMetrics {
             )
             .unwrap(),
 
-            performance_score: register_gauge_vec_with_registry!(
-                "validator_client_observed_score",
-                "Current client-observed score per validator",
+            performance: register_gauge_vec_with_registry!(
+                "validator_client_observed_performance",
+                "Current client-observed performance per validator. The performance is the average latency of the validator
+                weighted by the reliability of the validator.",
                 &["validator", "tx_type"],
                 registry,
             )
