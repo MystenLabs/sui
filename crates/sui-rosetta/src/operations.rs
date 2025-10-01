@@ -1121,8 +1121,8 @@ mod tests {
         let metadata = ConstructionMetadata {
             sender,
             gas_coins: vec![gas],
-            extra_gas_coins: vec![],
             objects: vec![],
+            party_objects: vec![],
             total_coin_value: 0,
             gas_price,
             budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
@@ -1179,8 +1179,8 @@ mod tests {
         let metadata = ConstructionMetadata {
             sender,
             gas_coins: vec![gas],
-            extra_gas_coins: vec![],
             objects: vec![coin],
+            party_objects: vec![],
             total_coin_value: 0,
             gas_price,
             budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,

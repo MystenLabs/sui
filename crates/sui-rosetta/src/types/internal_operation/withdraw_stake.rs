@@ -118,8 +118,8 @@ impl TryConstructTransaction for WithdrawStake {
 
         Ok(TransactionObjectData {
             gas_coins,
-            extra_gas_coins: vec![],
             objects: stake_refs,
+            party_objects: vec![],
             total_sui_balance,
             budget,
         })

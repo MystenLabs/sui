@@ -622,8 +622,8 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let metadata = ConstructionMetadata {
         sender,
         gas_coins: vec![gas],
-        extra_gas_coins: vec![],
         objects: vec![],
+        party_objects: vec![],
         total_coin_value,
         gas_price: rgp,
         budget: rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,

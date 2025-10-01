@@ -638,9 +638,12 @@ pub struct ConstructionMetadata {
     pub sender: SuiAddress,
     /// `Coin<SUI>` objects to be used as gas
     pub gas_coins: Vec<ObjectRef>,
-    /// `Coin<SUI>` objects to be merged to GasCoin
-    pub extra_gas_coins: Vec<ObjectRef>,
+    /// For PaySui/Stake: extra gas coins to merge into gas
+    /// For PayCoin: payment coins of the specified type
+    /// For WithdrawStake: stake objects to withdraw
     pub objects: Vec<ObjectRef>,
+    /// Party-owned (ConsensusAddress) version of objects
+    pub party_objects: Vec<(ObjectID, SequenceNumber)>,
     /// Always refers to SUI balance used
     #[serde(with = "str_format")]
     pub total_coin_value: i128,
@@ -988,8 +991,8 @@ mod tests {
         let prod_metadata = ConstructionMetadata {
             sender: Default::default(),
             gas_coins: vec![],
-            extra_gas_coins: vec![],
             objects: vec![],
+            party_objects: vec![],
             total_coin_value: 65_000_004_233_578_496,
             gas_price: 0,
             budget: 0,

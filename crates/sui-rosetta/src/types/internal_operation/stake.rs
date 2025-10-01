@@ -3,10 +3,12 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use sui_rpc::client::v2::Client;
+use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
 use sui_sdk_types::{Address, StructTag};
 
-use sui_types::base_types::ObjectRef;
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::governance::ADD_STAKE_FUN_NAME;
 use sui_types::rpc_proto_conversions::ObjectReferenceExt;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -67,28 +69,51 @@ impl TryConstructTransaction for Stake {
 
         let total_sui_balance = all_coins.iter().map(|c| c.balance()).sum::<u64>() as i128;
 
-        let mut iter = all_coins
+        // Separate party objects (ConsensusAddressOwner) from regular objects.
+        // Party objects cannot be used as gas but can be merged into the gas coin using SharedObject.
+        let (party_objects, non_party_objects): (Vec<_>, Vec<_>) = all_coins
+            .iter()
+            .partition(|obj| obj.owner().kind() == OwnerKind::ConsensusAddress);
+
+        let mut iter = non_party_objects
             .iter()
             .map(|obj| obj.object_reference().try_to_object_ref());
         let gas_coins = iter
             .by_ref()
             .take(MAX_GAS_COINS)
             .collect::<Result<Vec<_>, _>>()?;
+
         let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>()?;
+
+        let extra_party_coins: Vec<(ObjectID, SequenceNumber)> = party_objects
+            .iter()
+            .map(|obj| -> Result<_, Error> {
+                let id = ObjectID::from_str(obj.object_id())
+                    .map_err(|e| Error::DataError(format!("Invalid party object ID: {}", e)))?;
+                let start_version = SequenceNumber::from_u64(obj.owner().version());
+                Ok((id, start_version))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Always simulate to validate the transaction
         // For stake_all (amount is None), simulate with minimal amount
         // For specific amount, simulate with actual amount
         let simulation_amount = amount.unwrap_or(1_000_000_000); // 1 SUI minimum staking threshold
 
-        let pt = stake_pt(validator, simulation_amount, false, &extra_gas_coins)?;
+        let pt = stake_pt(
+            validator,
+            simulation_amount,
+            false,
+            &extra_gas_coins,
+            &extra_party_coins,
+        )?;
         let (budget, _) =
             simulate_transaction(client, pt, sender, gas_coins.clone(), gas_price, budget).await?;
 
         Ok(TransactionObjectData {
             gas_coins,
-            extra_gas_coins,
-            objects: vec![],
+            objects: extra_gas_coins,
+            party_objects: extra_party_coins,
             total_sui_balance,
             budget,
         })
@@ -100,6 +125,7 @@ pub fn stake_pt(
     amount: u64,
     stake_all: bool,
     coins_to_merge: &[ObjectRef],
+    party_coins: &[(ObjectID, SequenceNumber)],
 ) -> anyhow::Result<ProgrammableTransaction> {
     let mut builder = ProgrammableTransactionBuilder::new();
 
@@ -119,14 +145,31 @@ pub fn stake_pt(
     };
 
     if !coins_to_merge.is_empty() {
-        // We need to merge the rest of the coins.
-        // Each merge has a limit of 511 arguments.
         coins_to_merge
             .chunks(MAX_COMMAND_ARGS)
             .try_for_each(|chunk| -> anyhow::Result<()> {
                 let to_merge = chunk
                     .iter()
                     .map(|&o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
+                    .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
+                builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
+                Ok(())
+            })?;
+    };
+
+    if !party_coins.is_empty() {
+        party_coins
+            .chunks(MAX_COMMAND_ARGS)
+            .try_for_each(|chunk| -> anyhow::Result<()> {
+                let to_merge = chunk
+                    .iter()
+                    .map(|&(id, initial_shared_version)| {
+                        builder.obj(ObjectArg::SharedObject {
+                            id,
+                            initial_shared_version,
+                            mutable: true,
+                        })
+                    })
                     .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
                 builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
                 Ok(())

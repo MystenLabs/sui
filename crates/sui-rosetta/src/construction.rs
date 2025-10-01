@@ -285,8 +285,8 @@ pub async fn metadata(
 
     let TransactionObjectData {
         gas_coins,
-        extra_gas_coins,
         objects,
+        party_objects,
         total_sui_balance,
         budget,
     } = option
@@ -297,8 +297,8 @@ pub async fn metadata(
         metadata: ConstructionMetadata {
             sender,
             gas_coins,
-            extra_gas_coins,
             objects,
+            party_objects,
             total_coin_value: total_sui_balance,
             gas_price,
             budget,

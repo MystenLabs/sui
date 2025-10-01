@@ -17,7 +17,7 @@ use sui_rpc::proto::sui::rpc::v2::{
     ProgrammableTransaction as ProtoProgrammableTransaction, SimulateTransactionRequest,
     Transaction, TransactionKind as ProtoTransactionKind,
 };
-use sui_types::base_types::{ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::transaction::{ProgrammableTransaction, TransactionData};
 
 use crate::errors::Error;
@@ -41,8 +41,12 @@ const MAX_COMMAND_ARGS: usize = 511;
 
 pub struct TransactionObjectData {
     pub gas_coins: Vec<ObjectRef>,
-    pub extra_gas_coins: Vec<ObjectRef>,
+    /// For PaySui/Stake: extra gas coins to merge into gas
+    /// For PayCoin: payment coins of the specified type
+    /// For WithdrawStake: stake objects to withdraw
     pub objects: Vec<ObjectRef>,
+    /// Party-owned (ConsensusAddress) version of objects
+    pub party_objects: Vec<(ObjectID, SequenceNumber)>,
     /// Refers to the sum of the `Coin<SUI>` balance of the coins participating in the transaction;
     /// either as gas or as objects.
     pub total_sui_balance: i128,
@@ -86,7 +90,12 @@ impl InternalOperation {
                 recipients,
                 amounts,
                 ..
-            }) => pay_sui_pt(recipients, amounts, &metadata.extra_gas_coins)?,
+            }) => pay_sui_pt(
+                recipients,
+                amounts,
+                &metadata.objects,
+                &metadata.party_objects,
+            )?,
             Self::PayCoin(PayCoin {
                 recipients,
                 amounts,
@@ -95,7 +104,13 @@ impl InternalOperation {
                 let currency = &metadata
                     .currency
                     .ok_or(anyhow!("metadata.coin_type is needed to PayCoin"))?;
-                pay_coin_pt(recipients, amounts, &metadata.objects, currency)?
+                pay_coin_pt(
+                    recipients,
+                    amounts,
+                    &metadata.objects,
+                    &metadata.party_objects,
+                    currency,
+                )?
             }
             InternalOperation::Stake(Stake {
                 validator, amount, ..
@@ -112,7 +127,13 @@ impl InternalOperation {
                         (true, metadata.total_coin_value as u64 - metadata.budget)
                     }
                 };
-                stake_pt(validator, amount, stake_all, &metadata.extra_gas_coins)?
+                stake_pt(
+                    validator,
+                    amount,
+                    stake_all,
+                    &metadata.objects,
+                    &metadata.party_objects,
+                )?
             }
             InternalOperation::WithdrawStake(WithdrawStake { stake_ids, .. }) => {
                 let withdraw_all = stake_ids.is_empty();

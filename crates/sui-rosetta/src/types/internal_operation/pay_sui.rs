@@ -3,10 +3,12 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 use sui_rpc::client::v2::Client;
+use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
 use sui_sdk_types::{Address, StructTag};
-use sui_types::base_types::{ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::rpc_proto_conversions::ObjectReferenceExt;
 use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransaction};
@@ -62,17 +64,34 @@ impl TryConstructTransaction for PaySui {
 
         let total_sui_balance = all_coins.iter().map(|c| c.balance()).sum::<u64>() as i128;
 
-        let mut iter = all_coins
+        // Separate party objects (ConsensusAddressOwner) from regular objects.
+        // Party objects cannot be used as gas but can be merged into the gas coin.
+        let (party_objects, non_party_objects): (Vec<_>, Vec<_>) = all_coins
+            .iter()
+            .partition(|obj| obj.owner().kind() == OwnerKind::ConsensusAddress);
+
+        let mut iter = non_party_objects
             .iter()
             .map(|obj| obj.object_reference().try_to_object_ref());
         let gas_coins = iter
             .by_ref()
             .take(MAX_GAS_COINS)
             .collect::<Result<Vec<_>, _>>()?;
-        let extra_gas_coins = iter.collect::<Result<Vec<_>, _>>()?;
+
+        let extra_coins = iter.collect::<Result<Vec<_>, _>>()?;
+
+        let extra_party_coins: Vec<(ObjectID, SequenceNumber)> = party_objects
+            .iter()
+            .map(|obj| -> Result<_, Error> {
+                let id = ObjectID::from_str(obj.object_id())
+                    .map_err(|e| Error::DataError(format!("Invalid party object ID: {}", e)))?;
+                let start_version = SequenceNumber::from_u64(obj.owner().version());
+                Ok((id, start_version))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Simulate to get budget if necessary and validate we can cover payment + gas amount.
-        let pt = pay_sui_pt(recipients, amounts, &extra_gas_coins)?;
+        let pt = pay_sui_pt(recipients, amounts, &extra_coins, &extra_party_coins)?;
         let (budget, gas_coin_objs) =
             simulate_transaction(client, pt, sender, gas_coins, gas_price, budget).await?;
 
@@ -83,8 +102,8 @@ impl TryConstructTransaction for PaySui {
 
         Ok(TransactionObjectData {
             gas_coins,
-            extra_gas_coins,
-            objects: vec![],
+            objects: extra_coins,
+            party_objects: extra_party_coins,
             total_sui_balance,
             budget,
         })
@@ -100,11 +119,10 @@ pub fn pay_sui_pt(
     recipients: Vec<SuiAddress>,
     amounts: Vec<u64>,
     coins_to_merge: &[ObjectRef],
+    party_coins: &[(ObjectID, SequenceNumber)],
 ) -> anyhow::Result<ProgrammableTransaction> {
     let mut builder = ProgrammableTransactionBuilder::new();
     if !coins_to_merge.is_empty() {
-        // We need to merge the rest of the coins.
-        // Each merge has a limit of 511 arguments.
         coins_to_merge
             .chunks(MAX_COMMAND_ARGS)
             .try_for_each(|chunk| -> anyhow::Result<()> {
@@ -116,6 +134,26 @@ pub fn pay_sui_pt(
                 Ok(())
             })?;
     };
+
+    if !party_coins.is_empty() {
+        party_coins
+            .chunks(MAX_COMMAND_ARGS)
+            .try_for_each(|chunk| -> anyhow::Result<()> {
+                let to_merge = chunk
+                    .iter()
+                    .map(|&(id, initial_shared_version)| {
+                        builder.obj(ObjectArg::SharedObject {
+                            id,
+                            initial_shared_version,
+                            mutable: true,
+                        })
+                    })
+                    .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
+                builder.command(Command::MergeCoins(Argument::GasCoin, to_merge));
+                Ok(())
+            })?;
+    };
+
     builder.pay_sui(recipients, amounts)?;
     Ok(builder.finish())
 }
