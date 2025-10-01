@@ -3,7 +3,6 @@
 
 #[allow(unused_use)]
 module bridge::committee;
-
 use bridge::crypto;
 use bridge::message::{Self, Blocklist, BridgeMessage};
 use sui::ecdsa_k1;
@@ -100,7 +99,11 @@ public fun verify_signatures(
 
     let mut threshold = 0;
     while (i < signature_counts) {
-        let pubkey = ecdsa_k1::secp256k1_ecrecover(&signatures[i], &message_bytes, 0);
+        let pubkey = ecdsa_k1::secp256k1_ecrecover(
+            &signatures[i],
+            &message_bytes,
+            0,
+        );
 
         // check duplicate
         // and make sure pub key is part of the committee
@@ -142,7 +145,10 @@ public(package) fun register(
     // We disallow registration after committee initiated in v1
     assert!(self.members.is_empty(), ECommitteeAlreadyInitiated);
     // Ensure pubkey is valid
-    assert!(bridge_pubkey_bytes.length() == ECDSA_COMPRESSED_PUBKEY_LENGTH, EInvalidPubkeyLength);
+    assert!(
+        bridge_pubkey_bytes.length() == ECDSA_COMPRESSED_PUBKEY_LENGTH,
+        EInvalidPubkeyLength,
+    );
     // sender must be the same sender that created the validator object, this is to prevent DDoS from non-validator actor.
     let sender = ctx.sender();
     let validators = system_state.active_validator_addresses();
@@ -194,10 +200,13 @@ public(package) fun try_create_next_committee(
         // Find validator stake amount from system state
 
         // Process registration if it's active validator
-        let voting_power = active_validator_voting_power.try_get(&registration.sui_address);
+        let voting_power = active_validator_voting_power.try_get(
+            &registration.sui_address,
+        );
         if (voting_power.is_some()) {
             let voting_power = voting_power.destroy_some();
-            stake_participation_percentage = stake_participation_percentage + voting_power;
+            stake_participation_percentage =
+                stake_participation_percentage + voting_power;
 
             let member = CommitteeMember {
                 sui_address: registration.sui_address,
@@ -230,7 +239,10 @@ public(package) fun try_create_next_committee(
 
 // This function applys the blocklist to the committee members, we won't need to run this very often so this is not gas optimised.
 // TODO: add tests for this function
-public(package) fun execute_blocklist(self: &mut BridgeCommittee, blocklist: Blocklist) {
+public(package) fun execute_blocklist(
+    self: &mut BridgeCommittee,
+    blocklist: Blocklist,
+) {
     let blocklisted = blocklist.blocklist_type() != 1;
     let eth_addresses = blocklist.blocklist_validator_addresses();
     let list_len = eth_addresses.length();
@@ -243,7 +255,9 @@ public(package) fun execute_blocklist(self: &mut BridgeCommittee, blocklist: Blo
         let mut found = false;
 
         while (member_idx < self.members.size()) {
-            let (pub_key, member) = self.members.get_entry_by_idx_mut(member_idx);
+            let (pub_key, member) = self
+                .members
+                .get_entry_by_idx_mut(member_idx);
             let eth_address = crypto::ecdsa_pub_key_to_eth_address(pub_key);
 
             if (*target_address == eth_address) {
@@ -298,16 +312,22 @@ public(package) fun update_node_url(
 // Dupicate keys would cause `try_create_next_committee` to fail and,
 // in consequence, an end of epoch transaction to fail (safe mode run).
 // This check will ensure the creation of the committee is correct.
-fun check_uniqueness_bridge_keys(self: &BridgeCommittee, bridge_pubkey_bytes: vector<u8>) {
+fun check_uniqueness_bridge_keys(
+    self: &BridgeCommittee,
+    bridge_pubkey_bytes: vector<u8>,
+) {
     let mut count = self.member_registrations.size();
     // bridge_pubkey_bytes must be found once and once only
     let mut bridge_key_found = false;
     while (count > 0) {
         count = count - 1;
-        let (_, registration) = self.member_registrations.get_entry_by_idx(count);
+        let (_, registration) = self
+            .member_registrations
+            .get_entry_by_idx(count);
         if (registration.bridge_pubkey_bytes == bridge_pubkey_bytes) {
             assert!(!bridge_key_found, EDuplicatePubkey);
-            bridge_key_found = true; // bridge_pubkey_bytes found, we must not have another one
+            bridge_key_found =
+                true; // bridge_pubkey_bytes found, we must not have another one
         }
     };
 }
@@ -317,7 +337,9 @@ fun check_uniqueness_bridge_keys(self: &BridgeCommittee, bridge_pubkey_bytes: ve
 //
 
 #[test_only]
-public(package) fun members(self: &BridgeCommittee): &VecMap<vector<u8>, CommitteeMember> {
+public(package) fun members(
+    self: &BridgeCommittee,
+): &VecMap<vector<u8>, CommitteeMember> {
     &self.members
 }
 
@@ -344,7 +366,9 @@ public(package) fun blocklisted(member: &CommitteeMember): bool {
 }
 
 #[test_only]
-public(package) fun bridge_pubkey_bytes(registration: &CommitteeMemberRegistration): &vector<u8> {
+public(package) fun bridge_pubkey_bytes(
+    registration: &CommitteeMemberRegistration,
+): &vector<u8> {
     &registration.bridge_pubkey_bytes
 }
 

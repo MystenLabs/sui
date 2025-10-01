@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::limiter;
-
 use bridge::chain_ids::{Self, BridgeRoute};
 use bridge::treasury::BridgeTreasury;
 use sui::clock::{Self, Clock};
@@ -91,7 +90,9 @@ public(package) fun check_and_record_sending_transfer<T>(
     let route_limit = self.transfer_limits.try_get(&route);
     assert!(route_limit.is_some(), ELimitNotFoundForRoute);
     let route_limit = route_limit.destroy_some();
-    let route_limit_adjusted = (route_limit as u128) * (treasury.decimal_multiplier<T>() as u128);
+    let route_limit_adjusted = (route_limit as u128) * (
+        treasury.decimal_multiplier<T>() as u128,
+    );
 
     // Compute notional amount
     // Upcast to u128 to prevent overflow, to not miss out on small amounts.
@@ -101,16 +102,19 @@ public(package) fun check_and_record_sending_transfer<T>(
     // Check if transfer amount exceed limit
     // Upscale them to the token's decimal.
     if (
-        (record.total_amount as u128)
-            * (treasury.decimal_multiplier<T>() as u128)
-            + notional_amount_with_token_multiplier > route_limit_adjusted
+        (record.total_amount as u128) * (
+            treasury.decimal_multiplier<T>() as u128,
+        ) +
+        notional_amount_with_token_multiplier >
+        route_limit_adjusted
     ) {
         return false
     };
 
     // Now scale down to notional value
-    let notional_amount =
-        notional_amount_with_token_multiplier / (treasury.decimal_multiplier<T>() as u128);
+    let notional_amount = notional_amount_with_token_multiplier / (
+        treasury.decimal_multiplier<T>() as u128,
+    );
     // Should be safe to downcast to u64 after dividing by the decimals
     let notional_amount = (notional_amount as u64);
 
@@ -146,7 +150,10 @@ fun current_hour_since_epoch(clock: &Clock): u64 {
     clock::timestamp_ms(clock) / 3600000
 }
 
-fun adjust_transfer_records(self: &mut TransferRecord, current_hour_since_epoch: u64) {
+fun adjust_transfer_records(
+    self: &mut TransferRecord,
+    current_hour_since_epoch: u64,
+) {
     if (self.hour_head == current_hour_since_epoch) {
         return // nothing to backfill
     };
@@ -166,7 +173,8 @@ fun adjust_transfer_records(self: &mut TransferRecord, current_hour_since_epoch:
         // self.hour_head is within 24 hour range.
         // some items in `per_hour_amounts` are still valid, we remove stale hours.
         while (self.hour_tail < target_tail) {
-            self.total_amount = self.total_amount - self.per_hour_amounts.remove(0);
+            self.total_amount =
+                self.total_amount - self.per_hour_amounts.remove(0);
             self.hour_tail = self.hour_tail + 1;
         }
     };
@@ -186,13 +194,19 @@ fun initial_transfer_limits(): VecMap<BridgeRoute, u64> {
     let mut transfer_limits = vec_map::empty();
     // 5M limit on Sui -> Ethereum mainnet
     transfer_limits.insert(
-        chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet()),
+        chain_ids::get_route(
+            chain_ids::eth_mainnet(),
+            chain_ids::sui_mainnet(),
+        ),
         5_000_000 * USD_VALUE_MULTIPLIER,
     );
 
     // MAX limit for testnet and devnet
     transfer_limits.insert(
-        chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()),
+        chain_ids::get_route(
+            chain_ids::eth_sepolia(),
+            chain_ids::sui_testnet(),
+        ),
         MAX_TRANSFER_LIMIT,
     );
 
@@ -219,7 +233,9 @@ fun initial_transfer_limits(): VecMap<BridgeRoute, u64> {
 //
 
 #[test_only]
-public(package) fun transfer_limits(limiter: &TransferLimiter): &VecMap<BridgeRoute, u64> {
+public(package) fun transfer_limits(
+    limiter: &TransferLimiter,
+): &VecMap<BridgeRoute, u64> {
     &limiter.transfer_limits
 }
 
@@ -283,6 +299,8 @@ public(package) fun hour_tail(record: &TransferRecord): u64 {
 }
 
 #[test_only]
-public(package) fun unpack_route_limit_event(event: UpdateRouteLimitEvent): (u8, u8, u64) {
+public(package) fun unpack_route_limit_event(
+    event: UpdateRouteLimitEvent,
+): (u8, u8, u64) {
     (event.sending_chain, event.receiving_chain, event.new_limit)
 }

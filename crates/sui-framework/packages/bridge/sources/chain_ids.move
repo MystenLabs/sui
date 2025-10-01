@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::chain_ids;
-
 // Chain IDs
 const SUI_MAINNET: u8 = 0;
 const SUI_TESTNET: u8 = 1;
@@ -139,7 +138,9 @@ fun test_routes() {
     while (size > 0) {
         size = size - 1;
         let route = valid_routes[size];
-        assert!(is_valid_route(route.source, route.destination)); // sould not assert
+        assert!(
+            is_valid_route(route.source, route.destination),
+        ); // sould not assert
     }
 }
 

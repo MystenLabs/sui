@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::message;
-
 use bridge::chain_ids;
 use bridge::message_types;
 use std::ascii::{Self, String};
@@ -97,7 +96,9 @@ public struct ParsedTokenTransferMessage has drop {
 // `sender_address` and `target_address` are no longer than 255 bytes.
 // Therefore their length can be represented by a single byte.
 // See `create_token_bridge_message` for the actual encoding rule.
-public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferPayload {
+public fun extract_token_bridge_payload(
+    message: &BridgeMessage,
+): TokenTransferPayload {
     let mut bcs = bcs::new(message.payload);
     let sender_address = bcs.peel_vec_u8();
     let target_chain = bcs.peel_u8();
@@ -151,7 +152,9 @@ public fun extract_blocklist_payload(message: &BridgeMessage): Blocklist {
     }
 }
 
-public fun extract_update_bridge_limit(message: &BridgeMessage): UpdateBridgeLimit {
+public fun extract_update_bridge_limit(
+    message: &BridgeMessage,
+): UpdateBridgeLimit {
     let mut bcs = bcs::new(message.payload);
     let sending_chain = bcs.peel_u8();
     let limit = peel_u64_be(&mut bcs);
@@ -166,7 +169,9 @@ public fun extract_update_bridge_limit(message: &BridgeMessage): UpdateBridgeLim
     }
 }
 
-public fun extract_update_asset_price(message: &BridgeMessage): UpdateAssetPrice {
+public fun extract_update_asset_price(
+    message: &BridgeMessage,
+): UpdateAssetPrice {
     let mut bcs = bcs::new(message.payload);
     let token_id = bcs.peel_u8();
     let new_price = peel_u64_be(&mut bcs);
@@ -189,7 +194,9 @@ public fun extract_add_tokens_on_sui(message: &BridgeMessage): AddTokenOnSui {
     let mut n = 0;
     let mut token_type_names = vector[];
     while (n < token_type_names_bytes.length()) {
-        token_type_names.push_back(ascii::string(*token_type_names_bytes.borrow(n)));
+        token_type_names.push_back(
+            ascii::string(*token_type_names_bytes.borrow(n)),
+        );
         n = n + 1;
     };
     assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
@@ -273,7 +280,11 @@ public fun create_token_bridge_message(
 /// [nonce:u64]
 /// [chain_id: u8]
 /// [op_type: u8]
-public fun create_emergency_op_message(source_chain: u8, seq_num: u64, op_type: u8): BridgeMessage {
+public fun create_emergency_op_message(
+    source_chain: u8,
+    seq_num: u64,
+    op_type: u8,
+): BridgeMessage {
     chain_ids::assert_valid_chain_id(source_chain);
 
     BridgeMessage {
@@ -308,7 +319,10 @@ public fun create_blocklist_message(
 
     while (i < address_length) {
         let address = validator_ecdsa_addresses[i];
-        assert!(address.length() == ECDSA_ADDRESS_LENGTH, EInvalidAddressLength);
+        assert!(
+            address.length() == ECDSA_ADDRESS_LENGTH,
+            EInvalidAddressLength,
+        );
         payload.append(address);
 
         i = i + 1;
@@ -408,7 +422,11 @@ public fun create_add_tokens_on_sui_message(
     }
 }
 
-public fun create_key(source_chain: u8, message_type: u8, bridge_seq_num: u64): BridgeMessageKey {
+public fun create_key(
+    source_chain: u8,
+    message_type: u8,
+    bridge_seq_num: u64,
+): BridgeMessageKey {
     BridgeMessageKey { source_chain, message_type, bridge_seq_num }
 }
 
@@ -462,15 +480,21 @@ public fun blocklist_type(self: &Blocklist): u8 {
     self.blocklist_type
 }
 
-public fun blocklist_validator_addresses(self: &Blocklist): &vector<vector<u8>> {
+public fun blocklist_validator_addresses(
+    self: &Blocklist,
+): &vector<vector<u8>> {
     &self.validator_eth_addresses
 }
 
-public fun update_bridge_limit_payload_sending_chain(self: &UpdateBridgeLimit): u8 {
+public fun update_bridge_limit_payload_sending_chain(
+    self: &UpdateBridgeLimit,
+): u8 {
     self.sending_chain
 }
 
-public fun update_bridge_limit_payload_receiving_chain(self: &UpdateBridgeLimit): u8 {
+public fun update_bridge_limit_payload_receiving_chain(
+    self: &UpdateBridgeLimit,
+): u8 {
     self.receiving_chain
 }
 
@@ -539,8 +563,13 @@ public fun required_voting_power(self: &BridgeMessage): u64 {
 }
 
 // Convert BridgeMessage to ParsedTokenTransferMessage
-public fun to_parsed_token_transfer_message(message: &BridgeMessage): ParsedTokenTransferMessage {
-    assert!(message.message_type() == message_types::token(), EMustBeTokenMessage);
+public fun to_parsed_token_transfer_message(
+    message: &BridgeMessage,
+): ParsedTokenTransferMessage {
+    assert!(
+        message.message_type() == message_types::token(),
+        EMustBeTokenMessage,
+    );
     let payload = message.extract_token_bridge_payload();
     ParsedTokenTransferMessage {
         message_version: message.message_version(),
@@ -614,7 +643,9 @@ public(package) fun make_payload(
 }
 
 #[test_only]
-public(package) fun deserialize_message_test_only(message: vector<u8>): BridgeMessage {
+public(package) fun deserialize_message_test_only(
+    message: vector<u8>,
+): BridgeMessage {
     let mut bcs = bcs::new(message);
     let message_type = bcs::peel_u8(&mut bcs);
     let message_version = bcs::peel_u8(&mut bcs);
@@ -636,7 +667,10 @@ public(package) fun reverse_bytes_test(bytes: vector<u8>): vector<u8> {
 }
 
 #[test_only]
-public(package) fun set_payload(message: &mut BridgeMessage, bytes: vector<u8>) {
+public(package) fun set_payload(
+    message: &mut BridgeMessage,
+    bytes: vector<u8>,
+) {
     message.payload = bytes;
 }
 

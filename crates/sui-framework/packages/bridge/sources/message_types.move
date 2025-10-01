@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::message_types;
-
 // message types
 const TOKEN: u8 = 0;
 const COMMITTEE_BLOCKLIST: u8 = 1;

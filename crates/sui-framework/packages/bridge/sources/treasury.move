@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::treasury;
-
 use std::ascii::{Self, String};
 use std::type_name::{Self, TypeName};
 use sui::address;
@@ -96,7 +95,9 @@ public(package) fun register_foreign_token<T>(
     // Make sure TreasuryCap has not been minted before.
     assert!(coin::total_supply(&tc) == 0, ETokenSupplyNonZero);
     let type_name = type_name::get<T>();
-    let address_bytes = hex::decode(ascii::into_bytes(type_name::get_address(&type_name)));
+    let address_bytes = hex::decode(
+        ascii::into_bytes(type_name::get_address(&type_name)),
+    );
     let coin_address = address::from_bytes(address_bytes);
     // Make sure upgrade cap is for the Coin package
     // FIXME: add test
@@ -132,7 +133,9 @@ public(package) fun add_new_token(
             type_name,
             uc,
             decimal,
-        } = self.waiting_room.remove<String, ForeignTokenRegistration>(token_name);
+        } = self
+            .waiting_room
+            .remove<String, ForeignTokenRegistration>(token_name);
         let decimal_multiplier = 10u64.pow(decimal);
         self
             .supported_tokens
@@ -174,7 +177,11 @@ public(package) fun burn<T>(self: &mut BridgeTreasury, token: Coin<T>) {
     coin::burn(treasury, token);
 }
 
-public(package) fun mint<T>(self: &mut BridgeTreasury, amount: u64, ctx: &mut TxContext): Coin<T> {
+public(package) fun mint<T>(
+    self: &mut BridgeTreasury,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<T> {
     let treasury = &mut self.treasuries[type_name::get<T>()];
     coin::mint(treasury, amount, ctx)
 }
@@ -298,7 +305,9 @@ public fun unwrap_update_event(event: UpdateTokenPriceEvent): (u8, u64) {
 }
 
 #[test_only]
-public fun unwrap_new_token_event(event: NewTokenEvent): (u8, TypeName, bool, u64, u64) {
+public fun unwrap_new_token_event(
+    event: NewTokenEvent,
+): (u8, TypeName, bool, u64, u64) {
     (
         event.token_id,
         event.type_name,
@@ -309,6 +318,8 @@ public fun unwrap_new_token_event(event: NewTokenEvent): (u8, TypeName, bool, u6
 }
 
 #[test_only]
-public fun unwrap_registration_event(event: TokenRegistrationEvent): (TypeName, u8, bool) {
+public fun unwrap_registration_event(
+    event: TokenRegistrationEvent,
+): (TypeName, u8, bool) {
     (event.type_name, event.decimal, event.native_token)
 }
