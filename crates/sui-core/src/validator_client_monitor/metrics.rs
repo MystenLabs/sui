@@ -3,8 +3,7 @@
 
 use prometheus::{
     register_gauge_vec_with_registry, register_histogram_vec_with_registry,
-    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, GaugeVec,
-    HistogramVec, IntCounterVec, IntGaugeVec, Registry,
+    register_int_counter_vec_with_registry, GaugeVec, HistogramVec, IntCounterVec, Registry,
 };
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -25,9 +24,6 @@ pub struct ValidatorClientMetrics {
     /// Current performance per validator. The performance is the average latency of the validator
     /// weighted by the reliability of the validator.
     pub performance: GaugeVec,
-
-    /// Consecutive failures per validator
-    pub consecutive_failures: IntGaugeVec,
 }
 
 impl ValidatorClientMetrics {
@@ -63,14 +59,6 @@ impl ValidatorClientMetrics {
                 "Current client-observed performance per validator. The performance is the average latency of the validator
                 weighted by the reliability of the validator.",
                 &["validator", "tx_type"],
-                registry,
-            )
-            .unwrap(),
-
-            consecutive_failures: register_int_gauge_vec_with_registry!(
-                "validator_client_consecutive_failures",
-                "Current consecutive failures observed by client per validator",
-                &["validator"],
                 registry,
             )
             .unwrap(),
