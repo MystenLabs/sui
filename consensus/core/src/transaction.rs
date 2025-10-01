@@ -403,10 +403,11 @@ impl TransactionClient {
             transactions: transactions.into_iter().map(Transaction::new).collect(),
             included_in_block_ack: included_in_block_ack_send,
         };
-        if let Err(e) = self.sender.send(t).await {
-            error!("Submit transactions failed with {:?}", e);
-            return Err(ClientError::ConsensusShuttingDown(e.to_string()));
-        }
+        self.sender
+            .send(t)
+            .await
+            .tap_err(|e| error!("Submit transactions failed with {}", e))
+            .map_err(|e| ClientError::ConsensusShuttingDown(e.to_string()))?;
         self.inflight.fetch_add(n, Ordering::AcqRel);
 
         Ok(included_in_block_ack_receive)
