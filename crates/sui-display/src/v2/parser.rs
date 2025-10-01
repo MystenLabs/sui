@@ -489,6 +489,7 @@ impl<'s> Parser<'s> {
                 let chain = self.parse_chain(meter)?;
                 match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
 
+                meter.load()?;
                 meter.alloc()?;
                 Accessor::DFIndex(chain)
             },
@@ -500,6 +501,9 @@ impl<'s> Parser<'s> {
                 let chain = self.parse_chain(meter)?;
                 match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
 
+                // Dynamic Object Fields require two successive loads.
+                meter.load()?;
+                meter.load()?;
                 meter.alloc()?;
                 Accessor::DOFIndex(chain)
             },
@@ -1152,23 +1156,29 @@ mod tests {
         output
     }
 
-    fn nodes(src: &str) -> (usize, Vec<Strand<'_>>) {
+    fn nodes_and_loads(src: &str) -> (usize, usize, Vec<Strand<'_>>) {
         let limits = Limits {
             max_depth: usize::MAX,
             max_nodes: usize::MAX,
+            max_loads: usize::MAX,
         };
 
         let mut budget = limits.budget();
         let mut meter = Meter::new(limits.max_depth, &mut budget);
 
         let strands = Parser::new(src).parse_format(&mut meter).unwrap();
-        (usize::MAX - budget.nodes, strands)
+        (
+            usize::MAX - budget.nodes,
+            usize::MAX - budget.loads,
+            strands,
+        )
     }
 
     fn parse_with_depth(depth: usize, src: &str) -> Result<Vec<Strand<'_>>, Error> {
         let limits = Limits {
             max_depth: depth,
             max_nodes: usize::MAX,
+            max_loads: usize::MAX,
         };
 
         let mut budget = limits.budget();
@@ -1179,22 +1189,25 @@ mod tests {
 
     #[test]
     fn test_metering_text() {
-        let (nodes, strands) = nodes("foo bar");
+        let (nodes, loads, strands) = nodes_and_loads("foo bar");
         assert_eq!(nodes, 1);
+        assert_eq!(loads, 0);
         assert_eq!(strands, vec![S::Text("foo bar".into())]);
     }
 
     #[test]
     fn test_metering_text_with_escapes() {
-        let (nodes, strands) = nodes("foo {{bar}}");
+        let (nodes, loads, strands) = nodes_and_loads("foo {{bar}}");
         assert_eq!(nodes, 1);
+        assert_eq!(loads, 0);
         assert_eq!(strands, vec![S::Text("foo {bar}".into())]);
     }
 
     #[test]
     fn test_metering_expression() {
-        let (nodes, strands) = nodes("{foo}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo}");
         assert_eq!(nodes, 3);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1209,8 +1222,9 @@ mod tests {
 
     #[test]
     fn test_metering_expression_with_transform() {
-        let (nodes, strands) = nodes("{foo:hex}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo:hex}");
         assert_eq!(nodes, 3);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1225,8 +1239,9 @@ mod tests {
 
     #[test]
     fn test_metering_field_access() {
-        let (nodes, strands) = nodes("{foo.bar}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo.bar}");
         assert_eq!(nodes, 4);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1241,8 +1256,9 @@ mod tests {
 
     #[test]
     fn test_metering_text_and_expr() {
-        let (nodes, strands) = nodes("foo {bar} baz");
+        let (nodes, loads, strands) = nodes_and_loads("foo {bar} baz");
         assert_eq!(nodes, 5);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![
@@ -1261,8 +1277,9 @@ mod tests {
 
     #[test]
     fn test_metering_alternates() {
-        let (nodes, strands) = nodes("{foo | bar | baz}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo | bar | baz}");
         assert_eq!(nodes, 7);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1287,8 +1304,9 @@ mod tests {
 
     #[test]
     fn test_metering_indexed_access() {
-        let (nodes, strands) = nodes("{foo[bar]->[baz]}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo[bar]->[baz]}");
         assert_eq!(nodes, 9);
+        assert_eq!(loads, 1);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1312,9 +1330,52 @@ mod tests {
     }
 
     #[test]
+    fn test_metering_nested_loads() {
+        let (nodes, loads, strands) = nodes_and_loads("{foo=>[bar->[baz]] | qux->[quy]}");
+        assert_eq!(nodes, 14);
+        assert_eq!(loads, 4);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![
+                    C {
+                        root: None,
+                        accessors: vec![
+                            A::Field(ident_str!("foo")),
+                            A::DOFIndex(C {
+                                root: None,
+                                accessors: vec![
+                                    A::Field(ident_str!("bar")),
+                                    A::DFIndex(C {
+                                        root: None,
+                                        accessors: vec![A::Field(ident_str!("baz"))],
+                                    }),
+                                ],
+                            }),
+                        ],
+                    },
+                    C {
+                        root: None,
+                        accessors: vec![
+                            A::Field(ident_str!("qux")),
+                            A::DFIndex(C {
+                                root: None,
+                                accessors: vec![A::Field(ident_str!("quy"))],
+                            }),
+                        ],
+                    },
+                ],
+                transform: None,
+            })]
+        );
+    }
+
+    #[test]
     fn test_metering_primitive_literals() {
-        let (nodes, strands) = nodes("{true | @0x1234 | 5678u64 | x'abcdef' | b'hello' | 'world'}");
+        let (nodes, loads, strands) =
+            nodes_and_loads("{true | @0x1234 | 5678u64 | x'abcdef' | b'hello' | 'world'}");
         assert_eq!(nodes, 13);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1353,7 +1414,7 @@ mod tests {
 
     #[test]
     fn test_metering_vectors() {
-        let (nodes, strands) = nodes(
+        let (nodes, loads, strands) = nodes_and_loads(
             r#"{ vector[1u8, 2u8, 3u8]
                | vector<u16>[4u16, 5u16]
                | vector<u32>
@@ -1363,6 +1424,7 @@ mod tests {
         );
 
         assert_eq!(nodes, 26);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1434,12 +1496,13 @@ mod tests {
 
     #[test]
     fn test_metering_datatypes() {
-        let (nodes, strands) = nodes(
+        let (nodes, loads, strands) = nodes_and_loads(
             r#"{ 0x1::string::String(42u64, 'foo', vector[1u256, 2u256, 3u256])
                | 0x2::coin::Coin<0x2::sui::SUI>::Foo#1 { balance: 100u64 } }"#,
         );
 
         assert_eq!(nodes, 22);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
