@@ -155,6 +155,10 @@ pub struct CompiledConstant<'a, K: SourceKind> {
     pub(crate) data: &'a ConstantData,
 }
 
+pub struct ModelBuilderConfig {
+    pub allow_missing_dependencies: bool,
+}
+
 //**************************************************************************************************
 // API
 //**************************************************************************************************
@@ -762,8 +766,10 @@ pub(crate) struct NamedConstantData {
 //**************************************************************************************************
 
 impl<K: SourceKind> Model<K> {
-    pub(crate) fn compute_dependencies(&mut self) {
+    /// Panics if a dependency is missing and `allow_missing_dependencies` is false.
+    pub(crate) fn compute_dependencies(&mut self, builder_config: &ModelBuilderConfig) {
         fn visit(
+            allow_missing_dependencies: bool,
             packages: &BTreeMap<AccountAddress, normalized::Package>,
             acc: &mut BTreeMap<ModuleId, BTreeMap<ModuleId, bool>>,
             id: ModuleId,
@@ -774,16 +780,48 @@ impl<K: SourceKind> Model<K> {
             }
 
             for immediate_dep in &module.immediate_dependencies {
-                let unit = &packages[&immediate_dep.address].modules[&immediate_dep.name];
-                visit(packages, acc, *immediate_dep, unit);
+                let Some(pkg) = packages.get(&immediate_dep.address) else {
+                    if allow_missing_dependencies {
+                        continue;
+                    } else {
+                        panic!(
+                            "Module {:?} depends on missing package {:?}",
+                            id, immediate_dep.address
+                        );
+                    }
+                };
+                let Some(unit) = pkg.modules.get(&immediate_dep.name) else {
+                    if allow_missing_dependencies {
+                        continue;
+                    } else {
+                        panic!(
+                            "Module {:?} depends on missing module {:?}",
+                            id, immediate_dep
+                        );
+                    }
+                };
+                visit(
+                    allow_missing_dependencies,
+                    packages,
+                    acc,
+                    *immediate_dep,
+                    unit,
+                );
             }
             let mut deps = BTreeMap::new();
             for immediate_dep in &module.immediate_dependencies {
                 deps.insert(*immediate_dep, true);
-                for transitive_dep in acc.get(immediate_dep).unwrap().keys() {
-                    if !deps.contains_key(transitive_dep) {
-                        deps.insert(*transitive_dep, false);
+                if let Some(imm_dep) = acc.get(immediate_dep) {
+                    for transitive_dep in imm_dep.keys() {
+                        if *transitive_dep != id {
+                            deps.insert(*transitive_dep, false);
+                        }
                     }
+                } else {
+                    assert!(
+                        allow_missing_dependencies,
+                        "Module {id:?} depends on missing module {immediate_dep:?}",
+                    );
                 }
             }
             acc.insert(id, deps);
@@ -798,7 +836,13 @@ impl<K: SourceKind> Model<K> {
         for (a, package) in &self.compiled.packages {
             for (m, module) in &package.modules {
                 let id = (a, m).module_id();
-                visit(&self.compiled.packages, &mut module_deps, id, module);
+                visit(
+                    builder_config.allow_missing_dependencies,
+                    &self.compiled.packages,
+                    &mut module_deps,
+                    id,
+                    module,
+                );
             }
         }
         let mut module_used_by = module_deps
@@ -808,7 +852,13 @@ impl<K: SourceKind> Model<K> {
         for (id, deps) in &module_deps {
             for (dep, immediate) in deps {
                 let immediate = *immediate;
-                let used_by = module_used_by.get_mut(dep).unwrap();
+                let Some(used_by) = module_used_by.get_mut(dep) else {
+                    if builder_config.allow_missing_dependencies {
+                        continue;
+                    } else {
+                        panic!("Module {:?} depends on missing module {:?}", id, dep);
+                    }
+                };
                 let is_immediate = used_by.entry(*id).or_insert(false);
                 *is_immediate = *is_immediate || immediate;
             }
@@ -1153,3 +1203,16 @@ derive_all!(Enum);
 derive_all!(Variant);
 derive_all!(Function);
 derive_all!(CompiledConstant);
+
+//**************************************************************************************************
+// Impls
+//**************************************************************************************************
+
+#[allow(clippy::derivable_impls)]
+impl Default for ModelBuilderConfig {
+    fn default() -> Self {
+        Self {
+            allow_missing_dependencies: false,
+        }
+    }
+}

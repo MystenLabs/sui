@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    model::{self, PackageData},
+    model::{self, ModelBuilderConfig, PackageData},
     normalized,
     source_kind::{Uninit, WithoutSource},
     summary,
@@ -25,6 +25,15 @@ pub type CompiledConstant<'a> = model::CompiledConstant<'a, WithoutSource>;
 
 impl Model {
     pub fn from_compiled(
+        named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
+        modules: Vec<CompiledModule>,
+    ) -> Self {
+        let config = ModelBuilderConfig::default();
+        Self::from_compiled_with_config(&config, named_address_reverse_map, modules)
+    }
+
+    pub fn from_compiled_with_config(
+        builder_config: &ModelBuilderConfig,
         named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
         modules: Vec<CompiledModule>,
     ) -> Self {
@@ -54,7 +63,7 @@ impl Model {
             summary: OnceCell::new(),
             _phantom: std::marker::PhantomData,
         };
-        model.compute_dependencies();
+        model.compute_dependencies(builder_config);
         model.compute_function_dependencies();
         model.check_invariants();
         model
