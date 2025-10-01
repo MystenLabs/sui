@@ -7,9 +7,10 @@ use sui_protocol_config::ProtocolConfig;
 use sui_rpc::proto::sui::rpc::v2::Event;
 use sui_rpc_api::grpc::alpha::event_service_proto::event_service_client::EventServiceClient;
 use sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsRequest;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::TransactionData;
-use test_cluster::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 fn create_rpc_config_with_authenticated_events() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
@@ -17,6 +18,89 @@ fn create_rpc_config_with_authenticated_events() -> sui_config::RpcConfig {
         enable_indexing: Some(true),
         ..Default::default()
     }
+}
+
+async fn publish_test_package(test_cluster: &TestCluster) -> ObjectID {
+    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests/data/auth_event");
+
+    let (sender, gas_object) = test_cluster
+        .wallet
+        .get_one_gas_object()
+        .await
+        .unwrap()
+        .unwrap();
+    let txn = test_cluster
+        .wallet
+        .sign_transaction(
+            &sui_test_transaction_builder::TestTransactionBuilder::new(sender, gas_object, 1000)
+                .with_gas_budget(50_000_000_000)
+                .publish(path)
+                .build(),
+        )
+        .await;
+    let resp = test_cluster
+        .wallet
+        .execute_transaction_must_succeed(txn)
+        .await;
+    resp.get_new_package_obj().unwrap().0
+}
+
+async fn emit_test_event(
+    test_cluster: &TestCluster,
+    package_id: ObjectID,
+    sender: SuiAddress,
+    value: u64,
+) {
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let val = ptb.pure(value).unwrap();
+    ptb.programmable_move_call(
+        package_id,
+        move_core_types::identifier::Identifier::new("events").unwrap(),
+        move_core_types::identifier::Identifier::new("emit").unwrap(),
+        vec![],
+        vec![val],
+    );
+    let gas_object = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(sender)
+        .await
+        .unwrap()
+        .unwrap();
+    let tx_data = TransactionData::new(
+        sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb.finish()),
+        sender,
+        gas_object,
+        50_000_000_000,
+        rgp,
+    );
+    test_cluster.sign_and_execute_transaction(&tx_data).await;
+}
+
+async fn query_authenticated_events(
+    rpc_url: &str,
+    stream_id: &str,
+    start_checkpoint: u64,
+    page_size: Option<u32>,
+) -> Result<
+    sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsResponse,
+    tonic::Status,
+> {
+    let mut client = EventServiceClient::connect(rpc_url.to_owned())
+        .await
+        .unwrap();
+
+    let mut req = ListAuthenticatedEventsRequest::default();
+    req.stream_id = Some(stream_id.to_string());
+    req.start_checkpoint = Some(start_checkpoint);
+    req.page_size = page_size;
+    req.page_token = None;
+
+    client
+        .list_authenticated_events(req)
+        .await
+        .map(|r| r.into_inner())
 }
 
 #[sim_test]
@@ -34,77 +118,18 @@ async fn list_authenticated_events_end_to_end() {
         .with_rpc_config(rpc_config)
         .build()
         .await;
-    let rgp = test_cluster.get_reference_gas_price().await;
 
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("tests/data/auth_event");
-
-    let (sender, gas_object) = test_cluster
-        .wallet
-        .get_one_gas_object()
-        .await
-        .unwrap()
-        .unwrap();
-    let gas_price = 1000;
-    let txn = test_cluster
-        .wallet
-        .sign_transaction(
-            &sui_test_transaction_builder::TestTransactionBuilder::new(
-                sender, gas_object, gas_price,
-            )
-            .with_gas_budget(50_000_000_000)
-            .publish(path)
-            .build(),
-        )
-        .await;
-    let resp = test_cluster
-        .wallet
-        .execute_transaction_must_succeed(txn)
-        .await;
-    let package_id = resp.get_new_package_obj().unwrap().0;
-
+    let package_id = publish_test_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
+
     for i in 0..10 {
-        let emit_value = 100 + i;
-        let mut ptb_i = ProgrammableTransactionBuilder::new();
-        let val_i = ptb_i.pure(emit_value as u64).unwrap();
-        ptb_i.programmable_move_call(
-            package_id,
-            move_core_types::identifier::Identifier::new("events").unwrap(),
-            move_core_types::identifier::Identifier::new("emit").unwrap(),
-            vec![],
-            vec![val_i],
-        );
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
-            .await
-            .unwrap()
-            .unwrap();
-        let tx_data_i = TransactionData::new(
-            sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb_i.finish()),
-            sender,
-            gas_object,
-            50_000_000_000,
-            rgp,
-        );
-        test_cluster.sign_and_execute_transaction(&tx_data_i).await;
+        emit_test_event(&test_cluster, package_id, sender, 100 + i).await;
     }
 
-    let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
-
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(package_id.to_string());
-    req.start_checkpoint = Some(0);
-    req.page_size = None;
-    req.page_token = None;
-    let response = client
-        .list_authenticated_events(req)
-        .await
-        .unwrap()
-        .into_inner();
+    let response =
+        query_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, None)
+            .await
+            .unwrap();
 
     let count = response.events.len();
     assert_eq!(count, 10, "expected 10 authenticated events, got {count}");
@@ -129,20 +154,11 @@ async fn list_authenticated_events_page_size_validation() {
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let response =
+        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(1500))
+            .await
+            .unwrap();
 
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(sender.to_string());
-    req.start_checkpoint = Some(0);
-    req.page_size = Some(1500);
-    req.page_token = None;
-    let response = client
-        .list_authenticated_events(req)
-        .await
-        .unwrap()
-        .into_inner();
     assert!(response.events.is_empty());
 }
 
@@ -156,33 +172,20 @@ async fn list_authenticated_events_start_beyond_highest() {
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let probe_response =
+        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(1))
+            .await
+            .unwrap();
+    let highest = probe_response.highest_indexed_checkpoint.unwrap_or(0);
 
-    let mut probe = ListAuthenticatedEventsRequest::default();
-    probe.stream_id = Some(sender.to_string());
-    probe.start_checkpoint = Some(0);
-    probe.page_size = Some(1);
-    probe.page_token = None;
-    let highest = client
-        .list_authenticated_events(probe)
-        .await
-        .unwrap()
-        .into_inner()
-        .highest_indexed_checkpoint
-        .unwrap_or(0);
-
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(sender.to_string());
-    req.start_checkpoint = Some(highest + 1000);
-    req.page_size = Some(10);
-    req.page_token = None;
-    let response = client
-        .list_authenticated_events(req)
-        .await
-        .unwrap()
-        .into_inner();
+    let response = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &sender.to_string(),
+        highest + 1000,
+        Some(10),
+    )
+    .await
+    .unwrap();
 
     assert!(response.events.is_empty());
 }
@@ -197,19 +200,12 @@ async fn list_authenticated_events_pruned_checkpoint_error() {
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let response =
+        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(10))
+            .await
+            .unwrap();
 
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(sender.to_string());
-    req.start_checkpoint = Some(0);
-    req.page_size = Some(10);
-    req.page_token = None;
-
-    let response = client.list_authenticated_events(req).await.unwrap();
-
-    assert!(response.into_inner().events.is_empty());
+    assert!(response.events.is_empty());
 }
 
 #[sim_test]
@@ -223,25 +219,89 @@ async fn authenticated_events_disabled_test() {
     let test_cluster = test_cluster::TestClusterBuilder::new().build().await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let result =
+        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(10)).await;
 
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(sender.to_string());
-    req.start_checkpoint = Some(0);
-    req.page_size = Some(10);
-    req.page_token = None;
-
-    let response = client.list_authenticated_events(req).await;
     assert!(
-        response.is_err(),
+        result.is_err(),
         "Expected error when authenticated events indexing is disabled"
     );
 
-    let error = response.unwrap_err();
+    let error = result.unwrap_err();
     assert_eq!(error.code(), tonic::Code::Unimplemented);
     assert!(error
         .message()
         .contains("Authenticated events indexing is disabled"));
+}
+
+#[sim_test]
+async fn authenticated_events_backfill_test() {
+    let _guard: sui_protocol_config::OverrideGuard =
+        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_authenticated_event_streams_for_testing();
+            cfg
+        });
+
+    let rpc_config_without_indexing = sui_config::RpcConfig {
+        authenticated_events_indexing: Some(false),
+        enable_indexing: Some(false),
+        ..Default::default()
+    };
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .with_rpc_config(rpc_config_without_indexing)
+        .build()
+        .await;
+
+    let package_id = publish_test_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+
+    for i in 0..5 {
+        emit_test_event(&test_cluster, package_id, sender, 200 + i).await;
+    }
+
+    let rpc_url_with_indexing = {
+        let mut new_fullnode_config = test_cluster
+            .fullnode_config_builder()
+            .build(&mut rand::rngs::OsRng, test_cluster.swarm.config());
+
+        if let Some(ref mut rpc_config) = new_fullnode_config.rpc {
+            rpc_config.enable_indexing = Some(true);
+            rpc_config.authenticated_events_indexing = Some(true);
+        }
+
+        let new_fullnode_handle = test_cluster
+            .start_fullnode_from_config(new_fullnode_config)
+            .await;
+
+        new_fullnode_handle.rpc_url.clone()
+    };
+
+    let start = tokio::time::Instant::now();
+    let response = loop {
+        let response =
+            query_authenticated_events(&rpc_url_with_indexing, &package_id.to_string(), 0, None)
+                .await
+                .unwrap();
+
+        if response.events.len() == 5 {
+            break response;
+        }
+
+        if start.elapsed() > tokio::time::Duration::from_secs(30) {
+            panic!(
+                "Timeout waiting for backfill to complete. Found {} events, expected 5",
+                response.events.len()
+            );
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    };
+
+    let count = response.events.len();
+    assert_eq!(
+        count, 5,
+        "expected 5 authenticated events after backfill, got {count}"
+    );
 }
