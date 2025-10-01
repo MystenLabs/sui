@@ -459,16 +459,10 @@ mod test {
 
     use super::*;
     use crate::{
-        block_manager::BlockManager,
-        commit_observer::CommitObserver,
-        context::Context,
-        core::CoreSignals,
-        dag_state::DagState,
-        leader_schedule::LeaderSchedule,
-        round_tracker::PeerRoundTracker,
-        storage::mem_store::MemStore,
-        transaction::{TransactionClient, TransactionConsumer},
-        transaction_certifier::TransactionCertifier,
+        block_manager::BlockManager, commit_observer::CommitObserver, context::Context,
+        core::CoreSignals, dag_state::DagState, leader_schedule::LeaderSchedule,
+        round_tracker::PeerRoundTracker, storage::mem_store::MemStore,
+        transaction::TransactionClient, transaction_certifier::TransactionCertifier,
         CommitConsumerArgs,
     };
 
