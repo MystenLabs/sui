@@ -52,6 +52,7 @@ const TRANSACTIONS_TABLE: &str = "transactions";
 const CHECKPOINTS_TABLE: &str = "checkpoints";
 const CHECKPOINTS_BY_DIGEST_TABLE: &str = "checkpoints_by_digest";
 const WATERMARK_TABLE: &str = "watermark";
+const WATERMARK_ALT_TABLE: &str = "watermark_alt";
 const EPOCHS_TABLE: &str = "epochs";
 
 const COLUMN_FAMILY_NAME: &str = "sui";
@@ -160,10 +161,19 @@ impl KeyValueStoreWriter for BigTableClient {
     }
 
     async fn save_watermark(&mut self, watermark: CheckpointSequenceNumber) -> Result<()> {
-        let key = watermark.to_be_bytes().to_vec();
+        let watermark_bytes = watermark.to_be_bytes().to_vec();
+        self.multi_set(
+            WATERMARK_ALT_TABLE,
+            [(
+                vec![0],
+                vec![(DEFAULT_COLUMN_QUALIFIER, watermark_bytes.clone())],
+            )],
+            Some(watermark),
+        )
+        .await?;
         self.multi_set(
             WATERMARK_TABLE,
-            [(key, vec![(DEFAULT_COLUMN_QUALIFIER, vec![])])],
+            [(watermark_bytes, vec![(DEFAULT_COLUMN_QUALIFIER, vec![])])],
             None,
         )
         .await
@@ -287,13 +297,13 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber> {
-        let upper_limit = u64::MAX.to_be_bytes().to_vec();
         match self
-            .reversed_scan(WATERMARK_TABLE, upper_limit)
+            .multi_get(WATERMARK_ALT_TABLE, vec![vec![0]], None)
             .await?
             .pop()
+            .and_then(|(_, mut row)| row.pop())
         {
-            Some((key_bytes, _)) => Ok(u64::from_be_bytes(key_bytes.as_slice().try_into()?)),
+            Some((_, value_bytes)) => Ok(u64::from_be_bytes(value_bytes.as_slice().try_into()?)),
             None => Ok(0),
         }
     }
