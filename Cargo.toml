@@ -607,7 +607,6 @@ linked-hash-map = "0.5.6"
 shlex = "1.3.0"
 starlark = "0.13.0"
 
-
 # Move dependencies
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
