@@ -62,6 +62,7 @@ sui-config.workspace = true
 sui-json-rpc-types.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true
+sui-light-client.workspace = true
 sui-rpc-api.workspace = true
 sui-rpc.workspace = true
 shared-crypto.workspace = true

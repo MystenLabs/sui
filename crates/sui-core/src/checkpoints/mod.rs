@@ -1443,6 +1443,7 @@ impl CheckpointBuilder {
         &self,
         sorted_tx_effects_included_in_checkpoint: &[TransactionEffects],
         checkpoint_height: CheckpointHeight,
+        tx_index_offset: u64,
     ) -> (TransactionKey, Vec<TransactionEffects>) {
         let _scope =
             monitored_scope("CheckpointBuilder::construct_and_execute_settlement_transactions");
@@ -1460,6 +1461,7 @@ impl CheckpointBuilder {
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.effects_store.as_ref()),
             sorted_tx_effects_included_in_checkpoint,
+            tx_index_offset,
         );
 
         let accumulator_changes = builder.collect_accumulator_changes();
@@ -1664,10 +1666,14 @@ impl CheckpointBuilder {
             sorted.extend(CausalOrder::causal_sort(unsorted));
 
             if let Some(settlement_root) = settlement_root {
+                // tx_effects.len() gives us the offset for this pending checkpoint's transactions
+                // in the final concatenated checkpoint
+                let tx_index_offset = tx_effects.len() as u64;
                 let (tx_key, settlement_effects) = self
                     .construct_and_execute_settlement_transactions(
                         &sorted,
                         pending.details.checkpoint_height,
+                        tx_index_offset,
                     )
                     .await;
                 debug!(?tx_key, "executed settlement transactions");

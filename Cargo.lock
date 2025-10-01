@@ -14097,6 +14097,7 @@ dependencies = [
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-light-client",
  "sui-macros",
  "sui-move-build",
  "sui-network",
