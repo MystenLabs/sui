@@ -12,7 +12,7 @@ use super::checkpoint::Checkpoint;
 ///
 /// Both `type_` and `field` are required. The `filter` is optional and provides retention information for filtered queries.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct RetentionKey {
+pub(crate) struct AvailableRangeKey {
     /// The GraphQL type to check retention for
     pub(crate) type_: String,
 
@@ -51,7 +51,7 @@ impl AvailableRange {
     pub(crate) fn new(
         ctx: &Context<'_>,
         scope: &Scope,
-        retention_key: RetentionKey,
+        retention_key: AvailableRangeKey,
     ) -> Result<Self, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let mut pipelines = BTreeSet::new();

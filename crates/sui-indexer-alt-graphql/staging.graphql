@@ -3384,6 +3384,10 @@ type SafeMode {
 
 type ServiceConfig {
 	"""
+	Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
+	"""
+	availableRange(type: String!, field: String, filters: [String!]): AvailableRange!
+	"""
 	Number of elements a paginated connection will return if a page size is not supplied.
 	
 	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
@@ -3497,10 +3501,6 @@ type ServiceConfig {
 	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
 	queryTimeoutMs: Int
-	"""
-	Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
-	"""
-	retention(type: String!, field: String, filters: [String!]): AvailableRange!
 }
 
 """
