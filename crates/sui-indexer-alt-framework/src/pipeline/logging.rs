@@ -22,15 +22,15 @@ pub(crate) struct LoggerWatermark {
 pub(crate) struct WatermarkLogger {
     name: &'static str,
     timer: Instant,
-    prev_watermark: LoggerWatermark,
+    prev_watermark: Option<LoggerWatermark>,
 }
 
 impl WatermarkLogger {
-    pub fn new(name: &'static str, init_watermark: impl Into<LoggerWatermark>) -> Self {
+    pub fn new(name: &'static str) -> Self {
         Self {
             name,
             timer: Instant::now(),
-            prev_watermark: init_watermark.into(),
+            prev_watermark: None,
         }
     }
 
@@ -48,15 +48,22 @@ impl WatermarkLogger {
         watermark_update_latency: f64,
     ) {
         let watermark: LoggerWatermark = watermark.into();
+        // If we didn't set a watermark previously, set it and calculate metrics on the next update.
+        let Some(prev_watermark) = &self.prev_watermark else {
+            self.prev_watermark = Some(watermark);
+            self.timer = Instant::now();
+            return;
+        };
+
         let logger_timer_elapsed = self.timer.elapsed().as_secs_f64();
-        let realtime_average_tps = match (self.prev_watermark.transaction, watermark.transaction) {
+        let realtime_average_tps = match (prev_watermark.transaction, watermark.transaction) {
             (Some(prev), Some(curr)) => Some((curr - prev) as f64 / logger_timer_elapsed),
             _ => None,
         };
         let realtime_average_cps =
-            (watermark.checkpoint - self.prev_watermark.checkpoint) as f64 / logger_timer_elapsed;
+            (watermark.checkpoint - prev_watermark.checkpoint) as f64 / logger_timer_elapsed;
 
-        if watermark.checkpoint < self.prev_watermark.checkpoint + LOUD_WATERMARK_UPDATE_INTERVAL {
+        if watermark.checkpoint < prev_watermark.checkpoint + LOUD_WATERMARK_UPDATE_INTERVAL {
             debug!(
                 logger = self.name,
                 pipeline = H::NAME,
@@ -80,7 +87,7 @@ impl WatermarkLogger {
             elapsed_ms = format!("{:.3}", watermark_update_latency * 1000.0),
             "Updated watermark",
         );
-        self.prev_watermark = watermark;
+        self.prev_watermark = Some(watermark);
         self.timer = Instant::now();
     }
 }

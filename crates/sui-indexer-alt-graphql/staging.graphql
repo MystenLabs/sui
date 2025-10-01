@@ -3239,11 +3239,15 @@ type Query {
 	"""
 	Simulate a transaction to preview its effects without executing it on chain.
 	
-	- `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
+	Accepts a JSON transaction matching the [Sui gRPC API schema](https://docs.sui.io/references/fullnode-protocol#sui-rpc-v2-Transaction).
+	The JSON format allows for partial transaction specification where certain fields can be automatically resolved by the server.
+	
+	Alternatively, for already serialized transactions, you can pass BCS-encoded data:
+	`{"bcs": {"value": "<base64>"}}`
 	
 	Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
 	"""
-	simulateTransaction(transactionDataBcs: Base64!): SimulationResult!
+	simulateTransaction(transaction: JSON!): SimulationResult!
 	"""
 	Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
 	"""

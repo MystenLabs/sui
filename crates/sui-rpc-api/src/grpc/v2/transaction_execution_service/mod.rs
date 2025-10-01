@@ -141,7 +141,7 @@ pub async fn execute_transaction(
     {
         let events = mask
             .subtree(ExecutedTransaction::EVENTS_FIELD)
-            .and_then(|mask| events.map(|e| TransactionEvents::merge_from(e, &mask)));
+            .and_then(|mask| events.map(|e| TransactionEvents::merge_from(&e, &mask)));
 
         let input_objects = input_objects.unwrap_or_default();
         let output_objects = output_objects.unwrap_or_default();

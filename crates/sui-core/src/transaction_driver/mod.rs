@@ -121,7 +121,7 @@ where
     async fn run_latency_checks(self: Arc<Self>) {
         const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(15);
         const MAX_JITTER: Duration = Duration::from_secs(10);
-        const PING_REQUEST_TIMEOUT: Duration = Duration::from_millis(5_000);
+        const PING_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
         let mut interval = interval(INTERVAL_BETWEEN_RUNS);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);

@@ -77,6 +77,8 @@ pub struct MockStore {
     pub transaction_failures: Arc<Failures>,
     /// Configuration for simulating commit failures in tests
     pub commit_failures: Arc<Failures>,
+    /// Configuration for simulating commit watermark failures in tests
+    pub commit_watermark_failures: Arc<Failures>,
     /// Delay in milliseconds for each transaction commit
     pub commit_delay_ms: u64,
 }
@@ -136,6 +138,18 @@ impl Connection for MockConnection<'_> {
         _pipeline: &'static str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
+        // Check if we should simulate a commit failure
+        let prev = self
+            .0
+            .commit_watermark_failures
+            .attempts
+            .fetch_add(1, Ordering::Relaxed);
+        ensure!(
+            prev >= self.0.commit_watermark_failures.failures,
+            "Commit failed, remaining failures: {}",
+            self.0.commit_watermark_failures.failures - prev
+        );
+
         let mut curr = self.0.watermark.lock().unwrap();
         *curr = Some(MockWatermark {
             epoch_hi_inclusive: watermark.epoch_hi_inclusive,
@@ -321,6 +335,15 @@ impl MockStore {
     /// Helper to configure transaction failure simulation
     pub fn with_transaction_failures(mut self, failures: usize) -> Self {
         self.transaction_failures = Arc::new(Failures {
+            failures,
+            attempts: AtomicUsize::new(0),
+        });
+        self
+    }
+
+    /// Helper to configure commit watermark failure simulation
+    pub fn with_commit_watermark_failures(mut self, failures: usize) -> Self {
+        self.commit_watermark_failures = Arc::new(Failures {
             failures,
             attempts: AtomicUsize::new(0),
         });

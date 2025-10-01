@@ -31,6 +31,7 @@ use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::{Object, Owner};
+use sui_types::storage::ObjectKey;
 use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
@@ -378,7 +379,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         self.execute_transaction(tx.into())
             .expect("advancing the epoch cannot fail");
 
-        let new_epoch_state = EpochState::new(self.store.get_system_state());
+        let new_epoch_state = EpochState::new_with_protocol_config(
+            self.store.get_system_state(),
+            self.epoch_state.protocol_config().clone(),
+        );
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: new_epoch_state.committee().voting_rights.clone(),
             next_epoch_protocol_version,
@@ -535,7 +539,9 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     ) -> anyhow::Result<()> {
         if let Some(path) = &self.data_ingestion_path {
             let file_name = format!("{}.chk", checkpoint.sequence_number);
-            let checkpoint_data = self.get_checkpoint_data(checkpoint, checkpoint_contents)?;
+            let checkpoint_data: sui_types::full_checkpoint_content::CheckpointData = self
+                .get_checkpoint_data(checkpoint, checkpoint_contents)?
+                .into();
             std::fs::create_dir_all(path)?;
             let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
             std::fs::write(path.join(file_name), blob.to_bytes())?;
@@ -675,6 +681,13 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         _digest: &sui_types::messages_checkpoint::CheckpointContentsDigest,
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()
+    }
+
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        _digest: &sui_types::digests::TransactionDigest,
+    ) -> Option<Vec<ObjectKey>> {
+        None
     }
 }
 

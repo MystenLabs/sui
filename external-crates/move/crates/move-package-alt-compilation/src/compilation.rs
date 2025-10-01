@@ -365,7 +365,10 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {
             is_dependency: !pkg.is_root(),
-            edition: Edition::from_str(pkg.edition())?,
+            edition: pkg
+                .edition()
+                .or(build_config.default_edition)
+                .unwrap_or(Edition::LEGACY), // TODO require edition
             flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
             warning_filter: WarningFiltersBuilder::new_for_source(),
         };

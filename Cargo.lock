@@ -7937,6 +7937,7 @@ dependencies = [
  "move-symbol-pool",
  "move-trace-format",
  "move-unit-test",
+ "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-test-utils",
@@ -8278,6 +8279,7 @@ dependencies = [
  "itertools 0.10.5",
  "jsonrpc",
  "move-command-line-common",
+ "move-compiler",
  "move-core-types",
  "named-lock",
  "once_cell",
@@ -13919,7 +13921,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8eee97380cac1a1899d3cca427bde7ac906abdb9#8eee97380cac1a1899d3cca427bde7ac906abdb9"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fe561f3089b3b4acbbd67ff48a278a6c448e488c#fe561f3089b3b4acbbd67ff48a278a6c448e488c"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -14887,6 +14889,7 @@ dependencies = [
  "move-core-types",
  "prometheus",
  "prost-types",
+ "serde_json",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
@@ -15958,7 +15961,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8eee97380cac1a1899d3cca427bde7ac906abdb9#8eee97380cac1a1899d3cca427bde7ac906abdb9"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fe561f3089b3b4acbbd67ff48a278a6c448e488c#fe561f3089b3b4acbbd67ff48a278a6c448e488c"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16117,7 +16120,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8eee97380cac1a1899d3cca427bde7ac906abdb9#8eee97380cac1a1899d3cca427bde7ac906abdb9"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fe561f3089b3b4acbbd67ff48a278a6c448e488c#fe561f3089b3b4acbbd67ff48a278a6c448e488c"
 dependencies = [
  "base64ct",
  "bcs",

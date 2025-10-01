@@ -39,7 +39,7 @@ pub struct ValidatorClientMonitor<A: Clone> {
     metrics: Arc<ValidatorClientMetrics>,
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
-    cached_scores: RwLock<HashMap<TxType, HashMap<AuthorityName, f64>>>,
+    cached_latencies: RwLock<HashMap<TxType, HashMap<AuthorityName, f64>>>,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -61,7 +61,7 @@ where
             metrics,
             client_stats: RwLock::new(ClientObservedStats::new(config)),
             authority_aggregator,
-            cached_scores: RwLock::new(HashMap::new()),
+            cached_latencies: RwLock::new(HashMap::new()),
         });
 
         let monitor_clone = monitor.clone();
@@ -155,41 +155,42 @@ where
                 }
             }
 
-            self.update_cached_scores(&authority_agg);
+            self.update_cached_latencies(&authority_agg);
         }
     }
 }
 
 impl<A: Clone> ValidatorClientMonitor<A> {
-    /// Calculate and cache scores for all validators.
+    /// Calculate and cache latencies for all validators.
     ///
     /// This method is called periodically after health checks complete to update
-    /// the cached validator scores.
-    fn update_cached_scores(&self, authority_agg: &AuthorityAggregator<A>) {
+    /// the cached validator latencies. Those are the end to end latencies as calculated for each validator
+    /// taking into account the reliability of the validator.
+    fn update_cached_latencies(&self, authority_agg: &AuthorityAggregator<A>) {
         let committee = &authority_agg.committee;
-        let mut cached_scores = self.cached_scores.write();
+        let mut cached_latencies = self.cached_latencies.write();
 
         for tx_type in TxType::iter() {
-            let score_map = self
+            let latencies_map = self
                 .client_stats
                 .read()
                 .get_all_validator_stats(committee, tx_type);
 
-            for (validator, score) in score_map.iter() {
+            for (validator, latency) in latencies_map.iter() {
                 debug!(
-                    "Validator {}, tx type {}: score {}",
+                    "Validator {}, tx type {}: latency {}",
                     validator,
                     tx_type.as_str(),
-                    score
+                    *latency
                 );
                 let display_name = authority_agg.get_display_name(validator);
                 self.metrics
-                    .performance_score
+                    .performance
                     .with_label_values(&[&display_name, tx_type.as_str()])
-                    .set(*score);
+                    .set(*latency);
             }
 
-            cached_scores.insert(tx_type, score_map);
+            cached_latencies.insert(tx_type, latencies_map);
         }
     }
 
@@ -239,15 +240,15 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// is called, and we need to maintain an invariant that the selected
     /// validators are always in the committee passed in.
     ///
-    /// Also the tx type is passed in so that we can select validators based on their respective scores
+    /// Also the tx type is passed in so that we can select validators based on their respective latencies
     /// for the transaction type.
     ///
     /// We shuffle the top k validators to avoid the same validator being selected
     /// too many times in a row and getting overloaded.
     ///
     /// Returns a vector containing:
-    /// 1. The top `k` validators by score (shuffled)
-    /// 2. The remaining validators ordered by score (not shuffled)
+    /// 1. The top `k` validators by latency (shuffled)
+    /// 2. The remaining validators ordered by latency (not shuffled)
     pub fn select_shuffled_preferred_validators(
         &self,
         committee: &Committee,
@@ -256,30 +257,34 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     ) -> Vec<AuthorityName> {
         let mut rng = rand::thread_rng();
 
-        let cached_scores = self.cached_scores.read();
-        let Some(cached_scores) = cached_scores.get(&tx_type) else {
+        let cached_latencies = self.cached_latencies.read();
+        let Some(cached_latencies) = cached_latencies.get(&tx_type) else {
             let mut validators: Vec<_> = committee.names().cloned().collect();
             validators.shuffle(&mut rng);
             return validators;
         };
 
-        // Since the cached scores are updated periodically, it is possible that it was ran on
+        // Since the cached latencies are updated periodically, it is possible that it was ran on
         // an out-of-date committee.
-        let mut validator_with_scores: Vec<_> = committee
+        let mut validator_with_latencies: Vec<_> = committee
             .names()
-            .map(|v| (*v, cached_scores.get(v).cloned().unwrap_or(0.0)))
+            .map(|v| (*v, cached_latencies.get(v).cloned().unwrap_or(0.0)))
             .collect();
-        validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        // Sort by latency in ascending order. We want to select the validators with the lowest latencies.
+        validator_with_latencies.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-        let k = k.min(validator_with_scores.len());
-        validator_with_scores[..k].shuffle(&mut rng);
+        let k = k.min(validator_with_latencies.len());
+        validator_with_latencies[..k].shuffle(&mut rng);
 
-        validator_with_scores.into_iter().map(|(v, _)| v).collect()
+        validator_with_latencies
+            .into_iter()
+            .map(|(v, _)| v)
+            .collect()
     }
 
     #[cfg(test)]
-    pub fn force_update_cached_scores(&self, authority_agg: &AuthorityAggregator<A>) {
-        self.update_cached_scores(authority_agg);
+    pub fn force_update_cached_latencies(&self, authority_agg: &AuthorityAggregator<A>) {
+        self.update_cached_latencies(authority_agg);
     }
 
     #[cfg(test)]

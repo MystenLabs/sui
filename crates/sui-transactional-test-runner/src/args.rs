@@ -63,8 +63,8 @@ pub struct SuiInitArgs {
     pub shared_object_deletion: Option<bool>,
     #[clap(long = "simulator")]
     pub simulator: bool,
-    #[clap(long = "custom-validator-account")]
-    pub custom_validator_account: bool,
+    #[clap(long = "num-custom-validator-accounts")]
+    pub num_custom_validator_accounts: Option<u64>,
     #[clap(long = "reference-gas-price")]
     pub reference_gas_price: Option<u64>,
     #[clap(long = "default-gas-price")]
