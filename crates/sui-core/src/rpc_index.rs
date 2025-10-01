@@ -511,6 +511,7 @@ impl IndexStoreTables {
         _epoch_store: &AuthorityPerEpochStore,
         _package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
         batch_size_limit: usize,
+        rpc_config: &sui_config::RpcConfig,
     ) -> Result<(), StorageError> {
         info!("Initializing RPC indexes");
 
@@ -535,7 +536,12 @@ impl IndexStoreTables {
         });
 
         if let Some(checkpoint_range) = checkpoint_range {
-            self.index_existing_transactions(authority_store, checkpoint_store, checkpoint_range)?;
+            self.index_existing_transactions(
+                authority_store,
+                checkpoint_store,
+                checkpoint_range,
+                rpc_config,
+            )?;
         }
 
         self.initialize_current_epoch(authority_store, checkpoint_store)?;
@@ -577,12 +583,13 @@ impl IndexStoreTables {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, authority_store, checkpoint_store))]
+    #[tracing::instrument(skip(self, authority_store, checkpoint_store, rpc_config))]
     fn index_existing_transactions(
         &mut self,
         authority_store: &AuthorityStore,
         checkpoint_store: &CheckpointStore,
         checkpoint_range: std::ops::RangeInclusive<u64>,
+        rpc_config: &sui_config::RpcConfig,
     ) -> Result<(), StorageError> {
         info!(
             "Indexing {} checkpoints in range {checkpoint_range:?}",
@@ -591,17 +598,18 @@ impl IndexStoreTables {
         let start_time = Instant::now();
 
         checkpoint_range.into_par_iter().try_for_each(|seq| {
-            let checkpoint_data =
-                sparse_checkpoint_data_for_backfill(authority_store, checkpoint_store, seq)?;
+            let load_events = rpc_config.authenticated_events_indexing();
+            let checkpoint_data = sparse_checkpoint_data_for_backfill(
+                authority_store,
+                checkpoint_store,
+                seq,
+                load_events,
+            )?;
 
             let mut batch = self.transactions.batch();
 
             self.index_epoch(&checkpoint_data, &mut batch)?;
-            // TODO: Support authenticated events backfill. Currently events are not loaded during
-            // backfill (sparse_checkpoint_data_for_backfill sets events: None), so we skip event
-            // indexing here. To support backfill, we need to load event data for historical
-            // checkpoints.
-            self.index_transactions(&checkpoint_data, &mut batch, /* index_events */ false)?;
+            self.index_transactions(&checkpoint_data, &mut batch, load_events)?;
 
             batch
                 .write_opt(&(bulk_ingestion_write_options()))
@@ -1312,6 +1320,7 @@ impl RpcIndexStore {
                         epoch_store,
                         package_store,
                         batch_size_limit,
+                        &rpc_config,
                     )
                     .expect("unable to initialize rpc index from live object set");
 
@@ -1720,12 +1729,11 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
 
 // TODO figure out a way to dedup this logic. Today we'd need to do quite a bit of refactoring to
 // make it possible.
-//
-// Load a CheckpointData struct without event data
 fn sparse_checkpoint_data_for_backfill(
     authority_store: &AuthorityStore,
     checkpoint_store: &CheckpointStore,
     checkpoint: u64,
+    load_events: bool,
 ) -> Result<CheckpointData, StorageError> {
     use sui_types::full_checkpoint_content::CheckpointTransaction;
 
@@ -1754,8 +1762,16 @@ fn sparse_checkpoint_data_for_backfill(
         .map(|maybe_effects| maybe_effects.ok_or_else(|| StorageError::custom("missing effects")))
         .collect::<Result<Vec<_>, _>>()?;
 
+    let events = if load_events {
+        authority_store
+            .multi_get_events(&transaction_digests)
+            .map_err(|e| StorageError::custom(e.to_string()))?
+    } else {
+        vec![None; transaction_digests.len()]
+    };
+
     let mut full_transactions = Vec::with_capacity(transactions.len());
-    for (tx, fx) in transactions.into_iter().zip(effects) {
+    for ((tx, fx), ev) in transactions.into_iter().zip(effects).zip(events) {
         let input_objects =
             sui_types::storage::get_transaction_input_objects(authority_store, &fx)?;
         let output_objects =
@@ -1764,7 +1780,7 @@ fn sparse_checkpoint_data_for_backfill(
         let full_transaction = CheckpointTransaction {
             transaction: tx.into(),
             effects: fx,
-            events: None,
+            events: ev,
             input_objects,
             output_objects,
         };
