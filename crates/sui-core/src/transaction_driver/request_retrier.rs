@@ -50,7 +50,7 @@ impl<A: Clone> RequestRetrier<A> {
         );
         let ranked_clients = ranked_validators
             .into_iter()
-            .filter(|name| allowed_validators.contains(name))
+            .filter(|name| allowed_validators.is_empty() || allowed_validators.contains(name))
             .filter_map(|name| {
                 // There is not guarantee that the `name` are in the `auth_agg.authority_clients` if those are coming from the list
                 // of `allowed_validators`, as the provided `auth_agg` might have been updated with a new committee that doesn't contain the validator in question.

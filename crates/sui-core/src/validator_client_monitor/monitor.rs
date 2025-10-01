@@ -236,22 +236,20 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         client_stats.record_interaction_result(feedback, &self.metrics);
     }
 
-    /// Select validators based on client-observed performance with shuffled top k.
+    /// Select validators by latency range with randomization for load balancing.
     ///
-    /// We need to pass the current committee here because it is possible
-    /// that the fullnode is in the middle of a committee change when this
-    /// is called, and we need to maintain an invariant that the selected
-    /// validators are always in the committee passed in.
+    /// Selects validators based on transaction-type-specific latencies, shuffling
+    /// all validators within a latency threshold to distribute load evenly.
     ///
-    /// Also the tx type is passed in so that we can select validators based on their respective latencies
-    /// for the transaction type.
+    /// The committee parameter ensures validators are from the current committee,
+    /// handling mid-epoch transitions correctly.
     ///
-    /// We shuffle the top k validators to avoid the same validator being selected
-    /// too many times in a row and getting overloaded.
+    /// The delta parameter defines the latency threshold as a multiplier:
+    /// - threshold = lowest_latency * (1.0 + delta)
+    /// - All validators with latency <= threshold are shuffled
+    /// - Remaining validators maintain latency order
     ///
-    /// Returns a vector containing:
-    /// 1. The top `k` validators by latency (shuffled)
-    /// 2. The remaining validators ordered by latency (not shuffled)
+    /// Returns validators sorted by latency, with those within the threshold shuffled.
     pub fn select_shuffled_preferred_validators(
         &self,
         committee: &Committee,
