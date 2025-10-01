@@ -22,10 +22,10 @@ use tokio_util::sync::CancellationToken;
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 
 // GraphQL query constants
-const RETENTION_TRANSACTIONS_QUERY: &str = r#"
+const RETENTION_QUERY: &str = r#"
     query {
         serviceConfig {
-            retention(type: "Query", field: "transactions", filters: ["affectedAddress"]) {
+            retention($type: String!, field: String, filters: [String]) {
                 first { sequenceNumber }
                 last { sequenceNumber }
             }
@@ -46,12 +46,10 @@ const TRANSACTIONS_QUERY: &str = r#"
 /// Test available range queries with retention configurations
 #[tokio::test]
 async fn test_available_range_with_pipelines() {
-    const RETENTION: u64 = 5;
     let mut cluster = cluster_with_pipelines(PipelineLayer {
-        tx_affected_addresses: Some(concurrent_pipeline(RETENTION)),
-        tx_digests: Some(concurrent_pipeline(RETENTION)),
-        cp_sequence_numbers: Some(concurrent_pipeline(RETENTION)),
-        ev_struct_inst: Some(concurrent_pipeline(RETENTION)),
+        tx_affected_addresses: Some(concurrent_pipeline(10)),
+        tx_digests: Some(concurrent_pipeline(5)),
+        cp_sequence_numbers: Some(concurrent_pipeline(5)),
         ..Default::default()
     })
     .await;
@@ -67,12 +65,7 @@ async fn test_available_range_with_pipelines() {
     }
 
     cluster
-        .wait_for_pruner("tx_digests", RETENTION, Duration::from_secs(10))
-        .await
-        .unwrap();
-
-    cluster
-        .wait_for_pruner("cp_sequence_numbers", RETENTION, Duration::from_secs(10))
+        .wait_for_pruner("tx_digests", 5, Duration::from_secs(10))
         .await
         .unwrap();
 
@@ -89,6 +82,7 @@ async fn test_available_range_with_pipelines() {
     )
     .await;
 
+    // There should only be 5 transactions after pruning as we only retain 5 checkpoints. and each checkpoint contains one transaction.
     assert_eq!(
         tx["data"]["transactions"]["nodes"]
             .as_array()
@@ -97,15 +91,65 @@ async fn test_available_range_with_pipelines() {
         5
     );
 
-    let retention = execute_graphql_query(&cluster, RETENTION_TRANSACTIONS_QUERY, None).await;
+    let affected_addresses_retention = execute_graphql_query(
+        &cluster,
+        RETENTION_QUERY,
+        Some(json!({
+            "type": "Query",
+            "field": "transactions",
+            "filters": ["affectedAddress"]
+        })),
+    )
+    .await;
     assert_eq!(
-        retention["data"]["serviceConfig"]["retention"]["first"]["sequenceNumber"]
+        affected_addresses_retention["data"]["serviceConfig"]["retention"]["first"]
+            ["sequenceNumber"]
             .as_u64()
             .unwrap(),
         6
     );
     assert_eq!(
-        retention["data"]["serviceConfig"]["retention"]["last"]["sequenceNumber"]
+        affected_addresses_retention["data"]["serviceConfig"]["retention"]["last"]
+            ["sequenceNumber"]
+            .as_u64()
+            .unwrap(),
+        10
+    );
+
+    for _ in 0..10 {
+        transfer_dust(&mut cluster, a, &akp, b);
+        cluster.create_checkpoint().await;
+    }
+
+    cluster
+        .wait_for_pruner("tx_digests", 10, Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    cluster
+        .wait_for_pruner("tx_affected_addresses", 5, Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    let transasction_retention = execute_graphql_query(
+        &cluster,
+        RETENTION_QUERY,
+        Some(json!({
+            "type": "Query",
+            "field": "transactions",
+            "filters": []
+        })),
+    )
+    .await;
+
+    assert_eq!(
+        transasction_retention["data"]["serviceConfig"]["retention"]["first"]["sequenceNumber"]
+            .as_u64()
+            .unwrap(),
+        6
+    );
+    assert_eq!(
+        transasction_retention["data"]["serviceConfig"]["retention"]["last"]["sequenceNumber"]
             .as_u64()
             .unwrap(),
         10
