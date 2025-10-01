@@ -106,7 +106,7 @@ If you publish a package that uses an OTW to create a currency in the package `i
 
 ## Regulated currency
 
-The Currency Standard supports creating regulated coins. Use the `make_regulated` function during the initialization phase before calling `finalize`. The function adds deny list capabilities to the `Currency<T>` and tracks the regulatory status within the coin registry. The function returns a `DenyCap` that allows the bearer to maintain the list of addresses on the deny list.
+The Currency Standard supports creating regulated coins. Use the `make_regulated` function during the initialization phase before calling `finalize`. The function adds deny list capabilities to the `Currency<T>` and tracks the regulatory status within the Coin Registry. The function returns a `DenyCap` that allows the bearer to maintain the list of addresses on the deny list.
 
 <details>
 <summary>
