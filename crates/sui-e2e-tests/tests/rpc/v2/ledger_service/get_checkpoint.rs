@@ -260,4 +260,6 @@ async fn get_checkpoint() {
 
     // Ensure we found the transaction we used for picking the checkpoint to test against
     assert!(found_transaction);
+
+    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 }

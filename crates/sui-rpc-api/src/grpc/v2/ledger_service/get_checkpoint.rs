@@ -96,19 +96,12 @@ pub fn get_checkpoint(
                 .subtree(Checkpoint::OBJECTS_FIELD)
                 .and_then(|submask| submask.subtree(ObjectSet::OBJECTS_FIELD))
             {
-                let set: std::collections::BTreeMap<_, _> = checkpoint_data
-                    .transactions
+                let set = checkpoint_data
+                    .object_set
                     .iter()
-                    .flat_map(|t| t.input_objects.iter().chain(t.output_objects.iter()))
-                    .map(|object| ((object.id(), object.version().value()), object))
+                    .map(|o| sui_rpc::proto::sui::rpc::v2::Object::merge_from(o, &submask))
                     .collect();
-                checkpoint.objects = Some(
-                    ObjectSet::default().with_objects(
-                        set.into_values()
-                            .map(|o| sui_rpc::proto::sui::rpc::v2::Object::merge_from(o, &submask))
-                            .collect(),
-                    ),
-                );
+                checkpoint.objects = Some(ObjectSet::default().with_objects(set));
             }
 
             if let Some(submask) = read_mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
@@ -121,7 +114,7 @@ pub fn get_checkpoint(
                             .then(|| {
                                 service
                                     .reader
-                                    .get_transaction_info(t.transaction.digest())
+                                    .get_transaction_info(&t.transaction.digest())
                                     .map(|info| {
                                         info.balance_changes
                                             .into_iter()
@@ -131,7 +124,7 @@ pub fn get_checkpoint(
                             })
                             .flatten()
                             .unwrap_or_default();
-                        let mut transaction = ExecutedTransaction::merge_from(t, &submask);
+                        let mut transaction = ExecutedTransaction::merge_from(&t, &submask);
                         transaction.checkpoint = submask
                             .contains(ExecutedTransaction::CHECKPOINT_FIELD)
                             .then_some(sequence_number);

@@ -647,6 +647,13 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()
     }
+
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> Option<Vec<sui_types::storage::ObjectKey>> {
+        None
+    }
 }
 
 impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {

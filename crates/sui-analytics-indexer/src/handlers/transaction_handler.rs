@@ -227,11 +227,13 @@ mod tests {
 
         // Create a checkpoint which should include the transaction we executed.
         let checkpoint = sim.create_checkpoint();
-        let checkpoint_data = sim.get_checkpoint_data(
-            checkpoint.clone(),
-            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
-                .unwrap(),
-        )?;
+        let checkpoint_data: sui_types::full_checkpoint_content::CheckpointData = sim
+            .get_checkpoint_data(
+                checkpoint.clone(),
+                sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
+                    .unwrap(),
+            )?
+            .into();
         let txn_handler = TransactionHandler::new();
         let transaction_entries: Vec<_> = txn_handler
             .process_checkpoint(&Arc::new(checkpoint_data))
