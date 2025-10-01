@@ -4,13 +4,14 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use crate::grpc::alpha::event_service_proto::{
-    AuthenticatedEvent, Bcs, Event, ListAuthenticatedEventsRequest, ListAuthenticatedEventsResponse,
+    AuthenticatedEvent, ListAuthenticatedEventsRequest, ListAuthenticatedEventsResponse,
 };
 use crate::RpcError;
 use crate::RpcService;
 use bytes::Bytes;
 use prost::Message;
 use std::str::FromStr;
+use sui_rpc::proto::sui::rpc::v2::{Bcs, Event};
 use sui_types::base_types::SuiAddress;
 
 const MAX_PAGE_SIZE: u32 = 1000;
@@ -28,7 +29,7 @@ struct PageToken {
 
 fn to_grpc_event(ev: &sui_types::event::Event) -> Event {
     let mut bcs = Bcs::default();
-    bcs.value = Some(ev.contents.clone());
+    bcs.value = Some(ev.contents.clone().into());
 
     let mut event = Event::default();
     event.package_id = Some(ev.package_id.to_canonical_string(true));
@@ -49,7 +50,7 @@ fn to_authenticated_event(
     let mut authenticated_event = AuthenticatedEvent::default();
     authenticated_event.checkpoint = Some(cp);
     authenticated_event.transaction_idx = Some(transaction_idx);
-    authenticated_event.event_index = Some(idx);
+    authenticated_event.event_idx = Some(idx);
     authenticated_event.event = Some(to_grpc_event(ev));
     authenticated_event.stream_id = Some(stream_id.to_string());
     authenticated_event

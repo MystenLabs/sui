@@ -4,8 +4,9 @@
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
+use sui_rpc::proto::sui::rpc::v2::Event;
 use sui_rpc_api::grpc::alpha::event_service_proto::event_service_client::EventServiceClient;
-use sui_rpc_api::grpc::alpha::event_service_proto::{Event, ListAuthenticatedEventsRequest};
+use sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsRequest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::TransactionData;
 use test_cluster::TestClusterBuilder;
@@ -112,7 +113,7 @@ async fn list_authenticated_events_end_to_end() {
         Some(Event {
             contents: Some(bcs),
             ..
-        }) => !bcs.value.clone().unwrap_or_default().is_empty(),
+        }) => bcs.value.as_ref().is_some_and(|v| !v.is_empty()),
         _ => false,
     });
     assert!(found, "expected authenticated event for the stream");

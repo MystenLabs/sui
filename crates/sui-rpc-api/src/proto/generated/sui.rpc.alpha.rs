@@ -41,46 +41,13 @@ pub struct AuthenticatedEvent {
     pub transaction_idx: ::core::option::Option<u32>,
     /// Index of the event within the transaction's event list.
     #[prost(uint32, optional, tag = "3")]
-    pub event_index: ::core::option::Option<u32>,
+    pub event_idx: ::core::option::Option<u32>,
     /// The event payload.
     #[prost(message, optional, tag = "4")]
-    pub event: ::core::option::Option<Event>,
+    pub event: ::core::option::Option<::sui_rpc::proto::sui::rpc::v2::Event>,
     /// The stream identifier (owner address) for which this event is authenticated.
     #[prost(string, optional, tag = "5")]
     pub stream_id: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// An event.
-/// TODO: Copied from sui-rust-sdk; we should use the existing struct.
-#[non_exhaustive]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Event {
-    /// Package ID of the top-level function invoked by a `MoveCall` command that triggered this
-    /// event to be emitted.
-    #[prost(string, optional, tag = "1")]
-    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// Module name of the top-level function invoked by a `MoveCall` command that triggered this
-    /// event to be emitted.
-    #[prost(string, optional, tag = "2")]
-    pub module: ::core::option::Option<::prost::alloc::string::String>,
-    /// Address of the account that sent the transaction where this event was emitted.
-    #[prost(string, optional, tag = "3")]
-    pub sender: ::core::option::Option<::prost::alloc::string::String>,
-    /// The type of the event emitted.
-    #[prost(string, optional, tag = "4")]
-    pub event_type: ::core::option::Option<::prost::alloc::string::String>,
-    /// BCS serialized bytes of the event.
-    #[prost(message, optional, tag = "5")]
-    pub contents: ::core::option::Option<Bcs>,
-    /// JSON rendering of the event.
-    #[prost(message, optional, tag = "6")]
-    pub json: ::core::option::Option<::prost_types::Value>,
-}
-/// BCS-encoded bytes
-#[non_exhaustive]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Bcs {
-    #[prost(bytes = "vec", optional, tag = "1")]
-    pub value: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
 }
 /// Generated client implementations.
 pub mod event_service_client {

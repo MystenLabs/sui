@@ -597,7 +597,11 @@ impl IndexStoreTables {
             let mut batch = self.transactions.batch();
 
             self.index_epoch(&checkpoint_data, &mut batch)?;
-            self.index_transactions(&checkpoint_data, &mut batch)?;
+            // TODO: Support authenticated events backfill. Currently events are not loaded during
+            // backfill (sparse_checkpoint_data_for_backfill sets events: None), so we skip event
+            // indexing here. To support backfill, we need to load event data for historical
+            // checkpoints.
+            self.index_transactions(&checkpoint_data, &mut batch, /* index_events */ false)?;
 
             batch
                 .write_opt(&(bulk_ingestion_write_options()))
@@ -647,11 +651,12 @@ impl IndexStoreTables {
         let mut batch = self.transactions.batch();
 
         self.index_epoch(checkpoint, &mut batch)?;
-        self.index_transactions(checkpoint, &mut batch)?;
+        self.index_transactions(
+            checkpoint,
+            &mut batch,
+            rpc_config.authenticated_events_indexing(),
+        )?;
         self.index_objects(checkpoint, &mut batch)?;
-        if rpc_config.authenticated_events_indexing() {
-            self.index_authenticated_events(checkpoint, &mut batch)?;
-        }
 
         batch.insert_batch(
             &self.watermark,
@@ -669,50 +674,49 @@ impl IndexStoreTables {
         Ok(batch)
     }
 
-    fn index_authenticated_events(
+    fn index_transaction_events(
         &self,
-        checkpoint: &CheckpointData,
+        tx: &sui_types::full_checkpoint_content::CheckpointTransaction,
+        checkpoint_seq: u64,
+        tx_idx: u32,
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
+        let acc_events = tx.effects.accumulator_events();
+        if acc_events.is_empty() {
+            return Ok(());
+        }
+
+        let mut per_tx_indices: Vec<(SuiAddress, u64)> = Vec::new();
+        for acc in acc_events {
+            if let Some(stream_id) =
+                sui_types::accumulator_root::stream_id_from_accumulator_event(&acc)
+            {
+                if let AccumulatorValue::EventDigest(idx, _d) = acc.write.value {
+                    per_tx_indices.push((stream_id, idx));
+                }
+            }
+        }
+
+        if per_tx_indices.is_empty() {
+            return Ok(());
+        }
+
+        let Some(tx_events) = tx.events.as_ref() else {
+            return Ok(());
+        };
+
         let mut entries: Vec<(EventIndexKey, Event)> = Vec::new();
-        let cp = checkpoint.checkpoint_summary.sequence_number;
-
-        for (tx_idx, tx) in checkpoint.transactions.iter().enumerate() {
-            let acc_events = tx.effects.accumulator_events();
-            if acc_events.is_empty() {
-                continue;
-            }
-
-            let mut per_tx_indices: Vec<(SuiAddress, u64)> = Vec::new();
-            for acc in acc_events {
-                if let Some(stream_id) =
-                    sui_types::accumulator_root::stream_id_from_accumulator_event(&acc)
-                {
-                    if let AccumulatorValue::EventDigest(idx, _d) = acc.write.value {
-                        per_tx_indices.push((stream_id, idx));
-                    }
-                }
-            }
-
-            if per_tx_indices.is_empty() {
-                continue;
-            }
-
-            let Some(tx_events) = tx.events.as_ref() else {
-                continue;
-            };
-            for (stream_id, idx) in per_tx_indices {
-                let ui = idx as usize;
-                if ui < tx_events.data.len() {
-                    let ev = &tx_events.data[ui];
-                    let key = EventIndexKey {
-                        stream_id,
-                        checkpoint_seq: cp,
-                        transaction_idx: tx_idx as u32,
-                        event_index: idx as u32,
-                    };
-                    entries.push((key, ev.clone()));
-                }
+        for (stream_id, idx) in per_tx_indices {
+            let ui = idx as usize;
+            if ui < tx_events.data.len() {
+                let ev = &tx_events.data[ui];
+                let key = EventIndexKey {
+                    stream_id,
+                    checkpoint_seq,
+                    transaction_idx: tx_idx,
+                    event_index: idx as u32,
+                };
+                entries.push((key, ev.clone()));
             }
         }
 
@@ -784,18 +788,25 @@ impl IndexStoreTables {
         &self,
         checkpoint: &CheckpointData,
         batch: &mut typed_store::rocks::DBBatch,
+        index_events: bool,
     ) -> Result<(), StorageError> {
-        for tx in &checkpoint.transactions {
+        let cp = checkpoint.checkpoint_summary.sequence_number;
+
+        for (tx_idx, tx) in checkpoint.transactions.iter().enumerate() {
             let info = TransactionInfo::new(
                 tx.transaction.transaction_data(),
                 &tx.effects,
                 &tx.input_objects,
                 &tx.output_objects,
-                checkpoint.checkpoint_summary.sequence_number,
+                cp,
             );
 
             let digest = tx.transaction.digest();
             batch.insert_batch(&self.transactions, [(digest, info)])?;
+
+            if index_events {
+                self.index_transaction_events(tx, cp, tx_idx as u32, batch)?;
+            }
         }
 
         Ok(())
