@@ -4,7 +4,7 @@
 use async_graphql::{Context, Object, Result};
 
 use crate::{
-    api::types::available_range::{AvailableRange, RetentionKey},
+    api::types::available_range::{AvailableRange, AvailableRangeKey},
     config::Limits,
     error::RpcError,
     pagination::{is_connection, PaginationConfig},
@@ -206,7 +206,7 @@ impl ServiceConfig {
     }
 
     /// Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
-    async fn retention(
+    async fn available_range(
         &self,
         ctx: &Context<'_>,
         type_: String,
@@ -216,7 +216,7 @@ impl ServiceConfig {
         AvailableRange::new(
             ctx,
             &self.scope,
-            RetentionKey {
+            AvailableRangeKey {
                 type_,
                 field,
                 filters,

@@ -22,10 +22,10 @@ use tokio_util::sync::CancellationToken;
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 
 // GraphQL query constants
-const RETENTION_QUERY: &str = r#"
+const AVAILABLE_RANGE_QUERY: &str = r#"
     query($type: String!, $field: String, $filters: [String]) {
         serviceConfig {
-            retention(type: $type, field: $field, filters: $filters) {
+            availableRange(type: $type, field: $field, filters: $filters) {
                 first { sequenceNumber }
                 last { sequenceNumber }
             }
@@ -91,9 +91,10 @@ async fn test_available_range_with_pipelines() {
         5
     );
 
+    // Last 5 checkpoints are available as we retain 5 checkpoints for tx_affected_addresses.
     let affected_addresses_retention = execute_graphql_query(
         &cluster,
-        RETENTION_QUERY,
+        AVAILABLE_RANGE_QUERY,
         Some(json!({
             "type": "Query".to_string(),
             "field": "transactions".to_string(),
@@ -103,14 +104,14 @@ async fn test_available_range_with_pipelines() {
     .await;
 
     assert_eq!(
-        affected_addresses_retention["data"]["serviceConfig"]["retention"]["first"]
+        affected_addresses_retention["data"]["serviceConfig"]["availableRange"]["first"]
             ["sequenceNumber"]
             .as_u64()
             .unwrap(),
         6
     );
     assert_eq!(
-        affected_addresses_retention["data"]["serviceConfig"]["retention"]["last"]
+        affected_addresses_retention["data"]["serviceConfig"]["availableRange"]["last"]
             ["sequenceNumber"]
             .as_u64()
             .unwrap(),
@@ -132,9 +133,10 @@ async fn test_available_range_with_pipelines() {
         .await
         .unwrap();
 
+    // Last 10 checkpoints are available as we retain 10 checkpoints for tx_digests.
     let transasction_retention = execute_graphql_query(
         &cluster,
-        RETENTION_QUERY,
+        AVAILABLE_RANGE_QUERY,
         Some(json!({
             "type": "Query",
             "field": "transactions",
@@ -144,13 +146,14 @@ async fn test_available_range_with_pipelines() {
     .await;
 
     assert_eq!(
-        transasction_retention["data"]["serviceConfig"]["retention"]["first"]["sequenceNumber"]
+        transasction_retention["data"]["serviceConfig"]["availableRange"]["first"]
+            ["sequenceNumber"]
             .as_u64()
             .unwrap(),
         11
     );
     assert_eq!(
-        transasction_retention["data"]["serviceConfig"]["retention"]["last"]["sequenceNumber"]
+        transasction_retention["data"]["serviceConfig"]["availableRange"]["last"]["sequenceNumber"]
             .as_u64()
             .unwrap(),
         20
