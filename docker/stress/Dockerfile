@@ -17,6 +17,7 @@ FROM rust:1.85-bullseye
 ARG PROFILE=release
 ARG GIT_REVISION
 COPY --from=builder /sui/target/${PROFILE}/stress /usr/local/bin
+WORKDIR "$WORKDIR/sui"
 
 RUN apt-get update && apt-get -y --no-install-recommends install wget=1.21-1+deb11u1 \
         iputils-ping netcat procps bind9-host bind9-dnsutils curl iproute2 git ca-certificates awscli
@@ -26,7 +27,10 @@ RUN git clone https://github.com/MystenLabs/sui.git ; \
         git checkout $GIT_REVISION ; \
         cd .. ; \
         mv sui/* .
-
+        
+RUN mkdir -p /docker/stress
+RUN cp docker/stress/entrypoint.sh /docker/stress/entrypoint.sh
+RUN chmod +x /docker/stress/entrypoint.sh
 RUN echo ${GIT_REVISION:-$GIT_REVISION} > /var/run/sui_commit
 
 CMD ["/docker/stress/entrypoint.sh"]

@@ -30,10 +30,14 @@ jobs:
         export new_commit_hash=$(git rev-parse HEAD)
         export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
 
-        export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -rV | head -1)
+        export previous_tag=$(git tag -l 'sui_v1*_rel_notes' --sort=-version:refname | head -n1 || true)
         export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
         
-        export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- consensus crates dashboards doc docker external-crates kiosk nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
+        export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline \
+            --abbrev-commit ${previous_commit_hash}...${new_commit_hash} \
+            -- consensus crates dashboards doc docker external-crates \
+            kiosk nre sui-execution | grep -o '#[0-9]\+' | \
+            grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
 
         echo "matrix=${list_of_prs}" >> $GITHUB_OUTPUT
         echo "new_commit_hash=${new_commit_hash}" >> $GITHUB_OUTPUT
@@ -59,18 +63,27 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "Processing PR#${{ matrix.pr }}"
+
+        # Fetch PR body to temp file to prevent injection
+        temp_file=$(mktemp)
+        trap 'rm -f "$temp_file"' EXIT
         
-        # old format
-        export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/### Release notes/{p=1; next} p' | sed '/^[[:space:]]*$/d')
-        
-        # new format
-        [[ -z $rel_notes ]] && export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/^\- \[x\]/')
+        gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/MystenLabs/sui/pulls/${{ matrix.pr }}" --jq ".body" > "$temp_file"
+
+        # Extract release notes - try old format first, then new format
+        rel_notes=$(awk '/### Release notes/{p=1; next} p' "$temp_file" | sed '/^[[:space:]]*$/d')
+        [[ -z "$rel_notes" ]] && rel_notes=$(awk '/^\- \[x\]/' "$temp_file")
 
         # make text json payload friendly
-        rel_notes="${rel_notes//\\/\\\\}"
-        rel_notes="${rel_notes//\"/\\\"}"
-        rel_notes="${rel_notes//$'\r'/}"
-        echo "release_notes=${rel_notes}" >> $GITHUB_ENV
+        rel_notes=$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\r//g' <<<"$rel_notes")
+
+        # Write to GITHUB_ENV safely (multiline)
+        {
+          echo 'release_notes<<__EOF__'
+          printf '%s\n' "$rel_notes"
+          echo '__EOF__'
+        } >> "$GITHUB_ENV"
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2

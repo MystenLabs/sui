@@ -6,7 +6,6 @@ use mysten_common::moving_window::MovingWindow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
-use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
@@ -23,11 +22,13 @@ use tracing::debug;
 const RELIABILITY_MOVING_WINDOW_SIZE: usize = 40;
 /// Size of the moving window for latency measurements
 const LATENCY_MOVING_WINDOW_SIZE: usize = 40;
+/// Maximum adjusted latency from completely unreachable (reliability = 0.0) or very slow validators.
+const MAX_LATENCY: f64 = 10.0;
 
 /// Complete client-observed statistics for validator interactions.
 ///
 /// This struct maintains client-side metrics for all validators in the network,
-/// including reliability scores, latency measurements, and failure tracking
+/// including latency measurements, reliability measurements, and failure tracking
 /// as observed from the client's perspective. It uses exponential moving averages (EMA)
 /// to smooth out transient spikes while still responding to sustained changes.
 #[derive(Debug, Clone)]
@@ -127,149 +128,58 @@ impl ClientObservedStats {
             .set(validator_stats.consecutive_failures as i64);
     }
 
-    /// Get validator scores for all validators in the committee for the provided tx type.
+    /// Get validator latencies for all validators in the committee for the provided tx type.
     ///
-    /// Returns a map of all tracked validators to their scores.
-    /// Score is 0 if the validator is excluded or has no stats.
+    /// Returns a map of all tracked validators to their stats. For a validator
     pub fn get_all_validator_stats(
         &self,
         committee: &Committee,
         tx_type: TxType,
     ) -> HashMap<AuthorityName, f64> {
-        let max_latencies = self.calculate_max_latencies(committee);
-
         committee
             .names()
             .map(|validator| {
-                let score = if let Some(stats) = self.validator_stats.get(validator) {
-                    let is_excluded = if let Some(exclusion_time) = stats.exclusion_time {
-                        exclusion_time.elapsed() < self.config.failure_cooldown
-                    } else {
-                        false
-                    };
-                    if is_excluded {
-                        0.0
-                    } else {
-                        self.calculate_client_score(stats, &max_latencies, tx_type)
-                    }
-                } else {
-                    0.0
-                };
-                (*validator, score)
+                let latency = self.calculate_client_latency(validator, tx_type);
+                (*validator, latency)
             })
             .collect()
     }
 
-    /// Calculate the max latencies for each operation type for the provided committee.
-    /// The max latencies are calculated by taking the maximum latency for each operation type
-    /// for each validator in the committee.
-    fn calculate_max_latencies(&self, committee: &Committee) -> HashMap<OperationType, f64> {
-        let mut max_latencies = HashMap::new();
-
-        for validator in committee.names() {
-            // It's possible that a reconfiguration happened and the validator is no longer in the committee.
-            let Some(stats) = self.validator_stats.get(validator) else {
-                continue;
-            };
-
-            // We are specifically excluding from the max latencies calculations the validators that are meant to be excluded
-            // from the score calculations anyways. Only the ones participating in the pool should be considered to avoid score inflation.
-            let is_excluded = if let Some(exclusion_time) = stats.exclusion_time {
-                exclusion_time.elapsed() < self.config.failure_cooldown
-            } else {
-                false
-            };
-
-            for op in OperationType::iter() {
-                let latency = if is_excluded {
-                    0.0
-                } else {
-                    stats
-                        .average_latencies
-                        .get(&op)
-                        .map(|mw| mw.get())
-                        .unwrap_or(0.0)
-                };
-                if let Some(max_latency) = max_latencies.get(&op) {
-                    if latency > *max_latency {
-                        max_latencies.insert(op, latency);
-                    }
-                } else {
-                    max_latencies.insert(op, latency);
-                }
-            }
-        }
-
-        max_latencies
-    }
-
-    /// Calculate client-observed score for a single validator for the provided tx type.
+    /// Calculate adjusted latency for a single validator for the provided tx type.
     ///
-    /// The score combines reliability and latency metrics as observed by the client,
-    /// weighted according to configuration.
+    /// Returns the average latency for relevant operations (Consensus and FastPath only)
+    /// with reliability penalty applied. Lower values are better.
     ///
-    /// If a validator is missing local stats for an operation type, we use a
-    /// conservative default (assuming they are at the global maximum latency)
-    /// to ensure fairness while still allowing them to be scored.
+    /// Only considers:
+    /// - Consensus operations (for SharedObject transactions)
+    /// - FastPath operations (for SingleWriter transactions)
     ///
-    /// Score calculation:
-    /// 1. Latency scores are normalized against global maximums
-    /// 2. Each operation type has its own weight
-    /// 3. Final score = (weighted_latency_score * latency_weight) + (reliability * reliability_weight)
-    fn calculate_client_score(
-        &self,
-        stats: &ValidatorClientStats,
-        max_latencies: &HashMap<OperationType, f64>,
-        tx_type: TxType,
-    ) -> f64 {
-        let mut latency_score = 0.0;
-        let mut total_weight = 0.0;
-
-        for op in OperationType::iter() {
-            let latency_weight = match op {
-                OperationType::Submit => self.config.score_weights.submit_latency_weight,
-                OperationType::Effects => self.config.score_weights.effects_latency_weight,
-                OperationType::HealthCheck => self.config.score_weights.health_check_latency_weight,
-                OperationType::FastPath => self.config.score_weights.fast_path_latency_weight,
-                OperationType::Consensus => self.config.score_weights.consensus_latency_weight,
-            };
-
-            if tx_type == TxType::SingleWriter && op == OperationType::Consensus {
-                continue;
-            }
-
-            if tx_type == TxType::SharedObject && op == OperationType::FastPath {
-                continue;
-            }
-
-            // Skip if max latency is missing for this operation
-            let Some(max_latency) = max_latencies.get(&op) else {
-                continue;
-            };
-
-            // If validator has local stats, use them; otherwise assume max latency (conservative)
-            let latency = stats
-                .average_latencies
-                .get(&op)
-                .map(|ma| ma.get())
-                .unwrap_or(*max_latency);
-
-            // Lower latency ratios are better (inverted for scoring)
-            let latency_ratio = (latency / max_latency).min(1.0);
-            latency_score += (1.0 - latency_ratio) * latency_weight;
-            total_weight += latency_weight;
-        }
-
-        let latency_score = if total_weight == 0.0 {
-            0.0
-        } else {
-            // Normalize latency score by total weight
-            latency_score / total_weight
+    /// Returns latency in seconds, with reliability penalty applied as a multiplier.
+    fn calculate_client_latency(&self, validator: &AuthorityName, tx_type: TxType) -> f64 {
+        let Some(stats) = self.validator_stats.get(validator) else {
+            return MAX_LATENCY;
         };
 
-        let reliability_score = stats.reliability.get();
-        latency_score * self.config.score_weights.latency
-            + reliability_score * self.config.score_weights.reliability
+        if let Some(exclusion_time) = stats.exclusion_time {
+            if exclusion_time.elapsed() < self.config.failure_cooldown {
+                return MAX_LATENCY;
+            }
+        }
+
+        let operation = match tx_type {
+            TxType::SharedObject => OperationType::Consensus,
+            TxType::SingleWriter => OperationType::FastPath,
+        };
+        let Some(latency) = stats.average_latencies.get(&operation) else {
+            // For the target validator and operation type, no latency data has been recorded yet.
+            return MAX_LATENCY;
+        };
+
+        // Get the latency for the relevant operation
+        let base_latency = latency.get();
+        let reliability = stats.reliability.get();
+        let reliability_weight = self.config.reliability_weight;
+        (base_latency + (1.0 - reliability) * reliability_weight * MAX_LATENCY).min(MAX_LATENCY)
     }
 
     /// Retain only the specified validators, removing any others.

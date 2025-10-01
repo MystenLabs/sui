@@ -10,7 +10,7 @@ use move_binary_format::{
 use move_core_types::{language_storage::ModuleId, vm_status::StatusCode};
 use std::collections::BTreeSet;
 
-pub fn verify_module<D>(module: &CompiledModule, imm_deps: D) -> VMResult<()>
+pub fn verify_module<D>(module: &CompiledModule, imm_deps: D) -> VMResult<BTreeSet<ModuleId>>
 where
     D: Fn(&ModuleId) -> PartialVMResult<Vec<ModuleId>>,
 {
@@ -22,7 +22,10 @@ where
 /// - If `module.self_id()` is encountered (again), a dependency cycle is detected and an error is
 ///   returned.
 /// - Otherwise terminates without an error.
-fn verify_module_impl<D>(module: &CompiledModule, imm_deps: D) -> PartialVMResult<()>
+fn verify_module_impl<D>(
+    module: &CompiledModule,
+    imm_deps: D,
+) -> PartialVMResult<BTreeSet<ModuleId>>
 where
     D: Fn(&ModuleId) -> PartialVMResult<Vec<ModuleId>>,
 {
@@ -39,7 +42,8 @@ where
             return Ok(true);
         }
 
-        if !visited.insert(cursor.clone()) {
+        let is_new = visited.insert(cursor.clone());
+        if is_new {
             for dep in deps(cursor)? {
                 if detect_cycles(target, &dep, visited, deps)? {
                     return Ok(true);
@@ -58,5 +62,5 @@ where
         }
     }
 
-    Ok(())
+    Ok(visited)
 }

@@ -9,9 +9,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
-    metrics::IndexerMetrics,
-    store::{CommitterWatermark, Store},
-    types::full_checkpoint_content::CheckpointData,
+    metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::CheckpointData,
     FieldCount,
 };
 
@@ -187,7 +185,7 @@ impl Default for PrunerConfig {
 /// reports an issue.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    initial_commit_watermark: Option<CommitterWatermark>,
+    next_checkpoint: u64,
     config: ConcurrentConfig,
     skip_watermark: bool,
     store: H::Store,
@@ -246,7 +244,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let commit_watermark = commit_watermark::<H>(
-        initial_commit_watermark,
+        next_checkpoint,
         committer_config,
         skip_watermark,
         watermark_rx,
@@ -297,9 +295,8 @@ mod tests {
 
     use crate::{
         metrics::IndexerMetrics,
+        mocks::store::{MockConnection, MockStore},
         pipeline::Processor,
-        store::CommitterWatermark,
-        testing::mock_store::MockStore,
         types::{
             full_checkpoint_content::CheckpointData,
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
@@ -351,7 +348,7 @@ mod tests {
 
         async fn commit<'a>(
             values: &[Self::Value],
-            conn: &mut crate::testing::mock_store::MockConnection<'a>,
+            conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             // Group values by checkpoint
             let mut grouped: std::collections::HashMap<u64, Vec<u64>> =
@@ -371,7 +368,7 @@ mod tests {
             &self,
             from: u64,
             to_exclusive: u64,
-            conn: &mut crate::testing::mock_store::MockConnection<'a>,
+            conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             conn.0.prune_data(from, to_exclusive)
         }
@@ -385,11 +382,7 @@ mod tests {
     }
 
     impl TestSetup {
-        async fn new(
-            config: ConcurrentConfig,
-            store: MockStore,
-            initial_watermark: Option<CommitterWatermark>,
-        ) -> Self {
+        async fn new(config: ConcurrentConfig, store: MockStore, next_checkpoint: u64) -> Self {
             let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
             let metrics = IndexerMetrics::new(None, &Registry::default());
             let cancel = CancellationToken::new();
@@ -397,7 +390,7 @@ mod tests {
             let skip_watermark = false;
             let pipeline_handle = pipeline(
                 DataPipeline,
-                initial_watermark,
+                next_checkpoint,
                 config,
                 skip_watermark,
                 store.clone(),
@@ -463,7 +456,7 @@ mod tests {
             ..Default::default()
         };
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send initial checkpoints
         for i in 0..3 {
@@ -522,7 +515,7 @@ mod tests {
             ..Default::default()
         };
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send several checkpoints
         for i in 0..10 {
@@ -560,7 +553,7 @@ mod tests {
     async fn test_out_of_order_processing() {
         let config = ConcurrentConfig::default();
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send checkpoints out of order
         let checkpoints = vec![2, 0, 4, 1, 3];
@@ -590,7 +583,7 @@ mod tests {
     async fn test_watermark_progression_with_gaps() {
         let config = ConcurrentConfig::default();
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send checkpoints with a gap (0, 1, 3, 4) - missing checkpoint 2
         for cp in [0, 1, 3, 4] {
@@ -604,7 +597,7 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         // Watermark should only progress to 1 (can't progress past the gap)
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.watermark().unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Now send the missing checkpoint 2
@@ -645,7 +638,7 @@ mod tests {
             ..Default::default()
         };
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Wait for initial setup
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -709,7 +702,7 @@ mod tests {
             ..Default::default()
         };
         let store = MockStore::default().with_commit_delay(10_000); // 10 seconds delay
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Pipeline capacity analysis with slow commits:
         // Configuration: FANOUT=2, write_concurrency=1, PIPELINE_BUFFER=5
@@ -769,7 +762,7 @@ mod tests {
     async fn test_commit_failure_retry() {
         let config = ConcurrentConfig::default();
         let store = MockStore::default().with_commit_failures(2); // Fail 2 times, then succeed
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send a checkpoint
         setup
@@ -801,7 +794,7 @@ mod tests {
 
         // Configure prune failures for range [0, 2) - fail twice then succeed
         let store = MockStore::default().with_prune_failures(0, 2, 1);
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send enough checkpoints to trigger pruning
         for i in 0..4 {
@@ -863,7 +856,7 @@ mod tests {
 
         // Configure reader watermark failures - fail 2 times then succeed
         let store = MockStore::default().with_reader_watermark_failures(2);
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send checkpoints to trigger reader watermark updates
         for i in 0..6 {
@@ -880,7 +873,7 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         // Verify that reader watermark was eventually updated despite failures
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.watermark().unwrap();
         assert_eq!(watermark.reader_lo, 3);
 
         setup.shutdown().await;
@@ -890,7 +883,7 @@ mod tests {
     async fn test_database_connection_failure_retry() {
         let config = ConcurrentConfig::default();
         let store = MockStore::default().with_connection_failures(2); // Fail 2 times, then succeed
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send a checkpoint
         setup

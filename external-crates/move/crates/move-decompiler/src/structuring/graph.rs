@@ -1,7 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::structuring::{ast as D, dom_tree};
+use crate::{
+    config::{Config, print_heading},
+    structuring::{ast as D, dom_tree},
+};
 
 use petgraph::{
     algo::dominators::Dominators,
@@ -25,7 +28,11 @@ pub struct Graph {
 }
 
 impl Graph {
-    pub fn new(input: &BTreeMap<NodeIndex, D::Input>, start_node: NodeIndex) -> Self {
+    pub fn new(
+        config: &Config,
+        input: &BTreeMap<NodeIndex, D::Input>,
+        start_node: NodeIndex,
+    ) -> Self {
         // Create the control flow graph by first adding all nodes, then edges
         let mut cfg = DiGraph::new();
 
@@ -42,13 +49,22 @@ impl Graph {
             cfg.add_edge(edge.0, edge.1, ());
         }
 
-        println!("CFG: {cfg:#?}");
+        if config.debug_print.control_flow_graph {
+            print_heading("control flow graph");
+            println!("{cfg:#?}");
+        }
 
         let (loop_heads, back_edges) = find_loop_heads_and_back_edges(&cfg, start_node);
         let dom_tree = dom_tree::DominatorTree::from_graph(&cfg, start_node);
-        let (return_, post_dominators) = compute_post_dominators(&cfg, input);
-        println!("Dom tree: {dom_tree:#?}");
-        println!("Loop heads: {loop_heads:#?}");
+        let (return_, post_dominators) = compute_post_dominators(config, &cfg, input);
+        if config.debug_print.control_flow_graph {
+            print_heading("dominators");
+            println!("{dom_tree:#?}");
+            print_heading("post-dominators");
+            println!("{post_dominators:#?}");
+            print_heading("loop heads");
+            println!("{loop_heads:#?}");
+        }
         Self {
             cfg,
             dom_tree,
@@ -123,10 +139,6 @@ impl Graph {
         }
 
         let (loop_nodes, succ_nodes) = self.refine_loop_nodes(loop_nodes, succ_nodes, node_start);
-        println!(
-            "Loop nodes: {:?}, Successor nodes: {:?}",
-            loop_nodes, succ_nodes
-        );
         (loop_nodes, succ_nodes)
     }
 
@@ -213,6 +225,7 @@ fn find_loop_heads_and_back_edges<N, E>(
 }
 
 fn compute_post_dominators<N, E>(
+    config: &Config,
     graph: &petgraph::Graph<N, E>,
     input: &BTreeMap<D::Label, D::Input>,
 ) -> (NodeIndex, Dominators<NodeIndex>) {
@@ -228,7 +241,9 @@ fn compute_post_dominators<N, E>(
                 .count()
                 == 0
         {
-            if !(matches!(input.get(&node), Some(D::Input::Code(_, _, None)))) {
+            if !(matches!(input.get(&node), Some(D::Input::Code(_, _, None))))
+                && config.debug_print.control_flow_graph
+            {
                 println!("Node {node:?} with no outs: {:#?}", input.get(&node));
             }
             graph.add_edge(return_, node, ());

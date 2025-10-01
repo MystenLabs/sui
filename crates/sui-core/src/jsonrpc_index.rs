@@ -1102,7 +1102,7 @@ impl IndexStore {
             TxSequenceNumber::MIN
         });
 
-        let max_string = "Z".repeat(self.max_type_length.try_into().unwrap());
+        let max_string = "z".repeat(self.max_type_length.try_into().unwrap());
         let module_val = module.clone().unwrap_or(if reverse {
             max_string.clone()
         } else {
@@ -1999,5 +1999,77 @@ mod tests {
         assert_eq!(balance.num_coins, 7);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_by_move_function() {
+        use sui_types::base_types::ObjectID;
+        use typed_store::Map;
+
+        let index_store = IndexStore::new(temp_dir(), &Registry::default(), Some(128), false);
+        let db = &index_store.tables.transactions_by_move_function;
+        db.insert(
+            &(
+                ObjectID::new([1; 32]),
+                "mod".to_string(),
+                "f".to_string(),
+                0,
+            ),
+            &[0; 32].into(),
+        )
+        .unwrap();
+        db.insert(
+            &(
+                ObjectID::new([1; 32]),
+                "mod".to_string(),
+                "Z".repeat(128),
+                0,
+            ),
+            &[1; 32].into(),
+        )
+        .unwrap();
+        db.insert(
+            &(
+                ObjectID::new([1; 32]),
+                "mod".to_string(),
+                "f".repeat(128),
+                0,
+            ),
+            &[2; 32].into(),
+        )
+        .unwrap();
+        db.insert(
+            &(
+                ObjectID::new([1; 32]),
+                "mod".to_string(),
+                "z".repeat(128),
+                0,
+            ),
+            &[3; 32].into(),
+        )
+        .unwrap();
+
+        let mut v = index_store
+            .get_transactions_by_move_function(
+                ObjectID::new([1; 32]),
+                Some("mod".to_string()),
+                None,
+                None,
+                None,
+                false,
+            )
+            .unwrap();
+        let v_rev = index_store
+            .get_transactions_by_move_function(
+                ObjectID::new([1; 32]),
+                Some("mod".to_string()),
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+        v.reverse();
+        assert_eq!(v, v_rev);
     }
 }

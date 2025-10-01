@@ -7,6 +7,9 @@ use crate::static_programmable_transactions::execution::context::check_private_g
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
 use move_binary_format::file_format::Visibility;
 use sui_types::{
+    balance::{
+        BALANCE_MODULE_NAME, SEND_TO_ACCOUNT_FUNCTION_NAME, WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME,
+    },
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
 };
@@ -163,7 +166,7 @@ fn move_call<Mode: ExecutionMode>(
     } = call;
     check_signature::<Mode>(function)?;
     check_private_generics(&function.runtime_id, function.name.as_ident_str())?;
-    let (vis, is_entry) = check_visibility::<Mode>(function)?;
+    let (vis, is_entry) = check_visibility::<Mode>(env, function)?;
     let arg_dirties = args
         .iter()
         .map(|arg| argument(env, context, arg))
@@ -209,6 +212,7 @@ fn check_signature<Mode: ExecutionMode>(
 }
 
 fn check_visibility<Mode: ExecutionMode>(
+    env: &Env,
     function: &T::LoadedFunction,
 ) -> Result<(Visibility, /* is_entry */ bool), ExecutionError> {
     match (function.visibility, function.is_entry) {
@@ -221,10 +225,20 @@ fn check_visibility<Mode: ExecutionMode>(
         // cannot call private or friend if not entry
         (Visibility::Private | Visibility::Friend, false) => {
             if !Mode::allow_arbitrary_function_calls() {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    "Can only call `entry` or `public` functions",
-                ));
+                // Special case: allow private accumulator entrypoints in test/simtest environments
+                // TODO: delete this as soon as the accumulator Move API is available
+                if env.protocol_config.allow_private_accumulator_entrypoints()
+                    && function.runtime_id.name() == BALANCE_MODULE_NAME
+                    && (function.name.as_ident_str() == SEND_TO_ACCOUNT_FUNCTION_NAME
+                        || function.name.as_ident_str() == WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME)
+                {
+                    // Allow these specific functions
+                } else {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::NonEntryFunctionInvoked,
+                        "Can only call `entry` or `public` functions",
+                    ));
+                }
             }
         }
     };

@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    connection::{Connection, Edge},
-    *,
-};
+use async_graphql::{connection::Connection, *};
 use sui_types::{
     digests::ChainIdentifier as NativeChainIdentifier,
     transaction::{
@@ -152,23 +149,18 @@ impl EndOfEpochTransaction {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-    ) -> Result<Connection<String, EndOfEpochTransactionKind>, RpcError> {
+    ) -> Result<Option<Connection<String, EndOfEpochTransactionKind>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("EndOfEpochTransaction", "transactions");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let cursors = page.paginate_indices(self.native.len());
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-
-        for edge in cursors.edges {
-            let tx_kind = EndOfEpochTransactionKind::from(
-                self.native[*edge.cursor].clone(),
+        page.paginate_indices(self.native.len(), |i| {
+            Ok(EndOfEpochTransactionKind::from(
+                self.native[i].clone(),
                 self.scope.clone(),
-            );
-            conn.edges.push(Edge::new(edge.cursor.to_string(), tx_kind));
-        }
-
-        Ok(conn)
+            ))
+        })
+        .map(Some)
     }
 }
 

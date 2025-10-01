@@ -1,0 +1,18 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: bit_ops
+    Function: and (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u8 = Move(lcl_0)
+        reg_1 : u8 = Move(lcl_1)
+        reg_2 : bool = BitAnd(reg_0 : u8, reg_1 : u8)
+        Return(reg_2 : bool)
+
+
+    Function: or (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u8 = Move(lcl_0)
+        reg_1 : u8 = Move(lcl_1)
+        reg_2 : bool = BitOr(reg_0 : u8, reg_1 : u8)
+        Return(reg_2 : bool)

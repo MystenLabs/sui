@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Always consult CLAUDE.md files in sub-crates. Instructions in local CLAUDE.md files override instructions
 in this file when they are in conflict.
 
-## CLAUDE-local.md files
-CLAUDE-local.md files are not checked in, and are maintained by individuals. Consult them if they are present.
+# Individual Preferences
+Individual preferences supercede and extend project preferences:
+- @CLAUDE.local.md
 
 ## Essential Development Commands
 
@@ -24,17 +25,11 @@ cargo check
 ### Testing
 
 ```bash
-# Run Rust unittests
-cargo nextest run                    # Preferred test runner
+# Run e2e tests. simtests must be run with `cargo simtest` to avoid false negatives
+cargo simtest -p sui-e2e-tests
 
-# Run specific test suite
-cargo nextest run -p sui-e2e-tests
-
-# Skip simulation tests for deterministic results
+# Run Rust unittests. skip simulation tests as they may cause false negatives with `cargo nextest`
 SUI_SKIP_SIMTESTS=1 cargo nextest run
-
-# Run deterministic simtests
-cargo simtest
 ```
 
 **Important Notes for Testing:**
@@ -46,7 +41,10 @@ cargo simtest
 ### Linting and Formatting
 
 ```bash
-# Rust
+# Formats & lints all Rust & Move, run before commit:
+./scripts/lint.sh
+
+# Alternatively, run individual lints:
 cargo fmt --all -- --check
 cargo xclippy
 ```

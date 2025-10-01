@@ -1,6 +1,8 @@
+use move_core_types::{account_address::AccountAddress, ident_str};
+
 use crate::{
     file_format::{Bytecode, Visibility},
-    normalized::*,
+    normalized::{self, *},
     unit_tests::compatibility_tests::mk_module_plus_code,
 };
 
@@ -63,5 +65,54 @@ fn test_function_locals_ignored_in_equivalence() {
     assert!(
         base_module.equivalent(&modified_module),
         "Equivalence failed due to differing `locals` fields, but these should be ignored"
+    );
+}
+
+#[test]
+fn test_function_ref_signatures_ignored_in_equivalence() {
+    let fn_ref_0 = normalized::FunctionRef {
+        module: ModuleId {
+            address: AccountAddress::ZERO,
+            name: ident_str!("M").to_owned(),
+        },
+        function: ident_str!("f").to_owned(),
+        type_arguments: Rc::new(vec![]),
+        parameters: Rc::new(vec![]),
+        return_: Rc::new(vec![]),
+    };
+
+    let fn_ref_1 = normalized::FunctionRef {
+        module: ModuleId {
+            address: AccountAddress::ZERO,
+            name: ident_str!("M").to_owned(),
+        },
+        function: ident_str!("f").to_owned(),
+        type_arguments: Rc::new(vec![]),
+        parameters: Rc::new(vec![Rc::new(Type::U64), Rc::new(Type::Bool)]),
+        return_: Rc::new(vec![]),
+    };
+
+    let fn_ref_2 = normalized::FunctionRef {
+        module: ModuleId {
+            address: AccountAddress::ZERO,
+            name: ident_str!("M").to_owned(),
+        },
+        function: ident_str!("f").to_owned(),
+        type_arguments: Rc::new(vec![]),
+        parameters: Rc::new(vec![]),
+        return_: Rc::new(vec![Rc::new(Type::U64), Rc::new(Type::Bool)]),
+    };
+
+    assert!(
+        fn_ref_0.equivalent(&fn_ref_1),
+        "Equivalence failed to ignore differing `parameters` fields"
+    );
+    assert!(
+        fn_ref_0.equivalent(&fn_ref_2),
+        "Equivalence failed to ignore differing `return_` fields"
+    );
+    assert!(
+        fn_ref_1.equivalent(&fn_ref_2),
+        "Equivalence failed to ignore differing `parameters` and `return_` fields"
     );
 }

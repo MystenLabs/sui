@@ -1684,14 +1684,12 @@ checksum = "dc1804bdb6a9784758b200007273a8b84e2b0b0b97a8f1e18e763eceb3e9f98a"
 
 [[package]]
 name = "insta"
-version = "1.42.2"
+version = "1.43.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50259abbaa67d11d2bcafc7ba1d094ed7a0c70e3ce893f0d0997f73558cb3084"
+checksum = "46fdb647ebde000f43b5b53f773c30cf9b0cb4300453208713fa38b2c70935a0"
 dependencies = [
  "console",
- "linked-hash-map",
  "once_cell",
- "pin-project",
  "serde",
  "similar",
 ]
@@ -2246,6 +2244,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-coverage",
+ "move-decompiler",
  "move-disassembler",
  "move-docgen",
  "move-ir-types",
@@ -2255,6 +2254,7 @@ dependencies = [
  "move-symbol-pool",
  "move-trace-format",
  "move-unit-test",
+ "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
  "serde",
@@ -2407,6 +2407,7 @@ dependencies = [
  "move-symbol-pool",
  "move-vm-runtime",
  "petgraph",
+ "pretty_simple",
  "tempfile",
 ]
 
@@ -2588,6 +2589,7 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "num",
+ "pretty_simple",
  "serde",
  "vfs",
 ]
@@ -2648,6 +2650,7 @@ dependencies = [
  "itertools 0.10.5",
  "jsonrpc",
  "move-command-line-common",
+ "move-compiler",
  "move-core-types",
  "named-lock",
  "once_cell",
@@ -3205,9 +3208,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.21.0"
+version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cde51589ab56b20a6f686b2c68f7a0bd6add753d697abf720d63f8db3ab7b1ad"
+checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "oorandom"
@@ -3420,26 +3423,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pin-project"
-version = "1.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677f1add503faace112b9f1373e43e9e054bfdd22ff1a63c1bc485eaec6a6a8a"
-dependencies = [
- "pin-project-internal",
-]
-
-[[package]]
-name = "pin-project-internal"
-version = "1.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.100",
-]
-
-[[package]]
 name = "pin-project-lite"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3508,6 +3491,16 @@ checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
 dependencies = [
  "diff",
  "yansi",
+]
+
+[[package]]
+name = "pretty_simple"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0911c3f13453d78cf188c7da2fb0b4a1d4991a6b1f051e63d251eae1ef3d92aa"
+dependencies = [
+ "insta",
+ "once_cell",
 ]
 
 [[package]]

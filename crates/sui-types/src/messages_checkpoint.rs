@@ -24,8 +24,8 @@ use crate::sui_serde::Readable;
 use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
+use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::MultisetHash;
-use fastcrypto::hash::{Blake2b256, HashFunction};
 use fastcrypto::merkle::MerkleTree;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
@@ -218,12 +218,7 @@ impl CheckpointArtifacts {
             .map(|a| a.digest())
             .collect::<Result<Vec<_>, _>>()?;
 
-        let bytes =
-            bcs::to_bytes(&digests).map_err(|e| SuiError::from(format!("BCS error: {}", e)))?;
-
-        Ok(CheckpointArtifactsDigest::new(
-            Blake2b256::digest(&bytes).into(),
-        ))
+        CheckpointArtifactsDigest::from_artifact_digests(digests)
     }
 }
 

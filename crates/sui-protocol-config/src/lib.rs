@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 96;
+const MAX_PROTOCOL_VERSION: u64 = 97;
 
 // Record history of protocol version allocations here:
 //
@@ -264,6 +264,8 @@ const MAX_PROTOCOL_VERSION: u64 = 96;
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
 //             Create Coin Registry object
 //             Enable checkpoint artifacts digest in devnet.
+// Version 97: Add authenticated event streams support via emit_authenticated function.
+//             Add better error messages to the loader.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -744,6 +746,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
 
+    // Enable authenticated event streams
+    #[serde(skip_serializing_if = "is_false")]
+    enable_authenticated_event_streams: bool,
+
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
@@ -814,6 +820,18 @@ struct FeatureFlags {
     // If true charge for loads into the cache (i.e., fetches from storage) in the object runtime.
     #[serde(skip_serializing_if = "is_false")]
     object_runtime_charge_cache_load_gas: bool,
+
+    // If true, use the new commit handler.
+    #[serde(skip_serializing_if = "is_false")]
+    use_new_commit_handler: bool,
+
+    // If true return a better error message when we encounter a loader error.
+    #[serde(skip_serializing_if = "is_false")]
+    better_loader_errors: bool,
+
+    // If true generate layouts for dynamic fields
+    #[serde(skip_serializing_if = "is_false")]
+    generate_df_type_layouts: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1299,6 +1317,7 @@ pub struct ProtocolConfig {
     event_emit_value_size_derivation_cost_per_byte: Option<u64>,
     event_emit_tag_size_derivation_cost_per_byte: Option<u64>,
     event_emit_output_cost_per_byte: Option<u64>,
+    event_emit_auth_stream_cost: Option<u64>,
 
     //  `object` module
     // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -1917,6 +1936,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_authenticated_event_streams(&self) -> bool {
+        self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
     pub fn enable_coin_registry(&self) -> bool {
         self.feature_flags.enable_coin_registry
     }
@@ -2230,6 +2253,18 @@ impl ProtocolConfig {
     pub fn object_runtime_charge_cache_load_gas(&self) -> bool {
         self.feature_flags.object_runtime_charge_cache_load_gas
     }
+
+    pub fn use_new_commit_handler(&self) -> bool {
+        self.feature_flags.use_new_commit_handler
+    }
+
+    pub fn better_loader_errors(&self) -> bool {
+        self.feature_flags.better_loader_errors
+    }
+
+    pub fn generate_df_type_layouts(&self) -> bool {
+        self.feature_flags.generate_df_type_layouts
+    }
 }
 
 #[cfg(not(msim))]
@@ -2503,6 +2538,7 @@ impl ProtocolConfig {
             event_emit_value_size_derivation_cost_per_byte: Some(2),
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
             event_emit_output_cost_per_byte: Some(10),
+            event_emit_auth_stream_cost: None,
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -4024,6 +4060,11 @@ impl ProtocolConfig {
                     // Enable Mysticeti fastpath handlers on mainnet.
                     cfg.feature_flags.mysticeti_fastpath = true;
                 }
+                97 => {
+                    cfg.event_emit_auth_stream_cost = Some(52);
+                    cfg.feature_flags.better_loader_errors = true;
+                    cfg.feature_flags.generate_df_type_layouts = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4091,6 +4132,7 @@ impl ProtocolConfig {
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
+            better_loader_errors: self.better_loader_errors(),
         }
     }
 
@@ -4237,9 +4279,50 @@ impl ProtocolConfig {
         self.feature_flags.record_time_estimate_processed = val;
     }
 
+    pub fn set_prepend_prologue_tx_in_consensus_commit_in_checkpoints_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints = val;
+    }
+
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
+    }
+
+    pub fn enable_authenticated_event_streams_for_testing(&mut self) {
+        self.enable_accumulators_for_testing();
+        self.feature_flags.enable_authenticated_event_streams = true;
+    }
+
+    pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .ignore_execution_time_observations_after_certs_closed = val;
+    }
+
+    pub fn set_consensus_checkpoint_signature_key_includes_digest_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .consensus_checkpoint_signature_key_includes_digest = val;
+    }
+
+    pub fn set_cancel_for_failed_dkg_early_for_testing(&mut self, val: bool) {
+        self.feature_flags.cancel_for_failed_dkg_early = val;
+    }
+
+    pub fn set_use_mfp_txns_in_load_initial_object_debts_for_testing(&mut self, val: bool) {
+        self.feature_flags.use_mfp_txns_in_load_initial_object_debts = val;
+    }
+
+    pub fn set_authority_capabilities_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.authority_capabilities_v2 = val;
     }
 }
 

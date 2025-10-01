@@ -24,7 +24,7 @@ fun init(witness: LEGACY, ctx: &mut TxContext) {
 
     let coin = treasury_cap.mint(1_000_000_000, ctx);
 
-    transfer::public_transfer(coin, @0x0);
-    transfer::public_share_object(treasury_cap);
+    transfer::public_transfer(coin, ctx.sender());
+    transfer::public_transfer(treasury_cap, ctx.sender());
     transfer::public_transfer(metadata, ctx.sender());
 }

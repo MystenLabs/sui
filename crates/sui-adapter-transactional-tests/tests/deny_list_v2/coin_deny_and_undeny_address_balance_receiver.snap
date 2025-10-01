@@ -1,0 +1,77 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 11-45:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 19448400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 46-50:
+//# programmable --sender A --inputs object(1,1) 1 @B
+//> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
+//> 1: sui::balance::send_to_account<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
+// Deny account B.
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: fake(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
+
+task 3, lines 51-53:
+//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 50, 56, 99, 52, 55, 102, 51, 99, 102, 53, 98, 102, 101, 48, 52, 48, 53, 56, 56, 50, 51, 50, 48, 52, 97, 48, 51, 100, 52, 50, 53, 102, 50, 98, 56, 53, 51, 54, 51, 98, 100, 56, 56, 55, 50, 57, 97, 53, 97, 98, 51, 99, 54, 101, 56, 48, 56, 50, 51, 57, 48, 102, 49, 54, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 193, 207, 223, 168, 132, 36, 189, 200, 116, 185, 218, 79, 67, 102, 54, 92, 118, 213, 35, 125, 7, 100, 179, 88, 231, 35, 71, 101, 29, 228, 152, 133] }
+created: object(3,0), object(3,1), object(3,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
+
+task 4, lines 54-56:
+//# programmable --sender A --inputs object(1,1) 1 @B
+//> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
+//> 1: sui::balance::send_to_account<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: fake(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
+
+task 5, lines 58-60:
+//# advance-epoch
+Epoch advanced: 1
+
+task 6, lines 61-65:
+//# programmable --sender A --inputs object(1,1) 1 @B
+//> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
+//> 1: sui::balance::send_to_account<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
+// Undeny account B.
+Error: Transaction Effects Status: Address B is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 7, lines 66-68:
+//# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
+
+task 8, lines 69-71:
+//# programmable --sender A --inputs object(1,1) 1 @B
+//> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
+//> 1: sui::balance::send_to_account<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
+Error: Transaction Effects Status: Address B is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 9, lines 73-75:
+//# advance-epoch
+Epoch advanced: 2
+
+task 10, lines 76-78:
+//# programmable --sender A --inputs object(1,1) 1 @B
+//> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
+//> 1: sui::balance::send_to_account<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: fake(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2437776, non_refundable_storage_fee: 24624

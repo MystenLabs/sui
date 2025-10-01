@@ -6,7 +6,7 @@
 //! datatypes (structs and enums).
 
 use crate::{TModuleId, model::Model, normalized, source_kind::SourceKind, source_model};
-use indexmap::IndexMap;
+
 use move_binary_format::file_format;
 use move_compiler::{
     expansion::ast as E,
@@ -16,6 +16,8 @@ use move_compiler::{
 };
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 use move_symbol_pool::Symbol;
+
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -110,12 +112,12 @@ pub struct TParam {
 pub struct Parameter {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
-    name: FromSource<Symbol>,
-    type_: Type,
+    pub name: FromSource<Symbol>,
+    pub type_: Type,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AbilitySet(BTreeSet<Ability>);
+pub struct AbilitySet(pub BTreeSet<Ability>);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Ability {

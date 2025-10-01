@@ -19,6 +19,30 @@ pub(crate) enum FqNameFilter {
     /// Exact match on the module member.
     FqName(SuiAddress, String, String),
 }
+
+impl FqNameFilter {
+    pub(crate) fn package(&self) -> SuiAddress {
+        match self {
+            FqNameFilter::Module(m) => m.package(),
+            FqNameFilter::FqName(p, _, _) => *p,
+        }
+    }
+
+    pub(crate) fn module(&self) -> Option<&str> {
+        match self {
+            FqNameFilter::Module(m) => m.module(),
+            FqNameFilter::FqName(_, m, _) => Some(m.as_str()),
+        }
+    }
+
+    pub(crate) fn name(&self) -> Option<&str> {
+        match self {
+            FqNameFilter::Module(_) => None,
+            FqNameFilter::FqName(_, _, n) => Some(n.as_str()),
+        }
+    }
+}
+
 impl_string_input!(FqNameFilter);
 
 impl FromStr for FqNameFilter {

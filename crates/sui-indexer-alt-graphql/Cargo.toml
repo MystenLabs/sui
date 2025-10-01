@@ -35,6 +35,7 @@ futures.workspace = true
 headers.workspace = true
 im.workspace = true
 itertools.workspace = true
+pin-project.workspace = true
 prometheus.workspace = true
 prost-types.workspace = true
 serde.workspace = true

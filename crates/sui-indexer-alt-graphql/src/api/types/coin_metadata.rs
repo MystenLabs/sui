@@ -2,14 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Context as _};
-use async_graphql::{connection::Connection, Context, Object};
+use async_graphql::{connection::Connection, Context, Enum, Object, SimpleObject};
 use move_core_types::language_storage::StructTag;
 use sui_types::{
+    base_types::SuiAddress as NativeAddress,
     coin::{
-        CoinMetadata as NativeMetadata, TreasuryCap, COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME,
+        CoinMetadata as NativeMetadata, RegulatedCoinMetadata, TreasuryCap,
+        COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME,
     },
-    coin_registry::{Currency as NativeCurrency, SupplyState},
+    coin_registry::{
+        Currency as NativeCurrency, RegulatedState as NativeRegulated, SupplyState as NativeSupply,
+    },
     gas_coin::{GAS, TOTAL_SUPPLY_MIST},
+    object::Owner as NativeOwner,
     TypeTag, SUI_FRAMEWORK_ADDRESS,
 };
 use tokio::sync::OnceCell;
@@ -38,6 +43,47 @@ pub(crate) struct CoinMetadata {
     pub(crate) super_: MoveObject,
 
     contents: OnceCell<Option<MetadataContents>>,
+}
+
+/// Whether the currency is regulated or not.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum RegulatedState {
+    /// A `DenyCap` or a `RegulatedCoinMetadata` exists for this currency.
+    Regulated,
+
+    /// The currency was created without a deny list.
+    Unregulated,
+}
+
+#[derive(SimpleObject, Default)]
+pub(crate) struct RegulatedFields {
+    /// Whether the currency is regulated or not. `null` indicates that the regulatory status is unknown.
+    regulated_state: Option<RegulatedState>,
+
+    /// Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
+    allow_global_pause: Option<bool>,
+
+    /// If the currency is regulated, this object represents the capability to modify the deny list. If a capability is known but wrapped, its address can be fetched but other fields will not be accessible.
+    deny_cap: Option<MoveObject>,
+}
+
+/// Future behavior of a currency's supply.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum SupplyState {
+    /// The supply can only decrease.
+    BurnOnly,
+
+    /// The supply can neither increase nor decrease.
+    Fixed,
+}
+
+#[derive(SimpleObject, Default)]
+pub(crate) struct SupplyFields {
+    /// Future behavior of the supply. `null` indicates that the future behavior of the supply is not known because the currency's treasury still exists.
+    supply_state: Option<SupplyState>,
+
+    /// The overall balance of coins issued.
+    supply: Option<BigInt>,
 }
 
 struct MetadataContents {
@@ -340,53 +386,191 @@ impl CoinMetadata {
             .await
     }
 
-    /// The overall balance of coins issued.
-    pub(crate) async fn supply(
+    #[graphql(flatten)]
+    pub(crate) async fn regulated_fields(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<BigInt>, RpcError<object::Error>> {
+    ) -> Result<RegulatedFields, RpcError<object::Error>> {
         let Some(contents) = self.metadata_contents(ctx).await.map_err(upcast)? else {
-            return Ok(None);
+            return Ok(RegulatedFields::default());
+        };
+
+        let scope = &self.super_.super_.super_.scope;
+
+        // If the currency's metadata is stored in the Coin Registry, and its regulation state is
+        // known, return it.
+        match &contents.native {
+            NativeContents::Registry(NativeCurrency {
+                regulated: NativeRegulated::Unregulated,
+                ..
+            }) => {
+                return Ok(RegulatedFields {
+                    regulated_state: Some(RegulatedState::Unregulated),
+                    allow_global_pause: Some(false),
+                    deny_cap: None,
+                });
+            }
+
+            NativeContents::Registry(NativeCurrency {
+                regulated:
+                    NativeRegulated::Regulated {
+                        cap,
+                        allow_global_pause,
+                        variant: _,
+                    },
+                ..
+            }) => {
+                return Ok(RegulatedFields {
+                    regulated_state: Some(RegulatedState::Regulated),
+                    allow_global_pause: *allow_global_pause,
+                    deny_cap: Some(MoveObject::from_super(Object::with_address(
+                        scope.without_root_version(),
+                        (*cap).into(),
+                    ))),
+                });
+            }
+
+            _ => {}
+        }
+
+        // ...otherwise fall back to looking up the RegulatedCoinMetadata singleton object (for
+        // coin registry currencies where the regulated state is not known and for legacy currencies).
+        let TypeTag::Struct(coin_type) = &contents.coin_type else {
+            return Ok(RegulatedFields::default());
+        };
+
+        if GAS::is_gas(coin_type.as_ref()) {
+            return Ok(RegulatedFields {
+                regulated_state: Some(RegulatedState::Unregulated),
+                allow_global_pause: Some(false),
+                deny_cap: None,
+            });
+        }
+
+        let type_ = RegulatedCoinMetadata::type_(*coin_type.clone());
+        let Some(object) = Object::singleton(ctx, scope.without_root_version(), type_).await?
+        else {
+            // If there is no RegulatedCoinMetadata object, the coin is unregulated.
+            return Ok(RegulatedFields {
+                regulated_state: Some(RegulatedState::Unregulated),
+                allow_global_pause: Some(false),
+                deny_cap: None,
+            });
+        };
+
+        let Some(contents) = object.contents(ctx).await.map_err(upcast)? else {
+            // We were able to find a regulated coin metadata object but couldn't load its
+            // contents -- it's definitely regulated, but we don't have more details.
+            return Ok(RegulatedFields {
+                regulated_state: Some(RegulatedState::Regulated),
+                allow_global_pause: None,
+                deny_cap: None,
+            });
+        };
+
+        let move_object = contents
+            .data
+            .try_as_move()
+            .context("Query by type returned a package")?;
+
+        let metadata: RegulatedCoinMetadata = bcs::from_bytes(move_object.contents())
+            .context("Failed to deserialize RegulatedCoinMetadata")?;
+
+        Ok(RegulatedFields {
+            regulated_state: Some(RegulatedState::Regulated),
+            allow_global_pause: None,
+            deny_cap: Some(MoveObject::from_super(Object::with_address(
+                scope.without_root_version(),
+                metadata.deny_cap_object.bytes.into(),
+            ))),
+        })
+    }
+
+    #[graphql(flatten)]
+    pub(crate) async fn supply_fields(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<SupplyFields, RpcError<object::Error>> {
+        let Some(contents) = self.metadata_contents(ctx).await.map_err(upcast)? else {
+            return Ok(SupplyFields::default());
         };
 
         // If the currency's metadata is stored in the Coin Registry, and its supply is known,
         // return it.
-        if let NativeContents::Registry(NativeCurrency {
-            supply: Some(SupplyState::Fixed(s) | SupplyState::BurnOnly(s)),
-            ..
-        }) = &contents.native
-        {
-            return Ok(Some(BigInt::from(*s)));
+        match &contents.native {
+            NativeContents::Registry(NativeCurrency {
+                supply: Some(NativeSupply::Fixed(s)),
+                ..
+            }) => {
+                return Ok(SupplyFields {
+                    supply_state: Some(SupplyState::Fixed),
+                    supply: Some(BigInt::from(*s)),
+                })
+            }
+
+            NativeContents::Registry(NativeCurrency {
+                supply: Some(NativeSupply::BurnOnly(s)),
+                ..
+            }) => {
+                return Ok(SupplyFields {
+                    supply_state: Some(SupplyState::BurnOnly),
+                    supply: Some(BigInt::from(*s)),
+                })
+            }
+
+            _ => {}
         }
 
         // ...otherwise fall back to looking up the TreasuryCap singleton object (for coin registry
         // currencies where the supply state is not known and for legacy currencies).
         let TypeTag::Struct(coin_type) = &contents.coin_type else {
-            return Ok(None);
+            return Ok(SupplyFields::default());
         };
 
         if GAS::is_gas(coin_type.as_ref()) {
-            return Ok(Some(BigInt::from(TOTAL_SUPPLY_MIST)));
+            return Ok(SupplyFields {
+                supply_state: Some(SupplyState::Fixed),
+                supply: Some(BigInt::from(TOTAL_SUPPLY_MIST)),
+            });
         }
 
         let type_ = TreasuryCap::type_(*coin_type.clone());
         let scope = self.super_.super_.super_.scope.without_root_version();
         let Some(object) = Object::singleton(ctx, scope, type_).await? else {
-            return Ok(None);
+            return Ok(SupplyFields::default());
         };
 
         let Some(contents) = object.contents(ctx).await.map_err(upcast)? else {
-            return Ok(None);
+            return Ok(SupplyFields::default());
         };
 
-        let Some(move_object) = contents.data.try_as_move() else {
-            return Ok(None);
-        };
+        let move_object = contents
+            .data
+            .try_as_move()
+            .context("Query by type returned a package")?;
 
         let treasury_cap: TreasuryCap =
             bcs::from_bytes(move_object.contents()).context("Failed to deserialize TreasuryCap")?;
 
-        Ok(Some(BigInt::from(treasury_cap.total_supply.value)))
+        // Treat the supply as fixed if the TreasuryCap is immutable, or owned by the zero address.
+        let supply_state = if matches!(
+            contents.owner(),
+            NativeOwner::Immutable
+                | NativeOwner::AddressOwner(NativeAddress::ZERO)
+                | NativeOwner::ConsensusAddressOwner {
+                    owner: NativeAddress::ZERO,
+                    ..
+                }
+        ) {
+            Some(SupplyState::Fixed)
+        } else {
+            None
+        };
+
+        Ok(SupplyFields {
+            supply_state,
+            supply: Some(BigInt::from(treasury_cap.total_supply.value)),
+        })
     }
 
     /// Symbol for the coin.

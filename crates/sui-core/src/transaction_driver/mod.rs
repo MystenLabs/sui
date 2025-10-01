@@ -10,7 +10,7 @@ mod transaction_submitter;
 /// Exports
 pub use error::TransactionDriverError;
 pub use metrics::*;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::strategy::ExponentialBackoff;
 
 use std::{
     net::SocketAddr,
@@ -121,7 +121,7 @@ where
     async fn run_latency_checks(self: Arc<Self>) {
         const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(15);
         const MAX_JITTER: Duration = Duration::from_secs(10);
-        const PING_REQUEST_TIMEOUT: Duration = Duration::from_millis(5_000);
+        const PING_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
         let mut interval = interval(INTERVAL_BETWEEN_RUNS);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -263,7 +263,7 @@ where
         // Exponential backoff with jitter to prevent thundering herd on retries
         let mut backoff = ExponentialBackoff::from_millis(100)
             .max_delay(MAX_RETRY_DELAY)
-            .map(jitter);
+            .map(|duration| duration.mul_f64(rand::thread_rng().gen_range(0.5..1.0)));
         let mut attempts = 0;
         let mut latest_retriable_error = None;
 

@@ -28,7 +28,7 @@
 //!         [package]
 //!         name = "a"
 //!         version = "1.0.0"
-//!         edition = "2025"
+//!         edition = "2024"
 //!
 //!         [dependencies]
 //!         dep1 = {{ git = '{}' }}

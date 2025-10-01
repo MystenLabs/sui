@@ -60,6 +60,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, TypeTag,
     accumulator_event::AccumulatorEvent,
     accumulator_root::AccumulatorObjId,
+    balance::Balance,
     base_types::{
         MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR, SequenceNumber,
         SuiAddress, TxContext,
@@ -1774,16 +1775,7 @@ pub fn finish(
         // let deleted = deleted_object_ids.contains(&id);
     }
 
-    if protocol_config.enable_coin_deny_list_v2() {
-        let DenyListResult {
-            result,
-            num_non_gas_coin_owners,
-        } = state_view.check_coin_deny_list(&written_objects);
-        gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-        result?;
-    }
-
-    let user_events = user_events
+    let user_events: Vec<Event> = user_events
         .into_iter()
         .map(|(module_id, tag, contents)| {
             Event::new(
@@ -1796,27 +1788,64 @@ pub fn finish(
         })
         .collect();
 
+    let mut receiving_funds_type_and_owners = BTreeMap::new();
     let accumulator_events = accumulator_events
         .into_iter()
-        .map(|accum_event| match accum_event.value {
-            MoveAccumulatorValue::U64(amount) => {
-                let value = AccumulatorValue::Integer(amount);
-                let address =
-                    AccumulatorAddress::new(accum_event.target_addr.into(), accum_event.target_ty);
-
-                let write = AccumulatorWriteV1 {
-                    address,
-                    operation: accum_event.action.into_sui_accumulator_action(),
-                    value,
-                };
-
-                AccumulatorEvent::new(
-                    AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
-                    write,
-                )
+        .map(|accum_event| {
+            if let Some(ty) = Balance::maybe_get_balance_type_param(&accum_event.target_ty) {
+                receiving_funds_type_and_owners
+                    .entry(ty)
+                    .or_insert_with(BTreeSet::new)
+                    .insert(accum_event.target_addr.into());
             }
+            let value = match accum_event.value {
+                MoveAccumulatorValue::U64(amount) => AccumulatorValue::Integer(amount),
+                MoveAccumulatorValue::EventRef(event_idx) => {
+                    let Some(event) = user_events.get(event_idx as usize) else {
+                        invariant_violation!(
+                            "Could not find authenticated event at index {}",
+                            event_idx
+                        );
+                    };
+                    let digest = event.digest();
+                    AccumulatorValue::EventDigest(event_idx, digest)
+                }
+            };
+
+            let address =
+                AccumulatorAddress::new(accum_event.target_addr.into(), accum_event.target_ty);
+
+            let write = AccumulatorWriteV1 {
+                address,
+                operation: accum_event.action.into_sui_accumulator_action(),
+                value,
+            };
+
+            Ok(AccumulatorEvent::new(
+                AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
+                write,
+            ))
         })
-        .collect();
+        .collect::<Result<Vec<_>, ExecutionError>>()?;
+
+    if protocol_config.enable_coin_deny_list_v2() {
+        for object in written_objects.values() {
+            let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
+            let owner = object.owner.get_address_owner_address();
+            if let (Some(ty), Ok(owner)) = (coin_type, owner) {
+                receiving_funds_type_and_owners
+                    .entry(ty)
+                    .or_insert_with(BTreeSet::new)
+                    .insert(owner);
+            }
+        }
+        let DenyListResult {
+            result,
+            num_non_gas_coin_owners,
+        } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
+        gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+        result?;
+    }
 
     Ok(ExecutionResults::V2(ExecutionResultsV2 {
         written_objects,

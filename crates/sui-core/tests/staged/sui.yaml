@@ -26,6 +26,11 @@ AccumulatorValue:
         TUPLE:
           - U64
           - U64
+    2:
+      EventDigest:
+        TUPLE:
+          - U64
+          - TYPENAME: Digest
 AccumulatorWriteV1:
   STRUCT:
     - address:

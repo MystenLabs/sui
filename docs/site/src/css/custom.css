@@ -888,3 +888,21 @@ h5 {
     margin: 1.5rem auto;
   }
 }
+
+/* Image sizing */
+
+.image-scale-30 img {
+  width: 30%;
+  height: auto;
+}
+
+.image-scale-50 img {
+  width: 50%;
+  height: auto;
+}
+
+.image-scale-70 img {
+  width: 70%;
+  height: auto;
+}
+
