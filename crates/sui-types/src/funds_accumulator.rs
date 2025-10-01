@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Rust bindings for `sui::funds_accumulator`
+
 use crate::base_types::SuiAddress;
 use crate::SUI_FRAMEWORK_ADDRESS;
 use move_core_types::annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout};
@@ -14,9 +16,14 @@ use serde::Serialize;
 pub const FUNDS_ACCUMULATOR_MODULE_NAME: &IdentStr = ident_str!("funds_accumulator");
 pub const WITHDRAWAL_STRUCT_NAME: &IdentStr = ident_str!("Withdrawal");
 
+/// Rust bindings for the Move struct `sui::funds_accumulator::Withdrawal`.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Withdrawal {
     pub owner: SuiAddress,
+    /// Note that unlike the `CallArg::FundsWithdrawal` the `limit` here must
+    /// be fully specified, and cannot be `None` (i.e., unlimited).
+    /// As such, it is the responsibility of the PTB runtime to determine
+    /// the maximum limit in such a case, before creating the Move value.
     pub limit: U256,
 }
 
@@ -25,12 +32,12 @@ impl Withdrawal {
         Self { owner, limit }
     }
 
-    pub fn type_(type_param: TypeTag) -> StructTag {
+    pub fn type_(type_arg: TypeTag) -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             module: FUNDS_ACCUMULATOR_MODULE_NAME.to_owned(),
             name: WITHDRAWAL_STRUCT_NAME.to_owned(),
-            type_params: vec![type_param],
+            type_params: vec![type_arg],
         }
     }
 
