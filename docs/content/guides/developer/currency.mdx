@@ -1,20 +1,20 @@
 ---
 title: Create Currencies and Tokens
-description: Learn how to create currencies and mint coins and tokens on the Sui network using legacy coin creation or the new Coin Registry system.
+description: Learn how to create currencies and mint coins and tokens on the Sui network using the Coin Registry system.
 keywords: [ mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry ]
 pagination_prev: null
 ---
 
 The Coin Registry system provides a centralized approach to currency management through the `sui::coin_registry` module. The registry is a shared object located at address `0xc` that stores metadata, supply information, and regulatory status for all registered coin types.
 
-The `sui::token` module handles token creation on the network. Refer to the [Closed-Loop Token](../../standards/closed-loop-token.mdx) and [Currency](../../standards/currency.mdx) Standards documentation for more information on these features.
+The `sui::token` module handles token creation on the network. Refer to the [Closed-Loop Token](/standards/closed-loop-token.mdx) and [Currency](/standards/currency.mdx) Standards documentation for more information on these features.
 
 ### Currency creation process
 
 The registry system supports two currency creation methods:
 
-1. **Standard creation:** Call `new_currency<T>()` when creating the coin outside of the init function of your package.
-2. **OTW creation:** Use `new_currency_with_otw<T>()` with a One-Time Witness for uniqueness proof.
+1. **Standard creation:** Call `new_currency<T>()` when creating the coin outside of the `init` function of your package.
+1. **OTW creation:** Use `new_currency_with_otw<T>()` with a One-Time Witness for uniqueness proof.
 
 Both methods return a `CurrencyInitializer<T>` that allows configuration before finalization:
 
@@ -34,8 +34,8 @@ OTW currency creation
 
 The initialization process allows for:
 
-- **Supply model selection:** Choose fixed, burn-only, or flexible supply
-- **Regulatory configuration:** Add deny list capabilities if needed
+- **Supply model selection:** Choose fixed, burn-only, or flexible supply.
+- **Regulatory configuration:** Add deny list capabilities if needed.
 
 :::caution Important
 
