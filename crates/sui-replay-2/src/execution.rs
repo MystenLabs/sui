@@ -271,6 +271,17 @@ pub fn execute_transaction_to_effects(
         }
     }
 
+    // HACK: Add any packages from inner_store.written to the object cache
+    // (e.g., newly published packages)
+    for (id, obj) in &inner_store.written {
+        if obj.is_package() {
+            object_cache
+                .entry(*id)
+                .or_default()
+                .insert(obj.version().value(), obj.clone());
+        }
+    }
+
     let mut unchanged = BTreeMap::new();
 
     for (id, meta) in &inner_store.loaded_runtime_objects {
