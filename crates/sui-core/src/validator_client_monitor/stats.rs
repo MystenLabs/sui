@@ -21,7 +21,7 @@ use tracing::debug;
 /// Size of the moving window for reliability measurements
 const RELIABILITY_MOVING_WINDOW_SIZE: usize = 40;
 /// Size of the moving window for latency measurements
-const LATENCY_MOVING_WINDOW_SIZE: usize = 40;
+const LATENCY_MOVING_WINDOW_SIZE: usize = 20;
 /// Maximum adjusted latency from completely unreachable (reliability = 0.0) or very slow validators.
 const MAX_LATENCY: Duration = Duration::from_secs(10);
 
