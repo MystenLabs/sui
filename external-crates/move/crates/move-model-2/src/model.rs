@@ -817,10 +817,10 @@ impl<K: SourceKind> Model<K> {
                             deps.insert(*transitive_dep, false);
                         }
                     }
-                } else if !allow_missing_dependencies {
-                    panic!(
-                        "Module {:?} depends on missing module {:?}",
-                        id, immediate_dep
+                } else {
+                    assert!(
+                        allow_missing_dependencies,
+                        "Module {id:?} depends on missing module {immediate_dep:?}",
                     );
                 }
             }
