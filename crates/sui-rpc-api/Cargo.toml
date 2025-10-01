@@ -56,3 +56,4 @@ tonic-web.workspace = true
 tonic-build = "0.13"
 protox = "0.7"
 walkdir.workspace = true
+serde_json.workspace = true
