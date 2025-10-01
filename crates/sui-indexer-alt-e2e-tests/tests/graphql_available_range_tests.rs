@@ -23,9 +23,9 @@ const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 
 // GraphQL query constants
 const RETENTION_QUERY: &str = r#"
-    query {
+    query($type: String!, $field: String, $filters: [String]) {
         serviceConfig {
-            retention($type: String!, field: String, filters: [String]) {
+            retention(type: $type, field: $field, filters: $filters) {
                 first { sequenceNumber }
                 last { sequenceNumber }
             }
@@ -47,8 +47,8 @@ const TRANSACTIONS_QUERY: &str = r#"
 #[tokio::test]
 async fn test_available_range_with_pipelines() {
     let mut cluster = cluster_with_pipelines(PipelineLayer {
-        tx_affected_addresses: Some(concurrent_pipeline(10)),
-        tx_digests: Some(concurrent_pipeline(5)),
+        tx_affected_addresses: Some(concurrent_pipeline(5)),
+        tx_digests: Some(concurrent_pipeline(10)),
         cp_sequence_numbers: Some(concurrent_pipeline(5)),
         ..Default::default()
     })
@@ -65,7 +65,7 @@ async fn test_available_range_with_pipelines() {
     }
 
     cluster
-        .wait_for_pruner("tx_digests", 5, Duration::from_secs(10))
+        .wait_for_pruner("tx_affected_addresses", 5, Duration::from_secs(10))
         .await
         .unwrap();
 
@@ -95,12 +95,13 @@ async fn test_available_range_with_pipelines() {
         &cluster,
         RETENTION_QUERY,
         Some(json!({
-            "type": "Query",
-            "field": "transactions",
-            "filters": ["affectedAddress"]
+            "type": "Query".to_string(),
+            "field": "transactions".to_string(),
+            "filters": ["affectedAddress".to_string()]
         })),
     )
     .await;
+
     assert_eq!(
         affected_addresses_retention["data"]["serviceConfig"]["retention"]["first"]
             ["sequenceNumber"]
@@ -122,12 +123,12 @@ async fn test_available_range_with_pipelines() {
     }
 
     cluster
-        .wait_for_pruner("tx_digests", 10, Duration::from_secs(10))
+        .wait_for_pruner("tx_affected_addresses", 10, Duration::from_secs(10))
         .await
         .unwrap();
 
     cluster
-        .wait_for_pruner("tx_affected_addresses", 5, Duration::from_secs(10))
+        .wait_for_pruner("tx_digests", 5, Duration::from_secs(10))
         .await
         .unwrap();
 
@@ -146,13 +147,13 @@ async fn test_available_range_with_pipelines() {
         transasction_retention["data"]["serviceConfig"]["retention"]["first"]["sequenceNumber"]
             .as_u64()
             .unwrap(),
-        6
+        11
     );
     assert_eq!(
         transasction_retention["data"]["serviceConfig"]["retention"]["last"]["sequenceNumber"]
             .as_u64()
             .unwrap(),
-        10
+        20
     );
 
     cluster.stopped().await;
