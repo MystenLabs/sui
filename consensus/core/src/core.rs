@@ -1045,10 +1045,7 @@ impl Core {
                     / self.transaction_consumer.max_transactions_in_block() as u32,
             ))
             // Do not try to propose close to the GC round.
-            .max(
-                clock_round
-                    .saturating_sub(self.context.protocol_config.consensus_gc_depth() / 2),
-            )
+            .max(clock_round.saturating_sub(self.context.protocol_config.consensus_gc_depth() / 2))
             // There must be a quorum of blocks from rounds before the clock round.
             .min(clock_parent_round);
 
@@ -1507,7 +1504,7 @@ mod test {
     use std::{collections::BTreeSet, time::Duration};
 
     use consensus_config::{AuthorityIndex, Parameters};
-    use consensus_types::block::TransactionIndex;
+    use consensus_types::block::{BlockDigest, TransactionIndex};
     use futures::{stream::FuturesUnordered, StreamExt};
     use mysten_metrics::monitored_mpsc;
     use sui_protocol_config::ProtocolConfig;
@@ -1971,6 +1968,41 @@ mod test {
         let last_commit = store.read_last_commit().unwrap();
         assert!(last_commit.is_none());
         assert_eq!(dag_state.read().last_commit_index(), 0);
+    }
+
+    #[tokio::test]
+    async fn core_get_quorum_round_respects_inflight() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _key_pairs) = Context::new_for_test(4);
+        let mut core_fixture = CoreTextFixture::new(
+            context.clone(),
+            vec![1, 1, 1, 1],
+            AuthorityIndex::new_for_test(0),
+            false,
+        )
+        .await;
+        let core = &mut core_fixture.core;
+
+        // Advance the clock to round 10.
+        core.dag_state
+            .write()
+            .add_to_threshold_clock_in_test(BlockRef::new(
+                10,
+                AuthorityIndex::new_for_test(0),
+                BlockDigest::MIN,
+            ));
+
+        // With no pending transactions, Core should propose at clock_round - 1 without forcing.
+        core.transaction_consumer.set_inflight_for_testing(0);
+        let (round_low_inflight, force_low) = core.get_quorum_round(false).unwrap();
+        assert_eq!(round_low_inflight, 9);
+        assert!(!force_low);
+
+        // When there are 2_000 pending transactions, Core should propose at clock_round - 3 to help drain the backlog.
+        core.transaction_consumer.set_inflight_for_testing(2_000);
+        let (round_high_inflight, force_high) = core.get_quorum_round(false).unwrap();
+        assert_eq!(round_high_inflight, 2);
+        assert!(force_high);
     }
 
     #[tokio::test]

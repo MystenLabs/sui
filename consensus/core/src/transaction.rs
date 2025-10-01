@@ -238,6 +238,11 @@ impl TransactionConsumer {
     }
 
     #[cfg(test)]
+    pub(crate) fn set_inflight_for_testing(&self, value: usize) {
+        self.inflight.store(value, Ordering::Relaxed);
+    }
+
+    #[cfg(test)]
     pub(crate) fn subscribe_for_block_status_testing(
         &self,
         block_ref: BlockRef,
