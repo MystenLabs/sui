@@ -22,6 +22,7 @@ contract SuiBridgeV2 is SuiBridge {
     {
         // verify that message has not been processed
         require(!isTransferProcessed[message.nonce], "SuiBridge: Message already processed");
+        require(message.version == 2, "SuiBridge: Invalid message version");
 
         IBridgeConfig config = committee.config();
 
