@@ -55,6 +55,7 @@ pub mod execution_config_utils;
 pub mod execution_params;
 pub mod execution_status;
 pub mod full_checkpoint_content;
+pub mod funds_accumulator;
 pub mod gas;
 pub mod gas_coin;
 pub mod gas_model;
