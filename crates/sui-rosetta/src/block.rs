@@ -51,8 +51,13 @@ pub async fn transaction(
         .with_digest(digest.to_string())
         .with_read_mask(FieldMask::from_paths([
             "digest",
-            "transaction",
-            "effects",
+            "transaction.sender",
+            "transaction.gas_payment",
+            "transaction.kind",
+            "transaction.data",
+            "effects.gas_object",
+            "effects.gas_used",
+            "effects.status",
             "balance_changes",
             "events.events.event_type",
             "events.events.json",
@@ -67,7 +72,9 @@ pub async fn transaction(
         .into_inner();
 
     let operations = Operations::try_from_executed_transaction(
-        response.transaction(),
+        response
+            .transaction
+            .ok_or_else(|| Error::DataError("Response missing transaction".to_string()))?,
         &context.coin_metadata_cache,
     )
     .await?;

@@ -15,7 +15,7 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{
     simulate_transaction_request::TransactionChecks, transaction_kind, GasPayment, ObjectReference,
     ProgrammableTransaction as ProtoProgrammableTransaction, SimulateTransactionRequest,
-    Transaction, TransactionKind as ProtoTransactionKind,
+    Transaction, TransactionKind,
 };
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::transaction::{ProgrammableTransaction, TransactionData};
@@ -164,7 +164,7 @@ async fn simulate_transaction(
     let ptb_proto: ProtoProgrammableTransaction = pt.into();
     let mut transaction = Transaction::default()
         .with_kind(
-            ProtoTransactionKind::default()
+            TransactionKind::default()
                 .with_programmable_transaction(ptb_proto)
                 .with_kind(transaction_kind::Kind::ProgrammableTransaction),
         )

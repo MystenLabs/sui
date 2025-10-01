@@ -14,13 +14,14 @@ use serde_json::Value;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
+use sui_rpc::proto::sui::rpc::v2::transaction_kind::Kind;
+use sui_rpc::proto::sui::rpc::v2::ExecutionStatus;
+use sui_rpc::proto::sui::rpc::v2::TransactionKind;
 use sui_sdk_types::Address;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
-use sui_types::execution_status::ExecutionStatus;
 use sui_types::messages_checkpoint::CheckpointDigest;
-use sui_types::transaction::TransactionKind;
 
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
@@ -447,26 +448,23 @@ pub enum OperationType {
     RandomnessStateUpdate,
     EndOfEpochTransaction,
     ProgrammableSystemTransaction,
+    Unknown,
 }
 
 impl From<&TransactionKind> for OperationType {
     fn from(tx: &TransactionKind) -> Self {
-        match tx {
-            TransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
-            TransactionKind::Genesis(_) => OperationType::Genesis,
-            TransactionKind::ConsensusCommitPrologue(_)
-            | TransactionKind::ConsensusCommitPrologueV2(_)
-            | TransactionKind::ConsensusCommitPrologueV3(_)
-            | TransactionKind::ConsensusCommitPrologueV4(_) => {
-                OperationType::ConsensusCommitPrologue
-            }
-            TransactionKind::ProgrammableTransaction(_) => OperationType::ProgrammableTransaction,
-            TransactionKind::AuthenticatorStateUpdate(_) => OperationType::AuthenticatorStateUpdate,
-            TransactionKind::RandomnessStateUpdate(_) => OperationType::RandomnessStateUpdate,
-            TransactionKind::EndOfEpochTransaction(_) => OperationType::EndOfEpochTransaction,
-            TransactionKind::ProgrammableSystemTransaction(_) => {
-                OperationType::ProgrammableSystemTransaction
-            }
+        match tx.kind.and_then(|k| Kind::try_from(k).ok()) {
+            Some(Kind::ProgrammableTransaction) => OperationType::ProgrammableTransaction,
+            Some(Kind::ChangeEpoch) => OperationType::EpochChange,
+            Some(Kind::Genesis) => OperationType::Genesis,
+            Some(Kind::ConsensusCommitPrologueV1)
+            | Some(Kind::ConsensusCommitPrologueV2)
+            | Some(Kind::ConsensusCommitPrologueV3)
+            | Some(Kind::ConsensusCommitPrologueV4) => OperationType::ConsensusCommitPrologue,
+            Some(Kind::AuthenticatorStateUpdate) => OperationType::AuthenticatorStateUpdate,
+            Some(Kind::RandomnessStateUpdate) => OperationType::RandomnessStateUpdate,
+            Some(Kind::EndOfEpoch) => OperationType::EndOfEpochTransaction,
+            Some(Kind::Unknown) | Some(_) | None => OperationType::Unknown,
         }
     }
 }
@@ -768,11 +766,12 @@ pub enum OperationStatus {
     Failure,
 }
 
-impl From<ExecutionStatus> for OperationStatus {
-    fn from(es: ExecutionStatus) -> Self {
-        match es {
-            ExecutionStatus::Success => OperationStatus::Success,
-            ExecutionStatus::Failure { .. } => OperationStatus::Failure,
+impl From<&ExecutionStatus> for OperationStatus {
+    fn from(es: &ExecutionStatus) -> Self {
+        if es.success() {
+            OperationStatus::Success
+        } else {
+            OperationStatus::Failure
         }
     }
 }

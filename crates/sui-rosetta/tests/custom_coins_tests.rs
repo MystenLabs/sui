@@ -308,7 +308,7 @@ async fn test_custom_coin_transfer() {
     let executed_tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");
-    let ops2 = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
+    let ops2 = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     assert!(
@@ -395,7 +395,7 @@ async fn test_custom_coin_without_symbol() {
     let executed_tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");
-    let ops = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
+    let ops = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
 
@@ -476,7 +476,7 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
     let executed_tx = mint_res;
 
-    let ops = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
+    let ops = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     const COIN_BALANCE_CREATED: u64 = COIN1_BALANCE + COIN2_BALANCE;

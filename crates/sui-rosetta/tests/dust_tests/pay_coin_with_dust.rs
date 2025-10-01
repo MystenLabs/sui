@@ -130,7 +130,7 @@ async fn test_pay_custom_coin_with_multiple_coins() -> anyhow::Result<()> {
 
     // Create coin cache for testing Operations conversion
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
-    let ops2 = Operations::try_from_executed_transaction(&tx, &coin_cache)
+    let ops2 = Operations::try_from_executed_transaction(tx, &coin_cache)
         .await
         .unwrap();
     assert!(
@@ -374,7 +374,7 @@ async fn test_pay_custom_coin_with_multiple_merge_chunks() -> anyhow::Result<()>
 
     // Create coin cache for testing Operations conversion
     let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
-    let ops2 = Operations::try_from_executed_transaction(&tx, &coin_cache)
+    let ops2 = Operations::try_from_executed_transaction(tx, &coin_cache)
         .await
         .unwrap();
     assert!(

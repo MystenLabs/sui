@@ -630,12 +630,20 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         currency: None,
     };
     let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
+
+    let proto_tx: sui_rpc::proto::sui::rpc::v2::Transaction = parsed_data.clone().into();
+    let parsed_ops = Operations::new(Operations::from_transaction(
+        proto_tx
+            .kind
+            .ok_or_else(|| anyhow::anyhow!("Transaction missing kind"))?,
+        parsed_data.sender(),
+        None,
+    )?);
+
     assert_eq!(
-        ops,
-        Operations::try_from(parsed_data.clone())?,
+        ops, parsed_ops,
         "expected {:#?}, got: {:#?}",
-        ops,
-        Operations::try_from(parsed_data)?
+        ops, parsed_ops
     );
 
     Ok(())
@@ -738,7 +746,7 @@ async fn test_transaction(
     let executed_tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");
-    let ops = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
+    let ops = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops);

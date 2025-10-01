@@ -10,10 +10,9 @@ use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::{
     simulate_transaction_request::TransactionChecks, ExecuteTransactionRequest,
-    SimulateTransactionRequest, Transaction as ProtoTransaction, UserSignature,
+    SimulateTransactionRequest, Transaction, UserSignature,
 };
 
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -24,9 +23,10 @@ use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::{
     verify_sender_signed_data_message_signatures, VerifiedDigestCache,
 };
-use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
+use sui_types::transaction::{TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
+use crate::operations::Operations;
 use crate::types::internal_operation::{PayCoin, TransactionObjectData, TryConstructTransaction};
 use crate::types::{
     Amount, ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
@@ -112,7 +112,7 @@ pub async fn combine(
     }
     .flag()];
 
-    let signed_tx = Transaction::from_generic_sig_data(
+    let signed_tx = sui_types::transaction::Transaction::from_generic_sig_data(
         intent_msg.value,
         vec![GenericSignature::from_bytes(
             &[&*flag, &*sig_bytes, &*pub_key].concat(),
@@ -143,20 +143,27 @@ pub async fn submit(
     WithRejection(Json(request), _): WithRejection<Json<ConstructionSubmitRequest>, Error>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let signed_tx: Transaction = bcs::from_bytes(&request.signed_transaction.to_vec()?)?;
+    let signed_tx: sui_types::transaction::Transaction =
+        bcs::from_bytes(&request.signed_transaction.to_vec()?)?;
+
+    let signatures = signed_tx
+        .tx_signatures()
+        .iter()
+        .cloned()
+        .map(UserSignature::from)
+        .collect();
+
+    let proto_transaction: Transaction = signed_tx
+        .into_data()
+        .into_inner()
+        .intent_message
+        .value
+        .into();
 
     // According to RosettaClient.rosseta_flow() (see tests), this transaction has already passed
     // through a dry_run with a possibly invalid budget (metadata endpoint), but the requirements
     // are that it should pass from there and fail here.
-    let tx_data = signed_tx.data().transaction_data().clone();
-
-    let tx_bytes = bcs::to_bytes(&tx_data)
-        .map_err(|e| Error::InvalidInput(format!("Failed to serialize transaction: {}", e)))?;
-
-    let bcs = Bcs::default().with_value(tx_bytes);
-    let proto_transaction = ProtoTransaction::default().with_bcs(bcs);
-
-    let request = SimulateTransactionRequest::new(proto_transaction)
+    let request = SimulateTransactionRequest::new(proto_transaction.clone())
         .with_read_mask(FieldMask::from_paths(["transaction.effects.status"]))
         .with_checks(TransactionChecks::Enabled)
         .with_do_gas_selection(false);
@@ -179,18 +186,6 @@ pub async fn submit(
 
     let mut client = context.client.clone();
     let mut execution_client = client.execution_client();
-
-    let bcs = Bcs::default().with_value(bcs::to_bytes(signed_tx.transaction_data())?);
-    let proto_transaction = ProtoTransaction::default().with_bcs(bcs);
-
-    let signatures = signed_tx
-        .tx_signatures()
-        .iter()
-        .map(|s| {
-            let bcs = Bcs::default().with_value(s.as_ref().to_owned());
-            UserSignature::default().with_bcs(bcs)
-        })
-        .collect();
 
     let exec_request = ExecuteTransactionRequest::default()
         .with_transaction(proto_transaction)
@@ -252,7 +247,7 @@ pub async fn hash(
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let tx_bytes = request.signed_transaction.to_vec()?;
-    let tx: Transaction = bcs::from_bytes(&tx_bytes)?;
+    let tx: sui_types::transaction::Transaction = bcs::from_bytes(&tx_bytes)?;
 
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier { hash: *tx.digest() },
@@ -318,20 +313,28 @@ pub async fn parse(
 ) -> Result<ConstructionParseResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let data = if request.signed {
-        let tx: Transaction = bcs::from_bytes(&request.transaction.to_vec()?)?;
-        tx.into_data().intent_message().value.clone()
+    let (data, sender) = if request.signed {
+        let tx: sui_types::transaction::Transaction =
+            bcs::from_bytes(&request.transaction.to_vec()?)?;
+        let intent = tx.into_data().intent_message().value.clone();
+        let sender = intent.sender();
+        (intent, sender)
     } else {
         let intent: IntentMessage<TransactionData> =
             bcs::from_bytes(&request.transaction.to_vec()?)?;
-        intent.value
+        let sender = intent.value.sender();
+        (intent.value, sender)
     };
     let account_identifier_signers = if request.signed {
-        vec![data.sender().into()]
+        vec![sender.into()]
     } else {
         vec![]
     };
-    let operations = data.try_into()?;
+    let proto_tx: Transaction = data.into();
+    let tx_kind = proto_tx
+        .kind
+        .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?;
+    let operations = Operations::new(Operations::from_transaction(tx_kind, sender, None)?);
     Ok(ConstructionParseResponse {
         operations,
         account_identifier_signers,

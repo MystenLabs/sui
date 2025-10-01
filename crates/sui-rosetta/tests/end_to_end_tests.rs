@@ -907,7 +907,7 @@ async fn test_balance_from_obj_paid_eq_gas() {
     let mut executed_transaction = ExecutedTransaction::default();
     executed_transaction.digest = Some("HavKhwo1K4QNXvvRPE8AhSYKEJSS7tmVq66Eb5Woj4ut".to_string());
 
-    let mut transaction = Transaction::default();
+    let mut transaction: Transaction = tx_data.clone().into();
     let mut tx_bcs = Bcs::default();
     tx_bcs.name = None;
     tx_bcs.value = Some(tx_data_bcs.into());
@@ -916,7 +916,7 @@ async fn test_balance_from_obj_paid_eq_gas() {
 
     executed_transaction.signatures = vec![];
 
-    let mut transaction_effects = TransactionEffects::default();
+    let mut transaction_effects: TransactionEffects = effects.clone().into();
     let mut effects_bcs_struct = Bcs::default();
     effects_bcs_struct.name = None;
     effects_bcs_struct.value = Some(effects_bcs.into());
@@ -944,7 +944,7 @@ async fn test_balance_from_obj_paid_eq_gas() {
     let executed_tx = response
         .transaction
         .expect("Response transaction should not be empty");
-    let operations = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
+    let operations = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
 
@@ -1356,7 +1356,7 @@ async fn fetch_transaction_and_get_operations(
     let executed_tx = grpc_response
         .transaction
         .ok_or_else(|| anyhow::anyhow!("Response transaction should not be empty"))?;
-    Operations::try_from_executed_transaction(&executed_tx, coin_cache)
+    Operations::try_from_executed_transaction(executed_tx, coin_cache)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to parse operations: {}", e))
 }

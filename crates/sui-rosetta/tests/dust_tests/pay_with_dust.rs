@@ -244,7 +244,7 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     let executed_tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");
-    let ops2 = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
+    let ops2 = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     assert!(
@@ -481,7 +481,7 @@ async fn test_limit_many_small_coins() -> Result<()> {
     let executed_tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");
-    let ops2 = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
+    let ops2 = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     assert!(
@@ -701,7 +701,7 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
     let executed_tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");
-    let ops2 = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
+    let ops2 = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     assert!(

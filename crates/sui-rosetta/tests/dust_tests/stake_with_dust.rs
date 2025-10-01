@@ -288,7 +288,7 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
     let executed_tx = grpc_response
         .transaction
         .expect("Response transaction should not be empty");
-    let ops2 = Operations::try_from_executed_transaction(&executed_tx, &coin_cache)
+    let ops2 = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     assert!(
