@@ -7,11 +7,10 @@ use fastcrypto::hash::Blake2b256;
 use fastcrypto::merkle::MerkleTree;
 use move_core_types::u256::U256;
 use mysten_common::fatal;
-use serde::Serialize;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
-    AccumulatorObjId, ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC, ACCUMULATOR_ROOT_SETTLE_U128_FUNC,
-    ACCUMULATOR_SETTLEMENT_MODULE,
+    AccumulatorObjId, EventCommitment, ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC,
+    ACCUMULATOR_ROOT_SETTLE_U128_FUNC, ACCUMULATOR_SETTLEMENT_MODULE,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::base_types::SequenceNumber;
@@ -140,14 +139,6 @@ impl From<MergedValueIntermediate> for MergedValue {
     }
 }
 
-#[derive(Debug, Serialize, Clone)]
-struct EventCommitment {
-    checkpoint_seq: u64,
-    transaction_idx: u64,
-    event_idx: u64,
-    digest: Digest,
-}
-
 fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
     // Debug assertion to ensure events are ordered by the natural order of EventCommitment
     debug_assert!(
@@ -205,12 +196,12 @@ impl MergedValueIntermediate {
                 *v2 += w2 as u128;
             }
             (Self::Events(commitments), AccumulatorValue::EventDigest(event_idx, digest)) => {
-                commitments.push(EventCommitment {
+                commitments.push(EventCommitment::new(
                     checkpoint_seq,
                     transaction_idx,
                     event_idx,
                     digest,
-                });
+                ));
             }
             _ => {
                 fatal!("invalid merge");
@@ -236,6 +227,7 @@ impl AccumulatorSettlementTxBuilder {
     pub fn new(
         cache: Option<&dyn TransactionCacheRead>,
         ckpt_effects: &[TransactionEffects],
+        tx_index_offset: u64,
     ) -> Self {
         let checkpoint_seq = 0u64; /* TODO: replace with actual checkpoint sequence number */
 
@@ -288,14 +280,18 @@ impl AccumulatorSettlementTxBuilder {
 
                 match operation {
                     AccumulatorOperation::Merge => {
-                        entry
-                            .merge
-                            .accumulate_into(value, checkpoint_seq, tx_index as u64);
+                        entry.merge.accumulate_into(
+                            value,
+                            checkpoint_seq,
+                            tx_index as u64 + tx_index_offset,
+                        );
                     }
                     AccumulatorOperation::Split => {
-                        entry
-                            .split
-                            .accumulate_into(value, checkpoint_seq, tx_index as u64);
+                        entry.split.accumulate_into(
+                            value,
+                            checkpoint_seq,
+                            tx_index as u64 + tx_index_offset,
+                        );
                     }
                 }
             }

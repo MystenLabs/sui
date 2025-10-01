@@ -1,46 +1,12 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use fastcrypto::hash::{Blake2b256, HashFunction};
 use fastcrypto::merkle::MerkleTree;
 use move_core_types::u256::U256;
-use serde::Serialize;
-use sui_types::digests::Digest;
+use sui_types::accumulator_root::{EventCommitment, EventStreamHead};
 
 const U256_ZERO: U256 = U256::zero();
-
-#[derive(Debug, Serialize, Clone)]
-pub struct EventCommitment {
-    checkpoint_seq: u64,
-    transaction_idx: u64,
-    event_idx: u64,
-    digest: Digest,
-}
-
-impl EventCommitment {
-    fn new(checkpoint_seq: u64, transaction_idx: u64, event_idx: u64, digest: Digest) -> Self {
-        Self {
-            checkpoint_seq,
-            transaction_idx,
-            event_idx,
-            digest,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct StreamHead {
-    mmr_digest: Vec<U256>,
-    checkpoint_seq: u64,
-    num_events: u64,
-}
-
-impl StreamHead {
-    pub fn new() -> Self {
-        Self {
-            mmr_digest: vec![],
-            checkpoint_seq: 0,
-            num_events: 0,
-        }
-    }
-}
 
 fn hash_two_to_one_u256(left: U256, right: U256) -> U256 {
     let mut concatenated = bcs::to_bytes(&left).expect("Failed to serialize left U256");
@@ -68,12 +34,12 @@ fn build_event_merkle_root(events: &[EventCommitment]) -> U256 {
     U256::from_le_bytes(&root_digest)
 }
 
-fn add_to_stream(mmr_digest: &mut Vec<U256>, new_val: U256) {
+fn add_to_stream(mmr: &mut Vec<U256>, new_val: U256) {
     let mut i = 0;
     let mut cur = new_val;
 
-    while i < mmr_digest.len() {
-        let r = &mut mmr_digest[i];
+    while i < mmr.len() {
+        let r = &mut mmr[i];
         if *r == U256_ZERO {
             *r = cur;
             return;
@@ -81,35 +47,30 @@ fn add_to_stream(mmr_digest: &mut Vec<U256>, new_val: U256) {
             cur = hash_two_to_one_u256(*r, cur);
             *r = U256_ZERO;
         }
-        i = i + 1;
+        i += 1;
     }
 
     // Vector length insufficient. Increase by 1.
-    mmr_digest.push(cur);
+    mmr.push(cur);
 }
 
 // Returns the new stream head after applying the updates.
 // - head: the stream head to update.
 // - events: a list of events for each checkpoint.
-pub fn apply_stream_updates(head: &StreamHead, events: Vec<Vec<EventCommitment>>) -> StreamHead {
+pub fn apply_stream_updates(
+    head: &EventStreamHead,
+    events: Vec<Vec<EventCommitment>>,
+) -> EventStreamHead {
     let mut new_head = head.clone();
-    let mut old_checkpoint_seq = head.checkpoint_seq;
     for cp_events in events {
         // Verify that there are events in the checkpoint.
-        debug_assert!(cp_events.len() > 0);
-        let cur_checkpoint_seq = cp_events[0].checkpoint_seq;
-        // Verify that the checkpoint number is same for each group of events.
-        debug_assert!(cp_events
-            .iter()
-            .all(|event| event.checkpoint_seq == cur_checkpoint_seq));
-        // Verify that the checkpoint number is monotonically increasing.
-        debug_assert!(old_checkpoint_seq < cur_checkpoint_seq);
+        debug_assert!(!cp_events.is_empty());
+
+        // TODO: checkpoint_seq in EventCommitment is always 0, so we don't validate it
 
         let merkle_root = build_event_merkle_root(&cp_events);
-        add_to_stream(&mut new_head.mmr_digest, merkle_root);
+        add_to_stream(&mut new_head.mmr, merkle_root);
         new_head.num_events += cp_events.len() as u64;
-        new_head.checkpoint_seq = cur_checkpoint_seq;
-        old_checkpoint_seq = cur_checkpoint_seq;
     }
     new_head
 }
@@ -117,29 +78,30 @@ pub fn apply_stream_updates(head: &StreamHead, events: Vec<Vec<EventCommitment>>
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    use sui_types::digests::Digest;
 
     use super::*;
 
     #[test]
     fn test_basic() {
-        let mut stream_head = StreamHead::new();
+        let mut stream_head = EventStreamHead::new();
         let new_val = U256::from(1u64);
-        add_to_stream(&mut stream_head.mmr_digest, new_val);
-        assert_eq!(stream_head.mmr_digest, vec![U256::from(1u64)]);
+        add_to_stream(&mut stream_head.mmr, new_val);
+        assert_eq!(stream_head.mmr, vec![U256::from(1u64)]);
     }
 
     #[test]
     fn test_compat_with_framework() {
-        let mut stream_head = StreamHead::new();
+        let mut stream_head = EventStreamHead::new();
 
         for i in 0..8 {
             let new_val = U256::from(50u64 + i);
-            add_to_stream(&mut stream_head.mmr_digest, new_val);
+            add_to_stream(&mut stream_head.mmr, new_val);
         }
 
         // This should match the Move test_mmr_digest_compat_with_rust result
         assert_eq!(
-            stream_head.mmr_digest,
+            stream_head.mmr,
             vec![
                 U256::from(0u64),
                 U256::from(0u64),
@@ -154,8 +116,8 @@ mod tests {
 
     #[test]
     fn test_verify_stream_head_update() {
-        let old_head = StreamHead::new();
-        let events = vec![vec![EventCommitment::new(1, 0, 0, Digest::new([1; 32]))]];
+        let old_head = EventStreamHead::new();
+        let events = vec![vec![EventCommitment::new(0, 0, 0, Digest::new([1; 32]))]];
         let new_head = apply_stream_updates(&old_head, events);
         println!("{:?}", new_head);
     }
