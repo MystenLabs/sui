@@ -8,7 +8,7 @@ integration.
 
 ## Overview
 
-Sui-Rosetta is an implementation of the Mesh API (f.k.a. Rosetta API) for the Sui network, the Sui-Rosetta server uses the Sui fullnode to
+Sui-Rosetta is an implementation of the Mesh API (f.k.a. Rosetta API) for the Sui network, the Sui-Rosetta server uses the Sui Full Node to
 read and write transactions to the Sui network.
 
 ## Local network quick start
