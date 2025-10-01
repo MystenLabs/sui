@@ -4,6 +4,7 @@
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
@@ -221,21 +222,6 @@ impl AuthorityPerpetualTables {
         let pruner_watermark = pruner_watermark.unwrap_or(Arc::new(AtomicU64::new(0)));
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
-        let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
-            let mut retain = HashSet::new();
-            let mut previous: Option<&[u8]> = None;
-            const OID_SIZE: usize = 16;
-            for (key, _) in index.iter().rev() {
-                if let Some(prev) = previous {
-                    if prev == &key[..OID_SIZE] {
-                        continue;
-                    }
-                }
-                previous = Some(&key[..OID_SIZE]);
-                retain.insert(key.clone());
-            }
-            index.retain(|k, _| retain.contains(k));
-        };
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
@@ -246,6 +232,32 @@ impl AuthorityPerpetualTables {
         let owned_object_transaction_locks_indexing =
             KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
 
+        let mut objects_config = KeySpaceConfig::new()
+            .with_unloaded_iterator(true)
+            .with_max_dirty_keys(4048)
+            .with_relocation_bloom_filter(0.001, 2_000_000_000);
+
+        if env::var("NO_OBJECT_COMPACTOR").is_err() {
+            let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
+                let mut retain = HashSet::new();
+                let mut previous: Option<&[u8]> = None;
+                const OID_SIZE: usize = 16;
+                for (key, _) in index.iter().rev() {
+                    if let Some(prev) = previous {
+                        if prev == &key[..OID_SIZE] {
+                            continue;
+                        }
+                    }
+                    previous = Some(&key[..OID_SIZE]);
+                    retain.insert(key.clone());
+                }
+                index.retain(|k, _| retain.contains(k));
+            };
+            objects_config = objects_config.with_compactor(Box::new(objects_compactor))
+        } else {
+            tracing::warn!("Object compactor disabled");
+        }
+
         let configs = vec![
             (
                 "objects".to_string(),
@@ -253,11 +265,7 @@ impl AuthorityPerpetualTables {
                     object_indexing,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
-                    KeySpaceConfig::new()
-                        .with_unloaded_iterator(true)
-                        .with_max_dirty_keys(4048)
-                        .with_compactor(Box::new(objects_compactor))
-                        .with_relocation_bloom_filter(0.001, 2_000_000_000),
+                    objects_config,
                 ),
             ),
             (
