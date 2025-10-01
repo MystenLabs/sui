@@ -80,8 +80,8 @@ pub(crate) struct Core {
     propagation_delay: Round,
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
-    /// The last new round for which core has sent out a signal.
-    last_signaled_round: Round,
+    /// The last proposed round at which core has sent out a signal for leader timeout of a new block.
+    last_leader_timeout_round: Round,
     /// The blocks of the last included ancestors per authority. This vector is basically used as a
     /// watermark in order to include in the next block proposal only ancestors of higher rounds.
     /// By default, is initialised with `None` values.
@@ -150,7 +150,7 @@ impl Core {
 
         let last_proposed_block = dag_state.read().get_last_proposed_block();
 
-        let last_signaled_round = last_proposed_block.round();
+        let last_leader_timeout_round = last_proposed_block.round();
 
         // Recover the last included ancestor rounds based on the last proposed block. That will allow
         // to perform the next block proposal by using ancestor blocks of higher rounds and avoid
@@ -183,7 +183,7 @@ impl Core {
 
         Self {
             context,
-            last_signaled_round,
+            last_leader_timeout_round,
             last_included_ancestors,
             last_decided_leader,
             leader_schedule,
@@ -373,48 +373,46 @@ impl Core {
 
     /// If needed, signals a new clock round and sets up leader timeout.
     fn try_signal_new_round(&mut self) {
+        let (clock_round, last_proposed_round) = {
+            let dag_state = self.dag_state.read();
+            (
+                dag_state.threshold_clock_round(),
+                dag_state.get_last_proposed_block().round(),
+            )
+        };
         // Signal only when the threshold clock round is more advanced than the last signaled round.
-        //
-        // NOTE: a signal is still sent even when a block has been proposed at the new round.
-        // We can consider changing this in the future.
-        let new_clock_round = self.dag_state.read().threshold_clock_round();
-        if new_clock_round <= self.last_signaled_round {
+        if last_proposed_round <= self.last_leader_timeout_round {
             return;
         }
-        // Then send a signal to set up leader timeout.
-        self.signals.new_round(new_clock_round);
-        self.last_signaled_round = new_clock_round;
+        // Then send a signal to set up leader timeout. The signal value is for debugging only.
+        self.signals.new_round(clock_round);
+        // Bump last_leader_timeout_round to avoid unnecessary signals.
+        self.last_leader_timeout_round = last_proposed_round;
 
         // Report the threshold clock round
         self.context
             .metrics
             .node_metrics
             .threshold_clock_round
-            .set(new_clock_round as i64);
+            .set(clock_round as i64);
     }
 
     /// Creating a new block for the dictated round. This is used when a leader timeout occurs, either
     /// when the min timeout expires or max. When `force = true` , then any checks like previous round
     /// leader existence will get skipped.
-    pub(crate) fn new_block(
-        &mut self,
-        round: Round,
-        force: bool,
-    ) -> ConsensusResult<Option<VerifiedBlock>> {
+    pub(crate) fn new_block(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
         let _scope = monitored_scope("Core::new_block");
-        if self.last_proposed_round() < round {
-            self.context
-                .metrics
-                .node_metrics
-                .leader_timeout_total
-                .with_label_values(&[&format!("{force}")])
-                .inc();
-            let result = self.try_propose(force);
-            // The threshold clock round may have advanced, so a signal needs to be sent.
-            self.try_signal_new_round();
-            return result;
-        }
-        Ok(None)
+        self.context
+            .metrics
+            .node_metrics
+            .leader_timeout_total
+            .with_label_values(&[&format!("{force}")])
+            .inc();
+        let result = self.try_propose(force);
+        // The threshold clock round may have advanced or more blocks can be proposed,
+        // so try setting up a signal potentially immediately after proposing.
+        self.try_signal_new_round();
+        result
     }
 
     /// Keeps only the certified commits that have a commit index > last commit index.
@@ -1295,6 +1293,7 @@ impl Core {
         self.last_proposed_block().timestamp_ms()
     }
 
+    #[cfg(test)]
     fn last_proposed_round(&self) -> Round {
         self.last_proposed_block().round()
     }
@@ -1307,6 +1306,9 @@ impl Core {
 /// Senders of signals from Core, for outputs and events (ex new block produced).
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<ExtendedBlock>,
+    // Notify new clock round for proposing blocks.
+    // Round may not increase and is for debugging only.
+    // The actual proposed round is determined by additional factors including inflight transactions.
     new_round_sender: watch::Sender<Round>,
     context: Arc<Context>,
 }
@@ -2484,7 +2486,7 @@ mod test {
         // Now try to create the blocks for round 4 via the leader timeout method which should
         // ignore any leader checks or min round delay.
         for core_fixture in cores.iter_mut() {
-            assert!(core_fixture.core.new_block(4, true).unwrap().is_some());
+            assert!(core_fixture.core.new_block(true).unwrap().is_some());
             assert_eq!(core_fixture.core.last_proposed_round(), 4);
 
             // Flush the DAG state to storage.
@@ -2798,7 +2800,7 @@ mod test {
         transaction_certifier
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().round(), 15);
+        assert_eq!(core.last_proposed_round(), 15);
 
         builder
             .layer(15)
@@ -2828,7 +2830,7 @@ mod test {
         transaction_certifier
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().round(), 16);
+        assert_eq!(core.last_proposed_round(), 16);
 
         // Check that a new block has been proposed & signaled.
         let extended_block = loop {
@@ -2872,7 +2874,7 @@ mod test {
         transaction_certifier
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().round(), 16);
+        assert_eq!(core.last_proposed_round(), 16);
 
         // Simulate a leader timeout and a force proposal where we will include
         // one EXCLUDE ancestor when we go to select ancestors for the next proposal
@@ -2936,7 +2938,7 @@ mod test {
         transaction_certifier
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().round(), 23);
+        assert_eq!(core.last_proposed_round(), 23);
 
         // Check that a new block has been proposed & signaled.
         let extended_block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
@@ -4000,7 +4002,7 @@ mod test {
                         vec![round, round, round, round],
                     ],
                 );
-                core_fixture.core.new_block(round, true).unwrap();
+                core_fixture.core.new_block(true).unwrap();
 
                 let block = core_fixture.core.last_proposed_block();
                 assert_eq!(block.round(), round);

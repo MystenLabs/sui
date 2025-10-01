@@ -46,7 +46,7 @@ enum CoreThreadCommand {
     /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
     /// When the command is called with `force = true`, then the block will be created for `round` skipping
     /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
-    NewBlock(Round, oneshot::Sender<()>, bool),
+    NewBlock(oneshot::Sender<()>, bool),
     /// Request missing blocks that need to be synced.
     GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
 }
@@ -74,7 +74,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
         commits: CertifiedCommits,
     ) -> Result<BTreeSet<BlockRef>, CoreError>;
 
-    async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
+    async fn new_block(&self, force: bool) -> Result<(), CoreError>;
 
     async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
 
@@ -142,9 +142,9 @@ impl CoreThread {
                             let missing_block_refs = self.core.add_certified_commits(commits)?;
                             sender.send(missing_block_refs).ok();
                         }
-                        CoreThreadCommand::NewBlock(round, sender, force) => {
+                        CoreThreadCommand::NewBlock(sender, force) => {
                             let _scope = monitored_scope("CoreThread::loop::new_block");
-                            self.core.new_block(round, force)?;
+                            self.core.new_block(force)?;
                             sender.send(()).ok();
                         }
                         CoreThreadCommand::GetMissing(sender) => {
@@ -157,7 +157,7 @@ impl CoreThread {
                     let _scope = monitored_scope("CoreThread::loop::set_last_known_proposed_round");
                     let round = *self.rx_last_known_proposed_round.borrow();
                     self.core.set_last_known_proposed_round(round);
-                    self.core.new_block(round + 1, true)?;
+                    self.core.new_block(true)?;
                 }
                 _ = self.rx_subscriber_exists.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_subscriber_exists");
@@ -167,7 +167,7 @@ impl CoreThread {
                     if !should_propose_before && self.core.should_propose() {
                         // If core cannot propose before but can propose now, try to produce a new block to ensure liveness,
                         // because block proposal could have been skipped.
-                        self.core.new_block(Round::MAX, true)?;
+                        self.core.new_block(true)?;
                     }
                 }
                 _ = self.rx_propagation_delay.changed() => {
@@ -180,7 +180,7 @@ impl CoreThread {
                     if !should_propose_before && self.core.should_propose() {
                         // If core cannot propose before but can propose now, try to produce a new block to ensure liveness,
                         // because block proposal could have been skipped.
-                        self.core.new_block(Round::MAX, true)?;
+                        self.core.new_block(true)?;
                     }
                 }
             }
@@ -327,10 +327,9 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         Ok(missing_block_refs)
     }
 
-    async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
+    async fn new_block(&self, force: bool) -> Result<(), CoreError> {
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::NewBlock(round, sender, force))
-            .await;
+        self.send(CoreThreadCommand::NewBlock(sender, force)).await;
         receiver.await.map_err(|e| Shutdown(e.to_string()))
     }
 
@@ -422,7 +421,7 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
         todo!()
     }
 
-    async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
+    async fn new_block(&self, _force: bool) -> Result<(), CoreError> {
         Ok(())
     }
 
