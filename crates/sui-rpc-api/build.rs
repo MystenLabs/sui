@@ -60,14 +60,15 @@ fn main() {
         }
     }
 
-    let config = tonic_build::configure();
+    let file_descriptors = protox::compile(proto_files, [sui_proto_dir, sui_rpc_proto_dir])
+        .expect("failed to compile proto files");
 
-    config
+    tonic_build::configure()
         .build_client(true)
         .build_server(true)
         .type_attribute(".", "#[non_exhaustive]")
         .extern_path(".sui.rpc.v2", "::sui_rpc::proto::sui::rpc::v2")
         .out_dir(&out_dir)
-        .compile_protos(&proto_files, &[sui_proto_dir, sui_rpc_proto_dir])
+        .compile_fds(file_descriptors)
         .expect("compile event_service.proto");
 }
