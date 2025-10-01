@@ -200,9 +200,9 @@ impl BuildConfig {
 
     fn internal_build(self, root_pkg: &RootPackage<SuiFlavor>) -> anyhow::Result<CompiledPackage> {
         let result = if self.print_diags_to_stderr {
-            self.compile_package(&root_pkg, &mut std::io::stderr())
+            self.compile_package(root_pkg, &mut std::io::stderr())
         } else {
-            self.compile_package(&root_pkg, &mut std::io::sink())
+            self.compile_package(root_pkg, &mut std::io::sink())
         };
 
         let (package, fn_info) = result.map_err(|error| SuiError::ModuleBuildFailure {
@@ -214,7 +214,7 @@ impl BuildConfig {
             verify_bytecode(&package, &fn_info)?;
         }
 
-        let dependency_ids = PackageDependencies::new(&root_pkg)?;
+        let dependency_ids = PackageDependencies::new(root_pkg)?;
         let published_at = root_pkg
             .publication()
             .map(|p| ObjectID::from_address(p.addresses.published_at.0));
