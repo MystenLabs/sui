@@ -54,21 +54,22 @@ impl AvailableRange {
         retention_key: RetentionKey,
     ) -> Result<Self, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let mut ps = BTreeSet::new();
-        pipelines(
+        let mut pipelines = BTreeSet::new();
+        collect_pipelines(
             &retention_key.type_,
             retention_key.field.as_deref(),
             retention_key.filters.unwrap_or_default(),
-            &mut ps,
+            &mut pipelines,
         );
 
-        let first = ps
-            .iter()
-            .try_fold(0, |acc: u64, pipeline| -> Result<u64, RpcError> {
-                let watermark = watermarks.pipeline_lo_watermark(pipeline)?;
-                let checkpoint = watermark.checkpoint();
-                Ok(acc.max(checkpoint))
-            })?;
+        let first =
+            pipelines
+                .iter()
+                .try_fold(0, |acc: u64, pipeline| -> Result<u64, RpcError> {
+                    let watermark = watermarks.pipeline_lo_watermark(pipeline)?;
+                    let checkpoint = watermark.checkpoint();
+                    Ok(acc.max(checkpoint))
+                })?;
 
         Ok(Self {
             scope: scope.clone(),
@@ -83,44 +84,49 @@ impl AvailableRange {
 /// The pipeline names are used to query watermark data to determine the
 /// checkpoint sequence range (available range) for which data is available.
 ///
-fn pipelines(type_: &str, field: Option<&str>, filters: Vec<String>, ps: &mut BTreeSet<String>) {
+fn collect_pipelines(
+    type_: &str,
+    field: Option<&str>,
+    filters: Vec<String>,
+    pipelines: &mut BTreeSet<String>,
+) {
     match (type_, field, filters) {
         // Address fields
         ("Address", Some("transactions"), mut filters) => {
             filters.push("affectedAddress".to_string());
-            pipelines("Query", Some("transactions"), filters, ps);
+            collect_pipelines("Query", Some("transactions"), filters, pipelines);
         }
         ("Address", Some("dynamicFields"), _) => {
-            pipelines("IMoveObject", Some("dynamicFields"), vec![], ps);
+            collect_pipelines("IMoveObject", Some("dynamicFields"), vec![], pipelines);
         }
         ("Address", field, filters) => {
-            pipelines("IAddressable", field, filters, ps);
+            collect_pipelines("IAddressable", field, filters, pipelines);
         }
 
         // Checkpoint fields
         ("Checkpoint", Some("transactions"), mut filters) => {
             filters.push("atCheckpoint".to_string());
-            pipelines("Query", Some("transactions"), filters, ps);
+            collect_pipelines("Query", Some("transactions"), filters, pipelines);
         }
 
         // CoinMetadata fields
         ("CoinMetadata", Some("supply"), _) => {
-            pipelines("Query", Some("coinMetadata"), vec![], ps);
+            collect_pipelines("Query", Some("coinMetadata"), vec![], pipelines);
         }
         ("CoinMetadata", field, filters) => {
-            pipelines("IMoveObject", field, vec![], ps);
-            pipelines("IAddressable", field, vec![], ps);
-            pipelines("IObject", field, filters, ps);
+            collect_pipelines("IMoveObject", field, vec![], pipelines);
+            collect_pipelines("IAddressable", field, vec![], pipelines);
+            collect_pipelines("IObject", field, filters, pipelines);
         }
 
         // Epoch fields
         ("Epoch", Some("checkpoints"), filters) => {
-            pipelines("Query", Some("checkpoints"), filters, ps);
+            collect_pipelines("Query", Some("checkpoints"), filters, pipelines);
         }
 
         // Event fields
         ("Event", _, _) => {
-            pipelines("Query", Some("events"), vec![], ps);
+            collect_pipelines("Query", Some("events"), vec![], pipelines);
         }
 
         // IAddressable fields
@@ -128,79 +134,79 @@ fn pipelines(type_: &str, field: Option<&str>, filters: Vec<String>, ps: &mut BT
         | ("IAddressable", Some("balances"), _)
         | ("IAddressable", Some("multiGetBalances"), _)
         | ("IAddressable", Some("objects"), _) => {
-            ps.insert("consistent".to_string());
+            pipelines.insert("consistent".to_string());
         }
 
         // IMoveObject fields
         ("IMoveObject", Some("dynamicFields"), _) => {
-            ps.insert("consistent".to_string());
+            pipelines.insert("consistent".to_string());
         }
 
         // IObject fields
         ("IObject", Some("objects"), _) => {
-            ps.insert("consistent".to_string());
+            pipelines.insert("consistent".to_string());
         }
         ("IObject", Some("receivedTransactions"), mut filters) => {
             filters.push("affectedAddress".to_string());
-            pipelines("Query", Some("transactions"), filters, ps);
+            collect_pipelines("Query", Some("transactions"), filters, pipelines);
         }
 
         // Package fields
         ("Package", field, filters) => {
-            pipelines("IAddressable", field, vec![], ps);
-            pipelines("IObject", field, filters, ps);
+            collect_pipelines("IAddressable", field, vec![], pipelines);
+            collect_pipelines("IObject", field, filters, pipelines);
         }
 
         // Query fields
         ("Query", Some("checkpoints"), _) => {
-            ps.insert("cp_sequence_numbers".to_string());
+            pipelines.insert("cp_sequence_numbers".to_string());
         }
         ("Query", Some("coinMetadata"), _) => {
-            ps.insert("consistent".to_string());
+            pipelines.insert("consistent".to_string());
         }
         ("Query", Some("events"), filters) => {
-            ps.insert("tx_digests".to_string());
+            pipelines.insert("tx_digests".to_string());
             if filters.is_empty() {
-                ps.insert("ev_struct_inst".to_string());
+                pipelines.insert("ev_struct_inst".to_string());
             } else {
                 for filter in filters {
                     if filter == "sender" {
-                        ps.insert("ev_emit_mod".to_string());
-                        ps.insert("ev_struct_inst".to_string());
+                        pipelines.insert("ev_emit_mod".to_string());
+                        pipelines.insert("ev_struct_inst".to_string());
                     } else if filter == "module" {
-                        ps.insert("ev_emit_mod".to_string());
+                        pipelines.insert("ev_emit_mod".to_string());
                     } else if filter == "type" {
-                        ps.insert("ev_struct_inst".to_string());
+                        pipelines.insert("ev_struct_inst".to_string());
                     }
                 }
             }
         }
         ("Query", Some("objects"), _) => {
-            ps.insert("consistent".to_string());
+            pipelines.insert("consistent".to_string());
         }
         ("Query", Some("transactions"), filters) => {
-            ps.insert("tx_digests".to_string());
+            pipelines.insert("tx_digests".to_string());
             for filter in filters {
                 if filter == "affectedAddress" || filter == "sentAddress" || filter == "kind" {
-                    ps.insert("tx_affected_addresses".to_string());
+                    pipelines.insert("tx_affected_addresses".to_string());
                 }
                 if filter == "kind" {
-                    ps.insert("tx_kinds".to_string());
+                    pipelines.insert("tx_kinds".to_string());
                 }
                 if filter == "function" {
-                    ps.insert("tx_calls".to_string());
+                    pipelines.insert("tx_calls".to_string());
                 }
                 if filter == "affectedObjects" {
-                    ps.insert("tx_affected_objects".to_string());
+                    pipelines.insert("tx_affected_objects".to_string());
                 }
                 if filter == "atCheckpoint" {
-                    ps.insert("cp_sequence_numbers".to_string());
+                    pipelines.insert("cp_sequence_numbers".to_string());
                 }
             }
         }
         ("TransactionEffects", Some("balanceChanges"), _) => {
-            ps.insert("tx_balance_changes".to_string());
-            ps.insert("tx_digests".to_string());
+            pipelines.insert("tx_balance_changes".to_string());
+            pipelines.insert("tx_digests".to_string());
         }
         (_, _, _) => (),
     }
@@ -213,7 +219,7 @@ mod tests {
 
     fn test_pipelines(type_: &str, field: Option<&str>, filters: Vec<String>) -> BTreeSet<String> {
         let mut ps = BTreeSet::new();
-        pipelines(type_, field, filters, &mut ps);
+        collect_pipelines(type_, field, filters, &mut ps);
         ps
     }
 
