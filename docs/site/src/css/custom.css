@@ -402,7 +402,6 @@ td .theme-code-block {
 .DocSearch-Button-Container {
   width: 100%;
   justify-content: space-between;
-  z-index: calc(var(--ifm-z-index-fixed) + 1);
 }
 
 .DocSearch-Button {
