@@ -28,18 +28,12 @@ use super::{Handler, PrunerConfig};
 pub(super) fn reader_watermark<H: Handler + 'static>(
     config: Option<PrunerConfig>,
     store: H::Store,
-    task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let task = task.as_deref();
         let Some(config) = config else {
-            info!(
-                pipeline = H::NAME,
-                task = task,
-                "Skipping reader watermark task"
-            );
+            info!(pipeline = H::NAME, "Skipping reader watermark task");
             return;
         };
 
@@ -48,26 +42,26 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, task = task, "Shutdown received");
+                    info!(pipeline = H::NAME, "Shutdown received");
                     break;
                 }
 
                 _ = poll.tick() => {
                     let Ok(mut conn) = store.connect().await else {
-                        warn!(pipeline = H::NAME, task = task, "Reader watermark task failed to get connection for DB");
+                        warn!(pipeline = H::NAME, "Reader watermark task failed to get connection for DB");
                         continue;
                     };
 
-                    let current = match conn.reader_watermark(H::NAME, task).await {
+                    let current = match conn.reader_watermark(H::NAME).await {
                         Ok(Some(current)) => current,
 
                         Ok(None) => {
-                            warn!(pipeline = H::NAME, task = task, "No watermark for pipeline, skipping");
+                            warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
                             continue;
                         }
 
                         Err(e) => {
-                            warn!(pipeline = H::NAME, task = task, "Failed to get current watermark: {e}");
+                            warn!(pipeline = H::NAME, "Failed to get current watermark: {e}");
                             continue;
                         }
                     };
@@ -79,7 +73,6 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                     if new_reader_lo <= current.reader_lo as u64 {
                         debug!(
                             pipeline = H::NAME,
-                            task = task,
                             current = current.reader_lo,
                             new = new_reader_lo,
                             "No change to reader watermark",
@@ -87,21 +80,19 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                         continue;
                     }
 
-                    // TODO: (wlmyng) how do we report task to this metric?
                     metrics
                         .watermark_reader_lo
                         .with_label_values(&[H::NAME])
                         .set(new_reader_lo as i64);
 
-                    let Ok(updated) = conn.set_reader_watermark(H::NAME, task, new_reader_lo).await else {
-                        warn!(pipeline = H::NAME, task = task, "Failed to update reader watermark");
+                    let Ok(updated) = conn.set_reader_watermark(H::NAME, new_reader_lo).await else {
+                        warn!(pipeline = H::NAME, "Failed to update reader watermark");
                         continue;
                     };
 
                     if updated {
-                        info!(pipeline = H::NAME, task = task, new_reader_lo, "Watermark");
+                        info!(pipeline = H::NAME, new_reader_lo, "Watermark");
 
-                        // TODO: (wlmyng) how do we report task to this metric?
                         metrics
                             .watermark_reader_lo_in_db
                             .with_label_values(&[H::NAME])
@@ -111,11 +102,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
             }
         }
 
-        info!(
-            pipeline = H::NAME,
-            task = task,
-            "Stopping reader watermark task"
-        );
+        info!(pipeline = H::NAME, "Stopping reader watermark task");
     })
 }
 
@@ -199,13 +186,8 @@ mod tests {
 
         let store_clone = store.clone();
         let cancel_clone = cancel.clone();
-        let handle = reader_watermark::<DataPipeline>(
-            Some(config),
-            store_clone,
-            None,
-            metrics,
-            cancel_clone,
-        );
+        let handle =
+            reader_watermark::<DataPipeline>(Some(config), store_clone, metrics, cancel_clone);
 
         TestSetup {
             store,

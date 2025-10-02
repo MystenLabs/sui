@@ -272,7 +272,7 @@ impl<S: Store> Indexer<S> {
                 .context("Failed to establish connection to store")?;
 
             let main_reader_watermark = conn
-                .reader_watermark(H::NAME, self.task.as_deref())
+                .reader_watermark(H::NAME)
                 .await
                 .context("Failed to get reader watermark")?;
 
