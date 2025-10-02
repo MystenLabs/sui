@@ -3,7 +3,7 @@
 
 use crate::{
     TModuleId,
-    model::{self, ModelBuilderConfig, NamedConstantData, PackageData},
+    model::{self, ModelConfig, NamedConstantData, PackageData},
     normalized,
     source_kind::WithSource,
     summary,
@@ -60,7 +60,7 @@ impl Model {
         compiled_units_vec: Vec<(/* file */ PathBuf, CompiledUnit)>,
     ) -> anyhow::Result<Self> {
         Self::from_source_with_config(
-            &ModelBuilderConfig::default(),
+            ModelConfig::default(),
             files,
             root_package_name,
             root_named_address_map,
@@ -70,7 +70,7 @@ impl Model {
     }
 
     pub fn from_source_with_config(
-        builder_config: &model::ModelBuilderConfig,
+        config: model::ModelConfig,
         files: MappedFiles,
         root_package_name: Option<Symbol>,
         root_named_address_map: BTreeMap<Symbol, AccountAddress>,
@@ -146,9 +146,10 @@ impl Model {
             compiled,
             packages,
             summary: OnceCell::new(),
+            config,
             _phantom: std::marker::PhantomData,
         };
-        model.compute_dependencies(builder_config);
+        model.compute_dependencies();
         model.compute_function_dependencies();
         model.check_invariants();
         Ok(model)
