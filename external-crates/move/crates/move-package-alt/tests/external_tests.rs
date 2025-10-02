@@ -4,6 +4,8 @@ use indoc::indoc;
 use insta::assert_snapshot;
 use move_package_alt::test_utils::{basic_manifest, graph_builder::TestPackageGraph};
 use test_log::test;
+
+#[allow(unused)]
 use tracing::debug;
 
 /// Ensure that the directory containing mock-resolver is on the PATH

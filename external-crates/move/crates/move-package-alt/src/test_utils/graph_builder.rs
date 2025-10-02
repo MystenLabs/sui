@@ -340,7 +340,7 @@ impl TestPackageGraph {
         }
 
         for git_dep in &self.inner[node].git_deps {
-            let dep_str = self.format_git_dep(&git_dep);
+            let dep_str = self.format_git_dep(git_dep);
             if let Some(env) = &git_dep.spec.use_env {
                 dep_replacements.push_str(&dep_str);
                 dep_replacements.push('\n');
@@ -460,7 +460,7 @@ impl TestPackageGraph {
         } = dep;
 
         let git = format!(r#"git = "{repo}", subdir = "{path}", rev = "{rev}""#);
-        Self::decorate_dep(&git, &dep)
+        Self::decorate_dep(&git, dep)
     }
 
     /// Returns `{{ {location} {additional_fields} }}` where `additional_fields` are generated from

@@ -277,7 +277,6 @@ mod tests {
     ) -> BTreeMap<PackageName, PackageInfo<Vanilla>> {
         graph
             .packages()
-            .expect("failed to get packages from graph")
             .into_iter()
             .map(|node| (node.name().clone(), node))
             .collect()

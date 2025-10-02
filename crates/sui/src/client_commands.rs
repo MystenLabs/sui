@@ -1020,7 +1020,7 @@ impl SuiClientCommands {
                     &build_config,
                     root_pkg.publication().cloned().as_mut(),
                 )?;
-                root_pkg.write_publish_data(publish_data)?;
+                root_pkg.write_publish_data(publish_data).await?;
 
                 result
             }
@@ -3939,6 +3939,6 @@ async fn publish_command(
         None,
     )?;
 
-    root_package.write_publish_data(publish_data)?;
+    root_package.write_publish_data(publish_data).await?;
     Ok(result)
 }
