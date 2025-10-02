@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMetrics};
-use mysten_common::moving_window::MovingWindow;
+use mysten_common::decay_moving_average::DecayMovingAverage;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -18,10 +18,6 @@ use tracing::debug;
 // 2. Some reports are more critical than others. For example, a health check
 //    report is more critical than a submit report in terms of failures status.
 
-/// Size of the moving window for reliability measurements
-const RELIABILITY_MOVING_WINDOW_SIZE: usize = 40;
-/// Size of the moving window for latency measurements
-const LATENCY_MOVING_WINDOW_SIZE: usize = 40;
 /// Maximum adjusted latency from completely unreachable (reliability = 0.0) or very slow validators.
 const MAX_LATENCY: f64 = 10.0;
 
@@ -47,9 +43,9 @@ pub struct ClientObservedStats {
 #[derive(Debug, Clone)]
 pub struct ValidatorClientStats {
     /// Moving window of success rate (0.0 to 1.0)
-    pub reliability: MovingWindow,
+    pub reliability: DecayMovingAverage,
     /// Moving window of latencies for each operation type (Submit, Effects, HealthCheck)
-    pub average_latencies: HashMap<OperationType, MovingWindow>,
+    pub average_latencies: HashMap<OperationType, DecayMovingAverage>,
     /// Counter for consecutive failures - resets on success
     pub consecutive_failures: u32,
     /// Time when validator was temporarily excluded due to failures.
@@ -60,7 +56,7 @@ pub struct ValidatorClientStats {
 impl ValidatorClientStats {
     pub fn new(init_reliability: f64) -> Self {
         Self {
-            reliability: MovingWindow::new(init_reliability, RELIABILITY_MOVING_WINDOW_SIZE),
+            reliability: DecayMovingAverage::new(init_reliability, 0.97),
             average_latencies: HashMap::new(),
             consecutive_failures: 0,
             exclusion_time: None,
@@ -70,13 +66,12 @@ impl ValidatorClientStats {
     pub fn update_average_latency(&mut self, operation: OperationType, new_latency: Duration) {
         match self.average_latencies.entry(operation) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().add_value(new_latency.as_secs_f64());
+                entry
+                    .get_mut()
+                    .update_moving_average(new_latency.as_secs_f64());
             }
             Entry::Vacant(entry) => {
-                entry.insert(MovingWindow::new(
-                    new_latency.as_secs_f64(),
-                    LATENCY_MOVING_WINDOW_SIZE,
-                ));
+                entry.insert(DecayMovingAverage::new(new_latency.as_secs_f64(), 0.97));
             }
         }
     }
@@ -107,12 +102,12 @@ impl ClientObservedStats {
 
         match feedback.result {
             Ok(latency) => {
-                validator_stats.reliability.add_value(1.0);
+                validator_stats.reliability.update_moving_average(1.0);
                 validator_stats.consecutive_failures = 0;
                 validator_stats.update_average_latency(feedback.operation, latency);
             }
             Err(()) => {
-                validator_stats.reliability.add_value(0.0);
+                validator_stats.reliability.update_moving_average(0.0);
                 validator_stats.consecutive_failures += 1;
 
                 // Exclude validator temporarily after too many consecutive failures
