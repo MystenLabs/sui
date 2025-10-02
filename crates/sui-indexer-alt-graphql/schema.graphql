@@ -4128,6 +4128,10 @@ type Validator implements IAddressable {
 	"""
 	projectUrl: String
 	"""
+	Other validators this validator has reported.
+	"""
+	reportRecords(first: Int, before: String, last: Int, after: String): ValidatorConnection
+	"""
 	The epoch stake rewards will be added here at the end of each epoch.
 	"""
 	rewardsPool: BigInt
