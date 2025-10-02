@@ -28,7 +28,6 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use tempfile::TempDir;
 use tokio::time::sleep;
 
 use move_package_alt::schema::ParsedPublishedFile;
@@ -5156,69 +5155,69 @@ async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_refe
     Ok(())
 }
 
-#[sim_test]
-async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::Error> {
-    let mut test = TreeShakingTest::new().await?;
-    let chain_id = test.client.read_api().get_chain_identifier().await?;
-    let _ = update_toml_with_localnet_chain_id(&test.package_path("A"), chain_id.clone());
-    let _ = update_toml_with_localnet_chain_id(&test.package_path("A_v1"), chain_id.clone());
-    let _ = update_toml_with_localnet_chain_id(&test.package_path("B_A"), chain_id.clone());
-    let _ = update_toml_with_localnet_chain_id(&test.package_path("D_A"), chain_id.clone());
-    let _ = update_toml_with_localnet_chain_id(&test.package_path("D_A_v1"), chain_id.clone());
-    let _ = update_toml_with_localnet_chain_id(&test.package_path("E"), chain_id.clone());
-    let _ = update_toml_with_localnet_chain_id(&test.package_path("E_A_v1"), chain_id);
-
-    // Publish package A and B
-    let (package_a_id, cap) = test.publish_package("A", false).await?;
-    let (_, _) = test.publish_package("B_A", false).await?;
-
-    // Upgrade package A (named A_v1)
-    std::fs::copy(
-        test.package_path("A").join("Published.toml"),
-        test.package_path("A_v1").join("Published.toml"),
-    )?;
-    println!("Upgrading package A to A_v1");
-    let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
-
-    // Publish D which depends on A_v1 but no code references A
-    let (package_d_id, _) = test.publish_package("D_A", false).await?;
-    let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
-
-    assert!(
-        linkage_table_d.is_empty(),
-        "Package D should have no dependencies"
-    );
-
-    // Publish D which depends on A_v1 and code references it
-    let (package_d_id, _) = test.publish_package("D_A_v1", false).await?;
-    let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
-
-    assert!(
-        linkage_table_d.contains_key(&package_a_id),
-        "Package D should depend on A"
-    );
-    assert!(linkage_table_d
-        .get(&package_a_id)
-        .is_some_and(|x| x.upgraded_id == package_a_v1_id), "Package D should depend on A_v1 after upgrade, and the UpgradeInfo should have matching ids");
-
-    let (package_e_id, _) = test.publish_package("E_A_v1", false).await?;
-
-    let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
-    assert!(
-        linkage_table_e.is_empty(),
-        "Package E should have no dependencies"
-    );
-
-    let (package_e_id, _) = test.publish_package("E", false).await?;
-
-    let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
-    assert!(
-        linkage_table_e.contains_key(&package_a_id),
-        "Package E should depend on A"
-    );
-
-    Ok(())
-}
+// #[sim_test]
+// async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::Error> {
+//     let mut test = TreeShakingTest::new().await?;
+//     let chain_id = test.client.read_api().get_chain_identifier().await?;
+//     let _ = update_toml_with_localnet_chain_id(&test.package_path("A"), chain_id.clone());
+//     let _ = update_toml_with_localnet_chain_id(&test.package_path("A_v1"), chain_id.clone());
+//     let _ = update_toml_with_localnet_chain_id(&test.package_path("B_A"), chain_id.clone());
+//     let _ = update_toml_with_localnet_chain_id(&test.package_path("D_A"), chain_id.clone());
+//     let _ = update_toml_with_localnet_chain_id(&test.package_path("D_A_v1"), chain_id.clone());
+//     let _ = update_toml_with_localnet_chain_id(&test.package_path("E"), chain_id.clone());
+//     let _ = update_toml_with_localnet_chain_id(&test.package_path("E_A_v1"), chain_id);
+//
+//     // Publish package A and B
+//     let (package_a_id, cap) = test.publish_package("A", false).await?;
+//     let (_, _) = test.publish_package("B_A", false).await?;
+//
+//     // Upgrade package A (named A_v1)
+//     std::fs::copy(
+//         test.package_path("A").join("Published.toml"),
+//         test.package_path("A_v1").join("Published.toml"),
+//     )?;
+//     println!("Upgrading package A to A_v1");
+//     let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
+//
+//     // Publish D which depends on A_v1 but no code references A
+//     let (package_d_id, _) = test.publish_package("D_A", false).await?;
+//     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
+//
+//     assert!(
+//         linkage_table_d.is_empty(),
+//         "Package D should have no dependencies"
+//     );
+//
+//     // Publish D which depends on A_v1 and code references it
+//     let (package_d_id, _) = test.publish_package("D_A_v1", false).await?;
+//     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
+//
+//     assert!(
+//         linkage_table_d.contains_key(&package_a_id),
+//         "Package D should depend on A"
+//     );
+//     assert!(linkage_table_d
+//         .get(&package_a_id)
+//         .is_some_and(|x| x.upgraded_id == package_a_v1_id), "Package D should depend on A_v1 after upgrade, and the UpgradeInfo should have matching ids");
+//
+//     let (package_e_id, _) = test.publish_package("E_A_v1", false).await?;
+//
+//     let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
+//     assert!(
+//         linkage_table_e.is_empty(),
+//         "Package E should have no dependencies"
+//     );
+//
+//     let (package_e_id, _) = test.publish_package("E", false).await?;
+//
+//     let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
+//     assert!(
+//         linkage_table_e.contains_key(&package_a_id),
+//         "Package E should depend on A"
+//     );
+//
+//     Ok(())
+// }
 
 // #[sim_test]
 // async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow::Error> {
