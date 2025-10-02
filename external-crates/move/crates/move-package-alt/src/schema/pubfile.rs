@@ -12,9 +12,9 @@ use super::{
 };
 
 /// The schema for a `Move.published` file
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(bound = "")]
-#[derive_where(Default)]
+#[derive_where(Default, Clone)]
 pub struct ParsedPublishedFile<F: MoveFlavor> {
     #[serde(default)]
     pub published: BTreeMap<EnvironmentName, Publication<F>>,
