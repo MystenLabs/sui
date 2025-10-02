@@ -41,7 +41,10 @@ use crate::{
             base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
             module_filter::ModuleFilter, sui_address::SuiAddress,
         },
-        types::{lookups::tx_bounds, transaction::filter::TransactionKindInput},
+        types::{
+            available_range::AvailableRange, lookups::tx_bounds,
+            transaction::filter::TransactionKindInput,
+        },
     },
     error::RpcError,
     pagination::Page,
@@ -212,6 +215,7 @@ impl Transaction {
             affected_object,
             sent_address,
         }: TransactionFilter,
+        available_range: AvailableRange,
     ) -> Result<Connection<String, Transaction>, RpcError> {
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(Connection::new(false, false));
@@ -225,7 +229,7 @@ impl Transaction {
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
-        let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
+        let reader_lo = available_range.reader_lo()?;
 
         let global_tx_hi = watermarks.high_watermark().transaction();
 

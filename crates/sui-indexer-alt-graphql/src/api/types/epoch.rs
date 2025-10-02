@@ -38,6 +38,7 @@ use crate::{
 };
 
 use super::{
+    available_range::{AvailableRange, AvailableRangeKey},
     checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
     move_package::{CSysPackage, MovePackage},
     object::Object,
@@ -189,8 +190,14 @@ impl Epoch {
             return Ok(Some(Connection::new(false, false)));
         };
 
+        let available_range = AvailableRange::new(
+            ctx,
+            &self.scope,
+            AvailableRangeKey::from_transaction_filter(&filter),
+        )?;
+
         Ok(Some(
-            Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+            Transaction::paginate(ctx, self.scope.clone(), page, filter, available_range).await?,
         ))
     }
 
