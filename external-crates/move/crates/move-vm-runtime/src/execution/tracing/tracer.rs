@@ -320,7 +320,9 @@ impl VMTracer<'_> {
         machine: &MachineState,
         stack_idx: usize,
     ) -> Option<TraceValue> {
+        // TODO: Add an assertion establishing that operand_stack and type_stack are in sync.
         if stack_idx >= machine.operand_stack.len() {
+            // TODO: Should we emit a trace error here?
             return None;
         }
         let offset = self.type_stack.len() - 1;
@@ -398,6 +400,7 @@ impl VMTracer<'_> {
         stack_idx: usize,
         local_index: usize,
     ) -> Option<()> {
+        // TODO: Add an assertion establishing that operand_stack and type_stack are in sync.
         if stack_idx >= machine.operand_stack.value.len() {
             return None;
         }
