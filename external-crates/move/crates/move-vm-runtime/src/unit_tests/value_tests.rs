@@ -335,7 +335,6 @@ fn test_vm_value_vector_u64_casting() {
     );
 }
 
-// TODO(bella-ciao-merge): Make sure we are happy with this size change (from 16 -> 32).
 #[test]
 fn assert_sizes() {
     assert_eq!(size_of::<Value>(), 32);

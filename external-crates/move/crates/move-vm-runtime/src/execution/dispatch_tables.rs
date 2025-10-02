@@ -56,7 +56,7 @@ use std::{
 /// transaction, is immutable for the execution of the transaction, and is dropped at the end of
 /// the transaction.
 ///
-/// TODO(tzakian): The representation can be optimized to use a more efficient data structure for
+/// FUTURE(vm-rewrite): The representation can be optimized to use a more efficient data structure for
 /// vtable/cross-package function resolution but we will keep it simple for now.
 #[derive(Debug)]
 pub struct VMDispatchTables {

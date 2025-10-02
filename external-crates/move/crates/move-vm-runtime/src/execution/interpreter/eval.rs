@@ -51,13 +51,6 @@ struct RunContext<'vm_cache, 'native, 'native_lifetimes, 'tracer, 'trace_builder
     tracer: &'tracer mut Option<VMTracer<'trace_builder>>,
 }
 
-impl RunContext<'_, '_, '_, '_, '_> {
-    // TODO: The Run Context should hold this, not go get it from the Loader.
-    fn vm_config(&self) -> &VMConfig {
-        &self.vm_config
-    }
-}
-
 /// Main loop for the execution of a function.
 ///
 /// This runs a newly-made Machine until it is complete. It expects the Machine to have a current
@@ -532,9 +525,6 @@ fn op_step_impl(
 
             gas_meter.charge_unpack(true, struct_.field_views())?;
 
-            // TODO: Whether or not we want this gas metering in the loop is
-            // questionable.  However, if we don't have it in the loop we could wind up
-            // doing a fair bit of work before charging for it.
             for value in struct_.unpack()? {
                 state.push_operand(value)?;
             }
@@ -1084,7 +1074,7 @@ fn partial_error_to_error<T>(
     result: PartialVMResult<T>,
 ) -> VMResult<T> {
     result.map_err(|err| {
-        let err = if run_context.vm_config().error_execution_state {
+        let err = if run_context.vm_config.error_execution_state {
             err.with_exec_state(state.get_internal_state())
         } else {
             err

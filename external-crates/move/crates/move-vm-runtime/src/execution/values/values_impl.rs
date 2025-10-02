@@ -2571,7 +2571,6 @@ pub mod debug {
         Ok(())
     }
 
-    // TODO: This function was used in an old implementation of std::debug::print, and can probably be removed.
     pub fn print_reference<B: Write>(buf: &mut B, r: &Reference) -> PartialVMResult<()> {
         debug_write!(buf, "(&) ")?;
         match r {
