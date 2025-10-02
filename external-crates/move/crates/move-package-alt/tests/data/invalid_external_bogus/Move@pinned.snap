@@ -1,4 +1,0 @@
----
-source: crates/move-package-alt/tests/test_runner.rs
----
-I/O Error when running external resolver `abcdef`: No such file or directory (os error 2)

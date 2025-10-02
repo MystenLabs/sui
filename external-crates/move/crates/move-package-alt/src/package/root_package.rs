@@ -426,14 +426,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         }
     }
 
-    pub fn lockfile_for_testing(&self) -> &ParsedLockfile {
-        &self.lockfile
-    }
-
-    pub fn lockfile(&self) -> &ParsedLockfile {
-        &self.lockfile
-    }
-
     /// Return the publication information for the root package in the current environment
     pub fn publication(&self) -> Option<&Publication<F>> {
         self.filtered_graph.root_package().publication()
@@ -479,7 +471,6 @@ fn localpubs_to_publications<F: MoveFlavor>(
 
 #[cfg(test)]
 mod tests {
-    use indoc::formatdoc;
     use insta::assert_snapshot;
     use std::{fs, io::Write, path::PathBuf};
     use test_log::test;
@@ -491,7 +482,8 @@ mod tests {
             vanilla::{self, DEFAULT_ENV_NAME, default_environment},
         },
         graph::NamedAddress,
-        schema::{LockfileDependencyInfo, PackageID, PublishAddresses, PublishedID},
+        package::root_package,
+        schema::{LockfileDependencyInfo, OriginalID, PackageID, PublishAddresses, PublishedID},
         test_utils::{
             self, basic_manifest_with_env,
             git::{self},
@@ -645,131 +637,272 @@ pkg_b = { local = "../pkg_b" }"#,
             .unwrap_err();
     }
 
-    /// This test creates a git repository with a Move package, and another package that depends on
-    /// this package as a git dependency. It then tests the following
-    /// - checkout of git dependency at the requested git sha is correct
-    /// - updating the git dependency to a different sha works as expected
-    /// - updating the git dependency in the manifest and re-pinning works as expected, including
-    /// writing back the deps to a lockfile
+    /// This gives a snapshot of a generated lockfile
     #[test(tokio::test)]
-    pub async fn test_all() {
-        debug!("running test_all");
-        let env = crate::flavor::vanilla::default_environment();
-        let pkg_git = git::new("pkg_git", |project| {
-            project.file(
-                "Move.toml",
-                &basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id()),
-            )
-        })
-        .await;
+    async fn graph_to_lockfile() {
+        let scenario = TestPackageGraph::new(["example", "baz", "bar"])
+            .add_deps([("example", "baz"), ("baz", "bar")])
+            .build();
 
-        pkg_git.as_ref().change_file(
-            "Move.toml",
-            &basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id()),
-        );
-        pkg_git.commit().await;
-        pkg_git.as_ref().change_file(
-            "Move.toml",
-            &basic_manifest_with_env("pkg_git", "0.0.3", env.name(), env.id()),
-        );
-        pkg_git.commit().await;
-
-        let pkg_dep = git::new("pkg_dep_on_git", |project| {
-            project.file(
-                "Move.toml",
-                &formatdoc!(
-                    r#"
-                    [package]
-                    name = "pkg_dep_on_git"
-                    edition = "2025"
-                    license = "Apache-2.0"
-                    authors = ["Move Team"]
-                    version = "0.0.1"
-
-                    [dependencies]
-                    pkg_git = {{ git = "../pkg_git", rev = "main" }}
-
-                    [environments]
-                    {} = "{}"
-                    "#,
-                    env.name(),
-                    env.id(),
-                ),
-            )
-        })
-        .await;
-
-        let root_pkg_path = pkg_dep.as_ref().root();
-        let commits = pkg_git.commits().await;
-        let mut root_pkg_manifest = fs::read_to_string(root_pkg_path.join("Move.toml")).unwrap();
-
-        // we need to replace this relative path with the actual git repository path, because find_sha
-        // function does not take a cwd, so this `git ls-remote` would be called from the cwd and not from the
-        // repo path.
-        root_pkg_manifest =
-            root_pkg_manifest.replace("../pkg_git", pkg_git.as_ref().root_path_str());
-        fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
-
-        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone(), vec![])
+        let env = default_environment();
+        let mut root = RootPackage::<Vanilla>::load(scenario.path_for("example"), env, vec![])
             .await
             .unwrap();
 
-        let pinned_deps = root_pkg.lockfile.pinned.get(env.name()).unwrap();
-        debug!("pinned_deps: {pinned_deps:#?}");
-        let git_dep = pinned_deps.get("pkg_git").unwrap();
+        root.update_lockfile().await.unwrap();
+        let lockfile = root.output_path.dump_lockfile().await.render_as_toml();
 
-        match &git_dep.source {
-            LockfileDependencyInfo::Git(p) => {
-                assert_eq!(&p.rev.to_string(), commits.first().unwrap())
-            }
-            _ => panic!("Expected a git dependency"),
-        }
+        assert_snapshot!(lockfile, @r###"
+        # Generated by move; do not edit
+        # This file should be checked in.
 
-        // Change ts second commit
-        root_pkg_manifest = root_pkg_manifest.replace(
-            "rev = \"main\"",
-            format!("rev = \"{}\"", commits[1]).as_str(),
-        );
-        fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
+        [move]
+        version = 4
 
-        let mut root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone(), vec![])
-            .await
-            .unwrap();
+        [pinned._test_env.bar]
+        source = { local = "../bar" }
+        use_environment = "_test_env"
+        manifest_digest = "1A967BADB8DF0A7E8361E9C717FACDE2D033EE8E6BF76EB39E4B1CCFFBECE4D0"
+        deps = {}
 
-        let pinned_deps = root_pkg.lockfile.pinned.get(env.name()).unwrap();
-        let git_dep = pinned_deps.get("pkg_git").unwrap();
+        [pinned._test_env.baz]
+        source = { local = "../baz" }
+        use_environment = "_test_env"
+        manifest_digest = "8FA88B998DC19B944880451C9F7D8C1138B6692FE69D52721B3699365E18277C"
+        deps = { bar = "bar" }
 
-        match &git_dep.source {
-            LockfileDependencyInfo::Git(p) => {
-                assert_eq!(p.rev.to_string(), commits[1])
-            }
-            _ => panic!("Expected a git dependency"),
-        }
+        [pinned._test_env.example]
+        source = { root = true }
+        use_environment = "_test_env"
+        manifest_digest = "DFA595418D331CD6EF17F3A520A878AC3B419AC25118A8E831C52F1768BC054E"
+        deps = { baz = "baz" }
+        "###);
+    }
 
-        root_pkg.update_lockfile().unwrap();
-        let lockfile = root_pkg.lockfile;
-        // Change to first commit in the rev in the manifest
-        root_pkg_manifest = root_pkg_manifest.replace(
-            format!("rev = \"{}\"", commits[1]).as_str(),
-            format!("rev = \"{}\"", commits[0]).as_str(),
-        );
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Git pinning / repinning /////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
 
-        fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
+    /// A git dependency on a branch gets pinned to the sha
+    #[test(tokio::test)]
+    pub async fn git_branch_dep_pinned() {
+        let env = default_environment();
+        let repo = git::new().await;
+        let commit = repo.commit(|project| project.add_packages(["a"])).await;
+        commit.branch("branch-name").await;
 
-        // check if update deps works as expected
-        let root_pkg = RootPackage::<Vanilla>::load_force_repin(&root_pkg_path, env, vec![])
-            .await
-            .unwrap();
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "a", "branch-name", |dep| dep)
+            .build();
 
-        let updated_lockfile = root_pkg.lockfile;
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
 
-        assert_ne!(updated_lockfile.render_as_toml(), lockfile.render_as_toml());
+        root_pkg.update_lockfile().await.unwrap();
 
-        let updated_lockfile_dep = &updated_lockfile.pinned[DEFAULT_ENV_NAME]["pkg_git"].source;
-        match updated_lockfile_dep {
-            LockfileDependencyInfo::Git(p) => assert_eq!(p.rev.to_string(), commits[0]),
-            x => panic!("Expected a git dependency, but got {:?}", x),
-        }
+        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        assert_eq!(sha, commit.sha());
+    }
+
+    /// A git dependency on a short sha gets pinned to the sha
+    #[test(tokio::test)]
+    pub async fn git_short_sha_dep_pinned() {
+        let env = default_environment();
+        let repo = git::new().await;
+        let commit = repo.commit(|project| project.add_packages(["a"])).await;
+
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "a", commit.short_sha(), |dep| dep)
+            .build();
+
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
+
+        root_pkg.update_lockfile().await.unwrap();
+
+        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        assert_eq!(sha, commit.sha());
+    }
+
+    /// If we have a git dep, and we pin using a branch, then change the branch, then load again,
+    /// we get the sha of the first commit. See also [git_force_repin]
+    #[test(tokio::test)]
+    pub async fn git_no_repin() {
+        let env = default_environment();
+        let repo = git::new().await;
+        let commit1 = repo.commit(|project| project.add_packages(["a"])).await;
+        commit1.branch("branch-name").await;
+
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "a", "branch-name", |dep| dep)
+            .build();
+
+        // load the root package and save the lockfile
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
+        root_pkg.update_lockfile().await.unwrap();
+
+        // change the branch
+        let commit2 = repo
+            .commit(|project| project.add_package("a", |a| a.version("0.0.2")))
+            .await;
+        commit2.branch("branch-name").await;
+
+        // reload the root package and save the lockfile again
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
+        root_pkg.update_lockfile().await.unwrap();
+
+        // sha should still be for commit 1
+        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        assert_eq!(sha, commit1.sha());
+    }
+
+    /// If we have a git dep, and we pin using a branch, then change the branch, then load again
+    /// with forced repinning, we get the sha of the second commit. See also [git_no_repin]
+    #[test(tokio::test)]
+    pub async fn git_force_repin() {
+        let env = default_environment();
+        let repo = git::new().await;
+        let commit1 = repo.commit(|project| project.add_packages(["a"])).await;
+        commit1.branch("branch-name").await;
+
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "a", "branch-name", |dep| dep)
+            .build();
+
+        // load the root package and save the lockfile
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
+        root_pkg.update_lockfile().await.unwrap();
+
+        // change the branch
+        let commit2 = repo
+            .commit(|project| project.add_package("a", |a| a.version("0.0.2")))
+            .await;
+        commit2.branch("branch-name").await;
+
+        // reload the root package with force repinning and save the lockfile again
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
+        root_pkg.update_lockfile().await.unwrap();
+
+        // since we repinned, sha should be for commit 2
+        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        assert_eq!(sha, commit2.sha());
+    }
+
+    /// If we have a git dep, and we pin using a branch, then change the branch, then update the
+    /// root manifest, and then load again, we get the sha of the second commit since the manifest
+    /// change should trigger a repin
+    #[test(tokio::test)]
+    pub async fn git_change_manifest() {
+        let env = default_environment();
+        let repo = git::new().await;
+        let commit1 = repo.commit(|project| project.add_packages(["a"])).await;
+        commit1.branch("branch-name").await;
+
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "a", "branch-name", |dep| dep)
+            .build();
+
+        // load the root package and save the lockfile
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
+        root_pkg.update_lockfile().await.unwrap();
+
+        // change the branch so we will notice a repin
+        let commit2 = repo
+            .commit(|project| project.add_package("a", |a| a.version("0.0.2")))
+            .await;
+        commit2.branch("branch-name").await;
+
+        // modify the manifest and then reload
+        project.extend_file("root/Move.toml", "\n# extra stuff\n");
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
+        root_pkg.update_lockfile().await.unwrap();
+
+        // since the manifest changed, we should have repinned, so the sha should be for commit 2
+        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        assert_eq!(sha, commit2.sha());
+    }
+
+    /// If we have a dep whose manifest is out of date, we repin everything
+    #[test(tokio::test)]
+    pub async fn git_change_dep_manifest() {
+        // there are 3 packages: `root`, `dirty`, and `git_dep`.
+        // root depends on a branch of git_dep and also depends on dirty
+        // we first pin root, then we update the branch and dirty `dirty`
+        // when we reload `root`, we should notice that `dirty` is dirty and repin, which should
+        // cause `git_dep` to be bumped to the latest version
+        let env = default_environment();
+        let repo = git::new().await;
+        let commit1 = repo
+            .commit(|project| project.add_packages(["git_dep"]))
+            .await;
+        commit1.branch("branch-name").await;
+
+        let project = TestPackageGraph::new(["root", "dirty"])
+            .add_git_dep("root", &repo, "git_dep", "branch-name", |dep| dep)
+            .add_deps([("root", "dirty")])
+            .build();
+
+        // load the root package and save the lockfile
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
+        root_pkg.update_lockfile().await.unwrap();
+
+        // change the branch so that we will notice a repin
+        let commit2 = repo
+            .commit(|project| project.add_package("git_dep", |pkg| pkg.version("0.0.2")))
+            .await;
+        commit2.branch("branch-name").await;
+
+        // modify the manifest for `dirty` and then reload
+        project.extend_file("dirty/Move.toml", "\n# extra stuff\n");
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
+                .await
+                .unwrap();
+        root_pkg.update_lockfile().await.unwrap();
+
+        // since the dependency's manifest changed, we should have repinned, so the sha should be
+        // for commit 2
+        let sha = dep_sha(&root_pkg, &env.name, "git_dep").await;
+        assert_eq!(sha, commit2.sha());
+    }
+
+    /// Reads the root package's output lockfile and extracts the dep with `id` in `env`. Asserts
+    /// that it is a git dep, and returns its sha
+    async fn dep_sha(
+        root: &RootPackage<Vanilla>,
+        env: &EnvironmentName,
+        id: impl AsRef<str>,
+    ) -> String {
+        let pin = &root.output_path.dump_lockfile().await.pinned[env][id.as_ref()];
+        let LockfileDependencyInfo::Git(git) = &pin.source else {
+            panic!("expected git dep");
+        };
+        git.rev.to_string()
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1141,7 +1274,9 @@ pkg_b = { local = "../pkg_b" }"#,
     /// (and does not update the normal pubfile)
     #[test(tokio::test)]
     async fn ephemeral_publish() {
-        let scenario = TestPackageGraph::new(["root", "dep"])
+        let scenario = TestPackageGraph::new(Vec::<String>::new())
+            .add_published("root", OriginalID::from(1), PublishedID::from(1))
+            .add_published("dep", OriginalID::from(2), PublishedID::from(2))
             .add_deps([("root", "dep")])
             .build();
 
@@ -1167,7 +1302,8 @@ pkg_b = { local = "../pkg_b" }"#,
         .await
         .unwrap();
 
-        let prepublish_pubfile = std::fs::read_to_string(root.path().publications_path()).unwrap();
+        let prepublish_pubfile =
+            std::fs::read_to_string(scenario.path_for("root/Published.toml")).unwrap();
 
         // publish
         root.write_publish_data(Publication {
@@ -1179,10 +1315,12 @@ pkg_b = { local = "../pkg_b" }"#,
             },
             metadata: vanilla::PublishedMetadata::default(),
         })
+        .await
         .unwrap();
 
         // check
-        let postpublish_pubfile = std::fs::read_to_string(root.path().publications_path()).unwrap();
+        let postpublish_pubfile =
+            std::fs::read_to_string(scenario.path_for("root/Published.toml")).unwrap();
         let ephemeral_data = std::fs::read_to_string(ephemeral.path()).unwrap();
 
         assert_eq!(prepublish_pubfile, postpublish_pubfile);
@@ -1300,7 +1438,7 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .await;
 
-        assert_snapshot!(root.unwrap_err().to_string(), @"Cannot build with build-env `unknown environment`: the recognized environments are <TODO>");
+        assert_snapshot!(root.unwrap_err().to_string(), @r###"Package `root` does not declare a `unknown environment` environment. The available environments are ["_test_env"]. Consider running with `--build-env _test_env`"###);
     }
 
     /// ```mermaid
