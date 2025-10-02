@@ -13,7 +13,7 @@ use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules};
 
 use move_package_alt::{
     flavor::{Vanilla, vanilla},
-    package::{RootPackage, layout::SourcePackageLayout, manifest::Manifest},
+    package::{RootPackage, layout::SourcePackageLayout},
 };
 use move_package_alt_compilation::{
     layout::CompiledPackageLayout, on_disk_package::OnDiskCompiledPackage,
@@ -67,11 +67,7 @@ fn collect_coverage(
     let canonical_build = build_dir.canonicalize().unwrap();
 
     let pkg_root = &SourcePackageLayout::try_find_root(&canonical_build).unwrap();
-    let manifest =
-        Manifest::read_from_file(pkg_root.join(SourcePackageLayout::Manifest.path())).unwrap();
-
-    // TODO fix this
-    let package_name = manifest.package_name().to_string();
+    let package_name = move_package_alt::read_name_from_manifest(pkg_root)?;
 
     let pkg_path = &build_dir
         .join(package_name)
@@ -168,7 +164,7 @@ fn package_paths(pkg_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
         vec!["test".into()],
     ))?;
 
-    let packages = root_pkg.packages()?;
+    let packages = root_pkg.packages();
 
     Ok(packages
         .iter()

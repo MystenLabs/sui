@@ -184,7 +184,11 @@ mod tests {
     async fn test_external_rename_error() {
         let scenario = TestPackageGraph::new(["root", "a", "b"])
             .add_deps([("root", "a")])
-            .add_dep("a", "b", |dep| dep.name("c").make_external())
+            .add_dep(
+                "a",
+                "b",
+                |dep| dep.name("c"), /* TODO .make_external()*/
+            )
             .build();
 
         assert_snapshot!(scenario.graph_for("root").await.check_rename_from().unwrap_err().to_string(), @"TODO");

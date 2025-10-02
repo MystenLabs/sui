@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use super::{
     EnvironmentName, GitSha, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses,
+    RenderToml,
     toml_format::{expand_toml, flatten_toml},
 };
 
@@ -93,9 +94,9 @@ pub struct LockfileGitDepInfo {
     pub rev: GitSha,
 }
 
-impl ParsedLockfile {
+impl RenderToml for ParsedLockfile {
     /// Pretty-print `self` as a TOML document
-    pub fn render_as_toml(&self) -> String {
+    fn render_as_toml(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");
 
         expand_toml(&mut toml);
@@ -135,6 +136,8 @@ mod tests {
     use indoc::indoc;
     use test_log::test;
     use tracing::debug;
+
+    use crate::schema::RenderToml;
 
     use super::ParsedLockfile;
 

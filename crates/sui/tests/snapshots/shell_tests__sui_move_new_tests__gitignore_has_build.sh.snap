@@ -24,9 +24,9 @@ exit_code: 0
 ignore1
 build/*
 ignore2
-build/*
 .trace
 .coverage*
+Pub.*.toml
 
 ==== files in example/ ====
 .gitignore

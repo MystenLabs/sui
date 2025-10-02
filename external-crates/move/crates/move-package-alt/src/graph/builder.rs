@@ -6,7 +6,10 @@ use crate::{
     dependency::{Pinned, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
-    package::{EnvironmentName, Package, lockfile::Lockfiles, paths::PackagePath},
+    package::{
+        EnvironmentName, Package, lockfile::Lockfiles, package_lock::PackageSystemLock,
+        paths::PackagePath,
+    },
     schema::{Environment, PackageID, PackageName},
 };
 
@@ -50,8 +53,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &Environment,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        self.load_from_lockfile_impl(path, env, true).await
+        self.load_from_lockfile_impl(path, env, true, mtx).await
     }
 
     /// Load a [PackageGraph] from the lockfile at `path`. Returns [None] if there is no lockfile
@@ -59,8 +63,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &Environment,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        self.load_from_lockfile_impl(path, env, false).await
+        self.load_from_lockfile_impl(path, env, false, mtx).await
     }
 
     /// Load a [PackageGraph] from the lockfile at `path`. Returns [None] if there is no lockfile.
@@ -70,8 +75,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         path: &PackagePath,
         env: &Environment,
         check_digests: bool,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        let Some(lockfile) = Lockfiles::read_from_dir::<F>(path)? else {
+        let Some(lockfile) = Lockfiles::read_from_dir::<F>(path, mtx)? else {
             return Ok(None);
         };
 
@@ -86,7 +92,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
             let dep = Pinned::from_lockfile(lockfile.file(), pin)?;
-            let package = self.cache.fetch(&dep, env).await?;
+            let package = self.cache.fetch(&dep, env, mtx).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
                 return Ok(None);
@@ -148,9 +154,10 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &Environment,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<PackageGraph<F>> {
         let graph = Arc::new(Mutex::new(DiGraph::new()));
-        let root = Arc::new(Package::<F>::load_root(path, env).await?);
+        let root = Arc::new(Package::<F>::load_root(path.clone(), env, mtx).await?);
 
         // TODO: should we add `root` to `visited`? we may have a problem if there is a cyclic
         // dependency involving the root
@@ -158,7 +165,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
 
         let root_index = self
-            .add_transitive_manifest_deps(root, env, graph.clone(), visited)
+            .add_transitive_manifest_deps(root, env, graph.clone(), visited, mtx)
             .await?;
 
         let inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo> =
@@ -227,13 +234,14 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         package: Arc<Package<F>>,
         env: &Environment,
         graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PinnedDependencyInfo>>>,
-        visited: Arc<Mutex<BTreeMap<(EnvironmentName, PathBuf), NodeIndex>>>,
+        visited: Arc<Mutex<BTreeMap<(EnvironmentName, PackagePath), NodeIndex>>>,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<NodeIndex> {
         // return early if node is cached; add empty node to graph and visited list otherwise
         let index = match visited
             .lock()
             .expect("unpoisoned")
-            .entry((env.name().clone(), package.path().as_ref().to_path_buf()))
+            .entry((env.name().clone(), package.path().clone()))
         {
             Entry::Occupied(entry) => return Ok(*entry.get()),
             Entry::Vacant(entry) => *entry.insert(graph.lock().expect("unpoisoned").add_node(None)),
@@ -242,7 +250,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
         for dep in package.direct_deps().iter() {
-            let fetched = self.cache.fetch(dep.as_ref(), env).await?;
+            let fetched = self.cache.fetch(dep.as_ref(), env, mtx).await?;
 
             // We retain the defined environment name, but we assign a consistent chain id (environmentID).
             let new_env = Environment::new(dep.use_environment().clone(), env.id().clone());
@@ -252,6 +260,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                 &new_env,
                 graph.clone(),
                 visited.clone(),
+                mtx,
             );
             let dep_index = Box::pin(future).await?;
 
@@ -281,7 +290,12 @@ impl<F: MoveFlavor> PackageCache<F> {
     }
 
     /// Return a reference to a cached [Package], loading it if necessary
-    pub async fn fetch(&self, dep: &Pinned, env: &Environment) -> PackageResult<Arc<Package<F>>> {
+    pub async fn fetch(
+        &self,
+        dep: &Pinned,
+        env: &Environment,
+        mtx: &PackageSystemLock,
+    ) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache
             .lock()
@@ -298,7 +312,7 @@ impl<F: MoveFlavor> PackageCache<F> {
         }
 
         // If not cached, load and cache
-        match Package::load(dep.clone(), env).await {
+        match Package::load(dep.clone(), env, mtx).await {
             Ok(package) => {
                 let node = Arc::new(package);
                 cell.get_or_init(async || Some(node.clone())).await;

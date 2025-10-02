@@ -18,6 +18,7 @@ use tracing::{debug, warn};
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{ModeName, Publication};
 use crate::{
     dependency::PinnedDependencyInfo,
@@ -55,23 +56,31 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// resolution graph in the lockfile inside `path` is up-to-date (i.e., whether any of the
     /// manifests digests are out of date). If the resolution graph is up-to-date, it is returned.
     /// Otherwise a new resolution graph is constructed by traversing (only) the manifest files.
-    pub async fn load(path: &PackagePath, env: &Environment) -> PackageResult<Self> {
+    pub async fn load(
+        path: &PackagePath,
+        env: &Environment,
+        mtx: &PackageSystemLock,
+    ) -> PackageResult<Self> {
         let builder = PackageGraphBuilder::<F>::new();
 
-        if let Some(graph) = builder.load_from_lockfile(path, env).await? {
+        if let Some(graph) = builder.load_from_lockfile(path, env, mtx).await? {
             debug!("successfully loaded lockfile");
             Ok(graph)
         } else {
             debug!("lockfile was missing or out of date; loading from manifests");
-            builder.load_from_manifests(path, env).await
+            builder.load_from_manifests(path, env, mtx).await
         }
     }
 
     /// Construct a [PackageGraph] by pinning and fetching all transitive dependencies from the
     /// manifests rooted at `path` (no lockfiles are read) for the passed environment.
-    pub async fn load_from_manifests(path: &PackagePath, env: &Environment) -> PackageResult<Self> {
+    pub async fn load_from_manifests(
+        path: &PackagePath,
+        env: &Environment,
+        mtx: &PackageSystemLock,
+    ) -> PackageResult<Self> {
         PackageGraphBuilder::new()
-            .load_from_manifests(path, env)
+            .load_from_manifests(path, env, mtx)
             .await
     }
 
@@ -81,9 +90,10 @@ impl<F: MoveFlavor> PackageGraph<F> {
     pub async fn load_from_lockfile_ignore_digests(
         path: &PackagePath,
         env: &Environment,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<Self>> {
         PackageGraphBuilder::new()
-            .load_from_lockfile_ignore_digests(path, env)
+            .load_from_lockfile_ignore_digests(path, env, mtx)
             .await
     }
 
@@ -92,14 +102,14 @@ impl<F: MoveFlavor> PackageGraph<F> {
         &self.inner[self.root_index]
     }
 
-    /// Return the list of packages that are in the linkage table, as well as
-    /// the unpublished ones in the package graph.
-    // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
-    // TODO: We probably want a deduplication function, and then we can just use `all_packages` for
-    // this
-    //
-    pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
-        Ok(self.linkage()?.values().cloned().collect())
+    /// Return the list of all packages that are in the package graph. Note that depending on whether the
+    /// graph has been filtered or not, this may contain multiple packages with the same original
+    /// ID
+    pub fn packages(&self) -> Vec<PackageInfo<F>> {
+        self.inner
+            .node_indices()
+            .map(|node| self.package_info(node))
+            .collect()
     }
 
     /// Return the sorted list of dependencies' name
@@ -114,7 +124,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
     /// For each entry in `overrides`, override the package publication in `self` for the
     /// corresponding package ID. Warns if the package ID is unrecognized.
-    pub(crate) fn add_publish_overrides(&mut self, overrides: BTreeMap<PackageID, Publication<F>>) {
+    pub fn add_publish_overrides(&mut self, overrides: BTreeMap<PackageID, Publication<F>>) {
         for (id, publish) in overrides {
             let Some(index) = self.package_ids.get_by_left(&id) else {
                 warn!("Ignoring unrecognized package identifier `{id}`");
@@ -166,6 +176,15 @@ impl<F: MoveFlavor> PackageGraph<F> {
         }
 
         index
+    }
+
+    /// Return a `PackageInfo` for `id`. Panics if the ID is not present
+    fn get_package(&self, id: &PackageID) -> PackageInfo<F> {
+        let node = self
+            .package_ids
+            .get_by_left(id)
+            .expect("all IDs have nodes");
+        self.package_info(*node)
     }
 }
 

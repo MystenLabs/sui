@@ -4,23 +4,21 @@
 
 use std::{
     collections::BTreeMap,
-    path::Path,
     sync::{LazyLock, Mutex},
 };
 
 use derive_where::derive_where;
 use tracing::debug;
 
-use super::compute_digest;
 use super::manifest::Manifest;
 use super::paths::PackagePath;
+use super::{compute_digest, package_lock::PackageSystemLock};
 use crate::compatibility::legacy::LegacyData;
-use crate::compatibility::legacy_parser::try_load_legacy_manifest;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
 use crate::{
     dependency::Pinned,
-    schema::{ParsedManifest, ParsedPublishedFile, Publication, ReplacementDependency},
+    schema::{ParsedManifest, Publication, ReplacementDependency},
 };
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
@@ -73,35 +71,44 @@ pub struct Package<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Package<F> {
-    /// Load a package from the manifest.
-    /// Makes a best effort to translate old-style packages into the current format,
-    ///
-    /// Fails if [path] does not exist, or if it doesn't contain a manifest
-    pub async fn load_root(path: impl AsRef<Path>, env: &Environment) -> PackageResult<Self> {
-        let path = PackagePath::new(path.as_ref().to_path_buf())?;
+    /// Load a package from the directory given by `path`.
+    /// Makes a best effort to translate old-style packages into the current format
+    pub async fn load_root(
+        path: PackagePath,
+        env: &Environment,
+        mtx: &PackageSystemLock,
+    ) -> PackageResult<Self> {
         let source = Pinned::Root(path);
 
-        Self::load(source, env).await
+        Self::load(source, env, mtx).await
     }
 
     /// Fetch [dep] (relative to [self]) and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
-    pub async fn load(dep_for_self: Pinned, env: &Environment) -> PackageResult<Self> {
-        debug!("loading package {:?}", dep_for_self);
-        let path = FetchedDependency::fetch(&dep_for_self).await?;
+    pub async fn load(
+        dep: Pinned,
+        env: &Environment,
+        mtx: &PackageSystemLock,
+    ) -> PackageResult<Self> {
+        debug!("loading package {:?}", dep);
+        let path = FetchedDependency::fetch(&dep).await?;
+
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
-        let (file_handle, manifest) = if let Some(result) = try_load_legacy_manifest(&path, env)? {
+        let legacy_manifest = path.read_legacy_manifest(env, mtx)?;
+        let (file_handle, manifest) = if let Some(result) = legacy_manifest {
             result
         } else {
-            let m = Manifest::read_from_file(path.manifest_path())?;
-            (*m.file_handle(), m.into_parsed())
+            let manifest = Manifest::read_from_file(&path, mtx)?;
+            check_for_environment::<F>(&manifest, &env.name)?;
+
+            (*manifest.file_handle(), manifest.into_parsed())
         };
 
         // try to load the address from the modern lockfile
         //   - if it fails, look in the legacy data
         //   - if that fails, use a dummy address
-        let publication = Self::load_publication(&path, env.name())?.or_else(|| {
+        let publication = Self::load_publication(&path, env.name(), mtx)?.or_else(|| {
             manifest
                 .legacy_data
                 .as_ref()
@@ -113,7 +120,7 @@ impl<F: MoveFlavor> Package<F> {
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
         //     (adding system deps)
 
-        let deps = Self::deps_from_manifest(&dep_for_self, &file_handle, &manifest, env).await?;
+        let deps = Self::deps_from_manifest(&dep, &file_handle, &manifest, env).await?;
 
         // compute the digest (TODO: this should only compute over the environment specific data)
         let digest = compute_digest(file_handle.source());
@@ -124,7 +131,7 @@ impl<F: MoveFlavor> Package<F> {
             metadata: manifest.package,
             path,
             publication,
-            dep_for_self,
+            dep_for_self: dep,
             legacy_data: manifest.legacy_data,
             deps,
             dummy_addr,
@@ -224,19 +231,14 @@ impl<F: MoveFlavor> Package<F> {
     fn load_publication(
         path: &PackagePath,
         env: &EnvironmentName,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<Publication<F>>> {
-        let pubfile = path.publications_path();
-
-        let Ok(file) = FileHandle::new(path.publications_path()) else {
-            debug!("unable to load {pubfile:?}");
+        let Some((file, parsed)) = path.read_pubfile(mtx)? else {
             return Ok(None);
         };
 
-        debug!("parsing\n---\n{}\n---", file.source());
-        let parsed = toml_edit::de::from_str::<ParsedPublishedFile<F>>(file.source())?;
-
         let Some(publish) = parsed.published.get(env) else {
-            debug!("no entry for {env:?} in {pubfile:?}");
+            debug!("no entry for {env:?} in {file:?}");
             return Ok(None);
         };
 
@@ -317,6 +319,34 @@ fn create_dummy_addr() -> OriginalID {
     let mut dummy_addr = lock.unwrap();
     *dummy_addr += 1;
     (*dummy_addr).into()
+}
+
+/// Check that `env` is defined in `manifest`, returning an error if it isn't
+fn check_for_environment<F: MoveFlavor>(
+    manifest: &Manifest,
+    env: &EnvironmentName,
+) -> PackageResult<()> {
+    let mut known_environments = manifest.environments();
+    known_environments.extend(F::default_environments());
+    let known_environments: Vec<EnvironmentName> = known_environments
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+
+    if known_environments.contains(env) {
+        Ok(())
+    } else {
+        let message = format!(
+            "Package `{}` does not declare a `{}` environment. The available environments are {:?}. Consider running with `--build-env {}`",
+            manifest.package_name(),
+            env,
+            known_environments,
+            known_environments
+                .first()
+                .expect("there is at least one environment")
+        );
+        Err(PackageError::UnknownBuildEnv(message))
+    }
 }
 
 #[cfg(test)]

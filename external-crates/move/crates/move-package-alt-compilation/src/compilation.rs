@@ -80,7 +80,7 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
-    let project_root = root_pkg.path().as_ref().to_path_buf();
+    let project_root = root_pkg.package_path().to_path_buf();
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let package_name = Symbol::from(root_pkg.name().as_str());
     let (file_map, all_compiled_units) =
@@ -133,10 +133,7 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
     // compilation
     if build_config.generate_docs {
         // TODO: fix this root_name_address_map
-        let named_addresses = root_pkg
-            .package_graph()
-            .root_package_info()
-            .named_addresses()?;
+        let named_addresses = root_pkg.package_info().named_addresses()?;
 
         // TODO: pkg-alt verify this is producing the correct map.
         let root_named_address_map = build_config.addresses_for_config(named_addresses).into();
@@ -201,7 +198,7 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     root_pkg: &RootPackage<F>,
     compiler_driver: impl FnOnce(Compiler) -> Result<T>,
 ) -> Result<T> {
-    let packages = root_pkg.packages()?;
+    let packages = root_pkg.packages();
     let package_paths = make_deps_for_compiler(w, packages, build_config)?;
 
     debug!("Package paths {:#?}", package_paths);
