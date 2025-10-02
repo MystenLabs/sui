@@ -160,5 +160,5 @@ fn default_latency_moving_window_size() -> usize {
 }
 
 fn default_reliability_moving_window_size() -> usize {
-    40
+    20
 }
