@@ -57,11 +57,11 @@ pub fn generate_from_files(input_files: &[PathBuf], output: &Path) -> anyhow::Re
                 .map_err(|e| anyhow!(format!("Failed to deserialize module at {path}: {e}")))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let model_config = M::ModelBuilderConfig {
+    let model_config = M::ModelConfig {
         // During decompilation, we do not need to resolve all dependencies.
         allow_missing_dependencies: true,
     };
-    let model = CM::Model::from_compiled_with_config(&model_config, &BTreeMap::new(), modules);
+    let model = CM::Model::from_compiled_with_config(model_config, &BTreeMap::new(), modules);
     generate_from_model(model, output)
 }
 
