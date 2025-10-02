@@ -251,10 +251,11 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         cancel,
     );
 
+    // task pipelines will skip reader_watermark and pruner
+
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
         store.clone(),
-        task.clone(),
         metrics.clone(),
         pruner_cancel.clone(),
     );
@@ -263,7 +264,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         handler,
         pruner_config,
         store,
-        task.clone(),
         metrics,
         pruner_cancel.clone(),
     );

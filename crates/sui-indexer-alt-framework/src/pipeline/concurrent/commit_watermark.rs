@@ -105,7 +105,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         continue;
                     };
 
-                    // TODO: (wlmyng) how do we report task to this metric?
                     // Check if the pipeline's watermark needs to be updated
                     let guard = metrics
                         .watermark_gather_latency

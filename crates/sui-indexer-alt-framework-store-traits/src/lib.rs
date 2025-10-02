@@ -45,20 +45,7 @@ pub trait Connection: Send {
     async fn reader_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&str>,
     ) -> anyhow::Result<Option<ReaderWatermark>>;
-
-    // /// Given a pipeline, return the reader watermark for all tasks of that pipeline. This is used
-    // /// by the indexer solely for concurrent pipelines to:
-    // /// - Determine the
-    // ///
-    // ///  hold back the pruner until all tasks
-    // /// record a committer hi watermark larger than the main pipeline's `[pruner_hi, reader_lo)`.
-    // async fn reader_watermarks(
-    //     &mut self,
-    //     pipeline: &'static str,
-    //     task: Option<&str>,
-    // ) -> anyhow::Result<Option<HashMap<String, ReaderWatermark>>>;
 
     /// For some pipeline and optional indexer task, get the bounds for the region that the pruner
     /// is allowed to prune, and the time in milliseconds the pruner must wait before it can begin
@@ -69,7 +56,6 @@ pub trait Connection: Send {
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&str>,
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>>;
 
@@ -82,9 +68,10 @@ pub trait Connection: Send {
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool>;
 
-    /// Update the `reader_lo` of an existing watermark entry only if it raises `reader_lo`. Readers
-    /// will reference this as the inclusive lower bound of available data for the corresponding
-    /// pipeline.
+    /// Update the `reader_lo` of an existing watermark entry only if it raises `reader_lo`. Only
+    /// main pipelines can update the `reader_lo`, and any task pipelines will have the same
+    /// `reader_lo`. Readers will reference this as the inclusive lower bound of available data for
+    /// the corresponding pipeline.
     ///
     /// If an update is to be made, some timestamp (i.e `pruner_timestamp`) should also be set on
     /// the watermark entry to the current time. Ideally, this would be from the perspective of the
@@ -98,14 +85,11 @@ pub trait Connection: Send {
     async fn set_reader_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&str>,
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
 
-    /// Update the pruner watermark for the main pipeline and any task pipelines provided ...
-    /// returns true if the watermark was actually updated
+    /// Update the pruner watermark, returns true if the watermark was actually updated.
     async fn set_pruner_watermark(
-        // TODO (wlmyng)
         &mut self,
         pipeline: &'static str,
         pruner_hi: u64,

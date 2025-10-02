@@ -54,11 +54,10 @@ impl store::Connection for Connection<'_> {
     async fn reader_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&str>,
     ) -> anyhow::Result<Option<store::ReaderWatermark>> {
         let watermark: Option<(i64, i64)> = watermarks::table
             .select((watermarks::checkpoint_hi_inclusive, watermarks::reader_lo))
-            .filter(watermarks::pipeline.eq(watermark_key(pipeline, task)))
+            .filter(watermarks::pipeline.eq(watermark_key(pipeline, None)))
             .first(self)
             .await
             .optional()?;
@@ -76,7 +75,6 @@ impl store::Connection for Connection<'_> {
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&str>,
         delay: Duration,
     ) -> anyhow::Result<Option<store::PrunerWatermark>> {
         //     |---------- + delay ---------------------|
@@ -91,7 +89,7 @@ impl store::Connection for Connection<'_> {
 
         let watermark: Option<(i64, i64, i64)> = watermarks::table
             .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
-            .filter(watermarks::pipeline.eq(watermark_key(pipeline, task)))
+            .filter(watermarks::pipeline.eq(watermark_key(pipeline, None)))
             .first(self)
             .await
             .optional()?;
@@ -149,7 +147,6 @@ impl store::Connection for Connection<'_> {
     async fn set_reader_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&str>,
         reader_lo: u64,
     ) -> anyhow::Result<bool> {
         Ok(diesel::update(watermarks::table)
@@ -157,7 +154,8 @@ impl store::Connection for Connection<'_> {
                 watermarks::reader_lo.eq(reader_lo as i64),
                 watermarks::pruner_timestamp.eq(diesel::dsl::now),
             ))
-            .filter(watermarks::pipeline.eq(watermark_key(pipeline, task)))
+            // This will match on the main pipeline and any task pipelines for the same name
+            .filter(watermarks::pipeline.eq(pipeline))
             .filter(watermarks::reader_lo.lt(reader_lo as i64))
             .execute(self)
             .await?
@@ -167,12 +165,11 @@ impl store::Connection for Connection<'_> {
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
-        task: Option<&str>,
         pruner_hi: u64,
     ) -> anyhow::Result<bool> {
         Ok(diesel::update(watermarks::table)
             .set(watermarks::pruner_hi.eq(pruner_hi as i64))
-            .filter(watermarks::pipeline.eq(watermark_key(pipeline, task)))
+            .filter(watermarks::pipeline.eq(pipeline))
             .execute(self)
             .await?
             > 0)
