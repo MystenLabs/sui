@@ -9,13 +9,10 @@ use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::{AuthorityName, ConciseableName};
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AuthorityKeyPair, KeypairTraits};
-use tokio::time::sleep;
 
 mod client_stats_tests {
 
     use super::*;
-    use crate::validator_client_monitor::metrics::ValidatorClientMetrics;
-    use prometheus::Registry;
     use sui_types::messages_grpc::TxType;
 
     /// Helper to create test validator names
@@ -28,16 +25,10 @@ mod client_stats_tests {
             .collect()
     }
 
-    /// Helper to create test metrics
-    fn create_test_metrics() -> ValidatorClientMetrics {
-        ValidatorClientMetrics::new(&Registry::default())
-    }
-
     #[tokio::test]
     async fn test_client_stats_record_success() {
         let config = ValidatorClientMonitorConfig::default();
         let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
 
         let validators = create_test_validator_names(1);
         let validator = validators[0];
@@ -50,12 +41,10 @@ mod client_stats_tests {
             result: Ok(Duration::from_millis(100)),
         };
 
-        stats.record_interaction_result(feedback, &metrics);
+        stats.record_interaction_result(feedback);
 
         // Check validator stats were created and updated
         let validator_stats = stats.validator_stats.get(&validator).unwrap();
-        assert_eq!(validator_stats.consecutive_failures, 0);
-        assert!(validator_stats.exclusion_time.is_none());
         assert_eq!(validator_stats.reliability.get(), 1.0);
 
         // Check latency was recorded
@@ -67,44 +56,9 @@ mod client_stats_tests {
     }
 
     #[tokio::test]
-    async fn test_client_stats_record_failure() {
-        let config = ValidatorClientMonitorConfig {
-            max_consecutive_failures: 3,
-            ..Default::default()
-        };
-        let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
-
-        let validators = create_test_validator_names(1);
-        let validator = validators[0];
-
-        // Record multiple failures
-        for i in 0..3 {
-            let feedback = OperationFeedback {
-                authority_name: validator,
-                display_name: validator.concise().to_string(),
-                operation: OperationType::Submit,
-                result: Err(()),
-            };
-            stats.record_interaction_result(feedback, &metrics);
-
-            let validator_stats = stats.validator_stats.get(&validator).unwrap();
-            assert_eq!(validator_stats.consecutive_failures, i + 1);
-
-            // Should be excluded after 3rd failure
-            if i == 2 {
-                assert!(validator_stats.exclusion_time.is_some());
-            } else {
-                assert!(validator_stats.exclusion_time.is_none());
-            }
-        }
-    }
-
-    #[tokio::test]
     async fn test_client_stats_calculate_latencies() {
         let config = ValidatorClientMonitorConfig::default();
         let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
 
         // Create two validators with different performance
         let validators = create_test_validator_names(2);
@@ -112,37 +66,28 @@ mod client_stats_tests {
         let validator2 = validators[1];
 
         // Validator 1: good performance
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validator1,
-                display_name: validator1.concise().to_string(),
-                operation: OperationType::FastPath,
-                result: Ok(Duration::from_millis(50)),
-            },
-            &metrics,
-        );
+        stats.record_interaction_result(OperationFeedback {
+            authority_name: validator1,
+            display_name: validator1.concise().to_string(),
+            operation: OperationType::FastPath,
+            result: Ok(Duration::from_millis(50)),
+        });
 
         // Validator 2: worse performance
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validator2,
-                display_name: validator2.concise().to_string(),
-                operation: OperationType::FastPath,
-                result: Ok(Duration::from_millis(200)),
-            },
-            &metrics,
-        );
+        stats.record_interaction_result(OperationFeedback {
+            authority_name: validator2,
+            display_name: validator2.concise().to_string(),
+            operation: OperationType::FastPath,
+            result: Ok(Duration::from_millis(200)),
+        });
 
         // Add one failure for validator2
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validator2,
-                display_name: validator2.concise().to_string(),
-                operation: OperationType::Submit,
-                result: Err(()),
-            },
-            &metrics,
-        );
+        stats.record_interaction_result(OperationFeedback {
+            authority_name: validator2,
+            display_name: validator2.concise().to_string(),
+            operation: OperationType::Submit,
+            result: Err(()),
+        });
 
         // Create a committee with both validators
         let committee = Committee::new_for_testing_with_normalized_voting_power(
@@ -160,62 +105,6 @@ mod client_stats_tests {
     }
 
     #[tokio::test]
-    async fn test_client_stats_exclusion() {
-        let config = ValidatorClientMonitorConfig {
-            max_consecutive_failures: 2,
-            failure_cooldown: Duration::from_millis(100),
-            ..Default::default()
-        };
-        let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
-
-        let validators = create_test_validator_names(1);
-        let validator = validators[0];
-
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validator,
-                display_name: validator.concise().to_string(),
-                operation: OperationType::Consensus,
-                result: Ok(Duration::from_millis(50)),
-            },
-            &metrics,
-        );
-
-        // Cause exclusion
-        for _ in 0..2 {
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: validator,
-                    display_name: validator.concise().to_string(),
-                    operation: OperationType::Submit,
-                    result: Err(()),
-                },
-                &metrics,
-            );
-        }
-
-        // Create a committee with the validator
-        let committee = Committee::new_for_testing_with_normalized_voting_power(
-            0,
-            vec![(validator, 1)].into_iter().collect(),
-        );
-
-        // Should be excluded (max latency should be assigned)
-        let all_stats = stats.get_all_validator_stats(&committee, TxType::SharedObject);
-        let latency = *all_stats.get(&validator).unwrap();
-        assert_eq!(latency, Duration::from_secs(10));
-
-        // Wait for cooldown
-        sleep(Duration::from_millis(150)).await;
-
-        // Should be included again (latency < 10.0)
-        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
-        let latency = *all_stats.get(&validator).unwrap();
-        assert!(latency > Duration::ZERO);
-    }
-
-    #[tokio::test]
     async fn test_client_stats_refresh_validator_set() {
         let config = ValidatorClientMonitorConfig::default();
         let mut stats = ClientObservedStats::new(config);
@@ -223,17 +112,13 @@ mod client_stats_tests {
         // Add stats for 3 validators
         let validators = create_test_validator_names(3);
 
-        let metrics = create_test_metrics();
         for validator in &validators {
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: *validator,
-                    display_name: validator.concise().to_string(),
-                    operation: OperationType::Submit,
-                    result: Ok(Duration::from_millis(100)),
-                },
-                &metrics,
-            );
+            stats.record_interaction_result(OperationFeedback {
+                authority_name: *validator,
+                display_name: validator.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Ok(Duration::from_millis(100)),
+            });
         }
 
         assert_eq!(stats.validator_stats.len(), 3);
@@ -250,7 +135,7 @@ mod client_stats_tests {
 
     #[tokio::test]
     async fn test_validator_stats_update_latency() {
-        let mut stats = ValidatorClientStats::new(1.0);
+        let mut stats = ValidatorClientStats::new(1.0, 40, 40);
 
         // First update creates the entry
         stats.update_average_latency(OperationType::Submit, Duration::from_millis(100));
@@ -280,21 +165,17 @@ mod client_stats_tests {
     async fn test_latency_calculation_with_missing_operations() {
         let config = ValidatorClientMonitorConfig::default();
         let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
 
         let validators = create_test_validator_names(1);
         let validator = validators[0];
 
         // Only record Submit operation, missing Effects and HealthCheck
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validator,
-                display_name: validator.concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(100)),
-            },
-            &metrics,
-        );
+        stats.record_interaction_result(OperationFeedback {
+            authority_name: validator,
+            display_name: validator.concise().to_string(),
+            operation: OperationType::Submit,
+            result: Ok(Duration::from_millis(100)),
+        });
 
         // Create a committee with the validator
         let committee = Committee::new_for_testing_with_normalized_voting_power(
@@ -312,21 +193,17 @@ mod client_stats_tests {
     async fn test_reliability_decay() {
         let config = ValidatorClientMonitorConfig::default();
         let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
 
         let validators = create_test_validator_names(1);
         let validator = validators[0];
 
         // Start with success
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validator,
-                display_name: validator.concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(100)),
-            },
-            &metrics,
-        );
+        stats.record_interaction_result(OperationFeedback {
+            authority_name: validator,
+            display_name: validator.concise().to_string(),
+            operation: OperationType::Submit,
+            result: Ok(Duration::from_millis(100)),
+        });
 
         let initial_reliability = stats
             .validator_stats
@@ -337,15 +214,12 @@ mod client_stats_tests {
         assert_eq!(initial_reliability, 1.0);
 
         // Add failure
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validator,
-                display_name: validator.concise().to_string(),
-                operation: OperationType::Submit,
-                result: Err(()),
-            },
-            &metrics,
-        );
+        stats.record_interaction_result(OperationFeedback {
+            authority_name: validator,
+            display_name: validator.concise().to_string(),
+            operation: OperationType::Submit,
+            result: Err(()),
+        });
 
         let new_reliability = stats
             .validator_stats
@@ -360,20 +234,16 @@ mod client_stats_tests {
     async fn test_moving_window_average_differences() {
         let config = ValidatorClientMonitorConfig::default();
         let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
 
         let validator = create_test_validator_names(1)[0];
 
         // Initial values for both validator latency and global max
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validator,
-                display_name: validator.concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(100)),
-            },
-            &metrics,
-        );
+        stats.record_interaction_result(OperationFeedback {
+            authority_name: validator,
+            display_name: validator.concise().to_string(),
+            operation: OperationType::Submit,
+            result: Ok(Duration::from_millis(100)),
+        });
 
         // Both should start at 100ms
         let validator_latency = stats
@@ -387,15 +257,12 @@ mod client_stats_tests {
         assert_eq!(validator_latency, Duration::from_millis(100));
 
         // Update with lower value (50ms)
-        stats.record_interaction_result(
-            OperationFeedback {
-                authority_name: validator,
-                display_name: validator.concise().to_string(),
-                operation: OperationType::Submit,
-                result: Ok(Duration::from_millis(50)),
-            },
-            &metrics,
-        );
+        stats.record_interaction_result(OperationFeedback {
+            authority_name: validator,
+            display_name: validator.concise().to_string(),
+            operation: OperationType::Submit,
+            result: Ok(Duration::from_millis(50)),
+        });
 
         // Validator latency should average now at 75ms
         let validator_latency = stats
@@ -412,13 +279,11 @@ mod client_stats_tests {
     #[tokio::test]
     async fn test_calculate_client_latency() {
         let config = ValidatorClientMonitorConfig {
-            failure_cooldown: Duration::from_millis(100),
-            max_consecutive_failures: 2,
-            reliability_weight: 0.5,
+            reliability_weight: 1.0,
+            reliability_moving_window_size: 3,
             ..Default::default()
         };
         let mut stats = ClientObservedStats::new(config);
-        let metrics = create_test_metrics();
 
         let validators = create_test_validator_names(3);
         let validator1 = validators[0]; // Good validator
@@ -439,15 +304,12 @@ mod client_stats_tests {
 
         println!("Case 2: Good validator with FastPath operation");
         {
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: validator1,
-                    display_name: validator1.concise().to_string(),
-                    operation: OperationType::FastPath,
-                    result: Ok(Duration::from_millis(100)), // 0.1s
-                },
-                &metrics,
-            );
+            stats.record_interaction_result(OperationFeedback {
+                authority_name: validator1,
+                display_name: validator1.concise().to_string(),
+                operation: OperationType::FastPath,
+                result: Ok(Duration::from_millis(100)), // 0.1s
+            });
 
             let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
             // 100ms from history, without reliability penalty.
@@ -459,15 +321,12 @@ mod client_stats_tests {
 
         println!("Case 3: Good validator with Consensus operation");
         {
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: validator1,
-                    display_name: validator1.concise().to_string(),
-                    operation: OperationType::Consensus,
-                    result: Ok(Duration::from_millis(200)), // 0.2s
-                },
-                &metrics,
-            );
+            stats.record_interaction_result(OperationFeedback {
+                authority_name: validator1,
+                display_name: validator1.concise().to_string(),
+                operation: OperationType::Consensus,
+                result: Ok(Duration::from_millis(200)), // 0.2s
+            });
 
             let latency_shared = stats.get_all_validator_stats(&committee, TxType::SharedObject);
             // 200ms from history, without reliability penalty.
@@ -479,32 +338,26 @@ mod client_stats_tests {
 
         println!("Case 4: Validator with reduced reliability");
         {
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: validator2,
-                    display_name: validator2.concise().to_string(),
-                    operation: OperationType::FastPath,
-                    result: Ok(Duration::from_millis(100)),
-                },
-                &metrics,
-            );
+            stats.record_interaction_result(OperationFeedback {
+                authority_name: validator2,
+                display_name: validator2.concise().to_string(),
+                operation: OperationType::FastPath,
+                result: Ok(Duration::from_millis(100)),
+            });
 
             // Add a failure to reduce reliability
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: validator2,
-                    display_name: validator2.concise().to_string(),
-                    operation: OperationType::Submit,
-                    result: Err(()),
-                },
-                &metrics,
-            );
+            stats.record_interaction_result(OperationFeedback {
+                authority_name: validator2,
+                display_name: validator2.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Err(()),
+            });
 
             let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
             let validator2_latency = *latency.get(&validator2).unwrap();
-            // Reliability should be 0.66, so latency ~= 0.1s + (1 - 0.66) * 0.5 * 10s ~= 0.1 + 1.66s ~= 1.76s
+            // Reliability should be 0.66, so latency = 0.1 + (1.0 - 0.66) * 1.0 * 10.0 = 0.1 + 0.34 * 1.0 * 10.0 = 0.1 + 3.4 = 3.5
             assert!(
-                (validator2_latency.as_secs_f64() - 1.766).abs() < 0.001,
+                (validator2_latency.as_secs_f64() - 3.433).abs() < 0.001,
                 "{}",
                 validator2_latency.as_secs_f64()
             );
@@ -512,25 +365,32 @@ mod client_stats_tests {
 
         println!("Case 5: Excluded validator should return MAX_LATENCY");
         {
-            // Add enough failures to cause exclusion
-            stats.record_interaction_result(
-                OperationFeedback {
+            for _ in 0..2 {
+                // Add enough failures to cause exclusion
+                stats.record_interaction_result(OperationFeedback {
                     authority_name: validator2,
                     display_name: validator2.concise().to_string(),
                     operation: OperationType::Submit,
                     result: Err(()),
-                },
-                &metrics,
-            );
+                });
+            }
 
             let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
             // MAX_LATENCY due to exclusion
             assert_eq!(*latency.get(&validator2).unwrap(), Duration::from_secs(10));
         }
 
-        println!("Case 6: After cooldown, validator should be included again");
+        println!("Case 6: Increase reliability should reduce latency again");
         {
-            tokio::time::sleep(Duration::from_millis(150)).await;
+            for _ in 0..2 {
+                stats.record_interaction_result(OperationFeedback {
+                    authority_name: validator2,
+                    display_name: validator2.concise().to_string(),
+                    operation: OperationType::Submit,
+                    result: Ok(Duration::from_millis(100)),
+                });
+            }
+
             let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
             let validator2_latency = *latency.get(&validator2).unwrap();
             // Should be back to calculated latency, not MAX_LATENCY
@@ -543,7 +403,6 @@ mod client_stats_tests {
     async fn test_reliability_weight() {
         let validators = create_test_validator_names(2);
         let validator = validators[0];
-        let metrics = create_test_metrics();
 
         println!("Case 1: Test with reliability_weight = 1.0");
         {
@@ -554,25 +413,19 @@ mod client_stats_tests {
             let mut stats = ClientObservedStats::new(config_half_weight);
 
             // Good validator - no failures
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: validator,
-                    display_name: validator.concise().to_string(),
-                    operation: OperationType::FastPath,
-                    result: Ok(Duration::from_millis(100)), // 0.1s
-                },
-                &metrics,
-            );
+            stats.record_interaction_result(OperationFeedback {
+                authority_name: validator,
+                display_name: validator.concise().to_string(),
+                operation: OperationType::FastPath,
+                result: Ok(Duration::from_millis(100)), // 0.1s
+            });
 
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: validator,
-                    display_name: validator.concise().to_string(),
-                    operation: OperationType::Submit,
-                    result: Err(()), // failure
-                },
-                &metrics,
-            );
+            stats.record_interaction_result(OperationFeedback {
+                authority_name: validator,
+                display_name: validator.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Err(()), // failure
+            });
 
             let committee = Committee::new_for_testing_with_normalized_voting_power(
                 0,
@@ -593,25 +446,19 @@ mod client_stats_tests {
             };
             let mut stats = ClientObservedStats::new(config_zero_weight);
 
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: validator,
-                    display_name: validator.concise().to_string(),
-                    operation: OperationType::FastPath,
-                    result: Ok(Duration::from_millis(100)),
-                },
-                &metrics,
-            );
+            stats.record_interaction_result(OperationFeedback {
+                authority_name: validator,
+                display_name: validator.concise().to_string(),
+                operation: OperationType::FastPath,
+                result: Ok(Duration::from_millis(100)),
+            });
 
-            stats.record_interaction_result(
-                OperationFeedback {
-                    authority_name: validator,
-                    display_name: validator.concise().to_string(),
-                    operation: OperationType::Submit,
-                    result: Err(()), // failure
-                },
-                &metrics,
-            );
+            stats.record_interaction_result(OperationFeedback {
+                authority_name: validator,
+                display_name: validator.concise().to_string(),
+                operation: OperationType::Submit,
+                result: Err(()), // failure
+            });
 
             let committee = Committee::new_for_testing_with_normalized_voting_power(
                 0,

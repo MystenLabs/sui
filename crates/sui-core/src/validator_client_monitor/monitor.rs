@@ -233,7 +233,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         }
 
         let mut client_stats = self.client_stats.write();
-        client_stats.record_interaction_result(feedback, &self.metrics);
+        client_stats.record_interaction_result(feedback);
     }
 
     /// Select validators based on client-observed performance for the given transaction type.
