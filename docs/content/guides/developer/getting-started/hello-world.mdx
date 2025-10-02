@@ -1,7 +1,7 @@
 ---
 title: Hello, World!
-description: 
-keywords: [  ]
+description: Create and publish your first Move package using a basic 'Hello, world!' example.
+keywords: [ first dapp, first package, move package, first move package, hello world, hello, world, what is move, what is a package, what is an object, move object, sui move object, sui move package, sui move module, move module, build package, publish package, call package, make call to package, how to call package ]
 ---
 
 The basic unit of storage on Sui is an [**object**](/concepts/object-model.mdx). On other blockchains, storage is typically structured using key-value stores. On Sui, storage is centered around objects addressable on-chain by unique IDs. Every Sui smart contract is an object that is used to manipulate other objects on the network.
@@ -33,6 +33,8 @@ A Sui **Move object** is typed data governed by a Sui Move module from a Sui Mov
 
 - [x] [Create a Sui address](/guides/developer/getting-started/get-address.mdx).
 
+- [x] [Get SUI Testnet tokens](/guides/developer/getting-started/get-coins.mdx).
+
 - [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
 
     - [VSCode] (https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
@@ -55,8 +57,8 @@ A Sui **Move object** is typed data governed by a Sui Move module from a Sui Mov
 To demonstrate objects, packages, and how to build your first Sui application, start by cloning the "Hello, world!"" example:
 
 ```
-$ git clone https://github.com/MystenLabs/sui-stack-hello-world.git hello-world
-$ cd hello-world
+$ git clone https://github.com/MystenLabs/sui-stack-hello-world.git
+$ cd /sui-stack-hello-world/move/hello-world
 ```
 
 In this project, there are two important files that define the package's logic, information, and its dependencies:
@@ -121,7 +123,7 @@ module hello_world::greeting {
 }
 ```
 
-First, this code defines a module called `hello_world` that takes input of `greeting`:
+First, this code defines a module called `greeting`:
 
 ```move 
 module hello_world::greeting {
@@ -130,7 +132,7 @@ module hello_world::greeting {
 }
 ```
 
-Then, it defines a public struct called `Greeting` that contains a unique object ID and text:
+Then, it defines a public struct called `Greeting` that contains a unique object ID and text. A struct is a type of _resource_:
 
 ```move 
   public struct Greeting has key {
@@ -161,19 +163,17 @@ Lastly, the package defines a function called `update_text` that can be called t
 
 ### Resource safety 
 
-A unique aspect of programming applications on Sui is the built-in resource safety. Move packages must satisfy the following resource safety parameters:
+A unique aspect of programming applications on Sui is the resource safety enforced by the Move Bytecode Verifier. Move packages must satisfy the following resource safety parameters:
 
 - All resources must be either moved into global storage or destroyed by the end of a transaction. 
 
 - Resources cannot be copied. 
 
-In the "Hello, world!" example, the struct `Greeting` is a resource type, as it has a `key` definition. `Greeting` is not copied within the module, as that is not allowed.
+In the "Hello, world!" example, the struct `Greeting` is a resource type. 
 
 To satisfy the requirement that all resources must be moved or destroyed by the end of a transaction `Greeting` is assigned to `new_greeting`, which is then moved into global storage through the call to `transfer::share_object(new_greeting)`.
 
 To mutate `Greeting`, the function `update_text` takes the input `(&mut Greeting)` rather than the resource itself. Resource safety is satisfied in this function, as the resource is not copied and is mutated via a reference. 
-
-If you edited this code where `Greeting` did not move into storage, was not destroyed, or it was copied, the verifier would throw an error.
 
 [Learn more about the Move Bytecode Verifier](https://github.com/MystenLabs/sui/blob/main/external-crates/move/move-execution/v1/crates/move-bytecode-verifier/README.md)
 
@@ -183,71 +183,307 @@ The Ethereum Virtual Machine adopts a gas based resource safety strategy. Every 
 
 ## Build the Move package 
 
-Move source files (.move) are human-readable, but the blockchain only understands bytecode.
-Building translates your code into bytecode that the Sui VM can execute.
+Before a Move package can be published to the network, it must first be _built_. Building your package is necessary because the `.move` source file is a human-readable piece of code, while the network can only understand bytecode. The `sui move build` command translates your `.move` code into bytecode that can be executed on Sui. 
 
+To build your "Hello, world!" package, first confirm your working directory is `~/sui-stack-hello-world/move/hello-world`, then run the following command:
 
-The build process fetches and compiles any dependencies your package needs (such as the Sui framework or other Move packages).
+```
+$ sui move build 
+```
 
-The compiler checks your code for syntax errors, type errors, and enforces important safety rules (like resource safety).
-This helps catch mistakes before you try to publish or test your code.
+<details>
 
-Only after building can you run unit tests (sui move test) or publish your package to the blockchain.
+<summary>Output</summary>
 
-sui move build
+```
+FETCHING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+Cloning into '/Users/sui_user/.move/https___github_com_MystenLabs_sui_git_framework__testnet'...
+remote: Enumerating objects: 33516, done.
+remote: Counting objects: 100% (49/49), done.
+remote: Compressing objects: 100% (49/49), done.
+remote: Total 33516 (delta 0), reused 0 (delta 0), pack-reused 33467 (from 2)
+Receiving objects: 100% (33516/33516), 17.68 MiB | 31.55 MiB/s, done.
+Resolving deltas: 100% (3465/3465), done.
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING hello_world
+```
 
+</details>
 
-- Build package
-    - Why do you need to build it
-    - What happens when you build it
+During the build process, the dependencies defined in the `Move.toml` file are fetched and compiled. The Move compiler checks your `.move` code for type errors, syntax errors, and enforces [resource safety](#resource-safety). 
 
-## Deploy the Move package 
+:::info 
 
-1. Your Compiled Code Is Uploaded to the Blockchain
-The bytecode for all modules in your package is sent to the Sui network.
-The blockchain stores this code at a unique address called the PackageID.
+Building your package is necessary for it to be published, but also for testing. You cannot run tests (`sui move test`) on your code until it has been built.
 
-2. A Package Object Is Created
-Sui creates a new package object that represents your deployed code.
-This object is immutable and can be referenced by other contracts or users.
+:::
 
+## Publish the Move package 
 
-3. Special Capability Objects May Be Created
-For upgradable packages, Sui creates an UpgradeCap object, which allows the owner to upgrade the package in the future.
-Example from deployment output:
+Now that your package has been built, you need to publish it onto the Sui Testnet. Once published, the package's modules and functions can be used by other packages or users by making calls to the package ID.
 
-│ ObjectType: 0x2::package::UpgradeCap
-│ ObjectID:   0x7530c33e4cf3345236601d69303e3fab84efc294194a810dc1cfea13c009e77f
+First, confirm your client is configured to use the Testnet as the active environment:
 
+```
+$ sui client active-env
+```
 
-4. You Receive Important IDs
-The deployment output includes:
-PackageID: The address of your package on-chain.
-UpgradeCap ObjectID (if applicable): Needed for future upgrades.
+This should return `testnet`. If it does not return `testnet`, follow the [client configuration instructions](/guides/developer/getting-started/configure-sui-client.mdx) before continuing.
 
+Then, check your balance of SUI tokens to confirm you have enough to publish to the Testnet:
 
-5. Other Contracts and Users Can Interact With Your Package
-Once published, your package’s modules and public functions can be called by other contracts or users, using the PackageID.
+```
+$ sui client balance 
+```
 
+You should have a balance of SUI tokens:
 
-6. Gas Is Consumed
-Deploying a package is a transaction and requires gas (SUI tokens).
+```
+╭────────────────────────────────────────────╮
+│ Balance of coins owned by this address     │
+├────────────────────────────────────────────┤
+│ ╭────────────────────────────────────────╮ │
+│ │ coin       balance (raw)  balance      │ │
+│ ├────────────────────────────────────────┤ │
+│ │ Sui        56804696124     6.80 SUI    │ │
+│ ╰────────────────────────────────────────╯ │
+╰────────────────────────────────────────────╯
+```
 
+If you do not have a balance, follow the [SUI Testnet faucet instructions](/guides/developer/getting-started/get-coins.mdx).
 
-- Deploy package
-    - Why do you need to deploy it (to interact with it)
-    - What happens when you deploy it
+Now, publish the package to the Testnet with the command:
+
+```
+$ sui client publish 
+```
+
+<details>
+
+<summary>Output</summary>
+
+```
+Transaction Digest: 8R39iKKLGPDG3QkW2SrRW3QX71csRP2BLhK9H7oz9SwW
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Data                                                                                             │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803                                   │
+│ Gas Owner: 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803                                │
+│ Gas Budget: 9843200 MIST                                                                                     │
+│ Gas Price: 1000 MIST                                                                                         │
+│ Gas Payment:                                                                                                 │
+│  ┌──                                                                                                         │
+│  │ ID: 0x816e5ec6ff457f18232498b57af8a0e1e219307a3a43fb5df5a4c2198296510c                                    │
+│  │ Version: 591332925                                                                                        │
+│  │ Digest: FLC4NXntT7WiHcqCkpDuBUq14DFTfi3EFeUiJcSNHdPu                                                      │
+│  └──                                                                                                         │
+│                                                                                                              │
+│ Transaction Kind: Programmable                                                                               │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Input Objects                                                                                            │ │
+│ ├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤ │
+│ │ 0   Pure Arg: Type: address, Value: "0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803" │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭─────────────────────────────────────────────────────────────────────────╮                                  │
+│ │ Commands                                                                │                                  │
+│ ├─────────────────────────────────────────────────────────────────────────┤                                  │
+│ │ 0  Publish:                                                             │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Dependencies:                                                        │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000001 │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000002 │                                  │
+│ │  └                                                                      │                                  │
+│ │                                                                         │                                  │
+│ │ 1  TransferObjects:                                                     │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Arguments:                                                           │                                  │
+│ │  │   Result 0                                                           │                                  │
+│ │  │ Address: Input  0                                                    │                                  │
+│ │  └                                                                      │                                  │
+│ ╰─────────────────────────────────────────────────────────────────────────╯                                  │
+│                                                                                                              │
+│ Signatures:                                                                                                  │
+│    mUxqMIofPq+yIzPxxYM+2mSIPTFneDxhWGGxJ7tM02hnRBRy5/FosnnWKxd4OSAjmaw6FNylwVdqUoUlJSxWCQ==                  │
+│                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: 8R39iKKLGPDG3QkW2SrRW3QX71csRP2BLhK9H7oz9SwW                                              │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 875                                                                               │
+│                                                                                                   │
+│ Created Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x136e41f505888066f189fb823d710ec96ab4fd75144b3d8008b91d58de85fd12                         │
+│  │ Owner: Account Address ( 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803 )  │
+│  │ Version: 591332926                                                                             │
+│  │ Digest: BGfc1tihsYPTLLozrj58HmRkDeQ1DWZfqeaR4SZDb1cX                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0xa7ed855d30500c485a94c0849f70b508d6b6adf6b0767ab93cc0756c075ecbb1                         │
+│  │ Owner: Immutable                                                                               │
+│  │ Version: 1                                                                                     │
+│  │ Digest: EtGAG9RHHCsguX4iuX1cbRDvW4QAkJXgDCMJjiufHtxB                                           │
+│  └──                                                                                              │
+│ Mutated Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x816e5ec6ff457f18232498b57af8a0e1e219307a3a43fb5df5a4c2198296510c                         │
+│  │ Owner: Account Address ( 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803 )  │
+│  │ Version: 591332926                                                                             │
+│  │ Digest: CiU5KNZALUmuckc2YUFmJq5YXgbB8oG3rs4cnh2rdDXd                                           │
+│  └──                                                                                              │
+│ Gas Object:                                                                                       │
+│  ┌──                                                                                              │
+│  │ ID: 0x816e5ec6ff457f18232498b57af8a0e1e219307a3a43fb5df5a4c2198296510c                         │
+│  │ Owner: Account Address ( 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803 )  │
+│  │ Version: 591332926                                                                             │
+│  │ Digest: CiU5KNZALUmuckc2YUFmJq5YXgbB8oG3rs4cnh2rdDXd                                           │
+│  └──                                                                                              │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 7843200 MIST                                                                     │
+│    Computation Cost: 1000000 MIST                                                                 │
+│    Storage Rebate: 978120 MIST                                                                    │
+│    Non-refundable Storage Fee: 9880 MIST                                                          │
+│                                                                                                   │
+│ Transaction Dependencies:                                                                         │
+│    2dkJtqsoQcyCZJvjZnskNVPQeynwVtwCcA9goAru6tTi                                                   │
+│    7PStztXyh92keJmrDD1aghHaKVdgCoVkVx4ZmLUfmQeK                                                   │
+│    Dd9pn1zFcSJjinxQewFd2gQdR4XKsHxFioD5MYnwLZQz                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────╮
+│ No transaction block events │
+╰─────────────────────────────╯
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Object Changes                                                                                   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Created Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0x136e41f505888066f189fb823d710ec96ab4fd75144b3d8008b91d58de85fd12                  │
+│  │ Sender: 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803                    │
+│  │ Owner: Account Address ( 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803 ) │
+│  │ ObjectType: 0x2::package::UpgradeCap                                                          │
+│  │ Version: 591332926                                                                            │
+│  │ Digest: BGfc1tihsYPTLLozrj58HmRkDeQ1DWZfqeaR4SZDb1cX                                          │
+│  └──                                                                                             │
+│ Mutated Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0x816e5ec6ff457f18232498b57af8a0e1e219307a3a43fb5df5a4c2198296510c                  │
+│  │ Sender: 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803                    │
+│  │ Owner: Account Address ( 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803 ) │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                    │
+│  │ Version: 591332926                                                                            │
+│  │ Digest: CiU5KNZALUmuckc2YUFmJq5YXgbB8oG3rs4cnh2rdDXd                                          │
+│  └──                                                                                             │
+│ Published Objects:                                                                               │
+│  ┌──                                                                                             │
+│  │ PackageID: 0xa7ed855d30500c485a94c0849f70b508d6b6adf6b0767ab93cc0756c075ecbb1                 │
+│  │ Version: 1                                                                                    │
+│  │ Digest: EtGAG9RHHCsguX4iuX1cbRDvW4QAkJXgDCMJjiufHtxB                                          │
+│  │ Modules: greeting                                                                             │
+│  └──                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Balance Changes                                                                                   │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──                                                                                              │
+│  │ Owner: Account Address ( 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803 )  │
+│  │ CoinType: 0x2::sui::SUI                                                                        │
+│  │ Amount: -7865080                                                                               │
+│  └──                                                                                              │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+</details>
+
+When a Move package is published to the network, the bytecode is uploaded to the network and stored at as a Move package with a unique package ID and version number. SUI tokens are consumed as gas, and the transaction to publish the package is processed on-chain.
+
+Once successfully executed, the output will include the new package ID, version number, and the object ID of the newly created and mutated objects. It will also provide details about the transaction used to publish the package, including the gas cost, transaction digest, dependencies, owner, and sender. 
 
 ## Interact with the Move package
 
-- Interact with the package
-    - Transactions
-        - Basic transaction limits, constraints, etc
-            - You cannot send 2 or more transactions simultaneously
-            - Your wallet has locked objects.
-                - For both of these conditions, you have to  wait till the current epoch ends before you can transact again
-                    - Definition of epoch, GlossaryToolTip?
-            - Link to detailed spec page on transaction constraints/limits/etc
-        - Send a basic transaction
-        - Link to Access Sui Data page
+Interact with the newly published package by first making a call to the `new` function that will create a new `Greeting` object and initialize it with the text `"Hello world!"`:
 
+```
+$ sui client call --package <PACKAGE_ID> --module greeting --function new  
+```
+
+Replace `<PACKAGE_ID>` with the package ID that was returned in the output of the `sui client publish` command. The `--package`, `--module`, and `--function` flags are all required. 
+
+In the output of this call, you will see a newly created object:
+
+```
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: 6xB9Foy5vyhXG99xppaCxrNvpPTV3UZsH39zqUKNoGsD                                              │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 875                                                                               │
+│                                                                                                   │
+│ Created Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x2834aa3d2ed1b5060f4e5d400092544fa9c95430fd894b139b7dfb0312501594                         │
+│  │ Owner: Shared( 591332927 )                                                                     │
+│  │ Version: 591332927                                                                             │
+│  │ Digest: 8xJRijHHp3gNXLExTG98KX5jYAQDVKqsBD8ATFMJXCbA                                           │
+│  └──                                                      
+```
+
+To verify that the object contains the text `"Hello, world"`, make a call to query the object's information:
+
+```
+$ sui client object <OBJECT_ID>
+```
+
+Replace `<OBJECT_ID>` with the value returned under `Created Objects, ID:`.
+
+You should see the object's details, including a value of `text: Hello world!`:
+
+```
+╭───────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ objectId      │  0x2834aa3d2ed1b5060f4e5d400092544fa9c95430fd894b139b7dfb0312501594                                              │
+│ version       │  591332927                                                                                                       │
+│ digest        │  8xJRijHHp3gNXLExTG98KX5jYAQDVKqsBD8ATFMJXCbA                                                                    │
+│ objType       │  0xa7ed855d30500c485a94c0849f70b508d6b6adf6b0767ab93cc0756c075ecbb1::greeting::Greeting                          │
+│ owner         │ ╭────────┬──────────────────────────────────────────╮                                                            │
+│               │ │ Shared │ ╭────────────────────────┬─────────────╮ │                                                            │
+│               │ │        │ │ initial_shared_version │  591332927  │ │                                                            │
+│               │ │        │ ╰────────────────────────┴─────────────╯ │                                                            │
+│               │ ╰────────┴──────────────────────────────────────────╯                                                            │
+│ prevTx        │  6xB9Foy5vyhXG99xppaCxrNvpPTV3UZsH39zqUKNoGsD                                                                    │
+│ storageRebate │  1413600                                                                                                         │
+│ content       │ ╭───────────────────┬──────────────────────────────────────────────────────────────────────────────────────────╮ │
+│               │ │ dataType          │  moveObject                                                                              │ │
+│               │ │ type              │  0xa7ed855d30500c485a94c0849f70b508d6b6adf6b0767ab93cc0756c075ecbb1::greeting::Greeting  │ │
+│               │ │ hasPublicTransfer │  false                                                                                   │ │
+│               │ │ fields            │ ╭──────┬───────────────────────────────────────────────────────────────────────────────╮ │ │
+│               │ │                   │ │ id   │ ╭────┬──────────────────────────────────────────────────────────────────────╮ │ │ │
+│               │ │                   │ │      │ │ id │  0x2834aa3d2ed1b5060f4e5d400092544fa9c95430fd894b139b7dfb0312501594  │ │ │ │
+│               │ │                   │ │      │ ╰────┴──────────────────────────────────────────────────────────────────────╯ │ │ │
+│               │ │                   │ │ text │  Hello world!                                                                 │ │ │
+│               │ │                   │ ╰──────┴───────────────────────────────────────────────────────────────────────────────╯ │ │
+│               │ ╰───────────────────┴──────────────────────────────────────────────────────────────────────────────────────────╯ │
+╰───────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Important transaction considerations 
+
+You cannot send 2 or more transactions simultaneously, otherwise you will encounter an error such as:
+
+```
+Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction.
+```
+
+If you receive this error, you must wait until the current epoch is over before submitting your transaction again. 
+
+To prevent the same object being modified by multiple transactions at once, your address 'locks' the object to prevent conflicting modifications. If you'd like to batch multiple transaction commands together, you can use [programmable transaction blocks](/concepts/transactions/prog-txn-blocks.mdx).
+
+Transactions also have limitations regarding total size, number of objects, and number of inputs. Learn more about limitations in [Building against Limits in The Move Book](https://move-book.com/guides/building-against-limits/).
+
+## Next steps 
+
+Making calls to an object or address is only one way to access data on Sui. It is recommended to [learn more about accessing data on Sui](/guides/developer/sui-101/data-serving.mdx).
+
+Or, view other [recommended next steps](/guides/developer/getting-started/next-steps.mdx) to continue learning about Sui development.
