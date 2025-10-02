@@ -58,7 +58,7 @@ impl AvailableRange {
         collect_pipelines(
             &retention_key.type_,
             retention_key.field.as_deref(),
-            retention_key.filters.unwrap_or_default(),
+            BTreeSet::from_iter(retention_key.filters.unwrap_or_default()),
             &mut pipelines,
         );
 
@@ -87,17 +87,28 @@ impl AvailableRange {
 fn collect_pipelines(
     type_: &str,
     field: Option<&str>,
-    filters: Vec<String>,
+    filters: BTreeSet<String>,
     pipelines: &mut BTreeSet<String>,
 ) {
     match (type_, field, filters) {
         // Address fields
         ("Address", Some("transactions"), mut filters) => {
-            filters.push("affectedAddress".to_string());
+            filters.insert("affectedAddress".to_string());
             collect_pipelines("Query", Some("transactions"), filters, pipelines);
         }
-        ("Address", Some("dynamicFields"), _) => {
-            collect_pipelines("IMoveObject", Some("dynamicFields"), vec![], pipelines);
+        (
+            "Address",
+            field @ Some("balance" | "balances" | "multiGetBalances" | "objects"),
+            filters,
+        ) => {
+            collect_pipelines("IAddressable", field, filters, pipelines);
+        }
+
+        // An Address can access MoveObjects by getting the object at its address. But IAddressable does
+        // not implement IMoveObject because it will incorrectly require MovePackage to implement IMoveObject.
+        //
+        ("Address", Some("dynamicFields"), filters) => {
+            collect_pipelines("IMoveObject", Some("dynamicFields"), filters, pipelines);
         }
         ("Address", field, filters) => {
             collect_pipelines("IAddressable", field, filters, pipelines);
@@ -105,18 +116,30 @@ fn collect_pipelines(
 
         // Checkpoint fields
         ("Checkpoint", Some("transactions"), mut filters) => {
-            filters.push("atCheckpoint".to_string());
+            filters.insert("atCheckpoint".to_string());
             collect_pipelines("Query", Some("transactions"), filters, pipelines);
         }
 
         // CoinMetadata fields
-        ("CoinMetadata", Some("supply"), _) => {
-            collect_pipelines("Query", Some("coinMetadata"), vec![], pipelines);
+        ("CoinMetadata", filter @ Some("balance" | "balances" | "multiGetBalances"), filters) => {
+            collect_pipelines("IAddressable", filter, filters, pipelines);
         }
-        ("CoinMetadata", field, filters) => {
-            collect_pipelines("IMoveObject", field, vec![], pipelines);
-            collect_pipelines("IAddressable", field, vec![], pipelines);
-            collect_pipelines("IObject", field, filters, pipelines);
+        ("CoinMetadata", Some("dynamicFields"), filters) => {
+            collect_pipelines("IMoveObject", Some("dynamicFields"), filters, pipelines);
+        }
+        ("CoinMetadata", Some("objects"), filters) => {
+            collect_pipelines("IObject", Some("objects"), filters, pipelines);
+        }
+        ("CoinMetadata", Some("receivedTransactions"), filters) => {
+            collect_pipelines(
+                "IMoveObject",
+                Some("receivedTransactions"),
+                filters,
+                pipelines,
+            );
+        }
+        ("CoinMetadata", Some("supply"), _) => {
+            pipelines.insert("consistent".to_string());
         }
 
         // Epoch fields
@@ -125,15 +148,12 @@ fn collect_pipelines(
         }
 
         // Event fields
-        ("Event", _, _) => {
-            collect_pipelines("Query", Some("events"), vec![], pipelines);
+        ("Event", _, filters) => {
+            collect_pipelines("Query", Some("events"), filters, pipelines);
         }
 
         // IAddressable fields
-        ("IAddressable", Some("balance"), _)
-        | ("IAddressable", Some("balances"), _)
-        | ("IAddressable", Some("multiGetBalances"), _)
-        | ("IAddressable", Some("objects"), _) => {
+        ("IAddressable", Some("balance" | "balances" | "multiGetBalances" | "objects"), _) => {
             pipelines.insert("consistent".to_string());
         }
 
@@ -147,14 +167,19 @@ fn collect_pipelines(
             pipelines.insert("consistent".to_string());
         }
         ("IObject", Some("receivedTransactions"), mut filters) => {
-            filters.push("affectedAddress".to_string());
+            filters.insert("affectedAddress".to_string());
             collect_pipelines("Query", Some("transactions"), filters, pipelines);
         }
 
-        // Package fields
-        ("Package", field, filters) => {
-            collect_pipelines("IAddressable", field, vec![], pipelines);
-            collect_pipelines("IObject", field, filters, pipelines);
+        // MovePackage fields
+        ("MovePackage", field @ Some("balance" | "balances" | "multiGetBalances"), filters) => {
+            collect_pipelines("IAddressable", field, filters, pipelines);
+        }
+        ("MovePackage", Some("objects"), filters) => {
+            collect_pipelines("IObject", Some("objects"), filters, pipelines);
+        }
+        ("MovePackage", Some("receivedTransactions"), filters) => {
+            collect_pipelines("IObject", Some("receivedTransactions"), filters, pipelines);
         }
 
         // Query fields
@@ -166,19 +191,14 @@ fn collect_pipelines(
         }
         ("Query", Some("events"), filters) => {
             pipelines.insert("tx_digests".to_string());
-            if filters.is_empty() {
+            if filters.contains("module") {
+                pipelines.insert("ev_emit_mod".to_string());
+            } else if filters.contains("type") {
+                pipelines.insert("ev_struct_inst".to_string());
+            } else if filters.contains("sender") {
                 pipelines.insert("ev_struct_inst".to_string());
             } else {
-                for filter in filters {
-                    if filter == "sender" {
-                        pipelines.insert("ev_emit_mod".to_string());
-                        pipelines.insert("ev_struct_inst".to_string());
-                    } else if filter == "module" {
-                        pipelines.insert("ev_emit_mod".to_string());
-                    } else if filter == "type" {
-                        pipelines.insert("ev_struct_inst".to_string());
-                    }
-                }
+                pipelines.insert("ev_struct_inst".to_string());
             }
         }
         ("Query", Some("objects"), _) => {
@@ -186,22 +206,28 @@ fn collect_pipelines(
         }
         ("Query", Some("transactions"), filters) => {
             pipelines.insert("tx_digests".to_string());
-            for filter in filters {
-                if filter == "affectedAddress" || filter == "sentAddress" || filter == "kind" {
+            if filters.contains("sender") {
+                pipelines.insert("tx_affected_addresses".to_string());
+            }
+            if filters.contains("atCheckpoint")
+                || filters.contains("afterCheckpoint")
+                || filters.contains("beforeCheckpoint")
+            {
+                pipelines.insert("cp_sequence_numbers".to_string());
+            }
+
+            if filters.contains("function") {
+                pipelines.insert("tx_calls".to_string());
+            } else if filters.contains("affectedAddress") {
+                pipelines.insert("tx_affected_addresses".to_string());
+            } else if filters.contains("kind") {
+                if filters.contains("sentAddress") {
                     pipelines.insert("tx_affected_addresses".to_string());
-                }
-                if filter == "kind" {
+                } else {
                     pipelines.insert("tx_kinds".to_string());
                 }
-                if filter == "function" {
-                    pipelines.insert("tx_calls".to_string());
-                }
-                if filter == "affectedObjects" {
-                    pipelines.insert("tx_affected_objects".to_string());
-                }
-                if filter == "atCheckpoint" {
-                    pipelines.insert("cp_sequence_numbers".to_string());
-                }
+            } else if filters.contains("affectedObjects") {
+                pipelines.insert("tx_affected_objects".to_string());
             }
         }
         ("TransactionEffects", Some("balanceChanges"), _) => {
@@ -217,164 +243,179 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    fn test_pipelines(type_: &str, field: Option<&str>, filters: Vec<String>) -> BTreeSet<String> {
-        let mut ps = BTreeSet::new();
-        collect_pipelines(type_, field, filters, &mut ps);
-        ps
+    fn test_collect_pipelines(
+        type_: &str,
+        field: Option<&str>,
+        filters: BTreeSet<String>,
+    ) -> BTreeSet<String> {
+        let mut pipelines = BTreeSet::new();
+        collect_pipelines(type_, field, filters, &mut pipelines);
+        pipelines
     }
 
     #[test]
     fn test_address_transactions() {
-        let result = test_pipelines("Address", Some("transactions"), vec![]);
+        let result = test_collect_pipelines("Address", Some("transactions"), BTreeSet::new());
         assert!(result.contains("tx_digests"));
         assert!(result.contains("tx_affected_addresses"));
     }
 
     #[test]
     fn test_address_consistent_fields() {
-        let result = test_pipelines("Address", Some("balance"), vec![]);
+        let result = test_collect_pipelines("Address", Some("balance"), BTreeSet::new());
         assert!(result.contains("consistent"));
     }
 
     #[test]
     fn test_address_other_fields() {
-        let result = test_pipelines("Address", Some("defaultSuinsName"), vec![]);
+        let result = test_collect_pipelines("Address", Some("defaultSuinsName"), BTreeSet::new());
         assert!(result.is_empty());
     }
 
     #[test]
     fn test_checkpoint_transactions() {
-        let result = test_pipelines("Checkpoint", Some("transactions"), vec![]);
+        let result = test_collect_pipelines("Checkpoint", Some("transactions"), BTreeSet::new());
         assert!(result.contains("cp_sequence_numbers"));
         assert!(result.contains("tx_digests"));
     }
 
     #[test]
     fn test_coin_metadata() {
-        let result = test_pipelines("CoinMetadata", Some("balance"), vec![]);
+        let result = test_collect_pipelines("CoinMetadata", Some("balance"), BTreeSet::new());
         assert!(result.contains("consistent"));
     }
 
     #[test]
     fn test_epoch_checkpoints() {
-        let result = test_pipelines("Epoch", Some("checkpoints"), vec![]);
+        let result = test_collect_pipelines("Epoch", Some("checkpoints"), BTreeSet::new());
         assert!(result.contains("cp_sequence_numbers"));
     }
 
     #[test]
     fn test_event() {
-        let result = test_pipelines("Event", None, vec![]);
+        let result = test_collect_pipelines("Event", None, BTreeSet::new());
         assert!(result.contains("ev_struct_inst"));
         assert!(result.contains("tx_digests"));
     }
 
     #[test]
     fn test_iobject_received_transactions() {
-        let result = test_pipelines("IObject", Some("receivedTransactions"), vec![]);
+        let result =
+            test_collect_pipelines("IObject", Some("receivedTransactions"), BTreeSet::new());
         assert!(result.contains("tx_digests"));
         assert!(result.contains("tx_affected_addresses"));
     }
 
     #[test]
-    fn test_package() {
-        let result = test_pipelines("Package", Some("balance"), vec![]);
+    fn test_move_package() {
+        let result = test_collect_pipelines("MovePackage", Some("balance"), BTreeSet::new());
         assert!(result.contains("consistent"));
     }
 
     #[test]
     fn test_query_address() {
-        let result = test_pipelines("Query", Some("address"), vec![]);
+        let result = test_collect_pipelines("Query", Some("address"), BTreeSet::new());
         assert!(result.is_empty());
     }
 
     #[test]
     fn test_query_checkpoints() {
-        let result = test_pipelines("Query", Some("checkpoints"), vec![]);
+        let result = test_collect_pipelines("Query", Some("checkpoints"), BTreeSet::new());
         assert!(result.contains("cp_sequence_numbers"));
     }
 
     #[test]
     fn test_query_coin_metadata() {
-        let result = test_pipelines("Query", Some("coinMetadata"), vec![]);
+        let result = test_collect_pipelines("Query", Some("coinMetadata"), BTreeSet::new());
         assert!(result.contains("consistent"));
     }
 
     #[test]
     fn test_query_events_no_filters() {
-        let result = test_pipelines("Query", Some("events"), vec![]);
+        let result = test_collect_pipelines("Query", Some("events"), BTreeSet::new());
         assert!(result.contains("tx_digests"));
         assert!(result.contains("ev_struct_inst"));
     }
 
     #[test]
-    fn test_query_events_with_module_filter() {
-        let result = test_pipelines("Query", Some("events"), vec!["module".to_string()]);
+    fn test_query_events_with_module_and_sender_filter() {
+        let result = test_collect_pipelines(
+            "Query",
+            Some("events"),
+            BTreeSet::from_iter(vec!["module".to_string(), "sender".to_string()]),
+        );
         assert!(result.contains("tx_digests"));
         assert!(result.contains("ev_emit_mod"));
     }
 
     #[test]
     fn test_query_events_with_sender_filter() {
-        let result = test_pipelines("Query", Some("events"), vec!["sender".to_string()]);
+        let result = test_collect_pipelines(
+            "Query",
+            Some("events"),
+            BTreeSet::from_iter(vec!["sender".to_string()]),
+        );
         assert!(result.contains("tx_digests"));
-        assert!(result.contains("ev_emit_mod"));
         assert!(result.contains("ev_struct_inst"));
     }
 
     #[test]
     fn test_query_objects() {
-        let result = test_pipelines("Query", Some("objects"), vec![]);
+        let result = test_collect_pipelines("Query", Some("objects"), BTreeSet::new());
         assert!(result.contains("consistent"));
     }
 
     #[test]
     fn test_query_transactions_no_filters() {
-        let result = test_pipelines("Query", Some("transactions"), vec![]);
+        let result = test_collect_pipelines("Query", Some("transactions"), BTreeSet::new());
         assert!(result.contains("tx_digests"));
     }
 
     #[test]
-    fn test_query_transactions_affected_objects_filter() {
-        let result = test_pipelines(
+    fn test_query_transactions_kind_filter() {
+        let result = test_collect_pipelines(
             "Query",
             Some("transactions"),
-            vec!["affectedObjects".to_string()],
+            BTreeSet::from_iter(vec!["kind".to_string()]),
         );
         assert!(result.contains("tx_digests"));
-        assert!(result.contains("tx_affected_objects"));
+        assert!(result.contains("tx_kinds"));
     }
 
     #[test]
     fn test_query_transactions_multiple_filters() {
-        let result = test_pipelines(
+        let result = test_collect_pipelines(
             "Query",
             Some("transactions"),
-            vec![
-                "affectedAddress".to_string(),
+            BTreeSet::from_iter(vec![
                 "kind".to_string(),
-                "function".to_string(),
+                "sentAddress".to_string(),
                 "atCheckpoint".to_string(),
-            ],
+            ]),
         );
         assert!(result.contains("tx_digests"));
         assert!(result.contains("tx_affected_addresses"));
-        assert!(result.contains("tx_kinds"));
-        assert!(result.contains("tx_calls"));
         assert!(result.contains("cp_sequence_numbers"));
     }
 
     #[test]
     fn test_transaction_effects_balance_changes() {
-        let result = test_pipelines("TransactionEffects", Some("balanceChanges"), vec![]);
+        let result = test_collect_pipelines(
+            "TransactionEffects",
+            Some("balanceChanges"),
+            BTreeSet::new(),
+        );
         assert!(result.contains("tx_balance_changes"));
         assert!(result.contains("tx_digests"));
     }
 
     #[test]
     fn test_catch_all() {
-        let invalid: BTreeSet<String> = test_pipelines("UnknownType", Some("field"), vec![]);
+        let invalid: BTreeSet<String> =
+            test_collect_pipelines("UnknownType", Some("field"), BTreeSet::new());
         assert!(invalid.is_empty());
-        let valid: BTreeSet<String> = test_pipelines("Address", Some("digests"), vec![]);
+        let valid: BTreeSet<String> =
+            test_collect_pipelines("Address", Some("digests"), BTreeSet::new());
         assert!(valid.is_empty());
     }
 }
