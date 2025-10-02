@@ -518,7 +518,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
 
     let chain_id = client.read_api().get_chain_identifier().await.unwrap();
     let (_tmp, pkg_path) =
-        create_temp_dir_with_framework_packages("ptb_complex_args_test_functions", Some(chain_id))?;
+        create_temp_dir_with_framework_packages("ptb_complex_args_test_functions", chain_id)?;
 
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
@@ -634,7 +634,7 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
 
     let chain_id = client.read_api().get_chain_identifier().await.unwrap();
-    let (_tmp, pkg_path) = create_temp_dir_with_framework_packages("ptb_publish", Some(chain_id))?;
+    let (_tmp, pkg_path) = create_temp_dir_with_framework_packages("ptb_publish", chain_id)?;
 
     let publish_ptb_string = format!(
         r#"
@@ -1128,7 +1128,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Provide path to well formed package sources
     let chain_id = client.read_api().get_chain_identifier().await.unwrap();
     let (_tmp, package_path) =
-        create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
+        create_temp_dir_with_framework_packages("dummy_modules_publish", chain_id)?;
 
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
@@ -1212,7 +1212,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     let build_config = BuildConfig::new_for_testing().config;
 
     let (_tmp, pkg_path) =
-        create_temp_dir_with_framework_packages("pkg_mgmt_modules_publish", Some(chain_id))?;
+        create_temp_dir_with_framework_packages("pkg_mgmt_modules_publish", chain_id)?;
 
     // Publish the package
     let resp = SuiClientCommands::Publish(PublishArgs {
@@ -2421,7 +2421,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     let (_tmp, package_path) =
-        create_temp_dir_with_framework_packages("dummy_modules_upgrade", Some(chain_id))?;
+        create_temp_dir_with_framework_packages("dummy_modules_upgrade", chain_id)?;
 
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish(PublishArgs {
@@ -5417,8 +5417,8 @@ async fn test_party_transfer_gas_object_as_transfer_object() -> Result<(), anyho
 fn create_temp_dir_with_framework_packages(
     // The "folder" name of the test pkg.
     test_pkg_name: &str,
-    // Optionally pass in the chain-id if we wanna set a non-test environment for tests.
-    chain_id: Option<String>,
+    // Pass in the chain-id if we wanna set a non-test environment for tests.
+    chain_id: String,
 ) -> Result<(TempDir, PathBuf), anyhow::Error> {
     let temp = tempdir()?;
 
@@ -5433,9 +5433,7 @@ fn create_temp_dir_with_framework_packages(
         tempdir.join("sui-framework").join("packages"),
     )?;
 
-    if let Some(chain_id) = chain_id {
-        update_toml_with_localnet_chain_id(&pkg_path.join("Move.toml"), chain_id);
-    }
+    let _ = update_toml_with_localnet_chain_id(&pkg_path.join("Move.toml"), chain_id);
 
     Ok((temp, pkg_path.clone()))
 }
