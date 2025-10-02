@@ -7,6 +7,7 @@ use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::kv_grpc_reader::KvGrpcArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use url::Url;
@@ -44,6 +45,9 @@ pub enum Command {
 
         #[command(flatten)]
         bigtable_args: BigtableArgs,
+
+        #[command(flatten)]
+        kv_grpc_args: KvGrpcArgs,
 
         #[command(flatten)]
         consistent_reader_args: ConsistentReaderArgs,
