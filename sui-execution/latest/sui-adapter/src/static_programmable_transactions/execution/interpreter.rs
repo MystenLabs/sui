@@ -246,7 +246,7 @@ fn execute_command<Mode: ExecutionMode>(
             let modules =
                 context.deserialize_modules(&module_bytes, /* is upgrade */ false)?;
 
-            let runtime_id = context.publish_and_init_package::<Mode>(
+            let original_id = context.publish_and_init_package::<Mode>(
                 modules,
                 &dep_ids,
                 linkage,
@@ -257,7 +257,7 @@ fn execute_command<Mode: ExecutionMode>(
                 // no upgrade cap for genesis modules
                 std::vec![]
             } else {
-                std::vec![context.new_upgrade_cap(runtime_id)?]
+                std::vec![context.new_upgrade_cap(original_id)?]
             }
         }
         T::Command__::Upgrade(

@@ -165,7 +165,7 @@ fn move_call<Mode: ExecutionMode>(
         arguments: args,
     } = call;
     check_signature::<Mode>(function)?;
-    check_private_generics(&function.runtime_id, function.name.as_ident_str())?;
+    check_private_generics(&function.original_mid, function.name.as_ident_str())?;
     let (vis, is_entry) = check_visibility::<Mode>(env, function)?;
     let arg_dirties = args
         .iter()
@@ -228,7 +228,7 @@ fn check_visibility<Mode: ExecutionMode>(
                 // Special case: allow private accumulator entrypoints in test/simtest environments
                 // TODO: delete this as soon as the accumulator Move API is available
                 if env.protocol_config.allow_private_accumulator_entrypoints()
-                    && function.runtime_id.name() == BALANCE_MODULE_NAME
+                    && function.original_mid.name() == BALANCE_MODULE_NAME
                     && (function.name.as_ident_str() == SEND_TO_ACCOUNT_FUNCTION_NAME
                         || function.name.as_ident_str() == WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME)
                 {
