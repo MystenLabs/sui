@@ -558,6 +558,11 @@ public fun active_validator_voting_powers(wrapper: &SuiSystemState): VecMap<addr
     wrapper.load_system_state_ref().active_validator_voting_powers()
 }
 
+/// Getter returns the total voting power of the active validators.
+public fun total_active_validator_stake(wrapper: &SuiSystemState): u64 {
+    wrapper.load_system_state_ref().validators().total_stake()
+}
+
 /// Calculate the rewards for a given staked SUI object.
 /// Used in the package, and can be dev-inspected.
 public(package) fun calculate_rewards(
