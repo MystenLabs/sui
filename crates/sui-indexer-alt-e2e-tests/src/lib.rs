@@ -33,7 +33,8 @@ use sui_indexer_alt_jsonrpc::{
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+    fullnode_client::FullnodeArgs, ledger_grpc_reader::LedgerGrpcArgs,
+    system_package_task::SystemPackageTaskArgs,
 };
 use sui_pg_db::{
     Db, DbArgs,
@@ -414,6 +415,7 @@ impl OffchainCluster {
             fullnode_args,
             DbArgs::default(),
             BigtableArgs::default(),
+            LedgerGrpcArgs::default(),
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),

@@ -12,7 +12,8 @@ use sui_indexer_alt_graphql::{
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+    fullnode_client::FullnodeArgs, ledger_grpc_reader::LedgerGrpcArgs,
+    system_package_task::SystemPackageTaskArgs,
 };
 use sui_macros::sim_test;
 use sui_pg_db::{DbArgs, temp::get_available_port};
@@ -175,6 +176,7 @@ async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> GraphQl
         fullnode_args,
         DbArgs::default(),
         BigtableArgs::default(),
+        LedgerGrpcArgs::default(),
         ConsistentReaderArgs::default(),
         graphql_args,
         SystemPackageTaskArgs::default(),

@@ -35,6 +35,7 @@ use sui_indexer_alt_reader::{
     consistent_reader::{ConsistentReader, ConsistentReaderArgs},
     fullnode_client::{FullnodeArgs, FullnodeClient},
     kv_loader::KvLoader,
+    ledger_grpc_reader::{LedgerGrpcArgs, LedgerGrpcReader},
     package_resolver::{DbPackageStore, PackageCache},
     pg_reader::PgReader,
 };
@@ -273,6 +274,7 @@ pub async fn start_rpc(
     fullnode_args: FullnodeArgs,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
+    ledger_grpc_args: LedgerGrpcArgs,
     consistent_reader_args: ConsistentReaderArgs,
     args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -317,6 +319,15 @@ pub async fn start_rpc(
         None
     };
 
+    let ledger_grpc_reader = if let Some(ledger_grpc_uri) = ledger_grpc_args.ledger_grpc_uri {
+        let reader = LedgerGrpcReader::new(ledger_grpc_uri)
+            .await
+            .context("Failed to create Ledger gRPC reader")?;
+        Some(reader)
+    } else {
+        None
+    };
+
     let consistent_reader = ConsistentReader::new(
         Some("graphql_consistent"),
         consistent_reader_args,
@@ -328,6 +339,8 @@ pub async fn start_rpc(
     let pg_loader = Arc::new(pg_reader.as_data_loader());
     let kv_loader = if let Some(reader) = bigtable_reader.as_ref() {
         KvLoader::new_with_bigtable(Arc::new(reader.as_data_loader()))
+    } else if let Some(reader) = ledger_grpc_reader.as_ref() {
+        KvLoader::new_with_ledger_grpc(Arc::new(reader.as_data_loader()))
     } else {
         KvLoader::new_with_pg(pg_loader.clone())
     };
