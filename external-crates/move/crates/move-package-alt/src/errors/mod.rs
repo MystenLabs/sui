@@ -26,6 +26,7 @@ use crate::graph::RenameError;
 use crate::package::EnvironmentID;
 use crate::package::EnvironmentName;
 use crate::package::manifest::ManifestError;
+use crate::package::paths::FileError;
 use crate::package::paths::PackagePathError;
 
 /// Result type for package operations
@@ -60,6 +61,9 @@ pub enum PackageError {
 
     #[error(transparent)]
     PackagePath(#[from] PackagePathError),
+
+    #[error(transparent)]
+    FileError(#[from] FileError),
 
     #[error(transparent)]
     Linkage(#[from] LinkageError),
@@ -104,8 +108,8 @@ pub enum PackageError {
     )]
     EphemeralNoBuildEnv,
 
-    #[error("Cannot build with build-env `{build_env}`: the recognized environments are <TODO>")]
-    UnknownBuildEnv { build_env: EnvironmentName },
+    #[error("{0}")]
+    UnknownBuildEnv(String),
 }
 
 /// Truncate `s` to the first `head` characters and the last `tail` characters of `s`, separated by

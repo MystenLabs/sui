@@ -319,6 +319,34 @@ fn create_dummy_addr() -> OriginalID {
     (*dummy_addr).into()
 }
 
+/// Check that `env` is defined in `manifest`, returning an error if it isn't
+fn check_for_environment<F: MoveFlavor>(
+    manifest: &Manifest,
+    env: &EnvironmentName,
+) -> PackageResult<()> {
+    let mut known_environments = manifest.environments();
+    known_environments.extend(F::default_environments());
+    let known_environments: Vec<EnvironmentName> = known_environments
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+
+    if known_environments.contains(env) {
+        Ok(())
+    } else {
+        let message = format!(
+            "Package `{}` does not declare a `{}` environment. The available environments are {:?}. Consider running with `--build-env {}`",
+            manifest.package_name(),
+            env,
+            known_environments,
+            known_environments
+                .first()
+                .expect("there is at least one environment")
+        );
+        Err(PackageError::UnknownBuildEnv(message))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use move_command_line_common::testing::insta::assert_snapshot;
