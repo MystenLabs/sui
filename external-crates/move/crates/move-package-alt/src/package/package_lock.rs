@@ -26,6 +26,8 @@ impl PackageSystemLock {
 fn global_git_cache_folder_lock() -> anyhow::Result<File> {
     let cache_path = get_cache_path();
     let cache_path = Path::new(cache_path);
+    // create dir if not exsits.
+    std::fs::create_dir_all(cache_path)?;
     let project_lock = cache_path.join("lock");
 
     let git_cache_folder_lock_file = OpenOptions::new()
