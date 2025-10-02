@@ -1,6 +1,7 @@
 [package]
 name = "l"
 edition = "2024"
+system-dependencies = []
 
 [dependencies]
 k = { local = "../K" }

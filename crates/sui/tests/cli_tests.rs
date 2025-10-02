@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::io::Write as IoWrite;
 use std::net::SocketAddr;
@@ -32,6 +32,7 @@ use tempfile::TempDir;
 use tokio::time::sleep;
 
 use move_package_alt::schema::ParsedPublishedFile;
+use mysten_common::random_util::TempDir;
 use mysten_common::tempdir;
 use std::fs::OpenOptions;
 use std::path::Path;
@@ -65,13 +66,12 @@ use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::error::SuiObjectResponseError;
-use sui_types::move_package::MovePackage;
+use sui_types::move_package::{MovePackage, UpgradeInfo};
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 const TEST_DATA_DIR: &str = "tests/data/";
 
-/* TODO: pkg-alt TREE SHAKING
 struct TreeShakingTest {
     test_cluster: TestCluster,
     client: SuiClient,
@@ -131,13 +131,14 @@ impl TreeShakingTest {
             .join(name)
     }
 
-    async fn publish_package(
+    /// Publishes the package in ephemeral mode
+    async fn test_publish_package(
         &mut self,
         package_name: &str,
         with_unpublished_dependencies: bool,
         pubfile: Option<PathBuf>,
     ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
-        publish_package(
+        test_publish_package(
             self.package_path(package_name),
             self.test_cluster.wallet_mut(),
             self.rgp,
@@ -148,125 +149,192 @@ impl TreeShakingTest {
         .await
     }
 
+    /// Publishes the package in normal mode. It needs a `localnet = "<chain_id>"` in the Move.toml
+    /// file
+    async fn publish_package(
+        &mut self,
+        package_name: &str,
+        with_unpublished_dependencies: bool,
+    ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
+        publish_package(
+            self.package_path(package_name),
+            self.test_cluster.wallet_mut(),
+            self.rgp,
+            self.gas_obj_id,
+            with_unpublished_dependencies,
+        )
+        .await
+    }
+
     // TODO: add back when tree shaking tests are added back
-    // async fn publish_package_without_tree_shaking(&mut self, package_name: &str) -> ObjectID {
-    //     let package_path = self.package_path(package_name);
-    //
-    //     let obj_ref = sui_test_transaction_builder::publish_package(
-    //         self.test_cluster.wallet_mut(),
-    //         package_path.clone(),
-    //     )
-    //     .await;
-    //
-    //     obj_ref.0
-    // }
-    //
-    // async fn upgrade_package(
-    //     &mut self,
-    //     package_name: &str,
-    //     upgrade_capability: ObjectID,
-    // ) -> Result<ObjectID, anyhow::Error> {
-    //     let mut build_config = BuildConfig::new_for_testing().config;
-    //     build_config.lock_file = Some(self.package_path(package_name).join("Move.lock"));
-    //     let resp = SuiClientCommands::Upgrade {
-    //         package_path: self.package_path(package_name),
-    //         upgrade_capability: Some(upgrade_capability),
-    //         build_config,
-    //         skip_dependency_verification: false,
-    //         verify_deps: false,
-    //         verify_compatibility: true,
-    //         with_unpublished_dependencies: false,
-    //         payment: PaymentArgs {
-    //             gas: vec![self.gas_obj_id],
-    //         },
-    //         gas_data: GasDataArgs {
-    //             gas_budget: Some(self.rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-    //             ..Default::default()
-    //         },
-    //         processing: TxProcessingArgs::default(),
-    //     }
-    //     .execute(self.test_cluster.wallet_mut())
-    //     .await?;
-    //
-    //     let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
-    //         unreachable!("Invalid response");
-    //     };
-    //
-    //     let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
-    //     assert!(effects.status.is_ok());
-    //
-    //     let package_a_v1 = effects
-    //         .created()
-    //         .iter()
-    //         .find(|refe| matches!(refe.owner, Owner::Immutable))
-    //         .unwrap();
-    //     Ok(package_a_v1.object_id())
-    // }
+    async fn publish_package_without_tree_shaking(&mut self, package_name: &str) -> ObjectID {
+        let package_path = self.package_path(package_name);
+
+        let obj_ref = sui_test_transaction_builder::publish_package(
+            self.test_cluster.wallet_mut(),
+            package_path.clone(),
+        )
+        .await;
+
+        obj_ref.0
+    }
+
+    async fn upgrade_package(
+        &mut self,
+        package_name: &str,
+        upgrade_capability: ObjectID,
+    ) -> Result<ObjectID, anyhow::Error> {
+        let mut build_config = BuildConfig::new_for_testing().config;
+        build_config.lock_file = Some(self.package_path(package_name).join("Move.lock"));
+        let resp = SuiClientCommands::Upgrade {
+            package_path: self.package_path(package_name),
+            upgrade_capability: Some(upgrade_capability),
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: false,
+            verify_compatibility: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![self.gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(self.rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
+        }
+        .execute(self.test_cluster.wallet_mut())
+        .await?;
+
+        let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+            unreachable!("Invalid response");
+        };
+
+        let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+        assert!(effects.status.is_ok());
+
+        let package_a_v1 = effects
+            .created()
+            .iter()
+            .find(|refe| matches!(refe.owner, Owner::Immutable))
+            .unwrap();
+        Ok(package_a_v1.object_id())
+    }
 
     async fn fetch_linkage_table(&self, pkg: ObjectID) -> BTreeMap<ObjectID, UpgradeInfo> {
         let move_pkg = fetch_move_packages(&self.client, vec![pkg]).await;
         move_pkg.first().unwrap().linkage_table().clone()
     }
 }
-*/
 
-// /// Publishes a package and returns the package object id and the upgrade capability object id
-// Note that this sets the `Move.lock` file to be written to the root of the package path.
-// async fn publish_package(
-//     package_path: PathBuf,
-//     context: &mut WalletContext,
-//     rgp: u64,
-//     gas_obj_id: ObjectID,
-//     with_unpublished_dependencies: bool,
-//     pubfile: Option<PathBuf>,
-// ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
-//     let mut build_config = BuildConfig::new_for_testing().config;
-//     let move_lock_path = package_path.clone().join("Move.lock");
-//     build_config.lock_file = Some(move_lock_path.clone());
-//
-//     let pubfile_path = pubfile.unwrap_or(package_path.join("localnet.toml"));
-//     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
-//         publish_args: PublishArgs {
-//             package_path: package_path.clone(),
-//             build_config: build_config.clone(),
-//             skip_dependency_verification: false,
-//             verify_deps: false,
-//             with_unpublished_dependencies,
-//             payment: PaymentArgs {
-//                 gas: vec![gas_obj_id],
-//             },
-//             gas_data: GasDataArgs {
-//                 gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-//                 ..Default::default()
-//             },
-//             processing: TxProcessingArgs::default(),
-//         },
-//         build_env: Some("testnet".to_string()),
-//         pubfile_path: Some(pubfile_path), // pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
-//     })
-//     .execute(context)
-//     .await?;
-//
-//     let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
-//         unreachable!("Invalid response");
-//     };
-//
-//     let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
-//
-//     assert!(effects.status.is_ok());
-//     let package_a = effects
-//         .created()
-//         .iter()
-//         .find(|refe| matches!(refe.owner, Owner::Immutable))
-//         .unwrap();
-//     let cap = effects
-//         .created()
-//         .iter()
-//         .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
-//         .unwrap();
-//
-//     Ok((package_a.reference.object_id, cap.reference.object_id))
-// }
+/// Publishes a package in ephemeral mode and returns the package object id and the upgrade
+/// capability object id.
+/// Note that this sets the `Move.lock` file to be written to the root of the package path.
+async fn test_publish_package(
+    package_path: PathBuf,
+    context: &mut WalletContext,
+    rgp: u64,
+    gas_obj_id: ObjectID,
+    with_unpublished_dependencies: bool,
+    pubfile: Option<PathBuf>,
+) -> Result<(ObjectID, ObjectID), anyhow::Error> {
+    let mut build_config = BuildConfig::new_for_testing().config;
+    let move_lock_path = package_path.clone().join("Move.lock");
+    build_config.lock_file = Some(move_lock_path.clone());
+
+    let pubfile_path = pubfile.unwrap_or(package_path.join("localnet.toml"));
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path: package_path.clone(),
+            build_config: build_config.clone(),
+            skip_dependency_verification: false,
+            verify_deps: false,
+            with_unpublished_dependencies,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
+        },
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(pubfile_path),
+    })
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    let package_a = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    Ok((package_a.reference.object_id, cap.reference.object_id))
+}
+
+async fn publish_package(
+    package_path: PathBuf,
+    context: &mut WalletContext,
+    rgp: u64,
+    gas_obj_id: ObjectID,
+    with_unpublished_dependencies: bool,
+) -> Result<(ObjectID, ObjectID), anyhow::Error> {
+    let mut build_config = BuildConfig::new_for_testing().config;
+    let move_lock_path = package_path.clone().join("Move.lock");
+    build_config.lock_file = Some(move_lock_path.clone());
+
+    let resp = SuiClientCommands::Publish(PublishArgs {
+        package_path: package_path.clone(),
+        build_config: build_config.clone(),
+        skip_dependency_verification: false,
+        verify_deps: false,
+        with_unpublished_dependencies,
+        payment: PaymentArgs {
+            gas: vec![gas_obj_id],
+        },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    })
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    let package_a = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    Ok((package_a.reference.object_id, cap.reference.object_id))
+}
 
 // Recursively copy a directory and all its contents
 fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
@@ -1684,6 +1752,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
@@ -4923,232 +4992,233 @@ async fn test_parse_host_port() {
     assert!(parse_host_port(input.to_string(), 9123).is_err());
 }
 
-// #[sim_test]
-// async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow::Error> {
-//     let mut test = TreeShakingTest::new().await.unwrap();
-//     // A package and with unpublished deps
-//     let (package_id, _) = test.publish_package("H", true).await.unwrap();
-//
-//     // set with_unpublished_dependencies to true and publish package H
-//     let linkage_table_h = test.fetch_linkage_table(package_id).await;
-//     // H depends on G, which is unpublished, so the linkage table should be empty as G will be
-//     // included in H during publishing
-//     assert!(linkage_table_h.is_empty());
-//
-//     // try publish package H but `with_unpublished_dependencies` is false. Should error
-//     let resp = test.publish_package("H", false).await;
-//     assert!(resp.is_err());
-//
-//     Ok(())
-// }
+#[sim_test]
+async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await.unwrap();
+    // A package and with unpublished deps
+    // let (package_id, _) = test.publish_package("H", true, None).await.unwrap();
+
+    // set with_unpublished_dependencies to true and publish package H
+    // let linkage_table_h = test.fetch_linkage_table(package_id).await;
+    // H depends on G, which is unpublished, so the linkage table should be empty as G will be
+    // included in H during publishing
+    // assert!(linkage_table_h.is_empty());
+
+    // try publish package H but `with_unpublished_dependencies` is false. Should error
+    let resp = test.test_publish_package("H", false, None).await;
+    assert!(resp.is_err());
+
+    Ok(())
+}
 
 // TODO: pkg-alt FAILING TEST
-// #[sim_test]
-// async fn test_tree_shaking_package_without_dependencies() -> Result<(), anyhow::Error> {
-//     let mut test = TreeShakingTest::new().await?;
-//
-//     // Publish package A and verify empty linkage table
-//     let (package_a_id, _) = test.publish_package("A", false, None).await?;
-//     let move_pkg_a = fetch_move_packages(&test.client, vec![package_a_id]).await;
-//     let linkage_table_a = move_pkg_a.first().unwrap().linkage_table();
-//     assert!(
-//         linkage_table_a.is_empty(),
-//         "Package A should have no dependencies"
-//     );
-//
-//     Ok(())
-// }
+#[sim_test]
+async fn test_tree_shaking_package_without_dependencies() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
 
-// TODO: pkg-alt FAILING TEST
-// #[sim_test]
-// async fn test_tree_shaking_package_with_direct_dependency() -> Result<(), anyhow::Error> {
-//     let mut test = TreeShakingTest::new().await?;
-//
-//     // First publish package A
-//     let (package_a_id, _) = test.publish_package("A", false, None).await?;
-//
-//     // Then publish B which depends on A
-//     let (package_b_id, _) = test
-//         .publish_package(
-//             "B_A",
-//             false,
-//             Some(test.package_path("A").join("localnet.toml")),
-//         )
-//         .await?;
-//     let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
-//     assert!(
-//         linkage_table_b.contains_key(&package_a_id),
-//         "Package B should depend on A"
-//     );
-//
-//     Ok(())
-// }
+    // Publish package A and verify empty linkage table
+    let (package_a_id, _) = test.test_publish_package("A", false, None).await?;
+    let move_pkg_a = fetch_move_packages(&test.client, vec![package_a_id]).await;
+    let linkage_table_a = move_pkg_a.first().unwrap().linkage_table();
+    assert!(
+        linkage_table_a.is_empty(),
+        "Package A should have no dependencies"
+    );
 
-// TODO: pkg-alt FAILING TEST
-// #[sim_test]
-// async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow::Error> {
-//     let mut test = TreeShakingTest::new().await?;
-//
-//     // First publish package A
-//     let (_, _) = test.publish_package("A", false, None).await?;
-//
-//     // Then publish B which declares but doesn't use A
-//     let (package_b_id, _) = test
-//         .publish_package(
-//             "B_A1",
-//             false,
-//             Some(test.package_path("A").join("localnet.toml")),
-//         )
-//         .await?;
-//     let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
-//     assert!(
-//         linkage_table_b.is_empty(),
-//         "Package B should have empty linkage table when not using A"
-//     );
-//
-//     Ok(())
-// }
+    Ok(())
+}
 
-// TODO: pkg-alt FAILING TEST
-// #[sim_test]
-// async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(), anyhow::Error> {
-//     // telemetry_subscribers::init_for_testing();
-//     let mut test = TreeShakingTest::new().await?;
-//
-//     // Publish packages A and B
-//     let (package_a_id, _) = test.publish_package("A", false, None).await?;
-//     let (package_b_id, _) = test
-//         .publish_package(
-//             "B_A",
-//             false,
-//             Some(test.package_path("A").join("localnet.toml")),
-//         )
-//         .await?;
-//
-//     // Publish C which depends on B (which depends on A)
-//     let (package_c_id, _) = test
-//         .publish_package(
-//             "C_B_A",
-//             false,
-//             Some(test.package_path("B_A").join("localnet.toml")),
-//         )
-//         .await?;
-//     let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
-//
-//     assert!(
-//         linkage_table_c.contains_key(&package_a_id),
-//         "Package C should depend on A"
-//     );
-//     assert!(
-//         linkage_table_c.contains_key(&package_b_id),
-//         "Package C should depend on B"
-//     );
-//     assert_eq!(
-//         linkage_table_c.len(),
-//         2,
-//         "Package C should have exactly two dependencies"
-//     );
-//
-//     Ok(())
-// }
+#[sim_test]
+async fn test_tree_shaking_package_with_direct_dependency() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
 
-// TODO: pkg-alt FAILING TEST
-// #[sim_test]
-// async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_references(
-// ) -> Result<(), anyhow::Error> {
-//     // Publish package C_B with no code references_B and check the linkage table
-//     // we use here the package B published in TEST 3
-//     let mut test = TreeShakingTest::new().await?;
-//
-//     // Publish packages A and B
-//     let (_, _) = test.publish_package("A", false, None).await?;
-//     let (_, _) = test
-//         .publish_package(
-//             "B_A1",
-//             false,
-//             Some(test.package_path("A").join("localnet.toml")),
-//         )
-//         .await?;
-//
-//     // Publish C which depends on B
-//     let (package_c_id, _) = test
-//         .publish_package(
-//             "C_B",
-//             false,
-//             Some(test.package_path("B_A1").join("localnet.toml")),
-//         )
-//         .await?;
-//     let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
-//
-//     assert!(
-//         linkage_table_c.is_empty(),
-//         "Package C should have no dependencies"
-//     );
-//
-//     Ok(())
-// }
+    // First publish package A
+    let (package_a_id, _) = test.test_publish_package("A", false, None).await?;
 
-// TODO: pkg-alt FAILING TEST
-// #[sim_test]
-// async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::Error> {
-//     let mut test = TreeShakingTest::new().await?;
-//
-//     // Publish package A and B
-//     let (package_a_id, cap) = test.publish_package("A", false, None).await?;
-//     let (_, _) = test
-//         .publish_package(
-//             "B_A",
-//             false,
-//             Some(test.package_path("A").join("localnet.toml")),
-//         )
-//         .await?;
-//
-//     // Upgrade package A (named A_v1)
-//     std::fs::copy(
-//         test.package_path("A").join("Move.lock"),
-//         test.package_path("A_v1").join("Move.lock"),
-//     )?;
-//     let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
-//
-//     // Publish D which depends on A_v1 but no code references A
-//     let (package_d_id, _) = test.publish_package("D_A", false).await?;
-//     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
-//
-//     assert!(
-//         linkage_table_d.is_empty(),
-//         "Package D should have no dependencies"
-//     );
-//
-//     // Publish D which depends on A_v1 and code references it
-//     let (package_d_id, _) = test.publish_package("D_A_v1", false).await?;
-//     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
-//
-//     assert!(
-//         linkage_table_d.contains_key(&package_a_id),
-//         "Package D should depend on A"
-//     );
-//     assert!(linkage_table_d
-//         .get(&package_a_id)
-//         .is_some_and(|x| x.upgraded_id == package_a_v1_id), "Package D should depend on A_v1 after upgrade, and the UpgradeInfo should have matching ids");
-//
-//     let (package_e_id, _) = test.publish_package("E_A_v1", false).await?;
-//
-//     let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
-//     assert!(
-//         linkage_table_e.is_empty(),
-//         "Package E should have no dependencies"
-//     );
-//
-//     let (package_e_id, _) = test.publish_package("E", false).await?;
-//
-//     let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
-//     assert!(
-//         linkage_table_e.contains_key(&package_a_id),
-//         "Package E should depend on A"
-//     );
-//
-//     Ok(())
-// }
+    // Then publish B which depends on A
+    let (package_b_id, _) = test
+        .test_publish_package(
+            "B_A",
+            false,
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
+    let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
+    assert!(
+        linkage_table_b.contains_key(&package_a_id),
+        "Package B should depend on A"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // First publish package A
+    let (_, _) = test.test_publish_package("A", false, None).await?;
+
+    // Then publish B which declares but doesn't use A
+    let (package_b_id, _) = test
+        .test_publish_package(
+            "B_A1",
+            false,
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
+    let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
+    assert!(
+        linkage_table_b.is_empty(),
+        "Package B should have empty linkage table when not using A"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish packages A and B
+    let (package_a_id, _) = test.test_publish_package("A", false, None).await?;
+    let (package_b_id, _) = test
+        .test_publish_package(
+            "B_A",
+            false,
+            // we need to use pkg A path here because that's where the published information will
+            // be written to.
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
+
+    // Publish C which depends on B (which depends on A)
+    let (package_c_id, _) = test
+        .test_publish_package(
+            "C_B_A",
+            false,
+            // we need to use pkg A path here because that's where the published information will
+            // be written to in the previous publish call.
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
+    let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
+
+    assert!(
+        linkage_table_c.contains_key(&package_a_id),
+        "Package C should depend on A"
+    );
+    assert!(
+        linkage_table_c.contains_key(&package_b_id),
+        "Package C should depend on B"
+    );
+    assert_eq!(
+        linkage_table_c.len(),
+        2,
+        "Package C should have exactly two dependencies"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_references(
+) -> Result<(), anyhow::Error> {
+    // Publish package C_B with no code references_B and check the linkage table
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish packages A and B
+    let (_, _) = test.test_publish_package("A", false, None).await?;
+    let (_, _) = test
+        .test_publish_package(
+            "B_A1",
+            false,
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
+
+    // Publish C which depends on B_A1
+    let (package_c_id, _) = test
+        .test_publish_package(
+            "C_B",
+            false,
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
+    let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
+
+    assert!(
+        linkage_table_c.is_empty(),
+        "Package C should have no dependencies"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+    let chain_id = test.client.read_api().get_chain_identifier().await?;
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("A"), chain_id.clone());
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("A_v1"), chain_id.clone());
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("B_A"), chain_id.clone());
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("D_A"), chain_id.clone());
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("D_A_v1"), chain_id.clone());
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("E"), chain_id.clone());
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("E_A_v1"), chain_id);
+
+    // Publish package A and B
+    let (package_a_id, cap) = test.publish_package("A", false).await?;
+    let (_, _) = test.publish_package("B_A", false).await?;
+
+    // Upgrade package A (named A_v1)
+    std::fs::copy(
+        test.package_path("A").join("Published.toml"),
+        test.package_path("A_v1").join("Published.toml"),
+    )?;
+    println!("Upgrading package A to A_v1");
+    let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
+
+    // Publish D which depends on A_v1 but no code references A
+    let (package_d_id, _) = test.publish_package("D_A", false).await?;
+    let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
+
+    assert!(
+        linkage_table_d.is_empty(),
+        "Package D should have no dependencies"
+    );
+
+    // Publish D which depends on A_v1 and code references it
+    let (package_d_id, _) = test.publish_package("D_A_v1", false).await?;
+    let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
+
+    assert!(
+        linkage_table_d.contains_key(&package_a_id),
+        "Package D should depend on A"
+    );
+    assert!(linkage_table_d
+        .get(&package_a_id)
+        .is_some_and(|x| x.upgraded_id == package_a_v1_id), "Package D should depend on A_v1 after upgrade, and the UpgradeInfo should have matching ids");
+
+    let (package_e_id, _) = test.publish_package("E_A_v1", false).await?;
+
+    let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
+    assert!(
+        linkage_table_e.is_empty(),
+        "Package E should have no dependencies"
+    );
+
+    let (package_e_id, _) = test.publish_package("E", false).await?;
+
+    let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
+    assert!(
+        linkage_table_e.contains_key(&package_a_id),
+        "Package E should depend on A"
+    );
+
+    Ok(())
+}
 
 // #[sim_test]
 // async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow::Error> {
@@ -5433,14 +5503,17 @@ fn create_temp_dir_with_framework_packages(
         tempdir.join("sui-framework").join("packages"),
     )?;
 
-    let _ = update_toml_with_localnet_chain_id(&pkg_path.join("Move.toml"), chain_id);
+    let _ = update_toml_with_localnet_chain_id(&pkg_path, chain_id);
 
     Ok((temp, pkg_path.clone()))
 }
 
-fn update_toml_with_localnet_chain_id(toml_path: &PathBuf, chain_id: String) -> String {
-    let orig_toml = std::fs::read_to_string(toml_path).unwrap();
-    let mut toml = OpenOptions::new().append(true).open(toml_path).unwrap();
+fn update_toml_with_localnet_chain_id(package_path: &PathBuf, chain_id: String) -> String {
+    let orig_toml = std::fs::read_to_string(package_path.join("Move.toml")).unwrap();
+    let mut toml = OpenOptions::new()
+        .append(true)
+        .open(package_path.join("Move.toml"))
+        .unwrap();
     writeln!(
         toml,
         "{}",

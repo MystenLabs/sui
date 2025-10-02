@@ -1,6 +1,7 @@
 [package]
 name = "j"
 edition = "2024"
+system-dependencies = []
 
 [dependencies]
 # this is relative to the temp directory where this whole tree shaking dir is copied to

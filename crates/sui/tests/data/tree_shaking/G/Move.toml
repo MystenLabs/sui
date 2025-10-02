@@ -1,6 +1,7 @@
 [package]
 name = "g"
 edition = "2024"
+system-dependencies = []
 
 [dependencies]
 sui = { local = "../../system-packages/sui-framework" }

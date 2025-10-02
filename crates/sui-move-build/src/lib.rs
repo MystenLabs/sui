@@ -603,11 +603,13 @@ impl PackageDependencies {
             match pkg.named_address() {
                 NamedAddress::RootPackage(_) => (),
                 NamedAddress::Unpublished { dummy_addr: _ } => {
-                    unpublished.insert(pkg.name().as_str().into());
+                    // TODO: pkg-alt is this the right thing to do here?
+                    unpublished.insert(pkg.display_name().into());
                 }
                 NamedAddress::Defined(original_id) => {
                     published.insert(
-                        pkg.name().as_str().into(),
+                        // TODO: pkg-alt is this the right thing to do here?
+                        pkg.display_name().into(),
                         ObjectID::from_address(original_id.0),
                     );
                 }

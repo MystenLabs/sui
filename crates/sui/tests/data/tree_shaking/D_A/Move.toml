@@ -1,6 +1,7 @@
 [package]
 name = "d_a"
 edition = "2024"
+system-dependencies = []
 
 [dependencies]
 a = { local = "../A_v1" }
