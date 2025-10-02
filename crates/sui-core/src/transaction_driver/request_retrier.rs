@@ -16,8 +16,8 @@ use crate::{
     validator_client_monitor::ValidatorClientMonitor,
 };
 
-/// Select validators with latencies within 10% of the lowest latency.
-const SELECT_LATENCY_DELTA: f64 = 0.1;
+/// Select validators with latencies within 5% of the lowest latency.
+const SELECT_LATENCY_DELTA: f64 = 0.02;
 
 /// Provides the next target validator to retry operations,
 /// and gathers the errors along with the operations.
