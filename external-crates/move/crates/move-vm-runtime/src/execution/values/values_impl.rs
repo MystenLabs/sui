@@ -17,7 +17,6 @@ use move_binary_format::{
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
-    gas_algebra::AbstractMemorySize,
     runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,
     vm_status::{StatusCode, sub_status::NFE_VECTOR_ERROR_BASE},
@@ -2208,107 +2207,6 @@ impl Vector {
                     .with_message("expected vector<u8>".to_string()),
             )
         }
-    }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Abstract Memory Size
-// -------------------------------------------------------------------------------------------------
-// TODO(gas): This is the oldest implementation of abstract memory size. It is now kept only as a
-// reference impl, which is used to ensure the new implementation is fully backward compatible. We
-// should be able to get this removed after we use the new impl for a while and gain enough
-// confidence in that.
-
-/// The size in bytes for a non-string or address constant on the stack
-pub(crate) const LEGACY_CONST_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
-
-/// The size in bytes for a reference on the stack
-pub(crate) const LEGACY_REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
-
-/// The size of a struct in bytes
-pub(crate) const LEGACY_STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
-
-impl Value {
-    // TODO(vm-rewrite): Rename this
-    // We assume Variant is defined as: type Variant = (VariantTag, FixedSizeVec);
-    // and that VariantTag is Copy.
-    const TAG_SIZE: AbstractMemorySize = AbstractMemorySize::new(std::mem::size_of::<u16>() as u64);
-
-    #[deprecated(note = "Update this to not use the legacy size")]
-    pub fn legacy_size(&self) -> AbstractMemorySize {
-        use Value::*;
-        match self {
-            // All scalar primitives use the legacy constant size.
-            Invalid | U8(_) | U16(_) | U32(_) | U64(_) | U128(_) | U256(_) | Bool(_) => {
-                LEGACY_CONST_SIZE
-            }
-            // AccountAddress uses its fixed length.
-            Address(_) => AbstractMemorySize::new(AccountAddress::LENGTH as u64),
-            // A vector container: delegate to its legacy size implementation.
-            Vec(vec) => vec.iter().fold(LEGACY_STRUCT_SIZE, |acc, field| {
-                acc + field.borrow().legacy_size()
-            }),
-            // A primitive vector: borrow its inner PrimVec and compute its legacy size.
-            PrimVec(prim_vec) => prim_vec.legacy_size(),
-            // A struct is a FixedSizeVec.
-            Struct(s) => s.0.legacy_size(),
-            // A variant is a boxed tuple (VariantTag, FixedSizeVec).
-            Variant(var_box) => {
-                let (_tag, fixed_vec) = var_box.as_ref();
-                fixed_vec.legacy_size() + Self::TAG_SIZE
-            }
-            // References have a fixed legacy size.
-            Reference(_) => LEGACY_REFERENCE_SIZE,
-        }
-    }
-}
-
-impl FixedSizeVec {
-    /// Computes the legacy size of a struct by folding over its fields.
-    pub fn legacy_size(&self) -> AbstractMemorySize {
-        // Start with a base overhead for a struct.
-        self.0.iter().fold(LEGACY_STRUCT_SIZE, |acc, field| {
-            acc + field.borrow().legacy_size()
-        })
-    }
-}
-
-impl Reference {
-    #[cfg(test)]
-    /// For testing purposes, the legacy size of any reference is fixed.
-    pub fn legacy_size(&self) -> AbstractMemorySize {
-        LEGACY_REFERENCE_SIZE
-    }
-}
-
-impl PrimVec {
-    /// Computes the legacy size of a primitive vector.
-    ///
-    /// Here we assume that each element contributes `LEGACY_CONST_SIZE` bytes,
-    /// and that the overhead is zero (or could be adjusted if needed).
-    pub fn legacy_size(&self) -> AbstractMemorySize {
-        let overhead = AbstractMemorySize::new(0);
-        fn size_count<T>(items: &[T]) -> AbstractMemorySize {
-            AbstractMemorySize::new(items.len() as u64 * std::mem::size_of::<T>() as u64)
-        }
-        overhead
-            + match self {
-                PrimVec::VecU8(items) => size_count(items),
-                PrimVec::VecU16(items) => size_count(items),
-                PrimVec::VecU32(items) => size_count(items),
-                PrimVec::VecU64(items) => size_count(items),
-                PrimVec::VecU128(items) => size_count(items),
-                PrimVec::VecU256(items) => size_count(items),
-                PrimVec::VecBool(items) => size_count(items),
-                PrimVec::VecAddress(items) => size_count(items),
-            }
-    }
-}
-
-impl Struct {
-    #[cfg(test)]
-    pub(crate) fn legacy_size(&self) -> AbstractMemorySize {
-        self.0.legacy_size()
     }
 }
 
