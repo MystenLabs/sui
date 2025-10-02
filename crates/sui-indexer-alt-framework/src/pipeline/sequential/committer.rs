@@ -42,7 +42,7 @@ pub(super) fn committer<H>(
     config: SequentialConfig,
     mut next_checkpoint: u64,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
-    tx: mpsc::UnboundedSender<(String, u64)>,
+    tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -322,7 +322,7 @@ where
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
                     // processing.
-                    let _ = tx.send((H::NAME.to_string(), watermark.checkpoint_hi_inclusive));
+                    let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive));
                     // docs::/#send
 
                     let _ = std::mem::take(&mut batch);
@@ -445,7 +445,7 @@ mod tests {
     struct TestSetup {
         store: MockStore,
         checkpoint_tx: mpsc::Sender<IndexedCheckpoint<TestHandler>>,
-        watermark_rx: mpsc::UnboundedReceiver<(String, u64)>,
+        watermark_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
         committer_handle: JoinHandle<()>,
     }
 

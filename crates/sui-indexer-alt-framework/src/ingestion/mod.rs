@@ -13,16 +13,16 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
+use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
-use crate::ingestion::regulated_broadcaster::regulated_broadcaster;
 use crate::metrics::IndexerMetrics;
 use crate::types::full_checkpoint_content::CheckpointData;
 
+mod broadcaster;
 pub mod client;
 pub mod error;
 mod local_client;
-mod regulated_broadcaster;
 mod remote_client;
 mod rpc_client;
 #[cfg(test)]
@@ -69,8 +69,8 @@ pub struct IngestionConfig {
 pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
-    ingest_hi_tx: mpsc::UnboundedSender<(String, u64)>,
-    ingest_hi_rx: mpsc::UnboundedReceiver<(String, u64)>,
+    ingest_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
+    ingest_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
     cancel: CancellationToken,
 }
@@ -136,7 +136,7 @@ impl IngestionService {
         &mut self,
     ) -> (
         mpsc::Receiver<Arc<CheckpointData>>,
-        mpsc::UnboundedSender<(String, u64)>,
+        mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
         let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
         self.subscribers.push(sender);
@@ -157,10 +157,9 @@ impl IngestionService {
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub async fn run<I>(self, checkpoints: I) -> Result<JoinHandle<()>>
+    pub async fn run<R>(self, checkpoints: R) -> Result<JoinHandle<()>>
     where
-        I: IntoIterator<Item = u64> + Send + Sync + 'static,
-        I::IntoIter: Send + Sync + 'static,
+        R: std::ops::RangeBounds<u64> + Send + 'static,
     {
         let IngestionService {
             config,
@@ -175,7 +174,7 @@ impl IngestionService {
             return Err(Error::NoSubscribers);
         }
 
-        let regulated_broadcaster = regulated_broadcaster(
+        let broadcaster = broadcaster(
             checkpoints,
             config,
             client,
@@ -184,7 +183,7 @@ impl IngestionService {
             cancel.clone(),
         );
 
-        Ok(regulated_broadcaster)
+        Ok(broadcaster)
     }
 }
 

@@ -106,7 +106,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     config: SequentialConfig,
     db: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
-    watermark_tx: mpsc::UnboundedSender<(String, u64)>,
+    watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
