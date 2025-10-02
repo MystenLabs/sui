@@ -7,16 +7,20 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use codespan_reporting::diagnostic::{Diagnostic, Label};
+use codespan_reporting::diagnostic::Diagnostic;
 
 use thiserror::Error;
 
 use crate::{
-    errors::{FileHandle, Location},
+    errors::FileHandle,
     schema::{DefaultDependency, PackageName, ParsedManifest, ReplacementDependency},
 };
 
-use super::*;
+use super::{
+    package_lock::PackageSystemLock,
+    paths::{FileResult, PackagePath},
+    *,
+};
 use indexmap::IndexMap;
 use serde_spanned::Spanned;
 
@@ -38,7 +42,6 @@ pub struct ManifestError {
 #[derive(Debug)]
 enum ErrorLocation {
     WholeFile(PathBuf),
-    AtLoc(Location),
 }
 
 #[derive(Error, Debug)]
@@ -59,17 +62,10 @@ pub type ManifestResult<T> = Result<T, ManifestError>;
 
 impl Manifest {
     /// Read the manifest file from the file handle, returning a [`Manifest`].
-    pub fn read_from_file(path: impl AsRef<Path>) -> ManifestResult<Self> {
-        let file_handle = FileHandle::new(&path).map_err(ManifestError::with_file(&path))?;
-        let parsed: ParsedManifest = toml_edit::de::from_str(file_handle.source())
-            .map_err(ManifestError::from_toml(file_handle))?;
+    pub(crate) fn read_from_file(path: &PackagePath, mtx: &PackageSystemLock) -> FileResult<Self> {
+        let (file_handle, inner) = path.read_manifest(mtx)?;
 
-        let result = Self {
-            inner: parsed,
-            file_handle,
-        };
-
-        Ok(result)
+        Ok(Self { inner, file_handle })
     }
 
     pub fn package_name(&self) -> String {
@@ -119,29 +115,12 @@ impl ManifestError {
         }
     }
 
-    fn from_toml(file: FileHandle) -> impl Fn(toml_edit::de::Error) -> Self {
-        move |e| {
-            let location = e
-                .span()
-                .map(|span| ErrorLocation::AtLoc(Location::new(file, span)))
-                .unwrap_or(ErrorLocation::WholeFile(file.path().to_path_buf()));
-            ManifestError {
-                kind: Box::new(e.into()),
-                location,
-            }
-        }
-    }
-
     /// Convert this error into a codespan Diagnostic
     pub fn to_diagnostic(&self) -> Diagnostic<FileHandle> {
         match &self.location {
             ErrorLocation::WholeFile(path) => {
                 Diagnostic::error().with_message(format!("Error while loading `{path:?}`: {self}"))
             }
-            ErrorLocation::AtLoc(loc) => Diagnostic::error()
-                .with_message(format!("Error while loading `{:?}`", loc.file()))
-                .with_labels(vec![Label::primary(loc.file(), loc.span().clone())])
-                .with_notes(vec![self.to_string()]),
         }
     }
 }
@@ -153,24 +132,32 @@ mod tests {
     use tempfile::TempDir;
     use test_log::test;
 
-    use crate::{flavor::vanilla::default_environment, schema::PackageName};
+    use crate::{
+        flavor::vanilla::default_environment,
+        package::{package_lock::PackageSystemLock, paths::PackagePath},
+        schema::PackageName,
+    };
 
-    use super::{Manifest, ManifestResult};
+    use super::Manifest;
 
     /// Create a file containing `contents` and pass it to `Manifest::read_from_file`
-    fn load_manifest(contents: impl AsRef<[u8]>) -> ManifestResult<Manifest> {
+    async fn load_manifest(contents: impl AsRef<[u8]>) -> anyhow::Result<Manifest> {
         // TODO: we need a better implementation for this
         let tempdir = TempDir::new().unwrap();
+
         let manifest_path = tempdir.path().join("Move.toml");
-
         std::fs::write(&manifest_path, contents).expect("write succeeds");
+        let package_path = PackagePath::new(tempdir.path().to_path_buf()).unwrap();
 
-        Manifest::read_from_file(manifest_path)
+        Ok(Manifest::read_from_file(
+            &package_path,
+            &PackageSystemLock::new()?,
+        )?)
     }
 
     /// The `environments` table may be missing
-    #[test]
-    fn empty_environments_allowed() {
+    #[test(tokio::test)]
+    async fn empty_environments_allowed() {
         let manifest = load_manifest(
             r#"
             [package]
@@ -178,15 +165,16 @@ mod tests {
             edition = "2024"
             "#,
         )
+        .await
         .unwrap();
 
         assert!(manifest.environments().is_empty());
     }
 
     /// Environment names in `dep-replacements` must be defined in `environments`
-    #[test]
+    #[test(tokio::test)]
     #[ignore] // TODO: this tests new behavior that isn't implemented yet
-    fn dep_replacement_envs_are_declared() {
+    async fn dep_replacement_envs_are_declared() {
         let manifest = load_manifest(
             r#"
             [package]
@@ -197,6 +185,7 @@ mod tests {
             mainnet.foo = { local = "../foo" }
             "#,
         )
+        .await
         .unwrap();
 
         let name = PackageName::new("foo").unwrap();

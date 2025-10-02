@@ -5,7 +5,7 @@
 use crate::{
     compatibility::{
         LegacyBuildInfo, LegacySubstOrRename, LegacySubstitution, LegacyVersion,
-        find_module_name_for_package, legacy_lockfile::try_load_legacy_lockfile_publications,
+        find_module_name_for_package,
     },
     errors::FileHandle,
     package::paths::PackagePath,
@@ -26,7 +26,7 @@ use std::{
 use toml::Value as TV;
 use tracing::debug;
 
-use super::{legacy::LegacyData, parse_address_literal};
+use super::{legacy::LegacyData, legacy_lockfile::load_legacy_lockfile, parse_address_literal};
 use move_compiler::editions::Edition;
 
 const EMPTY_ADDR_STR: &str = "_";
@@ -76,7 +76,7 @@ pub fn try_load_legacy_manifest(
     path: &PackagePath,
     default_env: &Environment,
 ) -> anyhow::Result<Option<(FileHandle, ParsedManifest)>> {
-    let Ok(file_handle) = FileHandle::new(path.manifest_path()) else {
+    let Ok(file_handle) = FileHandle::new(path.path().join("Move.toml")) else {
         debug!("failed to load legacy file");
         return Ok(None);
     };
@@ -213,6 +213,9 @@ fn parse_source_manifest(
             let normalized_legacy_name =
                 normalize_legacy_name_to_identifier(metadata.legacy_name.as_str())?;
 
+            let legacy_publications =
+                load_legacy_lockfile(&path.path().join("Move.lock"))?.unwrap_or_default();
+
             Ok(ParsedManifest {
                 package: PackageMetadata {
                     name: new_name,
@@ -236,8 +239,7 @@ fn parse_source_manifest(
                     normalized_legacy_name,
                     named_addresses: programmatic_addresses,
                     manifest_address_info,
-                    legacy_publications: try_load_legacy_lockfile_publications(path)
-                        .unwrap_or_default(),
+                    legacy_publications,
                 }),
                 dep_replacements: BTreeMap::new(),
             })

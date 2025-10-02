@@ -51,6 +51,11 @@ pub enum ResolverError {
         source: std::io::Error,
     },
 
+    #[error(
+        "External resolver `{resolver}` not found; ensure that it is installed and on your PATH"
+    )]
+    ResolverNotFound { resolver: ResolverName },
+
     /// This indicates that the resolver was faulty
     #[error("`{resolver}` did not follow the external resolver protocol ({message})")]
     BadResolver {
@@ -128,9 +133,15 @@ impl ResolvedDependency {
 
 impl ResolverError {
     pub fn io_error(resolver: &ResolverName, source: std::io::Error) -> Self {
-        Self::IoError {
-            resolver: resolver.clone(),
-            source,
+        if source.kind() == std::io::ErrorKind::NotFound {
+            Self::ResolverNotFound {
+                resolver: resolver.clone(),
+            }
+        } else {
+            Self::IoError {
+                resolver: resolver.clone(),
+                source,
+            }
         }
     }
 

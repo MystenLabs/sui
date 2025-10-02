@@ -118,32 +118,8 @@ impl<F: MoveFlavor, W: Write + Send, R: BufRead> MigrationContext<'_, F, W, R> {
         }
     }
 
-    pub fn perform_upgrade_migration(&mut self, mut migration: Migration) -> anyhow::Result<()> {
-        self.terminal.writeln(MIGRATION_DIFF_MSG)?;
-        self.terminal.writeln(BAR)?;
-        self.terminal.newline()?;
-        self.terminal.writeln(&migration.render_output())?;
-        self.terminal.newline()?;
-        self.terminal.writeln(BAR)?;
-        let apply = self
-            .terminal
-            .yes_no_prompt(APPLY_MIGRATION_PATCH_PROMPT, true)?;
-        if apply {
-            migration.apply_changes(self.terminal.writer)?;
-            self.terminal.newline()?;
-            self.terminal.writeln("Changes complete")?;
-        }
-
-        let filename = migration.record_diff(self.build_plan.root_package_path().to_path_buf())?;
-        self.terminal.write(WROTE_PATCHFILE)?;
-        self.terminal.writeln(filename.as_str())?;
-        self.terminal.newline()?;
-
-        if !apply {
-            self.terminal.writeln(NOMIGRATION_HELP_MSG)?;
-            self.terminal.writeln(MIGRATION_RERUN)?;
-        }
-        Ok(())
+    pub fn perform_upgrade_migration(&mut self, mut _migration: Migration) -> anyhow::Result<()> {
+        todo!()
     }
 }
 

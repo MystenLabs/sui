@@ -356,7 +356,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     let mut diagnostics = None;
 
     // TODO: we need to rework on loading the root pkg only once.
-    let dependencies = root_pkg.packages()?;
+    let dependencies = root_pkg.packages();
 
     let compiler_flags = compiler_flags(&build_config);
     let (mut caching_result, other_diags) = if let Ok(deps_package_paths) =
@@ -767,7 +767,7 @@ fn compute_mapped_files<F: MoveFlavor>(
     let mut dep_hashes = vec![];
     let mut dep_pkg_paths = BTreeMap::new();
 
-    for rpkg in root_pkg.packages()? {
+    for rpkg in root_pkg.packages() {
         for f in get_sources(rpkg.path(), build_config).unwrap() {
             let is_dep = !rpkg.is_root();
             // dunce does a better job of canonicalization on Windows
@@ -961,7 +961,7 @@ fn load_root_pkg<F: MoveFlavor>(
     let mut root_pkg =
         RootPackage::<F>::load_sync(path.to_path_buf(), env, build_config.mode_set())?;
 
-    root_pkg.update_lockfile()?;
+    root_pkg.save_lockfile_to_disk_sync()?;
 
     Ok(root_pkg)
 }

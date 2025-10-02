@@ -1020,7 +1020,7 @@ impl SuiClientCommands {
                     &build_config,
                     root_pkg.publication().cloned().as_mut(),
                 )?;
-                root_pkg.write_publish_data(publish_data)?;
+                root_pkg.write_publish_data(publish_data).await?;
 
                 result
             }
@@ -3901,7 +3901,7 @@ async fn publish_command(
 
     let compiled_package = compiled_package?;
 
-    root_package.save_to_disk()?;
+    root_package.save_lockfile_to_disk().await?;
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     let dep_ids = compiled_package.get_published_dependencies_ids();
 
@@ -3939,6 +3939,6 @@ async fn publish_command(
         None,
     )?;
 
-    root_package.write_publish_data(publish_data)?;
+    root_package.write_publish_data(publish_data).await?;
     Ok(result)
 }
