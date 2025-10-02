@@ -259,8 +259,7 @@ impl AuthorityPerpetualTables {
                     KeySpaceConfig::new()
                         .with_unloaded_iterator(true)
                         .with_max_dirty_keys(4048)
-                        .with_compactor(Box::new(objects_compactor))
-                        .with_relocation_bloom_filter(0.001, 2_000_000_000),
+                        .with_compactor(Box::new(objects_compactor)),
                 ),
             ),
             (
@@ -269,10 +268,7 @@ impl AuthorityPerpetualTables {
                     owned_object_transaction_locks_indexing,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
-                    bloom_config
-                        .clone()
-                        .with_max_dirty_keys(4048)
-                        .with_relocation_bloom_filter(0.001, 100_000),
+                    bloom_config.clone().with_max_dirty_keys(4048),
                 ),
             ),
             (
