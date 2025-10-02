@@ -1546,7 +1546,7 @@ impl VMTracer<'_> {
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::PackVariantGeneric(variant_inst_ptr) => {
-                let field_count = variant_inst_ptr.variant.variant_tag;
+                let field_count = variant_inst_ptr.variant.field_count();
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count as usize);
                 let ty = vtables
