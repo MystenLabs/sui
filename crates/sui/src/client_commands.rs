@@ -870,7 +870,7 @@ impl SuiClientCommands {
             SuiClientCommands::Upgrade {
                 package_path,
                 upgrade_capability,
-                build_config,
+                mut build_config,
                 skip_dependency_verification,
                 verify_deps,
                 verify_compatibility,
@@ -883,6 +883,9 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let read_api = client.read_api();
                 let chain_id = read_api.get_chain_identifier().await?;
+
+                // For upgrade, we want to force the root package to have `0x0` as its address
+                build_config.root_as_zero = true;
 
                 check_protocol_version_and_warn(read_api).await?;
                 let package_path =

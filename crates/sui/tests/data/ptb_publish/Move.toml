@@ -1,7 +1,8 @@
 [package]
 name = "test_functions"
 edition = "2024.beta"
+system-dependencies = []
 
 [dependencies]
-sui = { local = "../../../../sui-framework/packages/sui-framework" }
-
+sui = { local = "../sui-framework/packages/sui-framework" }
+std = { local = "../sui-framework/packages/move-stdlib" }

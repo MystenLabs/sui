@@ -42,6 +42,7 @@ tracing-subscriber.workspace = true
 heck.workspace = true
 walkdir.workspace = true
 whoami.workspace = true
+fs4.workspace = true
 
 [dev-dependencies]
 aquamarine.workspace = true

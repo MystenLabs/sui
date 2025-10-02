@@ -22,20 +22,8 @@ use once_cell::sync::OnceCell;
 static CONFIG: OnceCell<String> = OnceCell::new();
 
 // TODO: this should be moved into [crate::dependency::git]
-fn get_cache_path() -> &'static str {
-    CONFIG.get_or_init(|| {
-        #[cfg(test)]
-        {
-            let tempdir = tempfile::tempdir().expect("failed to create temp dir");
-            tempdir.path().to_string_lossy().to_string()
-        }
-
-        #[allow(unused)]
-        #[cfg(not(test))]
-        {
-            move_command_line_common::env::MOVE_HOME.to_string()
-        }
-    })
+pub(crate) fn get_cache_path() -> &'static str {
+    CONFIG.get_or_init(|| move_command_line_common::env::MOVE_HOME.to_string())
 }
 
 /// A cache that manages a collection of downloaded git trees
