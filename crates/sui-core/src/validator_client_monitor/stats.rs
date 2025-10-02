@@ -3,8 +3,8 @@
 
 use crate::validator_client_monitor::{OperationFeedback, OperationType};
 use mysten_common::moving_window::MovingWindow;
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::AuthorityName;
@@ -45,7 +45,7 @@ pub struct ValidatorClientStats {
     /// Moving window of success rate (0.0 to 1.0)
     pub reliability: MovingWindow<f64>,
     /// Moving window of latencies for each operation type (Submit, Effects, HealthCheck)
-    pub average_latencies: HashMap<OperationType, MovingWindow<Duration>>,
+    pub average_latencies: BTreeMap<OperationType, MovingWindow<Duration>>,
     /// Size of the moving window for latency measurements
     pub latency_moving_window_size: usize,
 }
@@ -58,7 +58,7 @@ impl ValidatorClientStats {
     ) -> Self {
         Self {
             reliability: MovingWindow::new(init_reliability, reliability_moving_window_size),
-            average_latencies: HashMap::new(),
+            average_latencies: BTreeMap::new(),
             latency_moving_window_size,
         }
     }

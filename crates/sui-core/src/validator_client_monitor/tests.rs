@@ -356,7 +356,11 @@ mod client_stats_tests {
             let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
             let validator2_latency = *latency.get(&validator2).unwrap();
             // Reliability should be 0.66, so latency = 0.1 + (1.0 - 0.66) * 1.0 * 10.0 = 0.1 + 0.34 * 1.0 * 10.0 = 0.1 + 3.4 = 3.5
-            assert!((validator2_latency - 3.433).abs() < 0.001, "{}", validator2_latency.as_secs_f64());
+            assert!(
+                (validator2_latency.as_secs_f64() - 3.433).abs() < 0.001,
+                "{}",
+                validator2_latency.as_secs_f64()
+            );
         }
 
         println!("Case 5: Excluded validator should return MAX_LATENCY");
