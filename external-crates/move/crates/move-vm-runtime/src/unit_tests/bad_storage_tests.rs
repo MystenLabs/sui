@@ -11,9 +11,13 @@ use crate::{
     },
     shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
 };
+use move_binary_format::errors::{Location, PartialVMError, VMError};
 use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
-    vm_status::StatusType,
+    account_address::AccountAddress,
+    identifier::Identifier,
+    language_storage::ModuleId,
+    resolver::{ModuleResolver, SerializedPackage},
+    vm_status::{StatusCode, StatusType},
 };
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
@@ -361,66 +365,69 @@ fn test_unverifiable_module_dependency() {
     }
 }
 
-// struct BogusStorage {
-//     bad_status_code: StatusCode,
-// }
-//
-// impl ModuleResolver for BogusStorage {
-//     type Error = VMError;
-//
-//     fn get_module(&self, _module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-//         Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
-//     }
-//
-//     fn get_packages_static<const N: usize>(
-//         &self,
-//         _ids: [AccountAddress; N],
-//     ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
-//         Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
-//     }
-//
-//     fn get_packages(
-//         &self,
-//         _ids: &[AccountAddress],
-//     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-//         Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
-//     }
-// }
-//
-// TODO(vm-rewrite): port and re-enable this test
-// const LIST_OF_ERROR_CODES: &[StatusCode] = &[
-//     StatusCode::UNKNOWN_VALIDATION_STATUS,
-//     StatusCode::INVALID_SIGNATURE,
-//     StatusCode::UNKNOWN_VERIFICATION_ERROR,
-//     StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-//     StatusCode::UNKNOWN_BINARY_ERROR,
-//     StatusCode::UNKNOWN_RUNTIME_STATUS,
-//     StatusCode::UNKNOWN_STATUS,
-// ];
-//
-// #[test]
-// fn test_storage_returns_bogus_error_when_loading_module() {
-//     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("N").unwrap());
-//     let fun_name = Identifier::new("bar").unwrap();
-//
-//     for error_code in LIST_OF_ERROR_CODES {
-//         let storage = BogusStorage {
-//             bad_status_code: *error_code,
-//         };
-//         let vm = MoveVM::new(vec![]).unwrap();
-//         let mut sess = vm.new_session(&storage);
-//
-//         let err = sess
-//             .execute_function_bypass_visibility(
-//                 &module_id,
-//                 &fun_name,
-//                 vec![],
-//                 Vec::<Vec<u8>>::new(),
-//                 &mut UnmeteredGasMeter,
-//                 None,
-//             )
-//             .unwrap_err();
-//
-//         assert_eq!(err.status_type(), StatusType::InvariantViolation);
-//     }
-// }
+struct BogusStorage {
+    bad_status_code: StatusCode,
+}
+
+impl ModuleResolver for BogusStorage {
+    type Error = VMError;
+
+    fn get_module(&self, _module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        _ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
+    }
+
+    fn get_packages(
+        &self,
+        _ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
+    }
+}
+
+const LIST_OF_ERROR_CODES: &[StatusCode] = &[
+    StatusCode::UNKNOWN_VALIDATION_STATUS,
+    StatusCode::INVALID_SIGNATURE,
+    StatusCode::UNKNOWN_VERIFICATION_ERROR,
+    StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+    StatusCode::UNKNOWN_BINARY_ERROR,
+    StatusCode::UNKNOWN_RUNTIME_STATUS,
+    StatusCode::UNKNOWN_STATUS,
+];
+
+#[test]
+fn test_storage_returns_bogus_error_when_loading_module() {
+    // Compile module M.
+    let code = r#"
+        module {{ADDR}}::M {
+            public fun foo() {}
+        }
+    "#;
+    let code = code.replace("{{ADDR}}", &format!("0x{}", TEST_ADDR));
+    let mut units = compile_units(&code).unwrap();
+    let m = as_module(units.pop().unwrap());
+
+    for error_code in LIST_OF_ERROR_CODES {
+        let storage = BogusStorage {
+            bad_status_code: *error_code,
+        };
+
+        let mut adapter: InMemoryTestAdapter = InMemoryTestAdapter::new();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m.clone()]).unwrap(),
+        );
+        let linkage: LinkageContext = adapter.get_linkage_context(TEST_ADDR).unwrap();
+        let runtime = adapter.runtime();
+        let sess = runtime.make_vm::<BogusStorage>(storage, linkage);
+        assert_eq!(
+            sess.unwrap_err().status_type(),
+            StatusType::InvariantViolation
+        );
+    }
+}
