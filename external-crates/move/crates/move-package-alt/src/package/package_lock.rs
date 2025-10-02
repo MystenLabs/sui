@@ -18,7 +18,7 @@ impl PackageSystemLock {
 
     // drop the package system lokc.
     pub fn drop(self) -> anyhow::Result<()> {
-        self._file.unlock()?;
+        fs4::fs_std::FileExt::unlock(&self._file)?;
         Ok(())
     }
 }
@@ -29,9 +29,10 @@ fn global_git_cache_folder_lock() -> anyhow::Result<File> {
     let project_lock = cache_path.join("lock");
 
     let git_cache_folder_lock_file = OpenOptions::new()
-        .create(true)
+        .truncate(true)
         .write(true)
         .read(true)
+        .create(true)
         .open(&project_lock)?;
 
     Ok(git_cache_folder_lock_file)
