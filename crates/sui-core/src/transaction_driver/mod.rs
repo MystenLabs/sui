@@ -448,27 +448,19 @@ where
 pub fn choose_transaction_driver_percentage(
     chain_id: Option<sui_types::digests::ChainIdentifier>,
 ) -> u8 {
-    // Currently, TD cannot work in mainnet.
-    if let Some(chain_identifier) = chain_id {
-        if chain_identifier.chain() == sui_protocol_config::Chain::Mainnet {
-            return 0;
-        }
-    }
-
-    // TODO(fastpath): Remove this once mfp hits mainnet
-    if let Ok(chain) =
-        std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME)
-    {
-        if chain == "mainnet" {
-            return 0;
-        }
-    }
-
     if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
         if let Ok(tx_driver_percentage) = v.parse::<u8>() {
             if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
                 return tx_driver_percentage;
             }
+        }
+    }
+
+    if let Some(chain_identifier) = chain_id {
+        if chain_identifier.chain() == sui_protocol_config::Chain::Mainnet {
+            // Require explicit opt-in to TransactionDriver on mainnet,
+            // via the TRANSACTION_DRIVER environment variable.
+            return 0;
         }
     }
 
