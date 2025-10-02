@@ -89,9 +89,11 @@ use move_compiler::{
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, Type_, TypeName_, VariantFields},
     parser::ast::{self as P, DocComment},
-    shared::{Identifier, NamedAddressMap, files::MappedFiles, unique_map::UniqueMap},
+    shared::{
+        Identifier, NamedAddressMap, files::MappedFiles,
+        stdlib_definitions::UNIT_TEST_POISON_INJECTION_NAME, unique_map::UniqueMap,
+    },
     typing::ast::ModuleDefinition,
-    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 use move_ir_types::location::*;
 use move_package::source_package::parsed_manifest::Dependencies;
@@ -712,7 +714,7 @@ pub fn ignored_function(name: Symbol) -> bool {
     // function preventing publishing of modules compiled in test mode. We need to ignore its
     // definition to avoid spurious on-hover display of this function's info whe hovering close to
     // `module` keyword.
-    name == UNIT_TEST_POISON_FUN_NAME
+    name == UNIT_TEST_POISON_INJECTION_NAME
 }
 
 /// Get symbols for outer definitions in the module (functions, structs, and consts)

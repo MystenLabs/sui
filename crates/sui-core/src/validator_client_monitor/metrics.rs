@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_metrics::{COUNT_BUCKETS, LATENCY_SEC_BUCKETS};
 use prometheus::{
     register_gauge_vec_with_registry, register_histogram_vec_with_registry,
     register_int_counter_vec_with_registry, GaugeVec, HistogramVec, IntCounterVec, Registry,
 };
-
-const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.04, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-];
 
 #[derive(Clone)]
 pub struct ValidatorClientMetrics {
@@ -24,6 +21,9 @@ pub struct ValidatorClientMetrics {
     /// Current performance per validator. The performance is the average latency of the validator
     /// weighted by the reliability of the validator.
     pub performance: GaugeVec,
+
+    /// Number of low latency validators that got shuffled.
+    pub shuffled_validators: HistogramVec,
 }
 
 impl ValidatorClientMetrics {
@@ -59,6 +59,15 @@ impl ValidatorClientMetrics {
                 "Current client-observed performance per validator. The performance is the average latency of the validator
                 weighted by the reliability of the validator.",
                 &["validator", "tx_type"],
+                registry,
+            )
+            .unwrap(),
+
+            shuffled_validators: register_histogram_vec_with_registry!(
+                "validator_client_shuffled_validators",
+                "Number of low latency validators that got shuffled",
+                &["tx_type"],
+                COUNT_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
