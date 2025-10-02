@@ -197,6 +197,9 @@ impl MergedValueIntermediate {
 struct Update {
     merge: MergedValueIntermediate,
     split: MergedValueIntermediate,
+    // Track input and output SUI for each update. Necessary so that when we construct
+    // a settlement transaction from a collection of Updates, they can accurately
+    // track the net SUI flows.
     input_sui: u64,
     output_sui: u64,
 }
@@ -330,13 +333,22 @@ impl AccumulatorSettlementTxBuilder {
         let mut settlements = Vec::new();
 
         let build_one_settlement_txn = |idx: u64, updates: &mut Vec<(AccumulatorObjId, Update)>| {
+            let (total_input_sui, total_output_sui) =
+                updates
+                    .iter()
+                    .fold((0, 0), |(acc_input, acc_output), (_, update)| {
+                        (acc_input + update.input_sui, acc_output + update.output_sui)
+                    });
+
             Self::build_one_settlement_txn(
                 &addresses,
                 epoch,
                 idx,
                 checkpoint_height,
                 accumulator_root_obj_initial_shared_version,
-                updates,
+                updates.drain(..),
+                total_input_sui,
+                total_output_sui,
             )
         };
 
@@ -400,15 +412,10 @@ impl AccumulatorSettlementTxBuilder {
         idx: u64,
         checkpoint_height: u64,
         accumulator_root_obj_initial_shared_version: SequenceNumber,
-        updates: &mut Vec<(AccumulatorObjId, Update)>,
+        updates: impl Iterator<Item = (AccumulatorObjId, Update)>,
+        total_input_sui: u64,
+        total_output_sui: u64,
     ) -> TransactionKind {
-        let (total_input_sui, total_output_sui) =
-            updates
-                .iter()
-                .fold((0, 0), |(acc_input, acc_output), (_, update)| {
-                    (acc_input + update.input_sui, acc_output + update.output_sui)
-                });
-
         let mut builder = ProgrammableTransactionBuilder::new();
 
         let root = builder
@@ -440,7 +447,7 @@ impl AccumulatorSettlementTxBuilder {
             ],
         );
 
-        for (accumulator_obj, update) in updates.drain(..) {
+        for (accumulator_obj, update) in updates {
             let Update { merge, split, .. } = update;
             let address = addresses.get(&accumulator_obj).unwrap();
             let merged_value = MergedValue::from(merge);

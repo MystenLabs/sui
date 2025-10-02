@@ -795,6 +795,8 @@ pub struct ExecutionEnv {
     pub scheduling_source: SchedulingSource,
     /// Status of the balance withdraw scheduling of the transaction.
     pub withdraw_status: BalanceWithdrawStatus,
+    /// Transactions that must finish before this transaction can be executed.
+    pub barrier_dependencies: Vec<TransactionDigest>,
 }
 
 impl Default for ExecutionEnv {
@@ -804,6 +806,7 @@ impl Default for ExecutionEnv {
             expected_effects_digest: None,
             scheduling_source: SchedulingSource::NonFastPath,
             withdraw_status: BalanceWithdrawStatus::NoWithdraw,
+            barrier_dependencies: Default::default(),
         }
     }
 }
@@ -838,6 +841,14 @@ impl ExecutionEnv {
 
     pub fn with_insufficient_balance(mut self) -> Self {
         self.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
+        self
+    }
+
+    pub fn with_barrier_dependencies(
+        mut self,
+        barrier_dependencies: BTreeSet<TransactionDigest>,
+    ) -> Self {
+        self.barrier_dependencies = barrier_dependencies.into_iter().collect();
         self
     }
 }
@@ -1851,7 +1862,7 @@ impl AuthorityState {
         fail_point!("crash");
 
         self.get_cache_writer()
-            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
+            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs.clone());
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
