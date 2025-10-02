@@ -395,20 +395,21 @@ mod tests {
 
     /// Pinning a git dep with a partial SHA expands it to 40 characters
     #[test(tokio::test)]
-    #[ignore] // TODO
     async fn git_partial_sha() {
-        let git_project =
-            git::new("git_project", |project| project.file("dummy.txt", "dummy")).await;
+        let git_project = git::new().await;
+        let commit = git_project
+            .commit(|project| project.add_packages(["a"]))
+            .await;
 
-        let repo = "child.git"; // TODO: get repo from git_project
-        let sha = git_project.commits().await.remove(0);
+        let repo = git_project.repo_path_str();
+        let sha = commit.sha();
 
         let dep = new_git(repo, Some(&sha[0..12]), "");
         let pinned = dep.pin().await.unwrap_as_git();
 
-        assert_eq!(pinned.inner.repo_url(), "child.git");
+        assert_eq!(pinned.inner.repo_url(), git_project.repo_path_str());
         assert_eq!(pinned.inner.sha().as_ref(), sha);
-        assert_eq!(pinned.inner.path_in_repo().as_os_str(), "");
+        assert_eq!(pinned.inner.path_in_repo().as_os_str(), ".");
     }
 
     /// Pinning a git dep with a branch converts it to a sha
