@@ -33,8 +33,8 @@ use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
 use sui_types::transaction::{
-    GenesisObject, Reservation, SenderSignedData, StoredExecutionTimeObservations, TransactionData,
-    WithdrawFrom, WithdrawalTypeArg,
+    GenesisObject, Reservation, SenderSignedData, SharedObjectMutability,
+    StoredExecutionTimeObservations, TransactionData, WithdrawFrom, WithdrawalTypeArg,
 };
 use sui_types::type_input::{StructInput, TypeInput};
 use sui_types::{
@@ -205,6 +205,9 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<WithdrawalTypeArg>(&samples).unwrap();
     tracer.trace_type::<CallArg>(&samples).unwrap();
     tracer.trace_type::<ObjectArg>(&samples).unwrap();
+    tracer
+        .trace_type::<SharedObjectMutability>(&samples)
+        .unwrap();
     tracer.trace_type::<Data>(&samples).unwrap();
     tracer.trace_type::<TypeTag>(&samples).unwrap();
     tracer.trace_type::<TypedStoreError>(&samples).unwrap();

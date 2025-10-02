@@ -1889,6 +1889,7 @@
                   "u64": "256"
                 },
                 "max_type_to_layout_nodes": null,
+                "max_updates_per_settlement_txn": null,
                 "max_value_stack_size": {
                   "u64": "1024"
                 },
