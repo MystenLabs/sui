@@ -29,7 +29,6 @@ use move_core_types::{
 use move_package_alt::{
     compatibility::{legacy_parser::LegacyPackageMetadata, parse_legacy_package_info},
     flavor::MoveFlavor,
-    graph::NamedAddress,
     package::RootPackage,
 };
 use move_package_alt_compilation::{
@@ -599,20 +598,17 @@ impl PackageDependencies {
 
         let packages = root_pkg.packages()?;
 
-        for pkg in packages {
-            match pkg.named_address() {
-                NamedAddress::RootPackage(_) => (),
-                NamedAddress::Unpublished { dummy_addr: _ } => {
-                    // TODO: pkg-alt is this the right thing to do here?
-                    unpublished.insert(pkg.display_name().into());
-                }
-                NamedAddress::Defined(original_id) => {
-                    published.insert(
-                        // TODO: pkg-alt is this the right thing to do here?
-                        pkg.display_name().into(),
-                        ObjectID::from_address(original_id.0),
-                    );
-                }
+        for p in packages {
+            if p.is_root() {
+                continue;
+            }
+            if let Some(addresses) = p.published() {
+                published.insert(
+                    p.display_name().into(),
+                    ObjectID::from_address(addresses.published_at.0),
+                );
+            } else {
+                unpublished.insert(p.display_name().into());
             }
         }
 
