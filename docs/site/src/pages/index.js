@@ -118,6 +118,12 @@ export default function Home() {
             >
               Sui ecosystem directory
             </Link>
+            <Link
+              className={styles.cardLink}
+              to="/references/awesome-sui"
+            >
+              Awesome Sui
+            </Link>
             <Link className={styles.cardLink} to="https://blog.sui.io/">
               Sui blog
             </Link>
