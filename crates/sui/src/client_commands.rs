@@ -908,9 +908,6 @@ impl SuiClientCommands {
                 let verify =
                     check_dep_verification_flags(skip_dependency_verification, verify_deps)?;
 
-                let old_addresses =
-                    set_original_id(&mut root_pkg, OriginalID(AccountAddress::ZERO))?;
-
                 let upgrade_cap = if let Some(ref upgrade_cap) = upgrade_capability {
                     upgrade_cap
                 } else {
@@ -922,8 +919,9 @@ impl SuiClientCommands {
                     })?
                 };
 
-                // TODO we should read upgrade cap from lockfile, but the question is how do we
-                // migrate? During migration we might want to try to find the upgrade cap?
+                // TODO: pkg-alt we should read upgrade cap from published file, but the question
+                // is how do we migrate? During migration we might want to try to find the upgrade
+                // cap?
                 let upgrade_result = upgrade_package(
                     read_api,
                     &root_pkg,
@@ -934,9 +932,6 @@ impl SuiClientCommands {
                     !verify,
                 )
                 .await;
-                if let Some(old_addresses) = old_addresses {
-                    let _ = set_original_id(&mut root_pkg, old_addresses)?;
-                };
 
                 let (upgrade_policy, compiled_package) =
                     upgrade_result.map_err(|e| anyhow!("{e}"))?;
@@ -3837,24 +3832,6 @@ pub fn update_publication(
             // the Publish case
             Ok(publication.clone())
         }
-    }
-}
-
-/// Primarily used to update the lockfile's publication info to whatever addresses we need, mostly
-/// for publication/upgrade purposes.
-fn set_original_id(
-    root_package: &mut RootPackage<SuiFlavor>,
-    orig_id: OriginalID,
-) -> Result<Option<OriginalID>, anyhow::Error> {
-    let publication = root_package.publication().cloned();
-    if let Some(mut published_data) = publication {
-        let old_addresses = published_data.addresses.original_id.clone();
-        published_data.addresses.original_id = orig_id;
-        root_package.write_publish_data(published_data.clone())?;
-
-        Ok(Some(old_addresses))
-    } else {
-        Ok(None)
     }
 }
 
