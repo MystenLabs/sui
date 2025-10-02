@@ -861,6 +861,15 @@ ObjectArg:
             - TYPENAME: ObjectID
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
+    3:
+      SharedObjectV2:
+        STRUCT:
+          - id:
+              TYPENAME: ObjectID
+          - initial_shared_version:
+              TYPENAME: SequenceNumber
+          - mutability:
+              TYPENAME: SharedObjectMutability
 ObjectDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -1038,6 +1047,14 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+SharedObjectMutability:
+  ENUM:
+    0:
+      Mutable: UNIT
+    1:
+      Immutable: UNIT
+    2:
+      NonExclusiveWrite: UNIT
 StoredExecutionTimeObservations:
   ENUM:
     0:
