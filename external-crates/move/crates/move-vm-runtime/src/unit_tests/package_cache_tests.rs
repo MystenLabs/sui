@@ -633,9 +633,9 @@ fn relink() {
     let st_c_v1_addr = AccountAddress::from_hex_literal("0x42").unwrap();
     let st_b_v1_addr = AccountAddress::from_hex_literal("0x43").unwrap();
 
-    let c_runtime_addr = AccountAddress::from_hex_literal("0x2").unwrap();
-    let b_runtime_addr = AccountAddress::from_hex_literal("0x3").unwrap();
-    let _a_runtime_addr = AccountAddress::from_hex_literal("0x4").unwrap();
+    let c_original_addr = AccountAddress::from_hex_literal("0x2").unwrap();
+    let b_original_addr = AccountAddress::from_hex_literal("0x3").unwrap();
+    let _a_original_addr = AccountAddress::from_hex_literal("0x4").unwrap();
 
     // publish c v0
     let packages = compile_modules_in_file("rt_c_v0.move", &[]);
@@ -667,7 +667,7 @@ fn relink() {
                     ModuleId::new(runtime_package_id, Identifier::new("c").unwrap()),
                     Identifier::new("S").unwrap(),
                 ),
-                ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
             )]
             .into_iter()
             .collect(),
@@ -687,7 +687,7 @@ fn relink() {
             runtime_package_id,
             modules,
             BTreeMap::new(),
-            [c_runtime_addr].into_iter().collect(),
+            [c_original_addr].into_iter().collect(),
         )
         .unwrap();
 
@@ -705,10 +705,10 @@ fn relink() {
             [
                 (
                     (
-                        ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                        ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
                         Identifier::new("S").unwrap(),
                     ),
-                    ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                    ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
                 ),
                 (
                     (
@@ -738,10 +738,10 @@ fn relink() {
             [
                 (
                     (
-                        ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                        ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
                         Identifier::new("S").unwrap(),
                     ),
-                    ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                    ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
                 ),
                 (
                     (
@@ -753,7 +753,7 @@ fn relink() {
             ]
             .into_iter()
             .collect(),
-            [st_c_v1_addr, b_runtime_addr].into_iter().collect(),
+            [st_c_v1_addr, b_original_addr].into_iter().collect(),
         )
         .unwrap();
 
@@ -770,14 +770,14 @@ fn relink() {
             modules,
             [(
                 (
-                    ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                    ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
                     Identifier::new("S").unwrap(),
                 ),
-                ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
             )]
             .into_iter()
             .collect(),
-            [c_runtime_addr, b_runtime_addr].into_iter().collect(),
+            [c_original_addr, b_original_addr].into_iter().collect(),
         )
         .unwrap_err();
 

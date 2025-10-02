@@ -294,7 +294,7 @@ fn command<Mode: ExecutionMode>(
                         "Expected {} argument{} calling function '{}::{}', but found {}",
                         num_parameters,
                         if num_parameters == 1 { "" } else { "s" },
-                        function.storage_id,
+                        function.version_mid,
                         function.name,
                         num_args,
                     ),

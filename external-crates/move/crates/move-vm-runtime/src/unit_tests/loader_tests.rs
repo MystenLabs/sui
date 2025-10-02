@@ -173,10 +173,10 @@ impl Adapter {
         if !self.store.type_origin.is_empty() {
             pkg.0.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = pkg.0.original_id;
+        let original_id = pkg.0.original_id;
         self.runtime_adapter
             .write()
-            .publish_package(runtime_id, pkg.into_serialized_package())
+            .publish_package(original_id, pkg.into_serialized_package())
             .unwrap_or_else(|e| panic!("failure publishing modules: {e:?}"));
     }
 
@@ -187,10 +187,10 @@ impl Adapter {
         if !self.store.type_origin.is_empty() {
             pkg.0.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = pkg.0.original_id;
+        let original_id = pkg.0.original_id;
         self.runtime_adapter
             .write()
-            .publish_package(runtime_id, pkg.into_serialized_package())
+            .publish_package(original_id, pkg.into_serialized_package())
             .expect_err("publishing must fail");
     }
 

@@ -280,7 +280,7 @@ pub(crate) enum ArenaType {
 pub struct DatatypeDescriptor {
     pub(crate) name: IdentifierKey,
     pub defining_id: ModuleIdKey,
-    pub runtime_id: ModuleIdKey,
+    pub original_id: ModuleIdKey,
     pub datatype_info: ArenaBox<Datatype>,
 }
 
@@ -996,13 +996,13 @@ impl DatatypeDescriptor {
     pub(crate) fn new(
         name: IdentifierKey,
         defining_id: ModuleIdKey,
-        runtime_id: ModuleIdKey,
+        original_id: ModuleIdKey,
         datatype_info: ArenaBox<Datatype>,
     ) -> Self {
         Self {
             name,
             defining_id,
-            runtime_id,
+            original_id,
             datatype_info,
         }
     }

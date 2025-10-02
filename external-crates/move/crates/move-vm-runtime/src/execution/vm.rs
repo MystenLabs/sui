@@ -301,11 +301,11 @@ impl<'extensions> MoveVM<'extensions> {
     // -------------------------------------------
 
     /// Entry point for function execution, allowing an instance to run the specified function.
-    /// Note that the specified module is a `runtime_id`, meaning it should already be resolved
+    /// Note that the specified module is an `original_id`, meaning it should already be resolved
     /// with respect to the linkage context.
     fn execute_function(
         &mut self,
-        runtime_id: &ModuleId,
+        original_id: &ModuleId,
         function_name: &IdentStr,
         type_arguments: Vec<Type>,
         args: Vec<Value>,
@@ -318,7 +318,7 @@ impl<'extensions> MoveVM<'extensions> {
             function,
             parameters: _,
             return_type: _,
-        } = self.find_function(runtime_id, function_name, &type_arguments)?;
+        } = self.find_function(original_id, function_name, &type_arguments)?;
 
         if !bypass_declared_entry_check && !function.to_ref().is_entry {
             return Err(PartialVMError::new(
@@ -342,12 +342,12 @@ impl<'extensions> MoveVM<'extensions> {
     pub(crate) fn find_function(
         &self,
         // This is expected to be the translated version of the module ID, already translated by
-        // the link context. See `sui-adapter/src/programmable_transactions/execution.rs`
-        runtime_id: &ModuleId,
+        // the link context to the original ID. See `sui-adapter/src/static_programmable_transactions/env.rs`
+        original_id: &ModuleId,
         function_name: &IdentStr,
         ty_args: &[Type],
     ) -> VMResult<MoveVMFunction> {
-        let (package_key, module_id) = runtime_id.clone().into();
+        let (package_key, module_id) = original_id.clone().into();
         let module_name =
             intern_identifier(&module_id).map_err(|err| err.finish(Location::Undefined))?;
         let member_name =
@@ -373,7 +373,7 @@ impl<'extensions> MoveVM<'extensions> {
         // verify type arguments
         self.virtual_tables
             .verify_ty_args(fun_ref.type_parameters(), ty_args)
-            .map_err(|e| e.finish(Location::Module(runtime_id.clone())))?;
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         let function = MoveVMFunction {
             function,

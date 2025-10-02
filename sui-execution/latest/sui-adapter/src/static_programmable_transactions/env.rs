@@ -240,8 +240,8 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 package
             );
         };
-        let storage_id = ModuleId::new(package.into(), module.clone());
-        let runtime_id = ModuleId::new(original_id.into(), module);
+        let version_mid = ModuleId::new(package.into(), module.clone());
+        let original_mid = ModuleId::new(original_id.into(), module);
         let data_store = &self.linkable_store.package_store;
         let linkage_context = linkage.linkage_context();
         let loaded_type_arguments = type_arguments
@@ -254,14 +254,14 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             .make_vm(data_store, linkage_context)
             .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
         let runtime_signature = vm
-            .function_information(&runtime_id, name.as_ident_str(), &loaded_type_arguments)
+            .function_information(&original_mid, name.as_ident_str(), &loaded_type_arguments)
             .map_err(|e| {
                 if e.major_status() == StatusCode::EXTERNAL_RESOLUTION_REQUEST_ERROR {
                     ExecutionError::new_with_source(
                         ExecutionErrorKind::FunctionNotFound,
                         format!(
                             "Could not resolve function '{}' in module {}",
-                            name, &storage_id,
+                            name, &version_mid,
                         ),
                     )
                 } else {
@@ -286,8 +286,8 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             return_,
         };
         Ok(LoadedFunction {
-            storage_id,
-            runtime_id,
+            version_mid,
+            original_mid,
             name,
             type_arguments,
             signature,

@@ -12,7 +12,7 @@ use crate::{
     runtime::MoveRuntime,
     shared::{
         linkage_context::LinkageContext,
-        types::{DefiningTypeId, OriginalId},
+        types::{OriginalId, VersionId},
     },
     validation::verification::ast as verif_ast,
 };
@@ -175,7 +175,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
     fn generate_linkage_context(
         &self,
         original_id: OriginalId,
-        version_id: DefiningTypeId,
+        version_id: VersionId,
         modules: &[CompiledModule],
     ) -> VMResult<LinkageContext> {
         let mut all_dependencies: BTreeSet<AccountAddress> = BTreeSet::new();
@@ -213,7 +213,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         Ok(linkage_context)
     }
 
-    fn get_package_from_store(&self, version_id: &DefiningTypeId) -> VMResult<SerializedPackage> {
+    fn get_package_from_store(&self, version_id: &VersionId) -> VMResult<SerializedPackage> {
         self.get_package(version_id)
     }
 

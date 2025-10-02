@@ -519,7 +519,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     pub fn take_user_events(
         &mut self,
-        storage_id: ModuleId,
+        version_mid: ModuleId,
         function_def_idx: FunctionDefinitionIndex,
         instr_length: u16,
         linkage: &ExecutableLinkage,
@@ -530,7 +530,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         if num_events as u64 > max_events {
             let err = max_event_error(max_events)
                 .at_code_offset(function_def_idx, instr_length)
-                .finish(Location::Module(storage_id.clone()));
+                .finish(Location::Module(version_mid.clone()));
             return Err(self.env.convert_linked_vm_error(err, linkage));
         }
         let new_events = events
@@ -539,7 +539,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 let Some(bytes) = value.serialize() else {
                     invariant_violation!("Failed to serialize Move event");
                 };
-                Ok((storage_id.clone(), tag, bytes))
+                Ok((version_mid.clone(), tag, bytes))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         self.user_events.extend(new_events);
@@ -655,12 +655,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(amount)
     }
 
-    pub fn new_upgrade_cap(&mut self, storage_id: ObjectID) -> Result<CtxValue, ExecutionError> {
+    pub fn new_upgrade_cap(&mut self, version_id: ObjectID) -> Result<CtxValue, ExecutionError> {
         let id = self.tx_context.borrow_mut().fresh_id();
         object_runtime_mut!(self)?
             .new_id(id)
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
-        let cap = UpgradeCap::new(id, storage_id);
+        let cap = UpgradeCap::new(id, version_id);
         Ok(CtxValue(Value::upgrade_cap(cap)))
     }
 
@@ -684,7 +684,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
         let result = self.execute_function_bypass_visibility(
-            &function.runtime_id,
+            &function.original_mid,
             &function.name,
             &function.type_arguments,
             args,
@@ -692,7 +692,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             trace_builder_opt,
         )?;
         self.take_user_events(
-            function.storage_id,
+            function.version_mid,
             function.definition_index,
             function.instruction_length,
             &function.linkage,
@@ -702,7 +702,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     pub fn execute_function_bypass_visibility(
         &mut self,
-        runtime_id: &ModuleId,
+        original_mid: &ModuleId,
         function_name: &IdentStr,
         ty_args: &[Type],
         args: Vec<CtxValue>,
@@ -727,7 +727,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
         self.execute_function_bypass_visibility_with_vm(
             &mut vm,
-            runtime_id,
+            original_mid,
             function_name,
             ty_args,
             args,
@@ -740,7 +740,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     fn execute_function_bypass_visibility_with_vm(
         &mut self,
         vm: &mut MoveVM<'env>,
-        runtime_id: &ModuleId,
+        original_mid: &ModuleId,
         function_name: &IdentStr,
         ty_args: Vec<VMType>,
         args: Vec<CtxValue>,
@@ -750,7 +750,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let gas_status = self.gas_charger.move_gas_status_mut();
         let values = vm
             .execute_function_bypass_visibility(
-                runtime_id,
+                original_mid,
                 function_name,
                 ty_args,
                 args.into_iter().map(|v| v.0.into()).collect(),
@@ -883,9 +883,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 trace_builder_opt.as_deref_mut(),
             )?;
 
-            let storage_id = ModuleId::new(package_id.into(), module.self_id().name().to_owned());
+            let version_mid = ModuleId::new(package_id.into(), module.self_id().name().to_owned());
             self.take_user_events(
-                storage_id,
+                version_mid,
                 fdef_idx,
                 fdef.code.as_ref().map(|c| c.code.len() as u16).unwrap_or(0),
                 linkage,
@@ -906,7 +906,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         linkage: ResolvedLinkage,
         trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<ObjectID, ExecutionError> {
-        let runtime_id = if <Mode>::packages_are_predefined() {
+        let original_id = if <Mode>::packages_are_predefined() {
             // do not calculate or substitute id for predefined packages
             (*modules[0].self_id().address()).into()
         } else {
@@ -926,10 +926,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         )?);
         let package_id = package.id();
 
-        let linkage = ResolvedLinkage::update_for_publication(package_id, runtime_id, linkage);
+        let linkage = ResolvedLinkage::update_for_publication(package_id, original_id, linkage);
 
         let (pkg, vm) =
-            self.publish_and_verify_modules(runtime_id, &package, &modules, &linkage)?;
+            self.publish_and_verify_modules(original_id, &package, &modules, &linkage)?;
         // Here we optimistically push the package that is being published/upgraded
         // and if there is an error of any kind (verification or module init) we
         // remove it.
@@ -941,7 +941,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .push_package(package_id, package.clone(), pkg)?;
 
         match self.init_modules(vm, package_id, &modules, &linkage, trace_builder_opt) {
-            Ok(()) => Ok(runtime_id),
+            Ok(()) => Ok(original_id),
             Err(e) => {
                 self.env
                     .linkable_store
@@ -963,27 +963,27 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         // Check that this package ID points to a package and get the package we're upgrading.
         let current_package = self.fetch_package(&current_package_id)?;
 
-        let runtime_id = current_package.move_package().original_package_id();
-        adapter::substitute_package_id(&mut modules, runtime_id)?;
+        let original_id = current_package.move_package().original_package_id();
+        adapter::substitute_package_id(&mut modules, original_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
         // It should be fine that this does not go through the object runtime since it does not
         // need to know about new packages created, since Move objects and Move packages
         // cannot interact
-        let storage_id = self.tx_context.borrow_mut().fresh_id();
+        let version_id = self.tx_context.borrow_mut().fresh_id();
 
         let dependencies = self.fetch_packages(dep_ids)?;
         let current_move_package = current_package.move_package();
         let package = current_move_package.new_upgraded(
-            storage_id,
+            version_id,
             &modules,
             self.env.protocol_config,
             dependencies.iter().map(|p| p.move_package()),
         )?;
 
-        let linkage = ResolvedLinkage::update_for_publication(storage_id, runtime_id, linkage);
+        let linkage = ResolvedLinkage::update_for_publication(version_id, original_id, linkage);
         let (verified_pkg, _) =
-            self.publish_and_verify_modules(runtime_id, &package, &modules, &linkage)?;
+            self.publish_and_verify_modules(original_id, &package, &modules, &linkage)?;
 
         check_compatibility(
             self.env.protocol_config,
@@ -1032,11 +1032,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
 
         self.env.linkable_store.package_store.push_package(
-            storage_id,
+            version_id,
             Rc::new(package),
             verified_pkg,
         )?;
-        Ok(storage_id)
+        Ok(version_id)
     }
 
     //

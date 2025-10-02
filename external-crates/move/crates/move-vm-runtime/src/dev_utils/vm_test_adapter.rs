@@ -7,7 +7,7 @@ use crate::{
     runtime::MoveRuntime,
     shared::{
         linkage_context::LinkageContext,
-        types::{DefiningTypeId, OriginalId},
+        types::{OriginalId, VersionId},
     },
     validation::verification::ast as verif_ast,
 };
@@ -68,17 +68,17 @@ pub trait VMTestAdapter<Storage: ModuleResolver + Sync + Send> {
     fn generate_linkage_context(
         &self,
         original_id: OriginalId,
-        version_id: DefiningTypeId,
+        version_id: VersionId,
         modules: &[CompiledModule],
     ) -> VMResult<LinkageContext>;
 
     /// Retrieve the linkage context for the given package in `Storage`.
-    fn get_linkage_context(&self, version_id: DefiningTypeId) -> VMResult<LinkageContext> {
+    fn get_linkage_context(&self, version_id: VersionId) -> VMResult<LinkageContext> {
         let pkg = self.get_package_from_store(&version_id)?;
         Ok(LinkageContext::new(pkg.linkage_table))
     }
 
-    fn get_package_from_store(&self, version_id: &DefiningTypeId) -> VMResult<SerializedPackage>;
+    fn get_package_from_store(&self, version_id: &VersionId) -> VMResult<SerializedPackage>;
 
     /// Get the move runtime associated with the adapter.
     fn runtime(&mut self) -> &mut MoveRuntime;

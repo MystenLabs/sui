@@ -363,8 +363,8 @@ fn initialize_type_refs(
         .map(|datatype_handle| {
             let struct_name = intern_ident_str(module.identifier_at(datatype_handle.name))?;
             let module_handle = module.module_handle_at(datatype_handle.module);
-            let runtime_id = module.module_id_for_handle(module_handle);
-            let module_name = intern_ident_str(runtime_id.name())?;
+            let original_id = module.module_id_for_handle(module_handle);
+            let module_name = intern_ident_str(original_id.name())?;
             Ok(IntraPackageKey {
                 module_name,
                 member_name: struct_name,
@@ -397,7 +397,7 @@ fn datatypes(
     // and pass a full and complete representation of it in with the package.
     fn defining_id(
         context: &PackageContext,
-        storage_id: &VersionId,
+        version_id: &VersionId,
         name: &VirtualTableKey,
     ) -> PartialVMResult<ModuleIdKey> {
         let defining_address = context
@@ -411,30 +411,30 @@ fn datatypes(
                     },
                 )
             })?;
-        dbg_println!("Package ID: {:?}", storage_id);
+        dbg_println!("Package ID: {:?}", version_id);
         dbg_println!("Defining Address: {:?}", defining_address);
         let module_id = name.inner_pkg_key.module_name;
         Ok(ModuleIdKey::from_parts(*defining_address, module_id))
     }
 
-    let runtime_id = module.self_id();
-    let runtime_address = *runtime_id.address();
+    let original_id = module.self_id();
+    let original_address = *original_id.address();
 
-    let structs: ArenaVec<StructDef> = structs(context, &runtime_address, module_name, module)?;
-    let enums: ArenaVec<EnumDef> = enums(context, &runtime_address, module_name, module)?;
+    let structs: ArenaVec<StructDef> = structs(context, &original_address, module_name, module)?;
+    let enums: ArenaVec<EnumDef> = enums(context, &original_address, module_name, module)?;
 
-    let module_runtime_id = ModuleIdKey::from_parts(runtime_address, *module_name);
+    let module_original_id = ModuleIdKey::from_parts(original_address, *module_name);
 
     let struct_descriptors = structs
         .iter()
         .map(|struct_| {
             let name = resolve_member_name(&struct_.def_vtable_key)?;
             let defining_id = defining_id(context, version_id, &struct_.def_vtable_key)?;
-            let runtime_id = module_runtime_id;
+            let original_id = module_original_id;
             let datatype_info =
                 context.arena_box(Datatype::Struct(VMPointer::from_ref(struct_)))?;
             let name = intern_identifier_with_msg(&name, "struct name")?;
-            let descriptor = DatatypeDescriptor::new(name, defining_id, runtime_id, datatype_info);
+            let descriptor = DatatypeDescriptor::new(name, defining_id, original_id, datatype_info);
             Ok(descriptor)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
@@ -444,10 +444,10 @@ fn datatypes(
         .map(|enum_| {
             let name = resolve_member_name(&enum_.def_vtable_key)?;
             let defining_id = defining_id(context, version_id, &enum_.def_vtable_key)?;
-            let runtime_id = module_runtime_id;
+            let original_id = module_original_id;
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
             let name = intern_identifier_with_msg(&name, "enum name")?;
-            let descriptor = DatatypeDescriptor::new(name, defining_id, runtime_id, datatype_info);
+            let descriptor = DatatypeDescriptor::new(name, defining_id, original_id, datatype_info);
             Ok(descriptor)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
@@ -1282,10 +1282,10 @@ fn call(
     let func_handle = module.function_handle_at(function_handle_index);
     let member_name = intern_ident_str(module.identifier_at(func_handle.name))?;
     let module_handle = module.module_handle_at(func_handle.module);
-    let runtime_id = module.module_id_for_handle(module_handle);
-    let module_name = intern_ident_str(runtime_id.name())?;
+    let original_id = module.module_id_for_handle(module_handle);
+    let module_name = intern_ident_str(original_id.name())?;
     let vtable_key = VirtualTableKey {
-        package_key: *runtime_id.address(),
+        package_key: *original_id.address(),
         inner_pkg_key: IntraPackageKey {
             module_name,
             member_name,
@@ -1336,10 +1336,10 @@ fn make_arena_type(
             let datatype_handle = module.datatype_handle_at(*sh_idx);
             let datatype_name = intern_ident_str(module.identifier_at(datatype_handle.name))?;
             let module_handle = module.module_handle_at(datatype_handle.module);
-            let runtime_address = module.address_identifier_at(module_handle.address);
+            let original_address = module.address_identifier_at(module_handle.address);
             let module_name = intern_ident_str(module.identifier_at(module_handle.name))?;
             let cache_idx = VirtualTableKey {
-                package_key: *runtime_address,
+                package_key: *original_address,
                 inner_pkg_key: IntraPackageKey {
                     module_name,
                     member_name: datatype_name,
@@ -1357,10 +1357,10 @@ fn make_arena_type(
             let datatype_handle = module.datatype_handle_at(*sh_idx);
             let datatype_name = intern_ident_str(module.identifier_at(datatype_handle.name))?;
             let module_handle = module.module_handle_at(datatype_handle.module);
-            let runtime_address = module.address_identifier_at(module_handle.address);
+            let original_address = module.address_identifier_at(module_handle.address);
             let module_name = intern_ident_str(module.identifier_at(module_handle.name))?;
             let cache_idx = VirtualTableKey {
-                package_key: *runtime_address,
+                package_key: *original_address,
                 inner_pkg_key: IntraPackageKey {
                     module_name,
                     member_name: datatype_name,

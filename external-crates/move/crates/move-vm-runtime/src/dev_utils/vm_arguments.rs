@@ -52,7 +52,7 @@ impl ValueFrame {
 
     pub fn serialized_call(
         vm: &mut MoveVM<'_>,
-        runtime_id: &ModuleId,
+        original_id: &ModuleId,
         function_name: &IdentStr,
         ty_args: Vec<Type>,
         serialized_args: Vec<impl Borrow<[u8]>>,
@@ -61,7 +61,7 @@ impl ValueFrame {
         bypass_declared_entry_check: bool,
     ) -> VMResult<Self> {
         let mut frame = Self::empty();
-        let fun = vm.find_function(runtime_id, function_name, &ty_args)?;
+        let fun = vm.find_function(original_id, function_name, &ty_args)?;
         let arg_types = fun
             .parameters
             .into_iter()
@@ -73,7 +73,7 @@ impl ValueFrame {
             .map_err(|e| e.finish(Location::Undefined))?;
         let return_values = if bypass_declared_entry_check {
             vm.execute_function_bypass_visibility(
-                runtime_id,
+                original_id,
                 function_name,
                 ty_args,
                 frame.values,
@@ -82,7 +82,7 @@ impl ValueFrame {
             )?
         } else {
             debug_assert!(tracer.is_none());
-            vm.execute_entry_function(runtime_id, function_name, ty_args, frame.values, gas_meter)?
+            vm.execute_entry_function(original_id, function_name, ty_args, frame.values, gas_meter)?
         };
         frame.values = return_values;
         Ok(frame)

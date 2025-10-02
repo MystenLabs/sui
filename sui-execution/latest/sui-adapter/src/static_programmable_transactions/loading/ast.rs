@@ -121,8 +121,8 @@ pub struct LoadedFunctionInstantiation {
 
 #[derive(Debug)]
 pub struct LoadedFunction {
-    pub storage_id: ModuleId,
-    pub runtime_id: ModuleId,
+    pub version_mid: ModuleId,
+    pub original_mid: ModuleId,
     pub name: Identifier,
     pub type_arguments: Vec<Type>,
     pub signature: LoadedFunctionInstantiation,
