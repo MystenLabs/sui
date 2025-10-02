@@ -219,7 +219,7 @@ impl BuildConfig {
             .publication()
             .map(|p| ObjectID::from_address(p.addresses.published_at.0));
 
-        root_pkg.update_lockfile()?;
+        root_pkg.update_lockfile_sync()?;
 
         Ok(CompiledPackage {
             package,
@@ -597,7 +597,7 @@ impl PackageDependencies {
         let mut published = BTreeMap::new();
         let mut unpublished = BTreeSet::new();
 
-        let packages = root_pkg.packages()?;
+        let packages = root_pkg.packages();
 
         for p in packages {
             if p.is_root() {

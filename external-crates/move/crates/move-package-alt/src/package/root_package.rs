@@ -8,15 +8,14 @@ use std::{collections::BTreeMap, fmt, path::Path};
 use indexmap::IndexMap;
 use tracing::debug;
 
-use super::paths::PackagePath;
+use super::paths::{EphemeralPubfilePath, OutputPath, PackagePath};
 use super::{EnvironmentID, manifest::Manifest};
-use crate::compatibility::legacy_lockfile::convert_legacy_lockfile;
-use crate::graph::{LinkageTable, PackageInfo};
+use crate::graph::PackageInfo;
 use crate::package::block_on;
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
-    Environment, ModeName, OriginalID, PackageID, PackageName, ParsedEphemeralPubs,
-    ParsedPublishedFile, Publication, RenderToml,
+    Environment, ModeName, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
+    Publication, RenderToml,
 };
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
@@ -25,20 +24,52 @@ use crate::{
     package::EnvironmentName,
     schema::ParsedLockfile,
 };
-use move_symbol_pool::Symbol;
 
-/// We store the publication file that we read so that we can update it later in
-/// [RootPackage::write_publish_data]
-#[derive(Debug)]
-enum PublicationSource<F: MoveFlavor> {
-    /// Addresses are stored in the `Published.toml` file and retrieved from dependencies' files
-    Published(ParsedPublishedFile<F>),
+#[derive(Clone, Debug)]
+pub struct PackageConfig {
+    /// The path to read all input files from (e.g. lockfiles, pubfiles, etc). If this path is
+    /// different from `output_path`, the package system won't touch any files here Note that in
+    /// the case of ephemeral loads, `self.load_type.ephemeral_file` may also be read
+    input_path: PathBuf,
 
-    /// Addresses are retrieved from and stored to the ephemeral publication file located at `file`
-    /// and with contents `pubs`
+    /// The chain ID to build for
+    chain_id: EnvironmentID,
+
+    /// The ephemeral or persistent environment to load for
+    load_type: LoadType,
+
+    /// The directory to write all output files into (e.g. updated lockfiles, etc)
+    /// Note that in the case of ephemeral loads, `self.load_type.ephemeral_file` may also be
+    /// written
+    output_path: PathBuf,
+
+    /// The modes to load for
+    modes: Vec<ModeName>,
+
+    /// Repin the dependencies even if the lockfile is up-to-date
+    pub(crate) force_repin: bool,
+
+    /// Use the lockfile even if the manifest digests are out of date
+    pub(crate) ignore_digests: bool,
+    // TODO: The directory to use for the git cache (defaults to `~/.move`)
+    // cache_dir: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+pub enum LoadType {
+    Persistent {
+        env: EnvironmentName,
+    },
     Ephemeral {
-        file: PathBuf,
-        pubs: ParsedEphemeralPubs<F>,
+        /// The environment to build for. If it is `None`, the value in `ephemeral_file` will be
+        /// used; if that file also doesn't exist, then the load will fail
+        build_env: Option<EnvironmentName>,
+
+        /// The ephemeral file to use for addresses, relative to the current working directory (not
+        /// to `input_path`). This file will be written if the package is published (i.e. if
+        /// [RootPackage::write_publish_data] is called). It does not have to exist a priori, but
+        /// if it does, the addresses will be used.
+        ephemeral_file: PathBuf,
     },
 }
 
@@ -46,13 +77,17 @@ enum PublicationSource<F: MoveFlavor> {
 ///
 /// This is a special package that contains the project manifest and dependencies' graphs,
 /// and associated functions to operate with this data.
-///
-/// TODO(manos): We should try to hold a lock on the manifest / lockfile when we do operations
-/// to avoid race conditions.
 #[derive(Debug)]
 pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
-    /// The path to the root package
-    package_path: PackagePath,
+    /// The path to the files containing the root package
+    input_path: PackagePath,
+
+    /// The path to the output directory for the root package
+    output_path: OutputPath,
+
+    /// The ephemeral file
+    ephemeral_file: Option<EphemeralPubfilePath>,
+
     /// The environment we're operating on for this root package.
     environment: Environment,
 
@@ -64,17 +99,32 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     /// overrides applied.
     /// TODO: we should apply overrides here as well
     filtered_graph: PackageGraph<F>,
+}
 
-    /// The lockfile we're operating on
-    /// Invariant: lockfile.pinned matches graph, except that digests may differ
-    lockfile: ParsedLockfile,
+impl PackageConfig {
+    fn persistent(path: impl AsRef<Path>, env: Environment, modes: Vec<ModeName>) -> Self {
+        Self {
+            input_path: path.as_ref().to_path_buf(),
+            chain_id: env.id,
+            load_type: LoadType::Persistent { env: env.name },
+            output_path: path.as_ref().to_path_buf(),
+            modes,
+            force_repin: false,
+            ignore_digests: false,
+        }
+    }
+}
 
-    /// The stored publications for the root package
-    pubs: PublicationSource<F>,
-
-    /// The list of published ids for every dependency in the root package
-    // TODO: the comment says published ids but the type says original id; what is this for?
-    deps_ids: BTreeMap<Symbol, OriginalID>,
+impl LoadType {
+    /// return `Some(path)` if `self` is a valid ephemeral load, or None if it is a persistent load
+    fn ephemeral_file(&self) -> PackageResult<Option<EphemeralPubfilePath>> {
+        match self {
+            LoadType::Persistent { .. } => Ok(None),
+            LoadType::Ephemeral { ephemeral_file, .. } => {
+                Ok(Some(EphemeralPubfilePath::new(ephemeral_file)?))
+            }
+        }
+    }
 }
 
 /// Root package is the "public" entrypoint for operations with the package management.
@@ -83,10 +133,18 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     pub fn environments(
         path: impl AsRef<Path>,
     ) -> PackageResult<IndexMap<EnvironmentName, EnvironmentID>> {
+        let path = path.as_ref().to_path_buf();
+        block_on!(Self::async_environments(path))
+    }
+
+    async fn async_environments(
+        path: impl AsRef<Path>,
+    ) -> PackageResult<IndexMap<EnvironmentName, EnvironmentID>> {
+        let mtx = PackageLock::lock().await;
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let mut environments = F::default_environments();
 
-        if let Ok(modern_manifest) = Manifest::read_from_file(package_path.manifest_path()) {
+        if let Ok(modern_manifest) = Manifest::read_from_file(&package_path, &mtx) {
             // TODO(manos): Decide on validation (e.g. if modern manifest declares environments differently,
             // we should error?!)
             environments.extend(modern_manifest.environments());
@@ -105,20 +163,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
-        debug!(
-            "Loading RootPackage for {:?} (CWD: {:?}",
-            path.as_ref(),
-            std::env::current_dir()
-        );
-        let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let config = PackageConfig::persistent(path, env, modes);
 
-        // hold a lock to the package system. All operations with Move package should be sequential
-        // to avoid weird side-effects in our caches.
-        let _lock = PackageSystemLock::new()?;
-
-        let graph = PackageGraph::<F>::load(&package_path, &env).await?;
-
-        Self::_validate_and_construct(package_path, env, graph, modes)
+        Self::validate_and_construct(config).await
     }
 
     /// A synchronous version of `load` that can be used to load a package while blocking in place.
@@ -139,45 +186,22 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         build_env: Option<EnvironmentName>,
         chain_id: EnvironmentID,
         pubfile_path: impl AsRef<Path>,
-        mode: Vec<ModeName>,
+        modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
-        // Load the publication file
-        let pubfile =
-            Self::load_ephemeral_pubfile(build_env, chain_id.clone(), &pubfile_path).await?;
-
-        // extract the environment
-        let build_env_name = pubfile.build_env.clone();
-
-        let build_env_id = Self::environments(&root)?
-            .get(&build_env_name)
-            .ok_or(PackageError::UnknownBuildEnv {
-                build_env: build_env_name.clone(),
-            })?
-            .clone();
-
-        let build_env = Environment {
-            name: build_env_name,
-            id: build_env_id,
+        let config = PackageConfig {
+            input_path: root.as_ref().to_path_buf(),
+            chain_id,
+            load_type: LoadType::Ephemeral {
+                build_env,
+                ephemeral_file: pubfile_path.as_ref().to_path_buf(),
+            },
+            output_path: root.as_ref().to_path_buf(),
+            modes,
+            force_repin: false,
+            ignore_digests: false,
         };
 
-        // load the package as if in the build_env
-        let mut result = Self::load(root, build_env, mode).await?;
-
-        // update the packages to use the ephemeral addresses
-        result
-            .unfiltered_graph
-            .add_publish_overrides(localpubs_to_publications(&pubfile));
-
-        result
-            .filtered_graph
-            .add_publish_overrides(localpubs_to_publications(&pubfile));
-
-        result.pubs = PublicationSource::Ephemeral {
-            file: pubfile_path.as_ref().to_path_buf(),
-            pubs: pubfile,
-        };
-
-        Ok(result)
+        Self::validate_and_construct(config).await
     }
 
     /// Loads the root package from path and builds a dependency graph from the manifests.
@@ -191,10 +215,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
-        let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let mut config = PackageConfig::persistent(path, env, modes);
+        config.force_repin = true;
+        /*
         let graph = PackageGraph::<F>::load_from_manifests(&package_path, &env).await?;
+        */
 
-        Self::_validate_and_construct(package_path, env, graph, modes)
+        Self::validate_and_construct(config).await
     }
 
     /// Loads the root lockfile only, ignoring all manifests. Returns an error if the lockfile
@@ -209,22 +236,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
-        let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
-
-        convert_legacy_lockfile::<F>(&package_path)?;
-
-        let Some(graph) =
-            PackageGraph::<F>::load_from_lockfile_ignore_digests(&package_path, &env).await?
-        else {
-            return Err(PackageError::Generic(format!(
-                "No lockfile found for environment `{}`",
-                env.name()
-            )));
-        };
-
-        Self::_validate_and_construct(package_path, env, graph, modes)
-        // Note: we do not sync the lockfile here because we haven't repinned so we don't want to
-        // update the digests
+        let mut config = PackageConfig::persistent(path, env, modes);
+        config.ignore_digests = true;
+        Self::validate_and_construct(config).await
     }
 
     /// The metadata for the root package in [PackageInfo] form
@@ -234,59 +248,90 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Central validation point for a RootPackage.
     ///
+    /// 1. check that the path has a manifest
+    /// 2. get an environment from the ephemeral file
+    ///
     /// This helps validate:
     /// 1. TODO: Fill this in! (deduplicate nodes etc)
-    fn _validate_and_construct(
-        package_path: PackagePath,
-        env: Environment,
-        unfiltered_graph: PackageGraph<F>,
-        modes: Vec<ModeName>,
-    ) -> PackageResult<Self> {
+    async fn validate_and_construct(config: PackageConfig) -> PackageResult<Self> {
+        let mtx = PackageLock::lock().await; // held until function returns
+        let input_path = PackagePath::new(config.input_path.clone())?;
+        let ephemeral_file = config.load_type.ephemeral_file()?;
+        let output_path = OutputPath::new(config.output_path.clone())?;
+
         debug!(
-            "creating RootPackage at {:?} (CWD: {:?})",
-            package_path.path(),
+            "creating RootPackage (CWD: {:?})\n{config:#?}",
             std::env::current_dir()
         );
-        // TODO: think more carefully about when we convert the legacy lockfile
-        convert_legacy_lockfile::<F>(&package_path)?;
 
-        let mut lockfile = Self::load_lockfile(&package_path)?;
-        lockfile
-            .pinned
-            .insert(env.name.clone(), unfiltered_graph.to_pins()?);
-        let pubs = Self::load_pubfile(&package_path)?;
+        debug!("getting ephemeral files");
+        let (env, ephemeral_pubs) = Self::get_env_and_ephemeral_file(&config).await?;
 
-        // apply mode filter
-        let filtered_graph = unfiltered_graph.filter_for_mode(&modes);
+        debug!("loading unfiltered graph");
+        let unfiltered_graph = if config.force_repin {
+            PackageGraph::<F>::load_from_manifests(&input_path, &env, &mtx).await?
+        } else if config.ignore_digests {
+            PackageGraph::<F>::load_from_lockfile_ignore_digests(&input_path, &env, &mtx)
+                .await?
+                .unwrap()
+        } else {
+            PackageGraph::<F>::load(&input_path, &env, &mtx).await?
+        };
 
-        // check that there is a consistent linkage
-        let linkage = filtered_graph.linkage()?;
+        debug!("filtering graph");
+        let mut filtered_graph = unfiltered_graph.filter_for_mode(&config.modes).linkage()?;
+        if let Some(ephemeral_pubs) = ephemeral_pubs {
+            debug!("adding overrides");
+            filtered_graph.add_publish_overrides(localpubs_to_publications(&ephemeral_pubs));
+        }
+
+        debug!("checking rename-from");
         unfiltered_graph.check_rename_from()?;
-
-        let deps_ids = linkage
-            .iter()
-            .map(|x| (Symbol::from(x.1.name().to_string()), x.0.clone()))
-            .collect();
 
         debug!(
             "packages (unfiltered): {:?}",
             unfiltered_graph
                 .packages()
-                .expect("linkage succeeds")
                 .iter()
                 .map(|pkg| pkg.display_name())
                 .collect::<Vec<_>>()
         );
 
         Ok(Self {
-            package_path,
             environment: env,
-            lockfile,
-            deps_ids,
-            pubs: PublicationSource::Published(pubs),
             unfiltered_graph,
             filtered_graph,
+            output_path,
+            ephemeral_file,
+            input_path,
         })
+    }
+
+    /// Returns the build environment to use for this package. For ephemeral loads, this requires
+    /// reading the ephemeral pubfile as well, so this function also returns a parsed pubfile if
+    /// the load is ephemeral.
+    async fn get_env_and_ephemeral_file(
+        config: &PackageConfig,
+    ) -> PackageResult<(Environment, Option<ParsedEphemeralPubs<F>>)> {
+        let result = match &config.load_type {
+            LoadType::Persistent { env } => {
+                (Environment::new(env.clone(), config.chain_id.clone()), None)
+            }
+            LoadType::Ephemeral {
+                build_env,
+                ephemeral_file,
+            } => {
+                let ephemeral =
+                    Self::load_ephemeral_pubfile(build_env, &config.chain_id, ephemeral_file)
+                        .await?;
+                (
+                    Environment::new(ephemeral.build_env.clone(), config.chain_id.clone()),
+                    Some(ephemeral),
+                )
+            }
+        };
+
+        Ok(result)
     }
 
     /// The id of the root package (TODO: perhaps this method is poorly named; check where it's
@@ -301,109 +346,114 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.filtered_graph.root_package().display_name()
     }
 
-    /// The path to the root of the package
-    pub fn path(&self) -> &PackagePath {
-        &self.package_path
+    /// Return the path to the directory containing the root package
+    pub fn package_path(&self) -> &Path {
+        self.input_path.path()
     }
 
     /// Return the list of all packages in the root package's package graph (including itself and all
     /// transitive dependencies). This includes the non-duplicate addresses only.
-    pub fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+    pub fn packages(&self) -> Vec<PackageInfo<F>> {
         self.filtered_graph.packages()
     }
 
-    /// Return the linkage table for the root package. This contains an entry for each package that
-    /// this package depends on (transitively). Returns an error if any of the packages that this
-    /// package depends on is unpublished.
-    pub fn linkage(&self) -> PackageResult<LinkageTable<F>> {
-        Ok(self.filtered_graph.linkage()?)
+    pub fn update_lockfile_sync(&mut self) -> PackageResult<()> {
+        block_on!(self.update_lockfile())
     }
 
     /// Update the dependencies in the lockfile for this environment to match the dependency graph
     /// represented by `self`.
-    pub fn update_lockfile(&mut self) -> PackageResult<()> {
-        let mut lockfile: ParsedLockfile = Self::load_lockfile(self.package_path())?;
+    ///
+    /// Before overwriting the lockfile, this function also extracts any publication information
+    /// from the legacy lockfile and writes it into the pubfile
+    pub async fn update_lockfile(&mut self) -> PackageResult<()> {
+        let mtx = PackageLock::lock().await;
+
+        // migrate any pubs from the legacy lockfile to the modern pubfile before we clobber the
+        // legacy lockfile.
+        let legacy_pubs = self.input_path.read_legacy_lockfile(&mtx)?;
+        if let Some(pubs) = &legacy_pubs {
+            if !pubs.is_empty() {
+                let old_pubfile = self
+                    .input_path
+                    .read_pubfile(&mtx)?
+                    .map(|(_, p)| p)
+                    .unwrap_or_default();
+                let mut legacy_pubs: ParsedPublishedFile<F> = pubs.clone().into();
+                // if the same publication exists in both, we keep the modern one
+                legacy_pubs.published.extend(old_pubfile.published);
+                self.output_path.write_pubfile(&legacy_pubs, &mtx)?;
+            }
+        }
+
+        let mut lockfile: ParsedLockfile = if legacy_pubs.is_some() {
+            ParsedLockfile::default()
+        } else {
+            self.input_path
+                .read_lockfile(&mtx)?
+                .map(|(_, l)| l)
+                .unwrap_or_default()
+        };
+
+        // merge our graph and write to disk
         lockfile.pinned.insert(
             self.environment.name.clone(),
-            self.filtered_graph.to_pins()?,
+            self.unfiltered_graph.to_pins()?,
         );
+        self.output_path.write_lockfile(&lockfile, &mtx)?;
 
-        std::fs::write(self.path().lockfile_path(), lockfile.render_as_toml())?;
         Ok(())
     }
 
     /// Record metadata for a publication for the root package in either its `Published.toml` or
     /// its ephemeral pubfile (depending on how it was loaded)
-    pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
+    pub async fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
+        let mtx = PackageLock::lock().await;
         let package_id = self.name().to_string();
 
-        match &mut self.pubs {
-            PublicationSource::Published(pubfile) => {
-                pubfile
-                    .published
-                    .insert(self.environment.name().clone(), publish_data);
-                std::fs::write(
-                    &self.package_path.publications_path(),
-                    pubfile.render_as_toml(),
-                )?;
-            }
-            PublicationSource::Ephemeral { file, pubs } => {
-                pubs.published.insert(package_id, publish_data.into());
-                std::fs::write(&file, pubs.render_as_toml())?;
-            }
+        if let Some(ephemeral_file) = &mut self.ephemeral_file {
+            let mut pubs = ephemeral_file
+                .read_pubfile(&mtx)?
+                .map(|(_, pubs)| pubs)
+                .unwrap_or_default();
+
+            // TODO: should we check build-env and chain-id again?
+            pubs.published.insert(package_id, publish_data.into());
+            ephemeral_file.write_pubfile(&pubs, &mtx)?;
+        } else {
+            let mut pubfile = self
+                .input_path
+                .read_pubfile(&mtx)?
+                .map(|(_, p)| p)
+                .unwrap_or_default();
+            pubfile.published.insert(package_id, publish_data);
+            self.output_path.write_pubfile(&pubfile, &mtx)?;
         }
 
         Ok(())
     }
 
-    /// Read the lockfile from the root directory, returning an empty structure if none exists
-    /// Assumes that legacy lockfiles have already been converted (which should happen during
-    /// package load)
-    fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile> {
-        let path = package_path.lockfile_path();
-        debug!("loading lockfile {:?}", path);
-
-        if !path.exists() {
-            return Ok(ParsedLockfile::default());
-        }
-
-        let file = FileHandle::new(path)?;
-        Ok(toml_edit::de::from_str(file.source())?)
-    }
-
-    /// Read the pubfile from the root directory, returning an empty structure if none exists
-    fn load_pubfile(path: &PackagePath) -> PackageResult<ParsedPublishedFile<F>> {
-        let path = path.publications_path();
-
-        if !path.exists() {
-            return Ok(ParsedPublishedFile::default());
-        }
-
-        let file = FileHandle::new(path)?;
-        Ok(toml_edit::de::from_str(file.source())?)
-    }
-
     /// Load ephemeral publications from `pubfile`, checking that they have the correct `chain-id`
     /// and `build-env`. If the file does not exist, a new file is created and returned
     async fn load_ephemeral_pubfile(
-        build_env: Option<EnvironmentName>,
-        chain_id: EnvironmentID,
+        build_env: &Option<EnvironmentName>,
+        chain_id: &EnvironmentID,
         pubfile: impl AsRef<Path>,
     ) -> PackageResult<ParsedEphemeralPubs<F>> {
         if let Ok(file) = FileHandle::new(&pubfile) {
             let parsed: ParsedEphemeralPubs<F> = toml_edit::de::from_str(file.source())?;
             if let Some(build_env) = build_env {
-                if build_env != parsed.build_env {
+                if *build_env != parsed.build_env {
                     return Err(PackageError::EphemeralEnvMismatch {
                         file_build_env: parsed.build_env,
-                        passed_build_env: build_env,
+                        passed_build_env: build_env.clone(),
                     });
                 }
             }
-            if chain_id != parsed.chain_id {
+            if *chain_id != parsed.chain_id {
                 return Err(PackageError::EphemeralChainMismatch {
                     file_chain_id: parsed.chain_id,
-                    passed_chain_id: chain_id,
+                    passed_chain_id: chain_id.clone(),
                 });
             }
 
@@ -415,8 +465,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             };
 
             let pubs = ParsedEphemeralPubs {
-                build_env,
-                chain_id,
+                build_env: build_env.clone(),
+                chain_id: chain_id.clone(),
                 published: BTreeMap::new(),
             };
             debug!("writing empty file {file:?}");
@@ -433,19 +483,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     // *** PATHS RELATED FUNCTIONS ***
 
-    /// Return the package path wrapper
-    pub fn package_path(&self) -> &PackagePath {
-        &self.package_path
-    }
-
     /// Return a list of sorted package names
     pub fn sorted_deps(&self) -> Vec<&PackageName> {
         self.filtered_graph.sorted_deps()
-    }
-
-    // TODO: what is the spec of this function?
-    pub fn deps_ids(&self) -> &BTreeMap<Symbol, OriginalID> {
-        &self.deps_ids
     }
 }
 
@@ -482,7 +522,6 @@ mod tests {
             vanilla::{self, DEFAULT_ENV_NAME, default_environment},
         },
         graph::NamedAddress,
-        package::root_package,
         schema::{LockfileDependencyInfo, OriginalID, PackageID, PublishAddresses, PublishedID},
         test_utils::{
             self, basic_manifest_with_env,
@@ -586,21 +625,6 @@ pkg_b = { local = "../pkg_b" }"#,
         );
 
         assert_eq!(root.name(), &PackageID::from("graph"));
-    }
-
-    #[test(tokio::test)]
-    async fn test_lockfile_deps() {
-        let (env, root_path) = setup_test_move_project().await;
-        let pkg_path = root_path.join("packages").join("graph");
-
-        let root = RootPackage::<Vanilla>::load(&pkg_path, env, vec![])
-            .await
-            .unwrap();
-
-        let new_lockfile = root.lockfile().clone();
-
-        // TODO: put this snapshot in a more sensible place
-        assert_snapshot!("test_lockfile_deps", new_lockfile.render_as_toml());
     }
 
     #[test(tokio::test)]
@@ -1467,7 +1491,6 @@ pkg_b = { local = "../pkg_b" }"#,
 
         let mut package_names: Vec<_> = root
             .packages()
-            .unwrap()
             .into_iter()
             .map(|pkg| pkg.display_name().to_string())
             .collect();
@@ -1504,7 +1527,6 @@ pkg_b = { local = "../pkg_b" }"#,
 
         let mut package_names: Vec<_> = root
             .packages()
-            .unwrap()
             .into_iter()
             .map(|pkg| pkg.display_name().to_string())
             .collect();

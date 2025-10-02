@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    borrow::Cow,
-    io::{BufRead, Write},
+    io::BufRead,
     path::{Path, PathBuf},
     process::Stdio,
 };
@@ -192,9 +191,19 @@ impl GitTree {
             .await?;
         }
 
-        update_sparse_checkout_file(&self.path_to_repo, &self.path_in_repo().to_string_lossy())?;
-        // TODO
-        self.run_git(&["sparse-checkout", "list"]).await?;
+        if self.path_in_repo().to_str() == Some("") || self.path_in_repo().to_str() == Some(".") {
+            self.run_git(&["sparse-checkout", "disable"]).await?;
+        }
+
+        let sparse_enabled = self.run_git(&["config", "core.sparseCheckout"]).await?;
+        if sparse_enabled == "true\n" {
+            self.run_git(&[
+                "sparse-checkout",
+                "add",
+                &self.path_in_repo().to_string_lossy(),
+            ])
+            .await?;
+        }
 
         // git checkout
         self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
@@ -457,74 +466,10 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
     ))
 }
 
-/// Ensure that the directory is included in the sparse checkout. Disables sparse checkout if the
-/// path is empty
-///
-/// It's a workaround because `git sparse-checkout add .` does not work to add all files and
-/// directories.
-fn update_sparse_checkout_file(repo_path: &Path, path_in_repo: &str) -> Result<(), std::io::Error> {
-    let sparse_checkout_path = repo_path.join(".git").join("info").join("sparse-checkout");
-
-    // the sparse checkout file can be in one of 3 states:
-    //  - initially, git init creates this sparse checkout file:
-    //      /*
-    //      !/*/
-    //  - if we want to checkout the whole repo (because one of the paths cleans to ""), just
-    //    delete the file - this turns off sparse checkout
-    //  - if we want to checkout paths a/b/c and d/e, it should be (trailing slashes are important)
-    //      /a/b/c/
-    //      /d/e/
-    debug!("adding `{path_in_repo}` to `{sparse_checkout_path:?}`");
-
-    if !sparse_checkout_path.exists() {
-        debug!(" - all files are already checked out");
-        return Ok(());
-    }
-
-    if path_in_repo == "." || path_in_repo.is_empty() {
-        debug!(" - root path requested; removing sparse-checkout file");
-        std::fs::remove_file(sparse_checkout_path)?;
-        return Ok(());
-    }
-
-    let mut pattern = if path_in_repo.starts_with("/") {
-        path_in_repo.to_string()
-    } else {
-        format!("/{path_in_repo}")
-    };
-
-    if !path_in_repo.ends_with("/") {
-        pattern.push('/');
-    }
-
-    for line in std::fs::read_to_string(&sparse_checkout_path)?.lines() {
-        if line == pattern {
-            debug!(" - pattern {pattern} already present; no change");
-            return Ok(());
-        }
-    }
-
-    debug!(" - adding {pattern}");
-    pattern.push('\n');
-    std::fs::OpenOptions::new()
-        .append(true)
-        .open(&sparse_checkout_path)?
-        .write_all(pattern.as_bytes())?;
-
-    debug!(
-        "sparse checkout contents:\n{}",
-        std::fs::read_to_string(&sparse_checkout_path).unwrap()
-    );
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_utils::git;
-    use indoc::indoc;
-    use insta::assert_snapshot;
     use std::collections::BTreeSet;
     use std::fs;
     use std::path::Path;
@@ -1006,115 +951,90 @@ mod tests {
         assert_exactly_paths(git_tree.repo_fs_path(), ["a/Move.toml"]);
     }
 
-    /// If sparse checkout file is the one that git creates by default, then adding a non-empty
-    /// path should append that path
-    #[test]
-    fn test_update_sparse_checkout_initial() {
-        let initial_contents = indoc!(
-            r###"
-            /*
-            !/*/
-            "###
-        );
+    /// Checking out two different trees in the same repo works
+    #[test(tokio::test)]
+    async fn test_sparse_checkout_two_dirs() {
+        let project = git::new().await;
+        let _commit = project
+            .commit(|proj| proj.add_packages(["a", "b", "c"]))
+            .await;
 
-        let tempdir = tempdir().unwrap();
-        let repo_path = tempdir.path();
-        let sparse_checkout_path = repo_path.join(".git").join("info").join("sparse-checkout");
-        std::fs::create_dir_all(sparse_checkout_path.parent().unwrap()).unwrap();
-        std::fs::write(&sparse_checkout_path, initial_contents).unwrap();
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+        let tree_a = cache
+            .resolve_to_tree(&project.repo_path_str(), &None, Some(PathBuf::from("a")))
+            .await
+            .unwrap();
 
-        update_sparse_checkout_file(repo_path, "packages/a").unwrap();
+        let tree_b = cache
+            .resolve_to_tree(&project.repo_path_str(), &None, Some(PathBuf::from("b")))
+            .await
+            .unwrap();
 
-        assert_snapshot!(std::fs::read_to_string(&sparse_checkout_path).unwrap(), @r###"
-        /*
-        !/*/
-        /packages/a/
-        "###);
+        tree_a.fetch().await.unwrap();
+        tree_b.fetch().await.unwrap();
+
+        assert_exactly_paths(tree_a.repo_fs_path(), ["a/Move.toml", "b/Move.toml"]);
     }
 
-    /// If something else has been added to the sparse-checkout file, the new path is appended
-    #[test]
-    fn test_update_sparse_checkout_different() {
-        let initial_contents = indoc!(
-            r###"
-            /*
-            !/*/
-            /packages/pkg_a/
-            "###
-        );
+    /// Checking out the root and a subtree works
+    #[test(tokio::test)]
+    async fn test_sparse_checkout_root_and_subdir() {
+        let project = git::new().await;
+        let _commit = project
+            .commit(|proj| proj.add_packages(["a", "b", "c"]))
+            .await;
 
-        let tempdir = tempdir().unwrap();
-        let repo_path = tempdir.path();
-        let sparse_checkout_path = repo_path.join(".git").join("info").join("sparse-checkout");
-        std::fs::create_dir_all(sparse_checkout_path.parent().unwrap()).unwrap();
-        std::fs::write(&sparse_checkout_path, initial_contents).unwrap();
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+        let tree_a = cache
+            .resolve_to_tree(&project.repo_path_str(), &None, Some(PathBuf::from("a")))
+            .await
+            .unwrap();
 
-        update_sparse_checkout_file(repo_path, "packages/pkg_b").unwrap();
+        let tree_root = cache
+            .resolve_to_tree(&project.repo_path_str(), &None, Some(PathBuf::from("")))
+            .await
+            .unwrap();
 
-        assert_snapshot!(std::fs::read_to_string(&sparse_checkout_path).unwrap(), @r###"
-        /*
-        !/*/
-        /packages/pkg_a/
-        /packages/pkg_b/
-        "###);
-    }
+        tree_root.fetch().await.unwrap();
+        tree_a.fetch().await.unwrap();
 
-    /// Readding the same path doesn't change the sparse checkout file
-    #[test]
-    fn test_update_sparse_checkout_same() {
-        let initial_contents = indoc!(
-            r###"
-            /*
-            !/*/
-            /packages/pkg_a/
-            /packages/pkg_b/
-            /packages/pkg_c/
-            "###
-        );
-
-        let tempdir = tempdir().unwrap();
-        let repo_path = tempdir.path();
-        let sparse_checkout_path = repo_path.join(".git").join("info").join("sparse-checkout");
-        std::fs::create_dir_all(sparse_checkout_path.parent().unwrap()).unwrap();
-        std::fs::write(&sparse_checkout_path, initial_contents).unwrap();
-
-        update_sparse_checkout_file(repo_path, "packages/pkg_b").unwrap();
-
-        assert_eq!(
-            std::fs::read_to_string(&sparse_checkout_path).unwrap(),
-            initial_contents
+        assert_exactly_paths(
+            tree_a.repo_fs_path(),
+            ["a/Move.toml", "b/Move.toml", "c/Move.toml"],
         );
     }
 
-    /// Adding "" removes the sparse checkout file
-    #[test]
-    fn test_update_sparse_checkout_add_root() {
-        let initial_contents = indoc!(
-            r###"
-            /*
-            !/*/
-            /packages/pkg_a/
-            "###
-        );
+    /// Checking out a deep subtree works
+    #[test(tokio::test)]
+    async fn test_sparse_checkout_deep() {
+        let project = git::new().await;
+        let _commit = project
+            .commit(|proj| {
+                proj.add_package("a", |a| {
+                    a.add_file("b/c/d/Move.toml", "# toml contents")
+                        .add_file("e/Move.toml", "# ignored")
+                })
+            })
+            .await;
 
-        let tempdir = tempdir().unwrap();
-        let repo_path = tempdir.path();
-        let sparse_checkout_path = repo_path.join(".git").join("info").join("sparse-checkout");
-        std::fs::create_dir_all(sparse_checkout_path.parent().unwrap()).unwrap();
-        std::fs::write(&sparse_checkout_path, initial_contents).unwrap();
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+        let tree_d = cache
+            .resolve_to_tree(
+                &project.repo_path_str(),
+                &None,
+                Some(PathBuf::from("a/b/c/d")),
+            )
+            .await
+            .unwrap();
 
-        update_sparse_checkout_file(repo_path, "").unwrap();
-        assert!(!sparse_checkout_path.exists());
-    }
+        tree_d.fetch().await.unwrap();
 
-    /// If the sparse checkout file has been deleted, it stays deleted
-    #[test]
-    fn test_update_sparse_checkout_deleted() {
-        let tempdir = tempdir().unwrap();
-        let repo_path = tempdir.path();
-        let sparse_checkout_path = repo_path.join(".git").join("info").join("sparse-checkout");
-        std::fs::create_dir_all(sparse_checkout_path.parent().unwrap()).unwrap();
-        update_sparse_checkout_file(repo_path, "packages/a").unwrap();
-        assert!(!sparse_checkout_path.exists());
+        // note that `a/Move.toml` should be included because git sparse-checkout always includes
+        // the files in directories that are on the path to the added files, but `a/e/Move.toml`
+        // should not
+        assert_exactly_paths(tree_d.repo_fs_path(), ["a/b/c/d/Move.toml", "a/Move.toml"]);
     }
 }
