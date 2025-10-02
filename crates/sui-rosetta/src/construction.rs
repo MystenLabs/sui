@@ -11,7 +11,7 @@ use fastcrypto::hash::HashFunction;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{
-    simulate_transaction_request::TransactionChecks, ExecuteTransactionRequest,
+    simulate_transaction_request::TransactionChecks, Bcs, ExecuteTransactionRequest,
     SimulateTransactionRequest, Transaction, UserSignature,
 };
 
@@ -153,12 +153,9 @@ pub async fn submit(
         .map(UserSignature::from)
         .collect();
 
-    let proto_transaction: Transaction = signed_tx
-        .into_data()
-        .into_inner()
-        .intent_message
-        .value
-        .into();
+    let tx_data = signed_tx.into_data().into_inner().intent_message.value;
+    let proto_transaction =
+        Transaction::default().with_bcs(Bcs::default().with_value(bcs::to_bytes(&tx_data)?));
 
     // According to RosettaClient.rosseta_flow() (see tests), this transaction has already passed
     // through a dry_run with a possibly invalid budget (metadata endpoint), but the requirements
