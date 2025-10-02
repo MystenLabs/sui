@@ -331,7 +331,6 @@ mod tests {
         let commit_watermark_handle = commit_watermark::<H>(
             next_checkpoint,
             config,
-            false,
             watermark_rx,
             store_clone,
             None, // task

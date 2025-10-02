@@ -263,10 +263,51 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
-        // If this is not a tasked indexer, we're dealing with main pipelines. Check that the
-        // `--first-checkpoint` is not greater than any main pipeline's committer watermark, as this
-        // would create a gap in the indexed data.
-        let next_checkpoint = if self.task.is_none() {
+        let next_checkpoint = if let Some(task) = self.task.as_deref() {
+            // maybe this isn't even needed ... we can just warn in commit_watermark or something
+            let mut conn = self
+                .store
+                .connect()
+                .await
+                .context("Failed to establish connection to store")?;
+
+            let main_reader_watermark = conn
+                .reader_watermark(H::NAME, self.task.as_deref())
+                .await
+                .context("Failed to get reader watermark")?;
+
+            let working_checkpoint = match (watermark, self.first_checkpoint) {
+                (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
+                // hmm.. tasked pipelines are a little diff in that, even once we set the correct checkpoint to resume
+                // by the time we've ingested up to that checkpoint, maybe the retention of the main pipeline has shifted
+                // so we need to account for that...
+                (_, Some(first_checkpoint)) => {
+                    let main_reader_lo = main_reader_watermark.unwrap_or_default().reader_lo;
+                    let resume = first_checkpoint.max(main_reader_lo);
+
+                    if first_checkpoint < main_reader_lo {
+                        warn!(
+                            pipeline = H::NAME,
+                            task = task,
+                            requested_first_checkpoint = first_checkpoint,
+                            main_reader_lo = main_reader_lo,
+                            actual_start_checkpoint = resume,
+                            "first_checkpoint is below main pipeline's reader_lo. \
+                             Starting tasked pipeline from main pipeline's reader_lo to avoid data gaps."
+                        );
+                    }
+
+                    resume
+                }
+                (None, None) => 0,
+            };
+
+            working_checkpoint
+        } else {
+            // If this is not a tasked indexer, we're dealing with main pipelines. Check that the
+            // `--first-checkpoint` is not greater than any main pipeline's committer watermark, as
+            // this would create a gap in the indexed data.
+            //
             // If `first_checkpoint` does not violate the consistency check, concurrent pipelines will
             // prefer to resume from the `first_checkpoint` if configured.
             match (watermark, self.first_checkpoint) {
@@ -282,15 +323,6 @@ impl<S: Store> Indexer<S> {
                     first_checkpoint
                 }
                 (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
-                (_, Some(first_checkpoint)) => first_checkpoint,
-                (None, None) => 0,
-            }
-        } else {
-            match (watermark, self.first_checkpoint) {
-                // If the tasked pipeline has an existing watermark, always resume from the next checkpoint after that.
-                (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
-                // Prefer first_checkpoint, but need to make sure it's >= main pipeline reader_lo ... can actually be > committer_hi
-                // Or ... why not just warn, and since we have main pipeline reader lo, set the next_checkpoint = main pipeline reader lo + buffer?
                 (_, Some(first_checkpoint)) => first_checkpoint,
                 (None, None) => 0,
             }

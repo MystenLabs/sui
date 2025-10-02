@@ -102,11 +102,12 @@ pub trait Connection: Send {
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
 
-    /// Update the pruner watermark, returns true if the watermark was actually updated
+    /// Update the pruner watermark for the main pipeline and any task pipelines provided ...
+    /// returns true if the watermark was actually updated
     async fn set_pruner_watermark(
+        // TODO (wlmyng)
         &mut self,
         pipeline: &'static str,
-        task: Option<&str>,
         pruner_hi: u64,
     ) -> anyhow::Result<bool>;
 }

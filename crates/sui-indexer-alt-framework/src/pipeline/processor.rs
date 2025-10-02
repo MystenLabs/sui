@@ -50,6 +50,27 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
+    // or maybe here, so we dont even spend cpu
+    // only need to check while we're behind the main pipeline
+    // when task current checkpoint > main reader lo...
+    // so i guess we'd periodically check task's checkpoint_hi_inclusive?
+
+    // not sure if we could filter out at ingestion level
+    // but maybe on startup, instead of constantly checking ... main reader_lo + safe enough buffer?
+
+    // Given that tasked indexers are typically used for backfills (not continuous operation), the
+    // performance cost of checking main_reader_lo might be acceptable. The alternative is risking
+    // data corruption, which is much worse.
+
+    // possibly, don't even need a new method of fetching main reader lo in tandem with task ...
+
+    // just need a new method fetching main pipeline and task pipeline's reader_los ... then
+    // adjusting, on conflict do nothing if excluded < existing
+    // Get all task pipelines
+    // update reader_lo, maybe pruner_hi
+    // and only when main reader_lo advances, and only if new reader_lo > existing task reader_lo
+    // could bump pruner_hi, but don't need to set pruner_timestamp on tasks
+
     tokio::spawn(async move {
         info!(pipeline = P::NAME, "Starting processor");
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<P>(
