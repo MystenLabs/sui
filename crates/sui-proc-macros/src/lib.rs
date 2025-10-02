@@ -73,7 +73,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                         use std::path::PathBuf;
                         use sui_simulator::sui_move_build::BuildConfig;
                         use sui_simulator::tempfile::TempDir;
-    
+
                         let mut path = PathBuf::from(env!("SIMTEST_STATIC_INIT_MOVE"));
                         let mut build_config = BuildConfig::new_for_testing();
                         build_config.config.install_dir = Some(TempDir::new().unwrap().keep());

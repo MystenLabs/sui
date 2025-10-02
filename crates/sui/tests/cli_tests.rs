@@ -28,6 +28,7 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
+use tempfile::TempDir;
 use tokio::time::sleep;
 
 use move_package_alt::schema::ParsedPublishedFile;
@@ -515,17 +516,14 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
-    // Provide path to well formed package sources
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("ptb_complex_args_test_functions");
-    let orig_toml = update_toml_with_localnet_chain_id(
-        &package_path.join("Move.toml"),
-        client.read_api().get_chain_identifier().await.unwrap(),
-    );
+    let chain_id = client.read_api().get_chain_identifier().await.unwrap();
+    let (_tmp, pkg_path) =
+        create_temp_dir_with_framework_packages("ptb_complex_args_test_functions", Some(chain_id))?;
+
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
-            package_path: package_path.clone(),
+            package_path: pkg_path.clone(),
             build_config,
             skip_dependency_verification: false,
             verify_deps: true,
@@ -544,8 +542,6 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     })
     .execute(context)
     .await;
-
-    restore_orig_toml(&package_path.join("Move.toml"), orig_toml);
 
     let resp = resp?;
     // Print it out to CLI/logs
@@ -636,14 +632,9 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let client = context.get_client().await?;
-    let temp_dir = tempdir()?.keep();
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("ptb_publish");
-    copy_dir_all(&package_path, &temp_dir).unwrap();
-    let _ = update_toml_with_localnet_chain_id(
-        &temp_dir.join("Move.toml"),
-        client.read_api().get_chain_identifier().await.unwrap(),
-    );
+
+    let chain_id = client.read_api().get_chain_identifier().await.unwrap();
+    let (_tmp, pkg_path) = create_temp_dir_with_framework_packages("ptb_publish", Some(chain_id))?;
 
     let publish_ptb_string = format!(
         r#"
@@ -654,7 +645,7 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
          --transfer-objects "[upgrade_cap]" sender
          --gas-budget 50000000
         "#,
-        temp_dir.display()
+        pkg_path.display()
     );
     let args = shlex::split(&publish_ptb_string).unwrap();
     let res = sui::client_ptb::ptb::PTB { args: args.clone() }
@@ -1135,9 +1126,9 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     // Provide path to well formed package sources
-
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("dummy_modules_publish");
+    let chain_id = client.read_api().get_chain_identifier().await.unwrap();
+    let (_tmp, package_path) =
+        create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
 
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
@@ -1220,24 +1211,9 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
 
     let build_config = BuildConfig::new_for_testing().config;
 
-    // make temp dir for test pkg and sui-framework packages
-    let tempdir = tempdir()?.keep();
-    let pkg_path = &tempdir.join("test");
-    // copy test pkg
-    copy_dir_all(
-        PathBuf::from(TEST_DATA_DIR).join("pkg_mgmt_modules_publish"),
-        pkg_path,
-    )
-    .expect("to copy the test pkg from dir to a temp dir");
-    // copy framework packages as the test pkg depends on them
-    let framework_pkgs = PathBuf::from("../sui-framework/packages");
-    copy_dir_all(
-        framework_pkgs,
-        tempdir.join("sui-framework").join("packages"),
-    )?;
+    let (_tmp, pkg_path) =
+        create_temp_dir_with_framework_packages("pkg_mgmt_modules_publish", Some(chain_id))?;
 
-    // we want to do a non ephemeral publication, so set localnet as environment in toml file
-    let _ = update_toml_with_localnet_chain_id(&pkg_path.join("Move.toml"), chain_id);
     // Publish the package
     let resp = SuiClientCommands::Publish(PublishArgs {
         package_path: pkg_path.clone(),
@@ -2444,29 +2420,12 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
-    // Provide path to well formed package sources
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("dummy_modules_upgrade");
-
-    // make temp dir for test pkg and sui-framework packages
-    let tempdir = tempdir()?.keep();
-    let pkg_path = &tempdir.join("test");
-    // copy test pkg
-    copy_dir_all(&package_path, pkg_path)
-        .expect("to copy the test pkg from data dir to a temp dir");
-    // copy framework packages as the test pkg depends on them
-    let framework_pkgs = PathBuf::from("../sui-framework/packages");
-    copy_dir_all(
-        framework_pkgs,
-        tempdir.join("sui-framework").join("packages"),
-    )?;
-
-    // we want to do a non ephemeral publication, so set localnet as environment in toml file
-    let _ = update_toml_with_localnet_chain_id(&pkg_path.join("Move.toml"), chain_id.clone());
+    let (_tmp, package_path) =
+        create_temp_dir_with_framework_packages("dummy_modules_upgrade", Some(chain_id))?;
 
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish(PublishArgs {
-        package_path: pkg_path.clone(),
+        package_path: package_path.clone(),
         build_config: build_config.clone(),
         skip_dependency_verification: false,
         verify_deps: true,
@@ -2494,7 +2453,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
 
     // Now run the upgrade
     let upgrade_response = SuiClientCommands::Upgrade {
-        package_path: pkg_path.to_path_buf(),
+        package_path: package_path.to_path_buf(),
         upgrade_capability: None,
         build_config: build_config.clone(),
         verify_compatibility: true,
@@ -2532,7 +2491,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
             unreachable!("Invalid response");
         };
 
-    let published_file_str = std::fs::read_to_string(pkg_path.join("Published.toml")).unwrap();
+    let published_file_str = std::fs::read_to_string(package_path.join("Published.toml")).unwrap();
     let published_file: ParsedPublishedFile<SuiFlavor> =
         toml_edit::de::from_str(&published_file_str).expect("to deserialize published file");
     let data = published_file
@@ -5453,6 +5412,34 @@ async fn test_party_transfer_gas_object_as_transfer_object() -> Result<(), anyho
     Ok(())
 }
 
+// Creates a temp directory in which the test pkg and framework packages are copied into
+// so that we can run operations
+fn create_temp_dir_with_framework_packages(
+    // The "folder" name of the test pkg.
+    test_pkg_name: &str,
+    // Optionally pass in the chain-id if we wanna set a non-test environment for tests.
+    chain_id: Option<String>,
+) -> Result<(TempDir, PathBuf), anyhow::Error> {
+    let temp = tempdir()?;
+
+    let tempdir = temp.path().to_path_buf();
+    let pkg_path = &tempdir.join("test");
+
+    copy_dir_all(PathBuf::from(TEST_DATA_DIR).join(test_pkg_name), pkg_path)
+        .expect("to copy the test pkg from data dir to a temp dir");
+
+    copy_dir_all(
+        PathBuf::from("../sui-framework/packages"),
+        tempdir.join("sui-framework").join("packages"),
+    )?;
+
+    if let Some(chain_id) = chain_id {
+        update_toml_with_localnet_chain_id(&pkg_path.join("Move.toml"), chain_id);
+    }
+
+    Ok((temp, pkg_path.clone()))
+}
+
 fn update_toml_with_localnet_chain_id(toml_path: &PathBuf, chain_id: String) -> String {
     let orig_toml = std::fs::read_to_string(toml_path).unwrap();
     let mut toml = OpenOptions::new().append(true).open(toml_path).unwrap();
@@ -5464,8 +5451,4 @@ fn update_toml_with_localnet_chain_id(toml_path: &PathBuf, chain_id: String) -> 
     .unwrap();
 
     orig_toml
-}
-
-fn restore_orig_toml(toml_path: &PathBuf, orig_toml: String) {
-    std::fs::write(toml_path, orig_toml).unwrap()
 }

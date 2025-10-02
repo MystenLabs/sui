@@ -99,6 +99,11 @@ pub struct BuildConfig {
     #[clap(skip)]
     pub force_lock_file: bool,
 
+    /// Forces the `root` package to have `0x0` as its address, instead of the published
+    /// address (if it exists). Useful for `upgrade` operations (or any other cases we might want to..)
+    #[clap(skip)]
+    pub root_as_zero: bool,
+
     #[clap(
         long = "environment",
         short = 'e',

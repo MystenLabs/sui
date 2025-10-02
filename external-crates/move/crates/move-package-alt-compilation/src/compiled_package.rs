@@ -188,23 +188,48 @@ impl CompiledPackage {
     }
 }
 
+impl BuildNamedAddresses {
+    /// For "publish"/"upgrade" operations, we want root to always be `0x0`.
+    pub fn root_as_zero(value: BTreeMap<PackageName, NamedAddress>) -> Self {
+        Self {
+            inner: format_named_addresses(value, true /* root as zero */),
+        }
+    }
+}
+
 impl From<BTreeMap<PackageName, NamedAddress>> for BuildNamedAddresses {
     fn from(value: BTreeMap<PackageName, NamedAddress>) -> Self {
-        let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
-        for (dep_name, dep) in value {
-            let name = dep_name.as_str().into();
-
-            let addr = match dep {
-                NamedAddress::RootPackage(Some(addr)) => addr.0,
-                NamedAddress::RootPackage(None) => AccountAddress::ZERO,
-                NamedAddress::Unpublished { dummy_addr } => dummy_addr.0,
-                NamedAddress::Defined(original_id) => original_id.0,
-            };
-
-            let addr: NumericalAddress =
-                NumericalAddress::new(addr.into_bytes(), move_compiler::shared::NumberFormat::Hex);
-            addresses.insert(name, addr);
+        Self {
+            inner: format_named_addresses(value, false /* root as zero */),
         }
-        Self { inner: addresses }
     }
+}
+
+fn format_named_addresses(
+    value: BTreeMap<PackageName, NamedAddress>,
+    root_as_zero: bool,
+) -> BTreeMap<Symbol, NumericalAddress> {
+    let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
+    for (dep_name, dep) in value {
+        let name = dep_name.as_str().into();
+
+        let addr = match dep {
+            NamedAddress::RootPackage(Some(addr)) => {
+                if root_as_zero {
+                    AccountAddress::ZERO
+                } else {
+                    addr.0
+                }
+            }
+            NamedAddress::RootPackage(None) => AccountAddress::ZERO,
+            NamedAddress::Unpublished { dummy_addr } => dummy_addr.0,
+            NamedAddress::Defined(original_id) => original_id.0,
+        };
+
+        let addr: NumericalAddress =
+            NumericalAddress::new(addr.into_bytes(), move_compiler::shared::NumberFormat::Hex);
+        addresses.insert(name, addr);
+    }
+
+    addresses
 }

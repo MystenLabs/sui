@@ -358,7 +358,11 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
         }
 
-        let addresses: BuildNamedAddresses = pkg.named_addresses()?.into();
+        let addresses: BuildNamedAddresses = if build_config.root_as_zero {
+            BuildNamedAddresses::root_as_zero(pkg.named_addresses()?)
+        } else {
+            pkg.named_addresses()?.into()
+        };
 
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {
