@@ -1,0 +1,70 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-45:
+//# publish
+warning[W09002]: unused variable
+   ┌─ /var/folders/0_/j3dn9z3j3213833kj0q00hrc0000gp/T/.tmpPRcE9Q:19:28
+   │
+19 │ public fun heat_via_shared(a: &A, obj: Shared, _: &mut TxContext): Shared {
+   │                            ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ /var/folders/0_/j3dn9z3j3213833kj0q00hrc0000gp/T/.tmpPRcE9Q:22:17
+   │
+22 │ public fun heat(a: &A): Hot {
+   │                 ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7166800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 47-51:
+//# programmable --sender A --inputs @A
+//> test::m::a();
+//> sui::transfer::public_transfer<test::m::A>(Result(0), Input(0));
+//> test::m::a();
+//> sui::transfer::public_transfer<test::m::A>(Result(2), Input(0));
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3404800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 53-54:
+//# programmable --sender A
+//> test::m::share();
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 56-62:
+//# programmable --sender A --inputs object(2,0) object(3,0)
+// invalid even though the shared object and hot potato are gone
+//> 0: test::m::heat(Input(0));
+//> 1: test::m::heat_via_shared(Input(0), Input(1));
+//> test::m::reshare(Result(1));
+//> test::m::cool(Result(0));
+//> test::m::delete_a(Input(0));
+mutated: object(0,0), object(3,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3408372, non_refundable_storage_fee: 34428
+
+task 5, lines 64-70:
+//# programmable --sender A --inputs object(2,1) object(3,0)
+// invalid even though the shared object and hot potato are gone
+//> 0: test::m::heat_via_shared(Input(0), Input(1));
+//> 1: test::m::heat(Input(0));
+//> test::m::cool(Result(1));
+//> test::m::reshare(Result(0));
+//> test::m::delete_a(Input(0));
+mutated: object(0,0), object(3,0)
+deleted: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3408372, non_refundable_storage_fee: 34428

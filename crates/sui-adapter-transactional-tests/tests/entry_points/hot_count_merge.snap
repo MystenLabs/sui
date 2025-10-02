@@ -1,0 +1,160 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-58:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8033200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 60-78:
+//# programmable --sender A --inputs @A
+// Entangled before being made hot multiple times, should fail
+//> 0: test::m::a();
+//> 1: test::m::b();
+//> 2: test::m::c();
+//> 3: test::m::d();
+//> 4: test::m::entangle<test::m::A, test::m::B>(Result(0), Result(1));
+//> 5: test::m::entangle<test::m::C, test::m::D>(Result(2), Result(3));
+//> 6: test::m::entangle<test::m::B, test::m::C>(Result(1), Result(2));
+//> 7: test::m::heat<test::m::A>(Result(0));
+//> 8: test::m::heat<test::m::B>(Result(1));
+//> 9: test::m::heat<test::m::C>(Result(2));
+//> 10: test::m::heat<test::m::D>(Result(3));
+//> test::m::cool(Result(8));
+//> test::m::cool(Result(9));
+//> test::m::cool(Result(10));
+//> test::m::play<test::m::D>(Result(3));
+//> test::m::cool(Result(7));
+//> test::m::close(Result(0), Result(1), Result(2), Result(3));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(14) } }
+
+task 3, lines 80-101:
+//# programmable --sender A --inputs @A
+// Entangled before being made hot multiple times, succeeds since all cooled
+//> 0: test::m::a();
+//> 1: test::m::b();
+//> 2: test::m::c();
+//> 3: test::m::d();
+//> 4: test::m::entangle<test::m::A, test::m::B>(Result(0), Result(1));
+//> 5: test::m::entangle<test::m::C, test::m::D>(Result(2), Result(3));
+//> 6: test::m::entangle<test::m::B, test::m::C>(Result(1), Result(2));
+//> 7: test::m::heat<test::m::A>(Result(0));
+//> 8: test::m::heat<test::m::B>(Result(1));
+//> 9: test::m::heat<test::m::C>(Result(2));
+//> 10: test::m::heat<test::m::D>(Result(3));
+//> test::m::cool(Result(7));
+//> test::m::cool(Result(8));
+//> test::m::cool(Result(9));
+//> test::m::cool(Result(10));
+//> test::m::play<test::m::A>(Result(0));
+//> test::m::play<test::m::B>(Result(1));
+//> test::m::play<test::m::C>(Result(2));
+//> test::m::play<test::m::D>(Result(3));
+//> test::m::close(Result(0), Result(1), Result(2), Result(3));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(15) } }
+
+task 4, lines 103-121:
+//# programmable --sender A --inputs @A
+// Entangled after being made hot multiple times, should fail
+//> 0: test::m::a();
+//> 1: test::m::b();
+//> 2: test::m::c();
+//> 3: test::m::d();
+//> 4: test::m::heat<test::m::A>(Result(0));
+//> 5: test::m::heat<test::m::B>(Result(1));
+//> 6: test::m::heat<test::m::C>(Result(2));
+//> 7: test::m::heat<test::m::D>(Result(3));
+//> 8: test::m::entangle<test::m::A, test::m::B>(Result(0), Result(1));
+//> 9: test::m::entangle<test::m::C, test::m::D>(Result(2), Result(3));
+//> 10: test::m::entangle<test::m::B, test::m::C>(Result(1), Result(2));
+//> test::m::cool(Result(4));
+//> test::m::cool(Result(6));
+//> test::m::cool(Result(7));
+//> test::m::play<test::m::D>(Result(3));
+//> test::m::cool(Result(5));
+//> test::m::close(Result(0), Result(1), Result(2), Result(3));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(14) } }
+
+task 5, lines 123-144:
+//# programmable --sender A --inputs @A
+// Entangled after being made hot multiple times, succeeds since all cooled
+//> 0: test::m::a();
+//> 1: test::m::b();
+//> 2: test::m::c();
+//> 3: test::m::d();
+//> 4: test::m::heat<test::m::A>(Result(0));
+//> 5: test::m::heat<test::m::B>(Result(1));
+//> 6: test::m::heat<test::m::C>(Result(2));
+//> 7: test::m::heat<test::m::D>(Result(3));
+//> 8: test::m::entangle<test::m::A, test::m::B>(Result(0), Result(1));
+//> 9: test::m::entangle<test::m::C, test::m::D>(Result(2), Result(3));
+//> 10: test::m::entangle<test::m::B, test::m::C>(Result(1), Result(2));
+//> test::m::cool(Result(4));
+//> test::m::cool(Result(5));
+//> test::m::cool(Result(6));
+//> test::m::cool(Result(7));
+//> test::m::play<test::m::A>(Result(0));
+//> test::m::play<test::m::B>(Result(1));
+//> test::m::play<test::m::C>(Result(2));
+//> test::m::play<test::m::D>(Result(3));
+//> test::m::close(Result(0), Result(1), Result(2), Result(3));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(15) } }
+
+task 6, lines 146-164:
+//# programmable --sender A --inputs @A
+// Entangled before and after being made hot multiple times, should fail
+//> 0: test::m::a();
+//> 1: test::m::b();
+//> 2: test::m::c();
+//> 3: test::m::d();
+//> 4: test::m::heat<test::m::A>(Result(0));
+//> 5: test::m::heat<test::m::B>(Result(1));
+//> 6: test::m::entangle<test::m::A, test::m::B>(Result(0), Result(1));
+//> 7: test::m::entangle<test::m::C, test::m::D>(Result(2), Result(3));
+//> 8: test::m::heat<test::m::C>(Result(2));
+//> 9: test::m::heat<test::m::D>(Result(3));
+//> 10: test::m::entangle<test::m::B, test::m::C>(Result(1), Result(2));
+//> test::m::cool(Result(5));
+//> test::m::cool(Result(8));
+//> test::m::cool(Result(9));
+//> test::m::play<test::m::D>(Result(3));
+//> test::m::cool(Result(4));
+//> test::m::close(Result(0), Result(1), Result(2), Result(3));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(14) } }
+
+task 7, lines 166-187:
+//# programmable --sender A --inputs @A
+// Entangled before and after being made hot multiple times, succeeds since all cooled
+//> 0: test::m::a();
+//> 1: test::m::b();
+//> 2: test::m::c();
+//> 3: test::m::d();
+//> 4: test::m::heat<test::m::A>(Result(0));
+//> 5: test::m::heat<test::m::B>(Result(1));
+//> 6: test::m::entangle<test::m::A, test::m::B>(Result(0), Result(1));
+//> 7: test::m::entangle<test::m::C, test::m::D>(Result(2), Result(3));
+//> 8: test::m::heat<test::m::C>(Result(2));
+//> 9: test::m::heat<test::m::D>(Result(3));
+//> 10: test::m::entangle<test::m::B, test::m::C>(Result(1), Result(2));
+//> test::m::cool(Result(4));
+//> test::m::cool(Result(5));
+//> test::m::cool(Result(8));
+//> test::m::cool(Result(9));
+//> test::m::play<test::m::A>(Result(0));
+//> test::m::play<test::m::B>(Result(1));
+//> test::m::play<test::m::C>(Result(2));
+//> test::m::play<test::m::D>(Result(3));
+//> test::m::close(Result(0), Result(1), Result(2), Result(3));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(15) } }
