@@ -103,15 +103,11 @@ fn collect_pipelines(
         ) => {
             collect_pipelines("IAddressable", field, filters, pipelines);
         }
-
         // An Address can access MoveObjects by getting the object at its address. But IAddressable does
         // not implement IMoveObject because it will incorrectly require MovePackage to implement IMoveObject.
         //
         ("Address", Some("dynamicFields"), filters) => {
             collect_pipelines("IMoveObject", Some("dynamicFields"), filters, pipelines);
-        }
-        ("Address", field, filters) => {
-            collect_pipelines("IAddressable", field, filters, pipelines);
         }
 
         // Checkpoint fields
