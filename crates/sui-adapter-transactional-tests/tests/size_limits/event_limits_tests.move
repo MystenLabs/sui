@@ -18,9 +18,9 @@ module Test::M1 {
 
     // emit an event of size n
     public fun emit_event_with_size(mut n: u64) {
-        // 46 seems to be the added size from event size derivation for `NewValueEvent`
-        assert!(n > 46, 0);
-        n = n - 46;
+        // 48 seems to be the added size from event size derivation for `NewValueEvent`
+        assert!(n > 48, 0);
+        n = n - 48;
         // minimum object size for NewValueEvent is 1 byte for vector length
         assert!(n > 1, 0);
         let mut contents = vector[];
