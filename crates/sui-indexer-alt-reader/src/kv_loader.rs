@@ -28,12 +28,13 @@ use crate::{
     checkpoints::CheckpointKey,
     error::Error,
     events::{StoredTransactionEvents, TransactionEventsKey},
+    grpc_reader::GrpcReader,
     objects::VersionedObjectKey,
     pg_reader::PgReader,
     transactions::TransactionKey,
 };
 
-/// A loader for point lookups in kv stores backed by either Bigtable or Postgres.
+/// A loader for point lookups in kv stores backed by either Bigtable, Postgres, or gRPC.
 /// Supported lookups:
 /// - Objects by id and version
 /// - Checkpoints by sequence number
@@ -42,9 +43,11 @@ use crate::{
 pub enum KvLoader {
     Bigtable(Arc<DataLoader<BigtableReader>>),
     Pg(Arc<DataLoader<PgReader>>),
+    Grpc(Arc<DataLoader<GrpcReader>>),
 }
 
 /// A wrapper for the contents of a transaction, either from Bigtable, Postgres, or just executed.
+#[derive(Clone)]
 pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),
@@ -71,6 +74,10 @@ impl KvLoader {
         Self::Pg(pg_loader)
     }
 
+    pub fn new_with_grpc(grpc_loader: Arc<DataLoader<GrpcReader>>) -> Self {
+        Self::Grpc(grpc_loader)
+    }
+
     pub async fn load_one_object(
         &self,
         id: ObjectID,
@@ -91,6 +98,7 @@ impl KvLoader {
                         })
                 })
                 .transpose(),
+            Self::Grpc(loader) => loader.load_one(key).await,
         }
     }
 
@@ -114,6 +122,7 @@ impl KvLoader {
 
                 Ok(results)
             }
+            Self::Grpc(loader) => loader.load_many(keys).await,
         }
     }
 
@@ -148,6 +157,7 @@ impl KvLoader {
                     Ok((summary, contents, signature))
                 })
                 .transpose(),
+            Self::Grpc(loader) => loader.load_one(key).await,
         }
     }
 
@@ -162,6 +172,7 @@ impl KvLoader {
                 .await?
                 .map(TransactionContents::Bigtable)),
             Self::Pg(loader) => Ok(loader.load_one(key).await?.map(TransactionContents::Pg)),
+            Self::Grpc(loader) => Ok(loader.load_one(key).await?),
         }
     }
 
@@ -186,6 +197,12 @@ impl KvLoader {
                 .into_iter()
                 .map(|(key, stored)| (key.0, TransactionEventsContents::Pg(stored)))
                 .collect()),
+            Self::Grpc(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| (key.0, TransactionEventsContents::Bigtable(stored)))
+                .collect()),
         }
     }
 
@@ -209,6 +226,12 @@ impl KvLoader {
                 .await?
                 .into_iter()
                 .map(|(key, stored)| (key.0, TransactionContents::Pg(stored)))
+                .collect()),
+            Self::Grpc(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| (key.0, stored))
                 .collect()),
         }
     }
