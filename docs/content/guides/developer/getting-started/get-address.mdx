@@ -4,8 +4,6 @@ description: You need an address on the Sui network before you can start trading
 keywords: [ get an address, sui address, how to get sui address, sui wallets, slush, suiet, glass wallet, martian extension, surf wallet, private keys ]
 ---
 
-## Create a Sui address
-
 An _address_ is a unique, anonymous identity on a blockchain network. On Sui, an address specifically represents a location on-chain that owns objects. Addresses on Sui are used for:
 
 - Holding and sending tokens 
@@ -30,7 +28,7 @@ Every address is derived from a public key generated using a cryptographic hash 
 
 :::caution 
 
-If you already created a new address in [configure a Sui client](/guides/developer/getting-started/configure-sui-client.mdx), you can skip to [Using the Testnet SUI faucet](/guides/developer/getting-started/get-coins.mdx) to continue the onboarding steps.
+If you already created a new address in [Configure a Sui Client](/guides/developer/getting-started/configure-sui-client.mdx), you can skip to [Using the Testnet SUI faucet](/guides/developer/getting-started/get-coins.mdx) to continue the onboarding steps.
 
 :::
 
@@ -44,7 +42,7 @@ If you already created a new address in [configure a Sui client](/guides/develop
 </TabItem>
 </Tabs>
 
-By default, when the Sui client runs for the first time, it will prompt you to [configure the client](/guides/developer/getting-started/configure-sui-client.mdx). This initial configuration generates a new Sui address, its key pair, and its associated secret recovery phrase. Make sure you write down the secret recovery phrase and store it in a safe place. 
+By default, when the Sui client runs for the first time, it will prompt you to [configure the client](/guides/developer/getting-started/configure-sui-client.mdx). This initial configuration generates a new Sui address, its key pair, and its associated secret recovery phrase. 
 
 To create a new Sui address outside of the initial client configuration, run:
 
@@ -85,14 +83,9 @@ This file will contain content similar to the following:
 
 When a new address is created on your system, a new line will be added to this file that consists of the address's private key. Make sure you do not expose this to anyone, as they can use it to get access to your account.
 
-
-Purpose of Task:
-A separate chapter should be added to clearly explain the connection between the addresses managed by the local keystore in the local PC and the sui.keystore file. 
-Users must understand the fact that only addresses imported to local keystore can be used for local transactions.
-
 ## View all local Sui addresses
 
-The _active address_ is the address the Sui client is currently using. This address will be the owner of any objects you create and transactions you submit, unless otherwise specified with an `--address` flag in a command. 
+The _active address_ is the address the Sui client is currently using. This address will be the owner of any objects you create and transactions you submit, unless otherwise specified with the `--address` flag in a command. 
 
 To view the current active address, use the command:
 

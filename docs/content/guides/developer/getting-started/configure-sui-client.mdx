@@ -1,10 +1,10 @@
 ---
-title: Configure a Sui client
+title: Configure a Sui Client
 description: placeholder
 keywords: [ placeholder ]
 ---
 
-You must [download and install](/guides/developer/getting-started/sui-install.mdx) Sui before you can configure it. You must configure the client because the configuration specifies which network to connect to and which address will send transactions. Once the client is configured after installation, you will not need to alter the configuration unless you'd like to change the network information. 
+You must configure the Sui client before you can use it because the configuration specifies which network to connect to and which address will send transactions. Once the client is configured, you will typically not need to alter the configuration unless you'd like to change the network information. 
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -32,7 +32,7 @@ Run the Sui CLI with the command:
 $ sui client
 ```
 
-The CLI prompts you to create a new Sui address and setup a network environment configuration. This information is stored in the `~/.sui/sui_config/client.yaml` file by default. You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
+The CLI prompts you to create a new Sui address and setup a network environment configuration. This information is stored in the `~/.sui/sui_config/client.yaml` file by default. You can store a `client.yaml` file in a different location, if preferred, and specify its location with the `--client.config` flag. 
 
 The Sui address will have a key stored in a separate file, `~/.sui/sui_config/sui.keystore`. Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
 
@@ -80,7 +80,7 @@ The second prompt configures the network server URL that you'd like to connect t
 Sui full node server URL (Defaults to Sui Testnet if not specified) :
 ```
 
-By default, the Testnet is used if nothing is specified. Using the Testnet is recommended for developers new to Sui that do not have a project already developed and ready for deployment on the Mainnet. 
+By default, the Testnet is used if nothing is specified. Using the Testnet is recommended for developers new to Sui that do not have a project already developed. 
 
 The options are:
 
@@ -88,7 +88,7 @@ The options are:
 
 - `https://fullnode.devnet.sui.io:443`: The RPC URL for the Devnet network. Devnet is not recommended for new Sui developers, as it is better suited for more advanced use cases and data is wiped weekly as part of the network's update process.
 
-- `https://fullnode.mainnet.sui.io:443`: The RPC URL for the Mainnet network. Deploying applications to the Mainnet costs real SUI tokens. 
+- `https://fullnode.mainnet.sui.io:443`: The RPC URL for the Mainnet network. Publishing applications to the Mainnet costs real SUI tokens. 
 
 - `http://0.0.0.0:9000`: The RPC URL for a Localnet network, if configured. [Learn how to setup a local network](/guides/developer/sui-101/local-network.mdx).
 
