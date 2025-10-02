@@ -260,7 +260,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             // all the settlement transactions.
             for txn in settlement_txns {
                 self.execute_system_transaction(txn)
-                    .expect("settlement txn cannot fail");
+                    .expect("settlement txn cannot fail")
+                    .0
+                    .status()
+                    .unwrap();
             }
         }
 
