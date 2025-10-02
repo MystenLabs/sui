@@ -71,7 +71,6 @@ pub fn validate_for_upgrade(
 pub fn validate_for_vm_execution(
     packages: BTreeMap<OriginalId, &verification::ast::Package>,
 ) -> VMResult<()> {
-    // TODO: Nothing else to do, right?
     verify_linkage_and_cyclic_checks(&packages)
 }
 

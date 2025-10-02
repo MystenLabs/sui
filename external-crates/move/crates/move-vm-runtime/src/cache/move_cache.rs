@@ -54,7 +54,14 @@ impl MoveCache {
     // Caching Operations
     // -------------------------------------------
 
-    // TODO: Make this a VM Result
+    /// Add a package to the cache. If the package is already present, this is a no-op.
+    ///
+    /// Important: it is not an error if a package is already present when we go to insert a
+    /// package. This can happen in concurrent scenarios where multiple threads attempt to load the
+    /// same package at the same time -- they could both check that the package is not yet cached
+    /// with `cached_package_at`, and then both proceed to independenctly load and verify the
+    /// package. As the write lock is not held between the `cached_package_at` call and the call to
+    /// `add_to_cache` the package could be inserted by another thread in the meantime.
     pub fn add_to_cache(
         &self,
         package_key: VersionId,
@@ -73,6 +80,8 @@ impl MoveCache {
         package_cache.insert(package_key, Arc::new(package));
     }
 
+    /// Get a package from the cache, if it is present.
+    /// If not present, returns `None`.
     pub fn cached_package_at(&self, package_key: VersionId) -> Option<Arc<Package>> {
         self.package_cache.read().get(&package_key).map(Arc::clone)
     }

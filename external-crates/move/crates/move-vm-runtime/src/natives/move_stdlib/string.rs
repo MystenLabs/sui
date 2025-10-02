@@ -134,7 +134,6 @@ fn native_sub_string(
     native_charge_gas_early_exit!(context, gas_params.base);
 
     if j < i {
-        // TODO: what abort code should we use here?
         return Ok(NativeResult::err(context.gas_used(), 1));
     }
     let cost = gas_params.base + gas_params.per_byte * NumBytes::new((j - i) as u64);
