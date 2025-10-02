@@ -16,7 +16,8 @@ use crate::{
     validator_client_monitor::ValidatorClientMonitor,
 };
 
-pub(crate) const TOP_K_VALIDATORS_DENOMINATOR: usize = 3;
+/// Select validators with latencies within 2% of the lowest latency.
+const SELECT_LATENCY_DELTA: f64 = 0.02;
 
 /// Provides the next target validator to retry operations,
 /// and gathers the errors along with the operations.
@@ -30,7 +31,7 @@ pub(crate) const TOP_K_VALIDATORS_DENOMINATOR: usize = 3;
 ///
 /// This component helps to manager this retry pattern.
 pub(crate) struct RequestRetrier<A: Clone> {
-    remaining_clients: VecDeque<(AuthorityName, Arc<SafeClient<A>>)>,
+    ranked_clients: VecDeque<(AuthorityName, Arc<SafeClient<A>>)>,
     pub(crate) non_retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
     pub(crate) retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
 }
@@ -42,19 +43,16 @@ impl<A: Clone> RequestRetrier<A> {
         tx_type: TxType,
         allowed_validators: Vec<AuthorityName>,
     ) -> Self {
-        let selected_validators = if !allowed_validators.is_empty() {
-            allowed_validators
-        } else {
-            client_monitor.select_shuffled_preferred_validators(
-                &auth_agg.committee,
-                auth_agg.committee.num_members() / TOP_K_VALIDATORS_DENOMINATOR,
-                tx_type,
-            )
-        };
-        let remaining_clients = selected_validators
+        let ranked_validators = client_monitor.select_shuffled_preferred_validators(
+            &auth_agg.committee,
+            tx_type,
+            SELECT_LATENCY_DELTA,
+        );
+        let ranked_clients = ranked_validators
             .into_iter()
+            .filter(|name| allowed_validators.is_empty() || allowed_validators.contains(name))
             .filter_map(|name| {
-                // There is not guarantee that the `selected_validators` are in the `auth_agg.authority_clients` if those are coming from the list
+                // There is not guarantee that the `name` are in the `auth_agg.authority_clients` if those are coming from the list
                 // of `allowed_validators`, as the provided `auth_agg` might have been updated with a new committee that doesn't contain the validator in question.
                 auth_agg
                     .authority_clients
@@ -65,7 +63,7 @@ impl<A: Clone> RequestRetrier<A> {
         let non_retriable_errors_aggregator = StatusAggregator::new(auth_agg.committee.clone());
         let retriable_errors_aggregator = StatusAggregator::new(auth_agg.committee.clone());
         Self {
-            remaining_clients,
+            ranked_clients,
             non_retriable_errors_aggregator,
             retriable_errors_aggregator,
         }
@@ -75,7 +73,7 @@ impl<A: Clone> RequestRetrier<A> {
     pub(crate) fn next_target(
         &mut self,
     ) -> Result<(AuthorityName, Arc<SafeClient<A>>), TransactionDriverError> {
-        if let Some((name, client)) = self.remaining_clients.pop_front() {
+        if let Some((name, client)) = self.ranked_clients.pop_front() {
             return Ok((name, client));
         };
 
@@ -214,8 +212,8 @@ mod tests {
             );
 
             // Should only have 1 remaining client (the known validator)
-            assert_eq!(retrier.remaining_clients.len(), 1);
-            assert_eq!(retrier.remaining_clients[0].0, authorities[0]);
+            assert_eq!(retrier.ranked_clients.len(), 1);
+            assert_eq!(retrier.ranked_clients[0].0, authorities[0]);
         }
 
         println!("Case 2. Only unknown validators are provided");
@@ -230,7 +228,7 @@ mod tests {
             );
 
             // Should have no remaining clients since none of the allowed validators exist
-            assert_eq!(retrier.remaining_clients.len(), 0);
+            assert_eq!(retrier.ranked_clients.len(), 0);
         }
     }
 
