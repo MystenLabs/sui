@@ -24,27 +24,27 @@ Every Sui address is a unique 32-byte identifier and is often encoded in hexadec
 
 Every address is derived from a public key generated using a cryptographic hash function. Each public key has a corresponding private key that is used to access the address and the objects that it owns. An address and its associated key together is an _account_. 
 
-[Learn more about how a Sui address is derived and other cryptography related topics](/concepts/cryptography/transaction-auth/keys-addresses).
+[Learn more about how a Sui address is derived and other cryptography related topics](/concepts/cryptography/transaction-auth/keys-addresses.mdx).
 
 ## Obtain a Sui address 
 
 :::caution 
 
-If you already created a new address in [configure a Sui client](/guides/developer/getting-started/configure-sui-client), you can skip to [Using the Testnet SUI faucet](/guides/developer/getting-started/get-coins) to continue the onboarding steps.
+If you already created a new address in [configure a Sui client](/guides/developer/getting-started/configure-sui-client.mdx), you can skip to [Using the Testnet SUI faucet](/guides/developer/getting-started/get-coins.mdx) to continue the onboarding steps.
 
 :::
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 
-- [x] [Download and install Sui](/guides/developer/getting-started/sui-install).
+- [x] [Download and install Sui](/guides/developer/getting-started/sui-install.mdx).
 
-- [x] [Configure your Sui client](/guides/developer/getting-started/configure-sui-client).
+- [x] [Configure your Sui client](/guides/developer/getting-started/configure-sui-client.mdx).
 
 </TabItem>
 </Tabs>
 
-By default, when the Sui client runs for the first time, it will prompt you to [configure the client](/guides/developer/getting-started/configure-sui-client). This initial configuration generates a new Sui address, its key pair, and its associated secret recovery phrase. Make sure you write down the secret recovery phrase and store it in a safe place. 
+By default, when the Sui client runs for the first time, it will prompt you to [configure the client](/guides/developer/getting-started/configure-sui-client.mdx). This initial configuration generates a new Sui address, its key pair, and its associated secret recovery phrase. Make sure you write down the secret recovery phrase and store it in a safe place. 
 
 To create a new Sui address outside of the initial client configuration, run:
 
@@ -120,7 +120,7 @@ This will return all addresses, along with their alias, public key, key scheme, 
 │ ╰─────────────────┴──────────────────────────────────────────────────────────────────────╯ │
 ```
 
-For more information about the keytool command, see the [Sui Keytool CLI](/references/cli/keytool) documentation.
+For more information about the keytool command, see the [Sui Keytool CLI](/references/cli/keytool.mdx) documentation.
 
 ### Change the active address 
 
@@ -159,7 +159,7 @@ You can use a Sui network explorer to find more information about an address, it
 
 :::danger
 
-Data displayed on an explorer will differ depending on which network your address was created on. If you've followed the [Configure a Sui Client](/guides/developer/getting-started/configure-sui-client) page previously, you will most likely be using the Sui Testnet. Be sure to select the Testnet network on the Sui explorer, such as https://testnet.suivision.xyz/
+Data displayed on an explorer will differ depending on which network your address was created on. If you've followed the [Configure a Sui Client](/guides/developer/getting-started/configure-sui-client.mdx) page previously, you will most likely be using the Sui Testnet. Be sure to select the Testnet network on the Sui explorer, such as https://testnet.suivision.xyz/
 
 :::
 
@@ -171,7 +171,7 @@ $ sui client objects <ADDRESS>
 
 ## Next steps 
 
-Next, [obtain Testnet SUI tokens](/guides/developer/getting-started/get-coins) from the Testnet SUI faucet.
+Next, [obtain Testnet SUI tokens](/guides/developer/getting-started/get-coins.mdx) from the Testnet SUI faucet.
 
-If you already have Testnet SUI, then you can [deploy Hello, world!](/guides/developer/getting-started/hello-world)
+If you already have Testnet SUI, then you can [deploy Hello, world!](/guides/developer/getting-started/hello-world.mdx)
 
