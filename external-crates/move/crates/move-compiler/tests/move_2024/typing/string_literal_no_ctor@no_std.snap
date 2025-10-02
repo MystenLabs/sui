@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04038]: invalid string after type inference
+  ┌─ tests/move_2024/typing/string_literal_no_ctor.move:4:36
+  │
+4 │     fun t0(): std::ascii::String { "hello" }
+  │                                    ^^^^^^^ Could not find constructor for type 'std::ascii::String'
+  │
+  = String literals must be linked against the standard library to be constructed
+
+error[E04038]: invalid string after type inference
+  ┌─ tests/move_2024/typing/string_literal_no_ctor.move:5:37
+  │
+5 │     fun t1(): std::string::String { "hello" }
+  │                                     ^^^^^^^ Could not find constructor for type 'std::string::String'
+  │
+  = String literals must be linked against the standard library to be constructed

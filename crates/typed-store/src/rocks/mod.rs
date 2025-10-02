@@ -976,6 +976,14 @@ impl<K, V> DBMap<K, V> {
         })
     }
 
+    fn start_iter_timer(&self) -> HistogramTimer {
+        self.db_metrics
+            .op_metrics
+            .rocksdb_iter_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer()
+    }
+
     // Creates metrics and context for tracking an iterator usage and performance.
     fn create_iter_context(
         &self,
@@ -985,12 +993,7 @@ impl<K, V> DBMap<K, V> {
         Option<Histogram>,
         Option<RocksDBPerfContext>,
     ) {
-        let timer = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
+        let timer = self.start_iter_timer();
         let bytes_scanned = self
             .db_metrics
             .op_metrics
@@ -1068,7 +1071,11 @@ impl<K, V> DBMap<K, V> {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
                     iter.reverse();
-                    Ok(Box::new(transform_th_iterator(iter, prefix)))
+                    Ok(Box::new(transform_th_iterator(
+                        iter,
+                        prefix,
+                        self.start_iter_timer(),
+                    )))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1562,9 +1569,11 @@ where
             Storage::InMemory(db) => db.iterator(&self.cf, None, None, false),
             #[cfg(tidehunter)]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter((ks, prefix)) => {
-                    Box::new(transform_th_iterator(db.iterator(*ks), prefix))
-                }
+                ColumnFamily::TideHunter((ks, prefix)) => Box::new(transform_th_iterator(
+                    db.iterator(*ks),
+                    prefix,
+                    self.start_iter_timer(),
+                )),
                 _ => unreachable!("storage backend invariant violation"),
             },
         }
@@ -1600,7 +1609,7 @@ where
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter, prefix))
+                    Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1633,7 +1642,7 @@ where
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter, prefix))
+                    Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
