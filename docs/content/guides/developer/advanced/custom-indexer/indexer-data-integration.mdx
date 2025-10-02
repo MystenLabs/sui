@@ -12,7 +12,7 @@ Finally, you need to [deserialize Move events](#deserialize) from raw BCS bytes 
 
 ## Checkpoint data sources {#checkpoint-data-sources}
 
-The `sui-indexer-alt-framework` supports three data sources for accessing Sui blockchain data. For all data sources, indexing framework is using a polling technique to check for new checkpoints, as explained in the "What is a Custom Indexer?" section. Data sources are configured through command-line arguments.
+The `sui-indexer-alt-framework` supports three data sources for accessing Sui blockchain data. For all data sources, the [indexing framework](/concepts/custom-indexing-framework.mdx) is using a polling technique to check for new checkpoints. Data sources are configured through command-line arguments.
 
 ### Remote store
 
@@ -118,10 +118,6 @@ impl Store for MyCustomStore {
 }
 ```
 
-For a complete reference, study the `sui-pg-db` implementation on `Store`:
-
-<ImportContent source="crates/sui-pg-db/src/store.rs" mode="code" impl="Store" />
-
 ###step Implement the `Connection` trait
 
 The `Connection` trait handles watermark operations for pipeline coordination:
@@ -194,6 +190,52 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 ```
+
+### Example: ClickHouse implementation
+
+For a complete working example of BYOS with [ClickHouse](https://clickhouse.com/) (a high-performance columnar database for analytics), see the [example project in the Sui repo](https://github.com/MystenLabs/sui/tree/main/examples/rust/clickhouse-sui-indexer).
+
+<details>
+<summary>
+ClickHouse example README
+</summary>
+<ImportContent source="examples/rust/clickhouse-sui-indexer/README.md" mode="code" style="md" />
+</details>
+
+This example demonstrates:
+
+- **Custom store** implementation using the [ClickHouse Rust client](https://clickhouse.com/docs/integrations/rust).
+- **Watermark persistence** with ClickHouse-specific SQL syntax.
+- **Transaction digest indexing** similar to the built-in PostgreSQL handler.
+
+The example includes three main components:
+
+1. `store.rs` - ClickHouseStore implementing `Store` and `Connection` traits.
+
+    <details>
+    <summary>
+    `store.rs`
+    </summary>
+    <ImportContent source="examples/rust/clickhouse-sui-indexer/src/store.rs" mode="code" />
+    </details>
+
+1. `handlers.rs` - `TxDigest` handler processing checkpoint data.
+
+    <details>
+    <summary>
+    `handlers.rs`
+    </summary>
+    <ImportContent source="examples/rust/clickhouse-sui-indexer/src/handlers.rs" mode="code" />
+    </details>
+
+1. `main.rs` - Manual indexer setup with ClickHouse backend.
+
+    <details>
+    <summary>
+    `main.rs`
+    </summary>
+    <ImportContent source="examples/rust/clickhouse-sui-indexer/src/main.rs" mode="code" />
+    </details>
 
 ## Deserializing Move events {#deserialize}
 
@@ -280,5 +322,3 @@ But in checkpoint data, these events arrive as **raw BCS bytes** that need to be
 
 <RelatedLink to="/concepts/custom-indexing-framework.mdx" />
 <RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />
-<RelatedLink to="/guides/developer/advanced/custom-indexer/indexer-runtime-perf.mdx" />
-<RelatedLink to="/guides/developer/advanced/custom-indexer/indexer-walrus.mdx" />
