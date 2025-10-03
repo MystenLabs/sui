@@ -2352,6 +2352,17 @@ impl From<crate::transaction::CallArg> for Input {
                     message.digest = Some(digest.to_string());
                     InputKind::Receiving
                 }
+                O::SharedObjectV2 {
+                    id,
+                    initial_shared_version,
+                    mutability,
+                } => {
+                    // TODO(address-balances): add full enum to schema
+                    message.object_id = Some(id.to_canonical_string(true));
+                    message.version = Some(initial_shared_version.value());
+                    message.mutable = Some(mutability.is_exclusive());
+                    InputKind::Shared
+                }
             },
             //TODO
             I::FundsWithdrawal(_) => InputKind::Unknown,
