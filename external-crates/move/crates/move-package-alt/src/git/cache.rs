@@ -8,9 +8,10 @@ use std::{
     process::Stdio,
 };
 
+use indoc::formatdoc;
 use path_clean::PathClean;
 use tokio::process::Command;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::schema::GitSha;
 
@@ -414,11 +415,9 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
 
 /// If the given rev is a short sha, clone the repository to a temp dir and return the full sha.
 async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
-    if rev.len() < 7
-        && !rev
-            .chars()
-            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
-    {
+    debug!("try_find_full_sha for `{rev}` in `{repo}`");
+    if rev.chars().any(|c| !c.is_ascii_hexdigit()) {
+        // not a sha!
         return Ok(None);
     }
 
@@ -460,6 +459,17 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
         .replace("\n", "");
 
     debug!("Found full sha {full_sha} for temp git repo {path_to_clone_str}");
+    warn!(
+        "{}",
+        formatdoc!(
+            r###"
+            Using shortened commit sha `{rev}` requires downloading the entire commit history. Consider changing the manifest to use the full 40-character hash:
+
+                {{ git = "{repo}", rev = "{full_sha}", ...}}
+
+            "###
+        )
+    );
 
     Ok(Some(
         GitSha::try_from(full_sha).expect("Git should return correctly formatted shas"),
@@ -542,6 +552,31 @@ mod tests {
 
         // Verify only pkg_a was checked out
         assert_exactly_paths(git_tree.repo_fs_path(), ["pkg_a/Move.toml"]);
+    }
+
+    #[test(tokio::test)]
+    async fn test_sparse_checkout_short_sha() {
+        let project = git::new().await;
+        let commit = project.commit(|project| project.add_packages(["a"])).await;
+
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+
+        // Pass in a short SHA
+        let git_tree = cache
+            .resolve_to_tree(
+                &project.repo_path_str(),
+                &Some(commit.short_sha()),
+                Some(PathBuf::from("a")),
+            )
+            .await
+            .unwrap();
+
+        // Fetch the dependency
+        let _ = git_tree.fetch().await.unwrap();
+
+        // Verify only pkg_a was checked out
+        assert_exactly_paths(git_tree.repo_fs_path(), ["a/Move.toml"]);
     }
 
     #[test(tokio::test)]
