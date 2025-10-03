@@ -1887,7 +1887,7 @@ impl From<&crate::transaction::GasData> for GasPayment {
         let mut message = Self::default();
         message.objects = value
             .payment
-            .into_iter()
+            .iter()
             .map(|obj_ref| obj_ref.to_proto())
             .collect();
         message.owner = Some(value.owner.to_string());
