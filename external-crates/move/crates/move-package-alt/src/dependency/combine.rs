@@ -91,6 +91,7 @@ impl CombinedDependency {
             addresses: None,
             containing_file: file,
             rename_from: default.rename_from,
+            modes: default.modes,
         })
     }
 
@@ -119,6 +120,7 @@ impl CombinedDependency {
             addresses: replacement.addresses,
             containing_file: file,
             rename_from: dep.rename_from,
+            modes: dep.modes,
         }))
     }
 
@@ -141,6 +143,7 @@ impl CombinedDependency {
             addresses: replacement.addresses,
             containing_file: file,
             rename_from: dep.rename_from,
+            modes: dep.modes,
         }))
     }
 }
