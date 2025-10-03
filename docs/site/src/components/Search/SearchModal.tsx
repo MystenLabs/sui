@@ -138,7 +138,7 @@ function ResultsUpdater({
       previousHitsRef.current = results.nbHits;
       onUpdate(indexName, results.nbHits);
     }
-  }, [results?.nbHits, indexName, onUpdate]);
+  }, [results?.nbHits, indexName, onUpdate, results]);
   return null;
 }
 
@@ -155,9 +155,14 @@ export default function MultiIndexSearchModal({
   });
   const [query, setQuery] = React.useState("");
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const searchBoxRef = React.useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      // Focus the search input when modal opens
+      setTimeout(() => {
+        searchBoxRef.current?.focus();
+      }, 300);
     } else {
       document.body.style.overflow = "";
     }
@@ -196,6 +201,7 @@ export default function MultiIndexSearchModal({
                 placeholder={`Search`}
                 query={query}
                 onChange={setQuery}
+                inputRef={searchBoxRef}
               />
               {query.length < 3 && (
                 <p className="text-sm text-sui-gray-5s dark:text-sui-gray-50 pl-4 mb-2 -mt-6">
