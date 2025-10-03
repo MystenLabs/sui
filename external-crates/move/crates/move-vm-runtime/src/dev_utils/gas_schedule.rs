@@ -474,10 +474,7 @@ impl GasMeter for GasStatus<'_> {
         expect_num_elements: NumArgs,
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
-        self.charge_instr_with_size(
-            Opcodes::VEC_UNPACK,
-            u64::from(expect_num_elements).into(),
-        )
+        self.charge_instr_with_size(Opcodes::VEC_UNPACK, u64::from(expect_num_elements).into())
     }
 
     fn charge_vec_swap(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
