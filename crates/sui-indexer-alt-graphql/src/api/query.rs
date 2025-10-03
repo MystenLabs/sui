@@ -483,8 +483,9 @@ impl Query {
     }
 
     /// Configuration for this RPC service.
-    async fn service_config(&self) -> ServiceConfig {
-        ServiceConfig
+    async fn service_config(&self, ctx: &Context<'_>) -> Result<ServiceConfig, RpcError> {
+        let scope = self.scope(ctx)?;
+        Ok(ServiceConfig { scope })
     }
 
     /// Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.

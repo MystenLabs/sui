@@ -209,6 +209,20 @@ type AuthenticatorStateUpdateTransaction {
 }
 
 """
+Checkpoint range for which data is available.
+"""
+type AvailableRange {
+	"""
+	Inclusive lower checkpoint for which data is available.
+	"""
+	first: Checkpoint
+	"""
+	Inclusive upper checkpoint for which data is available.
+	"""
+	last: Checkpoint
+}
+
+"""
 The total balance for a particular coin type.
 """
 type Balance {
@@ -3369,6 +3383,10 @@ type SafeMode {
 }
 
 type ServiceConfig {
+	"""
+	Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
+	"""
+	availableRange(type: String!, field: String, filters: [String!]): AvailableRange!
 	"""
 	Number of elements a paginated connection will return if a page size is not supplied.
 	
