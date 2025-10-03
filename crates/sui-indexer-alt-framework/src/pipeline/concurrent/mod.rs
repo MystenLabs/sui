@@ -11,7 +11,11 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_framework_store_traits::Connection;
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::mpsc,
+    task::JoinHandle,
+    time::{interval, MissedTickBehavior},
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -231,7 +235,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let main_reader_lo_task = main_reader_lo_task::<H>(
         main_reader_lo.clone(),
-        Duration::from_millis(1000),
+        pruner_config.clone(),
         cancel.clone(),
         store.clone(),
     );
@@ -315,7 +319,7 @@ const fn max_chunk_rows<H: Handler>() -> usize {
 
 pub(super) fn main_reader_lo_task<H: Handler + 'static>(
     main_reader_lo: Option<Arc<AtomicU64>>,
-    interval: Duration,
+    config: Option<PrunerConfig>,
     cancel: CancellationToken,
     store: H::Store,
 ) -> JoinHandle<()> {
@@ -325,7 +329,14 @@ pub(super) fn main_reader_lo_task<H: Handler + 'static>(
             return;
         };
 
-        let mut interval = tokio::time::interval(interval);
+        let Some(config) = config else {
+            info!(pipeline = H::NAME, "Skipping main reader lo task");
+            return;
+        };
+
+        let mut interval = interval(config.interval());
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
@@ -335,20 +346,37 @@ pub(super) fn main_reader_lo_task<H: Handler + 'static>(
 
                 _ = interval.tick() => {
                     match store.connect().await {
-                        Ok(mut conn) => match conn.reader_watermark(H::NAME).await {
-                            Ok(Some(main_reader_watermark)) => {
-                                let current_reader_lo = main_reader_watermark.reader_lo;
-                                main_reader_lo.store(current_reader_lo, Ordering::Relaxed);
-                            }
-                            Ok(None) => {
-                                warn!("No reader watermark found");
-                            }
-                            Err(e) => {
-                                warn!("Failed to get reader watermark: {e}");
+                        Ok(mut conn) => {
+                            // Check if we need to refresh immediately due to pruner delay expiration.
+                            match conn.pruner_watermark(H::NAME, config.delay()).await {
+                                Ok(Some(pruner_watermark)) => {
+                                    if let Some(wait_for) = pruner_watermark.wait_for() {
+                                        if wait_for <= Duration::ZERO {
+                                            match conn.reader_watermark(H::NAME).await {
+                                                Ok(Some(main_reader_watermark)) => {
+                                                    let current_reader_lo = main_reader_watermark.reader_lo;
+                                                    main_reader_lo.store(current_reader_lo, Ordering::Relaxed);
+                                                }
+                                                Ok(None) => {
+                                                    warn!(pipeline = H::NAME, "No reader watermark found");
+                                                }
+                                                Err(e) => {
+                                                    warn!(pipeline = H::NAME, "Failed to get reader watermark: {e}");
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Ok(None) => {
+                                    warn!(pipeline = H::NAME, "No pruner watermark found");
+                                }
+                                Err(e) => {
+                                    warn!(pipeline = H::NAME, "Failed to get pruner watermark: {e}");
+                                }
                             }
                         },
                         Err(e) => {
-                            warn!("Failed to connect to store: {e}");
+                            warn!(pipeline = H::NAME, "Failed to connect to store: {e}");
                         }
                     }
                 }
