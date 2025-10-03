@@ -660,7 +660,7 @@ impl Scenario {
 
     pub(crate) async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
         let path = PackagePath::new(self.path_for(package)).unwrap();
-        let mtx = PackageLock::lock().await;
+        let mtx = PackageLock::new().unwrap();
 
         PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment(), &mtx)
             .await
@@ -692,8 +692,6 @@ impl Scenario {
         &self,
         package: impl AsRef<str>,
     ) -> PackageResult<RootPackage<Vanilla>> {
-        let mtx = PackageLock::lock().await;
-
         RootPackage::<Vanilla>::load(self.path_for(package), default_environment(), vec![]).await
     }
 
