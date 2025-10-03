@@ -15,7 +15,6 @@ pub fn exp(
     let mut map: BTreeMap<RegId, Out::Exp> = BTreeMap::new();
     let mut seq = Vec::new();
 
-    println!("STACKLESS BYTECODE BLOCK:\n{}", block);
     for instr in block.instructions {
         match instr {
             SI::Return(trivs) => {
@@ -24,49 +23,86 @@ pub fn exp(
             }
             SI::AssignReg {
                 lhs,
-                rhs: RValue::Call { function, args },
-            } => match &lhs[..] {
-                [] => {
-                    seq.push(Out::Exp::Call(
-                        function.to_string(),
-                        trivials(&mut map, args),
-                    ));
+                rhs: RValue::Call { target, args },
+            } => {
+                let args = trivials(&mut map, args);
+                let call = Out::Exp::Call(target, args);
+                match &lhs[..] {
+                    [] => {
+                        seq.push(call);
+                    }
+                    [reg] => {
+                        map.insert(reg.name, call);
+                    }
+                    _ => {
+                        let tmps = lhs
+                            .into_iter()
+                            .map(|reg| {
+                                let tmp = reg.name();
+                                map.insert(reg.name, Out::Exp::Variable(tmp.clone()));
+                                tmp
+                            })
+                            .collect();
+                        seq.push(Out::Exp::Assign(tmps, Box::new(call)));
+                    }
                 }
-                [reg] => {
-                    let call = Out::Exp::Call(function.to_string(), trivials(&mut map, args));
-                    map.insert(reg.name, call);
-                }
-                _ => {
-                    let tmps = lhs
-                        .into_iter()
-                        .map(|reg| {
-                            let tmp = format!("tmp{}", reg);
-                            map.insert(reg.name, Out::Exp::Variable(tmp.clone()));
-                            tmp
-                        })
-                        .collect();
-                    seq.push(Out::Exp::Assign(
-                        tmps,
-                        Box::new(Out::Exp::Call(
-                            function.to_string(),
-                            trivials(&mut map, args.clone()),
-                        )),
-                    ));
-                }
-            },
+            }
             SI::AssignReg {
-                lhs: _,
+                lhs,
+                rhs:
+                    RValue::Data {
+                        op: DataOp::Unpack(ty),
+                        args,
+                    },
+            } => {
+                let fields = &ty.struct_.fields.0;
+                debug_assert!(fields.len() == lhs.len());
+                assert!(args.len() == 1);
+                let unpack_fields = fields
+                    .iter()
+                    .zip(lhs.iter())
+                    .map(|(f, r)| (f.1.name, r.name()))
+                    .collect::<Vec<_>>();
+                let module_id = ty.struct_.defining_module;
+                let name = ty.struct_.name;
+                let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
+                seq.push(Out::Exp::Unpack((module_id, name), unpack_fields, rhs));
+            }
+            SI::AssignReg {
+                lhs,
                 rhs:
                     RValue::Data {
                         op:
-                            DataOp::Unpack(_)
-                            | DataOp::UnpackVariant(_)
+                            op @ (DataOp::UnpackVariant(_)
                             | DataOp::UnpackVariantImmRef(_)
-                            | DataOp::UnpackVariantMutRef(_),
-                        args: _,
+                            | DataOp::UnpackVariantMutRef(_)),
+                        args,
                     },
             } => {
-                todo!()
+                let (ty, unpack_kind) = match op {
+                    DataOp::UnpackVariant(ty) => (ty, Out::UnpackKind::Value),
+                    DataOp::UnpackVariantImmRef(ty) => (ty, Out::UnpackKind::ImmRef),
+                    DataOp::UnpackVariantMutRef(ty) => (ty, Out::UnpackKind::MutRef),
+                    _ => unreachable!(),
+                };
+                let fields = &ty.variant.fields.0;
+                debug_assert!(fields.len() == lhs.len());
+                assert!(args.len() == 1);
+                let unpack_fields = fields
+                    .iter()
+                    .zip(lhs.iter())
+                    .map(|(f, r)| (*f.0, r.name()))
+                    .collect::<Vec<_>>();
+                let module_id = ty.enum_.defining_module;
+                let enum_ = ty.enum_.name;
+                let variant = ty.variant.name;
+                let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
+                seq.push(Out::Exp::UnpackVariant(
+                    unpack_kind,
+                    (module_id, enum_, variant),
+                    unpack_fields,
+                    rhs,
+                ));
             }
             SI::AssignReg {
                 lhs: _,
@@ -90,9 +126,9 @@ pub fn exp(
             SI::StoreLoc { loc, value } => {
                 let triv = trivial(&mut map, value);
                 if let_binds.insert(loc) {
-                    seq.push(Out::Exp::LetBind(vec![format!("l{}", loc)], Box::new(triv)));
+                    seq.push(Out::Exp::LetBind(vec![local_name(loc)], Box::new(triv)));
                 } else {
-                    seq.push(Out::Exp::Assign(vec![format!("l{}", loc)], Box::new(triv)));
+                    seq.push(Out::Exp::Assign(vec![local_name(loc)], Box::new(triv)));
                 }
             }
 
@@ -144,13 +180,19 @@ fn trivials(map: &mut BTreeMap<RegId, Out::Exp>, trivs: Vec<Trivial>) -> Vec<Out
 
 fn trivial(map: &mut BTreeMap<RegId, Out::Exp>, triv: Trivial) -> Out::Exp {
     match triv {
+        // If it is not there, just use the register as-is: it probably came from an unpack or a
+        // call with multiple return values.
         Trivial::Register(reg_id) => map
             .remove(&reg_id.name)
-            .unwrap_or_else(|| panic!("Register {reg_id} not found")),
+            .unwrap_or_else(|| Out::Exp::Variable(reg_id.to_string())),
         Trivial::Immediate(value) => Out::Exp::Value(value),
     }
 }
 
+fn local_name(id: usize) -> String {
+    format!("l{}", id)
+}
+
 fn local(id: usize) -> Out::Exp {
-    Out::Exp::Variable(format!("l{}", id))
+    Out::Exp::Variable(local_name(id))
 }

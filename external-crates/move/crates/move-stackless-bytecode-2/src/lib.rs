@@ -20,17 +20,20 @@ pub(crate) mod utils;
 pub fn from_compiled_modules(
     modules: Vec<CompiledModule>,
     optimize: bool,
-) -> anyhow::Result<ast::StacklessBytecode<WithoutSource>> {
+) -> anyhow::Result<(
+    move_model_2::model::Model<WithoutSource>,
+    ast::StacklessBytecode,
+)> {
     let model =
         move_model_2::model::Model::<WithoutSource>::from_compiled(&BTreeMap::new(), modules);
     let packages = translate::packages(&model, optimize)?;
-    Ok(ast::StacklessBytecode { model, packages })
+    Ok((model, ast::StacklessBytecode { packages }))
 }
 
 pub fn from_model<S: SourceKind>(
-    model: Model<S>,
+    model: &Model<S>,
     optimize: bool,
-) -> anyhow::Result<ast::StacklessBytecode<S>> {
-    let packages = translate::packages(&model, optimize)?;
-    Ok(ast::StacklessBytecode { model, packages })
+) -> anyhow::Result<ast::StacklessBytecode> {
+    let packages = translate::packages(model, optimize)?;
+    Ok(ast::StacklessBytecode { packages })
 }

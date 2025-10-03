@@ -164,8 +164,8 @@ fn pre_compiled_decls(
         let type_parameters = sig.type_parameters;
         let empty_flags = Flags::empty();
         let empty_known_filter_names = BTreeMap::new();
-        let empty_diags = RwLock::new(Diagnostics::new());
-        let empty_ide_info = RwLock::new(IDEInfo::new());
+        let empty_diags = Arc::new(RwLock::new(Diagnostics::new()));
+        let empty_ide_info = Arc::new(RwLock::new(IDEInfo::new()));
         let empty_warning_filters_scope = WarningFiltersScope::root(None);
         // create an empty reporter to collect all diagnostics,
         // and report ICE if any exist as in here there shouldn't be any
@@ -174,8 +174,8 @@ fn pre_compiled_decls(
         let empty_reporter = DiagnosticReporter::new(
             &empty_flags,
             &empty_known_filter_names,
-            &empty_diags,
-            &empty_ide_info,
+            empty_diags,
+            empty_ide_info,
             empty_warning_filters_scope,
         );
         let parameters = sig

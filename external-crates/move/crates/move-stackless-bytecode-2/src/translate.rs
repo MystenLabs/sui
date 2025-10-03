@@ -14,6 +14,7 @@ use move_binary_format::{
 
 use move_model_2::{
     model::{Model, Module, Package},
+    normalized,
     source_kind::SourceKind,
 };
 use move_symbol_pool::Symbol;
@@ -339,12 +340,6 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::Branch(code_offset) => Instruction::Jump(*code_offset as usize),
 
-        IB::LdU8(value) => assign_reg!([push!(Type::U8.into())] = imm!(Value::U8(*value))),
-
-        IB::LdU64(value) => assign_reg!([push!(Type::U64.into())] = imm!(Value::U64(*value))),
-
-        IB::LdU128(bx) => assign_reg!([push!(Type::U128.into())] = imm!(Value::U128(*(*bx)))),
-
         IB::CastU8 => {
             assign_reg!([push!(Type::U8.into())] = primitive_op!(Op::CastU8, R(pop!())))
         }
@@ -396,49 +391,31 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Call(function_ref) => {
-            let name = &function_ref.module.name;
-            let mut modules = ctxt.model.modules();
-            let module = modules
-                .find(|m| {
-                    m.compiled().name() == (&function_ref.module.name)
-                        && *m.compiled().address() == function_ref.module.address
-                })
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Module {} with address {} not found in the model",
-                        name, function_ref.module.address
-                    )
-                });
-            let compiled = module.compiled();
-            let function = compiled
-                .functions
-                .get(&function_ref.function)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Function {} not found in module {}",
-                        function_ref.function, name
-                    )
-                });
+            let modules = ctxt.model.modules();
+            if let Some(function) = find_function(modules, function_ref) {
+                let args = make_vec!(function.parameters.len(), R(pop!()));
 
-            let args = make_vec!(function.parameters.len(), R(pop!()));
+                let type_params = function_ref
+                    .type_arguments
+                    .iter()
+                    .map(|ty| ty.as_ref().clone())
+                    .collect::<Vec<_>>();
+                let lhs = function
+                    .return_
+                    .iter()
+                    .map(|ty| push!(ty.clone().subst(&type_params).into()))
+                    .collect::<Vec<_>>();
 
-            let type_params = function_ref
-                .type_arguments
-                .iter()
-                .map(|ty| ty.as_ref().clone())
-                .collect::<Vec<_>>();
-            let lhs = function
-                .return_
-                .iter()
-                .map(|ty| push!(ty.clone().subst(&type_params).into()))
-                .collect::<Vec<_>>();
-
-            Instruction::AssignReg {
-                lhs,
-                rhs: RValue::Call {
-                    function: function.name,
-                    args,
-                },
+                let target = (function_ref.module, function.name);
+                Instruction::AssignReg {
+                    lhs,
+                    rhs: RValue::Call { target, args },
+                }
+            } else {
+                panic!(
+                    "Function not found: {}::{}",
+                    function_ref.module.name, function_ref.function
+                );
             }
         }
 
@@ -662,10 +639,11 @@ pub(crate) fn bytecode<K: SourceKind>(
             }
         }
 
+        IB::LdU8(value) => assign_reg!([push!(Type::U8.into())] = imm!(Value::U8(*value))),
         IB::LdU16(value) => assign_reg!([push!(Type::U16.into())] = imm!(Value::U16(*value))),
-
         IB::LdU32(value) => assign_reg!([push!(Type::U32.into())] = imm!(Value::U32(*value))),
-
+        IB::LdU64(value) => assign_reg!([push!(Type::U64.into())] = imm!(Value::U64(*value))),
+        IB::LdU128(bx) => assign_reg!([push!(Type::U128.into())] = imm!(Value::U128(*(*bx)))),
         IB::LdU256(_bx) => assign_reg!([push!(Type::U256.into())] = imm!(Value::U256(*(*_bx)))),
 
         IB::CastU16 => {
@@ -725,8 +703,10 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::VariantSwitch(jt) => {
             let JumpTableInner::Full(offsets) = &jt.jump_table;
+            let enum_ = (jt.enum_.defining_module, jt.enum_.name);
             Instruction::VariantSwitch {
                 condition: R(pop!()),
+                enum_,
                 variants: jt.enum_.variants.keys().cloned().collect(),
                 labels: offsets
                     .iter()
@@ -742,6 +722,18 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::MoveFromDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
     }
+}
+
+fn find_function<'a, K: SourceKind>(
+    mut modules: impl Iterator<Item = Module<'a, K>>,
+    function_ref: &normalized::FunctionRef,
+) -> Option<&'a normalized::Function> {
+    let module = modules.find(|m| {
+        m.compiled().name() == (&function_ref.module.name)
+            && *m.compiled().address() == function_ref.module.address
+    })?;
+    let compiled = module.compiled();
+    compiled.functions.get(&function_ref.function).map(|v| &**v)
 }
 
 fn struct_ref_to_type(struct_ref: &N::StructRef<Symbol>) -> N::Type<Symbol> {

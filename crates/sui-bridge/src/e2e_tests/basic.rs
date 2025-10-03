@@ -16,13 +16,10 @@ use crate::events::{
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::types::{AddTokensOnEvmAction, BridgeAction};
 use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
-use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
 use std::collections::HashSet;
-use sui_json_rpc_api::BridgeReadApiClient;
 use sui_types::crypto::get_key_pair;
-use test_cluster::TestClusterBuilder;
 
 use std::path::Path;
 
@@ -145,7 +142,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     assert_eq!(parsed_msg.parsed_payload.token_type, TOKEN_ID_ETH);
     assert_eq!(parsed_msg.parsed_payload.amount, sui_amount);
 
-    let message = eth_sui_bridge::Message::from(sui_to_eth_bridge_action);
+    let message: eth_sui_bridge::Message = sui_to_eth_bridge_action.try_into().unwrap();
     let signatures = get_signatures(bridge_test_cluster.bridge_client(), nonce, sui_chain_id).await;
 
     let eth_sui_bridge = EthSuiBridge::new(
@@ -353,22 +350,4 @@ async fn test_committee_registration() {
     test_cluster
         .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
         .await;
-}
-
-#[tokio::test]
-async fn test_bridge_api_compatibility() {
-    let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-        .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .build()
-        .await;
-
-    test_cluster.trigger_reconfiguration().await;
-    let client = test_cluster.rpc_client();
-    client.get_latest_bridge().await.unwrap();
-    // TODO: assert fields in summary
-
-    client
-        .get_bridge_object_initial_shared_version()
-        .await
-        .unwrap();
 }

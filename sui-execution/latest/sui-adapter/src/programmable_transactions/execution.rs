@@ -78,9 +78,7 @@ mod checked {
     };
     use sui_verifier::{
         INIT_FN_NAME,
-        private_generics::{
-            EVENT_MODULE, PRIVATE_EVENT_FUNCTIONS, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE,
-        },
+        private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     };
     use tracing::instrument;
 
@@ -1389,9 +1387,7 @@ mod checked {
         function: &IdentStr,
     ) -> Result<(), ExecutionError> {
         let module_ident = (module_id.address(), module_id.name());
-        if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE)
-            && PRIVATE_EVENT_FUNCTIONS.contains(&function)
-        {
+        if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::NonEntryFunctionInvoked,
                 format!("Cannot directly call functions in sui::{}", EVENT_MODULE),

@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use parking_lot::Mutex;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{FullObjectID, ObjectRef};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
 use sui_types::storage::{FullObjectKey, InputKey, MarkerValue, ObjectKey};
-use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
+use sui_types::transaction::{TransactionData, TransactionDataAPI, VerifiedTransaction};
 
 /// TransactionOutputs
 #[derive(Debug)]
@@ -17,6 +18,7 @@ pub struct TransactionOutputs {
     pub transaction: Arc<VerifiedTransaction>,
     pub effects: TransactionEffects,
     pub events: TransactionEvents,
+    pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
     pub accumulator_events: Mutex<Vec<AccumulatorEvent>>,
 
     pub markers: Vec<(FullObjectKey, MarkerValue)>,
@@ -37,6 +39,7 @@ impl TransactionOutputs {
         transaction: VerifiedTransaction,
         effects: TransactionEffects,
         inner_temporary_store: InnerTemporaryStore,
+        unchanged_loaded_runtime_objects: Vec<ObjectKey>,
     ) -> TransactionOutputs {
         let output_keys = inner_temporary_store.get_output_keys(&effects);
 
@@ -187,6 +190,7 @@ impl TransactionOutputs {
             transaction: Arc::new(transaction),
             effects,
             events,
+            unchanged_loaded_runtime_objects,
             accumulator_events: Mutex::new(accumulator_events),
             markers,
             wrapped,
@@ -208,6 +212,7 @@ impl TransactionOutputs {
             transaction: Arc::new(transaction),
             effects,
             events: TransactionEvents { data: vec![] },
+            unchanged_loaded_runtime_objects: vec![],
             accumulator_events: Default::default(),
             markers: vec![],
             wrapped: vec![],
@@ -218,4 +223,28 @@ impl TransactionOutputs {
             output_keys: vec![],
         }
     }
+}
+
+pub fn unchanged_loaded_runtime_objects(
+    _transaction: &TransactionData,
+    effects: &TransactionEffects,
+    loaded_runtime_objects: &ObjectSet,
+) -> Vec<ObjectKey> {
+    let mut unchanged_loaded_runtime_objects: BTreeMap<_, _> = loaded_runtime_objects
+        .iter()
+        // Don't include loaded packages (which are used for doing UID tracking inside the VM)
+        .filter(|o| !o.is_package())
+        .map(|o| (o.id(), o.version()))
+        .collect();
+
+    // Remove any object that is referenced in the changed objects effects set since it would be
+    // redundent to include it again.
+    for change in effects.object_changes() {
+        unchanged_loaded_runtime_objects.remove(&change.id);
+    }
+
+    unchanged_loaded_runtime_objects
+        .into_iter()
+        .map(|(id, v)| ObjectKey(id, v))
+        .collect()
 }

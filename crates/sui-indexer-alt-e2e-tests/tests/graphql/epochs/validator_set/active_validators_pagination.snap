@@ -1,0 +1,147 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+init:
+A: object(0,0), validator_0: object(0,1), validator_1: object(0,2), validator_2: object(0,3), validator_3: object(0,4), validator_4: object(0,5), validator_5: object(0,6), validator_6: object(0,7), validator_7: object(0,8)
+
+task 1, lines 6-33:
+//# run-graphql --cursors 0 1 2 3 4 5 6 7
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 0,
+      "validatorSet": {
+        "v_0_1_a": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true,
+            "startCursor": "MA==",
+            "endCursor": "MQ=="
+          },
+          "nodes": [
+            {
+              "name": "validator-0"
+            },
+            {
+              "name": "validator-1"
+            }
+          ]
+        },
+        "v_0_1_b": {
+          "pageInfo": {
+            "hasPreviousPage": false,
+            "hasNextPage": true,
+            "startCursor": "MA==",
+            "endCursor": "MQ=="
+          },
+          "nodes": [
+            {
+              "name": "validator-0"
+            },
+            {
+              "name": "validator-1"
+            }
+          ]
+        },
+        "v_2_3_a": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true,
+            "startCursor": "Mg==",
+            "endCursor": "Mw=="
+          },
+          "nodes": [
+            {
+              "name": "validator-2"
+            },
+            {
+              "name": "validator-3"
+            }
+          ]
+        },
+        "v_2_3_b": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true,
+            "startCursor": "Mg==",
+            "endCursor": "Mw=="
+          },
+          "nodes": [
+            {
+              "name": "validator-2"
+            },
+            {
+              "name": "validator-3"
+            }
+          ]
+        },
+        "v_4_5_a": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true,
+            "startCursor": "NA==",
+            "endCursor": "NQ=="
+          },
+          "nodes": [
+            {
+              "name": "validator-4"
+            },
+            {
+              "name": "validator-5"
+            }
+          ]
+        },
+        "v_4_5_b": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": true,
+            "startCursor": "NA==",
+            "endCursor": "NQ=="
+          },
+          "nodes": [
+            {
+              "name": "validator-4"
+            },
+            {
+              "name": "validator-5"
+            }
+          ]
+        },
+        "v_6_7_a": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false,
+            "startCursor": "Ng==",
+            "endCursor": "Nw=="
+          },
+          "nodes": [
+            {
+              "name": "validator-6"
+            },
+            {
+              "name": "validator-7"
+            }
+          ]
+        },
+        "v_6_7_b": {
+          "pageInfo": {
+            "hasPreviousPage": true,
+            "hasNextPage": false,
+            "startCursor": "Ng==",
+            "endCursor": "Nw=="
+          },
+          "nodes": [
+            {
+              "name": "validator-6"
+            },
+            {
+              "name": "validator-7"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -853,8 +853,6 @@ impl Object {
             return Ok(Connection::new(false, false));
         };
 
-        let mut conn = Connection::new(false, false);
-
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = v::obj_versions
@@ -914,20 +912,14 @@ impl Object {
             results.reverse();
         }
 
-        let (prev, next, results) =
-            page.paginate_results(results, |v| JsonCursor::new(v.object_version as u64));
-
-        conn.has_previous_page = prev;
-        conn.has_next_page = next;
-
-        for (cursor, stored) in results {
-            let scope = scope.with_root_version(stored.object_version as u64);
-            if let Some(object) = Self::from_stored_version(scope, stored)? {
-                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
-            }
-        }
-
-        Ok(conn)
+        page.paginate_results(
+            results,
+            |v| JsonCursor::new(v.object_version as u64),
+            |v| {
+                let scope = scope.with_root_version(v.object_version as u64);
+                Ok(Self::from_stored_version(scope, v)?.context("Failed to construct object")?)
+            },
+        )
     }
 
     /// Paginate through objects in the live object set.

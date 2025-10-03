@@ -205,7 +205,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Newly active JWKs (JSON Web Keys).
 	"""
-	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection
 	"""
 	Consensus round of the authenticator state update.
 	"""
@@ -370,7 +370,7 @@ type ChangeEpochTransaction {
 	"""
 	System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
 	"""
-	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
 }
 
 """
@@ -1029,7 +1029,7 @@ type EndOfEpochTransaction {
 	"""
 	The list of system transactions that are allowed to run at the end of the epoch.
 	"""
-	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection!
+	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection
 }
 
 union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction
@@ -3002,22 +3002,22 @@ type ProgrammableSystemTransaction {
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection
 	"""
 	Input objects or primitive values.
 	"""
-	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection
 }
 
 type ProgrammableTransaction {
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection
 	"""
 	Input objects or primitive values.
 	"""
-	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection
 }
 
 """
@@ -3109,7 +3109,7 @@ type Query {
 	"""
 	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
 	"""
-	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection!
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection
 	"""
 	Fetch the CoinMetadata for a given coin type.
 	
@@ -3129,7 +3129,7 @@ type Query {
 	"""
 	Paginate events that are emitted in the network, optionally filtered by event filters.
 	"""
-	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
+	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	"""
 	Fetch checkpoints by their sequence numbers.
 	
@@ -3243,11 +3243,15 @@ type Query {
 	"""
 	Simulate a transaction to preview its effects without executing it on chain.
 	
-	- `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
+	Accepts a JSON transaction matching the [Sui gRPC API schema](https://docs.sui.io/references/fullnode-protocol#sui-rpc-v2-Transaction).
+	The JSON format allows for partial transaction specification where certain fields can be automatically resolved by the server.
+	
+	Alternatively, for already serialized transactions, you can pass BCS-encoded data:
+	`{"bcs": {"value": "<base64>"}}`
 	
 	Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
 	"""
-	simulateTransaction(transactionDataBcs: Base64!): SimulationResult!
+	simulateTransaction(transaction: JSON!): SimulationResult!
 	"""
 	Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
 	"""
@@ -3267,7 +3271,7 @@ type Query {
 	"""
 	The transactions that exist in the network, optionally filtered by transaction filters.
 	"""
-	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	Fetch a structured representation of a concrete type, including its layout information.
 	
@@ -4059,6 +4063,11 @@ type Validator implements IAddressable {
 	"""
 	exchangeRatesSize: UInt53
 	"""
+	A wrapped object containing the validator's exchange rates. This is a table from epoch number to `PoolTokenExchangeRate` value.
+	The exchange rate is used to determine the amount of SUI tokens that each past SUI staker can withdraw in the future.
+	"""
+	exchangeRatesTable: Address
+	"""
 	The reference gas price for this epoch.
 	"""
 	gasPrice: BigInt
@@ -4209,7 +4218,7 @@ type ValidatorSet {
 	"""
 	The current list of active validators.
 	"""
-	activeValidators(first: Int, after: String, last: Int, before: String): ValidatorConnection!
+	activeValidators(first: Int, after: String, last: Int, before: String): ValidatorConnection
 	"""
 	Object ID of the `Table` storing the inactive staking pools.
 	"""

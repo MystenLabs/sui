@@ -93,7 +93,7 @@ public fun init() {{
 
 [package]
 name = "{name}"
-edition = "2025"         # use "2024" for Move 2024 edition
+edition = "2024"         # use "2024" for Move 2024 edition
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 # flavor = sui

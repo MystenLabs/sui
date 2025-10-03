@@ -219,7 +219,9 @@ impl CheckpointStoreTables {
             (
                 "checkpoint_content",
                 digest_config.clone().with_config(
-                    KeySpaceConfig::default().with_relocation_filter(|_, _| Decision::Remove),
+                    lru_config
+                        .clone()
+                        .with_relocation_filter(|_, _| Decision::Remove),
                 ),
             ),
             (
@@ -3725,6 +3727,13 @@ mod tests {
         }
 
         fn take_accumulator_events(&self, _: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
+            unimplemented!()
+        }
+
+        fn get_unchanged_loaded_runtime_objects(
+            &self,
+            _digest: &TransactionDigest,
+        ) -> Option<Vec<sui_types::storage::ObjectKey>> {
             unimplemented!()
         }
     }

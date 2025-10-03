@@ -41,6 +41,7 @@ use serde::{Deserialize, Serialize};
 use shared_object_version_manager::AssignedVersions;
 use shared_object_version_manager::Schedulable;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -75,6 +76,7 @@ use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabiliti
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::InputKey;
+use sui_types::storage::TrackingBackingStore;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
 };
@@ -1020,11 +1022,42 @@ impl AuthorityState {
             &self.config.verifier_signing_config,
         )?;
 
+        self.handle_coin_deny_list_checks(
+            tx_data,
+            &checked_input_objects,
+            &receiving_objects,
+            epoch_store,
+        )?;
+
+        Ok(checked_input_objects)
+    }
+
+    fn handle_coin_deny_list_checks(
+        &self,
+        tx_data: &TransactionData,
+        checked_input_objects: &CheckedInputObjects,
+        receiving_objects: &ReceivingObjects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<()> {
+        let funds_withdraw_types = tx_data
+            .get_funds_withdrawals()
+            .into_iter()
+            .filter_map(|withdraw| {
+                withdraw
+                    .type_arg
+                    .get_balance_type_param()
+                    // unwrap safe because we already verified the transaction.
+                    .unwrap()
+                    .map(|ty| ty.to_canonical_string(false))
+            })
+            .collect::<BTreeSet<_>>();
+
         if epoch_store.coin_deny_list_v1_enabled() {
             check_coin_deny_list_v1(
                 tx_data.sender(),
-                &checked_input_objects,
-                &receiving_objects,
+                checked_input_objects,
+                receiving_objects,
+                funds_withdraw_types.clone(),
                 &self.get_object_store(),
             )?;
         }
@@ -1032,13 +1065,14 @@ impl AuthorityState {
         if epoch_store.protocol_config().enable_coin_deny_list_v2() {
             check_coin_deny_list_v2_during_signing(
                 tx_data.sender(),
-                &checked_input_objects,
-                &receiving_objects,
+                checked_input_objects,
+                receiving_objects,
+                funds_withdraw_types.clone(),
                 &self.get_object_store(),
             )?;
         }
 
-        Ok(checked_input_objects)
+        Ok(())
     }
 
     /// This is a private method and should be kept that way. It doesn't check whether
@@ -1929,10 +1963,12 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
-                self.get_backing_store().as_ref(),
+                &tracking_store,
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -2037,6 +2073,13 @@ impl AuthorityState {
             );
         });
 
+        let unchanged_loaded_runtime_objects =
+            crate::transaction_outputs::unchanged_loaded_runtime_objects(
+                certificate.transaction_data(),
+                &effects,
+                &tracking_store.into_read_objects(),
+            );
+
         // index certificate
         let _ = self
             .post_process_one_tx(certificate, &effects, &inner_temp_store, epoch_store)
@@ -2051,6 +2094,7 @@ impl AuthorityState {
             certificate.clone().into_unsigned(),
             effects,
             inner_temp_store,
+            unchanged_loaded_runtime_objects,
         );
 
         let elapsed = prepare_certificate_start_time.elapsed().as_micros() as f64;
@@ -2434,8 +2478,11 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
+
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
-            self.get_backing_store().as_ref(),
+            &tracking_store,
             protocol_config,
             self.metrics.limits_metrics.clone(),
             false, // expensive_checks
@@ -2454,13 +2501,52 @@ impl AuthorityState {
             checks.disabled(),
         );
 
+        let loaded_runtime_objects = tracking_store.into_read_objects();
+        let unchanged_loaded_runtime_objects =
+            crate::transaction_outputs::unchanged_loaded_runtime_objects(
+                &transaction,
+                &effects,
+                &loaded_runtime_objects,
+            );
+
+        let object_set = {
+            let objects = {
+                let mut objects = loaded_runtime_objects;
+
+                for o in inner_temp_store
+                    .input_objects
+                    .into_values()
+                    .chain(inner_temp_store.written.into_values())
+                {
+                    objects.insert(o);
+                }
+
+                objects
+            };
+
+            let object_keys = sui_types::storage::get_transaction_object_set(
+                &transaction,
+                &effects,
+                &unchanged_loaded_runtime_objects,
+            );
+
+            let mut set = sui_types::full_checkpoint_content::ObjectSet::default();
+            for k in object_keys {
+                if let Some(o) = objects.get(&k) {
+                    set.insert(o.clone());
+                }
+            }
+
+            set
+        };
+
         Ok(SimulateTransactionResult {
-            input_objects: inner_temp_store.input_objects,
-            output_objects: inner_temp_store.written,
+            objects: object_set,
             events: effects.events_digest().map(|_| inner_temp_store.events),
             effects,
             execution_result,
             mock_gas_id,
+            unchanged_loaded_runtime_objects,
         })
     }
 

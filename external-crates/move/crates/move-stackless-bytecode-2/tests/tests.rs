@@ -13,7 +13,6 @@ use std::{collections::BTreeSet, io::BufRead, path::Path};
 
 fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     let pkg_dir = file_path.parent().unwrap();
-    // let toml_path = Path::join(&pkg_dir, "Move.toml");
     let output_dir = TempDir::new()?;
 
     let config = BuildConfig {
@@ -27,7 +26,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     let resolved_package = config.resolution_graph_for_package(pkg_dir, None, &mut writer)?;
     let model = model_builder::build(resolved_package.clone(), &mut writer)?;
 
-    let bytecode = from_model(model, /* optimize */ true)?;
+    let bytecode = from_model(&model, /* optimize */ true)?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()
@@ -53,8 +52,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         }
     }
 
-    let model = model_builder::build(resolved_package, &mut writer)?;
-    let bytecode = from_model(model, /* optimize */ false)?;
+    let bytecode = from_model(&model, /* optimize */ false)?;
 
     for pkg in &bytecode.packages {
         let pkg_name = pkg.name;

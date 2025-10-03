@@ -1,0 +1,68 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module action {
+    public fun destroy_action () {
+        let l2 = l0;
+        let l1 = &l2;
+        match(l1: 0x0::action::Action) {
+            0x0::action::Action::Stop => {
+                let 0x0::action::Action::Stop {} = &l1;
+                let 0x0::action::Action::Stop {} = l2;
+            },
+            0x0::action::Action::MoveTo => {
+                let 0x0::action::Action::MoveTo { x: reg_6, y: reg_7 } = &l1;
+                let 0x0::action::Action::MoveTo { x: reg_9, y: reg_10 } = l2;
+            },
+            0x0::action::Action::ChangeSpeed => {
+                let 0x0::action::Action::ChangeSpeed { pos0: reg_12 } = &l1;
+                let 0x0::action::Action::ChangeSpeed { pos0: reg_14 } = l2;
+            },
+        }
+        return 
+    }
+
+    public fun increase_speed () {
+        let l3 = l0;
+        let l2 =         freeze(l3);
+        match(l2: 0x0::action::Action) {
+            0x0::action::Action::Stop => {
+                let 0x0::action::Action::Stop {} = &l2;
+                abort!(U64(0));
+            },
+            0x0::action::Action::MoveTo => {
+                let 0x0::action::Action::MoveTo { x: reg_9, y: reg_10 } = &l2;
+                abort!(U64(0));
+            },
+            0x0::action::Action::ChangeSpeed => {
+                let 0x0::action::Action::ChangeSpeed { pos0: reg_13 } = &l2;
+                let 0x0::action::Action::ChangeSpeed { pos0: reg_15 } = l3;
+                let l4 = reg_15 : &mut 0x0::action::Action;
+                *l4 = l1
+                return 
+            },
+        }
+    }
+
+    public fun speed () {
+        let l3 = l0;
+        let l2 = l3;
+        match(l2: 0x0::action::Action) {
+            0x0::action::Action::Stop => {
+                let 0x0::action::Action::Stop {} = &l2;
+                abort!(U64(0));
+            },
+            0x0::action::Action::MoveTo => {
+                let 0x0::action::Action::MoveTo { x: reg_7, y: reg_8 } = &l2;
+                let 0x0::action::Action::MoveTo { x: reg_10, y: reg_11 } = &l3;
+                let l1 =         *reg_10 : &0x0::action::Action;
+            },
+            0x0::action::Action::ChangeSpeed => {
+                let 0x0::action::Action::ChangeSpeed { pos0: reg_14 } = &l2;
+                let 0x0::action::Action::ChangeSpeed { pos0: reg_16 } = &l3;
+                l1 =         *reg_16 : &0x0::action::Action;
+            },
+        }
+    }
+
+}

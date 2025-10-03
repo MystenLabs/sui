@@ -5,6 +5,7 @@ exclude = [
   "examples/tic-tac-toe/cli",
   "examples/regulated-coin/rust-client",
   "examples/custom-indexer/rust",
+  "examples/rust/clickhouse-sui-indexer",
   "external-crates/move/crates/jsonrpc",
   "external-crates/move/crates/bytecode-interpreter-crypto",
   "external-crates/move/crates/bytecode-verifier-libfuzzer",
@@ -226,7 +227,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.58.0"
+version = "1.59.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -606,7 +607,6 @@ linked-hash-map = "0.5.6"
 shlex = "1.3.0"
 starlark = "0.13.0"
 
-
 # Move dependencies
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
@@ -636,10 +636,10 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "204cd95e5a9f9a0d3d09c3c236dc5b2263c73fd3", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d1fcb853196c3de7888ed8fad74f419b8c8fbe3b" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d1fcb853196c3de7888ed8fad74f419b8c8fbe3b" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d1fcb853196c3de7888ed8fad74f419b8c8fbe3b", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d1fcb853196c3de7888ed8fad74f419b8c8fbe3b", features = [
   "experimental",
 ] }
 passkey-types = { version = "0.4.0" }
@@ -661,9 +661,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c794
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "8eee97380cac1a1899d3cca427bde7ac906abdb9", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "8eee97380cac1a1899d3cca427bde7ac906abdb9", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "8eee97380cac1a1899d3cca427bde7ac906abdb9" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fe561f3089b3b4acbbd67ff48a278a6c448e488c", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fe561f3089b3b4acbbd67ff48a278a6c448e488c", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fe561f3089b3b4acbbd67ff48a278a6c448e488c" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

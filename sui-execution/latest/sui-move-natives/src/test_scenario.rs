@@ -137,7 +137,7 @@ pub fn end_transaction(
 
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
-    // We pass the received objects since they should be viewed as "loaded" for the purposes of of
+    // We pass the received objects since they should be viewed as "loaded" for the purposes of
     // calculating the effects of the transaction.
     let results = object_runtime_state.finish(received, ChildObjectEffects::empty());
     let RuntimeResults {

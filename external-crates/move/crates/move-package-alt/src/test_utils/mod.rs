@@ -227,7 +227,7 @@ pub fn basic_manifest(name: &str, version: &str) -> String {
         name = "{}"
         version = "{}"
         authors = []
-        edition = "2025"
+        edition = "2024"
 
         [environments]
         mainnet = "35834a8a"
@@ -246,7 +246,7 @@ pub fn basic_manifest_with_env(name: &str, version: &str, env: &str, chain_id: &
         name = "{}"
         version = "{}"
         authors = []
-        edition = "2025"
+        edition = "2024"
 
         [environments]
         {} = "{}"

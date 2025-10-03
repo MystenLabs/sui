@@ -15,7 +15,7 @@ use strum::EnumIter;
 use sui_types::base_types::AuthorityName;
 
 /// Operation types for validator performance tracking
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, EnumIter)]
 pub enum OperationType {
     Submit,
     Effects,

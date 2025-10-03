@@ -3,9 +3,8 @@
 
 use crate::utils::comma_separated;
 
-use move_binary_format::normalized::{Constant, FieldRef, StructRef, Type, VariantRef};
+use move_binary_format::normalized::{Constant, FieldRef, ModuleId, StructRef, Type, VariantRef};
 use move_core_types::account_address::AccountAddress;
-use move_model_2::{model::Model, source_kind::SourceKind};
 use move_symbol_pool::Symbol;
 
 use std::{collections::BTreeMap, rc::Rc, vec};
@@ -14,8 +13,7 @@ use std::{collections::BTreeMap, rc::Rc, vec};
 // Types
 // -------------------------------------------------------------------------------------------------
 
-pub struct StacklessBytecode<S: SourceKind> {
-    pub model: Model<S>,
+pub struct StacklessBytecode {
     pub packages: Vec<Package>,
 }
 
@@ -67,8 +65,9 @@ pub enum Instruction {
     Nop,
     VariantSwitch {
         condition: Trivial,
-        labels: Vec<Label>,
+        enum_: (ModuleId<Symbol>, Symbol),
         variants: Vec<Symbol>,
+        labels: Vec<Label>,
     },
     Drop(Register), // Drop an operand in the case of a Pop operation
     NotImplemented(String),
@@ -89,7 +88,7 @@ pub struct Register {
 #[derive(Debug, Clone)]
 pub enum RValue {
     Call {
-        function: Symbol,
+        target: (ModuleId<Symbol>, Symbol),
         args: Vec<Trivial>,
     },
     Primitive {
@@ -211,6 +210,13 @@ impl BasicBlock {
         }
     }
 }
+
+impl Register {
+    pub fn name(&self) -> String {
+        format!("reg_{}", self.name)
+    }
+}
+
 // -------------------------------------------------------------------------------------------------
 // Display
 // -------------------------------------------------------------------------------------------------
@@ -287,9 +293,10 @@ impl std::fmt::Display for Instruction {
             Instruction::VariantSwitch {
                 condition,
                 labels,
+                enum_: (module_id, enum_),
                 variants,
             } => {
-                write!(f, "Switch({condition}) ")?;
+                write!(f, "Switch({condition} : {module_id}::{enum_}) ")?;
                 for (i, label) in labels.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -316,7 +323,7 @@ impl std::fmt::Display for Trivial {
 
 impl std::fmt::Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "reg_{} : {}", self.name, self.ty)
+        write!(f, "{} : {}", self.name(), self.ty)
     }
 }
 
@@ -351,8 +358,8 @@ impl std::fmt::Display for LocalOp {
 impl std::fmt::Display for RValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RValue::Call { function, args } => {
-                write!(f, "Call {}(", function)?;
+            RValue::Call { target, args } => {
+                write!(f, "Call {}::{}(", target.0, target.1)?;
                 write!(f, "{}", comma_separated(args))?;
                 write!(f, ")")
             }

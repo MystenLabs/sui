@@ -35,26 +35,29 @@ pub mod pipeline;
 pub mod postgres;
 pub mod task;
 
+#[cfg(test)]
+pub mod mocks;
+
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Default, Debug, Clone)]
 pub struct IndexerArgs {
-    /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
-    /// ingestion will start just after the lowest checkpoint watermark across all active
+    /// Override for the checkpoint to start ingestion from -- useful for backfills. Otherwise, by
+    /// default, ingestion will start just after the lowest checkpoint watermark across all active
     /// pipelines.
     ///
-    /// NOTE: This value is validated against the current watermark for each pipeline. Only
-    /// sequential pipelines fail to start if --first-checkpoint is in the future. Concurrent
-    /// pipelines will start and commit data, but they won't update the watermark.
+    /// For both concurrent and sequential pipelines, if a first checkpoint is configured, and a
+    /// watermark does not exist for the pipeline, the indexer will also tell the pipeline to start
+    /// from this value.
     ///
-    /// For testing purposes, you can bypass this check by manually updating the `watermarks`
-    /// table in your database:
+    /// Unless `--skip-watermark` is set, this value must be less than or equal to the global high
+    /// watermark (preventing the indexer from introducing a gap in the data). This exception only
+    /// applies to concurrent pipelines, and these pipelines will also not report watermark updates.
     ///
-    /// ```sql
-    /// INSERT INTO watermarks (pipeline, checkpoint_hi_inclusive) VALUES ('<pipeline>', <first_checkpoint> - 1);
-    /// ```
+    /// Sequential pipelines will always start committing from the next checkpoint after its
+    /// watermark.
     ///
-    /// However, this is NOT recommended in a production environment as it will create
-    /// inconsistencies in your indexed data.
+    /// Concurrent pipelines will always start committing from `first_checkpoint`. These pipelines
+    /// will not report watermark updates if `skip_watermark` is set.
     #[arg(long)]
     pub first_checkpoint: Option<u64>,
 
@@ -213,16 +216,33 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
-        // For a concurrent pipeline, if skip_watermark is set, we don't really care about the
-        // watermark consistency. first_checkpoint can be anything since we don't update watermark,
-        // and writes should be idempotent.
-        if !self.skip_watermark {
-            self.check_first_checkpoint_consistency::<H>(&watermark)?;
-        }
+        // If `first_checkpoint` does not violate the consistency check, concurrent pipelines will
+        // prefer to resume from the `first_checkpoint` if configured.
+        let next_checkpoint = match (watermark, self.first_checkpoint) {
+            (Some(watermark), Some(first_checkpoint)) => {
+                // Setting `skip_watermark` allows concurrent pipelines to not be considered in the
+                // consistency check. The indexer will still fail to start if `first_checkpoint`
+                // fails for a sequential pipeline in the indexer.
+                if !self.skip_watermark {
+                    ensure!(
+                        first_checkpoint <= watermark.checkpoint_hi_inclusive + 1,
+                        "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
+                        This could create gaps in the data.",
+                        H::NAME,
+                        first_checkpoint,
+                        watermark.checkpoint_hi_inclusive,
+                    );
+                }
+                first_checkpoint
+            }
+            (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
+            (_, Some(first_checkpoint)) => first_checkpoint,
+            (None, None) => 0,
+        };
 
         self.handles.push(concurrent::pipeline::<H>(
             handler,
-            watermark,
+            next_checkpoint,
             config,
             self.skip_watermark,
             self.store.clone(),
@@ -234,32 +254,13 @@ impl<S: Store> Indexer<S> {
         Ok(())
     }
 
-    /// Checks that the first checkpoint override is consistent with the watermark for the pipeline.
-    /// If the watermark does not exist, the override can be anything. If the watermark exists, the
-    /// override must not leave any gap in the data: it can be in the past, or at the tip of the
-    /// network, but not in the future.
-    fn check_first_checkpoint_consistency<P: Processor>(
-        &self,
-        watermark: &Option<CommitterWatermark>,
-    ) -> Result<()> {
-        if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
-            ensure!(
-                first_checkpoint <= watermark.checkpoint_hi_inclusive + 1,
-                "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
-                 This could create gaps in the data.",
-                P::NAME,
-                first_checkpoint,
-                watermark.checkpoint_hi_inclusive,
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Start ingesting checkpoints. Ingestion either starts from the configured
-    /// `first_checkpoint`, or it is calculated based on the watermarks of all active pipelines.
-    /// Ingestion will stop after consuming the configured `last_checkpoint`, if one is provided,
-    /// or will continue until it tracks the tip of the network.
+    /// Start ingesting checkpoints. Ingestion either starts from the
+    /// `first_checkpoint_from_watermark` calculated based on the smallest watermark of all active
+    /// pipelines or `first_checkpoint` if configured. Individual pipelines will start processing
+    /// and committing once the ingestion service has caught up to their respective watermarks.
+    ///
+    /// Ingestion will stop after consuming the configured `last_checkpoint`, if one is provided, or
+    /// will continue until it tracks the tip of the network.
     pub async fn run(mut self) -> Result<JoinHandle<()>> {
         if let Some(enabled_pipelines) = self.enabled_pipelines {
             ensure!(
@@ -298,9 +299,9 @@ impl<S: Store> Indexer<S> {
         }))
     }
 
-    /// Update the indexer's first checkpoint based on the watermark for the pipeline by adding for
-    /// handler `H` (as long as it's enabled). Returns `Ok(None)` if the pipeline is disabled,
-    /// `Ok(Some(None))` if the pipeline is enabled but its watermark is not found, and
+    /// Update the indexer's starting ingestion checkpoint based on the watermark for the pipeline
+    /// by adding for handler `H` (as long as it's enabled). Returns `Ok(None)` if the pipeline is
+    /// disabled, `Ok(Some(None))` if the pipeline is enabled but its watermark is not found, and
     /// `Ok(Some(Some(watermark)))` if the pipeline is enabled and the watermark is found.
     async fn add_pipeline<P: Processor + 'static>(
         &mut self,
@@ -371,15 +372,43 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
-        // For a sequential pipeline, data must be written in the order of checkpoints.
-        // Hence, we do not allow the first_checkpoint override to be in arbitrary positions.
-        self.check_first_checkpoint_consistency::<H>(&watermark)?;
+        // If `first_checkpoint` does not violate the consistency check, sequential pipelines will
+        // prefer to resume from the existing watermark unless no watermark exists.
+        let next_checkpoint = match (watermark, self.first_checkpoint) {
+            (Some(watermark), Some(first_checkpoint)) => {
+                // Sequential pipelines must write data in the order of checkpoints. If there is a
+                // gap, this violates the property.
+                ensure!(
+                    first_checkpoint <= watermark.checkpoint_hi_inclusive + 1,
+                    "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
+                     This could create gaps in the data.",
+                    H::NAME,
+                    first_checkpoint,
+                    watermark.checkpoint_hi_inclusive,
+                );
+                // Otherwise, sequential pipelines will wait until the processed checkpoint next
+                // after its current watermark.
+                warn!(
+                    pipeline = H::NAME,
+                    first_checkpoint,
+                    committer_hi = watermark.checkpoint_hi_inclusive,
+                    "Ignoring --first-checkpoint and will resume from committer_hi",
+                );
+                watermark.checkpoint_hi_inclusive + 1
+            }
+            // If a watermark exists, the pipeline will wait for the processed checkpoint next after
+            // its watermark.
+            (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
+            // If no watermark exists, the first checkpoint can be anything.
+            (_, Some(first_checkpoint)) => first_checkpoint,
+            (None, None) => 0,
+        };
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
         self.handles.push(sequential::pipeline::<H>(
             handler,
-            watermark,
+            next_checkpoint,
             config,
             self.store.clone(),
             checkpoint_rx,
@@ -393,4 +422,478 @@ impl<T: TransactionalStore> Indexer<T> {
 }
 
 #[cfg(test)]
-pub mod testing;
+mod tests {
+    use super::*;
+    use crate::mocks::store::MockStore;
+    use crate::pipeline::concurrent::ConcurrentConfig;
+    use crate::store::CommitterWatermark;
+    use crate::FieldCount;
+    use std::sync::Arc;
+    use sui_synthetic_ingestion::synthetic_ingestion;
+    use tokio_util::sync::CancellationToken;
+
+    impl Processor for MockHandler {
+        const NAME: &'static str = "test_processor";
+        type Value = MockValue;
+        fn process(
+            &self,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![MockValue(1)])
+        }
+    }
+
+    #[allow(dead_code)]
+    #[derive(Clone, FieldCount)]
+    struct MockValue(u64);
+
+    struct MockHandler;
+
+    #[async_trait::async_trait]
+    impl crate::pipeline::concurrent::Handler for MockHandler {
+        type Store = MockStore;
+
+        async fn commit<'a>(
+            _values: &[Self::Value],
+            _conn: &mut <Self::Store as Store>::Connection<'a>,
+        ) -> anyhow::Result<usize> {
+            Ok(1)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::pipeline::sequential::Handler for MockHandler {
+        type Store = MockStore;
+        type Batch = Vec<Self::Value>;
+
+        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+            batch.extend(values);
+        }
+
+        async fn commit<'a>(
+            _batch: &Self::Batch,
+            _conn: &mut <Self::Store as Store>::Connection<'a>,
+        ) -> anyhow::Result<usize> {
+            Ok(1)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_first_checkpoint_from_watermark() {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+
+        let store = MockStore::default();
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test_processor",
+            CommitterWatermark {
+                epoch_hi_inclusive: 1,
+                checkpoint_hi_inclusive: 100,
+                tx_hi: 1000,
+                timestamp_ms_hi_inclusive: 1000000,
+            },
+        )
+        .await
+        .unwrap();
+
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(50),
+            last_checkpoint: None,
+            pipeline: vec![],
+            skip_watermark: false,
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        indexer
+            .concurrent_pipeline::<MockHandler>(MockHandler, ConcurrentConfig::default())
+            .await
+            .unwrap();
+
+        assert_eq!(indexer.first_checkpoint_from_watermark, 101);
+    }
+
+    #[tokio::test]
+    async fn test_indexer_concurrent_pipeline_disallow_inconsistent_first_checkpoint() {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+
+        let store = MockStore::default();
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test_processor",
+            CommitterWatermark {
+                epoch_hi_inclusive: 1,
+                checkpoint_hi_inclusive: 100,
+                tx_hi: 1000,
+                timestamp_ms_hi_inclusive: 1000000,
+            },
+        )
+        .await
+        .unwrap();
+
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(1001),
+            last_checkpoint: None,
+            pipeline: vec![],
+            skip_watermark: false,
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        let result = indexer
+            .concurrent_pipeline::<MockHandler>(MockHandler, ConcurrentConfig::default())
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_indexer_concurrent_pipeline_allow_inconsistent_first_checkpoint_with_skip_watermark(
+    ) {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+
+        let store = MockStore::default();
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test_processor",
+            CommitterWatermark {
+                epoch_hi_inclusive: 1,
+                checkpoint_hi_inclusive: 100,
+                tx_hi: 1000,
+                timestamp_ms_hi_inclusive: 1000000,
+            },
+        )
+        .await
+        .unwrap();
+
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(1001),
+            last_checkpoint: None,
+            pipeline: vec![],
+            skip_watermark: true,
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        let result = indexer
+            .concurrent_pipeline::<MockHandler>(MockHandler, ConcurrentConfig::default())
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_indexer_sequential_pipeline_disallow_inconsistent_first_checkpoint() {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+
+        let store = MockStore::default();
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test_processor",
+            CommitterWatermark {
+                epoch_hi_inclusive: 1,
+                checkpoint_hi_inclusive: 100,
+                tx_hi: 1000,
+                timestamp_ms_hi_inclusive: 1000000,
+            },
+        )
+        .await
+        .unwrap();
+
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(1001),
+            last_checkpoint: None,
+            pipeline: vec![],
+            skip_watermark: false,
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        let result = indexer
+            .sequential_pipeline::<MockHandler>(MockHandler, SequentialConfig::default())
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_indexer_sequential_pipeline_disallow_inconsistent_first_checkpoint_with_skip_watermark(
+    ) {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+
+        let store = MockStore::default();
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test_processor",
+            CommitterWatermark {
+                epoch_hi_inclusive: 1,
+                checkpoint_hi_inclusive: 100,
+                tx_hi: 1000,
+                timestamp_ms_hi_inclusive: 1000000,
+            },
+        )
+        .await
+        .unwrap();
+
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(1001),
+            last_checkpoint: None,
+            pipeline: vec![],
+            skip_watermark: true,
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        let result = indexer
+            .sequential_pipeline::<MockHandler>(MockHandler, SequentialConfig::default())
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_indexer_sequential_pipeline_always_resume_from_watermark() {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+        let store = MockStore::default();
+        let pipeline_checkpoint_hi = 10;
+        let indexer_first_checkpoint = 5;
+        let num_ingested_checkpoints = 10;
+
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test_processor",
+            CommitterWatermark {
+                epoch_hi_inclusive: 1,
+                checkpoint_hi_inclusive: pipeline_checkpoint_hi,
+                tx_hi: 1000,
+                timestamp_ms_hi_inclusive: 1000000,
+            },
+        )
+        .await
+        .unwrap();
+
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(indexer_first_checkpoint),
+            last_checkpoint: Some(indexer_first_checkpoint + num_ingested_checkpoints - 1),
+            pipeline: vec![],
+            skip_watermark: true,
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: indexer_first_checkpoint,
+            num_checkpoints: num_ingested_checkpoints,
+            checkpoint_size: 2,
+        })
+        .await;
+
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        let _ = indexer
+            .sequential_pipeline::<MockHandler>(MockHandler, SequentialConfig::default())
+            .await;
+
+        let metrics = indexer.metrics().clone();
+
+        indexer.run().await.unwrap().await.unwrap();
+
+        assert_eq!(
+            metrics.total_ingested_checkpoints.get(),
+            num_ingested_checkpoints
+        );
+        assert_eq!(
+            metrics
+                .total_watermarks_out_of_order
+                .get_metric_with_label_values(&["test_processor"])
+                .unwrap()
+                .get(),
+            pipeline_checkpoint_hi - indexer_first_checkpoint + 1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_indexer_concurrent_pipeline_always_resume_from_first_checkpoint() {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+        let store = MockStore::default();
+        let pipeline_checkpoint_hi = 10;
+        let indexer_first_checkpoint = 5;
+        let num_ingested_checkpoints = 10;
+
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test_processor",
+            CommitterWatermark {
+                epoch_hi_inclusive: 1,
+                checkpoint_hi_inclusive: pipeline_checkpoint_hi,
+                tx_hi: 1000,
+                timestamp_ms_hi_inclusive: 1000000,
+            },
+        )
+        .await
+        .unwrap();
+
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(indexer_first_checkpoint),
+            last_checkpoint: Some(indexer_first_checkpoint + num_ingested_checkpoints - 1),
+            pipeline: vec![],
+            skip_watermark: true,
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: indexer_first_checkpoint,
+            num_checkpoints: num_ingested_checkpoints,
+            checkpoint_size: 2,
+        })
+        .await;
+
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        let _ = indexer
+            .concurrent_pipeline::<MockHandler>(MockHandler, ConcurrentConfig::default())
+            .await;
+
+        let metrics = indexer.metrics().clone();
+
+        indexer.run().await.unwrap().await.unwrap();
+
+        assert_eq!(
+            metrics.total_ingested_checkpoints.get(),
+            num_ingested_checkpoints
+        );
+        assert_eq!(
+            metrics
+                .total_watermarks_out_of_order
+                .get_metric_with_label_values(&["test_processor"])
+                .unwrap()
+                .get(),
+            0
+        );
+    }
+}

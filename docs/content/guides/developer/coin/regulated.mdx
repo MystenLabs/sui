@@ -1,12 +1,23 @@
 ---
-title: Regulated Coin and Deny List
-description: You can create regulated coins on Sui, such as stablecoins. These coins are similar to other coins, like SUI, but include the ability to control access to the coin using a deny list.
-keywords: [ regulated coin list, regulated coins, regulate coin, allow list, deny list, stablecoins, token example, create a token, how to create token, SUI token standards ]
+title: Regulated Currency and Deny List
+description: You can create regulated currencies on Sui using the Coin Registry system. These coins include the ability to control access using a deny list.
+keywords: [ regulated coin list, regulated coins, regulate coin, allow list, deny list, stablecoins, token example, create a token, how to create token, SUI token standards, coin registry ]
 ---
 
-You can create regulated coins on Sui, such as [stablecoins](../stablecoins.mdx). These coins are similar to other coins, like SUI, but include the ability to control access to the coin using a deny list. 
+You can create regulated currencies on Sui, such as stablecoins. These coins are similar to other coins, like SUI, but include the ability to control access to the currency using a deny list.
 
-When creating standard coins, you call the `create_currency` function in the `coin` package of the Sui framework, whether directly or via an SDK. When you create regulated coins, you call the `create_regulated_currency_v2` function in that same package instead. The `create_regulated_currency_v2` function actually leverages the `create_currency` function to create the coin, but adds an additional step that produces a `DenyCapV2` and transfers it to the publisher of the regulated coin package. The bearer of the transferrable `DenyCapV2` object can control access to the coin through a deny list. 
+The Coin Registry system provides enhanced regulatory features through the `sui::coin_registry` module:
+
+1. **During initialization:** Use the `make_regulated()` function on the `CurrencyInitializer<T>` before calling `finalize()`.
+2. **Regulatory tracking:** The registry automatically tracks regulatory status in the `RegulatedState` enum.
+3. **Enhanced compliance:** Built-in support for global pause functionality and better ecosystem integration.
+
+Advantages of these regulatory features include:
+
+- **Centralized tracking:** Regulatory status is stored in the registry for easy discovery.
+- **Global pause support:** Enhanced pause/unpause functionality for emergency situations.
+- **Compliance tooling:** Better integration with wallets, exchanges, and compliance systems.
+- **Migration support:** Seamless migration from legacy regulated coins.
 
 ## `DenyList`
 
@@ -18,7 +29,7 @@ The `DenyList` object is a system object that has the address `0x403`. You canno
 
 :::
 
-To learn about the features available, see the [Coin standard](../../../standards/coin.mdx) documentation and the `coin` module in the <UnsafeLink href="/references/framework/sui/coin">Sui framework</UnsafeLink>.
+To learn about the features available, see the [Currency Standard](/standards/currency.mdx) documentation and the `coin_registry` module in the Sui framework.
 
 ## Regulated coin example
 
@@ -75,7 +86,7 @@ The example uses a single file to create the smart contract for the project (`re
 
 ### Creating regulated coins
 
-The Sui Coin standard provides a `create_regulated_currency_v2` function to create regulated coins. This function actually uses `create_currency` to mint a coin, but extends the function by also creating and transferring a `DenyCapV2` capability. The `DenyCapV2` bearer can add and remove addresses from a list that controls, or regulates, access to the coin. This ability is a requirement for assets like stablecoins.
+The Sui Currency Standard provides a `new_currency_with_otw` function to create currency using a One-Time Witness. To make the currency regulated, the module provides a `make_regulated` function that initializes the regulated currency and returns a `DenyCapV2`. The `DenyCapV2` bearer can add and remove addresses from a list that controls, or regulates, access to the coin. This ability is a requirement for assets like stablecoins.
 
 The TypeScript and Rust clients handle the call to the `coin` package's `mint` function. The `coin` package also includes a `mint_and_transfer` function you could use to perform the same task, but the composability of minting the coin in one command and transferring with another is preferable. Using two explicit commands allows you to implement future logic between the minting of the coin and the transfer. The structure of programmable transaction blocks means you're still making and paying for a single transaction on the network.
 
@@ -150,7 +161,7 @@ For the ability to manage the addresses assigned to the deny list for your coin,
 
 If you add an address to the deny list, you might notice that you can still send tokens to that address. If so, that's because the address is still able to receive coins until the end of the epoch in which you called the function. If you try to send the regulated coin from the now blocked address, your attempt results in an error. After the next epoch starts, the address can no longer receive the coins, either. If you remove the address, it can receive coins immediately but must wait until the epoch after removal before the address can include the coins as transaction inputs.
 
-To use these functions, you pass the address you want to either add or remove. The frontend function then calls the relevant move module in the framework, adding the `DenyList` object (`0x403`) and your `DenyCap` object ID. You receive the `DenyCap` ID at the time of publishing the smart contract. In this example, you add that value to the `.env` file that the frontend function reads from.
+To use these functions, you pass the address you want to either add or remove. The frontend function then calls the relevant move module in the framework, adding the `DenyList` object (`0x403`) and your `DenyCapV2` object ID. You receive the `DenyCapV2` ID at the time of publishing the smart contract. In this example, you add that value to the `.env` file that the frontend function reads from.
 
 <Tabs groupId="code-language">
 

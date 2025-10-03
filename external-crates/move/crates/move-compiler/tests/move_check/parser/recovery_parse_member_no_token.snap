@@ -9,7 +9,7 @@ error[E01008]: invalid hex string
   ┌─ tests/move_check/parser/recovery_parse_member_no_token.move:5:9
   │
 5 │         x"abcd
-  │         ^^^^^^ Missing closing quote (") after byte string
+  │         ^^^^^^ Missing closing quote (") after hex string
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/parser/recovery_parse_member_no_token.move:8:36
