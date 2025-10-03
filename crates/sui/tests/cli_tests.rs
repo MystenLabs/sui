@@ -2095,63 +2095,57 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     Ok(())
 }
 
-// TODO: pkg-alt FAILING TEST
-// #[sim_test]
-// async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result<(), anyhow::Error>
-// {
-//     let with_unpublished_dependencies = true; // Value under test, incompatible with dependencies that specify non-zero address.
-//
-//     let mut test_cluster = TestClusterBuilder::new().build().await;
-//     let rgp = test_cluster.get_reference_gas_price().await;
-//     let address = test_cluster.get_address_0();
-//     let context = &mut test_cluster.wallet;
-//
-//     let client = context.get_client().await?;
-//     let object_refs = client
-//         .read_api()
-//         .get_owned_objects(address, None, None, None)
-//         .await?
-//         .data;
-//
-//     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
-//
-//     let mut package_path = PathBuf::from(TEST_DATA_DIR);
-//     package_path.push("module_publish_with_unpublished_dependency_with_non_zero_address");
-//     let build_config = BuildConfig::new_for_testing().config;
-//     let result = SuiClientCommands::TestPublish(TestPublishArgs {
-//         publish_args: PublishArgs {
-//             package_path,
-//             build_config,
-//             skip_dependency_verification: false,
-//             verify_deps: true,
-//             with_unpublished_dependencies,
-//             payment: PaymentArgs {
-//                 gas: vec![gas_obj_id],
-//             },
-//             gas_data: GasDataArgs {
-//                 gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-//                 ..Default::default()
-//             },
-//             processing: TxProcessingArgs::default(),
-//         },
-//         build_env: Some("testnet".to_string()),
-//         pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
-//     })
-//     .execute(context)
-//     .await;
-//
-//     let expect = expect![[r#"
-//         Err(
-//             ModulePublishFailure {
-//                 error: "The following modules in package dependencies set a non-zero self-address:\n - 0000000000000000000000000000000000000000000000000000000000000bad::non_zero in dependency UnpublishedNonZeroAddress\nIf these packages really are unpublished, their self-addresses should be set to \"0x0\" in the [addresses] section of the manifest when publishing. If they are already published, ensure they specify the address in the `published-at` of their Move.toml manifest.",
-//             },
-//         )
-//     "#]];
-//     expect.assert_debug_eq(&result);
-//     Ok(())
-// }
+#[sim_test]
+async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result<(), anyhow::Error>
+{
+    let with_unpublished_dependencies = true; // Value under test, incompatible with dependencies that specify non-zero address.
 
-// TODO: pkg-alt FAILING TEST
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(address, None, None, None)
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("module_publish_with_unpublished_dependency_with_non_zero_address");
+    let build_config = BuildConfig::new_for_testing().config;
+    let result = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
+        },
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
+    .execute(context)
+    .await;
+    let err = result.unwrap_err().to_string();
+
+    // errors due to tree shaking wanting to fetch the linkage table of this unpublished pkg
+    assert!(err.contains("Failed to fetch package UnpublishedNonZeroAddress"));
+    Ok(())
+}
+
+// TODO: pkg alt FAILING TEST -
 // #[sim_test]
 // async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Error> {
 //     let with_unpublished_dependencies = true; // Invalid packages should fail to publish, even if we allow unpublished dependencies.
@@ -2213,56 +2207,6 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
 //         )
 //     "#]];
 //     expect.assert_debug_eq(&result);
-//     Ok(())
-// }
-
-// TODO: pkg-alt FAILING TEST
-// #[sim_test]
-// async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Error> {
-//     let mut test_cluster = TestClusterBuilder::new().build().await;
-//     let rgp = test_cluster.get_reference_gas_price().await;
-//     let address = test_cluster.get_address_0();
-//     let context = &mut test_cluster.wallet;
-//     let client = context.get_client().await?;
-//     let object_refs = client
-//         .read_api()
-//         .get_owned_objects(address, None, None, None)
-//         .await?
-//         .data;
-//
-//     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
-//
-//     let mut package_path = PathBuf::from(TEST_DATA_DIR);
-//     package_path.push("module_publish_with_nonexistent_dependency");
-//     let build_config = BuildConfig::new_for_testing().config;
-//     let result = SuiClientCommands::TestPublish(TestPublishArgs {
-//         publish_args: PublishArgs {
-//             package_path,
-//             build_config,
-//             skip_dependency_verification: false,
-//             verify_deps: true,
-//             with_unpublished_dependencies: false,
-//             payment: PaymentArgs {
-//                 gas: vec![gas_obj_id],
-//             },
-//             gas_data: GasDataArgs {
-//                 gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-//                 ..Default::default()
-//             },
-//             processing: TxProcessingArgs::default(),
-//         },
-//         build_env: Some("testnet".to_string()),
-//         pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
-//     })
-//     .execute(context)
-//     .await;
-//
-//     let err = result.unwrap_err().to_string();
-//     assert!(
-//         err.contains("Failed to fetch package Nonexistent"),
-//         "{}",
-//         err
-//     );
 //     Ok(())
 // }
 
@@ -2386,8 +2330,6 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// TODO: pkg-alt FAILING TEST
-/*
 #[sim_test]
 async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -2419,15 +2361,13 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_upgrade");
     let tmp_dir = tempdir().unwrap().keep();
-    fs_extra::dir::copy(
-        &package_path,
-        &tmp_dir,
-        &fs_extra::dir::CopyOptions::default(),
-    )
-    .unwrap();
+    copy_dir_all(package_path, &tmp_dir.join("dummy_modules_upgrade"))?;
+    let framework_pkgs = PathBuf::from("../sui-framework/packages");
+    copy_dir_all(framework_pkgs, tmp_dir.join("system-packages"))?;
 
-    let package_path = tmp_dir;
-    let _ = update_toml_with_localnet_chain_id(&package_path.join("Move.toml"), chain_id);
+    let mut package_path = tmp_dir;
+    package_path.push("dummy_modules_upgrade");
+    let _ = update_toml_with_localnet_chain_id(&package_path, chain_id);
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish(PublishArgs {
         package_path: package_path.clone(),
@@ -2458,22 +2398,11 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
 
     assert!(effects.status.is_ok());
     assert_eq!(effects.gas_object().object_id(), gas_obj_id);
-    // let package = effects
-    //     .created()
-    //     .iter()
-    //     .find(|refe| matches!(refe.owner, Owner::Immutable))
-    //     .unwrap();
-
-    let cap = effects
-        .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
-        .unwrap();
 
     // Now run the upgrade
     let resp = SuiClientCommands::Upgrade {
         package_path,
-        upgrade_capability: Some(cap.reference.object_id),
+        upgrade_capability: None,
         build_config,
         verify_compatibility: true,
         skip_dependency_verification: false,
@@ -2513,7 +2442,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     }
 
     Ok(())
-}*/
+}
 
 #[sim_test]
 async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Error> {

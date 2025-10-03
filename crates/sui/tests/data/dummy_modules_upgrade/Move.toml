@@ -5,5 +5,5 @@ edition = "2024.beta"
 system-dependencies = []
 
 [dependencies]
-sui = { local = "../sui-framework/packages/sui-framework" } # relative to the tempdir where the test runs and has all system pkgs
+sui = { local = "../system-packages/sui-framework" } # relative to the tempdir where the test runs and has all system pkgs
 
