@@ -388,6 +388,12 @@ fn op_step_impl(
             let reference = state.pop_operand_as::<VariantRef>()?;
             gas_meter.charge_variant_switch(&reference)?;
             let tag = reference.get_tag()?;
+            debug_assert!(
+                (tag as usize) < jump_table_ptr.len(),
+                "Variant tag {} out of bounds for jump table of size {}",
+                tag,
+                jump_table_ptr.len()
+            );
             state.call_stack.current_frame.pc = jump_table_ptr[tag as usize];
         }
         // -- OTHER OPCODES ----------------------
