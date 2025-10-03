@@ -1,4 +1,6 @@
 name: Trigger Release binaries builds
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
@@ -23,3 +25,17 @@ jobs:
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: build-release-binaries
           client-payload: '{"sui_commit": "${{ github.sha }}"}'
+
+  # Tag all sui images with branch names, so that they can be easily found
+  tag-docker-hub-images:
+    name: Tag sui docker images in DockerHub
+    if: github.event_name == 'push' && !startsWith(github.ref_name, 'releases') && github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: tag-docker-images
+          client-payload: '{"sui_commit": "${{ github.sha }}", "repo_name": "all", "tag": "${{ github.ref_name }}"}'
