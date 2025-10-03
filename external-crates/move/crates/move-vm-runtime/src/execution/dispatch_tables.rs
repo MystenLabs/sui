@@ -458,7 +458,7 @@ impl VMDispatchTables {
             return Ok(form.clone());
         }
 
-        let datatype = self.resolve_type(&datatype_name.clone())?.to_ref();
+        let datatype = self.resolve_type(&datatype_name)?.to_ref();
         let formulas = match datatype.datatype_info.inner_ref() {
             // The depth of enum is calculated as the maximum depth of any of its variants.
             Datatype::Enum(enum_type) => enum_type
