@@ -134,8 +134,13 @@ impl PackagePath {
     /// isn't correctly formatted
     pub(crate) fn read_lockfile(
         &self,
-        _mtx: &PackageLock,
+        mtx: &PackageLock,
     ) -> FileResult<Option<(FileHandle, ParsedLockfile)>> {
+        // TODO: this could maybe a little cleaner - don't really need to do a full parse just to
+        // see if it's a legacy file...
+        if self.read_legacy_lockfile(mtx)?.is_some() {
+            return Ok(None);
+        }
         parse_file(&self.lockfile_path())
     }
 
