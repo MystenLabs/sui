@@ -13,7 +13,9 @@ use crate::{
     FieldCount,
 };
 
-use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
+use super::{
+    processor::processor, CommitterConfig, ProcessorAsync, WatermarkPart, PIPELINE_BUFFER,
+};
 
 use self::{
     collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
@@ -46,7 +48,7 @@ mod reader_watermark;
 /// build up, the collector will stop accepting new checkpoints, which will eventually propagate
 /// back to the ingestion service.
 #[async_trait::async_trait]
-pub trait Handler: Processor<Value: FieldCount> {
+pub trait Handler: ProcessorAsync<Value: FieldCount> {
     type Store: Store;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
