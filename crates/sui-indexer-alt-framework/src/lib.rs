@@ -264,7 +264,6 @@ impl<S: Store> Indexer<S> {
         };
 
         let next_checkpoint = if let Some(task) = self.task.as_deref() {
-            // maybe this isn't even needed ... we can just warn in commit_watermark or something
             let mut conn = self
                 .store
                 .connect()
@@ -274,42 +273,29 @@ impl<S: Store> Indexer<S> {
             let main_reader_watermark = conn
                 .reader_watermark(H::NAME)
                 .await
-                .context("Failed to get reader watermark")?;
+                .context("Failed to get reader watermark")?
+                .unwrap_or_default();
 
-            let working_checkpoint = match (watermark, self.first_checkpoint) {
-                (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
-                // hmm.. tasked pipelines are a little diff in that, even once we set the correct checkpoint to resume
-                // by the time we've ingested up to that checkpoint, maybe the retention of the main pipeline has shifted
-                // so we need to account for that...
-                (_, Some(first_checkpoint)) => {
-                    let main_reader_lo = main_reader_watermark.unwrap_or_default().reader_lo;
-                    let resume = first_checkpoint.max(main_reader_lo);
+            let next_checkpoint = watermark
+                .map(|w| w.checkpoint_hi_inclusive + 1)
+                .or(self.first_checkpoint)
+                .unwrap_or_default();
 
-                    if first_checkpoint < main_reader_lo {
-                        warn!(
-                            pipeline = H::NAME,
-                            task = task,
-                            requested_first_checkpoint = first_checkpoint,
-                            main_reader_lo = main_reader_lo,
-                            actual_start_checkpoint = resume,
-                            "first_checkpoint is below main pipeline's reader_lo. \
-                             Starting tasked pipeline from main pipeline's reader_lo to avoid data gaps."
-                        );
-                    }
+            if next_checkpoint < main_reader_watermark.reader_lo {
+                warn!(
+                    pipeline = H::NAME,
+                    task = task,
+                    main_reader_lo = main_reader_watermark.reader_lo,
+                    "first_checkpoint or task committer watermark is below main pipeline's reader_lo. \
+                     Starting tasked pipeline from main pipeline's reader_lo to avoid data gaps."
+                );
+            }
 
-                    resume
-                }
-                (None, None) => 0,
-            };
-
-            working_checkpoint
+            main_reader_watermark.reader_lo.max(next_checkpoint)
         } else {
             // If this is not a tasked indexer, we're dealing with main pipelines. Check that the
             // `--first-checkpoint` is not greater than any main pipeline's committer watermark, as
             // this would create a gap in the indexed data.
-            //
-            // If `first_checkpoint` does not violate the consistency check, concurrent pipelines will
-            // prefer to resume from the `first_checkpoint` if configured.
             match (watermark, self.first_checkpoint) {
                 (Some(watermark), Some(first_checkpoint)) => {
                     ensure!(
@@ -320,7 +306,7 @@ impl<S: Store> Indexer<S> {
                         first_checkpoint,
                         watermark.checkpoint_hi_inclusive,
                 );
-                    first_checkpoint
+                    watermark.checkpoint_hi_inclusive + 1
                 }
                 (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
                 (_, Some(first_checkpoint)) => first_checkpoint,
@@ -479,8 +465,6 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
-        // If `first_checkpoint` does not violate the consistency check, sequential pipelines will
-        // prefer to resume from the existing watermark unless no watermark exists.
         let next_checkpoint = match (watermark, self.first_checkpoint) {
             (Some(watermark), Some(first_checkpoint)) => {
                 // Sequential pipelines must write data in the order of checkpoints. If there is a

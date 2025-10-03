@@ -1,12 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
+use sui_indexer_alt_framework_store_traits::Connection;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::CheckpointData,
@@ -216,12 +223,26 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let pruner_cancel = cancel.child_token();
     let handler = Arc::new(handler);
 
+    let main_reader_lo = if task.is_some() {
+        Some(Arc::new(AtomicU64::new(next_checkpoint)))
+    } else {
+        None
+    };
+
+    let main_reader_lo_task = main_reader_lo_task::<H>(
+        main_reader_lo.clone(),
+        Duration::from_millis(1000),
+        cancel.clone(),
+        store.clone(),
+    );
+
     let processor = processor(
         handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
         cancel.clone(),
+        main_reader_lo,
     );
 
     let collector = collector::<H>(
@@ -251,7 +272,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         cancel,
     );
 
-    // task pipelines will skip reader_watermark and pruner
+    // task pipelines will skip reader_watermark and pruner. Setting the pruner config to None will
+    // result in the tasks returning early.
+    let pruner_config = if task.is_some() { None } else { pruner_config };
 
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
@@ -269,7 +292,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     tokio::spawn(async move {
-        let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
+        let (_, _, _, _, _) = futures::join!(
+            main_reader_lo_task,
+            processor,
+            collector,
+            committer,
+            commit_watermark
+        );
 
         pruner_cancel.cancel();
         let _ = futures::join!(reader_watermark, pruner);
@@ -282,6 +311,50 @@ const fn max_chunk_rows<H: Handler>() -> usize {
     } else {
         i16::MAX as usize / H::Value::FIELD_COUNT
     }
+}
+
+pub(super) fn main_reader_lo_task<H: Handler + 'static>(
+    main_reader_lo: Option<Arc<AtomicU64>>,
+    interval: Duration,
+    cancel: CancellationToken,
+    store: H::Store,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let Some(main_reader_lo) = main_reader_lo else {
+            info!(pipeline = H::NAME, "Skipping main reader lo task");
+            return;
+        };
+
+        let mut interval = tokio::time::interval(interval);
+        loop {
+            tokio::select! {
+                _ = cancel.cancelled() => {
+                    info!(pipeline = H::NAME, "Shutdown received");
+                    break;
+                }
+
+                _ = interval.tick() => {
+                    match store.connect().await {
+                        Ok(mut conn) => match conn.reader_watermark(H::NAME).await {
+                            Ok(Some(main_reader_watermark)) => {
+                                let current_reader_lo = main_reader_watermark.reader_lo;
+                                main_reader_lo.store(current_reader_lo, Ordering::Relaxed);
+                            }
+                            Ok(None) => {
+                                warn!("No reader watermark found");
+                            }
+                            Err(e) => {
+                                warn!("Failed to get reader watermark: {e}");
+                            }
+                        },
+                        Err(e) => {
+                            warn!("Failed to connect to store: {e}");
+                        }
+                    }
+                }
+            }
+        }
+    })
 }
 
 #[cfg(test)]
