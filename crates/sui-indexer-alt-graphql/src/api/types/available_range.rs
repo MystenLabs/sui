@@ -92,6 +92,9 @@ fn collect_pipelines(
 ) {
     match (type_, field, filters) {
         // Address fields
+        ("Address", Some("asObject"), filters) => {
+            collect_pipelines("IObject", Some("objectAt"), filters, pipelines);
+        }
         ("Address", Some("transactions"), mut filters) => {
             filters.insert("affectedAddress".to_string());
             collect_pipelines("Query", Some("transactions"), filters, pipelines);
@@ -103,11 +106,21 @@ fn collect_pipelines(
         ) => {
             collect_pipelines("IAddressable", field, filters, pipelines);
         }
-        // An Address can access MoveObjects by getting the object at its address. But IAddressable does
-        // not implement IMoveObject because it will incorrectly require MovePackage to implement IMoveObject.
-        //
-        ("Address", Some("dynamicFields"), filters) => {
-            collect_pipelines("IMoveObject", Some("dynamicFields"), filters, pipelines);
+        // Address has `dynamicFields` to allow for fetching fields on wrapped objects. But we do not want
+        // to add `dynamicFields` to `IAddressable`, because that would incorrectly require MovePackage
+        // to offer it.
+        (
+            "Address",
+            field @ Some(
+                "dynamicField"
+                | "dynamicFields"
+                | "dynamicObjectField"
+                | "multiGetDynamicFields"
+                | "multiGetDynamicObjectFields",
+            ),
+            filters,
+        ) => {
+            collect_pipelines("IMoveObject", field, filters, pipelines);
         }
 
         // Checkpoint fields
@@ -123,17 +136,17 @@ fn collect_pipelines(
         ("CoinMetadata", Some("dynamicFields"), filters) => {
             collect_pipelines("IMoveObject", Some("dynamicFields"), filters, pipelines);
         }
-        ("CoinMetadata", Some("objects"), filters) => {
-            collect_pipelines("IObject", Some("objects"), filters, pipelines);
+        ("CoinMetadata", filter @ Some("objects" | "receivedTransactions"), filters) => {
+            collect_pipelines("IObject", filter, filters, pipelines);
         }
-        ("CoinMetadata", Some("receivedTransactions"), filters) => {
-            collect_pipelines(
-                "IMoveObject",
-                Some("receivedTransactions"),
-                filters,
-                pipelines,
-            );
+        (
+            "CoinMetadata",
+            field @ Some("objectAt" | "objectVersionsAfter" | "objectVersionsBefore"),
+            filters,
+        ) => {
+            collect_pipelines("IObject", field, filters, pipelines);
         }
+
         ("CoinMetadata", Some("supply"), _) => {
             pipelines.insert("consistent".to_string());
         }
@@ -141,6 +154,9 @@ fn collect_pipelines(
         // Epoch fields
         ("Epoch", Some("checkpoints"), filters) => {
             collect_pipelines("Query", Some("checkpoints"), filters, pipelines);
+        }
+        ("Epoch", Some("coinDenyList"), _) => {
+            pipelines.insert("obj_versions".to_string());
         }
 
         // Event fields
@@ -152,10 +168,29 @@ fn collect_pipelines(
         ("IAddressable", Some("balance" | "balances" | "multiGetBalances" | "objects"), _) => {
             pipelines.insert("consistent".to_string());
         }
+        ("IAddressable", Some("defaultSuinsName"), _) => {
+            pipelines.insert("obj_versions".to_string());
+        }
 
         // IMoveObject fields
         ("IMoveObject", Some("dynamicFields"), _) => {
             pipelines.insert("consistent".to_string());
+        }
+        (
+            "IMoveObject",
+            Some(
+                "contents"
+                | "dynamicField"
+                | "hasPublicTransfer"
+                | "dynamicObjectField"
+                | "objectVersionsBefore"
+                | "moveObjectBcs"
+                | "multiGetDynamicFields"
+                | "multiGetDynamicObjectFields",
+            ),
+            _,
+        ) => {
+            pipelines.insert("obj_versions".to_string());
         }
 
         // IObject fields
@@ -166,16 +201,81 @@ fn collect_pipelines(
             filters.insert("affectedAddress".to_string());
             collect_pipelines("Query", Some("transactions"), filters, pipelines);
         }
+        (
+            "IObject",
+            Some(
+                "digest"
+                | "objectAt"
+                | "objectBcs"
+                | "objectVersionsAfter"
+                | "objectVersionsBefore"
+                | "owner"
+                | "previousTransaction"
+                | "storageRebate"
+                | "version",
+            ),
+            _,
+        ) => {
+            pipelines.insert("obj_versions".to_string());
+        }
+        // Object fields
+        (
+            "Object",
+            field @ Some(
+                "address" | "balance" | "balances" | "defaultSuiNsName" | "multiGetBalances"
+                | "objects",
+            ),
+            filters,
+        ) => collect_pipelines("IAddressable", field, filters, pipelines),
+        (
+            "Object",
+            field @ Some(
+                "asMoveObject"
+                | "asMovePackage"
+                | "dynamicField"
+                | "dynamicFields"
+                | "dynamicObjectField"
+                | "multiGetDynamicFields"
+                | "multiGetDynamicObjectFields",
+            ),
+            filters,
+        ) => collect_pipelines("IMoveObject", field, filters, pipelines),
+        (
+            "Object",
+            field @ Some(
+                "digest"
+                | "objectAt"
+                | "objectBcs"
+                | "objectVersionsAfter"
+                | "objectVersionsBefore"
+                | "owner"
+                | "previousTransaction"
+                | "storageRebate"
+                | "version",
+            ),
+            filters,
+        ) => collect_pipelines("IObject", field, filters, pipelines),
 
         // MovePackage fields
         ("MovePackage", field @ Some("balance" | "balances" | "multiGetBalances"), filters) => {
             collect_pipelines("IAddressable", field, filters, pipelines);
         }
-        ("MovePackage", Some("objects"), filters) => {
-            collect_pipelines("IObject", Some("objects"), filters, pipelines);
-        }
-        ("MovePackage", Some("receivedTransactions"), filters) => {
-            collect_pipelines("IObject", Some("receivedTransactions"), filters, pipelines);
+        (
+            "MovePackage",
+            field @ Some(
+                "digest"
+                | "objectAt"
+                | "objectBcs"
+                | "objectVersionsAfter"
+                | "objectVersionsBefore"
+                | "owner"
+                | "receivedTransactions"
+                | "storageRebate"
+                | "version",
+            ),
+            filters,
+        ) => {
+            collect_pipelines("IObject", field, filters, pipelines);
         }
 
         // Query fields
@@ -193,8 +293,14 @@ fn collect_pipelines(
                 pipelines.insert("ev_struct_inst".to_string());
             }
         }
+        ("Query", Some("object"), _) => {
+            pipelines.insert("obj_versions".to_string());
+        }
         ("Query", Some("objects"), _) => {
             pipelines.insert("consistent".to_string());
+        }
+        ("Query", Some("objectVersions"), _) => {
+            pipelines.insert("obj_versions".to_string());
         }
         ("Query", Some("transactions"), filters) => {
             pipelines.insert("tx_digests".to_string());

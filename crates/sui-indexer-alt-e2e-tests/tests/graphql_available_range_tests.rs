@@ -7,7 +7,9 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster, OffchainClusterConfig};
+use sui_indexer_alt_e2e_tests::{find::address_owned, FullCluster, OffchainClusterConfig};
+
+use sui_indexer_alt_graphql::config::{RpcConfig as GraphQlConfig, WatermarkConfig};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{get_account_key_pair, Signature, Signer},
@@ -33,15 +35,29 @@ const AVAILABLE_RANGE_QUERY: &str = r#"
     }
 "#;
 
-const TRANSACTIONS_QUERY: &str = r#"
-    query($filter: TransactionFilter!, $first: Int) {
-        transactions(filter: $filter, first: $first) {
-            nodes {
-                digest
-            }
-        }
-    }
-"#;
+/// Tests happy path for SuiNS resolution (forward lookup).
+macro_rules! assert_sequence_numbers_eq {
+    ($first:expr, $last:expr, $resp:expr) => {
+        let resp = $resp;
+        let first = resp["data"]["serviceConfig"]["availableRange"]["first"]["sequenceNumber"]
+            .as_u64()
+            .unwrap();
+        let last = resp["data"]["serviceConfig"]["availableRange"]["last"]["sequenceNumber"]
+            .as_u64()
+            .unwrap();
+
+        assert_eq!(
+            $first, first,
+            "Expected first sequence number {}, got {resp:#?}",
+            $first,
+        );
+        assert_eq!(
+            $last, last,
+            "Expected last sequence number {}, got {resp:#?}",
+            $last,
+        );
+    };
+}
 
 /// Test available range queries with retention configurations
 #[tokio::test]
@@ -57,42 +73,16 @@ async fn test_available_range_with_pipelines() {
     let (a, akp) = get_account_key_pair();
     let (b, _) = get_account_key_pair();
 
-    // Create 10 checkpoints with transactions from `a` and `b`. Each checkpoint contains one
-    // transactions from `a` to `b`.
-    for _ in 0..10 {
+    // (1) Create 4 checkpoints with transactions from `a` and `b`. Each checkpoint contains one
+    // transactions from `a` to `b`.  At this point we have 5 total checkpoints (Cp 0 is created by the cluster),
+    // nothing should be pruned on either side.
+    for _ in 1..=4 {
         transfer_dust(&mut cluster, a, &akp, b);
         cluster.create_checkpoint().await;
     }
 
-    cluster
-        .wait_for_pruner("tx_affected_addresses", 5, Duration::from_secs(10))
-        .await
-        .unwrap();
-
-    // TODO: (henrychen) Add tests when we use retention configs in our pagination api
-    let tx = execute_graphql_query(
-        &cluster,
-        TRANSACTIONS_QUERY,
-        Some(json!({
-            "filter": {
-                "sentAddress": a.to_string()
-            },
-            "first": 20
-        })),
-    )
-    .await;
-
-    // There should only be 5 transactions after pruning as we only retain 5 checkpoints. and each checkpoint contains one transaction.
-    assert_eq!(
-        tx["data"]["transactions"]["nodes"]
-            .as_array()
-            .unwrap()
-            .len(),
-        5
-    );
-
-    // Last 5 checkpoints are available as we retain 5 checkpoints for tx_affected_addresses.
-    let affected_addresses_retention = execute_graphql_query(
+    // Last 5 checkpoints are available as we have not pruned yet.
+    let affected_addresses_available_range = execute_graphql_query(
         &cluster,
         AVAILABLE_RANGE_QUERY,
         Some(json!({
@@ -103,38 +93,48 @@ async fn test_available_range_with_pipelines() {
     )
     .await;
 
-    assert_eq!(
-        affected_addresses_retention["data"]["serviceConfig"]["availableRange"]["first"]
-            ["sequenceNumber"]
-            .as_u64()
-            .unwrap(),
-        6
-    );
-    assert_eq!(
-        affected_addresses_retention["data"]["serviceConfig"]["availableRange"]["last"]
-            ["sequenceNumber"]
-            .as_u64()
-            .unwrap(),
-        10
-    );
+    assert_sequence_numbers_eq!(0, 4, affected_addresses_available_range);
 
-    for _ in 0..10 {
+    // (2) Add 1 more checkpoint, now the affected_addresses table is pruned, but the digests are not.
+    transfer_dust(&mut cluster, a, &akp, b);
+    cluster.create_checkpoint().await;
+
+    cluster
+        .wait_for_pruner("tx_affected_addresses", 1, Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    let affected_addresses_available_range = execute_graphql_query(
+        &cluster,
+        AVAILABLE_RANGE_QUERY,
+        Some(json!({
+            "type": "Query".to_string(),
+            "field": "transactions".to_string(),
+            "filters": ["affectedAddress".to_string()]
+        })),
+    )
+    .await;
+
+    assert_sequence_numbers_eq!(1, 5, affected_addresses_available_range);
+
+    // (3) Add 5 more checkpoints, now both tables have been pruned.
+    for _ in 6..=10 {
         transfer_dust(&mut cluster, a, &akp, b);
         cluster.create_checkpoint().await;
     }
 
     cluster
-        .wait_for_pruner("tx_affected_addresses", 10, Duration::from_secs(10))
+        .wait_for_pruner("tx_digests", 1, Duration::from_secs(10))
         .await
         .unwrap();
 
     cluster
-        .wait_for_pruner("tx_digests", 5, Duration::from_secs(10))
+        .wait_for_pruner("tx_affected_addresses", 6, Duration::from_secs(10))
         .await
         .unwrap();
 
-    // Last 10 checkpoints are available as we retain 10 checkpoints for tx_digests.
-    let transasction_retention = execute_graphql_query(
+    // Last 10 checkpoints of 11 checkpoints are available as we retain 10 checkpoints for tx_digests.
+    let transasction_available_range = execute_graphql_query(
         &cluster,
         AVAILABLE_RANGE_QUERY,
         Some(json!({
@@ -145,19 +145,7 @@ async fn test_available_range_with_pipelines() {
     )
     .await;
 
-    assert_eq!(
-        transasction_retention["data"]["serviceConfig"]["availableRange"]["first"]
-            ["sequenceNumber"]
-            .as_u64()
-            .unwrap(),
-        11
-    );
-    assert_eq!(
-        transasction_retention["data"]["serviceConfig"]["availableRange"]["last"]["sequenceNumber"]
-            .as_u64()
-            .unwrap(),
-        20
-    );
+    assert_sequence_numbers_eq!(1, 10, transasction_available_range);
 
     cluster.stopped().await;
 }
@@ -170,6 +158,12 @@ async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
             indexer_config: IndexerConfig {
                 pipeline,
                 ..IndexerConfig::for_test()
+            },
+            graphql_config: GraphQlConfig {
+                watermark: WatermarkConfig {
+                    watermark_polling_interval: Duration::from_millis(100),
+                },
+                ..Default::default()
             },
             ..Default::default()
         },
@@ -205,7 +199,7 @@ fn transfer_dust(
         .request_gas(sender, DEFAULT_GAS_BUDGET + 1)
         .expect("Failed to request gas");
 
-    let gas = find_address_owned(&fx).expect("Failed to find gas object");
+    let gas = address_owned(&fx).expect("Failed to find gas object");
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.transfer_sui(recipient, Some(1));
