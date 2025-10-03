@@ -356,7 +356,6 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
     build_config: &BuildConfig,
 ) -> anyhow::Result<Vec<PackagePaths>> {
     let mut package_paths: Vec<PackagePaths> = vec![];
-    // let cwd = std::env::current_dir()?;
     for pkg in packages.into_iter() {
         let name: Symbol = pkg.display_name().into();
 
@@ -364,28 +363,15 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
             writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
         }
 
-        let mut named_addresses = pkg.named_addresses()?;
-
-        // If set_unpublished_deps_to_zero is enabled, transform the addresses
-        if build_config.set_unpublished_deps_to_zero {
-            // Set root package to 0x0 if unpublished
-            if pkg.is_root() {
-                if let Some(root_addr) = named_addresses.get_mut(pkg.name()) {
-                    if matches!(root_addr, NamedAddress::RootPackage(_)) {
-                        *root_addr = NamedAddress::Defined(OriginalID(AccountAddress::ZERO));
-                    }
-                }
+        let named_addresses = pkg.named_addresses()?;
+        let addresses = named_addresses.map(|addr| match addr {
+            NamedAddress::Defined(addr) => addr,
+            NamedAddress::Root(addr) => addr,
+            NamedAddress::Unpublished(dummy) if build_config.set_unpublished_deps_to_zero => {
+                NamedAddress::Defined(OriginalID(AccountAddress::ZERO))
             }
-
-            // Set all unpublished dependencies to 0x0
-            for (_, addr) in named_addresses.iter_mut() {
-                if matches!(addr, NamedAddress::Unpublished { .. }) {
-                    *addr = NamedAddress::Defined(OriginalID(AccountAddress::ZERO));
-                }
-            }
-        }
-
-        let addresses: BuildNamedAddresses = named_addresses.into();
+            NamedAddress::Unpublished(dummy) => dummy,
+        });
 
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {
@@ -400,11 +386,6 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
 
         // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
         let safe_name = Symbol::from(pkg.id().clone());
-
-        // let sources = get_sources(pkg.path(), build_config)?
-        //     .iter()
-        //     .map(|x| x.replace(cwd.to_str().unwrap(), ".").into())
-        //     .collect();
 
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
         debug!("Named address map {:#?}", addresses);
