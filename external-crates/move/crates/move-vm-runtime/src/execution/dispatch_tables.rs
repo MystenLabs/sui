@@ -88,7 +88,7 @@ pub struct PackageVirtualTable {
 #[derive(Debug)]
 pub struct DefinitionMap<Value>(HashMap<IntraPackageKey, Value>);
 
-/// runtime_address::module_name::function_name
+/// original_address::module_name::function_name
 /// NB: This relies on no boxing -- if this introduces boxes, the arena allocation in the execution
 /// AST will leak memory.
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -171,9 +171,9 @@ impl VMDispatchTables {
 
     pub fn resolve_loaded_module(
         &self,
-        runtime_id: &ModuleId,
+        original_id: &ModuleId,
     ) -> PartialVMResult<VMPointer<Module>> {
-        let (package, module_id) = runtime_id.into();
+        let (package, module_id) = original_id.into();
         let package = self.loaded_packages.get(package).ok_or_else(|| {
             PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                 .with_message(format!("Package {} not found", package))
@@ -278,12 +278,12 @@ impl VMDispatchTables {
 
                 // The computed runtime ID should match the runtime ID of the datatype that we have
                 // loaded.
-                if datatype.runtime_id.address() != &package_key {
+                if datatype.original_id.address() != &package_key {
                     return Err(
                         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                             .with_message(format!(
                                 "Runtime ID resolution of {defining_id} => {package_key} does not match runtime ID of loaded type: {}",
-                                datatype.runtime_id.address()
+                                datatype.original_id.address()
 
                             ))
                             .finish(Location::Undefined),
@@ -399,7 +399,7 @@ impl VMDispatchTables {
             Type::Datatype(vtable_key) => {
                 let descriptor = self.resolve_type(vtable_key)?.to_ref();
                 Some(DatatypeInfo {
-                    original_id: *descriptor.runtime_id.address(),
+                    original_id: *descriptor.original_id.address(),
                     defining_id: *descriptor.defining_id.address(),
                     module_name: descriptor.defining_id.name(),
                     type_name: resolve_interned(&descriptor.name, "type name")?,
@@ -409,7 +409,7 @@ impl VMDispatchTables {
                 let (idx, _) = &**inst;
                 let descriptor = self.resolve_type(idx)?.to_ref();
                 Some(DatatypeInfo {
-                    original_id: *descriptor.runtime_id.address(),
+                    original_id: *descriptor.original_id.address(),
                     defining_id: *descriptor.defining_id.address(),
                     module_name: descriptor.defining_id.name(),
                     type_name: resolve_interned(&descriptor.name, "type name")?,
@@ -554,8 +554,8 @@ impl VMDispatchTables {
 
         let (address, module) = match tag_type {
             DatatypeTagType::Runtime => (
-                *datatype.runtime_id.address(),
-                datatype.runtime_id.name().to_owned(),
+                *datatype.original_id.address(),
+                datatype.original_id.name().to_owned(),
             ),
 
             DatatypeTagType::Defining => (

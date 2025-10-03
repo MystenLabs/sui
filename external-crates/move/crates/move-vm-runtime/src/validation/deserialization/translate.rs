@@ -29,10 +29,10 @@ pub(crate) fn package(vm_config: &VMConfig, pkg: SerializedPackage) -> VMResult<
             .finish(Location::Undefined));
     }
 
-    let runtime_id = *modules.keys().next().expect("non-empty package").address();
+    let original_id = *modules.keys().next().expect("non-empty package").address();
 
     Ok(Package::new(
-        runtime_id,
+        original_id,
         modules.into_values().collect(),
         pkg,
     ))

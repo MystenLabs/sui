@@ -1,4 +1,4 @@
-use crate::shared::types::{DefiningTypeId, OriginalId};
+use crate::shared::types::{DefiningTypeId, OriginalId, VersionId};
 use indexmap::IndexMap;
 use move_binary_format::CompiledModule;
 use move_core_types::{
@@ -10,12 +10,12 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone)]
 pub(crate) struct Package {
     pub(crate) original_id: OriginalId,
-    pub(crate) version_id: DefiningTypeId,
+    pub(crate) version_id: VersionId,
     pub(crate) modules: BTreeMap<ModuleId, CompiledModule>,
     #[allow(dead_code)]
     pub(crate) type_origin_table: IndexMap<IntraPackageName, DefiningTypeId>,
     #[allow(dead_code)]
-    pub(crate) linkage_table: BTreeMap<OriginalId, DefiningTypeId>,
+    pub(crate) linkage_table: BTreeMap<OriginalId, VersionId>,
     pub(crate) version: u64,
 }
 

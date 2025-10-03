@@ -10,7 +10,6 @@ use std::{
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, ExecutionErrorKind},
-    move_package::MovePackage,
 };
 
 /// Unifiers. These are used to determine how to unify two packages.
@@ -41,30 +40,6 @@ impl ResolutionTable {
             all_versions_resolution_table: BTreeMap::new(),
         }
     }
-
-    #[allow(dead_code)]
-    pub fn merge(&mut self, other: &ResolutionTable) -> Result<(), ExecutionError> {
-        for (object_id, resolution) in other.resolution_table.iter() {
-            if let Entry::Vacant(e) = self.resolution_table.entry(*object_id) {
-                e.insert(resolution.clone());
-            } else {
-                let existing_unifier = self
-                    .resolution_table
-                    .get_mut(object_id)
-                    .expect("Guaranteed to exist");
-                *existing_unifier = existing_unifier.unify(resolution)?;
-            }
-        }
-
-        for (object_id, original_pkg_id) in other.all_versions_resolution_table.iter() {
-            if !self.all_versions_resolution_table.contains_key(object_id) {
-                self.all_versions_resolution_table
-                    .insert(*object_id, *original_pkg_id);
-            }
-        }
-
-        Ok(())
-    }
 }
 
 impl VersionConstraint {
@@ -80,11 +55,6 @@ impl VersionConstraint {
             pkg.version(),
             pkg.version_id().into(),
         ))
-    }
-
-    #[allow(dead_code)]
-    pub fn no_constraint(_pkg: &MovePackage) -> Option<VersionConstraint> {
-        None
     }
 
     pub fn unify(&self, other: &VersionConstraint) -> Result<VersionConstraint, ExecutionError> {

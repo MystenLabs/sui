@@ -1841,9 +1841,9 @@ fn into_annotated_move_value(
     Some(value.as_annotated_move_value(type_)?.into())
 }
 
-fn get_version_id(vtables: &VMDispatchTables, runtime_id: &ModuleId) -> AccountAddress {
+fn get_version_id(vtables: &VMDispatchTables, original_id: &ModuleId) -> AccountAddress {
     vtables
-        .get_package(runtime_id.address())
+        .get_package(original_id.address())
         .expect("Package must be loaded")
         .version_id
 }
