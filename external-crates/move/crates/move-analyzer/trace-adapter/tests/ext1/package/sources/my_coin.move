@@ -26,10 +26,10 @@ public fun mint(
     ctx: &mut TxContext,
 ): coin::Coin<MY_COIN> {
     let mut amount = 0;
-    while (!vec.is_empty()) {
-        amount = amount + vec.pop_back();
+//    while (!vec.is_empty()) {
+//        amount = amount + vec.pop_back();
 
-    };
+//    };
     coin::mint(treasury_cap, amount, ctx)
 }
 

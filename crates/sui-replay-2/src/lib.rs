@@ -32,6 +32,7 @@ pub mod artifacts;
 pub mod data_stores;
 pub mod displays;
 pub mod execution;
+pub mod package_tools;
 pub mod replay_interface;
 pub mod replay_txn;
 pub mod summary_metrics;
@@ -40,6 +41,8 @@ pub mod tracing;
 const DEFAULT_OUTPUT_DIR: &str = ".replay";
 const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
 const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
+const MAINNET_RPC_URL: &str = "https://fullnode.mainnet.sui.io:443";
+const TESTNET_RPC_URL: &str = "https://fullnode.testnet.sui.io:443";
 const CONFIG_FILE_NAME: &str = "replay.toml";
 
 // Arguments to the replay tool.
@@ -56,10 +59,65 @@ const CONFIG_FILE_NAME: &str = "replay.toml";
     rename_all = "kebab-case"
 )]
 pub struct Config {
+    #[command(subcommand)]
+    pub command: Option<Command>,
     #[command(flatten)]
     pub replay_stable: ReplayConfigStable,
     #[command(flatten)]
     pub replay_experimental: ReplayConfigExperimental,
+}
+
+/// Subcommands for the replay tool
+#[derive(Parser, Clone, Debug)]
+pub enum Command {
+    /// Rebuild a package from cache and source
+    RebuildPackage {
+        /// Package ID to rebuild
+        #[arg(long = "pkg-id")]
+        package_id: String,
+
+        /// Path to package source directory
+        #[arg(long = "pkg-src")]
+        package_source: PathBuf,
+
+        /// Output path for rebuilt package binary. If not specified, replaces the package in cache
+        #[arg(short = 'o', long = "output")]
+        output_path: Option<PathBuf>,
+
+        /// RPC of the fullnode used to fetch the package
+        #[arg(short = 'n', long = "node", default_value = "mainnet")]
+        node: Node,
+    },
+
+    /// Extract a package from cache to a file
+    ExtractPackage {
+        /// Package ID to extract
+        #[arg(long = "pkg-id")]
+        package_id: String,
+
+        /// Output path for extracted package binary
+        #[arg(short = 'o', long = "output")]
+        output_path: PathBuf,
+
+        /// RPC of the fullnode cache to extract from
+        #[arg(short = 'n', long = "node", default_value = "mainnet")]
+        node: Node,
+    },
+
+    /// Overwrite a package in cache with a provided package file
+    OverwritePackage {
+        /// Package ID to overwrite
+        #[arg(long = "pkg-id")]
+        package_id: String,
+
+        /// Path to the package file to write
+        #[arg(long = "pkg-path")]
+        package_path: PathBuf,
+
+        /// RPC of the fullnode cache to write to
+        #[arg(short = 'n', long = "node", default_value = "mainnet")]
+        node: Node,
+    },
 }
 
 /// Arguments for replay (used for both CLI and config file)
@@ -212,6 +270,15 @@ impl Node {
             // Node::Devnet => "devnet",
             // TODO: custom provides a URL which has to be translated to a valid directory name
             Node::Custom(_) => "custom",
+        }
+    }
+
+    pub fn get_rpc_url(&self) -> &str {
+        match self {
+            Node::Mainnet => MAINNET_RPC_URL,
+            Node::Testnet => TESTNET_RPC_URL,
+            // For custom, assume it's already an RPC URL
+            Node::Custom(url) => url.as_str(),
         }
     }
 }

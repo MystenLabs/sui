@@ -10,7 +10,7 @@
 //! ```text
 //! ~/.replay_data_store/
 //!   node_mapping.csv              (CSV: "node,chain_id" mappings)
-//!   <chain_id>/                  
+//!   <chain_id>/
 //!     transaction/
 //!       <tx_digest>              (BCS: TransactionFileData)
 //!     epoch/
@@ -81,6 +81,15 @@ use sui_types::{
     supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::TransactionData,
 };
+
+// Public constants for file system paths
+pub const REPLAY_STORE_DIR: &str = ".replay_data_store";
+pub const NODE_MAPPING_FILE: &str = "node_mapping.csv";
+pub const OBJECTS_DIR: &str = "objects";
+pub const TRANSACTION_DIR: &str = "transaction";
+pub const EPOCH_DIR: &str = "epoch";
+pub const ROOT_VERSIONS_FILE: &str = "root_versions";
+pub const CHECKPOINT_VERSIONS_FILE: &str = "checkpoint_versions";
 
 /// Serializable wrapper for transaction data stored in files
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -159,16 +168,7 @@ pub struct FileSystemStore {
 
 impl FileSystemStore {
     pub fn new(node: Node) -> Result<Self, anyhow::Error> {
-        let home_dir = std::env::var("REPLAY_STORE")
-            .or_else(|_| std::env::var("SUI_CONFIG_DIR"))
-            .or_else(|_| std::env::var("HOME"))
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .map_err(|_| {
-                anyhow!(
-                    "Cannot determine home directory. Define a REPLAY_STORE environment variable"
-                )
-            })?;
-        let base_path = PathBuf::from(home_dir).join(".replay_data_store");
+        let base_path = Self::base_path()?;
         Ok(Self {
             node,
             base_path,
@@ -178,6 +178,19 @@ impl FileSystemStore {
         })
     }
 
+    pub fn base_path() -> Result<PathBuf, anyhow::Error> {
+        let home_dir = std::env::var("REPLAY_STORE")
+            .or_else(|_| std::env::var("SUI_CONFIG_DIR"))
+            .or_else(|_| std::env::var("HOME"))
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .map_err(|_| {
+                anyhow!(
+                    "Cannot determine home directory. Define a REPLAY_STORE environment variable"
+                )
+            })?;
+        Ok(PathBuf::from(home_dir).join(REPLAY_STORE_DIR))
+    }
+
     fn node_dir(&self) -> Result<PathBuf, anyhow::Error> {
         // Read the chain identifier mapping to determine the directory name
         let chain_id = self.get_chain_id_for_node()?;
@@ -185,7 +198,7 @@ impl FileSystemStore {
     }
 
     fn get_chain_id_for_node(&self) -> Result<String, anyhow::Error> {
-        let mapping_file = self.base_path.join("node_mapping.csv");
+        let mapping_file = self.base_path.join(NODE_MAPPING_FILE);
 
         if !mapping_file.exists() {
             return Err(anyhow::anyhow!(
@@ -241,29 +254,29 @@ impl FileSystemStore {
     }
 
     fn transaction_dir(&self) -> Result<PathBuf, anyhow::Error> {
-        Ok(self.node_dir()?.join("transaction"))
+        Ok(self.node_dir()?.join(TRANSACTION_DIR))
     }
 
     fn epoch_dir(&self) -> Result<PathBuf, anyhow::Error> {
-        Ok(self.node_dir()?.join("epoch"))
+        Ok(self.node_dir()?.join(EPOCH_DIR))
     }
 
     fn objects_dir(&self) -> Result<PathBuf, anyhow::Error> {
-        Ok(self.node_dir()?.join("objects"))
+        Ok(self.node_dir()?.join(OBJECTS_DIR))
     }
 
     fn root_versions_path(&self, object_id: &ObjectID) -> Result<PathBuf, anyhow::Error> {
         Ok(self
             .objects_dir()?
             .join(object_id.to_string())
-            .join("root_versions"))
+            .join(ROOT_VERSIONS_FILE))
     }
 
     fn checkpoint_versions_path(&self, object_id: &ObjectID) -> Result<PathBuf, anyhow::Error> {
         Ok(self
             .objects_dir()?
             .join(object_id.to_string())
-            .join("checkpoint_versions"))
+            .join(CHECKPOINT_VERSIONS_FILE))
     }
 
     fn read_bcs_file<T: serde::de::DeserializeOwned>(
@@ -726,7 +739,7 @@ impl SetupStore for FileSystemStore {
 
 impl FileSystemStore {
     fn write_chain_identifier(&self, chain_id: String) -> Result<(), anyhow::Error> {
-        let mapping_file = self.base_path.join("node_mapping.csv");
+        let mapping_file = self.base_path.join(NODE_MAPPING_FILE);
 
         // Create the base directory if it doesn't exist
         if let Some(parent) = mapping_file.parent() {

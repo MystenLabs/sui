@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution::ReplayCacheSummary;
+use anyhow::bail;
 use std::{
     io::Write,
     path::{Path, PathBuf},
 };
 
-use crate::execution::ReplayCacheSummary;
 use move_trace_format::format::{MoveTrace, MoveTraceReader};
 use sui_types::{effects::TransactionEffects, gas::GasUsageReport};
 
@@ -282,5 +283,20 @@ impl ArtifactMember<'_, '_> {
                     })
             }
         })
+    }
+
+    pub fn try_remove_artifact(&self) -> anyhow::Result<()> {
+        if self.manager.overrides_allowed {
+            if let Err(e) = std::fs::remove_file(&self.artifact_path) {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    bail!(
+                        "Failed to remove file {}: {:?}",
+                        self.artifact_path.display(),
+                        e
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 }
