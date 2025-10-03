@@ -357,8 +357,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.filtered_graph.packages()
     }
 
-    pub fn update_lockfile_sync(&mut self) -> PackageResult<()> {
-        block_on!(self.update_lockfile())
+    pub fn save_lockfile_to_disk_sync(&mut self) -> PackageResult<()> {
+        block_on!(self.save_lockfile_to_disk())
     }
 
     /// Update the dependencies in the lockfile for this environment to match the dependency graph
@@ -366,7 +366,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// Before overwriting the lockfile, this function also extracts any publication information
     /// from the legacy lockfile and writes it into the pubfile
-    pub async fn update_lockfile(&mut self) -> PackageResult<()> {
+    pub async fn save_lockfile_to_disk(&mut self) -> PackageResult<()> {
         let mtx = PackageLock::new()?;
 
         // migrate any pubs from the legacy lockfile to the modern pubfile before we clobber the
@@ -673,7 +673,7 @@ pkg_b = { local = "../pkg_b" }"#,
             .await
             .unwrap();
 
-        root.update_lockfile().await.unwrap();
+        root.save_lockfile_to_disk().await.unwrap();
         let lockfile = root.output_path.dump_lockfile().await.render_as_toml();
 
         assert_snapshot!(lockfile, @r###"
@@ -724,7 +724,7 @@ pkg_b = { local = "../pkg_b" }"#,
                 .await
                 .unwrap();
 
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
         assert_eq!(sha, commit.sha());
@@ -746,7 +746,7 @@ pkg_b = { local = "../pkg_b" }"#,
                 .await
                 .unwrap();
 
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
         assert_eq!(sha, commit.sha());
@@ -770,7 +770,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         // change the branch
         let commit2 = repo
@@ -783,7 +783,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         // sha should still be for commit 1
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
@@ -808,7 +808,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         // change the branch
         let commit2 = repo
@@ -821,7 +821,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         // since we repinned, sha should be for commit 2
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
@@ -847,7 +847,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         // change the branch so we will notice a repin
         let commit2 = repo
@@ -861,7 +861,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         // since the manifest changed, we should have repinned, so the sha should be for commit 2
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
@@ -893,7 +893,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         // change the branch so that we will notice a repin
         let commit2 = repo
@@ -907,7 +907,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.update_lockfile().await.unwrap();
+        root_pkg.save_lockfile_to_disk().await.unwrap();
 
         // since the dependency's manifest changed, we should have repinned, so the sha should be
         // for commit 2

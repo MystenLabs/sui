@@ -961,7 +961,7 @@ fn load_root_pkg<F: MoveFlavor>(
     let mut root_pkg =
         RootPackage::<F>::load_sync(path.to_path_buf(), env, build_config.mode_set())?;
 
-    root_pkg.update_lockfile_sync()?;
+    root_pkg.save_lockfile_to_disk_sync()?;
 
     Ok(root_pkg)
 }
