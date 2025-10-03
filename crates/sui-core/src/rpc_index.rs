@@ -239,10 +239,14 @@ fn balance_delta_merge_operator(
             .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.");
         result.merge_delta(&delta);
     }
-    Some(
-        bcs::to_bytes(&result)
-            .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption."),
-    )
+    if result.balance_delta == 0 {
+        None
+    } else {
+        Some(
+            bcs::to_bytes(&result)
+                .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption."),
+        )
+    }
 }
 
 fn balance_table_options() -> typed_store::rocks::DBOptions {
