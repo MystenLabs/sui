@@ -3,23 +3,18 @@ use crate::{
     jit::execution::translate::*,
     jit::optimization::ast as input,
     natives::functions::NativeFunctions,
-    shared::{
-        linkage_context::LinkageContext,
-        types::{OriginalId, VersionId},
-    },
+    shared::types::{OriginalId, VersionId},
 };
+use indexmap::IndexMap;
 use move_binary_format::file_format::{
     AddressIdentifierIndex, IdentifierIndex, ModuleHandle, empty_module,
 };
+use move_core_types::resolver::IntraPackageName;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::collections::BTreeMap;
 
 fn create_test_natives() -> NativeFunctions {
     NativeFunctions::empty_for_testing().unwrap()
-}
-
-fn create_test_link_context(original_id: &OriginalId, version_id: &VersionId) -> LinkageContext {
-    LinkageContext::new(BTreeMap::from([(*original_id, *version_id)]))
 }
 
 fn create_empty_input_module() -> input::Module {
@@ -40,7 +35,7 @@ fn create_test_input_package() -> input::Package {
         version_id,
         original_id,
         modules,
-        type_origin_table: Vec::new(),
+        type_origin_table: IndexMap::new(),
         linkage_table: BTreeMap::from([(original_id, version_id)]),
     }
 }
@@ -49,10 +44,8 @@ fn create_test_input_package() -> input::Package {
 fn test_package_empty() {
     let natives = create_test_natives();
     let input_package = create_test_input_package();
-    let link_context =
-        create_test_link_context(&input_package.original_id, &input_package.version_id);
 
-    let result = package(&natives, &link_context, input_package);
+    let result = package(&natives, input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -70,10 +63,7 @@ fn test_package_preserves_version_and_original_id() {
     input_package.version_id = test_version_id;
     input_package.original_id = test_original_id;
 
-    let link_context =
-        create_test_link_context(&input_package.original_id, &input_package.version_id);
-
-    let result = package(&natives, &link_context, input_package);
+    let result = package(&natives, input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -85,18 +75,17 @@ fn test_package_preserves_version_and_original_id() {
 fn test_package_with_type_origin_table() {
     let natives = create_test_natives();
     let mut input_package = create_test_input_package();
-    let link_context =
-        create_test_link_context(&input_package.original_id, &input_package.version_id);
 
     // Add a type origin entry
-    let type_origin = move_core_types::resolver::TypeOrigin {
-        module_name: Identifier::new("TestModule").unwrap(),
-        type_name: Identifier::new("TestType").unwrap(),
-        origin_id: input_package.original_id.into(),
-    };
-    input_package.type_origin_table = vec![type_origin];
+    input_package.type_origin_table.insert(
+        IntraPackageName {
+            module_name: Identifier::new("TestModule").unwrap(),
+            type_name: Identifier::new("TestType").unwrap(),
+        },
+        input_package.original_id,
+    );
 
-    let result = package(&natives, &link_context, input_package);
+    let result = package(&natives, input_package);
     assert!(result.is_ok());
 }
 
@@ -134,13 +123,11 @@ fn test_package_multiple_modules_dependency_order() {
         version_id,
         original_id,
         modules,
-        type_origin_table: Vec::new(),
+        type_origin_table: IndexMap::new(),
         linkage_table: BTreeMap::from([(original_id, version_id)]),
     };
 
-    let link_context =
-        create_test_link_context(&input_package.original_id, &input_package.version_id);
-    let result = package(&natives, &link_context, input_package);
+    let result = package(&natives, input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -151,10 +138,8 @@ fn test_package_multiple_modules_dependency_order() {
 fn test_package_creates_virtual_table() {
     let natives = create_test_natives();
     let input_package = create_test_input_package();
-    let link_context =
-        create_test_link_context(&input_package.original_id, &input_package.version_id);
 
-    let result = package(&natives, &link_context, input_package);
+    let result = package(&natives, input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -167,18 +152,17 @@ fn test_package_creates_virtual_table() {
 fn test_package_error_handling_invalid_identifier() {
     let natives = create_test_natives();
     let mut input_package = create_test_input_package();
-    let link_context =
-        create_test_link_context(&input_package.original_id, &input_package.version_id);
 
     // Add a type origin entry
-    let type_origin = move_core_types::resolver::TypeOrigin {
-        module_name: Identifier::new("ValidModule").unwrap(),
-        type_name: Identifier::new("TestType").unwrap(),
-        origin_id: input_package.original_id.into(),
-    };
-    input_package.type_origin_table = vec![type_origin];
+    input_package.type_origin_table.insert(
+        IntraPackageName {
+            module_name: Identifier::new("ValidModule").unwrap(),
+            type_name: Identifier::new("TestType").unwrap(),
+        },
+        input_package.original_id,
+    );
 
-    let result = package(&natives, &link_context, input_package);
+    let result = package(&natives, input_package);
     assert!(result.is_ok());
 }
 
