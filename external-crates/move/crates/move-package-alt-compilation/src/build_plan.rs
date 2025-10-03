@@ -56,7 +56,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
     }
 
     /// Compilation results in the process exit upon warning/failure
-    pub fn compile<W: Write>(
+    pub fn compile<W: Write + Send>(
         self,
         writer: &mut W,
         modify_compiler: impl FnOnce(Compiler) -> Compiler,
@@ -66,7 +66,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         })
     }
 
-    pub fn compile_with_driver<W: Write>(
+    pub fn compile_with_driver<W: Write + Send>(
         &self,
         writer: &mut W,
         compiler_driver: impl FnOnce(
@@ -98,7 +98,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
     }
 
     /// Compilation process does not exit even if warnings/failures are encountered
-    pub fn compile_no_exit<W: Write>(
+    pub fn compile_no_exit<W: Write + Send>(
         &self,
         writer: &mut W,
         modify_compiler: impl FnOnce(Compiler) -> Compiler,
@@ -160,7 +160,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
     }
 
     /// Migrate the package from legacy to Move 2024 edition, if possible.
-    pub fn migrate<W: Write>(&self, writer: &mut W) -> anyhow::Result<Option<Migration>> {
+    pub fn migrate<W: Write + Send>(&self, writer: &mut W) -> anyhow::Result<Option<Migration>> {
         let root_name = Symbol::from(self.root_pkg.name().to_string());
         let (files, res) = build_for_driver(
             writer,

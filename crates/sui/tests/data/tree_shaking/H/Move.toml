@@ -1,11 +1,8 @@
 [package]
-name = "H"
-edition = "2024.beta"
+name = "h"
+edition = "2024"
+system-dependencies = []
 
 [dependencies]
-G = { local = "../G" }
-
-
-[addresses]
-h = "0x0"
+g = { local = "../G" }
 

@@ -1,9 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::reroot_path;
+use crate::base::reroot_path;
 use clap::*;
-use move_package::BuildConfig;
+use move_package_alt::flavor::MoveFlavor;
+use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 use std::path::Path;
 
 /// Build the package at `path`. If no path is provided defaults to current directory.
@@ -12,22 +13,18 @@ use std::path::Path;
 pub struct Build;
 
 impl Build {
-    pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
+    pub async fn execute<F: MoveFlavor>(
+        self,
+        path: Option<&Path>,
+        config: BuildConfig,
+    ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
-        if config.fetch_deps_only {
-            let mut config = config;
-            if config.test_mode {
-                config.dev_mode = true;
-            }
-            config.download_deps_for_package(&rerooted_path, &mut std::io::stdout())?;
-            return Ok(());
-        }
+        let env = find_env::<F>(&rerooted_path, &config)?;
 
-        config.clone().cli_compile_package(
-            &rerooted_path,
-            &mut std::io::stdout(),
-            &mut std::io::stdin().lock(),
-        )?;
+        config
+            .compile_package::<F, _>(&rerooted_path, &env, &mut std::io::stdout())
+            .await?;
+
         Ok(())
     }
 }

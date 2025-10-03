@@ -120,8 +120,6 @@ impl OnDiskCompiledPackage {
             deps_compiled_units,
             compiled_docs,
             file_map,
-            // TODO: Let's remove this from CompiledPackage
-            deps_published_ids: vec![],
         })
     }
 

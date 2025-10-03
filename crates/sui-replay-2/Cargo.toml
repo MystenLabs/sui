@@ -26,7 +26,8 @@ move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-trace-format.workspace = true
 prometheus.workspace = true
 reqwest = { workspace = true, features = ["json"] }

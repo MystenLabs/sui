@@ -1,8 +1,4 @@
-[package]
-name = "test_pkg"
-edition = "2024.beta"
-
-[dependencies]
-
-[addresses]
-test_pkg = "0x0"
+[environments]
+localnet="e0dfde79"
+[environments]
+localnet="4821f05b"

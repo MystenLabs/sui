@@ -12,7 +12,6 @@ workspace = true
 [dependencies]
 
 [dev-dependencies]
-move-package.workspace = true
 move-core-types.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
