@@ -2025,25 +2025,19 @@ pub(crate) async fn upgrade_package(
 pub(crate) async fn compile_package(
     read_api: &ReadApi,
     root_pkg: &RootPackage<SuiFlavor>,
-    build_config: MoveBuildConfig,
+    mut build_config: MoveBuildConfig,
     package_path: &Path,
     with_unpublished_deps: bool,
 ) -> Result<CompiledPackage, anyhow::Error> {
+    let dependency_ids = check_for_unpublished_deps(root_pkg, with_unpublished_deps)?;
+
     let chain_id = read_api.get_chain_identifier().await?;
     debug!("Current client has {chain_id} as chain identifier");
 
     debug!("Loaded package from {:?}", package_path.display());
 
-    let published_at = root_pkg
-        .publication()
-        .map(|p| ObjectID::from_address(p.addresses.published_at.0));
-
-    debug!("Published at {:?}", published_at);
-
-    // TODO: pluck back in
-    // if !with_unpublished_deps {
-    //     check_unpublished_dependencies(&dependencies.unpublished)?;
-    // };
+    // This will direct the pkg-system to set all unpublished dependencies to address 0x0
+    build_config.set_unpublished_deps_to_zero = with_unpublished_deps;
 
     let mut stdout = std::io::stdout();
     let package = move_package_alt_compilation::compile_from_root_package::<
@@ -2052,7 +2046,9 @@ pub(crate) async fn compile_package(
     >(root_pkg, &build_config, &mut stdout)
     .unwrap();
 
-    let dependency_ids = PackageDependencies::new(root_pkg)?;
+    let published_at = root_pkg
+        .publication()
+        .map(|p| ObjectID::from_address(p.addresses.published_at.0));
 
     let mut compiled_package = CompiledPackage {
         package,
@@ -2080,6 +2076,31 @@ pub(crate) async fn compile_package(
     // }
 
     Ok(compiled_package)
+}
+
+/// Check for unpublished dependencies and error if any are found when the
+/// `--with-unpublished-dependencies` is not set.
+fn check_for_unpublished_deps(
+    root_pkg: &RootPackage<SuiFlavor>,
+    with_unpublished_deps: bool,
+) -> anyhow::Result<PackageDependencies> {
+    let package_dependencies = PackageDependencies::new(root_pkg)?;
+    if !package_dependencies.unpublished.is_empty() && !with_unpublished_deps {
+        bail!(
+            "The package has unpublished dependencies. If you want to publish with unpublished \
+        dependencies, please publish them one by one, or (not recommended) pass the \
+        `--with-unpublished-dependencies` flag.\n Unpublished dependencies: {}
+        ",
+            package_dependencies
+                .unpublished
+                .into_iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    Ok(package_dependencies)
 }
 
 async fn compatibility_checks(
@@ -3873,6 +3894,8 @@ async fn publish_command(
     .await;
 
     let compiled_package = compiled_package?;
+
+    root_package.save_to_disk()?;
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     let dep_ids = compiled_package.get_published_dependencies_ids();
 
