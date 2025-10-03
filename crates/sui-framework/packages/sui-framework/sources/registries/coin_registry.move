@@ -619,6 +619,12 @@ public fun create_coin_data_registry_for_testing(ctx: &mut TxContext): CoinRegis
 }
 
 #[test_only]
+/// Set CoinRegistry object to share object
+public fun share_for_testing(registry: CoinRegistry)  {
+    transfer::share_object(registry);
+}
+
+#[test_only]
 /// Unwrap CurrencyInitializer for testing purposes.
 /// This function is test-only and should only be used in tests.
 public fun unwrap_for_testing<T>(init: CurrencyInitializer<T>): Currency<T> {
