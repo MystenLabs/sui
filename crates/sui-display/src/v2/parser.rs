@@ -12,11 +12,18 @@ use move_core_types::{
     u256::U256,
 };
 
-use super::error::{Error, Expected, ExpectedSet, Match};
-use super::lexer::{Lexeme as Lex, Lexer, Token as T};
 use super::peek::{Peekable2, Peekable2Ext};
+use super::{
+    error::{Error, Expected, ExpectedSet, Match},
+    meter::Limits,
+};
+use super::{
+    lexer::{Lexeme as Lex, Lexer, Token as T},
+    meter::Meter,
+};
 
 /// A single Display string template is a sequence of strands.
+#[derive(PartialEq, Eq)]
 pub enum Strand<'s> {
     /// Text strands are ported literally to the output.
     Text(Cow<'s, str>),
@@ -29,12 +36,14 @@ pub enum Strand<'s> {
 /// Expressions are composed of a number of alternates and an optional transform. During
 /// evaluation, each alternate is evaluated in turn until the first one succeeds, and if a
 /// transform is provided, it is applied to the result to convert it to a string.
+#[derive(PartialEq, Eq)]
 pub struct Expr<'s> {
     alternates: Vec<Chain<'s>>,
     transform: Option<&'s str>,
 }
 
 /// Chains are a sequence of nested field accesses.
+#[derive(PartialEq, Eq)]
 pub struct Chain<'s> {
     /// An optional root expression. If not provided, the object being displayed is the root.
     root: Option<Literal<'s>>,
@@ -44,6 +53,7 @@ pub struct Chain<'s> {
 }
 
 /// Different ways to nest deeply into an object.
+#[derive(PartialEq, Eq)]
 pub enum Accessor<'s> {
     /// Access a named field.
     Field(&'s IdentStr),
@@ -59,6 +69,7 @@ pub enum Accessor<'s> {
 }
 
 /// Literal forms are elements whose syntax determines their (outer) type.
+#[derive(PartialEq, Eq)]
 pub enum Literal<'s> {
     // Primitives
     Address(AccountAddress),
@@ -81,6 +92,7 @@ pub enum Literal<'s> {
 }
 
 /// Contents of a vector literal.
+#[derive(PartialEq, Eq)]
 pub struct Vector<'s> {
     /// Element type, optional for non-empty vectors.
     type_: Option<TypeTag>,
@@ -88,12 +100,14 @@ pub struct Vector<'s> {
 }
 
 /// Contents of a struct literal.
+#[derive(PartialEq, Eq)]
 pub struct Struct<'s> {
     type_: StructTag,
     fields: Fields<'s>,
 }
 
 /// Contents of an enum literal.
+#[derive(PartialEq, Eq)]
 pub struct Enum<'s> {
     type_: StructTag,
     variant_name: Option<&'s str>,
@@ -101,7 +115,7 @@ pub struct Enum<'s> {
     fields: Fields<'s>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq)]
 pub enum Fields<'s> {
     Positional(Vec<Chain<'s>>),
     Named(Vec<(&'s str, Chain<'s>)>),
@@ -235,30 +249,36 @@ impl<'s> Parser<'s> {
         }
     }
 
-    /// Entrypoint into the parser, parsing the root non-terminal -- `format`. Consumes all the
-    /// remaining input in the parser and the parser itself.
-    pub(crate) fn parse_format(mut self) -> Result<Vec<Strand<'s>>, Error> {
+    /// Entrypoint into the parser, parsing the root non-terminal -- `format`.
+    pub(crate) fn run(src: &'s str, limits: Limits) -> Result<Vec<Strand<'s>>, Error> {
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+        Self::new(src).parse_format(&mut meter)
+    }
+
+    fn parse_format<'b>(mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, Error> {
         let mut strands = vec![];
         while self.lexer.peek().is_some() {
-            strands.push(self.parse_strand()?);
+            strands.push(self.parse_strand(meter)?);
         }
 
         Ok(strands)
     }
 
-    fn parse_strand(&mut self) -> Result<Strand<'s>, Error> {
+    fn parse_strand<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Strand<'s>, Error> {
         Ok(match_token! { self.lexer;
-            Tok(_, T::Text | T::LLBrace | T::RRBrace, _, _) => Strand::Text(self.parse_text()?),
-            Tok(_, T::LBrace, _, _) => Strand::Expr(self.parse_expr()?),
+            Tok(_, T::Text | T::LLBrace | T::RRBrace, _, _) => Strand::Text(self.parse_text(meter)?),
+            Tok(_, T::LBrace, _, _) => Strand::Expr(self.parse_expr(meter)?),
         })
     }
 
-    fn parse_text(&mut self) -> Result<Cow<'s, str>, Error> {
+    fn parse_text<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Cow<'s, str>, Error> {
         let mut text = self.parse_part()?;
         while let Some(Lex(_, T::Text | T::LLBrace | T::RRBrace, _, _)) = self.lexer.peek() {
             text += self.parse_part()?;
         }
 
+        meter.alloc()?;
         Ok(text)
     }
 
@@ -271,9 +291,9 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_expr(&mut self) -> Result<Expr<'s>, Error> {
+    fn parse_expr<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Expr<'s>, Error> {
         match_token! { self.lexer; Tok(_, T::LBrace, _, _) => self.lexer.next() };
-        let mut alternates = vec![self.parse_chain()?];
+        let mut alternates = vec![self.parse_chain(meter)?];
         let mut transform = None;
 
         loop {
@@ -297,29 +317,32 @@ impl<'s> Parser<'s> {
 
                 Tok(_, T::Pipe, _, _) => {
                     self.lexer.next();
-                    alternates.push(self.parse_chain()?);
+                    alternates.push(self.parse_chain(meter)?);
                 }
             }
         }
 
+        meter.alloc()?;
         Ok(Expr {
             alternates,
             transform,
         })
     }
 
-    fn parse_chain(&mut self) -> Result<Chain<'s>, Error> {
+    fn parse_chain<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Chain<'s>, Error> {
+        let meter = &mut meter.nest()?;
         let mut accessors = vec![];
 
         // If there is no root literal, the chain must start with an identifier, representing a
         // field on the object being displayed.
-        let root = match self.try_parse_literal()? {
+        let root = match self.try_parse_literal(meter)? {
             Match::Found(literal) => Some(literal),
             Match::Tried(_, tried) => {
                 accessors.push(match_token! { self.lexer, tried;
                     Tok(_, T::Ident, _, ident) @ lex => {
                         let ident = IdentStr::new(ident).map_err(|_| Error::InvalidIdentifier(lex.detach()))?;
                         self.lexer.next();
+                        meter.alloc()?;
                         Accessor::Field(ident)
                     }},
                 );
@@ -327,47 +350,55 @@ impl<'s> Parser<'s> {
             }
         };
 
-        while let Match::Found(accessor) = self.try_parse_accessor()? {
+        while let Match::Found(accessor) = self.try_parse_accessor(meter)? {
             accessors.push(accessor);
         }
 
+        meter.alloc()?;
         Ok(Chain { root, accessors })
     }
 
-    fn try_parse_literal(&mut self) -> Result<Match<Literal<'s>>, Error> {
+    fn try_parse_literal<'b>(
+        &mut self,
+        meter: &mut Meter<'b>,
+    ) -> Result<Match<Literal<'s>>, Error> {
         Ok(match_token_opt! { self.lexer;
             Tok(_, T::At, _, _) => {
                 self.lexer.next();
+                meter.alloc()?;
                 Literal::Address(self.parse_address()?)
             },
 
             Lit(_, T::Ident, _, "true") => {
                 self.lexer.next();
+                meter.alloc()?;
                 Literal::Bool(true)
             },
 
             Lit(_, T::Ident, _, "false") => {
                 self.lexer.next();
+                meter.alloc()?;
                 Literal::Bool(false)
             },
 
             Tok(_, T::NumDec | T::NumHex, _, _)
             if self.lexer.peek2().is_some_and(|Lex(_, t, _, _)| *t == T::CColon) => {
-                self.parse_data()?
+                self.parse_data(meter)?
             },
 
             Tok(_, T::NumDec, _, dec) => {
                 self.lexer.next();
-                self.parse_numeric_suffix(dec, 10)?
+                self.parse_numeric_suffix(dec, 10, meter)?
             },
 
             Tok(_, T::NumHex, _, hex) => {
                 self.lexer.next();
-                self.parse_numeric_suffix(hex, 16)?
+                self.parse_numeric_suffix(hex, 16, meter)?
             },
 
             Tok(_, T::String, _, slice) => {
                 self.lexer.next();
+                meter.alloc()?;
                 Literal::String(read_string_literal(slice))
             },
 
@@ -378,6 +409,8 @@ impl<'s> Parser<'s> {
                 // SAFETY: Match guard peeks ahead to this token.
                 let Lex(_, _, _, slice) = self.lexer.next().unwrap();
                 let output = read_string_literal(slice);
+
+                meter.alloc()?;
                 Literal::ByteArray(output.into_owned().into_bytes())
             },
 
@@ -388,13 +421,15 @@ impl<'s> Parser<'s> {
                 // SAFETY: Match guard peeks ahead to this token.
                 let lex @ Lex(_, _, _, slice) = self.lexer.next().unwrap();
                 let output = read_hex_literal(&lex, slice)?;
+
+                meter.alloc()?;
                 Literal::ByteArray(output)
             },
 
             Tok(_, T::Ident, offset, "vector") => {
                 self.lexer.next();
 
-                let mut type_params = self.parse_type_params()?;
+                let mut type_params = self.parse_type_params(meter)?;
                 let type_ = match type_params.len() {
                     // SAFETY: Bounds check on `type_params.len()` guarantees safety.
                     1 => Some(type_params.pop().unwrap()),
@@ -402,7 +437,7 @@ impl<'s> Parser<'s> {
                     arity => return Err(Error::VectorArity { offset, arity }),
                 };
 
-                let elements = self.parse_array_elements()?;
+                let elements = self.parse_array_elements(meter)?;
 
                 // If the vector is empty, the type parameter becomes mandatory.
                 if elements.is_empty() && type_.is_none() {
@@ -412,12 +447,16 @@ impl<'s> Parser<'s> {
                     });
                 }
 
+                meter.alloc()?;
                 Literal::Vector(Box::new(Vector { type_, elements }))
             },
         })
     }
 
-    fn try_parse_accessor(&mut self) -> Result<Match<Accessor<'s>>, Error> {
+    fn try_parse_accessor<'b>(
+        &mut self,
+        meter: &mut Meter<'b>,
+    ) -> Result<Match<Accessor<'s>>, Error> {
         Ok(match_token_opt! { self.lexer;
             Tok(_, T::Dot, _, _) => {
                 self.lexer.next();
@@ -426,12 +465,15 @@ impl<'s> Parser<'s> {
                         let ident = IdentStr::new(ident)
                             .map_err(|_| Error::InvalidIdentifier(lex.detach()))?;
                         self.lexer.next();
+                        meter.alloc()?;
                         Accessor::Field(ident)
                     },
 
                     Tok(_, T::NumDec, _, n) => {
                         self.lexer.next();
                         let index = read_u8(n, 10, "positional field index")?;
+
+                        meter.alloc()?;
                         Accessor::Positional(index)
                     }
                 }
@@ -445,21 +487,25 @@ impl<'s> Parser<'s> {
                 };
 
                 if let Match::Tried(offset, doubled) = doubled {
-                    let chain = self.parse_chain()
+                    let chain = self.parse_chain(meter)
                         .map_err(|e| e.also_tried(offset, doubled))?;
                     match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
+
+                    meter.alloc()?;
                     Accessor::Index(chain)
                 } else {
-                    let chain = self.parse_chain()?;
+                    let chain = self.parse_chain(meter)?;
                     match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
                     match_token! { self.lexer; Tok(false, T::RBracket, _, _) => self.lexer.next() };
+
+                    meter.alloc()?;
                     Accessor::IIndex(chain)
                 }
             },
         })
     }
 
-    fn parse_array_elements(&mut self) -> Result<Vec<Chain<'s>>, Error> {
+    fn parse_array_elements<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Vec<Chain<'s>>, Error> {
         let mut elements = vec![];
 
         if match_token_opt! { self.lexer; Tok(_, T::LBracket, _, _) => { self.lexer.next(); } }
@@ -479,7 +525,7 @@ impl<'s> Parser<'s> {
 
         loop {
             elements.push(
-                self.parse_chain()
+                self.parse_chain(meter)
                     .map_err(|e| e.also_tried(offset, terminated.clone()))?,
             );
 
@@ -503,18 +549,19 @@ impl<'s> Parser<'s> {
         Ok(elements)
     }
 
-    fn parse_data(&mut self) -> Result<Literal<'s>, Error> {
-        let type_ = self.parse_datatype()?;
+    fn parse_data<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Literal<'s>, Error> {
+        let type_ = self.parse_datatype(meter)?;
 
         let enum_ = match_token_opt! { self.lexer;
             Tok(_, T::CColon, _, _) => { self.lexer.next(); }
         };
 
         if let Match::Tried(offset, enum_) = enum_ {
+            meter.alloc()?;
             return Ok(Literal::Struct(Box::new(Struct {
                 type_,
                 fields: self
-                    .parse_fields()
+                    .parse_fields(meter)
                     .map_err(|e| e.also_tried(offset, enum_))?,
             })));
         }
@@ -529,11 +576,12 @@ impl<'s> Parser<'s> {
                     read_u16(index, 10, "enum variant index")?
                 }};
 
+                meter.alloc()?;
                 Literal::Enum(Box::new(Enum {
                     type_,
                     variant_name: Some(variant_name),
                     variant_index,
-                    fields: self.parse_fields()?,
+                    fields: self.parse_fields(meter)?,
                 }))
             },
 
@@ -542,17 +590,18 @@ impl<'s> Parser<'s> {
 
                 let variant_index = read_u16(index, 10, "enum variant index")?;
 
+                meter.alloc()?;
                 Literal::Enum(Box::new(Enum {
                     type_,
                     variant_name: None,
                     variant_index,
-                    fields: self.parse_fields()?,
+                    fields: self.parse_fields(meter)?,
                 }))
             }
         })
     }
 
-    fn parse_fields(&mut self) -> Result<Fields<'s>, Error> {
+    fn parse_fields<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Fields<'s>, Error> {
         let is_named = match_token! { self.lexer;
             Tok(_, T::LParen, _, _) => { self.lexer.next(); false },
             Tok(_, T::LBrace, _, _) => { self.lexer.next(); true }
@@ -577,7 +626,7 @@ impl<'s> Parser<'s> {
 
                 match_token! { self.lexer; Tok(_, T::Colon, _, _) => self.lexer.next() };
 
-                let value = self.parse_chain()?;
+                let value = self.parse_chain(meter)?;
                 fields.push((name, value));
 
                 let delimited = match_token_opt! { self.lexer;
@@ -612,7 +661,7 @@ impl<'s> Parser<'s> {
 
             loop {
                 fields.push(
-                    self.parse_chain()
+                    self.parse_chain(meter)
                         .map_err(|e| e.also_tried(offset, terminated.clone()))?,
                 );
 
@@ -637,34 +686,80 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_type(&mut self) -> Result<TypeTag, Error> {
+    fn parse_type(&mut self, meter: &mut Meter<'_>) -> Result<TypeTag, Error> {
+        let meter = &mut meter.nest()?;
         Ok(match_token! { self.lexer;
-            Lit(_, T::Ident, _, "address") => { self.lexer.next(); TypeTag::Address },
-            Lit(_, T::Ident, _, "bool") => { self.lexer.next(); TypeTag::Bool },
-            Lit(_, T::Ident, _, "u8") => { self.lexer.next(); TypeTag::U8 },
-            Lit(_, T::Ident, _, "u16") => { self.lexer.next(); TypeTag::U16 },
-            Lit(_, T::Ident, _, "u32") => { self.lexer.next(); TypeTag::U32 },
-            Lit(_, T::Ident, _, "u64") => { self.lexer.next(); TypeTag::U64 },
-            Lit(_, T::Ident, _, "u128") => { self.lexer.next(); TypeTag::U128 },
-            Lit(_, T::Ident, _, "u256") => { self.lexer.next(); TypeTag::U256 },
+            Lit(_, T::Ident, _, "address") => {
+                self.lexer.next();
+                meter.alloc()?;
+                TypeTag::Address
+            },
+
+            Lit(_, T::Ident, _, "bool") => {
+                self.lexer.next();
+                meter.alloc()?;
+                TypeTag::Bool
+            },
+
+            Lit(_, T::Ident, _, "u8") => {
+                self.lexer.next();
+                meter.alloc()?;
+                TypeTag::U8
+            },
+
+            Lit(_, T::Ident, _, "u16") => {
+                self.lexer.next();
+                meter.alloc()?;
+                TypeTag::U16
+            },
+
+            Lit(_, T::Ident, _, "u32") => {
+                self.lexer.next();
+                meter.alloc()?;
+                TypeTag::U32
+            },
+
+            Lit(_, T::Ident, _, "u64") => {
+                self.lexer.next();
+                meter.alloc()?;
+                TypeTag::U64
+            },
+
+            Lit(_, T::Ident, _, "u128") => {
+                self.lexer.next();
+                meter.alloc()?;
+                TypeTag::U128
+            },
+
+            Lit(_, T::Ident, _, "u256") => {
+                self.lexer.next();
+                meter.alloc()?;
+                TypeTag::U256
+            },
 
             Lit(_, T::Ident, offset, "vector") => {
                 self.lexer.next();
-                let mut type_params = self.parse_type_params()?;
+                let mut type_params = self.parse_type_params(meter)?;
                 match type_params.len() {
-                    // SAFETY: Bounds check on `type_params.len()` guarantees safety.
-                    1 => TypeTag::Vector(Box::new(type_params.pop().unwrap())),
+                    1 => {
+                        // SAFETY: Bounds check on `type_params.len()` guarantees safety.
+                        let inner = type_params.pop().unwrap();
+
+                        meter.alloc()?;
+                        TypeTag::Vector(Box::new(inner))
+                    }
+
                     arity => return Err(Error::VectorArity { offset, arity }),
                 }
             },
 
             Tok(_, T::NumDec | T::NumHex, _, _) => {
-                TypeTag::Struct(Box::new(self.parse_datatype()?))
+                TypeTag::Struct(Box::new(self.parse_datatype(meter)?))
             }
         })
     }
 
-    fn parse_datatype(&mut self) -> Result<StructTag, Error> {
+    fn parse_datatype(&mut self, meter: &mut Meter<'_>) -> Result<StructTag, Error> {
         let address = self.parse_address()?;
 
         match_token! { self.lexer; Tok(_, T::CColon, _, _) => self.lexer.next() };
@@ -673,8 +768,9 @@ impl<'s> Parser<'s> {
         match_token! { self.lexer; Tok(_, T::CColon, _, _) => self.lexer.next() };
         let name = self.parse_identifier()?;
 
-        let type_params = self.parse_type_params()?;
+        let type_params = self.parse_type_params(meter)?;
 
+        meter.alloc()?;
         Ok(StructTag {
             address,
             module,
@@ -683,7 +779,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_type_params(&mut self) -> Result<Vec<TypeTag>, Error> {
+    fn parse_type_params(&mut self, meter: &mut Meter<'_>) -> Result<Vec<TypeTag>, Error> {
         let mut type_params = vec![];
         if match_token_opt! { self.lexer; Tok(_, T::LAngle, _, _) => { self.lexer.next(); } }
             .is_not_found()
@@ -692,7 +788,7 @@ impl<'s> Parser<'s> {
         }
 
         loop {
-            type_params.push(self.parse_type()?);
+            type_params.push(self.parse_type(meter)?);
 
             let delimited = match_token_opt! { self.lexer;
                 Tok(_, T::Comma, _, _) => { self.lexer.next(); }
@@ -740,14 +836,48 @@ impl<'s> Parser<'s> {
         }
     }
 
-    fn parse_numeric_suffix(&mut self, num: &'s str, radix: u32) -> Result<Literal<'s>, Error> {
+    fn parse_numeric_suffix<'b>(
+        &mut self,
+        num: &'s str,
+        radix: u32,
+        meter: &mut Meter<'b>,
+    ) -> Result<Literal<'s>, Error> {
         Ok(match_token! { self.lexer;
-            Lit(false, T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(num, radix, "'u8'")?) },
-            Lit(false, T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(num, radix, "'u16'")?) },
-            Lit(false, T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(num, radix, "'u32'")?) },
-            Lit(false, T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(num, radix, "'u64'")?) },
-            Lit(false, T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(num, radix, "'u128'")?) },
-            Lit(false, T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(num, radix, "'u256'")?) },
+            Lit(false, T::Ident, _, "u8") => {
+                self.lexer.next();
+                meter.alloc()?;
+                Literal::U8(read_u8(num, radix, "'u8'")?)
+            },
+
+            Lit(false, T::Ident, _, "u16") => {
+                self.lexer.next();
+                meter.alloc()?;
+                Literal::U16(read_u16(num, radix, "'u16'")?)
+            },
+
+            Lit(false, T::Ident, _, "u32") => {
+                self.lexer.next();
+                meter.alloc()?;
+                Literal::U32(read_u32(num, radix, "'u32'")?)
+            },
+
+            Lit(false, T::Ident, _, "u64") => {
+                self.lexer.next();
+                meter.alloc()?;
+                Literal::U64(read_u64(num, radix, "'u64'")?)
+            },
+
+            Lit(false, T::Ident, _, "u128") => {
+                self.lexer.next();
+                meter.alloc()?;
+                Literal::U128(read_u128(num, radix, "'u128'")?)
+            },
+
+            Lit(false, T::Ident, _, "u256") => {
+                self.lexer.next();
+                meter.alloc()?;
+                Literal::U256(read_u256(num, radix, "'u256'")?)
+            },
         })
     }
 }
@@ -989,12 +1119,15 @@ fn read_hex_literal(lexeme: &Lex<'_>, slice: &str) -> Result<Vec<u8>, Error> {
 
 #[cfg(test)]
 mod tests {
-    use insta::assert_snapshot;
+    use std::str::FromStr;
 
-    use super::*;
+    use insta::assert_snapshot;
+    use move_core_types::ident_str;
+
+    use super::{Accessor as A, Chain as C, Expr as E, Literal as L, Parser, Strand as S, *};
 
     fn strands(src: &str) -> String {
-        let strands = match Parser::new(src).parse_format() {
+        let strands = match Parser::run(src, Limits::default()) {
             Ok(strands) => strands,
             Err(e) => return format!("Error: {e}"),
         };
@@ -1005,6 +1138,389 @@ mod tests {
         }
 
         output
+    }
+
+    fn nodes(src: &str) -> (usize, Vec<Strand<'_>>) {
+        let limits = Limits {
+            max_depth: usize::MAX,
+            max_nodes: usize::MAX,
+        };
+
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+
+        let strands = Parser::new(src).parse_format(&mut meter).unwrap();
+        (usize::MAX - budget.nodes, strands)
+    }
+
+    fn parse_with_depth(depth: usize, src: &str) -> Result<Vec<Strand<'_>>, Error> {
+        let limits = Limits {
+            max_depth: depth,
+            max_nodes: usize::MAX,
+        };
+
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+
+        Parser::new(src).parse_format(&mut meter)
+    }
+
+    #[test]
+    fn test_metering_text() {
+        let (nodes, strands) = nodes("foo bar");
+        assert_eq!(nodes, 1);
+        assert_eq!(strands, vec![S::Text("foo bar".into())]);
+    }
+
+    #[test]
+    fn test_metering_text_with_escapes() {
+        let (nodes, strands) = nodes("foo {{bar}}");
+        assert_eq!(nodes, 1);
+        assert_eq!(strands, vec![S::Text("foo {bar}".into())]);
+    }
+
+    #[test]
+    fn test_metering_expression() {
+        let (nodes, strands) = nodes("{foo}");
+        assert_eq!(nodes, 3);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![C {
+                    root: None,
+                    accessors: vec![A::Field(ident_str!("foo"))],
+                }],
+                transform: None,
+            })]
+        );
+    }
+
+    #[test]
+    fn test_metering_expression_with_transform() {
+        let (nodes, strands) = nodes("{foo:hex}");
+        assert_eq!(nodes, 3);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![C {
+                    root: None,
+                    accessors: vec![A::Field(ident_str!("foo"))],
+                }],
+                transform: Some("hex"),
+            })]
+        );
+    }
+
+    #[test]
+    fn test_metering_field_access() {
+        let (nodes, strands) = nodes("{foo.bar}");
+        assert_eq!(nodes, 4);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![C {
+                    root: None,
+                    accessors: vec![A::Field(ident_str!("foo")), A::Field(ident_str!("bar"))],
+                }],
+                transform: None,
+            })]
+        );
+    }
+
+    #[test]
+    fn test_metering_text_and_expr() {
+        let (nodes, strands) = nodes("foo {bar} baz");
+        assert_eq!(nodes, 5);
+        assert_eq!(
+            strands,
+            vec![
+                S::Text("foo ".into()),
+                S::Expr(E {
+                    alternates: vec![C {
+                        root: None,
+                        accessors: vec![A::Field(ident_str!("bar"))],
+                    }],
+                    transform: None,
+                }),
+                S::Text(" baz".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_metering_alternates() {
+        let (nodes, strands) = nodes("{foo | bar | baz}");
+        assert_eq!(nodes, 7);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![
+                    C {
+                        root: None,
+                        accessors: vec![A::Field(ident_str!("foo"))],
+                    },
+                    C {
+                        root: None,
+                        accessors: vec![A::Field(ident_str!("bar"))],
+                    },
+                    C {
+                        root: None,
+                        accessors: vec![A::Field(ident_str!("baz"))],
+                    },
+                ],
+                transform: None,
+            })]
+        );
+    }
+
+    #[test]
+    fn test_metering_indexed_access() {
+        let (nodes, strands) = nodes("{foo[bar][[baz]]}");
+        assert_eq!(nodes, 9);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![C {
+                    root: None,
+                    accessors: vec![
+                        A::Field(ident_str!("foo")),
+                        A::Index(C {
+                            root: None,
+                            accessors: vec![A::Field(ident_str!("bar"))],
+                        }),
+                        A::IIndex(C {
+                            root: None,
+                            accessors: vec![A::Field(ident_str!("baz"))],
+                        }),
+                    ],
+                }],
+                transform: None,
+            })]
+        );
+    }
+
+    #[test]
+    fn test_metering_primitive_literals() {
+        let (nodes, strands) = nodes("{true | @0x1234 | 5678u64 | x'abcdef' | b'hello' | 'world'}");
+        assert_eq!(nodes, 13);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![
+                    C {
+                        root: Some(L::Bool(true)),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::Address(
+                            AccountAddress::from_hex_literal("0x1234").unwrap()
+                        )),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::U64(5678)),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::ByteArray(vec![0xab, 0xcd, 0xef])),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::ByteArray(b"hello".to_vec())),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::String("world".into())),
+                        accessors: vec![],
+                    },
+                ],
+                transform: None,
+            })]
+        );
+    }
+
+    #[test]
+    fn test_metering_vectors() {
+        let (nodes, strands) = nodes(
+            r#"{ vector[1u8, 2u8, 3u8]
+               | vector<u16>[4u16, 5u16]
+               | vector<u32>
+               | vector<u64>[]
+               | vector<0x2::coin::Coin<0x2::sui::SUI>>
+               }"#,
+        );
+
+        assert_eq!(nodes, 26);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![
+                    C {
+                        root: Some(L::Vector(Box::new(Vector {
+                            type_: None,
+                            elements: vec![
+                                C {
+                                    root: Some(L::U8(1)),
+                                    accessors: vec![],
+                                },
+                                C {
+                                    root: Some(L::U8(2)),
+                                    accessors: vec![],
+                                },
+                                C {
+                                    root: Some(L::U8(3)),
+                                    accessors: vec![],
+                                },
+                            ],
+                        }))),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::Vector(Box::new(Vector {
+                            type_: Some(TypeTag::U16),
+                            elements: vec![
+                                C {
+                                    root: Some(L::U16(4)),
+                                    accessors: vec![],
+                                },
+                                C {
+                                    root: Some(L::U16(5)),
+                                    accessors: vec![],
+                                },
+                            ],
+                        }))),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::Vector(Box::new(Vector {
+                            type_: Some(TypeTag::U32),
+                            elements: vec![],
+                        }))),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::Vector(Box::new(Vector {
+                            type_: Some(TypeTag::U64),
+                            elements: vec![],
+                        }))),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::Vector(Box::new(Vector {
+                            type_: Some(
+                                TypeTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
+                            ),
+                            elements: vec![],
+                        }))),
+                        accessors: vec![],
+                    },
+                ],
+                transform: None,
+            })]
+        );
+    }
+
+    #[test]
+    fn test_metering_datatypes() {
+        let (nodes, strands) = nodes(
+            r#"{ 0x1::string::String(42u64, 'foo', vector[1u256, 2u256, 3u256])
+               | 0x2::coin::Coin<0x2::sui::SUI>::Foo#1 { balance: 100u64 } }"#,
+        );
+
+        assert_eq!(nodes, 22);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![
+                    C {
+                        root: Some(L::Struct(Box::new(Struct {
+                            type_: StructTag::from_str("0x1::string::String").unwrap(),
+                            fields: Fields::Positional(vec![
+                                C {
+                                    root: Some(L::U64(42)),
+                                    accessors: vec![],
+                                },
+                                C {
+                                    root: Some(L::String("foo".into())),
+                                    accessors: vec![],
+                                },
+                                C {
+                                    root: Some(L::Vector(Box::new(Vector {
+                                        type_: None,
+                                        elements: vec![
+                                            C {
+                                                root: Some(L::U256(1u64.into())),
+                                                accessors: vec![],
+                                            },
+                                            C {
+                                                root: Some(L::U256(2u64.into())),
+                                                accessors: vec![],
+                                            },
+                                            C {
+                                                root: Some(L::U256(3u64.into())),
+                                                accessors: vec![],
+                                            },
+                                        ],
+                                    }))),
+                                    accessors: vec![],
+                                },
+                            ]),
+                        }))),
+                        accessors: vec![],
+                    },
+                    C {
+                        root: Some(L::Enum(Box::new(Enum {
+                            type_: StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap(),
+                            variant_name: Some("Foo"),
+                            variant_index: 1,
+                            fields: Fields::Named(vec![(
+                                "balance",
+                                C {
+                                    root: Some(L::U64(100)),
+                                    accessors: vec![],
+                                },
+                            )]),
+                        }))),
+                        accessors: vec![],
+                    },
+                ],
+                transform: None,
+            })]
+        );
+    }
+
+    #[test]
+    fn test_metering_depth_text() {
+        let src = "foo bar";
+        assert!(parse_with_depth(0, src).is_ok());
+    }
+
+    #[test]
+    fn test_metering_depth_expression() {
+        let src = "{foo}";
+        assert!(parse_with_depth(0, src).is_err());
+        assert!(parse_with_depth(1, src).is_ok());
+    }
+
+    #[test]
+    fn test_metering_depth_literal() {
+        let src = "{0x42::foo::Bar { value: 0x1::option::Option<u64>::Some#1(vector[42u64]) }}";
+        assert!(parse_with_depth(3, src).is_err());
+        assert!(parse_with_depth(4, src).is_ok());
+    }
+
+    #[test]
+    fn test_metering_depth_indexing() {
+        let src = "{foo[bar[baz]]}";
+        assert!(parse_with_depth(2, src).is_err());
+        assert!(parse_with_depth(3, src).is_ok());
+    }
+
+    #[test]
+    fn test_metering_depth_types() {
+        let src = "{vector<0x1::foo::Bar<0x2::baz::Qux<0x2::quy::Quz>>>}";
+        assert!(parse_with_depth(3, src).is_err());
+        assert!(parse_with_depth(4, src).is_ok());
     }
 
     #[test]

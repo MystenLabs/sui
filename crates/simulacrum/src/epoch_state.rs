@@ -39,10 +39,17 @@ pub struct EpochState {
 
 impl EpochState {
     pub fn new(system_state: SuiSystemState) -> Self {
+        let protocol_config =
+            ProtocolConfig::get_for_version(system_state.protocol_version().into(), Chain::Unknown);
+        Self::new_with_protocol_config(system_state, protocol_config)
+    }
+
+    pub fn new_with_protocol_config(
+        system_state: SuiSystemState,
+        protocol_config: ProtocolConfig,
+    ) -> Self {
         let epoch_start_state = system_state.into_epoch_start_state();
         let committee = epoch_start_state.get_sui_committee();
-        let protocol_config =
-            ProtocolConfig::get_for_version(epoch_start_state.protocol_version(), Chain::Unknown);
         let registry = prometheus::Registry::new();
         let limits_metrics = Arc::new(LimitsMetrics::new(&registry));
         let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(&registry));

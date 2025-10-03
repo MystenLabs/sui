@@ -42,6 +42,7 @@ move-vm-types.workspace = true
 move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
+move-vm-config.workspace = true
 move-binary-format.workspace = true
 move-package-alt.workspace = true
 move-package-alt-compilation.workspace = true

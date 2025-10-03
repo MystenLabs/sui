@@ -123,7 +123,8 @@ fun new_stream_head(new_root: u256, event_count_delta: u64, checkpoint_seq: u64)
     }
 }
 
-entry fun settle_events(
+#[allow(unused_function)]
+fun settle_events(
     accumulator_root: &mut AccumulatorRoot,
     stream_id: address,
     new_root: u256,

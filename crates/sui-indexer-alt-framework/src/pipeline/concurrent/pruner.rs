@@ -120,7 +120,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
         // The pruner task will periodically output a log message at a higher log level to
         // demonstrate that it is making progress.
-        let mut logger = WatermarkLogger::new("pruner", LoggerWatermark::default());
+        let mut logger = WatermarkLogger::new("pruner");
 
         // Maintains the list of chunks that are ready to be pruned but not yet pruned.
         // This map can contain ranges that were attempted to be pruned in previous iterations,

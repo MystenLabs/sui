@@ -1481,6 +1481,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         txns.reserve(user_transactions.len());
         randomness_txns.reserve(user_transactions.len());
 
+        // There may be randomness transactions in `txns`, which were deferred due to congestion.
+        // They must be placed back into `randomness_txns`.
+        let mut txns: Vec<_> = txns
+            .into_iter()
+            .filter_map(|tx| {
+                if tx.transaction_data().uses_randomness() {
+                    randomness_txns.push(tx);
+                    None
+                } else {
+                    Some(tx)
+                }
+            })
+            .collect();
+
         for txn in user_transactions {
             if txn.transaction_data().uses_randomness() {
                 randomness_txns.push(txn);
@@ -1899,6 +1913,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let name = self.epoch_store.name;
             let authority_index = self.epoch_store.committee().authority_index(&name).unwrap();
             authority_index < 2
+                && self
+                    .epoch_store
+                    .epoch_start_config()
+                    .use_commit_handler_v2()
         } else if self.epoch_store.protocol_config().use_new_commit_handler() {
             true
         } else {

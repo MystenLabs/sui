@@ -144,7 +144,10 @@ impl TransactionSubmitter {
                         .submit_transaction_retries
                         .observe(retries as f64);
                     let elapsed = start_time.elapsed().as_secs_f64();
-                    self.metrics.submit_transaction_latency.observe(elapsed);
+                    self.metrics
+                        .submit_transaction_latency
+                        .with_label_values(&[&display_name, tx_type.as_str(), ping_label])
+                        .observe(elapsed);
 
                     return Ok((name, result));
                 }

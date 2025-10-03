@@ -585,6 +585,25 @@ macro_rules! resolve_from_module_access {
     }};
 }
 
+/// Like `resolve_from_module_access`, but does not produce diagnostics (or enforce they exist) in
+/// failure cases. This is because errors previously meant that expansion had errors, but here
+/// expansion may not have reported errors when failing to look up standard library bindings. We
+/// use this to continue ommitting those errors. when further resolving standard library bindings.
+macro_rules! resolve_from_module_access_without_diags {
+    ($context:expr, $loc:expr, $mident:expr, $name:expr, $expected_pat:pat, $rhs:expr, $expected_kind:expr) => {{
+        match $context.resolve_module_access_inner(
+            &Some($expected_kind),
+            $loc,
+            $mident,
+            $name,
+            /* report_errors */ false,
+        ) {
+            Some($expected_pat) => $rhs,
+            Some(_) | None => None,
+        }
+    }};
+}
+
 impl OuterContext {
     fn new(
         compilation_env: &CompilationEnv,
@@ -682,14 +701,28 @@ impl<'outer, 'env> Context<'outer, 'env> {
         m: &ModuleIdent,
         n: &Name,
     ) -> Option<ResolvedModuleMember> {
+        self.resolve_module_access_inner(kind, loc, m, n, /* report_errors */ true)
+    }
+
+    fn resolve_module_access_inner(
+        &mut self,
+        kind: &Option<ErrorKind>,
+        loc: Loc,
+        m: &ModuleIdent,
+        n: &Name,
+        report_errors: bool,
+    ) -> Option<ResolvedModuleMember> {
         let Some(members) = self.outer.module_members.get(m) else {
-            self.add_diag(make_unbound_module_error(self, m.loc, m));
+            if report_errors {
+                self.add_diag(make_unbound_module_error(self, m.loc, m))
+            };
             return None;
         };
         let result = members.get(&n.value);
-        if result.is_none() {
-            let diag = make_unbound_module_member_error(self, kind, loc, *m, n.value);
-            self.add_diag(diag);
+        if result.is_none() && report_errors {
+            self.add_diag(make_unbound_module_member_error(
+                self, kind, loc, *m, n.value,
+            ))
         }
         result.map(|inner| {
             let mut result = inner.clone();
@@ -723,6 +756,41 @@ impl<'outer, 'env> Context<'outer, 'env> {
         n: &Name,
     ) -> Option<Box<ResolvedModuleFunction>> {
         resolve_from_module_access!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleMember::Function(fun),
+            Some(fun),
+            ErrorKind::Function
+        )
+    }
+
+    fn resolve_stdlib_type(
+        &mut self,
+        loc: Loc,
+        m: &ModuleIdent,
+        n: &Name,
+        error_kind: ErrorKind,
+    ) -> Option<Box<ResolvedDatatype>> {
+        resolve_from_module_access_without_diags!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleMember::Datatype(module_type),
+            Some(Box::new(module_type)),
+            error_kind
+        )
+    }
+
+    fn resolve_stdlib_function(
+        &mut self,
+        loc: Loc,
+        m: &ModuleIdent,
+        n: &Name,
+    ) -> Option<Box<ResolvedModuleFunction>> {
+        resolve_from_module_access_without_diags!(
             self,
             loc,
             m,
@@ -1719,6 +1787,7 @@ fn module(
         target_kind,
         use_funs: euse_funs,
         friends: efriends,
+        stdlib_definitions: estdlib_definitions,
         structs: estructs,
         enums: eenums,
         functions: efunctions,
@@ -1729,6 +1798,7 @@ fn module(
     let mut use_funs = use_funs(context, euse_funs);
     let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
+    let stdlib_definitions = resolve_stdlib_definitions(context, estdlib_definitions);
     let struct_names = estructs
         .key_cloned_iter()
         .map(|(k, _)| k)
@@ -1792,6 +1862,7 @@ fn module(
         use_funs,
         syntax_methods,
         friends,
+        stdlib_definitions,
         structs,
         enums,
         constants,
@@ -2046,6 +2117,75 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
         assert!(context.env.has_errors());
         None
     }
+}
+
+//**************************************************************************************************
+// Std Library Definitions
+//**************************************************************************************************
+
+fn resolve_stdlib_definitions(
+    context: &mut Context,
+    estdlib_definitions: E::StdlibDefinitions,
+) -> N::StdlibDefinitions {
+    let cur_diag_reporter = std::mem::replace(
+        &mut context.reporter,
+        context.env.dummy_diagnostic_reporter(),
+    );
+
+    let E::StdlibDefinitions { functions, types } = estdlib_definitions;
+
+    let functions = functions
+        .into_iter()
+        .filter_map(|(name, path)| resolve_stdlib_function(context, path).map(|fun| (name, fun)))
+        .collect::<BTreeMap<_, _>>();
+
+    let types = types
+        .into_iter()
+        .filter_map(|(name, path)| resolve_stdlib_type(context, path).map(|ty| (name, ty)))
+        .collect::<BTreeMap<_, _>>();
+
+    let _ = std::mem::replace(&mut context.reporter, cur_diag_reporter);
+
+    N::StdlibDefinitions { functions, types }
+}
+
+fn resolve_stdlib_function(
+    context: &mut Context,
+    ma: E::ModuleAccess_,
+) -> Option<(ModuleIdent, FunctionName)> {
+    let E::ModuleAccess_::ModuleAccess(m, n) = ma else {
+        return None;
+    };
+    let Some(resolved_function) = context.resolve_stdlib_function(m.loc, &m, &n) else {
+        return None;
+    };
+    Some((resolved_function.mident, resolved_function.name))
+}
+
+fn resolve_stdlib_type(context: &mut Context, ma: E::ModuleAccess_) -> Option<N::Type> {
+    use N::{Type_ as NT, TypeName_ as NN};
+
+    let E::ModuleAccess_::ModuleAccess(m, n) = ma else {
+        return None;
+    };
+    let Some(mt) = context.resolve_stdlib_type(m.loc, &m, &n, ErrorKind::Type) else {
+        return None;
+    };
+    let (decl_loc, tn, arity) = match *mt {
+        ResolvedDatatype::Struct(stype) => {
+            let tn = sp(stype.decl_loc, NN::ModuleType(stype.mident, stype.name));
+            let arity = stype.tyarg_arity;
+            (stype.decl_loc, tn, arity)
+        }
+        ResolvedDatatype::Enum(etype) => {
+            let tn = sp(etype.decl_loc, NN::ModuleType(etype.mident, etype.name));
+            let arity = etype.tyarg_arity;
+            (etype.decl_loc, tn, arity)
+        }
+    };
+    assert!(arity == 0, "Cannot resolve stdlib types with arguments");
+    let tys = vec![];
+    Some(sp(decl_loc, NT::Apply(None, tn, tys)))
 }
 
 //**************************************************************************************************

@@ -5,7 +5,13 @@
 //! source code. The summaries include the signatures of all functions (potentially macros) and
 //! datatypes (structs and enums).
 
-use crate::{TModuleId, model::Model, normalized, source_kind::SourceKind, source_model};
+use crate::{
+    TModuleId,
+    model::{Model, ModelConfig},
+    normalized,
+    source_kind::SourceKind,
+    source_model,
+};
 
 use move_binary_format::file_format;
 use move_compiler::{
@@ -244,6 +250,7 @@ pub struct DatatypeTArg {
 //**************************************************************************************************
 
 pub struct Context {
+    config: ModelConfig,
     root_named_address_reverse_map: BTreeMap<AccountAddress, Symbol>,
     phantom_type_positions:
         BTreeMap<normalized::ModuleId, BTreeMap<Symbol, Vec</* is phantom */ bool>>>,
@@ -251,6 +258,7 @@ pub struct Context {
 
 impl Context {
     pub fn new<K: SourceKind>(model: &Model<K>) -> Self {
+        let config = model.config.clone();
         let root_named_address_reverse_map = model.root_named_address_reverse_map.clone();
         let phantom_type_positions = model
             .compiled
@@ -274,6 +282,7 @@ impl Context {
             })
             .collect();
         Self {
+            config,
             root_named_address_reverse_map,
             phantom_type_positions,
         }
@@ -564,8 +573,20 @@ impl DatatypeTArg {
         idx: usize,
         ty: Type,
     ) -> Self {
+        let phantom = if context.config.allow_missing_dependencies {
+            // Default to false if we do not find it.
+            *context
+                .phantom_type_positions
+                .get(module)
+                .and_then(|m| m.get(name))
+                .and_then(|v| v.get(idx))
+                .unwrap_or(&false)
+        } else {
+            // Assume it is there and panic otherwise.
+            context.phantom_type_positions[module][name][idx]
+        };
         Self {
-            phantom: context.phantom_type_positions[module][name][idx],
+            phantom,
             argument: ty,
         }
     }

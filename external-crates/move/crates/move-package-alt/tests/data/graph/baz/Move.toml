@@ -1,6 +1,6 @@
 [package]
 name = "baz"
-edition = "2025"
+edition = "2024"
 license = "Apache-2.0"
 authors = ["Move Team"]
 

@@ -114,7 +114,14 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-exports.returnFunctions = (source, functions, language) => {
+const cutAtBodyStart = (text) => {
+  const brace = text.indexOf("{");
+  if (brace !== -1) return text.slice(0, brace).trimEnd();
+  const semi = text.indexOf(";");
+  return semi !== -1 ? text.slice(0, semi + 1).trimEnd() : text.trimEnd();
+};
+
+exports.returnFunctions = (source, functions, language, sig) => {
   if (!functions) {
     return source;
   }
@@ -144,9 +151,11 @@ exports.returnFunctions = (source, functions, language) => {
       if (bracePos === -1) continue;
       const block = captureBalanced(sub.slice(bracePos));
       if (!block) continue;
-      const full = sub.slice(0, bracePos) + block; // header through matching `}`
+      const header = sub.slice(0, bracePos);
+      const full = header + block;
       const pre = capturePrepend(m, source);
-      funContent.push(removeLeadingSpaces(full, pre));
+      const out = sig ? cutAtBodyStart(full) : full;
+      funContent.push(removeLeadingSpaces(out, pre));
       continue;
     } else if (language === "ts") {
       funStr = `^(\\s*)(async )?(export (default )?)?function \\b${escapeRegex(fn)}\\b[\\s\\S]*?\\n\\1\\}`;
@@ -159,7 +168,11 @@ exports.returnFunctions = (source, functions, language) => {
       const funMatch = funRE.exec(source);
       if (funMatch) {
         let pre = capturePrepend(funMatch, source);
-        funContent.push(removeLeadingSpaces(funMatch[0], pre));
+        let matched = funMatch[0];
+        if (sig) {
+          matched = cutAtBodyStart(matched);
+        }
+        funContent.push(removeLeadingSpaces(matched, pre));
       }
     }
   }
@@ -295,15 +308,15 @@ exports.returnStructs = (source, structList, language) => {
 
   for (const name of names) {
     const shortStructRE = new RegExp(
-      String.raw`^\s*(?:pub(?:$begin:math:text$[^)]+$end:math:text$)?\s+)?struct\s+${escapeRegex(name)}\s*;[ \t]*(?:\r?\n|$)`,
-      "m",
+      String.raw`^\s*(?:pub(?:lic)?(?:\s*\(\s*[^)]+\s*\))?\s+)?struct\s+${escapeRegex(name)}\s*;[ \t]*(?:\r?\n|$)`,
     );
 
     const m = shortStructRE.exec(src);
-    let full, pre = "";
+    let full,
+      pre = "";
     if (!m) {
       const structBegRE = new RegExp(
-        String.raw`^\s*(?:pub(?:$begin:math:text$[^)]+$end:math:text$)?\s+)?struct\s+${escapeRegex(name)}\b[^\n]*\{`,
+        String.raw`^\s*(?:pub(?:lic)?(?:\s*\(\s*[^)]+\s*\))?\s+)?struct\s+${escapeRegex(name)}\b[\s\S]*?\{`,
         "m",
       );
       const ml = structBegRE.exec(src);
@@ -402,7 +415,7 @@ exports.returnEnums = (source, enumVal) => {
   for (const e of enums) {
     // Match optional keywords: export / declare / const (TS) OR pub (Rust)
     const re = new RegExp(
-      `^( *)(?:export\\s+)?(?:declare\\s+)?(?:const\\s+)?(?:pub\\s+)?enum\\s+${escapeRegex(e)}\\s*\\{`,
+      `^(\\s*)(?:export\\s+)?(?:declare\\s+)?(?:const\\s+)?(?:pub(?:lic)?(?:\$begin:math:text$package\\$end:math:text$)?\\s+)?enum\\s+${escapeRegex(e)}\\b(?:\\s*<[^>]*>)?(?:\\s+has\\s+[^{]+)?\\s*\\{`,
       "m",
     );
     const m = re.exec(source);

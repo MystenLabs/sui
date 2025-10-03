@@ -7,6 +7,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use sui_indexer_alt_graphql::{
     config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
 };
@@ -135,6 +136,12 @@ struct ObjectState {
     as_move_object: Option<Value>,
 }
 
+#[derive(Debug, Deserialize)]
+struct FieldLayout {
+    name: String,
+    layout: Value,
+}
+
 struct GraphQlTestCluster {
     url: Url,
     handle: JoinHandle<()>,
@@ -231,8 +238,8 @@ async fn test_simulate_transaction_basic() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -249,7 +256,11 @@ async fn test_simulate_transaction_basic() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -296,8 +307,8 @@ async fn test_simulate_transaction_with_events() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -311,7 +322,11 @@ async fn test_simulate_transaction_with_events() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -343,15 +358,19 @@ async fn test_simulate_transaction_input_validation() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects { digest }
                     error
                 }
             }
         "#,
             json!({
-                "txData": "invalid_base64!"
+                "txData": {
+                    "bcs": {
+                        "value": "invalid_base64!"
+                    }
+                }
             }),
         )
         .await
@@ -378,8 +397,8 @@ async fn test_simulate_transaction_object_changes() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -415,7 +434,11 @@ async fn test_simulate_transaction_object_changes() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -589,8 +612,8 @@ async fn test_simulate_transaction_command_results() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects { status }
                     outputs {
                         returnValues {
@@ -619,7 +642,13 @@ async fn test_simulate_transaction_command_results() {
                 }
             }
         "#,
-            json!({ "txData": tx_bytes.encoded() }),
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
         )
         .await
         .unwrap();
@@ -688,6 +717,230 @@ async fn test_simulate_transaction_command_results() {
             _ => panic!("Unexpected command index: {}", i),
         }
     }
+
+    graphql_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_simulate_transaction_json_transfer() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    let sender = validator_cluster.get_address_0();
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Create a JSON Transaction following the proto schema for a simple transfer
+    let tx_json = json!({
+        "sender": sender.to_string(),
+         "gas_payment": {
+            "budget": 3000000,
+            "owner": sender.to_string()
+        },
+        "kind": {
+            "programmable_transaction": {
+                "inputs": [
+                    {
+                        "literal": 1000000  // Amount to transfer as a number literal
+                    },
+                    {
+                        "literal": recipient.to_string()  // Recipient address as string literal
+                    }
+                ],
+                "commands": [
+                    {
+                        "split_coins": {
+                            "coin": {
+                                "kind": "GAS"
+                            },
+                            "amounts": [
+                                {
+                                    "kind": "INPUT",
+                                    "input": 0
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "transfer_objects": {
+                            "objects": [
+                                {
+                                    "kind": "RESULT",
+                                    "result": 0,
+                                    "subresult": 0
+                                }
+                            ],
+                            "address": {
+                                "kind": "INPUT",
+                                "input": 1
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    });
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txJson: JSON!) {
+                simulateTransaction(transaction: $txJson) {
+                    effects {
+                        digest
+                        status
+                        transaction {
+                            sender { address }
+                            gasInput { gasBudget }
+                            signatures {
+                                signatureBytes
+                            }
+                        }
+                    }
+                    error
+                }
+            }
+        "#,
+            json!({
+                "txJson": tx_json
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    let simulation_result: SimulationResult =
+        serde_json::from_value(result.pointer("/data/simulateTransaction").unwrap().clone())
+            .unwrap();
+
+    // Verify simulation was successful
+    let effects = simulation_result.effects.unwrap();
+    assert_eq!(effects.status, "SUCCESS");
+    assert!(simulation_result.error.is_none());
+
+    // Verify transaction data matches original
+    let transaction = effects.transaction.unwrap();
+    assert_eq!(
+        transaction.sender.address,
+        validator_cluster.get_address_0().to_string()
+    );
+    assert_eq!(transaction.gas_input.gas_budget, "3000000");
+
+    // For simulation, signatures should be empty since we don't provide them
+    assert_eq!(transaction.signatures.len(), 0);
+
+    graphql_cluster.stopped().await;
+}
+
+//TODO(joey) We need to setup a DB so that package resolution can properly find packages that are
+//not included in the response (like 0x2). This test previously passed since simulate was
+//incorretly returning the system package as a part of the input objects.
+#[sim_test]
+#[ignore]
+async fn test_package_resolver_finds_newly_published_package() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    // Publish the test package
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["packages", "package_resolver_test"]);
+    let tx_data = validator_cluster
+        .test_transaction_builder()
+        .await
+        .publish(path)
+        .build();
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    // Execute the publish transaction and query for type LAYOUT
+    // The layout query will trigger PackageResolver::fetch() for the new package
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: Base64!) {
+                simulateTransaction(transaction: $txData) {
+                    effects {
+                        status
+                        objectChanges {
+                            nodes {
+                                outputState {
+                                    address
+                                    asMoveObject {
+                                        contents {
+                                            type {
+                                                repr
+                                                layout
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Find the SimpleObject created by the package's init function
+    let object_changes = result
+        .pointer("/data/simulateTransaction/effects/objectChanges/nodes")
+        .unwrap()
+        .as_array()
+        .unwrap();
+
+    // Look for the SimpleObject - its type resolution requires fetching the newly published package
+    let simple_object = object_changes
+        .iter()
+        .find(|node| {
+            node.pointer("/outputState/asMoveObject/contents/type/repr")
+                .and_then(|t| t.as_str())
+                .map(|type_str| type_str.contains("::resolver_test::SimpleObject"))
+                .unwrap_or(false)
+        })
+        .unwrap();
+    let fields: Vec<FieldLayout> = serde_json::from_value(
+        simple_object
+            .pointer("/outputState/asMoveObject/contents/type/layout/struct/fields")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        fields.len(),
+        2,
+        "SimpleObject should have 2 fields (id and value)"
+    );
+
+    // Verify the 'id' field is of type UID
+    assert_eq!(fields[0].name, "id");
+    assert_eq!(
+        fields[0]
+            .layout
+            .pointer("/struct/type")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+    );
+
+    // Verify the 'value' field is of type NestedObject
+    assert_eq!(fields[1].name, "value");
+    assert!(fields[1]
+        .layout
+        .pointer("/struct/type")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("::resolver_test::NestedObject"));
 
     graphql_cluster.stopped().await;
 }
