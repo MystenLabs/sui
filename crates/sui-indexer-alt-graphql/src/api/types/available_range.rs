@@ -189,10 +189,6 @@ fn collect_pipelines(
             pipelines.insert("tx_digests".to_string());
             if filters.contains("module") {
                 pipelines.insert("ev_emit_mod".to_string());
-            } else if filters.contains("type") {
-                pipelines.insert("ev_struct_inst".to_string());
-            } else if filters.contains("sender") {
-                pipelines.insert("ev_struct_inst".to_string());
             } else {
                 pipelines.insert("ev_struct_inst".to_string());
             }
