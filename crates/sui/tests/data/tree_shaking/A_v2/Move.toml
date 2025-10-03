@@ -1,5 +1,5 @@
 [package]
-name = "A"
+name = "a"
 edition = "2024"
 system-dependencies = []
 
