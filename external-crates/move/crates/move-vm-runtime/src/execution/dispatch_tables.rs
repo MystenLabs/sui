@@ -168,16 +168,15 @@ impl VMDispatchTables {
         })
     }
 
-    pub fn resolve_loaded_module(
-        &self,
-        runtime_id: &ModuleId,
-    ) -> PartialVMResult<VMPointer<Module>> {
+    pub fn resolve_loaded_module(&self, runtime_id: &ModuleId) -> VMResult<VMPointer<Module>> {
         let (package, module_id) = runtime_id.into();
         let package = self.loaded_packages.get(package).ok_or_else(|| {
             PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                 .with_message(format!("Package {} not found", package))
+                .finish(Location::Undefined)
         })?;
-        let interned = identifier_interner::intern_identifier(module_id).unwrap();
+        let interned = identifier_interner::intern_identifier(module_id)
+            .map_err(|e| e.finish(Location::Undefined))?;
         package
             .loaded_modules
             .get(&interned)
@@ -185,6 +184,7 @@ impl VMDispatchTables {
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                     .with_message(format!("Module {} not found", module_id))
+                    .finish(Location::Undefined)
             })
     }
 
