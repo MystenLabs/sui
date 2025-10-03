@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FaucetError","FaucetRequest","RequestStatus"],"fn":["create_wallet_context","start_faucet"],"struct":["AppState","CoinInfo","FaucetConfig","FaucetResponse","FixedAmountRequest","LocalFaucet"]};
