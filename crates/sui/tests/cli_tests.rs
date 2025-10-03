@@ -4977,14 +4977,16 @@ async fn test_parse_host_port() {
 #[sim_test]
 async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await.unwrap();
+    let chain_id = test.client.read_api().get_chain_identifier().await.unwrap();
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("H"), chain_id.clone());
     // A package and with unpublished deps
-    // let (package_id, _) = test.publish_package("H", true, None).await.unwrap();
+    let (package_id, _) = test.publish_package("H", true).await.unwrap();
 
     // set with_unpublished_dependencies to true and publish package H
-    // let linkage_table_h = test.fetch_linkage_table(package_id).await;
+    let linkage_table_h = test.fetch_linkage_table(package_id).await;
     // H depends on G, which is unpublished, so the linkage table should be empty as G will be
     // included in H during publishing
-    // assert!(linkage_table_h.is_empty());
+    assert!(linkage_table_h.is_empty());
 
     // try publish package H but `with_unpublished_dependencies` is false. Should error
     let resp = test.test_publish_package("H", false, None).await;
@@ -4993,7 +4995,6 @@ async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow:
     Ok(())
 }
 
-// TODO: pkg-alt FAILING TEST
 #[sim_test]
 async fn test_tree_shaking_package_without_dependencies() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
