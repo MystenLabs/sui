@@ -1,4 +1,6 @@
 name: Trigger Release binaries builds
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
