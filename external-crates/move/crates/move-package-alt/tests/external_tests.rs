@@ -253,7 +253,7 @@ async fn external_non_json() {
     ));
 
     let scenario = TestPackageGraph::new(["root"])
-        .add_package("a", |a| a.add_file("move.toml", a_manifest))
+        .add_package("a", |a| a.add_file("Move.toml", a_manifest))
         .add_deps([("root", "a")])
         .build();
 
@@ -277,7 +277,7 @@ async fn external_returns_external() {
     ));
 
     let scenario = TestPackageGraph::new(["root"])
-        .add_package("a", |a| a.add_file("move.toml", a_manifest))
+        .add_package("a", |a| a.add_file("Move.toml", a_manifest))
         .add_deps([("root", "a")])
         .build();
 
@@ -300,7 +300,7 @@ async fn external_no_resolver() {
     ));
 
     let scenario = TestPackageGraph::new(["root"])
-        .add_package("a", |a| a.add_file("move.toml", a_manifest))
+        .add_package("a", |a| a.add_file("Move.toml", a_manifest))
         .add_deps([("root", "a")])
         .build();
 
