@@ -32,10 +32,14 @@ use move_compiler::{
     },
     sui_mode,
 };
+use move_core_types::account_address::AccountAddress;
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, graph::PackageInfo, package::RootPackage,
-    schema::Environment,
+    errors::PackageResult,
+    flavor::MoveFlavor,
+    graph::{NamedAddress, PackageInfo},
+    package::RootPackage,
+    schema::{Environment, OriginalID},
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -350,7 +354,6 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
     build_config: &BuildConfig,
 ) -> anyhow::Result<Vec<PackagePaths>> {
     let mut package_paths: Vec<PackagePaths> = vec![];
-    // let cwd = std::env::current_dir()?;
     for pkg in packages.into_iter() {
         let name: Symbol = pkg.display_name().into();
 
@@ -358,10 +361,31 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
         }
 
+        // Build the named address mapping for this package taking into consideration if the
+        // set_unpublished_deps_to_zero flag is set
+        let named_addresses: BTreeMap<_, _> = pkg
+            .named_addresses()?
+            .into_iter()
+            .map(|(id, addr)| {
+                (
+                    id,
+                    match addr {
+                        NamedAddress::Unpublished { dummy_addr: _ }
+                            if build_config.set_unpublished_deps_to_zero =>
+                        {
+                            NamedAddress::Defined(OriginalID(AccountAddress::ZERO))
+                        }
+                        addr => addr,
+                    },
+                )
+            })
+            .collect();
+        // if the root_as_zero flag is set, we want to ensure that the root package is always
+        // mapped to `0x0`
         let addresses: BuildNamedAddresses = if build_config.root_as_zero {
-            BuildNamedAddresses::root_as_zero(pkg.named_addresses()?)
+            BuildNamedAddresses::root_as_zero(named_addresses)
         } else {
-            pkg.named_addresses()?.into()
+            named_addresses.into()
         };
 
         // TODO: better default handling for edition and flavor
@@ -378,18 +402,13 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
         // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
         let safe_name = Symbol::from(pkg.id().clone());
 
-        // let sources = get_sources(pkg.path(), build_config)?
-        //     .iter()
-        //     .map(|x| x.replace(cwd.to_str().unwrap(), ".").into())
-        //     .collect();
-
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
-        debug!("Named address map {:#?}", addresses);
+        debug!("Named address map {:#?}", named_addresses);
         let paths = PackagePaths {
             name: Some((safe_name, config)),
             // paths: sources,
             paths: get_sources(pkg.path(), build_config)?,
-            named_address_map: addresses.inner,
+            named_address_map: named_addresses.inner,
         };
 
         package_paths.push(paths);
