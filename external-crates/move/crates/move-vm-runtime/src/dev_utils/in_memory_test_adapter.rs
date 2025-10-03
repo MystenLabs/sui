@@ -120,8 +120,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         package: SerializedPackage,
     ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
         let Some(version_id) = package.linkage_table.get(&original_id).cloned() else {
-            // TODO: VM error instead?
-            panic!("Did not find runtime ID {original_id} in linkage context.");
+            panic!("Did not find original ID {original_id} in linkage context.");
         };
         assert_eq!(version_id, package.version_id);
         let mut gas_meter = GasStatus::new_unmetered();
@@ -140,8 +139,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         package: verif_ast::Package,
     ) -> VMResult<()> {
         let Some(version_id) = package.linkage_table.get(&original_id).cloned() else {
-            // TODO: VM error instead?
-            panic!("Did not find runtime ID {original_id} in linkage context.");
+            panic!("Did not find original ID {original_id} in linkage context.");
         };
         assert!(version_id == package.version_id);
         self.storage

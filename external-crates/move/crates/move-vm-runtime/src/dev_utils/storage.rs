@@ -23,18 +23,6 @@ use std::collections::BTreeMap;
 // Types
 // -------------------------------------------------------------------------------------------------
 
-/// A dummy storage containing no modules or resources.
-#[derive(Debug, Clone)]
-pub struct BlankStorage;
-
-/// A storage adapter created by stacking a change set on top of an existing storage backend.
-/// This can be used for additional computations without modifying the base.
-#[derive(Debug, Clone)]
-pub struct DeltaStorage<'a, 'b, S> {
-    base: &'a S,
-    stored_pkg_cache: &'b BTreeMap<VersionId, SerializedPackage>,
-}
-
 /// Simple in-memory representation of packages. This is a wrapper around `SerializedPackage` to
 /// allow for additional helper methods for testing purposes.
 #[derive(Debug, Clone)]
@@ -49,21 +37,6 @@ pub struct InMemoryStorage {
 // -------------------------------------------------------------------------------------------------
 // Impls
 // -------------------------------------------------------------------------------------------------
-
-impl BlankStorage {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl<'a, 'b, S: ModuleResolver> DeltaStorage<'a, 'b, S> {
-    pub fn new(base: &'a S, delta: &'b BTreeMap<VersionId, SerializedPackage>) -> Self {
-        Self {
-            base,
-            stored_pkg_cache: delta,
-        }
-    }
-}
 
 impl StoredPackage {
     fn empty(original_id: OriginalId, version_id: VersionId, version: u64) -> Self {
@@ -253,58 +226,6 @@ impl InMemoryStorage {
 // -----------------------------------------------
 // Module Resolvers
 // -----------------------------------------------
-
-impl ModuleResolver for BlankStorage {
-    type Error = ();
-
-    fn get_packages_static<const N: usize>(
-        &self,
-        ids: [AccountAddress; N],
-    ) -> std::prelude::v1::Result<[Option<SerializedPackage>; N], Self::Error> {
-        self.get_packages(&ids).map(|packages| {
-            packages
-                .try_into()
-                .expect("Impossible to get a length mismatch")
-        })
-    }
-
-    fn get_packages(
-        &self,
-        ids: &[AccountAddress],
-    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        Ok(ids.iter().map(|_| None).collect())
-    }
-}
-
-impl<S: ModuleResolver> ModuleResolver for DeltaStorage<'_, '_, S> {
-    type Error = S::Error;
-    fn get_packages_static<const N: usize>(
-        &self,
-        ids: [AccountAddress; N],
-    ) -> std::prelude::v1::Result<[Option<SerializedPackage>; N], Self::Error> {
-        self.get_packages(&ids).map(|packages| {
-            packages
-                .try_into()
-                .expect("Impossible to get a length mismatch")
-        })
-    }
-
-    fn get_packages(
-        &self,
-        ids: &[AccountAddress],
-    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        ids.iter()
-            .map(|version_id| {
-                if let Some(pkg) = self.stored_pkg_cache.get(version_id) {
-                    Ok(Some(pkg.clone()))
-                } else {
-                    // TODO: Can optimize this to do a two-pass bulk lookup if we want
-                    Ok(self.base.get_packages(&[*version_id])?[0].clone())
-                }
-            })
-            .collect::<Result<Vec<_>, Self::Error>>()
-    }
-}
 
 impl ModuleResolver for InMemoryStorage {
     type Error = ();

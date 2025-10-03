@@ -1765,7 +1765,7 @@ impl<'a> VMTracer<'a> {
             let instruction =
                 &machine.call_stack.current_frame.function.to_ref().code()[pc as usize];
             let effects = self.register_post_effects(vec![EF::ExecutionError(error_string)]);
-            // TODO: type params here?
+            // TODO(tracer): type params here?
             self.trace
                 .instruction(instruction, vec![], effects, *remaining_gas, pc);
         } else if let Some(err) = err {

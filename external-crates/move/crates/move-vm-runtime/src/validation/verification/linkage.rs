@@ -90,34 +90,35 @@ fn verify_package_no_cyclic_relationships(
     cached_packages: &BTreeMap<VersionId, &Package>,
     relocation_map: &HashMap<VersionId, OriginalId>,
 ) -> VMResult<()> {
-    let (module, bundle_verified) = if package.len() == 1 {
-        (&package[0], BTreeMap::new())
-    } else {
-        let module = &package[0];
-        let module_map = package
-            .iter()
-            .skip(1)
-            .map(|m| (m.value.self_id(), m))
-            .collect();
-        (module, module_map)
-    };
+    let mut to_visit_modules: BTreeMap<_, _> =
+        package.iter().map(|m| (m.value.self_id(), m)).collect();
+    let module_map = to_visit_modules.clone();
 
-    cyclic_dependencies::verify_module(&module.value, |runtime_module_id| {
-        let module = if let Some(bundled) = bundle_verified.get(runtime_module_id) {
-            Some(**bundled)
-        } else {
-            let storage_id = relocation_map
-                .get(runtime_module_id.address())
-                .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))?;
-            cached_packages
-                .get(storage_id)
-                .and_then(|p| p.modules.get(&runtime_module_id.to_owned()))
-        };
+    // Iteratively visit modules, removing them from the to-visit set as we go. If we encounter a
+    // cycle an error is returned.
+    while let Some((_, module)) = to_visit_modules.pop_last() {
+        let visited = cyclic_dependencies::verify_module(&module.value, |original_module_id| {
+            let module = if let Some(bundled) = module_map.get(original_module_id) {
+                Some(**bundled)
+            } else {
+                let version_id = relocation_map
+                    .get(original_module_id.address())
+                    .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))?;
+                cached_packages
+                    .get(version_id)
+                    .and_then(|p| p.modules.get(&original_module_id.to_owned()))
+            };
 
-        module
-            .map(|m| m.value.immediate_dependencies())
-            .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
-    })?;
+            module
+                .map(|m| m.value.immediate_dependencies())
+                .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
+        })?;
+
+        // Remove all visited modules from the to-visit set.
+        for k in visited.iter() {
+            to_visit_modules.remove(k);
+        }
+    }
 
     Ok(())
 }
