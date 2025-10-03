@@ -25,7 +25,6 @@ Move.toml
 sources
 tests
 ==== files in sources ====
-_example_a.move
 _Example_A.move
 ==== files in tests =====
 _example_a_tests.move
