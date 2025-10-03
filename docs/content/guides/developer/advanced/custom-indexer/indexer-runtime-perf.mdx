@@ -4,7 +4,15 @@ description: Learn how to optimize Sui custom indexer performance through runtim
 keywords: [ sui indexer performance, indexer optimization, tokio console debugging, prometheus metrics, database tuning, checkpoint ingestion, data pruning, indexer configuration, performance monitoring, sui blockchain indexing ]
 ---
 
-Proper configuration and resource monitoring delivers the most performant custom indexer possible. Runtime configuration options for ingestion, database connections, and pipeline selection, as well as purposeful use of debugging tools like `tokio_console` to analyze async workloads help dial in your indexer performance. A sensible strategy targeting efficient data pruning for your tables keeps them performant over time. Following best practices for exposing and extending Prometheus metrics helps you keep track of indexer performance. Together, these techniques help you run indexers that are fast, resource-efficient, and easier to monitor in both development and production.
+Proper configuration and resource monitoring delivers the most performant custom indexer possible. For example:
+
+- Runtime configuration options for ingestion, database connections, and pipeline selection, as well as purposeful use of debugging tools like `tokio_console` help dial in your indexer performance. 
+
+- A sensible strategy targeting efficient data pruning for your tables keeps them performant over time. 
+
+- Following best practices for exposing and extending Prometheus metrics helps you keep track of indexer performance. 
+
+Together, these techniques help you run indexers that are fast, resource-efficient, and easier to monitor in both development and production.
 
 ## Fine-tuning configurations
 
@@ -84,7 +92,7 @@ For complex configuration scenarios requiring deep understanding of pipeline int
 - [Sequential pipeline architecture](/concepts/custom-indexer/pipeline-architecture.mdx#sequential-pipeline-architecture)
 - [Concurrent pipeline architecture](/concepts/custom-indexer/pipeline-architecture.mdx#concurrent-pipeline-architecture)
 
-## Tokio Runtime Debugging
+## Tokio runtime debugging
 
 For performance-sensitive pipelines or when troubleshooting async runtime issues, the `sui-indexer-alt-framework` integrates with `tokio-console`, a powerful debugger for async Rust applications. This tool provides real-time insights into task execution, helping identify performance bottlenecks, stuck tasks, and memory issues.
 
@@ -101,7 +109,7 @@ The Tokio console is particularly useful for:
 
 ### Setup instructions
 
-Setup instructions should work in most cases. If you have issues, consult the [README](https://github.com/tokio-rs/console/blob/main/README.md) in the Tokio GitHub repo.
+Consult the [README](https://github.com/tokio-rs/console/blob/main/README.md) in the Tokio GitHub repo for additional information.
 
 1. Add dependencies
 
@@ -136,7 +144,7 @@ Setup instructions should work in most cases. If you have issues, consult the [R
     RUSTFLAGS="--cfg tokio_unstable" TOKIO_CONSOLE=1 cargo run
     ```
 
-    **Flag Explanations:**
+    **Flag explanations:**
 
     - `TOKIO_CONSOLE=1`: Enables `tokio-console` integration in `telemetry_subscribers`.
     - `RUSTFLAGS="--cfg tokio_unstable"`: Required by `tokio-console` to collect task instrumentation data.
@@ -161,7 +169,7 @@ For detailed information about the console dashboard, available views, warnings,
 
 ### Production considerations
 
-`Tokio-console` introduces runtime overhead and should be used carefully in production. While it's safe to use regularly during development and staging, production usage requires careful evaluation. Before enabling in production, you should run performance benchmarks with and without Tokio console enabled to measure the impact on your specific workload. Consider enabling only during maintenance windows or targeted troubleshooting sessions while monitoring system resources.
+`tokio-console` introduces runtime overhead and should be used carefully in production. While it's safe to use regularly during development and staging, production usage requires careful evaluation. Before enabling in production, you should run performance benchmarks with and without Tokio console enabled to measure the impact on your specific workload. Consider enabling only during maintenance windows or targeted troubleshooting sessions while monitoring system resources.
 
 ## Metrics
 
@@ -184,13 +192,13 @@ Key metric categories include:
 
 By default, metrics are served on `0.0.0.0:9184/metrics` in [Prometheus format](https://prometheus.io/docs/concepts/data_model/). You can override this address:
 
-- via command line:
+- Via the command line:
 
     ```sh
     $ cargo run --metrics-address "0.0.0.0:8080"
     ```
 
-- or via builder configuration:
+- Or, via the builder configuration:
 
     ```rust
     let cluster = IndexerCluster::builder()
@@ -242,7 +250,7 @@ See [Collect Prometheus metrics](https://grafana.com/docs/alloy/latest/collect/p
 
 If your table prunes data in checkpoint order, you can improve efficiency by partitioning the table, so that you can prune by just dropping whole partitions. This usually requires only a single pruner task, avoiding the need for concurrent batched `DELETE` queries.
 
-Partition size is the key tradeoff: you need `N` full partitions plus one trailing _active_ partition that cannot be dropped until it falls outside the read window. Larger partitions mean fewer total partitions to scan, reducing read amplification. Smaller partitions reduce retention overhead but increase the number of partitions queried. For example, keeping 10M checkpoints could use one 10M partition plus one active partition (querying at most 2 partitions) or ten 1M partitions plus one active partition (querying 11 partitions). In practice, per-epoch partitioning tends to produce too many small partitions, and not partitioning at all leads to performance degradation from repeated `DELETE`s creating dead tuples and fragmentation.
+Partition size is the key tradeoff: you need `N` full partitions plus one trailing _active_ partition that cannot be dropped until it falls outside the read window. Larger partitions mean fewer total partitions to scan, reducing read amplification. Smaller partitions reduce retention overhead but increase the number of partitions queried. For example, keeping 10M checkpoints could use a 10M partition plus 1 active partition (querying at most 2 partitions) or 10 1M partitions plus 1 active partition (querying 11 partitions). In practice, per-epoch partitioning tends to produce too many small partitions, and not partitioning at all leads to performance degradation from repeated `DELETE`s creating dead tuples and fragmentation.
 
 Pipelines with more complex pruning rules can still benefit. For example, in consistent pipelines, a record can only be pruned if there is a newer record for the same key or if it is a sentinel row. A separate, leaner table can track deletable records and be partitioned by checkpoint to make pruning efficient.
 
