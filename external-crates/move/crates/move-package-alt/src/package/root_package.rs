@@ -13,7 +13,7 @@ use super::paths::{EphemeralPubfilePath, OutputPath, PackagePath};
 use super::{EnvironmentID, manifest::Manifest};
 use crate::graph::PackageInfo;
 use crate::package::block_on;
-use crate::package::package_lock::PackageSystemLock;
+use crate::package::package_lock::PackageLock;
 use crate::schema::{
     Environment, ModeName, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
     Publication, RenderToml,
@@ -141,7 +141,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     async fn async_environments(
         path: impl AsRef<Path>,
     ) -> PackageResult<IndexMap<EnvironmentName, EnvironmentID>> {
-        let mtx = PackageLock::lock().await;
+        let mtx = PackageLock::new()?;
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let mut environments = F::default_environments();
 
@@ -259,7 +259,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// This helps validate:
     /// 1. TODO: Fill this in! (deduplicate nodes etc)
     async fn validate_and_construct(config: PackageConfig) -> PackageResult<Self> {
-        let mtx = PackageLock::lock().await; // held until function returns
+        let mtx = PackageLock::new()?; // held until function returns
         let input_path = PackagePath::new(config.input_path.clone())?;
         let ephemeral_file = config.load_type.ephemeral_file()?;
         let output_path = OutputPath::new(config.output_path.clone())?;
@@ -372,7 +372,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Before overwriting the lockfile, this function also extracts any publication information
     /// from the legacy lockfile and writes it into the pubfile
     pub async fn update_lockfile(&mut self) -> PackageResult<()> {
-        let mtx = PackageLock::lock().await;
+        let mtx = PackageLock::new()?;
 
         // migrate any pubs from the legacy lockfile to the modern pubfile before we clobber the
         // legacy lockfile.
@@ -413,7 +413,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Record metadata for a publication for the root package in either its `Published.toml` or
     /// its ephemeral pubfile (depending on how it was loaded)
     pub async fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
-        let mtx = PackageLock::lock().await;
+        let mtx = PackageLock::new()?;
         let package_id = self.name().to_string();
 
         if let Some(ephemeral_file) = &mut self.ephemeral_file {

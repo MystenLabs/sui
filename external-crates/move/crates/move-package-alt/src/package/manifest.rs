@@ -134,17 +134,14 @@ mod tests {
 
     use crate::{
         flavor::vanilla::default_environment,
-        package::{
-            package_lock::PackageLock,
-            paths::{FileResult, PackagePath},
-        },
+        package::{package_lock::PackageLock, paths::PackagePath},
         schema::PackageName,
     };
 
     use super::Manifest;
 
     /// Create a file containing `contents` and pass it to `Manifest::read_from_file`
-    async fn load_manifest(contents: impl AsRef<[u8]>) -> FileResult<Manifest> {
+    async fn load_manifest(contents: impl AsRef<[u8]>) -> anyhow::Result<Manifest> {
         // TODO: we need a better implementation for this
         let tempdir = TempDir::new().unwrap();
 
@@ -152,7 +149,10 @@ mod tests {
         std::fs::write(&manifest_path, contents).expect("write succeeds");
         let package_path = PackagePath::new(tempdir.path().to_path_buf()).unwrap();
 
-        Manifest::read_from_file(&package_path, &PackageLock::lock().await)
+        Ok(Manifest::read_from_file(
+            &package_path,
+            &PackageLock::new()?,
+        )?)
     }
 
     /// The `environments` table may be missing

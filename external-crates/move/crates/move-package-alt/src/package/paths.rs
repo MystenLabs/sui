@@ -231,7 +231,7 @@ impl OutputPath {
     /// Read the contents of the lockfile from the output directory
     #[cfg(test)]
     pub async fn dump_lockfile(&self) -> ParsedLockfile {
-        let mtx = PackageLock::lock().await;
+        let mtx = PackageLock::new().unwrap();
         PackagePath(self.clone())
             .read_lockfile(&mtx)
             .unwrap()
@@ -242,7 +242,7 @@ impl OutputPath {
     /// Read the contents of the pubfile from the output directory
     #[cfg(test)]
     pub async fn dump_pubfile<F: MoveFlavor>(&self) -> ParsedPublishedFile<F> {
-        let mtx = PackageLock::lock().await;
+        let mtx = PackageLock::new().unwrap();
         PackagePath(self.clone())
             .read_pubfile(&mtx)
             .unwrap()
@@ -389,7 +389,7 @@ mod tests {
         )
         .unwrap();
 
-        let mtx = PackageLock::lock().await;
+        let mtx = PackageLock::new().unwrap();
         let path = PackagePath::new(tempdir.path().to_path_buf()).unwrap();
         let error = path.read_manifest(&mtx).unwrap_err().to_string();
         assert_snapshot!(error.replace(tempdir.path().to_string_lossy().as_ref(), "<TEMPDIR>"),
