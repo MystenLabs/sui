@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
-    balance_read::AccountBalanceRead, naive_scheduler::NaiveBalanceWithdrawScheduler,
-    BalanceSettlement, ScheduleResult, TxBalanceWithdraw,
+    balance_read::AccountBalanceRead, eager_scheduler::EagerBalanceWithdrawScheduler,
+    naive_scheduler::NaiveBalanceWithdrawScheduler, BalanceSettlement, ScheduleResult,
+    TxBalanceWithdraw,
 };
 use futures::stream::FuturesUnordered;
 use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -17,6 +18,7 @@ use tracing::debug;
 pub(crate) trait BalanceWithdrawSchedulerTrait: Send + Sync {
     async fn schedule_withdraws(&self, withdraws: WithdrawReservations);
     async fn settle_balances(&self, settlement: BalanceSettlement);
+    fn close_epoch(&self);
 }
 
 pub(crate) struct WithdrawReservations {
@@ -59,8 +61,13 @@ impl BalanceWithdrawScheduler {
     pub fn new(
         balance_read: Arc<dyn AccountBalanceRead>,
         starting_accumulator_version: SequenceNumber,
+        use_eager_scheduler: bool,
     ) -> Self {
-        let inner = NaiveBalanceWithdrawScheduler::new(balance_read, starting_accumulator_version);
+        let inner: Arc<dyn BalanceWithdrawSchedulerTrait> = if use_eager_scheduler {
+            EagerBalanceWithdrawScheduler::new(balance_read, starting_accumulator_version)
+        } else {
+            NaiveBalanceWithdrawScheduler::new(balance_read, starting_accumulator_version)
+        };
         let (withdraw_sender, withdraw_receiver) =
             unbounded_channel("withdraw_scheduler_withdraws");
         let (settlement_sender, settlement_receiver) =
@@ -87,10 +94,7 @@ impl BalanceWithdrawScheduler {
         accumulator_version: SequenceNumber,
         withdraws: Vec<TxBalanceWithdraw>,
     ) -> FuturesUnordered<oneshot::Receiver<ScheduleResult>> {
-        debug!(
-            "schedule_withdraws: {:?}, {:?}",
-            accumulator_version, withdraws
-        );
+        // TODO: Add debug assertion that withdraws are scheduled in order.
         let (reservations, receivers) = WithdrawReservations::new(accumulator_version, withdraws);
         if let Err(err) = self.withdraw_sender.send(reservations) {
             tracing::error!("Failed to send withdraw reservations: {:?}", err);
@@ -102,8 +106,12 @@ impl BalanceWithdrawScheduler {
     /// It is only called from checkpoint builder, once for each accumulator version, in order.
     pub fn settle_balances(&self, settlement: BalanceSettlement) {
         if let Err(err) = self.settlement_sender.send(settlement) {
-            tracing::error!("Failed to send balance settlement: {:?}", err);
+            tracing::error!("Failed to send balance settlement: {}", err);
         }
+    }
+
+    pub fn close_epoch(&self) {
+        self.inner.close_epoch();
     }
 
     async fn process_withdraw_task(
@@ -111,6 +119,11 @@ impl BalanceWithdrawScheduler {
         mut withdraw_receiver: UnboundedReceiver<WithdrawReservations>,
     ) {
         while let Some(event) = withdraw_receiver.recv().await {
+            debug!(
+                withdraw_accumulator_version =? event.accumulator_version.value(),
+                "Processing withdraws: {:?}",
+                event.withdraws,
+            );
             self.inner.schedule_withdraws(event).await;
         }
         tracing::info!("Balance withdraw receiver closed");
@@ -121,6 +134,11 @@ impl BalanceWithdrawScheduler {
         mut settlement_receiver: UnboundedReceiver<BalanceSettlement>,
     ) {
         while let Some(settlement) = settlement_receiver.recv().await {
+            debug!(
+                next_accumulator_version =? settlement.next_accumulator_version.value(),
+                "Settling balance changes: {:?}",
+                settlement.balance_changes,
+            );
             self.inner.settle_balances(settlement).await;
         }
         tracing::info!("Balance settlement receiver closed");

@@ -122,6 +122,8 @@ impl ExecutionScheduler {
         Some(BalanceWithdrawScheduler::new(
             Arc::new(child_object_resolver),
             starting_accumulator_version,
+            // Use naive scheduler for now.
+            false,
         ))
     }
 
@@ -310,7 +312,7 @@ impl ExecutionScheduler {
                             let env = env.with_sufficient_balance();
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
-                        ScheduleStatus::AlreadyExecuted => {
+                        ScheduleStatus::AlreadySettled => {
                             let tx_digest = result.tx_digest;
                             debug!(?tx_digest, "Withdraw already executed");
                         }
@@ -536,6 +538,9 @@ impl ExecutionScheduler {
             child_object_resolver.clone(),
         );
         let mut guard = self.balance_withdraw_scheduler.lock();
+        if let Some(old_scheduler) = guard.as_ref() {
+            old_scheduler.close_epoch();
+        }
         *guard = scheduler;
     }
 
