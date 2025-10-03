@@ -128,7 +128,7 @@ impl MockCheckpointBuilder {
             .map(|e| e.effects.clone())
             .collect();
 
-        let builder = AccumulatorSettlementTxBuilder::new(None, &effects);
+        let builder = AccumulatorSettlementTxBuilder::new(None, &effects, 0);
 
         let checkpoint_height = self.get_next_checkpoint_number();
 
