@@ -33,6 +33,7 @@ mod checked {
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
         resolver::MoveResolver,
+        u256::U256,
         vm_status::StatusCode,
     };
     use move_trace_format::format::MoveTraceBuilder;
@@ -57,6 +58,7 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         accumulator_event::AccumulatorEvent,
+        accumulator_root::AccumulatorObjId,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
@@ -66,11 +68,12 @@ mod checked {
         execution::{ExecutionResults, ExecutionResultsV2},
         execution_config_utils::to_binary_config,
         execution_status::CommandArgumentError,
+        funds_accumulator::Withdrawal,
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::DenyListResult,
-        transaction::{Argument, CallArg, ObjectArg},
+        transaction::{Argument, CallArg, FundsWithdrawalArg, ObjectArg, WithdrawFrom},
     };
     use tracing::instrument;
 
@@ -160,6 +163,7 @@ mod checked {
                 state_view.as_sui_resolver(),
             ))));
             let mut input_object_map = BTreeMap::new();
+            let tx_context_ref = RefCell::borrow(&tx_context);
             let inputs = inputs
                 .into_iter()
                 .map(|call_arg| {
@@ -170,10 +174,12 @@ mod checked {
                         &mut linkage_view,
                         &[],
                         &mut input_object_map,
+                        &tx_context_ref,
                         call_arg,
                     )
                 })
                 .collect::<Result<_, ExecutionError>>()?;
+            std::mem::drop(tx_context_ref);
             let gas = if let Some(gas_coin) = gas_charger.gas_coin() {
                 let mut gas = load_object(
                     protocol_config,
@@ -1046,23 +1052,13 @@ mod checked {
 
         /// Special case errors for type arguments to Move functions
         pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
-            use sui_types::execution_status::TypeArgumentError;
-            match error.major_status() {
-                StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
-                    ExecutionErrorKind::TypeArityMismatch.into()
-                }
-                StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
-                    argument_idx: idx as TypeParameterIndex,
-                    kind: TypeArgumentError::TypeNotFound,
-                }
-                .into(),
-                StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
-                    argument_idx: idx as TypeParameterIndex,
-                    kind: TypeArgumentError::ConstraintNotSatisfied,
-                }
-                .into(),
-                _ => self.convert_vm_error(error),
-            }
+            convert_type_argument_error(
+                idx,
+                error,
+                self.vm,
+                &self.linkage_view,
+                self.protocol_config.resolve_abort_locations_to_package_id(),
+            )
         }
 
         /// Returns true if the value at the argument's location is borrowed, mutably or immutably
@@ -1509,16 +1505,7 @@ mod checked {
             // let deleted = deleted_object_ids.contains(&id);
         }
 
-        if protocol_config.enable_coin_deny_list_v2() {
-            let DenyListResult {
-                result,
-                num_non_gas_coin_owners,
-            } = state_view.check_coin_deny_list(&written_objects);
-            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-            result?;
-        }
-
-        let user_events = user_events
+        let user_events: Vec<Event> = user_events
             .into_iter()
             .map(|(module_id, tag, contents)| {
                 Event::new(
@@ -1531,26 +1518,64 @@ mod checked {
             })
             .collect();
 
+        let mut receiving_funds_type_and_owners = BTreeMap::new();
         let accumulator_events = accumulator_events
             .into_iter()
-            .map(|accum_event| match accum_event.value {
-                MoveAccumulatorValue::U64(amount) => {
-                    let value = AccumulatorValue::Integer(amount);
-                    let address = AccumulatorAddress::new(
-                        accum_event.target_addr.into(),
-                        accum_event.target_ty,
-                    );
-
-                    let write = AccumulatorWriteV1 {
-                        address,
-                        operation: accum_event.action.into_sui_accumulator_action(),
-                        value,
-                    };
-
-                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+            .map(|accum_event| {
+                if let Some(ty) = Balance::maybe_get_balance_type_param(&accum_event.target_ty) {
+                    receiving_funds_type_and_owners
+                        .entry(ty)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(accum_event.target_addr.into());
                 }
+                let value = match accum_event.value {
+                    MoveAccumulatorValue::U64(amount) => AccumulatorValue::Integer(amount),
+                    MoveAccumulatorValue::EventRef(event_idx) => {
+                        let Some(event) = user_events.get(event_idx as usize) else {
+                            invariant_violation!(
+                                "Could not find authenticated event at index {}",
+                                event_idx
+                            );
+                        };
+                        let digest = event.digest();
+                        AccumulatorValue::EventDigest(event_idx, digest)
+                    }
+                };
+
+                let address =
+                    AccumulatorAddress::new(accum_event.target_addr.into(), accum_event.target_ty);
+
+                let write = AccumulatorWriteV1 {
+                    address,
+                    operation: accum_event.action.into_sui_accumulator_action(),
+                    value,
+                };
+
+                Ok(AccumulatorEvent::new(
+                    AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
+                    write,
+                ))
             })
-            .collect();
+            .collect::<Result<Vec<_>, ExecutionError>>()?;
+
+        if protocol_config.enable_coin_deny_list_v2() {
+            for object in written_objects.values() {
+                let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
+                let owner = object.owner.get_address_owner_address();
+                if let (Some(ty), Ok(owner)) = (coin_type, owner) {
+                    receiving_funds_type_and_owners
+                        .entry(ty)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(owner);
+                }
+            }
+            let DenyListResult {
+                result,
+                num_non_gas_coin_owners,
+            } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
+            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+            result?;
+        }
 
         Ok(ExecutionResults::V2(ExecutionResultsV2 {
             written_objects,
@@ -1824,6 +1849,7 @@ mod checked {
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
+        tx_context: &TxContext,
         call_arg: CallArg,
     ) -> Result<InputValue, ExecutionError> {
         Ok(match call_arg {
@@ -1837,9 +1863,61 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
-            CallArg::BalanceWithdraw(_) => {
-                // TODO(address-balances): Add support for balance withdraws.
-                InputValue::new_balance_withdraw()
+            CallArg::FundsWithdrawal(FundsWithdrawalArg {
+                reservation,
+                type_arg,
+                withdraw_from,
+            }) => {
+                let Ok(type_arg) = type_arg.to_type_tag() else {
+                    // TODO(address-balances): ensure this is caught at signing
+                    invariant_violation!(
+                        "FundsWithdrawArg type arg should have been \
+                        checked at signing"
+                    );
+                };
+                let withdrawal_ty = Withdrawal::type_tag(type_arg);
+                let ty =
+                    load_type(vm, linkage_view, new_packages, &withdrawal_ty).map_err(|e| {
+                        convert_type_argument_error(
+                            0,
+                            e,
+                            vm,
+                            linkage_view,
+                            protocol_config.resolve_abort_locations_to_package_id(),
+                        )
+                    })?;
+                let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
+                    convert_vm_error(
+                        e,
+                        vm,
+                        linkage_view,
+                        protocol_config.resolve_abort_locations_to_package_id(),
+                    )
+                })?;
+                let loaded_ty = RawValueType::Loaded {
+                    ty,
+                    abilities,
+                    used_in_non_entry_move_call: false,
+                };
+                let owner = match withdraw_from {
+                    WithdrawFrom::Sender => tx_context.sender(),
+                };
+                // After this point, we can treat this like any other returned/loaded value, e.g.
+                // from a Move call. As such, sanity check Withdrawal should have only drop.
+                debug_assert!({
+                    !abilities.has_key()
+                        && !abilities.has_store()
+                        && !abilities.has_copy()
+                        && abilities.has_drop()
+                });
+                let limit = match reservation {
+                    sui_types::transaction::Reservation::EntireBalance => {
+                        // TODO(address-balances): support entire balance withdrawal
+                        todo!("Entire balance withdrawal not yet supported")
+                    }
+                    sui_types::transaction::Reservation::MaxAmountU64(u) => U256::from(u),
+                };
+                InputValue::withdrawal(loaded_ty, owner, limit)
             }
         })
     }
@@ -2042,5 +2120,31 @@ mod checked {
                 })
             },
         )
+    }
+    /// Special case errors for type arguments to Move functions
+    fn convert_type_argument_error<S: MoveResolver<Err = SuiError>>(
+        idx: usize,
+        error: VMError,
+        vm: &MoveVM,
+        state_view: &S,
+        resolve_abort_location_to_package_id: bool,
+    ) -> ExecutionError {
+        use sui_types::execution_status::TypeArgumentError;
+        match error.major_status() {
+            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
+                ExecutionErrorKind::TypeArityMismatch.into()
+            }
+            StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::TypeNotFound,
+            }
+            .into(),
+            StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::ConstraintNotSatisfied,
+            }
+            .into(),
+            _ => convert_vm_error(error, vm, state_view, resolve_abort_location_to_package_id),
+        }
     }
 }

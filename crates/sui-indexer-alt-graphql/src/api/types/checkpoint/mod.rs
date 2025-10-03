@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    Context, Object,
-};
+use async_graphql::{connection::Connection, Context, Object};
 
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
@@ -244,8 +241,6 @@ impl Checkpoint {
         page: Page<CCheckpoint>,
         filter: CheckpointFilter,
     ) -> Result<Connection<String, Checkpoint>, RpcError> {
-        let mut conn = Connection::new(false, false);
-
         // TODO: (henrychen) Update when we figure out retention for key-value stores.
         let cp_lo = 0;
         let Some(cp_hi_inclusive) = scope.checkpoint_viewed_at() else {
@@ -269,19 +264,11 @@ impl Checkpoint {
             cp_unfiltered(&cp_bounds, &page)
         };
 
-        let (prev, next, results) = page.paginate_results(results, |c| JsonCursor::new(*c));
-
-        conn.has_previous_page = prev;
-        conn.has_next_page = next;
-
-        for (cursor, cp_sequence_number) in results {
-            conn.edges.push(Edge::new(
-                cursor.encode_cursor(),
-                Self::with_sequence_number(scope.clone(), Some(cp_sequence_number)).unwrap(),
-            ));
-        }
-
-        Ok(conn)
+        page.paginate_results(
+            results,
+            |c| JsonCursor::new(*c),
+            |c| Ok(Self::with_sequence_number(scope.clone(), Some(c)).unwrap()),
+        )
     }
 }
 

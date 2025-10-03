@@ -164,6 +164,7 @@ codes!(
         InvalidName: { msg: "invalid name", severity: BlockingError },
         InvalidMacro: { msg: "invalid macro invocation", severity: BlockingError },
         InvalidMatch: { msg: "invalid 'match'", severity: BlockingError },
+        InvalidString: { msg: "invalid string literal", severity: NonblockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -194,6 +195,7 @@ codes!(
         MissingSyntaxMethod: { msg: "no valid 'syntax' declaration found", severity: BlockingError },
         DuplicateAlias: { msg: "duplicate alias", severity: Warning },
         InvalidEnum: { msg: "invalid 'enum' declaration", severity: NonblockingError },
+        AmbiguousAddress: { msg: "ambiguous address", severity: Warning },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [
@@ -266,6 +268,7 @@ codes!(
         InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
         IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
         DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
+        InvalidString: { msg: "invalid string after type inference", severity: NonblockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

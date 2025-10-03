@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
@@ -76,9 +76,7 @@ pub fn keccak256(
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     // Load the cost parameters from the protocol config
-    let hash_keccak256_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let hash_keccak256_cost_params = get_extension!(context, NativesCostTable)?
         .hash_keccak256_cost_params
         .clone();
     // Charge the base cost for this oper
@@ -116,9 +114,7 @@ pub fn blake2b256(
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     // Load the cost parameters from the protocol config
-    let hash_blake2b256_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let hash_blake2b256_cost_params = get_extension!(context, NativesCostTable)?
         .hash_blake2b256_cost_params
         .clone();
     // Charge the base cost for this oper

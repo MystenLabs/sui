@@ -21,16 +21,21 @@ use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use mysten_metrics::monitored_scope;
 use sui_json::{primitive_type, SuiJsonValue};
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::crypto::SuiSignature;
+use sui_types::digests::Digest;
 use sui_types::digests::{
     AdditionalConsensusStateDigest, CheckpointDigest, ConsensusCommitDigest, ObjectDigest,
     TransactionEventsDigest,
 };
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{
+    AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI,
+    TransactionEvents,
+};
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
@@ -50,7 +55,7 @@ use sui_types::transaction::{
     Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisObject,
     InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, Reservation,
     SenderSignedData, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
-    WithdrawTypeParam,
+    WithdrawalTypeArg,
 };
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
@@ -599,6 +604,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::AccumulatorRootCreate => {
                                 SuiEndOfEpochTransactionKind::AccumulatorRootCreate
                             }
+                            EndOfEpochTransactionKind::CoinRegistryCreate => {
+                                SuiEndOfEpochTransactionKind::CoinRegistryCreate
+                            }
                         })
                         .collect(),
                 })
@@ -735,6 +743,8 @@ pub trait SuiTransactionBlockEffectsAPI {
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
     fn all_changed_objects(&self) -> Vec<(&OwnedObjectRef, WriteKind)>;
     fn all_deleted_objects(&self) -> Vec<(&SuiObjectRef, DeleteKind)>;
+
+    fn accumulator_events(&self) -> Vec<SuiAccumulatorEvent>;
 }
 
 #[serde_as]
@@ -748,6 +758,69 @@ pub struct SuiTransactionBlockEffectsModifiedAtVersions {
     #[schemars(with = "AsSequenceNumber")]
     #[serde_as(as = "AsSequenceNumber")]
     sequence_number: SequenceNumber,
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "AccumulatorEvent", rename_all = "camelCase")]
+pub struct SuiAccumulatorEvent {
+    pub accumulator_obj: ObjectID,
+    pub address: SuiAddress,
+    pub ty: SuiTypeTag,
+    pub operation: SuiAccumulatorOperation,
+    pub value: SuiAccumulatorValue,
+}
+
+impl From<AccumulatorEvent> for SuiAccumulatorEvent {
+    fn from(event: AccumulatorEvent) -> Self {
+        let AccumulatorEvent {
+            accumulator_obj,
+            write,
+        } = event;
+        Self {
+            accumulator_obj: accumulator_obj.inner().to_owned(),
+            address: write.address.address,
+            ty: write.address.ty.into(),
+            operation: write.operation.into(),
+            value: write.value.into(),
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "AccumulatorOperation", rename_all = "camelCase")]
+pub enum SuiAccumulatorOperation {
+    Merge,
+    Split,
+}
+
+impl From<AccumulatorOperation> for SuiAccumulatorOperation {
+    fn from(operation: AccumulatorOperation) -> Self {
+        match operation {
+            AccumulatorOperation::Merge => Self::Merge,
+            AccumulatorOperation::Split => Self::Split,
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "AccumulatorValue", rename_all = "camelCase")]
+pub enum SuiAccumulatorValue {
+    Integer(u64),
+    IntegerTuple(u64, u64),
+    EventDigest(u64 /* event index in the transaction */, Digest),
+}
+
+impl From<AccumulatorValue> for SuiAccumulatorValue {
+    fn from(value: AccumulatorValue) -> Self {
+        match value {
+            AccumulatorValue::Integer(value) => Self::Integer(value),
+            AccumulatorValue::IntegerTuple(value1, value2) => Self::IntegerTuple(value1, value2),
+            AccumulatorValue::EventDigest(idx, value) => Self::EventDigest(idx, value),
+        }
+    }
 }
 
 /// The response from processing a transaction or a certified transaction
@@ -791,6 +864,8 @@ pub struct SuiTransactionBlockEffectsV1 {
     /// Object refs of objects now wrapped in other objects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wrapped: Vec<SuiObjectRef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accumulator_events: Vec<SuiAccumulatorEvent>,
     /// The updated gas object reference. Have a dedicated field for convenient access.
     /// It's also included in mutated.
     pub gas_object: OwnedObjectRef,
@@ -902,6 +977,10 @@ impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
             .chain(self.wrapped.iter().map(|r| (r, DeleteKind::Wrap)))
             .collect()
     }
+
+    fn accumulator_events(&self) -> Vec<SuiAccumulatorEvent> {
+        self.accumulator_events.clone()
+    }
 }
 
 impl SuiTransactionBlockEffects {
@@ -929,6 +1008,7 @@ impl SuiTransactionBlockEffects {
             events_digest: None,
             dependencies: vec![],
             abort_error: None,
+            accumulator_events: vec![],
         })
     }
 }
@@ -978,6 +1058,11 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                 abort_error: effect
                     .move_abort()
                     .map(|(abort, code)| SuiMoveAbort::new(abort, code)),
+                accumulator_events: effect
+                    .accumulator_events()
+                    .into_iter()
+                    .map(SuiAccumulatorEvent::from)
+                    .collect(),
             },
         ))
     }
@@ -1683,6 +1768,7 @@ pub enum SuiEndOfEpochTransactionKind {
     BridgeCommitteeUpdate(SequenceNumber),
     StoreExecutionTimeObservations,
     AccumulatorRootCreate,
+    CoinRegistryCreate,
 }
 
 #[serde_as]
@@ -2235,7 +2321,7 @@ pub enum SuiCallArg {
     Pure(SuiPureValue),
     // Reservation to withdraw balance. This will be converted into a Withdrawal struct and passed into Move.
     // It is allowed to have multiple withdraw arguments even for the same balance type.
-    BalanceWithdraw(SuiBalanceWithdrawArg),
+    FundsWithdrawal(SuiFundsWithdrawalArg),
 }
 
 impl SuiCallArg {
@@ -2271,14 +2357,14 @@ impl SuiCallArg {
                     digest,
                 })
             }
-            CallArg::BalanceWithdraw(arg) => SuiCallArg::BalanceWithdraw(SuiBalanceWithdrawArg {
+            CallArg::FundsWithdrawal(arg) => SuiCallArg::FundsWithdrawal(SuiFundsWithdrawalArg {
                 reservation: match arg.reservation {
                     Reservation::EntireBalance => SuiReservation::EntireBalance,
                     Reservation::MaxAmountU64(amount) => SuiReservation::MaxAmountU64(amount),
                 },
-                type_param: match arg.type_param {
-                    WithdrawTypeParam::Balance(type_input) => {
-                        SuiWithdrawTypeParam::Balance(type_input.to_type_tag()?.into())
+                type_arg: match arg.type_arg {
+                    WithdrawalTypeArg::Balance(type_input) => {
+                        SuiWithdrawalTypeArg::Balance(type_input.to_type_tag()?.into())
                     }
                 },
                 withdraw_from: match arg.withdraw_from {
@@ -2373,7 +2459,7 @@ pub enum SuiReservation {
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub enum SuiWithdrawTypeParam {
+pub enum SuiWithdrawalTypeArg {
     Balance(SuiTypeTag),
 }
 
@@ -2385,9 +2471,9 @@ pub enum SuiWithdrawFrom {
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SuiBalanceWithdrawArg {
+pub struct SuiFundsWithdrawalArg {
     pub reservation: SuiReservation,
-    pub type_param: SuiWithdrawTypeParam,
+    pub type_arg: SuiWithdrawalTypeArg,
     pub withdraw_from: SuiWithdrawFrom,
 }
 

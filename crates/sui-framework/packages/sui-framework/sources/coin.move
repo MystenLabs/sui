@@ -25,12 +25,16 @@ public use fun sui::pay::split_and_transfer as Coin.split_and_transfer;
 // Allows calling `.divide_and_keep(n, ctx)` on `coin`
 public use fun sui::pay::divide_and_keep as Coin.divide_and_keep;
 
+/// Allows calling `.into_supply()` on `TreasuryCap`
+public use fun treasury_into_supply as TreasuryCap.into_supply;
+
 /// A type passed to create_supply is not a one-time witness.
 const EBadWitness: u64 = 0;
 /// Invalid arguments are passed to a function.
 const EInvalidArg: u64 = 1;
 /// Trying to split a coin more times than its balance allows.
 const ENotEnough: u64 = 2;
+
 // #[error]
 // const EGlobalPauseNotAllowed: vector<u8> =
 //    b"Kill switch was not allowed at the creation of the DenyCapV2";
@@ -198,11 +202,10 @@ public fun destroy_zero<T>(c: Coin<T>) {
     balance.destroy_zero()
 }
 
-// === Registering new coin types and managing the coin supply ===
-
 /// Create a new currency type `T` as and return the `TreasuryCap` for
 /// `T` to the caller. Can only be called with a `one-time-witness`
 /// type, ensuring that there's only one `TreasuryCap` per `T`.
+#[deprecated(note = b"Use `coin_registry::new_currency_with_otw` instead")]
 public fun create_currency<T: drop>(
     witness: T,
     decimals: u8,
@@ -239,6 +242,8 @@ public fun create_currency<T: drop>(
 /// The `allow_global_pause` flag enables an additional API that will cause all addresses to
 /// be denied. Note however, that this doesn't affect per-address entries of the deny list and
 /// will not change the result of the "contains" APIs.
+#[deprecated(note = b"Use `coin_registry::new_currency_with_otw` with `make_regulated` instead")]
+#[allow(deprecated_usage)]
 public fun create_regulated_currency_v2<T: drop>(
     witness: T,
     decimals: u8,
@@ -267,6 +272,7 @@ public fun create_regulated_currency_v2<T: drop>(
         coin_metadata_object: object::id(&metadata),
         deny_cap_object: object::id(&deny_cap),
     });
+
     (treasury_cap, deny_cap, metadata)
 }
 
@@ -479,6 +485,37 @@ public fun get_icon_url<T>(metadata: &CoinMetadata<T>): Option<Url> {
     metadata.icon_url
 }
 
+/// Destroy legacy `CoinMetadata` object
+public(package) fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
+    let CoinMetadata { id, .. } = metadata;
+    id.delete()
+}
+
+public(package) fun deny_cap_id<T>(metadata: &RegulatedCoinMetadata<T>): ID {
+    metadata.deny_cap_object
+}
+
+public(package) fun new_deny_cap_v2<T>(
+    allow_global_pause: bool,
+    ctx: &mut TxContext,
+): DenyCapV2<T> {
+    DenyCapV2 {
+        id: object::new(ctx),
+        allow_global_pause,
+    }
+}
+
+public(package) fun new_treasury_cap<T>(ctx: &mut TxContext): TreasuryCap<T> {
+    TreasuryCap {
+        id: object::new(ctx),
+        total_supply: balance::create_supply_internal(),
+    }
+}
+
+public(package) fun allow_global_pause<T>(cap: &DenyCapV2<T>): bool {
+    cap.allow_global_pause
+}
+
 // === Test-only code ===
 
 #[test_only]
@@ -501,6 +538,20 @@ public fun create_treasury_cap_for_testing<T>(ctx: &mut TxContext): TreasuryCap<
     TreasuryCap {
         id: object::new(ctx),
         total_supply: balance::create_supply_for_testing(),
+    }
+}
+
+#[test_only]
+// Keeping public(package) so no one ever uses it!
+public(package) fun regulated_coin_metadata_for_testing<T>(
+    coin_metadata_id: ID,
+    deny_cap_id: ID,
+    ctx: &mut TxContext,
+): RegulatedCoinMetadata<T> {
+    RegulatedCoinMetadata {
+        id: object::new(ctx),
+        coin_metadata_object: coin_metadata_id,
+        deny_cap_object: deny_cap_id,
     }
 }
 
@@ -528,9 +579,10 @@ public struct DenyCap<phantom T> has key, store {
 /// with the coin as input objects.
 #[
     deprecated(
-        note = b"For new coins, use `create_regulated_currency_v2`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2`",
+        note = b"For new coins, use `new_currency_with_otw` and use `make_regulated`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2` and then use migration functions in `coin_registry`",
     ),
 ]
+#[allow(deprecated_usage)]
 public fun create_regulated_currency<T: drop>(
     witness: T,
     decimals: u8,

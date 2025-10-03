@@ -332,6 +332,15 @@ impl AuthorityStore {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
+    pub fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<Vec<ObjectKey>>, TypedStoreError> {
+        self.perpetual_tables
+            .unchanged_loaded_runtime_objects
+            .get(digest)
+    }
+
     pub fn multi_get_effects<'a>(
         &self,
         effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,
@@ -763,13 +772,27 @@ impl AuthorityStore {
             deleted,
             written,
             events,
+            unchanged_loaded_runtime_objects,
             locks_to_delete,
             new_locks_to_init,
             ..
         } = tx_outputs;
 
-        // Store the certificate indexed by transaction digest
+        let effects_digest = effects.digest();
         let transaction_digest = transaction.digest();
+        // effects must be inserted before the corresponding dependent entries
+        // because they carry epoch information necessary for correct pruning via relocation filters
+        write_batch
+            .insert_batch(
+                &self.perpetual_tables.effects,
+                [(effects_digest, effects.clone())],
+            )?
+            .insert_batch(
+                &self.perpetual_tables.executed_effects,
+                [(transaction_digest, effects_digest)],
+            )?;
+
+        // Store the certificate indexed by transaction digest
         write_batch.insert_batch(
             &self.perpetual_tables.transactions,
             iter::once((transaction_digest, transaction.serializable_ref())),
@@ -809,22 +832,19 @@ impl AuthorityStore {
             )?;
         }
 
+        // Write unchanged_loaded_runtime_objects
+        if !unchanged_loaded_runtime_objects.is_empty() {
+            write_batch.insert_batch(
+                &self.perpetual_tables.unchanged_loaded_runtime_objects,
+                [(transaction_digest, unchanged_loaded_runtime_objects)],
+            )?;
+        }
+
         self.initialize_live_object_markers_impl(write_batch, new_locks_to_init, false)?;
 
         // Note: deletes locks for received objects as well (but not for objects that were in
         // `Receiving` arguments which were not received)
         self.delete_live_object_markers(write_batch, locks_to_delete)?;
-
-        let effects_digest = effects.digest();
-        write_batch
-            .insert_batch(
-                &self.perpetual_tables.effects,
-                [(effects_digest, effects.clone())],
-            )?
-            .insert_batch(
-                &self.perpetual_tables.executed_effects,
-                [(transaction_digest, effects_digest)],
-            )?;
 
         debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
 
@@ -1186,14 +1206,16 @@ impl AuthorityStore {
         transaction_effects: &TransactionEffects,
     ) -> Result<(), TypedStoreError> {
         let mut write_batch = self.perpetual_tables.transactions.batch();
+        // effects must be inserted before the corresponding transaction entry
+        // because they carry epoch information necessary for correct pruning via relocation filters
         write_batch
-            .insert_batch(
-                &self.perpetual_tables.transactions,
-                [(transaction.digest(), transaction.serializable_ref())],
-            )?
             .insert_batch(
                 &self.perpetual_tables.effects,
                 [(transaction_effects.digest(), transaction_effects)],
+            )?
+            .insert_batch(
+                &self.perpetual_tables.transactions,
+                [(transaction.digest(), transaction.serializable_ref())],
             )?;
 
         write_batch.write()?;
@@ -1208,12 +1230,12 @@ impl AuthorityStore {
         for tx in transactions {
             write_batch
                 .insert_batch(
-                    &self.perpetual_tables.transactions,
-                    [(tx.transaction.digest(), tx.transaction.serializable_ref())],
-                )?
-                .insert_batch(
                     &self.perpetual_tables.effects,
                     [(tx.effects.digest(), &tx.effects)],
+                )?
+                .insert_batch(
+                    &self.perpetual_tables.transactions,
+                    [(tx.transaction.digest(), tx.transaction.serializable_ref())],
                 )?;
         }
 

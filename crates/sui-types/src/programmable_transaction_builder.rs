@@ -13,7 +13,7 @@ use crate::{
     base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef, SuiAddress},
     move_package::PACKAGE_MODULE_NAME,
     transaction::{
-        Argument, BalanceWithdrawArg, CallArg, Command, ObjectArg, ProgrammableTransaction,
+        Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, ProgrammableTransaction,
     },
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -27,7 +27,7 @@ enum BuilderArg {
     Object(ObjectID),
     Pure(Vec<u8>),
     ForcedNonUniquePure(usize),
-    BalanceWithdraw(usize),
+    FundsWithdraw(usize),
 }
 
 #[derive(Default)]
@@ -78,7 +78,7 @@ impl ProgrammableTransactionBuilder {
             let old_obj_arg = match old_value {
                 CallArg::Pure(_) => anyhow::bail!("invariant violation! object has pure argument"),
                 CallArg::Object(arg) => arg,
-                CallArg::BalanceWithdraw(_) => {
+                CallArg::FundsWithdrawal(_) => {
                     anyhow::bail!("invariant violation! object has balance withdraw argument")
                 }
             };
@@ -123,10 +123,10 @@ impl ProgrammableTransactionBuilder {
         Ok(Argument::Input(i as u16))
     }
 
-    pub fn balance_withdraw(&mut self, arg: BalanceWithdrawArg) -> anyhow::Result<Argument> {
+    pub fn funds_withdrawal(&mut self, arg: FundsWithdrawalArg) -> anyhow::Result<Argument> {
         let (i, _) = self.inputs.insert_full(
-            BuilderArg::BalanceWithdraw(self.inputs.len()),
-            CallArg::BalanceWithdraw(arg),
+            BuilderArg::FundsWithdraw(self.inputs.len()),
+            CallArg::FundsWithdrawal(arg),
         );
         Ok(Argument::Input(i as u16))
     }
@@ -135,7 +135,7 @@ impl ProgrammableTransactionBuilder {
         match call_arg {
             CallArg::Pure(bytes) => Ok(self.pure_bytes(bytes, /* force separate */ false)),
             CallArg::Object(obj) => self.obj(obj),
-            CallArg::BalanceWithdraw(arg) => self.balance_withdraw(arg),
+            CallArg::FundsWithdrawal(arg) => self.funds_withdrawal(arg),
         }
     }
 

@@ -10,17 +10,17 @@ version = 4
 [pinned._test_env.bar]
 source = { local = "../bar" }
 use_environment = "_test_env"
-manifest_digest = "7CF677A61E2A8A49F782366D611EC014DB85EC46CC4987F1508407F22005182B"
+manifest_digest = "7188A137FDCCC70ADFC4D2E40EB631C52ABC2E5D1845F2BF69BB2720BC1CB850"
 deps = {}
 
 [pinned._test_env.baz]
 source = { local = "../baz" }
 use_environment = "_test_env"
-manifest_digest = "CB9239900A57672C111EDB16949CB9564EAF02FC5C327FD62AFD04D9518405C9"
+manifest_digest = "9EDE82D2B59D0ECF8479E0B521F9EE9362067C9A344C551FC3B91FCF33350CA7"
 deps = { bar = "bar" }
 
 [pinned._test_env.example]
 source = { root = true }
 use_environment = "_test_env"
-manifest_digest = "73E3CDCE3E6F576C907FA039F70F592F9DD4BC7DE41DE8D8D63800938EF11834"
+manifest_digest = "2CAD1B7ACC6715FD1948343767BFA9C5FD7CB491674928D080B3039501B49CC3"
 deps = { baz = "baz" }

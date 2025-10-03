@@ -79,7 +79,7 @@ async fn get_object() {
     } = client
         .get_object(
             GetObjectRequest::new(&id)
-                .with_version(1)
+                .with_version(1u64)
                 .with_read_mask(FieldMask::from_str("object_id,version")),
         )
         .await

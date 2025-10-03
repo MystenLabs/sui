@@ -8,7 +8,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster, OffchainClusterConfig};
+use sui_indexer_alt_e2e_tests::{find, FullCluster, OffchainClusterConfig};
 use sui_indexer_alt_jsonrpc::config::{ObjectsConfig, RpcConfig as JsonRpcConfig};
 use sui_json_rpc_types::Page;
 use sui_types::{
@@ -360,7 +360,7 @@ fn create_coin(cluster: &mut FullCluster, owner: SuiAddress, amount: u64) -> Obj
 
     assert!(fx.status().is_ok(), "create coin transaction failed");
 
-    find_address_owned(&fx)
+    find::address_owned(&fx)
         .expect("Failed to find created coin")
         .0
 }
@@ -410,7 +410,7 @@ fn create_bag(cluster: &mut FullCluster, owner: SuiAddress, size: u64) -> Object
 
     assert!(fx.status().is_ok(), "create bag transaction failed");
 
-    find_address_owned(&fx)
+    find::address_owned(&fx)
         .expect("Failed to find created bag")
         .0
 }

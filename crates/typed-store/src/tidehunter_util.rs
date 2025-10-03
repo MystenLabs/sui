@@ -3,7 +3,7 @@
 
 use crate::DBMetrics;
 use bincode::Options;
-use prometheus::Registry;
+use prometheus::{HistogramTimer, Registry};
 use serde::de::DeserializeOwned;
 use std::env;
 use std::path::Path;
@@ -16,7 +16,7 @@ use tidehunter::metrics::Metrics;
 pub use tidehunter::{
     key_shape::{KeyIndexing, KeyShapeBuilder, KeySpaceConfig, KeyType},
     minibytes::Bytes,
-    IndexWalPosition, WalPosition,
+    Decision, IndexWalPosition, WalPosition,
 };
 use typed_store_error::TypedStoreError;
 
@@ -110,6 +110,7 @@ pub(crate) fn transform_th_iterator<'a, K, V>(
             >,
         > + 'a,
     prefix: &'a Option<Vec<u8>>,
+    timer: HistogramTimer,
 ) -> impl Iterator<Item = Result<(K, V), TypedStoreError>> + 'a
 where
     K: DeserializeOwned,
@@ -121,6 +122,7 @@ where
     iterator.map(move |item| {
         item.map_err(|e| TypedStoreError::RocksDBError(format!("tidehunter error {:?}", e)))
             .and_then(|(raw_key, raw_value)| {
+                let _timer = &timer;
                 let key = match prefix {
                     Some(prefix) => {
                         let mut buffer = Vec::with_capacity(raw_key.len() + prefix.len());

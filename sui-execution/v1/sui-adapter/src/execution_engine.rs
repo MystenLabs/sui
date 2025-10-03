@@ -368,7 +368,7 @@ mod checked {
                 result = Err(conservation_err);
                 gas_charger.reset(temporary_store);
                 gas_charger.charge_gas(temporary_store, &mut result);
-                // check conservation once more more
+                // check conservation once more
                 if let Err(recovery_err) = {
                     temporary_store
                         .check_sui_conserved(simple_conservation_checks, cost_summary)
@@ -641,6 +641,9 @@ mod checked {
                         }
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             panic!("EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v1");
+                        }
+                        EndOfEpochTransactionKind::CoinRegistryCreate => {
+                            panic!("EndOfEpochTransactionKind::CoinRegistryCreate should not exist in v1");
                         }
                     }
                 }

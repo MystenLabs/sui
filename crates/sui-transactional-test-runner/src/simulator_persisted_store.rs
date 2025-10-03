@@ -9,14 +9,13 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
 use sui_config::genesis;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_swarm_config::genesis_config::AccountConfig;
-use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_swarm_config::network_config_builder::{ConfigBuilder, KeyPairWrapper};
 use sui_types::storage::{ReadStore, RpcStateReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
-    crypto::AccountKeyPair,
     digests::{ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::{SuiError, UserInputError},
@@ -105,9 +104,11 @@ impl PersistedStore {
         chain_start_timestamp_ms: u64,
         protocol_version: ProtocolVersion,
         account_configs: Vec<AccountConfig>,
-        validator_keys: Option<Vec<AccountKeyPair>>,
+        key_pair_wrappers: Vec<KeyPairWrapper>,
         reference_gas_price: Option<u64>,
         path: Option<PathBuf>,
+        enable_accumulators: bool,
+        enable_authenticated_event_streams: bool,
     ) -> (Simulacrum<R, Self>, PersistedStoreInnerReadOnlyWrapper)
     where
         R: rand::RngCore + rand::CryptoRng,
@@ -121,11 +122,28 @@ impl PersistedStore {
             .with_protocol_version(protocol_version)
             .with_accounts(account_configs);
 
-        if let Some(validator_keys) = validator_keys {
-            builder = builder.deterministic_committee_validators(validator_keys)
+        if !key_pair_wrappers.is_empty() {
+            builder = builder.deterministic_committee_validators(key_pair_wrappers)
         };
         if let Some(reference_gas_price) = reference_gas_price {
             builder = builder.with_reference_gas_price(reference_gas_price)
+        };
+
+        let _override_guard = if enable_accumulators || enable_authenticated_event_streams {
+            Some(ProtocolConfig::apply_overrides_for_testing(
+                move |_, cfg| {
+                    let mut c = cfg;
+                    if enable_accumulators {
+                        c.enable_accumulators_for_testing();
+                    }
+                    if enable_authenticated_event_streams {
+                        c.enable_authenticated_event_streams_for_testing();
+                    }
+                    c
+                },
+            ))
+        } else {
+            None
         };
 
         let config = builder.build();
@@ -146,6 +164,8 @@ impl PersistedStore {
         protocol_version: ProtocolVersion,
         account_configs: Vec<AccountConfig>,
         path: Option<PathBuf>,
+        enable_accumulators: bool,
+        enable_authenticated_event_streams: bool,
     ) -> Simulacrum<R, Self>
     where
         R: rand::RngCore + rand::CryptoRng,
@@ -155,9 +175,11 @@ impl PersistedStore {
             chain_start_timestamp_ms,
             protocol_version,
             account_configs,
-            None,
+            vec![],
             None,
             path,
+            enable_accumulators,
+            enable_authenticated_event_streams,
         )
         .0
     }
@@ -625,6 +647,13 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()
     }
+
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> Option<Vec<sui_types::storage::ObjectKey>> {
+        None
+    }
 }
 
 impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {
@@ -690,6 +719,8 @@ mod tests {
             ProtocolVersion::MAX,
             vec![],
             None,
+            false,
+            false,
         );
         let genesis_checkpoint_digest1 = *chain1
             .store()
@@ -704,6 +735,8 @@ mod tests {
             ProtocolVersion::MAX,
             vec![],
             None,
+            false,
+            false,
         );
         let genesis_checkpoint_digest2 = *chain2
             .store()
@@ -721,6 +754,8 @@ mod tests {
             ProtocolVersion::MAX,
             vec![],
             None,
+            false,
+            false,
         );
 
         assert_ne!(

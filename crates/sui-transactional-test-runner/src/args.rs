@@ -63,8 +63,8 @@ pub struct SuiInitArgs {
     pub shared_object_deletion: Option<bool>,
     #[clap(long = "simulator")]
     pub simulator: bool,
-    #[clap(long = "custom-validator-account")]
-    pub custom_validator_account: bool,
+    #[clap(long = "num-custom-validator-accounts")]
+    pub num_custom_validator_accounts: Option<u64>,
     #[clap(long = "reference-gas-price")]
     pub reference_gas_price: Option<u64>,
     #[clap(long = "default-gas-price")]
@@ -84,6 +84,12 @@ pub struct SuiInitArgs {
     /// URL for the Sui REST API. To be passed to the offchain indexer and reader.
     #[clap(long)]
     pub rest_api_url: Option<String>,
+    /// Enable accumulator features for testing (e.g., authenticated event streams)
+    #[clap(long = "enable-accumulators")]
+    pub enable_accumulators: bool,
+    /// Enable authenticated event streams for testing
+    #[clap(long = "enable-authenticated-event-streams")]
+    pub enable_authenticated_event_streams: bool,
 }
 
 #[derive(Debug, clap::Parser)]

@@ -460,7 +460,7 @@ mod checked {
                 result = Err(conservation_err);
                 gas_charger.reset(temporary_store);
                 gas_charger.charge_gas(temporary_store, &mut result);
-                // check conservation once more more
+                // check conservation once more
                 if let Err(recovery_err) = {
                     temporary_store
                         .check_sui_conserved(simple_conservation_checks, cost_summary)
@@ -773,6 +773,10 @@ mod checked {
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             assert!(protocol_config.enable_accumulators());
                             builder = setup_accumulator_root_create(builder);
+                        }
+                        EndOfEpochTransactionKind::CoinRegistryCreate => {
+                            assert!(protocol_config.enable_coin_registry());
+                            builder = setup_coin_registry_create(builder);
                         }
                     }
                 }
@@ -1438,6 +1442,21 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate accumulator_root_create transaction!");
+        builder
+    }
+
+    fn setup_coin_registry_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("coin_registry").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate coin_registry_create transaction!");
         builder
     }
 }

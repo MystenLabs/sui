@@ -114,6 +114,7 @@ feature_flags:
   check_for_init_during_upgrade: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
+  enable_coin_registry: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

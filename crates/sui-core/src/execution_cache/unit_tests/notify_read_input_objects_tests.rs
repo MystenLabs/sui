@@ -19,7 +19,7 @@ use tokio::time::timeout;
 
 async fn create_writeback_cache() -> Arc<WritebackCache> {
     let path = tempdir().unwrap();
-    let tables = Arc::new(AuthorityPerpetualTables::open(path.path(), None));
+    let tables = Arc::new(AuthorityPerpetualTables::open(path.path(), None, None));
     let config = ConfigBuilder::new_with_temp_dir().build();
     let store = AuthorityStore::open_with_committee_for_testing(
         tables,

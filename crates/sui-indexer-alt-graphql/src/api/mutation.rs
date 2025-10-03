@@ -14,13 +14,17 @@ use crate::api::scalars::base64::Base64;
 use crate::error::{bad_user_input, upcast, RpcError};
 
 /// Error type for user input validation in transaction operations
+#[allow(clippy::enum_variant_names)]
 #[derive(thiserror::Error, Debug)]
 pub enum TransactionInputError {
-    #[error("Invalid BCS encoding in transaction data: {0}")]
+    #[error("Invalid BCS-encoded TransactionData: {0}")]
     InvalidTransactionBcs(bcs::Error),
 
     #[error("Invalid signature format in signature {index}: {err}")]
     InvalidSignatureFormat { index: usize, err: FastCryptoError },
+
+    #[error("Invalid JSON-encoded gRPC Transaction: {0}")]
+    InvalidTransactionJson(serde_json::Error),
 }
 use crate::{
     api::types::{execution_result::ExecutionResult, transaction_effects::TransactionEffects},

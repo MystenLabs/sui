@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas, u256::U256};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -30,9 +30,7 @@ pub fn from_bytes(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
-    let address_from_bytes_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let address_from_bytes_cost_params = get_extension!(context, NativesCostTable)?
         .address_from_bytes_cost_params
         .clone();
 
@@ -69,9 +67,7 @@ pub fn to_u256(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
-    let address_to_u256_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let address_to_u256_cost_params = get_extension!(context, NativesCostTable)?
         .address_to_u256_cost_params
         .clone();
 
@@ -108,9 +104,7 @@ pub fn from_u256(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
-    let address_from_u256_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let address_from_u256_cost_params = get_extension!(context, NativesCostTable)?
         .address_from_u256_cost_params
         .clone();
 

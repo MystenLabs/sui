@@ -11,9 +11,8 @@ use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
 use criterion::Criterion;
-use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding};
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::traits::KeyPair;
 use iso8601::Duration as IsoDuration;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -68,9 +67,12 @@ use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
 use sui_swarm_config::genesis_config::AccountConfig;
+use sui_swarm_config::network_config_builder::KeyPairWrapper;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
-use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
+use sui_types::crypto::{
+    get_authority_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound,
+};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::execution_status::ExecutionFailureStatus;
@@ -183,7 +185,7 @@ struct AdapterInitConfig {
     account_names: BTreeSet<String>,
     protocol_config: ProtocolConfig,
     is_simulator: bool,
-    custom_validator_account: bool,
+    num_custom_validator_accounts: u64,
     reference_gas_price: Option<u64>,
     default_gas_price: Option<u64>,
     flavor: Option<Flavor>,
@@ -216,6 +218,7 @@ struct TxnSummary {
     wrapped: Vec<ObjectID>,
     unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
+    accumulators_written: Vec<ObjectID>,
     gas_summary: GasCostSummary,
 }
 
@@ -228,7 +231,7 @@ impl AdapterInitConfig {
             max_gas,
             shared_object_deletion,
             simulator,
-            custom_validator_account,
+            num_custom_validator_accounts,
             reference_gas_price,
             default_gas_price,
             snapshot_config,
@@ -236,6 +239,8 @@ impl AdapterInitConfig {
             epochs_to_keep,
             data_ingestion_path,
             rest_api_url,
+            enable_accumulators,
+            enable_authenticated_event_streams,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -248,6 +253,12 @@ impl AdapterInitConfig {
         } else {
             ProtocolConfig::get_for_max_version_UNSAFE()
         };
+        if enable_accumulators {
+            protocol_config.enable_accumulators_for_testing();
+        }
+        if enable_authenticated_event_streams {
+            protocol_config.enable_authenticated_event_streams_for_testing();
+        }
         if let Some(enable) = shared_object_deletion {
             protocol_config.set_shared_object_deletion_for_testing(enable);
         }
@@ -257,7 +268,8 @@ impl AdapterInitConfig {
             }
             protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
         }
-        if custom_validator_account && !simulator {
+        let num_custom_validator_accounts = num_custom_validator_accounts.unwrap_or(0);
+        if num_custom_validator_accounts > 0 && !simulator {
             panic!("Can only set custom validator account in simulator mode");
         }
         if reference_gas_price.is_some() && !simulator {
@@ -283,7 +295,7 @@ impl AdapterInitConfig {
             account_names: accounts,
             protocol_config,
             is_simulator: simulator,
-            custom_validator_account,
+            num_custom_validator_accounts,
             reference_gas_price,
             default_gas_price,
             flavor,
@@ -359,7 +371,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             account_names,
             mut protocol_config,
             is_simulator,
-            custom_validator_account,
+            num_custom_validator_accounts,
             reference_gas_price,
             default_gas_price,
             flavor,
@@ -388,7 +400,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 account_names,
                 additional_mapping,
                 &protocol_config,
-                custom_validator_account,
+                num_custom_validator_accounts,
                 reference_gas_price,
                 offchain_config
                     .as_ref()
@@ -1767,12 +1779,20 @@ impl SuiTestAdapter {
             .map(|(id, _, _)| *id)
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
+
+        let mut accumulators_written: Vec<_> = effects
+            .accumulator_events()
+            .iter()
+            .map(|event| *event.accumulator_obj.inner())
+            .collect();
+
         let gas_summary = effects.gas_cost_summary();
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
             .chain(unwrapped_ids.iter())
+            .chain(accumulators_written.iter())
             .copied()
             .collect();
 
@@ -1799,6 +1819,7 @@ impl SuiTestAdapter {
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unchanged_shared_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         match effects.status() {
             ExecutionStatus::Success { .. } => {
@@ -1808,6 +1829,7 @@ impl SuiTestAdapter {
                     .await?;
                 Ok(TxnSummary {
                     events,
+                    accumulators_written,
                     gas_summary: gas_summary.clone(),
                     created: created_ids,
                     mutated: mutated_ids,
@@ -1896,12 +1918,18 @@ impl SuiTestAdapter {
             .map(|o| o.object_id)
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|o| o.object_id).collect();
+        let mut accumulators_written: Vec<_> = effects
+            .accumulator_events()
+            .iter()
+            .map(|event| event.accumulator_obj)
+            .collect();
         let gas_summary = effects.gas_cost_summary();
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
             .chain(unwrapped_ids.iter())
+            .chain(accumulators_written.iter())
             .copied()
             .collect();
 
@@ -1921,6 +1949,7 @@ impl SuiTestAdapter {
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         let events = events
             .data
@@ -1939,6 +1968,7 @@ impl SuiTestAdapter {
             wrapped: wrapped_ids,
             // TODO: Properly propagate unchanged shared objects in dev_inspect.
             unchanged_shared: vec![],
+            accumulators_written,
         })
     }
 
@@ -2000,6 +2030,7 @@ impl SuiTestAdapter {
             unwrapped_then_deleted,
             wrapped,
             unchanged_shared,
+            accumulators_written,
         }: &TxnSummary,
         summarize: bool,
     ) -> Option<String> {
@@ -2059,6 +2090,17 @@ impl SuiTestAdapter {
             )
             .unwrap();
         }
+        if !accumulators_written.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(
+                out,
+                "accumulators_written: {}",
+                self.list_accumulator_events(accumulators_written, summarize)
+            )
+            .unwrap();
+        }
         out.push('\n');
         write!(out, "gas summary: {}", gas_summary).unwrap();
 
@@ -2095,6 +2137,17 @@ impl SuiTestAdapter {
                                          Some(fake) => format!("object({})", fake),
                                      },
             )
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    fn list_accumulator_events(&self, accumulator_ids: &[ObjectID], summarize: bool) -> String {
+        if summarize {
+            return format!("{}", accumulator_ids.len());
+        }
+        accumulator_ids
+            .iter()
+            .map(|id| self.stabilize_str(format!("{:?}", id)))
             .collect::<Vec<_>>()
             .join(", ")
     }
@@ -2239,7 +2292,7 @@ impl Default for AdapterInitConfig {
             account_names: BTreeSet::new(),
             protocol_config: ProtocolConfig::get_for_max_version_UNSAFE(),
             is_simulator: false,
-            custom_validator_account: false,
+            num_custom_validator_accounts: 0,
             reference_gas_price: None,
             default_gas_price: None,
             flavor: None,
@@ -2460,7 +2513,7 @@ async fn init_sim_executor(
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
-    custom_validator_account: bool,
+    num_custom_validator_accounts: u64,
     reference_gas_price: Option<u64>,
     data_ingestion_path: PathBuf,
 ) -> (
@@ -2484,18 +2537,29 @@ async fn init_sim_executor(
     // Make a default account keypair
     let default_account_kp = get_key_pair_from_rng(&mut rng);
 
-    let (mut validator_addr, mut validator_key, mut key_copy) = (None, None, None);
-    if custom_validator_account {
+    // Validators are sorted by their authority public key in tests. Sort before assigning
+    // names so that validators are ordered by name (validator_0, validator_1, ..).
+    // See https://github.com/MystenLabs/sui/blob/272c471e3ad1f91b2564efdaaa17100e475f732e/crates/sui-swarm-config/src/network_config_builder.rs#L443
+    let addr_keys: Vec<_> = (0..num_custom_validator_accounts)
         // Make a validator account with a gas object
-        let (a, b): (SuiAddress, Ed25519KeyPair) = get_key_pair_from_rng(&mut rng);
-
-        key_copy = Some(
-            Ed25519KeyPair::from_bytes(b.as_bytes())
-                .expect("FATAL: recovering key from bytes failed"),
-        );
-        validator_addr = Some(a);
-        validator_key = Some(b);
-    }
+        .map(|_| {
+            let (addr, account_key_pair): (SuiAddress, AccountKeyPair) =
+                get_key_pair_from_rng(&mut rng);
+            let protocol_key_pair: AuthorityKeyPair = get_key_pair_from_rng(&mut rng).1;
+            (
+                protocol_key_pair.public().into(),
+                (
+                    addr,
+                    KeyPairWrapper {
+                        account_key_pair,
+                        protocol_key_pair: Some(protocol_key_pair),
+                    },
+                ),
+            )
+        })
+        .collect::<BTreeMap<AuthorityPublicKeyBytes, _>>()
+        .into_values()
+        .collect();
 
     let mut acc_cfgs = account_kps
         .values()
@@ -2509,12 +2573,10 @@ async fn init_sim_executor(
         gas_amounts: vec![GAS_FOR_TESTING],
     });
 
-    if let Some(v_addr) = validator_addr {
-        acc_cfgs.push(AccountConfig {
-            address: Some(v_addr),
-            gas_amounts: vec![GAS_FOR_TESTING],
-        });
-    }
+    acc_cfgs.extend(addr_keys.iter().map(|(addr, _)| AccountConfig {
+        address: Some(*addr),
+        gas_amounts: vec![GAS_FOR_TESTING],
+    }));
 
     // Create the simulator with the specific account configs, which also crates objects
 
@@ -2524,9 +2586,14 @@ async fn init_sim_executor(
             DEFAULT_CHAIN_START_TIMESTAMP,
             protocol_config.version,
             acc_cfgs,
-            key_copy.map(|q| vec![q]),
+            addr_keys
+                .iter()
+                .map(|(_, key_pair_wrapper)| key_pair_wrapper.clone())
+                .collect(),
             reference_gas_price,
             None,
+            protocol_config.enable_accumulators(),
+            protocol_config.enable_authenticated_event_streams(),
         );
 
     sim.set_data_ingestion_path(data_ingestion_path.clone());
@@ -2558,16 +2625,17 @@ async fn init_sim_executor(
     };
     objects.push(o.clone());
 
-    if let (Some(v_addr), Some(v_key)) = (validator_addr, validator_key) {
-        let o = sim.store().owned_objects(v_addr).next().unwrap();
+    for (i, (addr, key_pair_wrapper)) in addr_keys.into_iter().enumerate() {
+        let o = sim.store().owned_objects(addr).next().unwrap();
         let validator_account = TestAccount {
-            address: v_addr,
-            key_pair: v_key,
+            address: addr,
+            key_pair: key_pair_wrapper.account_key_pair,
             gas: o.id(),
         };
         objects.push(o.clone());
-        account_objects.insert("validator_0".to_string(), o.id());
-        accounts.insert("validator_0".to_string(), validator_account);
+        let name = format!("validator_{}", i);
+        account_objects.insert(name.clone(), o.id());
+        accounts.insert(name, validator_account);
     }
 
     let sim = Box::new(sim);
@@ -2602,9 +2670,18 @@ async fn update_named_address_mapping(
         .get_active_validator_addresses()
         .await
         .expect("Failed to get validator addresses")
-        .iter()
+        .into_iter()
         .enumerate()
-        .map(|(idx, addr)| (format!("validator_{idx}"), *addr))
+        .map(|(idx, addr)| {
+            let validator_name = accounts
+                .iter()
+                .find(|(_, account)| account.address == addr)
+                .map_or_else(
+                    || format!("validator_{idx}"),
+                    |(validator_name, _)| validator_name.clone(),
+                );
+            (validator_name, addr)
+        })
         .collect();
 
     // For mappings where the address is specified, populate the named address mapping
@@ -2726,5 +2803,12 @@ impl ReadStore for SuiTestAdapter {
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         self.executor
             .get_full_checkpoint_contents(sequence_number, digest)
+    }
+
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<sui_types::storage::ObjectKey>> {
+        self.executor.get_unchanged_loaded_runtime_objects(digest)
     }
 }

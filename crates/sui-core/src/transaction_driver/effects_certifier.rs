@@ -9,7 +9,6 @@ use std::{
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
-use mysten_metrics::TxType;
 use sui_types::{
     base_types::{AuthorityName, ConciseableName as _},
     committee::StakeUnit,
@@ -17,7 +16,10 @@ use sui_types::{
     effects::TransactionEffectsAPI as _,
     error::SuiError,
     messages_consensus::ConsensusPosition,
-    messages_grpc::RawWaitForEffectsRequest,
+    messages_grpc::{
+        ExecutedData, PingType, RawWaitForEffectsRequest, SubmitTxResult, TxType,
+        WaitForEffectsRequest, WaitForEffectsResponse,
+    },
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::time::{sleep, timeout};
@@ -36,8 +38,7 @@ use crate::{
         },
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
-        ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResult,
-        WaitForEffectsRequest, WaitForEffectsResponse,
+        QuorumTransactionResponse, SubmitTransactionOptions,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -62,13 +63,14 @@ impl EffectsCertifier {
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
-        tx_digest: &TransactionDigest,
+        tx_digest: Option<TransactionDigest>,
         tx_type: TxType,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
         // Guaranteed to be not the Rejected variant.
         submit_txn_result: SubmitTxResult,
         options: &SubmitTransactionOptions,
+        ping: Option<PingType>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -90,7 +92,7 @@ impl EffectsCertifier {
                 None => (None, None),
             },
             SubmitTxResult::Rejected { error } => {
-                return Err(TransactionDriverError::Internal {
+                return Err(TransactionDriverError::ClientInternal {
                     error: format!(
                         "Unexpected submission error in get_certified_finalized_effects(): {}",
                         error
@@ -99,7 +101,8 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
+        let mut retrier =
+            RequestRetrier::new(authority_aggregator, client_monitor, tx_type, vec![]);
 
         // Setting this to None at first because if the full effects are already provided,
         // we do not need to record the latency. We track the time in this function instead of inside
@@ -113,7 +116,8 @@ impl EffectsCertifier {
                 tx_type,
                 consensus_position,
                 options,
-                current_target
+                current_target,
+                ping
             ),
             async {
                 // No need to send a full effects request if it is already provided.
@@ -128,7 +132,7 @@ impl EffectsCertifier {
                     .expect("there should be at least 1 target");
                 current_target = name;
                 full_effects_start_time = Some(Instant::now());
-                self.get_full_effects(client, tx_digest, consensus_position, options)
+                self.get_full_effects(client, tx_digest, consensus_position, options, ping)
                     .await
             },
         );
@@ -196,7 +200,7 @@ impl EffectsCertifier {
             current_target = name;
             full_effects_start_time = Some(Instant::now());
             full_effects_result = self
-                .get_full_effects(client, tx_digest, consensus_position, options)
+                .get_full_effects(client, tx_digest, consensus_position, options, ping)
                 .await;
         }
     }
@@ -205,23 +209,24 @@ impl EffectsCertifier {
     async fn get_full_effects<A>(
         &self,
         client: Arc<SafeClient<A>>,
-        tx_digest: &TransactionDigest,
+        tx_digest: Option<TransactionDigest>,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
+        ping: Option<PingType>,
     ) -> Result<(TransactionEffectsDigest, Box<ExecutedData>, bool), TransactionRequestError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            transaction_digest: *tx_digest,
+        let request = WaitForEffectsRequest {
+            transaction_digest: tx_digest,
             consensus_position,
             include_details: true,
-        })
-        .unwrap();
+            ping,
+        };
 
         match timeout(
             WAIT_FOR_EFFECTS_TIMEOUT,
-            client.wait_for_effects(raw_request.clone(), options.forwarded_client_addr),
+            client.wait_for_effects(request, options.forwarded_client_addr),
         )
         .await
         {
@@ -237,7 +242,9 @@ impl EffectsCertifier {
                         Ok((effects_digest, details, fast_path))
                     } else {
                         tracing::debug!("Execution data not found, retrying...");
-                        Err(TransactionRequestError::ExecutionDataNotFound)
+                        Err(TransactionRequestError::ValidatorInternal(
+                            "Execution data not found".to_string(),
+                        ))
                     }
                 }
                 WaitForEffectsResponse::Rejected { error } => match error {
@@ -260,18 +267,20 @@ impl EffectsCertifier {
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
-        tx_digest: &TransactionDigest,
+        tx_digest: Option<TransactionDigest>,
         tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
         submitted_tx_to_validator: AuthorityName,
+        ping: Option<PingType>,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
+        let ping_label = if ping.is_some() { "true" } else { "false" };
         self.metrics
             .certified_effects_ack_attempts
-            .with_label_values(&[tx_type.as_str()])
+            .with_label_values(&[tx_type.as_str(), ping_label])
             .inc();
         let timer = tokio::time::Instant::now();
         let clients = authority_aggregator
@@ -280,9 +289,10 @@ impl EffectsCertifier {
             .collect::<Vec<_>>();
         let committee = authority_aggregator.committee.clone();
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            transaction_digest: *tx_digest,
+            transaction_digest: tx_digest,
             consensus_position,
             include_details: false,
+            ping,
         })
         .unwrap();
 
@@ -351,18 +361,18 @@ impl EffectsCertifier {
                     details: _,
                     fast_path,
                 }) => {
-                    let aggregator = effects_digest_aggregators
-                        .entry(effects_digest)
-                        .or_insert_with(|| StatusAggregator::<()>::new(committee.clone()));
-                    aggregator.insert(name, ());
-
                     if fast_path {
                         if tx_type != TxType::SingleWriter {
-                            tracing::warn!("Fast path is only supported for single writer transactions, tx_digest={tx_digest}, name={name}");
+                            tracing::warn!("Fast path is only supported for single writer transactions, name={name}");
                         } else {
                             fast_path_aggregator.insert(name, ());
                         }
                     }
+
+                    let aggregator = effects_digest_aggregators
+                        .entry(effects_digest)
+                        .or_insert_with(|| StatusAggregator::<()>::new(committee.clone()));
+                    aggregator.insert(name, ());
 
                     if aggregator.reached_quorum_threshold() {
                         let quorum_weight = aggregator.total_votes();
@@ -379,11 +389,11 @@ impl EffectsCertifier {
                         // Record success and latency
                         self.metrics
                             .certified_effects_ack_successes
-                            .with_label_values(&[tx_type.as_str()])
+                            .with_label_values(&[tx_type.as_str(), ping_label])
                             .inc();
                         self.metrics
                             .certified_effects_ack_latency
-                            .with_label_values(&[tx_type.as_str()])
+                            .with_label_values(&[tx_type.as_str(), ping_label])
                             .observe(timer.elapsed().as_secs_f64());
 
                         if fast_path_aggregator.reached_quorum_threshold() {
@@ -393,7 +403,7 @@ impl EffectsCertifier {
 
                             self.metrics
                                 .transaction_fastpath_acked
-                                .with_label_values(&[&display_name])
+                                .with_label_values(&[&display_name, ping_label])
                                 .inc();
                         }
 
@@ -413,13 +423,19 @@ impl EffectsCertifier {
                         tracing::trace!(name = ?name.concise(), "Not found at validator");
                         reason_not_found_aggregator.insert(name, ());
                     }
-                    self.metrics.rejection_acks.inc();
+                    self.metrics
+                        .rejection_acks
+                        .with_label_values(&[tx_type.as_str(), ping_label])
+                        .inc();
                 }
                 Ok(WaitForEffectsResponse::Expired { epoch, round }) => {
                     let error = TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0));
                     // Expired status is submission retriable.
                     retriable_errors_aggregator.insert(name, error);
-                    self.metrics.expiration_acks.inc();
+                    self.metrics
+                        .expiration_acks
+                        .with_label_values(&[tx_type.as_str(), ping_label])
+                        .inc();
                 }
                 Err(error) => {
                     let error = TransactionRequestError::Aborted(error);
@@ -452,7 +468,7 @@ impl EffectsCertifier {
             if total_weight >= committee.quorum_threshold() {
                 // Try returning non-retriable aggregated error first.
                 if non_retriable_errors_aggregator.total_votes() >= committee.validity_threshold() {
-                    return Err(TransactionDriverError::InvalidTransaction {
+                    return Err(TransactionDriverError::RejectedByValidators {
                         submission_non_retriable_errors: aggregate_request_errors(
                             non_retriable_errors_aggregator.status_by_authority(),
                         ),
@@ -564,8 +580,9 @@ impl EffectsCertifier {
             .map(jitter);
         // This loop should only retry errors that are retriable without new submission.
         for (attempt, delay) in backoff.enumerate() {
+            let request: WaitForEffectsRequest = raw_request.clone().try_into().unwrap();
             let result = client
-                .wait_for_effects(raw_request.clone(), options.forwarded_client_addr)
+                .wait_for_effects(request, options.forwarded_client_addr)
                 .await;
             match result {
                 Ok(response) => {

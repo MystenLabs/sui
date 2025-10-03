@@ -1,0 +1,9 @@
+[package]
+name = "non_otw_coin"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+non_otw_coin = "0x0"

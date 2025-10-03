@@ -26,6 +26,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::storage::ObjectKey;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
@@ -98,9 +99,20 @@ pub fn simulate_transaction(
 
     // Perform budgest estimation and gas selection if requested and if TransactionChecks are enabled (it
     // makes no sense to do gas selection if checks are disabled because such a transaction can't
-    // ever be committed to the chain)
+    // ever be committed to the chain).
     if request.do_gas_selection() && checks.enabled() {
-        let budget = {
+        // At this point, the budget on the transaction can be set to one of the following:
+        // - The budget from the request, if specified.
+        // - The total balance of all of the gas payment coins (clamped to the protocol
+        //   MAX_GAS_BUDGET) in the request if the budget was not
+        //   specified but the gas payment coins were specified.
+        // - Protocol MAX_GAS_BUDGET if the request did not specified neither gas payment or budget.
+        //
+        // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
+        // overwrite the resolved budget with the more accurate estimate.
+        if request.transaction().gas_payment().budget.is_none()
+            && request.transaction().bcs_opt().is_none()
+        {
             let simulation_result = executor
                 .simulate_transaction(transaction.clone(), TransactionChecks::Enabled)
                 .map_err(anyhow::Error::from)?;
@@ -109,11 +121,22 @@ pub fn simulate_transaction(
                 simulation_result.effects.gas_cost_summary(),
                 reference_gas_price,
             );
-            transaction.gas_data_mut().budget = estimate;
-            estimate
-        };
 
-        // If the user didn't provide any gas payment we need to do gas selection now
+            // If the request specified gas payment, then transaction.gas_data().budget should have been
+            // resolved to the cumulative balance of those coins. We don't want to return a resolved transaction
+            // where the gas payment can't satisfy the budget, so validate that balance can actually cover the
+            // estimated budget.
+            let gas_balance = transaction.gas_data().budget;
+            if gas_balance < estimate {
+                return Err(RpcError::new(
+                    tonic::Code::InvalidArgument,
+                    format!("Insufficient gas balance to cover estimated transaction cost. \
+                        Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"),
+                ));
+            }
+            transaction.gas_data_mut().budget = estimate;
+        }
+
         if transaction.gas_data().payment.is_empty() {
             let input_objects = transaction
                 .input_objects()
@@ -129,7 +152,7 @@ pub fn simulate_transaction(
             let gas_coins = select_gas(
                 &service.reader,
                 transaction.gas_data().owner,
-                budget,
+                transaction.gas_data().budget,
                 protocol_config.max_gas_payment_objects(),
                 &input_objects,
             )?;
@@ -138,12 +161,12 @@ pub fn simulate_transaction(
     }
 
     let SimulateTransactionResult {
-        input_objects,
-        output_objects,
+        objects,
         events,
         effects,
         execution_result,
         mock_gas_id: _,
+        ..
     } = executor
         .simulate_transaction(transaction.clone(), checks)
         .map_err(anyhow::Error::from)?;
@@ -152,8 +175,16 @@ pub fn simulate_transaction(
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
 
-        let input_objects = input_objects.into_values().collect::<Vec<_>>();
-        let output_objects = output_objects.into_values().collect::<Vec<_>>();
+        let input_objects = effects
+            .modified_at_versions()
+            .into_iter()
+            .filter_map(|(object_id, version)| objects.get(&ObjectKey(object_id, version)).cloned())
+            .collect::<Vec<_>>();
+        let output_objects = effects
+            .all_changed_objects()
+            .into_iter()
+            .filter_map(|(object_ref, _owner, _kind)| objects.get(&object_ref.into()).cloned())
+            .collect::<Vec<_>>();
 
         message.balance_changes = read_mask
             .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
@@ -179,11 +210,7 @@ pub fn simulate_transaction(
                                 continue;
                             };
 
-                            if let Some(object) = input_objects
-                                .iter()
-                                .chain(&output_objects)
-                                .find(|o| o.id() == object_id)
-                            {
+                            if let Some(object) = objects.iter().find(|o| o.id() == object_id) {
                                 changed_object.object_type = Some(match object.struct_tag() {
                                     Some(struct_tag) => struct_tag.to_canonical_string(true),
                                     None => "package".to_owned(),
@@ -202,8 +229,7 @@ pub fn simulate_transaction(
                                 continue;
                             };
 
-                            if let Some(object) = input_objects.iter().find(|o| o.id() == object_id)
-                            {
+                            if let Some(object) = objects.iter().find(|o| o.id() == object_id) {
                                 unchanged_consensus_object.object_type =
                                     Some(match object.struct_tag() {
                                         Some(struct_tag) => struct_tag.to_canonical_string(true),

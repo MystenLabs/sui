@@ -406,6 +406,7 @@ impl Operations {
         let mut operations = vec![];
         let mut stake_ids = vec![];
         let mut currency: Option<Currency> = None;
+
         for command in commands {
             let result = match command {
                 SuiCommand::SplitCoins(coin, amounts) => {
@@ -872,7 +873,6 @@ impl Operations {
             .collect();
 
         let ops: Operations = ops
-            .clone()
             .into_iter()
             .filter(|op| {
                 if let (Some(acc), Some(amount)) = (&op.account, &op.amount) {
@@ -883,7 +883,6 @@ impl Operations {
                 true
             })
             .collect();
-
         Ok(ops)
     }
 }

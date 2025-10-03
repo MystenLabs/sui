@@ -33,6 +33,7 @@ public struct Gift has key, store {
 
 // Create a new LOYALTY currency, create a `TokenPolicy` for it and allow
 // everyone to spend `Token`s if they were `reward`ed.
+#[allow(deprecated_usage)]
 fun init(otw: LOYALTY, ctx: &mut TxContext) {
     let (treasury_cap, coin_metadata) = coin::create_currency(
         otw,

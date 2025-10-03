@@ -28,8 +28,8 @@ use crate::{
             check_valid_type_parameter_name, valid_local_variable_name,
         },
         path_expander::{
-            Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander, PathExpander,
-            access_result,
+            Access, AccessPath, LegacyPathExpander, Move2024PathExpander, PathExpander,
+            PathExpanderResult, access,
         },
         translate::known_attributes::{DiagnosticAttribute, KnownAttribute},
     },
@@ -40,6 +40,7 @@ use crate::{
         VariantName,
     },
     shared::{
+        self,
         ide::{IDEAnnotation, IDEInfo},
         known_attributes::{AttributeKind_, AttributePosition},
         program_info::ModuleInfo,
@@ -59,11 +60,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use super::ast::StdlibDefinitions;
+
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
 
 type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
+type OptAddr = Option<Spanned<Address>>;
+type PkgDef = P::PackageDefinition<P::ModuleDefinition>;
 
 // NB: We carry a few things separately because we need to split them out during path resolution to
 // allow for dynamic behavior during that resolution. This dynamic behavior allows us to reuse the
@@ -78,6 +83,7 @@ pub(super) struct DefnContext<'env> {
     pub(super) current_package: Option<Symbol>,
     pub(super) target_kind: P::TargetKind,
     pub(super) reporter: DiagnosticReporter<'env>,
+    pub(super) module_extensions: BTreeMap<Address, BTreeMap<ModuleName, P::ModuleDefinition>>,
 }
 
 pub(super) struct Context<'env> {
@@ -88,6 +94,16 @@ pub(super) struct Context<'env> {
     // and dependency packages
     all_filter_alls: WarningFilters,
     pub path_expander: Option<Box<dyn PathExpander>>,
+}
+
+macro_rules! report_path_expansion_error {
+    ($context:expr, $exp:expr) => {{
+        let PathExpanderResult { result, errors } = $exp;
+        for err in errors {
+            $context.add_diag(err.into_diagnostic());
+        }
+        result
+    }};
 }
 
 impl<'env> Context<'env> {
@@ -110,6 +126,7 @@ impl<'env> Context<'env> {
                 is_root_package: true,
             },
             reporter,
+            module_extensions: BTreeMap::new(),
         };
         Context {
             defn_context,
@@ -120,8 +137,25 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn finish(self) -> WarningFiltersTable {
-        self.warning_filters_table.into_inner().unwrap()
+    /// Hands back the warning filters table and any unused module extension.
+    fn finish(
+        self,
+    ) -> (
+        WarningFiltersTable,
+        BTreeMap<Address, BTreeMap<ModuleName, P::ModuleDefinition>>,
+    ) {
+        let Context {
+            defn_context,
+            warning_filters_table,
+            ..
+        } = self;
+        let DefnContext {
+            module_extensions, ..
+        } = defn_context;
+        (
+            warning_filters_table.into_inner().unwrap(),
+            module_extensions,
+        )
     }
 
     fn env(&self) -> &CompilationEnv {
@@ -211,10 +245,13 @@ impl<'env> Context<'env> {
             defn_context: inner_context,
             ..
         } = self;
-        path_expander
-            .as_mut()
-            .unwrap()
-            .name_access_chain_to_attribute_value(inner_context, attribute_value)
+        report_path_expansion_error!(
+            self,
+            path_expander
+                .as_mut()
+                .unwrap()
+                .name_access_chain_to_attribute_value(inner_context, attribute_value)
+        )
     }
 
     pub fn value_opt(&mut self, pvalue_opt: Option<P::Value>) -> Option<E::Value> {
@@ -233,11 +270,11 @@ impl<'env> Context<'env> {
         value(inner_context, pvalue)
     }
 
-    pub fn name_access_chain_to_module_access(
+    pub fn name_access_chain_to_module_access_result(
         &mut self,
         access: Access,
         chain: P::NameAccessChain,
-    ) -> Option<ModuleAccessResult> {
+    ) -> PathExpanderResult<AccessPath> {
         let Context {
             path_expander,
             defn_context: inner_context,
@@ -249,6 +286,17 @@ impl<'env> Context<'env> {
             .name_access_chain_to_module_access(inner_context, access, chain)
     }
 
+    pub fn name_access_chain_to_module_access(
+        &mut self,
+        access: Access,
+        chain: P::NameAccessChain,
+    ) -> Option<AccessPath> {
+        report_path_expansion_error!(
+            self,
+            self.name_access_chain_to_module_access_result(access, chain)
+        )
+    }
+
     pub fn name_access_chain_to_module_ident(
         &mut self,
         chain: P::NameAccessChain,
@@ -258,10 +306,13 @@ impl<'env> Context<'env> {
             defn_context: inner_context,
             ..
         } = self;
-        path_expander
-            .as_mut()
-            .unwrap()
-            .name_access_chain_to_module_ident(inner_context, chain)
+        report_path_expansion_error!(
+            self,
+            path_expander
+                .as_mut()
+                .unwrap()
+                .name_access_chain_to_module_ident(inner_context, chain)
+        )
     }
 
     fn error_ide_autocomplete_suggestion(&mut self, loc: Loc) {
@@ -325,6 +376,66 @@ impl<'env> Context<'env> {
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
         self.env()
             .check_feature(self.reporter(), package, feature, loc)
+    }
+
+    pub fn set_module_extensions(&mut self, exts: Vec<(OptAddr, PkgDef)>) {
+        for (addr, module) in exts {
+            let Some(addr) = addr else {
+                self.add_diag(diag!(
+                    Declarations::InvalidAddress,
+                    (module.def.name.loc(), "Module extension address is invalid")
+                ));
+                continue;
+            };
+            let P::PackageDefinition {
+                def,
+                package: _,
+                named_address_map: _,
+                target_kind,
+            } = module;
+            let name = def.name;
+            let loc = def.loc;
+
+            // Skip over all extensions that are not defined in the root package
+            if !matches!(
+                target_kind,
+                P::TargetKind::Source {
+                    is_root_package: true
+                }
+            ) {
+                continue;
+            }
+
+            ice_assert!(
+                self.reporter(),
+                def.is_extension,
+                loc,
+                "Module extension to add is not marked as extension"
+            );
+            let addr = self
+                .defn_context
+                .module_extensions
+                .entry(addr.value)
+                .or_default();
+            if let Some(entry) = addr.insert(name, def) {
+                self.add_diag(diag!(
+                    Declarations::DuplicateItem,
+                    (loc, "Duplicate module extension declaration"),
+                    (entry.loc, "Previous declaration here")
+                ));
+            };
+        }
+    }
+
+    pub fn get_module_extension_opt(
+        &mut self,
+        addr: &Address,
+        name: &ModuleName,
+    ) -> Option<P::ModuleDefinition> {
+        let Some(addr_map) = self.defn_context.module_extensions.get_mut(addr) else {
+            return None;
+        };
+        addr_map.remove(name)
     }
 }
 
@@ -444,7 +555,8 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
     }
     // Unused loc since these will not conflict and are implicit so no warnings are given
     let loc = Loc::invalid();
-    let std_address = maybe_make_well_known_address(context, loc, symbol!("std"));
+    let std_address =
+        maybe_make_well_known_address(context, loc, stdlib_definitions::STDLIB_ADDRESS_NAME);
     let sui_address = maybe_make_well_known_address(context, loc, symbol!("sui"));
     let mut modules: Vec<(Address, Symbol)> = vec![];
     let mut members: Vec<(Address, Symbol, Symbol, ModuleMemberKind)> = vec![];
@@ -496,6 +608,44 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
     builder
 }
 
+//************************************************
+// ERRORS
+//************************************************
+
+pub(super) enum ValueError {
+    NumTooBig {
+        loc: Loc,
+        type_description: &'static str,
+    },
+    InvalidByteString {
+        error: byte_string::BytestringError,
+    },
+    InvalidHexString {
+        error: hex_string::HexstringError,
+    },
+}
+
+impl ValueError {
+    pub fn into_diagnostic(self) -> Diagnostic {
+        match self {
+            ValueError::NumTooBig {
+                loc,
+                type_description,
+            } => diag!(
+                Syntax::InvalidNumber,
+                (
+                    loc,
+                    format!(
+                        "Invalid number literal. The given literal is too large to fit into {type_description}",
+                    )
+                ),
+            ),
+            ValueError::InvalidByteString { error } => error.into_diagnostic(),
+            ValueError::InvalidHexString { error } => error.into_diagnostic(),
+        }
+    }
+}
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -518,6 +668,7 @@ pub fn program(
             is_root_package: true,
         },
         reporter,
+        module_extensions: BTreeMap::new(),
     };
 
     let module_members = {
@@ -526,14 +677,12 @@ pub fn program(
             &mut member_computation_context,
             &prog.named_address_maps,
             &mut members,
-            true,
             &prog.source_definitions,
         );
         all_module_members(
             &mut member_computation_context,
             &prog.named_address_maps,
             &mut members,
-            true,
             &prog.lib_definitions,
         );
 
@@ -552,138 +701,265 @@ pub fn program(
     let mut source_module_map = UniqueMap::new();
     let mut lib_module_map = UniqueMap::new();
     let P::Program {
-        named_address_maps,
+        named_address_maps: named_addr_maps,
         source_definitions,
         lib_definitions,
     } = prog;
 
-    let mut context = Context::new(compilation_env, module_members, address_conflicts);
+    let mut ctxt = Context::new(compilation_env, module_members, address_conflicts);
+    let context = &mut ctxt;
 
-    for P::PackageDefinition {
-        package,
-        named_address_map,
-        def,
-        target_kind,
-    } in source_definitions
-    {
-        context.defn_context.target_kind = target_kind;
-        context.defn_context.current_package = package;
-        let named_address_map = named_address_maps.get(named_address_map);
-        if context
-            .env()
-            .supports_feature(package, FeatureGate::Move2024Paths)
-        {
-            let mut path_expander = Move2024PathExpander::new();
+    let (source_defs, source_exts) =
+        into_modules_and_extenions(context, &named_addr_maps, source_definitions);
+    // We currently discard library extensions, as they are not supported
+    let (lib_defs, _lib_exts) =
+        into_modules_and_extenions(context, &named_addr_maps, lib_definitions);
 
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, &named_address_map);
+    // Add source extensions to the context
+    context.set_module_extensions(source_exts);
 
-            // should never fail
-            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
-                context.add_diag(*diag);
-            }
-
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(path_expander));
-            definition(&mut context, &mut source_module_map, package, def);
-            context.pop_alias_scope(None); // Handle unused addresses in this case
-            context.path_expander = None;
-        } else {
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(LegacyPathExpander::new()));
-            definition(&mut context, &mut source_module_map, package, def);
-            context.path_expander = None;
-        }
+    // Process source modules first, then library modules
+    for (addr, def) in source_defs {
+        definition(context, &mut source_module_map, &named_addr_maps, addr, def);
     }
 
-    for P::PackageDefinition {
-        package,
-        named_address_map,
-        def,
-        target_kind: pkg_def_kind,
-    } in lib_definitions
-    {
-        context.defn_context.target_kind = pkg_def_kind;
-        context.defn_context.current_package = package;
-        let named_address_map = named_address_maps.get(named_address_map);
-        if context
-            .env()
-            .supports_feature(package, FeatureGate::Move2024Paths)
-        {
-            let mut path_expander = Move2024PathExpander::new();
-
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, &named_address_map);
-            // should never fail
-            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
-                context.add_diag(*diag);
-            }
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(path_expander));
-            definition(&mut context, &mut lib_module_map, package, def);
-            context.pop_alias_scope(None); // Handle unused addresses in this case
-            context.path_expander = None;
-        } else {
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(LegacyPathExpander::new()));
-            definition(&mut context, &mut lib_module_map, package, def);
-            context.path_expander = None;
-        }
+    for (addr, def) in lib_defs {
+        definition(context, &mut lib_module_map, &named_addr_maps, addr, def);
     }
 
     context.defn_context.current_package = None;
 
-    // Finalization
-    //
+    // Merge the library modules into the source modules, checking for duplicates
+
     for (mident, module) in lib_module_map {
         if let Err((mident, old_loc)) = source_module_map.add(mident, module) {
             if !context.env().sources_shadow_deps() {
-                duplicate_module(&mut context, &source_module_map, mident, old_loc)
+                duplicate_module_error(context, &source_module_map, mident, old_loc)
             }
         }
     }
     let module_map = source_module_map;
 
+    // Find primitive definers
     super::primitive_definers::modules(context.env(), pre_compiled_lib, &module_map);
+
+    // Finish up context, and report any unused extensions
+
+    let (warning_filters_table, module_extensions) = ctxt.finish();
+
+    for (addr, pkg) in module_extensions {
+        for (name, ext) in pkg {
+            compilation_env
+                .diagnostic_reporter_at_top_level()
+                .add_diag(diag!(
+                    Declarations::InvalidModule,
+                    (
+                        ext.loc,
+                        format!("Cannot extend unknown module '{addr}::{name}'")
+                    )
+                ));
+        }
+    }
+
+    let warning_filters_table = Arc::new(warning_filters_table);
+
     E::Program {
-        warning_filters_table: Arc::new(context.finish()),
+        warning_filters_table,
         modules: module_map,
     }
 }
 
+// ***********************************************
+// Definitions
+// ***********************************************
+
 fn definition(
     context: &mut Context,
     module_map: &mut UniqueMap<ModuleIdent, E::ModuleDefinition>,
-    package_name: Option<Symbol>,
-    def: P::Definition,
+    named_addr_maps: &NamedAddressMaps,
+    addr: Option<Spanned<Address>>,
+    def: PkgDef,
 ) {
-    let default_aliases = default_aliases(context);
-    context.push_alias_scope(/* unused */ Loc::invalid(), default_aliases);
-    match def {
-        P::Definition::Module(mut m) => {
-            let module_paddr = std::mem::take(&mut m.address);
-            let module_addr = module_paddr.map(|addr| {
-                let address = top_level_address(
+    fn process_module(
+        context: &mut Context,
+        module_map: &mut UniqueMap<ModuleIdent, E::ModuleDefinition>,
+        package_name: Option<Symbol>,
+        addr: Option<Spanned<Address>>,
+        def: P::ModuleDefinition,
+    ) {
+        let default_aliases = default_aliases(context);
+        context.push_alias_scope(/* unused */ Loc::invalid(), default_aliases);
+        module(context, module_map, package_name, addr, def);
+        context.pop_alias_scope(None);
+    }
+
+    let P::PackageDefinition {
+        package,
+        named_address_map,
+        def,
+        target_kind: pkg_def_kind,
+    } = def;
+    context.defn_context.target_kind = pkg_def_kind;
+    context.defn_context.current_package = package;
+    let named_address_map = named_addr_maps.get(named_address_map);
+    if context
+        .env()
+        .supports_feature(package, FeatureGate::Move2024Paths)
+    {
+        let mut path_expander = Move2024PathExpander::new();
+
+        let aliases = named_addr_map_to_alias_map_builder(context, &named_address_map);
+        // should never fail
+        if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
+            context.add_diag(*diag);
+        }
+        context.defn_context.named_address_mapping = Some(named_address_map);
+        context.path_expander = Some(Box::new(path_expander));
+        process_module(context, module_map, package, addr, def);
+        context.pop_alias_scope(None); // Handle unused addresses in this case
+        context.path_expander = None;
+    } else {
+        context.defn_context.named_address_mapping = Some(named_address_map);
+        context.path_expander = Some(Box::new(LegacyPathExpander::new()));
+        process_module(context, module_map, package, addr, def);
+        context.path_expander = None;
+    }
+}
+
+fn check_module_address(
+    context: &mut Context,
+    loc: Loc,
+    addr: Address,
+    m: &mut P::ModuleDefinition,
+) -> Spanned<Address> {
+    let module_address = std::mem::take(&mut m.address);
+    match module_address {
+        Some(other_paddr) => {
+            let other_loc = other_paddr.loc;
+            let other_addr = top_level_address(
+                &mut context.defn_context,
+                /* suggest_declaration */ true,
+                other_paddr,
+            );
+            let msg = if addr == other_addr {
+                "Redundant address specification"
+            } else {
+                "Multiple addresses specified for module"
+            };
+            context.add_diag(diag!(
+                Declarations::DuplicateItem,
+                (other_loc, msg),
+                (loc, "Address previously specified here")
+            ));
+            sp(other_loc, other_addr)
+        }
+        None => sp(loc, addr),
+    }
+}
+
+// This function takes a parsed program apart and (a) discards any address definition forms,
+// translating them into module forms, and (b) organizes modules by if they are extensions or not,
+// ensuring extension modules appear after the non-extension modules.
+//
+// This also does some preprocessing of addresses, ensuring that all modules have the appropriate
+// top-level address to recur with.
+
+fn into_modules_and_extenions(
+    context: &mut Context,
+    named_addr_maps: &NamedAddressMaps,
+    defs: Vec<P::PackageDefinition>,
+) -> (Vec<(OptAddr, PkgDef)>, Vec<(OptAddr, PkgDef)>) {
+    fn into_modules(
+        context: &mut Context,
+        named_addr_maps: &NamedAddressMaps,
+        def: P::PackageDefinition,
+    ) -> Vec<(OptAddr, PkgDef)> {
+        match def {
+            P::PackageDefinition {
+                def: P::Definition::Module(mut def),
+                package,
+                named_address_map,
+                target_kind,
+            } => {
+                let na_map = named_addr_maps.get(named_address_map);
+                let module_addr = std::mem::take(&mut def.address).map(|addr| {
+                    let address = top_level_address_(
+                        &mut context.defn_context,
+                        na_map,
+                        /* suggest_declaration */ true,
+                        addr,
+                    );
+                    sp(addr.loc, address)
+                });
+                let pdef = P::PackageDefinition {
+                    package,
+                    named_address_map,
+                    def,
+                    target_kind,
+                };
+                vec![(module_addr, pdef)]
+            }
+            P::PackageDefinition {
+                package,
+                named_address_map,
+                def:
+                    P::Definition::Address(P::AddressDefinition {
+                        attributes,
+                        loc,
+                        addr,
+                        modules,
+                    }),
+                target_kind,
+            } => {
+                let na_map = named_addr_maps.get(named_address_map);
+                for attr_set in attributes {
+                    for attr in attr_set.value.0 {
+                        if !matches!(
+                            attr.value,
+                            P::Attribute_::Mode { .. } | P::Attribute_::External { .. }
+                        ) {
+                            context.add_diag(diag!(
+                                Attributes::ValueWarning,
+                                (
+                                    attr.loc,
+                                    "Non-'mode' attributes on address blocks are not supported and will be ignored"
+                                )
+                            ));
+                        }
+                    }
+                }
+                let addr = top_level_address_(
                     &mut context.defn_context,
-                    /* suggest_declaration */ true,
+                    na_map,
+                    /* suggest_declaration */ false,
                     addr,
                 );
-                sp(addr.loc, address)
-            });
-            module(context, module_map, package_name, module_addr, m)
-        }
-        P::Definition::Address(a) => {
-            let addr = top_level_address(
-                &mut context.defn_context,
-                /* suggest_declaration */ false,
-                a.addr,
-            );
-            for mut m in a.modules {
-                let module_addr = check_module_address(context, a.loc, addr, &mut m);
-                module(context, module_map, package_name, Some(module_addr), m)
+
+                modules
+                    .into_iter()
+                    .map(|mut def| {
+                        let module_addr = Some(check_module_address(context, loc, addr, &mut def));
+                        let def = P::PackageDefinition {
+                            package,
+                            named_address_map,
+                            def,
+                            target_kind,
+                        };
+                        (module_addr, def)
+                    })
+                    .collect()
             }
         }
     }
-    context.pop_alias_scope(None);
+
+    defs.into_iter()
+        .flat_map(|def| into_modules(context, named_addr_maps, def))
+        .partition(|(_, def)| !def.def.is_extension)
 }
+
+// -----------------------------------------------
+// Addresses and Module Identifiers
+// -----------------------------------------------
 
 // Access a top level address as declared, not affected by any aliasing/shadowing
 pub(super) fn top_level_address(
@@ -814,52 +1090,9 @@ pub(super) fn module_ident(
     sp(loc, ModuleIdent_::new(addr, module))
 }
 
-fn check_module_address(
-    context: &mut Context,
-    loc: Loc,
-    addr: Address,
-    m: &mut P::ModuleDefinition,
-) -> Spanned<Address> {
-    let module_address = std::mem::take(&mut m.address);
-    match module_address {
-        Some(other_paddr) => {
-            let other_loc = other_paddr.loc;
-            let other_addr = top_level_address(
-                &mut context.defn_context,
-                /* suggest_declaration */ true,
-                other_paddr,
-            );
-            let msg = if addr == other_addr {
-                "Redundant address specification"
-            } else {
-                "Multiple addresses specified for module"
-            };
-            context.add_diag(diag!(
-                Declarations::DuplicateItem,
-                (other_loc, msg),
-                (loc, "Address previously specified here")
-            ));
-            sp(other_loc, other_addr)
-        }
-        None => sp(loc, addr),
-    }
-}
-
-fn duplicate_module(
-    context: &mut Context,
-    module_map: &UniqueMap<ModuleIdent, E::ModuleDefinition>,
-    mident: ModuleIdent,
-    old_loc: Loc,
-) {
-    let old_mident = module_map.get_key(&mident).unwrap();
-    let dup_msg = format!("Duplicate definition for module '{}'", mident);
-    let prev_msg = format!("Module previously defined here, with '{}'", old_mident);
-    context.add_diag(diag!(
-        Declarations::DuplicateItem,
-        (mident.loc, dup_msg),
-        (old_loc, prev_msg),
-    ))
-}
+// -----------------------------------------------
+// Modules
+// -----------------------------------------------
 
 fn module(
     context: &mut Context,
@@ -873,9 +1106,15 @@ fn module(
         context.spec_deprecated(module_def.name.0.loc, /* is_error */ false);
         return;
     }
+    if module_def.is_extension {
+        context.add_diag(ice!((
+            module_def.name.0.loc,
+            "ICE: Module extension passed to module()"
+        )));
+    }
     let (mident, mod_) = module_(context, package_name, module_address, module_def);
     if let Err((mident, old_loc)) = module_map.add(mident, mod_) {
-        duplicate_module(context, module_map, mident, old_loc)
+        duplicate_module_error(context, module_map, mident, old_loc)
     }
     context.address = None
 }
@@ -901,6 +1140,22 @@ fn set_module_address(
     })
 }
 
+fn duplicate_module_error(
+    context: &mut Context,
+    module_map: &UniqueMap<ModuleIdent, E::ModuleDefinition>,
+    mident: ModuleIdent,
+    old_loc: Loc,
+) {
+    let old_mident = module_map.get_key(&mident).unwrap();
+    let dup_msg = format!("Duplicate definition for module '{}'", mident);
+    let prev_msg = format!("Module previously defined here, with '{}'", old_mident);
+    context.add_diag(diag!(
+        Declarations::DuplicateItem,
+        (mident.loc, dup_msg),
+        (old_loc, prev_msg),
+    ))
+}
+
 fn module_(
     context: &mut Context,
     package_name: Option<Symbol>,
@@ -913,10 +1168,17 @@ fn module_(
         loc,
         address,
         is_spec_module: _,
+        is_extension,
         name,
-        members,
+        mut members,
         definition_mode: _,
     } = mdef;
+    if is_extension {
+        context.add_diag(ice!((
+            loc,
+            "ICE: Module extensions should have been handled earlier"
+        )));
+    }
     let attributes = expand_attributes(context, AttributePosition::Module, attributes);
     let warning_filter = module_warning_filter(context, package_name, &attributes);
     context.push_warning_filter_scope(warning_filter);
@@ -935,6 +1197,27 @@ fn module_(
 
     let name_loc = name.0.loc;
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
+
+    // [NOTE: MOD-EXT] Extensions are currently injected directly into the original module before any
+    // processing is done. This means that extensions can use aliases and other definitions from the
+    // defining module, and can define their own. In addition, use funs, etc., defined in the original
+    // may be used in the extension. Conversely, any attempt to change the meaning of a use fun, etc.,
+    // will result in a duplicate delcaration error.
+    //
+    // This is not the only option for this design, and it may be worth revisiting. In particular, this
+    // approach will not allow an extension to use diffferent packages or named address mappings than
+    // the original module. To support such behavior, we would need to process extensions separately
+    // and combined behavior much later. This would mean significant scope juggling, though, during
+    // name resolution, use fun resolution, typing, etc.
+
+    let cur_addr = *context.cur_address();
+
+    if let Some(extension) =
+        context.get_module_extension_opt(&cur_addr, &current_module.value.module)
+    {
+        members.extend(extension.members);
+        extension_attributes(context, extension.attributes);
+    }
 
     let mut new_scope = context.new_alias_map_builder();
     let mut use_funs_builder = UseFunsBuilder::new();
@@ -986,6 +1269,8 @@ fn module_(
     let mut use_funs = use_funs(context, use_funs_builder);
     check_visibility_modifiers(context, &functions, &friends, package_name);
 
+    let stdlib_definitions = stdlib_definitions(context, loc);
+
     context.pop_alias_scope(Some(&mut use_funs));
 
     let named_address_map = context.defn_context.named_address_mapping.clone().unwrap();
@@ -999,6 +1284,7 @@ fn module_(
         use_funs,
         target_kind,
         friends,
+        stdlib_definitions,
         structs,
         enums,
         constants,
@@ -1125,6 +1411,58 @@ fn check_visibility_modifiers(
             }
         }
     }
+}
+
+fn extension_attributes(context: &mut Context<'_>, attributes: Vec<Spanned<P::Attributes_>>) {
+    for attrs in attributes {
+        for attr in attrs.value.0 {
+            if !matches!(
+                attr.value,
+                P::Attribute_::Mode { .. } | P::Attribute_::External { .. }
+            ) {
+                context.add_diag(diag!(
+                    Attributes::ValueWarning,
+                    (attr.loc, "Non-'mode' attributes on module extensions are not supported and will be ignored")
+                ));
+            }
+        }
+    }
+}
+
+fn stdlib_definitions(context: &mut Context, mloc: Loc) -> StdlibDefinitions {
+    if maybe_make_well_known_address(context, mloc, stdlib_definitions::STDLIB_ADDRESS_NAME)
+        .is_none()
+    {
+        return StdlibDefinitions {
+            functions: BTreeMap::new(),
+            types: BTreeMap::new(),
+        };
+    }
+
+    let stdlib_functions = shared::stdlib_definitions::stdlib_function_definition(mloc);
+    let stdlib_types = shared::stdlib_definitions::stdlib_type_definition(mloc);
+
+    let functions = stdlib_functions
+        .into_iter()
+        .filter_map(|(key, name)| {
+            context
+                .name_access_chain_to_module_access_result(Access::ApplyPositional, name)
+                .result
+                .map(|name| (key, name.access.value))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let types = stdlib_types
+        .into_iter()
+        .filter_map(|(key, name)| {
+            context
+                .name_access_chain_to_module_access_result(Access::Type, name)
+                .result
+                .map(|name| (key, name.access.value))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    StdlibDefinitions { functions, types }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1266,7 +1604,6 @@ fn all_module_members<'a>(
     context: &mut DefnContext,
     named_addr_maps: &NamedAddressMaps,
     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
-    always_add: bool,
     defs: impl IntoIterator<Item = &'a P::PackageDefinition>,
 ) {
     for P::PackageDefinition {
@@ -1288,7 +1625,7 @@ fn all_module_members<'a>(
                     // Error will be handled when the module is compiled
                     None => Address::anonymous(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS),
                 };
-                module_members(members, always_add, addr, m)
+                module_members(members, addr, m)
             }
             P::Definition::Address(addr_def) => {
                 let addr = top_level_address_(
@@ -1298,7 +1635,7 @@ fn all_module_members<'a>(
                     addr_def.addr,
                 );
                 for m in &addr_def.modules {
-                    module_members(members, always_add, addr, m)
+                    module_members(members, addr, m)
                 }
             }
         };
@@ -1307,14 +1644,10 @@ fn all_module_members<'a>(
 
 fn module_members(
     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
-    always_add: bool,
     address: Address,
     m: &P::ModuleDefinition,
 ) {
     let mident = sp(m.name.loc(), ModuleIdent_::new(address, m.name));
-    if !always_add && members.contains_key(&mident) {
-        return;
-    }
     let mut cur_members = members.remove(&mident).unwrap_or_default();
     for mem in &m.members {
         match mem {
@@ -1683,7 +2016,7 @@ fn explicit_use_fun(
         ty,
         method,
     } = pexplicit;
-    let access_result!(function, tyargs, is_macro) =
+    let access!(function, tyargs, is_macro) =
         context.name_access_chain_to_module_access(Access::ApplyPositional, *function)?;
     ice_assert!(
         context.reporter(),
@@ -1697,7 +2030,7 @@ fn explicit_use_fun(
         loc,
         "Found a 'use fun' as a macro"
     );
-    let access_result!(ty, tyargs, is_macro) =
+    let access!(ty, tyargs, is_macro) =
         context.name_access_chain_to_module_access(Access::Type, *ty)?;
     ice_assert!(
         context.reporter(),
@@ -2302,7 +2635,7 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
                 assert!(context.env().has_errors());
                 ET::UnresolvedError
             }
-            Some(access_result!(n, ptyargs, _)) => ET::Apply(n, sp_types(context, ptyargs)),
+            Some(access!(n, ptyargs, _)) => ET::Apply(n, sp_types(context, ptyargs)),
         },
         PT::Ref(mut_, inner) => ET::Ref(mut_, Box::new(type_(context, *inner))),
         PT::Fun(args, result) => {
@@ -2489,7 +2822,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::Name(pn) => {
             bind_access_result!(
                 context.name_access_chain_to_module_access(Access::Term, pn) =>
-                    Some(access_result!(name, ptys_opt, is_macro)) in {
+                    Some(access!(name, ptys_opt, is_macro)) in {
                         assert!(ptys_opt.is_none());
                         assert!(is_macro.is_none());
                         EE::Name(name, None)
@@ -2501,7 +2834,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             let ers = sp(rloc, exps(context, prs));
             bind_access_result!(
                 en_opt =>
-                    Some(access_result!(name, ptys_opt, is_macro))
+                    Some(access!(name, ptys_opt, is_macro))
                     in EE::Call(name, is_macro, optional_sp_types(context, ptys_opt), ers)
             )
         }
@@ -2514,7 +2847,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             let efields = named_fields(context, loc, "construction", "argument", efields_vec);
             bind_access_result!(
                 en_opt =>
-                    Some(access_result!(name, ptys_opt, is_macro)) in {
+                    Some(access!(name, ptys_opt, is_macro)) in {
                         assert!(is_macro.is_none());
                         EE::Pack(name, optional_sp_types(context, ptys_opt), efields)
                     }
@@ -2958,7 +3291,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
         name_chain: P::NameAccessChain,
         identifier_okay: bool,
     ) -> Option<(E::ModuleAccess, Option<Spanned<Vec<P::Type>>>)> {
-        let ModuleAccessResult {
+        let AccessPath {
             access,
             ptys_opt,
             is_macro,
@@ -3138,99 +3471,89 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
 // Values
 //**************************************************************************************************
 
-pub(super) fn value(context: &mut DefnContext, sp!(loc, pvalue_): P::Value) -> Option<E::Value> {
-    use E::Value_ as EV;
-    use P::Value_ as PV;
-    let value_ = match pvalue_ {
-        PV::Address(addr) => {
-            let addr = top_level_address(context, /* suggest_declaration */ true, addr);
-            EV::Address(addr)
+pub(super) fn value(context: &mut DefnContext, value: P::Value) -> Option<E::Value> {
+    match value_result(context, value) {
+        Ok(value) => Some(value),
+        Err(errs) => {
+            for err in errs {
+                context.add_diag(err.into_diagnostic());
+            }
+            None
         }
-        PV::Num(s) if s.ends_with("u8") => match parse_u8(&s[..s.len() - 2]) {
-            Ok((u, _format)) => EV::U8(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u8'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u16") => match parse_u16(&s[..s.len() - 3]) {
-            Ok((u, _format)) => EV::U16(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u16'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u32") => match parse_u32(&s[..s.len() - 3]) {
-            Ok((u, _format)) => EV::U32(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u32'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u64") => match parse_u64(&s[..s.len() - 3]) {
-            Ok((u, _format)) => EV::U64(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u64'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u128") => match parse_u128(&s[..s.len() - 4]) {
-            Ok((u, _format)) => EV::U128(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u128'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u256") => match parse_u256(&s[..s.len() - 4]) {
-            Ok((u, _format)) => EV::U256(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u256'"));
-                return None;
-            }
-        },
-
-        PV::Num(s) => match parse_u256(&s) {
-            Ok((u, _format)) => EV::InferredNum(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(
-                    loc,
-                    "the largest possible integer type, 'u256'",
-                ));
-                return None;
-            }
-        },
-        PV::Bool(b) => EV::Bool(b),
-        PV::HexString(s) => match hex_string::decode(loc, &s) {
-            Ok(v) => EV::Bytearray(v),
-            Err(e) => {
-                context.add_diag(*e);
-                return None;
-            }
-        },
-        PV::ByteString(s) => match byte_string::decode(loc, &s) {
-            Ok(v) => EV::Bytearray(v),
-            Err(e) => {
-                context.add_diags(e);
-                return None;
-            }
-        },
-    };
-    Some(sp(loc, value_))
+    }
 }
 
-// Create an error for an integer literal that is too big to fit in its type.
-// This assumes that the literal is the current token.
-fn num_too_big_error(loc: Loc, type_description: &'static str) -> Diagnostic {
-    diag!(
-        Syntax::InvalidNumber,
-        (
+pub(super) fn value_result(
+    context: &mut DefnContext,
+    sp!(loc, pvalue_): P::Value,
+) -> Result<E::Value, Vec<ValueError>> {
+    use E::Value_ as EV;
+    use P::Value_ as PV;
+
+    fn num_too_big_error(loc: Loc, type_description: &'static str) -> Vec<ValueError> {
+        vec![ValueError::NumTooBig {
             loc,
-            format!(
-                "Invalid number literal. The given literal is too large to fit into {}",
-                type_description
-            )
+            type_description,
+        }]
+    }
+
+    fn hex_error(error: hex_string::HexstringError) -> Vec<ValueError> {
+        vec![ValueError::InvalidHexString { error }]
+    }
+
+    fn string_error(errors: Vec<byte_string::BytestringError>) -> Vec<ValueError> {
+        errors
+            .into_iter()
+            .map(|error| ValueError::InvalidByteString { error })
+            .collect()
+    }
+
+    macro_rules! parse_num {
+        ($exp:expr, $ctor:expr, $ty:expr) => {
+            $exp.map(|(u, _format)| $ctor(u))
+                .map_err(|_| num_too_big_error(loc, $ty))
+        };
+    }
+
+    let value_ = match pvalue_ {
+        PV::Address(addr) => {
+            Ok(EV::Address(top_level_address(
+                context, /* suggest_declaration */ true, addr,
+            )))
+        }
+        PV::Num(s) if s.ends_with("u8") => parse_num!(parse_u8(&s[..s.len() - 2]), EV::U8, "'u8'"),
+        PV::Num(s) if s.ends_with("u16") => {
+            parse_num!(parse_u16(&s[..s.len() - 3]), EV::U16, "'u16'")
+        }
+        PV::Num(s) if s.ends_with("u32") => {
+            parse_num!(parse_u32(&s[..s.len() - 3]), EV::U32, "'u32'")
+        }
+        PV::Num(s) if s.ends_with("u64") => {
+            parse_num!(parse_u64(&s[..s.len() - 3]), EV::U64, "'u64'")
+        }
+        PV::Num(s) if s.ends_with("u128") => {
+            parse_num!(parse_u128(&s[..s.len() - 4]), EV::U128, "'u128'")
+        }
+        PV::Num(s) if s.ends_with("u256") => {
+            parse_num!(parse_u256(&s[..s.len() - 4]), EV::U256, "'u256'")
+        }
+        PV::Num(s) => parse_num!(
+            parse_u256(&s),
+            EV::InferredNum,
+            "the largest possible integer type, 'u256'"
         ),
-    )
+        PV::Bool(b) => Ok(EV::Bool(b)),
+        PV::HexString(s) => hex_string::decode(loc, &s)
+            .map(EV::Bytearray)
+            .map_err(hex_error),
+        PV::ByteString(s) => byte_string::decode(loc, &s)
+            .map(EV::Bytearray)
+            .map_err(string_error),
+        PV::String(s) => byte_string::decode(loc, &s)
+            .map(EV::InferredString)
+            .map_err(string_error),
+    };
+    value_.map(|value_| sp(loc, value_))
 }
 
 //**************************************************************************************************
@@ -3280,7 +3603,7 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
             EL::Var(Some(emut), sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
         PB::Unpack(ptn, pfields) => {
-            let access_result!(name, ptys_opt, is_macro) =
+            let access!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, *ptn)?;
             ice_assert!(
                 context.reporter(),
@@ -3389,7 +3712,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
     match e_ {
         PE::Name(name) => {
             match context.name_access_chain_to_module_access(Access::Term, name.clone()) {
-                Some(access_result!(sp!(_, name @ M::Name(_)), Some(_), _is_macro)) => {
+                Some(access!(sp!(_, name @ M::Name(_)), Some(_), _is_macro)) => {
                     let msg = "Unexpected assignment of instantiated type without fields";
                     let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
                     diag.add_note(format!(
@@ -3399,17 +3722,17 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                     context.add_diag(diag);
                     None
                 }
-                Some(access_result!(_, _ptys_opt, Some(_))) => {
+                Some(access!(_, _ptys_opt, Some(_))) => {
                     let msg = "Unexpected assignment of name with macro invocation";
                     let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
                     diag.add_note("Macro invocation '!' must appear on an invocation");
                     context.add_diag(diag);
                     None
                 }
-                Some(access_result!(sp!(_, name @ M::Name(_)), None, None)) => {
+                Some(access!(sp!(_, name @ M::Name(_)), None, None)) => {
                     Some(sp(loc, EL::Var(None, sp(loc, name), None)))
                 }
-                Some(access_result!(sp!(_, M::ModuleAccess(_, _)), _ptys_opt, _is_macro)) => {
+                Some(access!(sp!(_, M::ModuleAccess(_, _)), _ptys_opt, _is_macro)) => {
                     let msg = "Unexpected assignment of module access without fields";
                     let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
                     diag.add_note(format!(
@@ -3419,7 +3742,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                     context.add_diag(diag);
                     None
                 }
-                Some(access_result!(sp!(loc, M::Variant(_, _)), _tys_opt, _is_macro)) => {
+                Some(access!(sp!(loc, M::Variant(_, _)), _tys_opt, _is_macro)) => {
                     let cur_pkg = context.current_package();
                     if context.check_feature(cur_pkg, FeatureGate::Enums, loc) {
                         let msg = "Unexpected assignment of variant";
@@ -3436,7 +3759,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             }
         }
         PE::Pack(pn, pfields) => {
-            let access_result!(name, ptys_opt, is_macro) =
+            let access!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             ice_assert!(
                 context.reporter(),
@@ -3454,7 +3777,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
         PE::Call(pn, sp!(_, exprs)) => {
             let pkg = context.current_package();
             context.check_feature(pkg, FeatureGate::PositionalFields, loc);
-            let access_result!(name, ptys_opt, is_macro) =
+            let access!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             ice_assert!(
                 context.reporter(),

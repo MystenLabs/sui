@@ -9,9 +9,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{IndexerConfig, PipelineLayer};
-use sui_indexer_alt_e2e_tests::{
-    find_address_owned, find_immutable, FullCluster, OffchainClusterConfig,
-};
+use sui_indexer_alt_e2e_tests::{find, FullCluster, OffchainClusterConfig};
 use sui_indexer_alt_jsonrpc::config::{PackageResolverLayer, RpcConfig as JsonRpcConfig};
 use sui_move_build::BuildConfig;
 use sui_types::{
@@ -205,7 +203,7 @@ impl TypeLimitCluster {
             .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
             .expect("Publish failed");
 
-        let package_id = find_immutable(&fx).expect("Couldn't find package").0;
+        let package_id = find::immutable(&fx).expect("Couldn't find package").0;
 
         Self {
             cluster,
@@ -260,7 +258,7 @@ impl TypeLimitCluster {
             .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
             .expect("Transaction failed");
 
-        find_address_owned(&fx).unwrap().0
+        find::address_owned(&fx).unwrap().0
     }
 
     /// Run a transaction on the cluster to create an instance of the `Wide` type from the test
@@ -297,7 +295,7 @@ impl TypeLimitCluster {
             .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
             .expect("Transaction failed");
 
-        find_address_owned(&fx).unwrap().0
+        find::address_owned(&fx).unwrap().0
     }
 
     /// Try and fetch the contents of an object from the cluster's RPC.

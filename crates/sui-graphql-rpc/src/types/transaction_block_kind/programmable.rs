@@ -60,7 +60,7 @@ struct OwnedOrImmutable {
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 struct SharedInput {
     address: SuiAddress,
-    /// The version that this this object was shared at.
+    /// The version at which this object was shared.​
     initial_shared_version: UInt53,
     /// Controls whether the transaction block can reference the shared object as a mutable
     /// reference or by value. This has implications for scheduling: Transactions that just read
@@ -450,7 +450,7 @@ impl TransactionInput {
             }),
 
             // TODO(address-balances): Add support for balance withdraws.
-            N::BalanceWithdraw(_) => todo!("BalanceWithdraw is not supported for GraphQL"),
+            N::FundsWithdrawal(_) => todo!("FundsWithdrawal is not supported for GraphQL"),
         }
     }
 }

@@ -1,0 +1,280 @@
+---
+title: Transfer Policies
+description: Learn about transfer policies on Sui.
+keywords: [ transfer, policy, transferpolicy, transfer receipt, transfer request, transferrequest ]
+---
+
+A [`TransferPolicy`](/references/framework/sui_sui/transfer_policy) on Sui is a customizable primitive that enables the owner of a type to create custom rules that define how the type can be transferred. You can use a `TransferPolicy` within a Sui Kiosk marketplace or any other system that integrates the `TransferPolicy` primitive. You can set any number of rules, such as paying a royalty or commission, and all must be satisfied in a single transaction for the transfer to succeed.
+
+In a kiosk, creating and sharing a `TransferPolicy<T>` makes the type `T` tradable in that kiosk. On every kiosk purchase, the `TransferPolicy` must confirm the `TransferRequest`, or the transaction fails.
+
+## Transfer policies for kiosks 
+
+When a kiosk purchase occurs, the system creates a `TransferRequest` _hot potato_, and only the matching `TransferPolicy` can confirm it to unblock the transaction.
+
+A kiosk can trade an item of type `T` only if the `TransferPolicy` for `T` exists and the buyer can access it. A purchase issues a `TransferRequest` that must be resolved in a matching `TransferPolicy`. If no policy exists or the buyer can't access it, the transaction fails.
+
+This system gives you maximum freedom and flexibility. By removing transfer policy logic from the trading primitive, only you can set policies, and you control all enforcement as long as the primitive is used.
+
+## `TransferPolicy` rules 
+
+By default, a single `TransferPolicy` enforces nothing and requires no user action. It confirms `TransferRequests` and therefore unblocks a transaction. However, the system allows setting _rules_. A rule is a way to request an additional action from the user before the request can be confirmed.
+
+The rule logic is straightforward: someone can publish a new rule module, such as a "fixed fee," and add it to the `TransferPolicy`. After the rule is added, `TransferRequest` needs to collect a `TransferReceipt` marking that the requirement specified in the rule was completed.
+
+### Example rule 
+
+To implement VAT fees on every merchant transaction, you must introduce a rule.
+
+A rule needs to provide 4 main components:
+
+1. A `RuleWitness` struct, which uniquely identifies the rule.
+1. A `config` type which is stored in the `TransferPolicy` and is used to configure the rule.
+1. A set function which adds the rule to the `TransferPolicy`. The `TransferPolicyCap` holder must perform this action.
+1. An actionable function which adds the receipt into the `TransferRequest` and potentially adds to the `TransferPolicy` balance if the functionality involves some monetary transaction.
+
+```
+module examples::dummy_rule {
+    use sui::coin::Coin;
+    use sui::sui::SUI;
+    use sui::transfer_policy::{
+        Self as policy,
+        TransferPolicy,
+        TransferPolicyCap,
+        TransferRequest
+    };
+
+    /// The rule Witness; has no fields and is used as a
+    /// static authorization method for the rule.
+    struct Rule has drop {}
+
+    /// Configuration struct with any fields (as long as it
+    /// has `drop`). Managed by the rule module.
+    struct Config has store, drop {}
+
+    /// Function that adds a rule to the `TransferPolicy`.
+    /// Requires `TransferPolicyCap` to make sure the rules are
+    /// added only by the publisher of T.
+    public fun add<T>(
+        policy: &mut TransferPolicy<T>,
+        cap: &TransferPolicyCap<T>
+    ) {
+        policy::add_rule(Rule {}, policy, cap, Config {})
+    }
+
+    /// Action function - perform a certain action (any, really)
+    /// and pass in the `TransferRequest` so it gets the receipt.
+    /// Receipt is a rule witness, so there's no way to create
+    /// it anywhere else but in this module.
+    ///
+    /// This example also illustrates that rules can add Coin<SUI>
+    /// to the balance of the TransferPolicy allowing creators to
+    /// collect fees.
+    public fun pay<T>(
+        policy: &mut TransferPolicy<T>,
+        request: &mut TransferRequest<T>,
+        payment: Coin<SUI>
+    ) {
+        policy::add_to_balance(Rule {}, policy, payment);
+        policy::add_receipt(Rule {}, request);
+    }
+}
+```
+
+The `TransferPolicy` module allows removing any rule at any time, as guaranteed by the constraints on the rule's configuration. This example module has no configuration and accepts a `Coin<SUI>` of any value.
+
+### Royalty rules
+
+To implement a percentage-based fee, such as royalties, a rule module must know the item's purchase price. The `TransferRequest` provides information that supports this and similar scenarios:
+
+- Item ID
+- Amount paid (SUI)
+- From ID: The object that was used for selling, such as the kiosk
+
+The `sui::transfer_policy` module provides public functions to access these fields: `paid()`, `item()`, and `from()`.
+
+```
+module examples::royalty_rule {
+    // skipping dependencies
+    const MAX_BP: u16 = 10_000;
+
+    struct Rule has drop {}
+
+    /// In this implementation rule has a configuration - `amount_bp`
+    /// which is the percentage of the `paid` in basis points.
+    struct Config has store, drop { amount_bp: u16 }
+
+    /// When a rule is added, configuration details are specified
+    public fun add<T>(
+        policy: &mut TransferPolicy<T>,
+        cap: &TransferPolicyCap<T>,
+        amount_bp: u16
+    ) {
+        assert!(amount_bp <= MAX_BP, 0);
+        policy::add_rule(Rule {}, policy, cap, Config { amount_bp })
+    }
+
+    /// To get the receipt, the buyer must call this function and pay
+    /// the required amount; the amount is calculated dynamically and
+    /// it is more convenient to use a mutable reference
+    public fun pay<T>(
+        policy: &mut TransferPolicy<T>,
+        request: &mut TransferRequest<T>,
+        payment: &mut Coin<SUI>,
+        ctx: &mut TxContext
+    ) {
+        // using the getter to read the paid amount
+        let paid = policy::paid(request);
+        let config: &Config = policy::get_rule(Rule {}, policy);
+        let amount = (((paid as u128) * (config.amount_bp as u128) / MAX_BP) as u64);
+        assert!(coin::value(payment) >= amount, EInsufficientAmount);
+
+        let fee = coin::split(payment, amount, ctx);
+        policy::add_to_balance(Rule {}, policy, fee);
+        policy::add_receipt(Rule {}, request)
+    }
+}
+```
+
+#### Time-based rules
+
+Rules apply to more than just payments and fees. Some rules might permit trading only before or after a specific time. Because rules are not standardized, you can encode logic with any object.
+
+```
+module examples::time_rule {
+    // skipping some dependencies
+    use sui::clock::{Self, Clock};
+
+    struct Rule has drop {}
+    struct Config has store, drop { start_time: u64 }
+
+    /// Start time is yet to come
+    const ETooSoon: u64 = 0;
+
+    /// Add a rule that enables purchases after a certain time
+    public fun add<T>(/* skip default fields */, start_time: u64) {
+        policy::add_rule(Rule {}, policy, cap, Config { start_time })
+    }
+
+    /// Pass in the clock and prove that current time value is higher
+    /// than the `start_time`
+    public fun confirm_time<T>(
+        policy: &TransferPolicy<T>,
+        request: &mut TransferRequest<T>,
+        clock: &Clock
+    ) {
+        let config: &Config = policy::get_rule(Rule {}, policy)
+        assert!(clock::timestamp_ms(clock) >= config.start_time, ETooSoon);
+        policy::add_receipt(Rule {}, request)
+    }
+}
+```
+
+### `TransferRequest` receipts
+
+The `TransferRequest` includes a field called `receipts`, which is a `VecSet` of `TypeName`. When the `confirm_request` call runs, the system compares the receipts against `TransferPolicy.rules`. If receipts do not match rules, the system rejects the request and the transaction fails.
+
+In the following example, both the rules and receipts are empty, so they match trivially and the request is confirmed:
+
+```
+module sui::transfer_policy {
+    // ... skipped ...
+
+    struct TransferRequest<phantom T> {
+        // ... other fields omitted ...
+
+        /// Collected receipts. Used to verify that all of the rules
+        /// were followed and `TransferRequest` can be confirmed.
+        receipts: VecSet<TypeName>
+    }
+
+    // ... skipped ...
+
+    struct TransferPolicy<phantom T> has key, store {
+        // ... other fields omitted ...
+
+        /// Set of types of attached rules - used to verify `receipts` when
+        /// a `TransferRequest` is received in `confirm_request` function.
+        ///
+        /// Additionally provides a way to look up currently attached rules.
+        rules: VecSet<TypeName>
+    }
+
+    // ...
+}
+```
+
+## Witness policy
+
+There are two ways to authorize an action: 
+
+1. Static, by using a witness pattern.
+1. Dynamic, via a capability pattern. 
+
+
+Adding type parameters lets you create a generic rule that varies not just by configuration, but also by its type.
+
+```
+module examples::witness_rule {
+    // skipping dependencies
+
+    /// Rule is either not set or the witness does not match the expectation
+    const ERuleNotSet: u64 = 0;
+
+    /// This rule requires a witness of type W, see the implementation
+    struct Rule<phantom W> has drop {}
+    struct Config has store, drop {}
+
+    /// No special arguments are required to set this rule, but the
+    /// publisher now needs to specify a witness type
+    public fun add<T, W>(/* .... */) {
+        policy::add_rule(Rule<W> {}, policy, cap, Config {})
+    }
+
+    /// To confirm the action, buyer needs to pass in a witness
+    /// which should be acquired either by calling some function or
+    /// integrated into a more specific hook of a marketplace /
+    /// trading module
+    public fun confirm<T, W>(
+        _: W,
+        policy: &TransferPolicy<T>,
+        request: &mut TransferRequest<T>
+    ) {
+        assert!(policy::has_rule<T, Rule<W>>(policy), ERuleNotSet);
+        policy::add_receipt(Rule<W> {}, request)
+    }
+}
+```
+
+The `witness_rule` is generic and you can use it to require a custom witness depending on the settings. It is a way to link custom marketplace or trading logic to the `TransferPolicy`. With a slight modification, the rule can be turned into a generic capability requirement for any object, even a `TransferPolicy` for a different type or a `TransferRequest`. 
+
+```
+module examples::capability_rule {
+    // skipping dependencies
+
+    /// Changing the type parameter name for better readability
+    struct Rule<phantom Cap> has drop {}
+    struct Config {}
+
+    /// Absolutely identical to the witness setting
+    public fun add<T, Cap>(/* ... */) {
+        policy::add_rule(Rule<Cap> {}, policy, cap, Config {})
+    }
+
+    /// Almost the same with the witness requirement, only now we
+    /// require a reference to the type.
+    public fun confirm<T, Cap>(
+        cap: &Cap,
+        /* ... */
+    ) {
+        assert!(policy::has_rule<T, Rule<Cap>>(policy), ERuleNotSet);
+        policy::add_receipt(Rule<Cap> {}, request)
+    }
+}
+```
+
+## Using multiple transfer policies
+
+You can create multiple policies for different purposes. For example, a default VAT policy requires everyone to use it. However, travelers leaving the country can claim a VAT refund without altering the default policy.
+
+To achieve this, you can issue a second `TransferPolicy` for the same type and wrap it in a custom object to implement the logic. For instance, a `TaxFreePolicy` object can bypass VAT. This object stores another `TransferPolicy`, accessible only if the buyer presents a valid `Passport` object. The inner policy might contain no rules, so the buyer pays no fees.

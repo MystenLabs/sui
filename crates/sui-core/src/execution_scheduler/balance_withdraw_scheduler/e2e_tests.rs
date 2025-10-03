@@ -8,7 +8,9 @@ use std::time::Duration;
 use move_core_types::language_storage::TypeTag;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::accumulator_root::{update_account_balance_for_testing, AccumulatorValue};
+use sui_types::accumulator_root::{
+    update_account_balance_for_testing, AccumulatorObjId, AccumulatorValue,
+};
 use sui_types::balance::Balance;
 use sui_types::base_types::ObjectID;
 use sui_types::digests::TransactionDigest;
@@ -21,7 +23,7 @@ use sui_types::{
     gas_coin::GAS,
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::BalanceWithdrawArg,
+    transaction::FundsWithdrawalArg,
 };
 use tokio::sync::mpsc::{self, unbounded_channel};
 use tokio::time::timeout;
@@ -92,9 +94,10 @@ impl TestEnv {
             .into_iter()
             .enumerate()
             .map(|(idx, amount)| {
-                let withdraw = BalanceWithdrawArg::new_with_amount(amount, GAS::type_tag().into());
+                let withdraw =
+                    FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag().into());
                 let mut ptb = ProgrammableTransactionBuilder::new();
-                ptb.balance_withdraw(withdraw).unwrap();
+                ptb.funds_withdrawal(withdraw).unwrap();
                 let tx_data = TestTransactionBuilder::new(
                     self.sender,
                     self.gas_object.compute_object_reference(),
@@ -163,16 +166,23 @@ impl TestEnv {
     }
 
     fn settle_balances(&mut self, balance_changes: BTreeMap<ObjectID, i128>) {
+        let balance_changes: BTreeMap<AccumulatorObjId, i128> = balance_changes
+            .into_iter()
+            .map(|(object_id, balance_change)| {
+                (AccumulatorObjId::new_unchecked(object_id), balance_change)
+            })
+            .collect();
         let mut accumulator_object = self.get_accumulator_object();
         let next_version = accumulator_object.version().next();
         self.scheduler.settle_balances(BalanceSettlement {
+            next_accumulator_version: next_version,
             balance_changes: balance_changes.clone(),
         });
         for (object_id, balance_change) in balance_changes {
             let mut account_object = self
                 .state
                 .get_object_cache_reader()
-                .get_object(&object_id)
+                .get_object(object_id.inner())
                 .unwrap();
             update_account_balance_for_testing(&mut account_object, balance_change);
             account_object

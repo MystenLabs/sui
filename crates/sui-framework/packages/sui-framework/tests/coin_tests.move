@@ -46,7 +46,7 @@ fun assert_global(
     assert!(is_global_pause_enabled_next_epoch<COIN_TESTS>(deny_list) == paused_next_epoch);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun coin_tests_metadata() {
     let mut scenario = test_scenario::begin(TEST_ADDR);
     let ctx = scenario.ctx();
@@ -94,7 +94,7 @@ fun coin_tests_metadata() {
     scenario.end();
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun coin_tests_mint() {
     let mut scenario = test_scenario::begin(TEST_ADDR);
     let witness = COIN_TESTS {};

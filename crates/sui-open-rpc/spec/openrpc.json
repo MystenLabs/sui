@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.57.0"
+    "version": "1.59.0"
   },
   "methods": [
     {
@@ -1294,9 +1294,10 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "96",
+              "maxSupportedProtocolVersion": "97",
               "protocolVersion": "6",
               "featureFlags": {
+                "abstract_size_in_object_runtime": false,
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
                 "additional_consensus_digest_indirect_state": false,
@@ -1309,6 +1310,7 @@
                 "authority_capabilities_v2": false,
                 "ban_entry_init": false,
                 "better_adapter_type_resolution_errors": false,
+                "better_loader_errors": false,
                 "bridge": false,
                 "cancel_for_failed_dkg_early": false,
                 "check_for_init_during_upgrade": false,
@@ -1333,8 +1335,10 @@
                 "disallow_new_modules_in_deps_only_packages": false,
                 "disallow_self_identifier": false,
                 "enable_accumulators": false,
+                "enable_authenticated_event_streams": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
+                "enable_coin_registry": false,
                 "enable_effects_v2": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
@@ -1348,8 +1352,10 @@
                 "end_of_epoch_transaction_supported": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fresh_vm_on_framework_upgrade": false,
+                "generate_df_type_layouts": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
+                "include_checkpoint_artifacts_digest_in_summary": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
@@ -1367,6 +1373,7 @@
                 "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
                 "normalize_ptb_arguments": false,
+                "object_runtime_charge_cache_load_gas": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "passkey_auth": false,
@@ -1396,6 +1403,7 @@
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
                 "use_mfp_txns_in_load_initial_object_debts": false,
+                "use_new_commit_handler": false,
                 "validate_identifier_inputs": false,
                 "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,
@@ -1625,6 +1633,7 @@
                 "ed25519_ed25519_verify_msg_cost_per_byte": {
                   "u64": "2"
                 },
+                "event_emit_auth_stream_cost": null,
                 "event_emit_cost_base": {
                   "u64": "52"
                 },
@@ -5368,6 +5377,108 @@
   ],
   "components": {
     "schemas": {
+      "AccumulatorEvent": {
+        "type": "object",
+        "required": [
+          "accumulatorObj",
+          "address",
+          "operation",
+          "ty",
+          "value"
+        ],
+        "properties": {
+          "accumulatorObj": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "address": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/AccumulatorOperation"
+          },
+          "ty": {
+            "$ref": "#/components/schemas/TypeTag"
+          },
+          "value": {
+            "$ref": "#/components/schemas/AccumulatorValue"
+          }
+        }
+      },
+      "AccumulatorOperation": {
+        "type": "string",
+        "enum": [
+          "merge",
+          "split"
+        ]
+      },
+      "AccumulatorValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "integer"
+            ],
+            "properties": {
+              "integer": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "integerTuple"
+            ],
+            "properties": {
+              "integerTuple": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "eventDigest"
+            ],
+            "properties": {
+              "eventDigest": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  {
+                    "$ref": "#/components/schemas/Digest"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "AdditionalConsensusStateDigest": {
         "$ref": "#/components/schemas/Digest"
       },
@@ -8781,7 +8892,7 @@
             "required": [
               "reservation",
               "type",
-              "typeParam",
+              "typeArg",
               "withdrawFrom"
             ],
             "properties": {
@@ -8791,11 +8902,11 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "balanceWithdraw"
+                  "fundsWithdrawal"
                 ]
               },
-              "typeParam": {
-                "$ref": "#/components/schemas/SuiWithdrawTypeParam"
+              "typeArg": {
+                "$ref": "#/components/schemas/SuiWithdrawalTypeArg"
               },
               "withdrawFrom": {
                 "$ref": "#/components/schemas/SuiWithdrawFrom"
@@ -8887,7 +8998,8 @@
               "RandomnessStateCreate",
               "CoinDenyListStateCreate",
               "StoreExecutionTimeObservations",
-              "AccumulatorRootCreate"
+              "AccumulatorRootCreate",
+              "CoinRegistryCreate"
             ]
           },
           {
@@ -10456,7 +10568,7 @@
           "sender"
         ]
       },
-      "SuiWithdrawTypeParam": {
+      "SuiWithdrawalTypeArg": {
         "oneOf": [
           {
             "type": "object",
@@ -10587,6 +10699,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "accumulatorEvents": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AccumulatorEvent"
+                }
               },
               "created": {
                 "description": "ObjectRef and owner of new objects created.",

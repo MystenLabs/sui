@@ -4,11 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    dataloader::DataLoader,
-    Context, Enum, Object,
-};
+use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Enum, Object};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
@@ -18,9 +14,12 @@ use sui_indexer_alt_reader::{
 use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
 use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
 use sui_types::{
-    digests::TransactionDigest, effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus, object::Object as NativeObject,
-    signature::GenericSignature, transaction::TransactionData,
+    digests::TransactionDigest,
+    effects::TransactionEffectsAPI,
+    execution_status::ExecutionStatus as NativeExecutionStatus,
+    object::Object as NativeObject,
+    signature::GenericSignature,
+    transaction::{TransactionData, TransactionDataAPI},
 };
 
 use crate::{
@@ -139,7 +138,16 @@ impl EffectsContents {
         let effects = content.effects()?;
         let status = effects.status();
 
-        ExecutionError::from_execution_status(&self.scope, status).await
+        // Extract programmable transaction if available
+        let programmable_tx = content
+            .data()
+            .ok()
+            .and_then(|tx_data| match tx_data.into_kind() {
+                sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => Some(tx),
+                _ => None,
+            });
+
+        ExecutionError::from_execution_status(&self.scope, status, programmable_tx.as_ref()).await
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
@@ -182,26 +190,19 @@ impl EffectsContents {
         let page = Page::from_params(limits, first, after, last, before)?;
 
         let events = content.events()?;
-        let cursors = page.paginate_indices(events.len());
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+        page.paginate_indices(events.len(), |i| {
+            let transaction_digest = content.digest()?;
+            let timestamp_ms = content.timestamp_ms();
 
-        let transaction_digest = content.digest()?;
-        let timestamp_ms = content.timestamp_ms();
-
-        for edge in cursors.edges {
-            let event = Event {
+            Ok(Event {
                 scope: self.scope.clone(),
-                native: events[*edge.cursor].clone(),
+                native: events[i].clone(),
                 transaction_digest,
-                sequence_number: *edge.cursor as u64,
+                sequence_number: i as u64,
                 timestamp_ms,
-            };
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), event));
-        }
-
-        Ok(Some(conn))
+            })
+        })
+        .map(Some)
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
@@ -240,19 +241,13 @@ impl EffectsContents {
         let limits = pagination.limits("TransactionEffects", "balanceChanges");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let cursors = page.paginate_indices(balance_changes.len());
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-
-        for edge in cursors.edges {
-            let balance_change = BalanceChange {
+        page.paginate_indices(balance_changes.len(), |i| {
+            Ok(BalanceChange {
                 scope: self.scope.clone(),
-                stored: balance_changes[*edge.cursor].clone(),
-            };
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), balance_change));
-        }
-
-        Ok(Some(conn))
+                stored: balance_changes[i].clone(),
+            })
+        })
+        .map(Some)
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
@@ -291,20 +286,13 @@ impl EffectsContents {
         };
 
         let object_changes = content.effects()?.object_changes();
-        let cursors = page.paginate_indices(object_changes.len());
-
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-        for edge in cursors.edges {
-            let object_change = ObjectChange {
+        page.paginate_indices(object_changes.len(), |i| {
+            Ok(ObjectChange {
                 scope: self.scope.clone(),
-                native: object_changes[*edge.cursor].clone(),
-            };
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), object_change))
-        }
-
-        Ok(Some(conn))
+                native: object_changes[i].clone(),
+            })
+        })
+        .map(Some)
     }
 
     /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
@@ -325,8 +313,7 @@ impl EffectsContents {
         after: Option<CUnchangedConsensusObject>,
         last: Option<u64>,
         before: Option<CUnchangedConsensusObject>,
-    ) -> Result<Option<Connection<CUnchangedConsensusObject, UnchangedConsensusObject>>, RpcError>
-    {
+    ) -> Result<Option<Connection<String, UnchangedConsensusObject>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -335,24 +322,16 @@ impl EffectsContents {
             return Ok(None);
         };
 
+        let epoch = content.effects()?.executed_epoch();
         let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
-        let cursors = page.paginate_indices(unchanged_consensus_objects.len());
-
-        let effects = content.effects()?;
-        let epoch = effects.executed_epoch();
-
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-        for edge in cursors.edges {
-            let unchanged_consensus_object = UnchangedConsensusObject::from_native(
+        page.paginate_indices(unchanged_consensus_objects.len(), |i| {
+            Ok(UnchangedConsensusObject::from_native(
                 self.scope.clone(),
-                unchanged_consensus_objects[*edge.cursor].clone(),
+                unchanged_consensus_objects[i].clone(),
                 epoch,
-            );
-            conn.edges
-                .push(Edge::new(edge.cursor, unchanged_consensus_object));
-        }
-
-        Ok(Some(conn))
+            ))
+        })
+        .map(Some)
     }
 
     /// Transactions whose outputs this transaction depends upon.
@@ -374,18 +353,10 @@ impl EffectsContents {
 
         let effects = content.effects()?;
         let dependencies = effects.dependencies();
-        let cursors = page.paginate_indices(dependencies.len());
-
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-        for edge in cursors.edges {
-            let dependency_digest = dependencies[*edge.cursor];
-            let transaction = Transaction::with_id(self.scope.clone(), dependency_digest);
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), transaction));
-        }
-
-        Ok(Some(conn))
+        page.paginate_indices(dependencies.len(), |i| {
+            Ok(Transaction::with_id(self.scope.clone(), dependencies[i]))
+        })
+        .map(Some)
     }
 }
 

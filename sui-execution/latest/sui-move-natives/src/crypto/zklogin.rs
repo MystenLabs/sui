@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::NativesCostTable;
+use crate::{get_extension, NativesCostTable};
 use fastcrypto::error::FastCryptoError;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
@@ -45,9 +45,7 @@ pub fn check_zklogin_id_internal(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     // Load the cost parameters from the protocol config
-    let check_zklogin_id_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let check_zklogin_id_cost_params = get_extension!(context, NativesCostTable)?
         .check_zklogin_id_cost_params
         .clone();
 
@@ -147,9 +145,7 @@ pub fn check_zklogin_issuer_internal(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     // Load the cost parameters from the protocol config
-    let check_zklogin_issuer_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let check_zklogin_issuer_cost_params = get_extension!(context, NativesCostTable)?
         .check_zklogin_issuer_cost_params
         .clone();
 

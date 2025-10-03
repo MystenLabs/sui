@@ -89,9 +89,11 @@ use move_compiler::{
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, Type_, TypeName_, VariantFields},
     parser::ast::{self as P, DocComment},
-    shared::{Identifier, NamedAddressMap, files::MappedFiles, unique_map::UniqueMap},
+    shared::{
+        Identifier, NamedAddressMap, files::MappedFiles,
+        stdlib_definitions::UNIT_TEST_POISON_INJECTION_NAME, unique_map::UniqueMap,
+    },
     typing::ast::ModuleDefinition,
-    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 use move_ir_types::location::*;
 use move_package::source_package::parsed_manifest::Dependencies;
@@ -147,17 +149,10 @@ pub type FileModules = BTreeMap<PathBuf, BTreeSet<ModuleDefs>>;
 /// correctly computed symbols should be a replacement for the old set - if symbols are not
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
-///
-/// Takes `modified_files` as an argument to indicate if we can retain (portion of) the cached
-/// user code. If `modified_files` is `None`, we can't retain any cached user code (need to recompute)
-/// everything. If `modified_files` is `Some`, we can retain cached user code for all Move files other than
-/// the ones in `modified_files` (if `modified_paths` contains a path not representing
-/// a Move file but rather a directory, then we conservatively do not re-use any cached info).
 pub fn get_symbols(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
-    modified_files: Option<Vec<PathBuf>>,
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
     implicit_deps: Dependencies,
@@ -188,7 +183,6 @@ pub fn get_symbols(
             packages_info.clone(),
             ide_files_root.clone(),
             pkg_path,
-            modified_files.clone(),
             lint,
             implicit_deps.clone(),
         )?;
@@ -228,6 +222,12 @@ pub fn compute_symbols(
         .file_name_mapping()
         .iter()
         .map(|(fhash, fpath)| (*fhash, fpath.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let user_file_hashes = compiled_pkg_info
+        .mapped_files
+        .file_name_mapping()
+        .iter()
+        .map(|(fhash, fpath)| (fpath.clone(), *fhash))
         .collect::<BTreeMap<_, _>>();
     let mut symbols_computation_data = SymbolsComputationData::new();
     let typed_mod_named_address_maps = compiled_pkg_info
@@ -270,6 +270,7 @@ pub fn compute_symbols(
                     deps_symbols_data,
                     program: Arc::new(program),
                     file_paths: Arc::new(file_paths),
+                    user_file_hashes: Arc::new(user_file_hashes),
                     edition,
                     compiler_info,
                     lsp_diags,
@@ -713,7 +714,7 @@ pub fn ignored_function(name: Symbol) -> bool {
     // function preventing publishing of modules compiled in test mode. We need to ignore its
     // definition to avoid spurious on-hover display of this function's info whe hovering close to
     // `module` keyword.
-    name == UNIT_TEST_POISON_FUN_NAME
+    name == UNIT_TEST_POISON_INJECTION_NAME
 }
 
 /// Get symbols for outer definitions in the module (functions, structs, and consts)

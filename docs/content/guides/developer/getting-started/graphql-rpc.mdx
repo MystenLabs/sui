@@ -81,15 +81,23 @@ The service retains the ability to identify entities that have been pruned when 
 
 ### Unpruned point lookups
 
-Point look-ups are generally unpruned, if GraphQL has access to an Archival Service.
+Point look-ups (accessing an object by its ID and version, a transaction by its digest, a checkpoint by its sequence number, and so on) are generally unpruned, if GraphQL has access to an Archival Service.
 
 ### More detailed retention API
 
-The service provides more details about the retention of its underlying data through the `ServiceConfig.retention` field.
+The service provides more details about the retention of its underlying data through the `ServiceConfig.availableRange` field.
 
 ### Governance
 
 APIs related to governance and staking are removed in favor of using view functions to access the data at its source of truth on-chain.
+
+### Owned Coin Pagination
+
+As there is no longer a dedicated API for fetching the coins owned by an address, whenever coins are returned by an owned object API (such as `Query.objects` with an `owner` filter or `IAddressable.objects`), they are grouped by coin type and sorted in descending balance order.
+
+### Dry-run, gas estimation, and coin selection
+
+Dry-run now supports the same input schema as `gRPC`'s [`SimulateTransaction`](/references/fullnode-protocol#sui-rpc-v2-Transaction) in JSON form. This means that it can also accept transactions where the inputs have not been fully resolved or serialized, perform gas estimation, and coin selection. The feature is now called `simulateTransaction`.
 
 ## Example queries
 

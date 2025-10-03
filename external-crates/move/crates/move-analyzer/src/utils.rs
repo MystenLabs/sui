@@ -5,8 +5,7 @@ use lsp_types::Position;
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     expansion::ast::{Address, ModuleIdent_},
-    shared::files::MappedFiles,
-    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
+    shared::{files::MappedFiles, stdlib_definitions::UNIT_TEST_POISON_INJECTION_NAME},
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -85,5 +84,5 @@ pub fn ignored_function(name: Symbol) -> bool {
     // publishing of modules compiled in test mode. We need to
     // ignore its definition to avoid spurious on-hover display
     // of this function's info whe hovering close to `module` keyword.
-    name == UNIT_TEST_POISON_FUN_NAME
+    name == UNIT_TEST_POISON_INJECTION_NAME
 }

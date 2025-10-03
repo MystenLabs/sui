@@ -203,11 +203,16 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // build index to id map
         for node in graph.node_indices() {
             let pkg_node = graph.node_weight(node).expect("node exists");
-            let suffix = name_to_suffix.entry(pkg_node.name().clone()).or_default();
-            let id = if *suffix == 0 {
-                pkg_node.name().to_string()
+            let name = if let Some(legacy_data) = &pkg_node.legacy_data {
+                &legacy_data.normalized_legacy_name
             } else {
-                format!("{}_{suffix}", pkg_node.name())
+                pkg_node.name()
+            };
+            let suffix = name_to_suffix.entry(name.clone()).or_default();
+            let id = if *suffix == 0 {
+                name.to_string()
+            } else {
+                format!("{}_{suffix}", name)
             };
             node_to_id.insert(id, node);
             *suffix += 1;
@@ -256,22 +261,11 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             );
             let dep_index = Box::pin(future).await?;
 
-            // TODO(manos): re-check the implementation here --  to make sure nothing was missed.
-            // TODO(manos)(2): Do we wanna error for missmatches on legacy packages? Will come on a follow-up.
-            // TODO(manos)(3): Do we wanna rename only for legacy parents, and error out for modern parents?
-            // If we're dealing with legacy packages, we are free to fix the naming in the outgoing edge, to match
-            // our modern system names.
-            let edge_name = if fetched.is_legacy() {
-                fetched.name()
-            } else {
-                name
-            };
-
             graph.lock().expect("unpoisoned").add_edge(
                 index,
                 dep_index,
                 PackageGraphEdge {
-                    name: edge_name.clone(),
+                    name: name.clone(),
                     dep: dep.clone(),
                 },
             );

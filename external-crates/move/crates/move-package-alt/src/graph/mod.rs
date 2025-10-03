@@ -8,14 +8,15 @@ mod package_info;
 mod rename_from;
 mod to_lockfile;
 
-pub use linkage::LinkageError;
-pub use package_info::NamedAddress;
-pub use package_info::PackageInfo;
+pub use linkage::{LinkageError, LinkageTable};
+pub use package_info::{NamedAddress, PackageInfo};
 pub use rename_from::RenameError;
-use tracing::debug;
+
+use tracing::{debug, warn};
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::schema::Publication;
 use crate::{
     dependency::PinnedDependencyInfo,
     errors::PackageResult,
@@ -108,28 +109,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     // TODO: We probably want a deduplication function, and then we can just use `all_packages` for
     // this
     pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
-        let linkage = self.linkage()?;
-
-        // Populate ALL the linkage elements
-        let mut result: Vec<PackageInfo<F>> = linkage.values().cloned().collect();
-
-        // Add all nodes that exist but are not in the linkage table.
-        // This is done to support unpublished packages, as linkage only includes
-        // published packages.
-        for node in self.inner.node_indices() {
-            let package = &self.inner[node];
-
-            if package
-                .original_id()
-                .is_some_and(|oid| linkage.contains_key(oid))
-            {
-                continue;
-            }
-
-            result.push(self.package_info(node));
-        }
-
-        Ok(result)
+        Ok(self.linkage()?.values().cloned().collect())
     }
 
     /// Return the sorted list of dependencies' name
@@ -140,5 +120,17 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .flat_map(|x| self.inner.node_weight(*x))
             .map(|x| x.name())
             .collect()
+    }
+
+    /// For each entry in `overrides`, override the package publication in `self` for the
+    /// corresponding package ID. Warns if the package ID is unrecognized.
+    pub(crate) fn add_publish_overrides(&mut self, overrides: BTreeMap<PackageID, Publication<F>>) {
+        for (id, publish) in overrides {
+            let Some(index) = self.package_ids.get_by_left(&id) else {
+                warn!("Ignoring unrecognized package identifier `{id}`");
+                continue;
+            };
+            self.inner[*index] = Arc::new(self.inner[*index].override_publish(publish));
+        }
     }
 }

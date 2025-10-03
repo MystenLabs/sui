@@ -1,0 +1,10 @@
+[package]
+name = "LegacyRegulated"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+legacy_regulated = "0x0"
