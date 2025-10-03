@@ -106,7 +106,7 @@ fn convert_clever_move_abort_error(
 
     // Otherwise it should be a tagged error
     match location {
-        Location::Undefined => None,
+        Location::Undefined | Location::Package(_) => None,
         Location::Module(module_id) => {
             let module = test_info.get(module_id)?;
             let name_constant_index = bitset.identifier_index()?;
