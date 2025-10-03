@@ -52,29 +52,30 @@ impl Locals {
         let values = values.into_iter();
         let n = values.len();
         assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
-        // TODO(vm-rewrite): Look into not allocation invalid memory slots ahead of time. For now
-        // we do this for ease, but we should be able to optimize this further.
         let mut heap = VMBaseHeap::new();
-        let mut locations = BTreeMap::new();
-        for (i, v) in values.enumerate() {
-            let alloc_idx = match v {
-                Some(v) => heap.allocate_value(v.0),
-                // If the value is None, we leave the local invalid
-                None => heap.allocate_value(VMValue::invalid()),
-            };
-            locations.insert(i as u16, alloc_idx);
-        }
+        let locations = values
+            .enumerate()
+            .map(|(i, v)| {
+                let alloc_idx = heap.allocate_value(match v {
+                    Some(v) => v.0,
+                    // If the value is None, we leave the local invalid
+                    None => VMValue::invalid(),
+                });
+                (i as u16, alloc_idx)
+            })
+            .collect();
         Ok(Self { heap, locations })
     }
 
     pub fn new_invalid(n: usize) -> Result<Self, ExecutionError> {
         assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
         let mut heap = VMBaseHeap::new();
-        let mut locations = BTreeMap::new();
-        for i in 0..n {
-            let alloc_idx = heap.allocate_value(VMValue::invalid());
-            locations.insert(i as u16, alloc_idx);
-        }
+        let locations = (0..n)
+            .map(|i| {
+                let alloc_idx = heap.allocate_value(VMValue::invalid());
+                (i as u16, alloc_idx)
+            })
+            .collect();
         Ok(Self { heap, locations })
     }
 
