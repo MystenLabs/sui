@@ -1,12 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
-use tokio::{sync::mpsc, task::JoinHandle};
+use sui_indexer_alt_framework_store_traits::Connection;
+use tokio::{
+    sync::mpsc,
+    task::JoinHandle,
+    time::{interval, sleep_until, Instant, MissedTickBehavior},
+};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::CheckpointData,
@@ -216,12 +227,26 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let pruner_cancel = cancel.child_token();
     let handler = Arc::new(handler);
 
+    let main_reader_lo = if task.is_some() {
+        Some(Arc::new(AtomicU64::new(next_checkpoint)))
+    } else {
+        None
+    };
+
+    let main_reader_lo_task = main_reader_lo_task::<H>(
+        main_reader_lo.clone(),
+        pruner_config.clone(),
+        cancel.clone(),
+        store.clone(),
+    );
+
     let processor = processor(
         handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
         cancel.clone(),
+        main_reader_lo.clone(),
     );
 
     let collector = collector::<H>(
@@ -249,9 +274,12 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         task.clone(),
         metrics.clone(),
         cancel,
+        main_reader_lo,
     );
 
-    // task pipelines will skip reader_watermark and pruner
+    // task pipelines will skip reader_watermark and pruner. Setting the pruner config to None will
+    // result in the tasks returning early.
+    let pruner_config = if task.is_some() { None } else { pruner_config };
 
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
@@ -269,7 +297,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     tokio::spawn(async move {
-        let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
+        let (_, _, _, _, _) = futures::join!(
+            main_reader_lo_task,
+            processor,
+            collector,
+            committer,
+            commit_watermark
+        );
 
         pruner_cancel.cancel();
         let _ = futures::join!(reader_watermark, pruner);
@@ -282,6 +316,98 @@ const fn max_chunk_rows<H: Handler>() -> usize {
     } else {
         i16::MAX as usize / H::Value::FIELD_COUNT
     }
+}
+
+/// Starts a task for tasked pipelines to track the main reader lo. Any checkpoints below this
+/// watermark will not be passed to the tasked pipeline.
+pub(super) fn main_reader_lo_task<H: Handler + 'static>(
+    main_reader_lo: Option<Arc<AtomicU64>>,
+    config: Option<PrunerConfig>,
+    cancel: CancellationToken,
+    store: H::Store,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let Some(main_reader_lo) = main_reader_lo else {
+            info!(pipeline = H::NAME, "Skipping main reader lo task");
+            return;
+        };
+
+        let Some(config) = config else {
+            info!(pipeline = H::NAME, "Skipping main reader lo task");
+            return;
+        };
+
+        let mut reader_interval = interval(config.interval());
+        reader_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+        // Initialize next pruner wake
+        let next_deadline = {
+            let wait = match store.connect().await {
+                Ok(mut conn) => match conn.pruner_watermark(H::NAME, config.delay()).await {
+                    Ok(Some(wm)) => wm.wait_for(),
+                    _ => None,
+                },
+                _ => None,
+            };
+            Instant::now() + wait.unwrap_or(Duration::from_secs(1))
+        };
+        let pruner_sleep = sleep_until(next_deadline);
+        tokio::pin!(pruner_sleep);
+
+        loop {
+            tokio::select! {
+                _ = cancel.cancelled() => {
+                    info!(pipeline = H::NAME, "Shutdown received");
+                    break;
+                }
+
+                // Periodic refresh of the main reader watermark.
+                _ = reader_interval.tick() => {
+                    warn!("reader_interval tick");
+                    match store.connect().await {
+                        Ok(mut conn) => {
+                            match conn.reader_watermark(H::NAME).await {
+                                Ok(Some(main_reader_watermark)) => {
+                                    let current_reader_lo = main_reader_watermark.reader_lo;
+                                    main_reader_lo.store(current_reader_lo, Ordering::Relaxed);
+                                }
+                                Ok(None) => {
+                                    warn!(pipeline = H::NAME, "No reader watermark found");
+                                }
+                                Err(e) => {
+                                    warn!(pipeline = H::NAME, "Failed to get reader watermark: {e}");
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            warn!(pipeline = H::NAME, "Failed to connect to store: {e}");
+                        }
+                    }
+                }
+
+                // Account for pruning work and ensure we update the reader_lo based on the pruner
+                // timestamp.
+                _ = &mut pruner_sleep => {
+                    let next = if let Ok(mut conn) = store.connect().await {
+                        if let Ok(Some(wm)) = conn.reader_watermark(H::NAME).await {
+                            let lo = wm.reader_lo;
+                            main_reader_lo.store(lo, Ordering::Relaxed);
+                        }
+
+                        match conn.pruner_watermark(H::NAME, config.delay()).await {
+                            Ok(Some(wm)) => wm.wait_for(),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+
+                    let next_deadline = Instant::now() + next.unwrap_or(Duration::from_secs(1));
+                    pruner_sleep.as_mut().reset(next_deadline);
+                }
+            }
+        }
+    })
 }
 
 #[cfg(test)]
