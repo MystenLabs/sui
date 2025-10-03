@@ -7,6 +7,7 @@ use crate::{
     file_format::{CodeOffset, FunctionDefinitionIndex, TableIndex},
 };
 use move_core_types::{
+    account_address::AccountAddress,
     language_storage::ModuleId,
     vm_status::{StatusCode, StatusType},
 };
@@ -19,7 +20,10 @@ pub type PartialVMResult<T> = ::std::result::Result<T, PartialVMError>;
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Location {
     Undefined,
+    // The `AccountAddress` inside of the `Module`'s `ModuleId` is the original id
     Module(ModuleId),
+    // The `AccountAddress` inside of the `Package` is the version id of the package
+    Package(AccountAddress),
 }
 
 /// A representation of the execution state (e.g., stack trace) at an
@@ -319,6 +323,7 @@ impl fmt::Display for Location {
         match self {
             Location::Undefined => write!(f, "UNDEFINED"),
             Location::Module(id) => write!(f, "Module {:?}", id),
+            Location::Package(addr) => write!(f, "Package {:?}", addr),
         }
     }
 }
