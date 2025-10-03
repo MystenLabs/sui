@@ -403,12 +403,12 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
         let safe_name = Symbol::from(pkg.id().clone());
 
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
-        debug!("Named address map {:#?}", named_addresses);
+        debug!("Named address map {:#?}", addresses);
         let paths = PackagePaths {
             name: Some((safe_name, config)),
             // paths: sources,
             paths: get_sources(pkg.path(), build_config)?,
-            named_address_map: named_addresses.inner,
+            named_address_map: addresses.inner,
         };
 
         package_paths.push(paths);
