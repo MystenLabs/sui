@@ -4,11 +4,11 @@ use std::path::Path;
 
 use crate::git::get_cache_path;
 
-pub struct PackageSystemLock {
+pub struct PackageLock {
     _file: File,
 }
 
-impl PackageSystemLock {
+impl PackageLock {
     pub fn new() -> anyhow::Result<Self> {
         // TODO: This should be fixed to always return a file, even for `cfg(test)` cases.
         let file = global_git_cache_folder_lock().expect("failed to get git cache folder lock");
