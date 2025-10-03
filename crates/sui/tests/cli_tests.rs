@@ -5552,12 +5552,12 @@ fn create_temp_dir_with_framework_packages(
         tempdir.join("sui-framework").join("packages"),
     )?;
 
-    let _ = update_toml_with_localnet_chain_id(&pkg_path, chain_id);
+    let _ = update_toml_with_localnet_chain_id(pkg_path, chain_id);
 
     Ok((temp, pkg_path.clone()))
 }
 
-fn update_toml_with_localnet_chain_id(package_path: &PathBuf, chain_id: String) -> String {
+fn update_toml_with_localnet_chain_id(package_path: &Path, chain_id: String) -> String {
     let orig_toml = std::fs::read_to_string(package_path.join("Move.toml")).unwrap();
     let mut toml = OpenOptions::new()
         .append(true)
