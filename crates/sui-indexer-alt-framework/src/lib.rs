@@ -10,7 +10,7 @@ use metrics::IndexerMetrics;
 use pipeline::{
     concurrent::{self, ConcurrentConfig},
     sequential::{self, Handler, SequentialConfig},
-    Processor,
+    ProcessorAsync,
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework_store_traits::{
@@ -303,7 +303,7 @@ impl<S: Store> Indexer<S> {
     /// by adding for handler `H` (as long as it's enabled). Returns `Ok(None)` if the pipeline is
     /// disabled, `Ok(Some(None))` if the pipeline is enabled but its watermark is not found, and
     /// `Ok(Some(Some(watermark)))` if the pipeline is enabled and the watermark is found.
-    async fn add_pipeline<P: Processor + 'static>(
+    async fn add_pipeline<P: ProcessorAsync + 'static>(
         &mut self,
     ) -> Result<Option<Option<CommitterWatermark>>> {
         ensure!(
@@ -425,7 +425,7 @@ impl<T: TransactionalStore> Indexer<T> {
 mod tests {
     use super::*;
     use crate::mocks::store::MockStore;
-    use crate::pipeline::concurrent::ConcurrentConfig;
+    use crate::pipeline::{concurrent::ConcurrentConfig, Processor};
     use crate::store::CommitterWatermark;
     use crate::FieldCount;
     use std::sync::Arc;
