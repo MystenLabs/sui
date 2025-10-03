@@ -363,15 +363,24 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
             writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
         }
 
-        let named_addresses = pkg.named_addresses()?;
-        let addresses = named_addresses.map(|addr| match addr {
-            NamedAddress::Defined(addr) => addr,
-            NamedAddress::Root(addr) => addr,
-            NamedAddress::Unpublished(dummy) if build_config.set_unpublished_deps_to_zero => {
-                NamedAddress::Defined(OriginalID(AccountAddress::ZERO))
-            }
-            NamedAddress::Unpublished(dummy) => dummy,
-        });
+        let named_addresses: BTreeMap<_, _> = pkg
+            .named_addresses()?
+            .into_iter()
+            .map(|(id, addr)| {
+                (
+                    id,
+                    match addr {
+                        NamedAddress::Unpublished { dummy_addr: _ }
+                            if build_config.set_unpublished_deps_to_zero =>
+                        {
+                            NamedAddress::Defined(OriginalID(AccountAddress::ZERO))
+                        }
+                        addr => addr,
+                    },
+                )
+            })
+            .collect();
+        let named_addresses: BuildNamedAddresses = named_addresses.into();
 
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {
@@ -388,12 +397,12 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
         let safe_name = Symbol::from(pkg.id().clone());
 
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
-        debug!("Named address map {:#?}", addresses);
+        debug!("Named address map {:#?}", named_addresses);
         let paths = PackagePaths {
             name: Some((safe_name, config)),
             // paths: sources,
             paths: get_sources(pkg.path(), build_config)?,
-            named_address_map: addresses.inner,
+            named_address_map: named_addresses.inner,
         };
 
         package_paths.push(paths);
