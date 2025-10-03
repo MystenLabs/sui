@@ -97,7 +97,7 @@ edition = "2024"         # use "2024" for Move 2024 edition
 # add the environment names and their chain ids here
 # by default, testnet and mainnet are implicitly available
 # example for devnet: devnet = "abcdef1234"
-# [environments]           
+# [environments]
 # chain_name = "{chain_id}"
 
 # Add your dependencies here or leave empty (for adding automatically sui and std deps)
