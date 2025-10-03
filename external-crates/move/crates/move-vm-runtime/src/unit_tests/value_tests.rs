@@ -5,16 +5,9 @@
 use crate::{
     execution::{interpreter::locals::MachineHeap, values::*},
     jit::execution::ast::Type,
-    shared::views::*,
 };
 use move_binary_format::errors::*;
 use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256};
-
-#[cfg(test)]
-const SIZE_CONFIG: SizeConfig = SizeConfig {
-    traverse_references: false,
-    include_vector_size: false,
-};
 
 #[test]
 fn locals() -> PartialVMResult<()> {
@@ -171,93 +164,6 @@ fn global_value_non_struct() -> PartialVMResult<()> {
     assert!(GlobalValue::create(r).is_err(), "cache error 2");
 
     let _ = heap.free_stack_frame(locals);
-
-    Ok(())
-}
-
-#[test]
-fn legacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
-    #![allow(deprecated)]
-    let mut heap = MachineHeap::new();
-    let mut locals = heap.allocate_stack_frame(vec![], 10)?;
-
-    locals.store_loc(0, Value::u128(0))?;
-    let r = locals.borrow_loc(0)?;
-    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
-
-    locals.store_loc(1, Value::vector_u8([1, 2, 3]))?;
-    let r = locals.borrow_loc(1)?;
-    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
-
-    let r: VectorRef = VMValueCast::cast(r)?;
-    let r = r.borrow_elem(0, &Type::U8)?;
-    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
-
-    locals.store_loc(2, Value::make_struct(vec![]))?;
-    let r: Reference = VMValueCast::cast(locals.borrow_loc(2)?)?;
-    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
-
-    Ok(())
-}
-
-#[test]
-fn legacy_struct_abstract_memory_size_consistenty() -> PartialVMResult<()> {
-    let structs = [
-        Struct::pack([]),
-        Struct::pack([Value::make_struct(vec![Value::u8(0), Value::u64(0)])]),
-    ];
-
-    for s in &structs {
-        assert_eq!(s.abstract_memory_size(&SIZE_CONFIG), s.legacy_size());
-    }
-
-    Ok(())
-}
-
-#[test]
-fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
-    let vals = [
-        Value::u8(0),
-        Value::u16(0),
-        Value::u32(0),
-        Value::u64(0),
-        Value::u128(0),
-        Value::u256(U256::zero()),
-        Value::bool(true),
-        Value::address(AccountAddress::ZERO),
-        Value::vector_u8([0, 1, 2]),
-        Value::vector_u16([0, 1, 2]),
-        Value::vector_u32([0, 1, 2]),
-        Value::vector_u64([]),
-        Value::vector_u128([1, 2, 3, 4]),
-        Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
-        Value::make_struct([]),
-        Value::make_struct([Value::u8(0), Value::bool(false)]),
-        Vector::pack(VectorSpecialization::Container, [])?,
-        Vector::pack(VectorSpecialization::U8, [Value::u8(0), Value::u8(1)])?,
-    ];
-
-    let mut heap = MachineHeap::new();
-    let mut locals = heap.allocate_stack_frame(vec![], vals.len())?;
-
-    for (idx, val) in vals.iter().enumerate() {
-        locals.store_loc(idx, val.copy_value())?;
-
-        let val_size_new = val.abstract_memory_size(&SIZE_CONFIG);
-        #[allow(deprecated)]
-        let val_size_old = val.legacy_size();
-
-        assert_eq!(val_size_new, val_size_old);
-
-        let ref_: Reference = VMValueCast::cast(locals.borrow_loc(idx)?)?;
-        let val_size_through_ref = ref_.value_view().abstract_memory_size(&SIZE_CONFIG);
-
-        assert_eq!(
-            val_size_through_ref, val_size_old,
-            "{:?} (ref size {} != old size {})",
-            val, val_size_through_ref, val_size_old
-        );
-    }
 
     Ok(())
 }

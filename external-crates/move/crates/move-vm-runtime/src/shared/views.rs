@@ -5,6 +5,23 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::AbstractMemorySize, language_storage::TypeTag,
 };
 
+// -------------------------------------------------------------------------------------------------
+// Abstract Memory Size
+// -------------------------------------------------------------------------------------------------
+// TODO(gas): This is the oldest implementation of abstract memory size. It is now kept only as a
+// reference impl, which is used to ensure the new implementation is fully backward compatible. We
+// should be able to get this removed after we use the new impl for a while and gain enough
+// confidence in that.
+
+/// The size in bytes for a non-string or address constant on the stack
+pub(crate) const CONST_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
+
+/// The size in bytes for a reference on the stack
+pub(crate) const REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
+
+/// The size of a struct in bytes
+pub(crate) const STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
+
 pub struct SizeConfig {
     /// If true, the reference values will be traversed recursively.
     pub traverse_references: bool,
@@ -30,10 +47,6 @@ pub trait ValueView {
 
     /// Returns the abstract memory size of the value.
     fn abstract_memory_size(&self, config: &SizeConfig) -> AbstractMemorySize {
-        use crate::execution::values::{
-            LEGACY_CONST_SIZE, LEGACY_REFERENCE_SIZE, LEGACY_STRUCT_SIZE,
-        };
-
         struct Acc<'b> {
             accumulated_size: AbstractMemorySize,
             config: &'b SizeConfig,
@@ -41,31 +54,31 @@ pub trait ValueView {
 
         impl ValueVisitor for Acc<'_> {
             fn visit_u8(&mut self, _depth: usize, _val: u8) {
-                self.accumulated_size += LEGACY_CONST_SIZE;
+                self.accumulated_size += CONST_SIZE;
             }
 
             fn visit_u16(&mut self, _depth: usize, _val: u16) {
-                self.accumulated_size += LEGACY_CONST_SIZE;
+                self.accumulated_size += CONST_SIZE;
             }
 
             fn visit_u32(&mut self, _depth: usize, _val: u32) {
-                self.accumulated_size += LEGACY_CONST_SIZE;
+                self.accumulated_size += CONST_SIZE;
             }
 
             fn visit_u64(&mut self, _depth: usize, _val: u64) {
-                self.accumulated_size += LEGACY_CONST_SIZE;
+                self.accumulated_size += CONST_SIZE;
             }
 
             fn visit_u128(&mut self, _depth: usize, _val: u128) {
-                self.accumulated_size += LEGACY_CONST_SIZE;
+                self.accumulated_size += CONST_SIZE;
             }
 
             fn visit_u256(&mut self, _depth: usize, _val: move_core_types::u256::U256) {
-                self.accumulated_size += LEGACY_CONST_SIZE;
+                self.accumulated_size += CONST_SIZE;
             }
 
             fn visit_bool(&mut self, _depth: usize, _val: bool) {
-                self.accumulated_size += LEGACY_CONST_SIZE;
+                self.accumulated_size += CONST_SIZE;
             }
 
             fn visit_address(&mut self, _depth: usize, _val: AccountAddress) {
@@ -73,78 +86,78 @@ pub trait ValueView {
             }
 
             fn visit_struct(&mut self, _depth: usize, _len: usize) -> bool {
-                self.accumulated_size += LEGACY_STRUCT_SIZE;
+                self.accumulated_size += STRUCT_SIZE;
                 true
             }
 
             fn visit_variant(&mut self, _depth: usize, _len: usize) -> bool {
-                self.accumulated_size += LEGACY_STRUCT_SIZE;
+                self.accumulated_size += STRUCT_SIZE;
                 true
             }
 
             fn visit_vec(&mut self, _depth: usize, _len: usize) -> bool {
-                self.accumulated_size += LEGACY_STRUCT_SIZE;
+                self.accumulated_size += STRUCT_SIZE;
                 true
             }
 
             fn visit_vec_u8(&mut self, _depth: usize, vals: &[u8]) {
                 if self.config.include_vector_size {
-                    self.accumulated_size += LEGACY_STRUCT_SIZE;
+                    self.accumulated_size += STRUCT_SIZE;
                 }
                 self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u16(&mut self, _depth: usize, vals: &[u16]) {
                 if self.config.include_vector_size {
-                    self.accumulated_size += LEGACY_STRUCT_SIZE;
+                    self.accumulated_size += STRUCT_SIZE;
                 }
                 self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u32(&mut self, _depth: usize, vals: &[u32]) {
                 if self.config.include_vector_size {
-                    self.accumulated_size += LEGACY_STRUCT_SIZE;
+                    self.accumulated_size += STRUCT_SIZE;
                 }
                 self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u64(&mut self, _depth: usize, vals: &[u64]) {
                 if self.config.include_vector_size {
-                    self.accumulated_size += LEGACY_STRUCT_SIZE;
+                    self.accumulated_size += STRUCT_SIZE;
                 }
                 self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u128(&mut self, _depth: usize, vals: &[u128]) {
                 if self.config.include_vector_size {
-                    self.accumulated_size += LEGACY_STRUCT_SIZE;
+                    self.accumulated_size += STRUCT_SIZE;
                 }
                 self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u256(&mut self, _depth: usize, vals: &[move_core_types::u256::U256]) {
                 if self.config.include_vector_size {
-                    self.accumulated_size += LEGACY_STRUCT_SIZE;
+                    self.accumulated_size += STRUCT_SIZE;
                 }
                 self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_bool(&mut self, _depth: usize, vals: &[bool]) {
                 if self.config.include_vector_size {
-                    self.accumulated_size += LEGACY_STRUCT_SIZE;
+                    self.accumulated_size += STRUCT_SIZE;
                 }
                 self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_address(&mut self, _depth: usize, vals: &[AccountAddress]) {
                 if self.config.include_vector_size {
-                    self.accumulated_size += LEGACY_STRUCT_SIZE;
+                    self.accumulated_size += STRUCT_SIZE;
                 }
                 self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_ref(&mut self, _depth: usize) -> bool {
-                self.accumulated_size += LEGACY_REFERENCE_SIZE;
+                self.accumulated_size += REFERENCE_SIZE;
                 self.config.traverse_references
             }
         }

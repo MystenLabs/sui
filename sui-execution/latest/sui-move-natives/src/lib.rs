@@ -1385,14 +1385,9 @@ pub(crate) fn legacy_test_cost() -> InternalGas {
     InternalGas::new(0)
 }
 
-pub(crate) fn abstract_size(protocol_config: &ProtocolConfig, v: &Value) -> AbstractMemorySize {
-    if protocol_config.abstract_size_in_object_runtime() {
-        v.abstract_memory_size(&SizeConfig {
-            include_vector_size: true,
-            traverse_references: false,
-        })
-    } else {
-        // TODO: Remove this (with glee!) in the next execution version cut.
-        v.legacy_size()
-    }
+pub(crate) fn abstract_size(_protocol_config: &ProtocolConfig, v: &Value) -> AbstractMemorySize {
+    v.abstract_memory_size(&SizeConfig {
+        include_vector_size: true,
+        traverse_references: false,
+    })
 }
