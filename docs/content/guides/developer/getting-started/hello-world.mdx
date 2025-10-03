@@ -4,11 +4,15 @@ description: Create and publish your first Move package using a basic 'Hello, wo
 keywords: [ first dapp, first package, move package, first move package, hello world, hello, world, what is move, what is a package, what is an object, move object, sui move object, sui move package, sui move module, move module, build package, publish package, call package, make call to package, how to call package ]
 ---
 
-The basic unit of storage on Sui is an [**object**](/concepts/object-model.mdx). On other blockchains, storage is typically structured using key-value stores. On Sui, storage is centered around objects addressable on-chain by unique IDs. Every Sui smart contract is an object that is used to manipulate other objects on the network.
+The most basic unit of storage on Sui is an [_object_](/concepts/object-model.mdx). Other blockchains typically structure storage using key-value stores. Sui centers storage around objects with unique ID addresses on-chain. Every Sui smart contract is an object that manipulates other objects.
 
-Objects can be immutable or mutable. Immutable objects cannot be transferred, changed, or deleted. Immutable objects are not owned by anyone and can be accessed by anyone on the network. Mutable objects can be transferred, changed, and deleted. They can be owned by a Sui address or shared to be made accessible to anyone on the network. 
+Objects can be immutable or mutable:
 
-Every object stored on-chain is referenced via its unique ID and a version number. Every transaction on the network takes objects as input, then reads, writes, and mutates the inputs to produce new or altered objects as output. Every object knows the hash of the transaction that produced it. 
+- **Immutable** objects cannot be transferred, changed, or deleted. No one owns them and anyone can access them publicly.
+
+- **Mutable** objects can be transferred, changed, and deleted. A Sui address can own them, or they can be shared for public access 
+
+Every object's unique ID and version number references it on-chain. Every transaction on the network takes objects as input, then reads, writes, and mutates the inputs to produce new or altered objects as output. Every object knows the hash of the transaction that produced it. 
 
 When an object is modified by a transaction, the transaction's output writes the object's mutated contents to the same object ID but with a new version number. 
 
@@ -16,13 +20,13 @@ Sui has limits on the maximum transaction size (128KB) and number of objects (2,
 
 ## What is Move? 
 
-[Move](/concepts/sui-move-concepts.mdx) a the programming language used on Sui to create smart contracts. It is platform agnostic and enables common libraries, tooling, and developer communities across blockchains with vastly different data and execution models. There are three ways to use Move in the context of Sui: Move packages, Move modules, and Move objects.
+[Move](/concepts/sui-move-concepts.mdx) is the programming language Sui uses to create smart contracts. It is platform agnostic and enables common libraries, tooling, and developer communities across blockchains with vastly different data and execution models. There are three ways to use Move in the context of Sui: Move packages, Move modules, and Move objects.
 
-A Sui **Move package** is also referred to as a Move smart contract. It is a set of Move bytecode that has been published to the Sui network. It is immutable and cannot be changed or removed, however it can be upgraded. Upgrading creates a new version of the package object on-chain, leaving the original intact. All prior versions of a package still exist on-chain. Once published, other packages can import and use the modules it provides. Anyone can view a package's contents and use a Sui Explorer to see how its logic manipulates other objects. 
+A Sui **Move package** is also referred to as a Move smart contract. It is a set of Move bytecode published to the Sui network. It is immutable and cannot be changed or removed, however you can upgrade it. Upgrading creates a new version of the package object on-chain, leaving the original intact. All prior versions of a package still exist on-chain. Once you publish it, other packages can import and use the modules it provides. Anyone can view a package's contents and use a Sui Explorer to see how its logic manipulates other objects. 
 
 Every Move package on Sui includes one or more **Sui Move modules** that define the package's interaction with on-chain objects. Each module's name is the combination of the package's on-chain ID and the name of a module. A module's name is always unique within the package that contains it.
 
-A Sui **Move object** is typed data governed by a Sui Move module from a Sui Move package. Each object value is a struct with fields that can contain primitive types, such as integers and addresses, other objects, and non-object structs.
+A Sui Move module governs a Sui **Move object**, which is typed data from a Sui Move package. Each object value is a struct with fields that can contain primitive types, such as integers and addresses, other objects, and non-object structs.
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -37,7 +41,7 @@ A Sui **Move object** is typed data governed by a Sui Move module from a Sui Mov
 
 - [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
 
-    - [VSCode] (https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
+    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
 
     - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
 
@@ -45,7 +49,7 @@ A Sui **Move object** is typed data governed by a Sui Move module from a Sui Mov
 
     - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
     
-    Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download, however it does not support all functions necessary for this guide.
+        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download, however, it does not support all functions necessary for this guide.
 
 - [x] [Download and install Git](https://git-scm.com/downloads).
 
@@ -58,18 +62,18 @@ To demonstrate objects, packages, and how to build your first Sui application, s
 
 ```
 $ git clone https://github.com/MystenLabs/sui-stack-hello-world.git
-$ cd /sui-stack-hello-world/move/hello-world
+$ cd sui-stack-hello-world/move/hello-world
 ```
 
 In this project, there are two important files that define the package's logic, information, and its dependencies:
 
-- `move/hello-world/sources/greeting.move`: Defines a basic shared greeting object that can be used by any address to create, share, or update the object's text. 
+- `move/hello-world/sources/greeting.move`: Defines a basic shared greeting object that can be used by any address. 
 
 - `move/hello-world/Move.toml`: The package's configuration file that defines the package name, dependencies, and addresses.
 
 <details>
 
-<summary> </summary>
+<summary>`move/hello-world/Move.toml`</summary>
 
 ```toml
 [package]
@@ -171,11 +175,11 @@ A unique aspect of programming applications on Sui is the resource safety enforc
 
 In the "Hello, world!" example, the struct `Greeting` is a resource type. 
 
-To satisfy the requirement that all resources must be moved or destroyed by the end of a transaction `Greeting` is assigned to `new_greeting`, which is then moved into global storage through the call to `transfer::share_object(new_greeting)`.
+To satisfy the requirement that all resources must be moved or destroyed by the end of a transaction, `Greeting` is assigned to `new_greeting`, which the call to `transfer::share_object(new_greeting)` then moves into global storage.
 
-To mutate `Greeting`, the function `update_text` takes the input `(&mut Greeting)` rather than the resource itself. Resource safety is satisfied in this function, as the resource is not copied and is mutated via a reference. 
+To mutate `Greeting`, the function `update_text` takes the input `(&mut Greeting)` rather than the resource itself. This function satisfies resource safety as the function does not copy the resource and mutates it via a reference.
 
-[Learn more about the Move Bytecode Verifier](https://github.com/MystenLabs/sui/blob/main/external-crates/move/move-execution/v1/crates/move-bytecode-verifier/README.md)
+[Learn more about the Move Bytecode Verifier](https://github.com/MystenLabs/sui/blob/main/external-crates/move/move-execution/v1/crates/move-bytecode-verifier/README.md).
 
 #### How does this differ from EVM applications?
 
@@ -183,7 +187,7 @@ The Ethereum Virtual Machine adopts a gas based resource safety strategy. Every 
 
 ## Build the Move package 
 
-Before a Move package can be published to the network, it must first be _built_. Building your package is necessary because the `.move` source file is a human-readable piece of code, while the network can only understand bytecode. The `sui move build` command translates your `.move` code into bytecode that can be executed on Sui. 
+Before you can publish a Move package to the network, you must first build it. Building your package is necessary because the `.move` source file is a human-readable piece of code, while the network can only understand bytecode. The `sui move build` command translates your `.move` code into bytecode that Sui can execute.
 
 To build your "Hello, world!" package, first confirm your working directory is `~/sui-stack-hello-world/move/hello-world`, then run the following command:
 
@@ -211,17 +215,17 @@ BUILDING hello_world
 
 </details>
 
-During the build process, the dependencies defined in the `Move.toml` file are fetched and compiled. The Move compiler checks your `.move` code for type errors, syntax errors, and enforces [resource safety](#resource-safety). 
+The build process fetches and compiles the dependencies defined in the `Move.toml` file. The Move compiler checks your `.move` code for type errors, syntax errors, and enforces [resource safety](#resource-safety). 
 
 :::info 
 
-Building your package is necessary for it to be published, but also for testing. You cannot run tests (`sui move test`) on your code until it has been built.
+You must build your package before you can publish it, but also before you test it. You cannot run tests (`sui move test`) on your code until it has been built.
 
 :::
 
 ## Publish the Move package 
 
-Now that your package has been built, you need to publish it onto the Sui Testnet. Once published, the package's modules and functions can be used by other packages or users by making calls to the package ID.
+Now that your package has been built, you need to publish it onto the Sui Testnet. Once you publish it, other packages and users can use the package's modules and functions by making calls to the package ID.
 
 First, confirm your client is configured to use the Testnet as the active environment:
 
@@ -398,7 +402,7 @@ Transaction Digest: 8R39iKKLGPDG3QkW2SrRW3QX71csRP2BLhK9H7oz9SwW
 
 </details>
 
-When a Move package is published to the network, the bytecode is uploaded to the network and stored at as a Move package with a unique package ID and version number. SUI tokens are consumed as gas, and the transaction to publish the package is processed on-chain.
+When you publish a Move package to the network, the network uploads and stores the bytecode as a Move package with a unique package ID and version number. The network consumes SUI tokens as gas and processes the transaction on-chain.
 
 Once successfully executed, the output will include the new package ID, version number, and the object ID of the newly created and mutated objects. It will also provide details about the transaction used to publish the package, including the gas cost, transaction digest, dependencies, owner, and sender. 
 
@@ -410,7 +414,7 @@ Interact with the newly published package by first making a call to the `new` fu
 $ sui client call --package <PACKAGE_ID> --module greeting --function new  
 ```
 
-Replace `<PACKAGE_ID>` with the package ID that was returned in the output of the `sui client publish` command. The `--package`, `--module`, and `--function` flags are all required. 
+Replace `<PACKAGE_ID>` with the package ID the output of the `sui client publish` command returned. You must include the `--package`, `--module`, and `--function` flags. 
 
 In the output of this call, you will see a newly created object:
 
@@ -437,7 +441,7 @@ To verify that the object contains the text `"Hello, world"`, make a call to que
 $ sui client object <OBJECT_ID>
 ```
 
-Replace `<OBJECT_ID>` with the value returned under `Created Objects, ID:`.
+Replace `<OBJECT_ID>` with the value under `Created Objects, ID:`.
 
 You should see the object's details, including a value of `text: Hello world!`:
 
@@ -478,7 +482,7 @@ Failed to sign transaction by a quorum of validators because one or more of its 
 
 If you receive this error, you must wait until the current epoch is over before submitting your transaction again. 
 
-To prevent the same object being modified by multiple transactions at once, your address 'locks' the object to prevent conflicting modifications. If you'd like to batch multiple transaction commands together, you can use [programmable transaction blocks](/concepts/transactions/prog-txn-blocks.mdx).
+To prevent the same object from being modified by multiple transactions at once, your address 'locks' the object to prevent conflicting modifications. If you'd like to batch multiple transaction commands together, you can use [programmable transaction blocks](/concepts/transactions/prog-txn-blocks.mdx).
 
 Transactions also have limitations regarding total size, number of objects, and number of inputs. Learn more about limitations in [Building against Limits in The Move Book](https://move-book.com/guides/building-against-limits/).
 

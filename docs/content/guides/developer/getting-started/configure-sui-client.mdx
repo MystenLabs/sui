@@ -4,7 +4,7 @@ description: placeholder
 keywords: [ placeholder ]
 ---
 
-You must configure the Sui client before you can use it because the configuration specifies which network to connect to and which address will send transactions. Once the client is configured, you will typically not need to alter the configuration unless you'd like to change the network information. 
+The Sui client configuration specifies which network to connect to and which address will send transactions. Once the client is configured, you will typically not need to alter the configuration unless you'd like to change the network information. 
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -32,13 +32,13 @@ Run the Sui CLI with the command:
 $ sui client
 ```
 
-The CLI prompts you to create a new Sui address and setup a network environment configuration. This information is stored in the `~/.sui/sui_config/client.yaml` file by default. You can store a `client.yaml` file in a different location, if preferred, and specify its location with the `--client.config` flag. 
+The CLI prompts you to create a new Sui address and setup a network environment configuration. By default, Sui stores this information in the `~/.sui/sui_config/client.yaml` file. You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
 
-The Sui address will have a key stored in a separate file, `~/.sui/sui_config/sui.keystore`. Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
+Sui stores the key for the Sui address in a separate file, `~/.sui/sui_config/sui.keystore`. Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
 
 :::caution 
 
-If you already have a `client.yaml` file stored locally from a previous Sui installation, you will receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
+If a previous Sui installation stored a `client.yaml` file locally, you will receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
 
 :::
 
@@ -52,9 +52,9 @@ Run the Sui CLI with the command:
 $ sui client
 ```
 
-The CLI prompts you to create a new Sui address and setup a network environment configuration. This information is stored in the `%USERPROFILE%\.sui\sui_config\client.yaml` file by default. You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
+The CLI prompts you to create a new Sui address and setup a network environment configuration. By default, Sui stores this information in the `%USERPROFILE%\.sui\sui_config\client.yaml` file. You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
 
-The Sui address will have a key stored in a separate file, `%USERPROFILE/.sui/sui_config/sui.keystore`. Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
+Sui stores the key for the Sui address in a separate file, `%USERPROFILE/.sui/sui_config/sui.keystore`. Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
 
 :::caution
 
@@ -80,13 +80,13 @@ The second prompt configures the network server URL that you'd like to connect t
 Sui full node server URL (Defaults to Sui Testnet if not specified) :
 ```
 
-By default, the Testnet is used if nothing is specified. Using the Testnet is recommended for developers new to Sui that do not have a project already developed. 
+If you specify nothing, the client uses Testnet by default. Using the Testnet is recommended for developers new to Sui that do not have a project already developed. 
 
 The options are:
 
 - `https://fullnode.testnet.sui.io:443`: The RPC URL for the Testnet network.
 
-- `https://fullnode.devnet.sui.io:443`: The RPC URL for the Devnet network. Devnet is not recommended for new Sui developers, as it is better suited for more advanced use cases and data is wiped weekly as part of the network's update process.
+- `https://fullnode.devnet.sui.io:443`: The RPC URL for the Devnet network. Devnet is not recommended for new Sui developers, as it is better suited for more advanced use cases and the network wipes data weekly as part of its update process.
 
 - `https://fullnode.mainnet.sui.io:443`: The RPC URL for the Mainnet network. Publishing applications to the Mainnet costs real SUI tokens. 
 
@@ -94,7 +94,7 @@ The options are:
 
 <ImportContent source="data-wipe.mdx" mode="snippet" />
 
-The final prompt is to select an encryption scheme. Once selected, the client will generate a new Sui address using that scheme for the address's key pair. Press **0**, **1**, or **2** to select a key scheme:
+The final prompt is to select an encryption scheme. Once you select a scheme, the client will generate a new Sui address. Press **0**, **1**, or **2** to select a key scheme:
 
 ```
 Select key scheme to generate key pair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
@@ -123,6 +123,6 @@ active_address: "0x7df01d3935b7ab3cd1da6828eed763ee2cc556670528a47baa6af8c251866
 
 Next, [learn more about your Sui address](/guides/developer/getting-started/get-address.mdx).
 
-Or, [clone the Hello, world!](/guides/developer/getting-started/hello-world.mdx) project if you are already familiar with Sui addresses and have [Testet SUI tokens](/guides/developer/getting-started/get-coins.mdx).
+Or, [clone the Hello, world!](/guides/developer/getting-started/hello-world.mdx) project if you are already familiar with Sui addresses and have [Testnet SUI tokens](/guides/developer/getting-started/get-coins.mdx).
 
 

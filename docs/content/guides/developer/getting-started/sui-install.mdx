@@ -6,11 +6,11 @@ keywords: [ install sui, how to install sui, install sui cli, interact with sui 
 
 # Install Sui
 
-Sui is a scalable and performant layer-1 blockchain that is home to a complete stack of native primitives ideal for building decentralized applications. Such primitives, such as those for encryption, data storage, verification, and access control, provide developers with every piece of the application stack without needing to use layer-2 chains or off-chain solutions. 
+Sui is a scalable and performant layer-1 blockchain that is home to a complete stack of native primitives ideal for building decentralized applications. Such primitives, such as those for [encryption](https://seal-docs.wal.app/UsingSeal/), [data storage](https://docs.wal.app/usage/setup.html), verification, and access control, provide developers with every piece of the application stack without needing to use layer-2 chains or off-chain solutions. 
 
-In contrast to other chains, Sui uses an object-centric model, where every item on the network is an object. Objects are used as input for transactions, which in turn mutate an existing object or create new objects. Each object is addressable on-chain by a unique ID.
+In contrast to other chains, Sui uses an [object-centric model](/concepts/object-model.mdx), where every item on the network is an object. [Transactions](/concepts/transactions.mdx) use objects as input, which mutate an existing object or create new objects. Each object has a unique on-chain ID.
 
-To create objects, submit transactions, and start building an application on Sui, first you must install Sui. This installation includes the Sui CLI, a tool used to create and manage address balances, build and publish smart contracts, and query information from the network. 
+To create objects, submit transactions, and start building an application on Sui, first you must install Sui. This installation includes the [Sui CLI](/references/cli.mdx), a tool that creates and manages address balances, builds and publishes smart contracts, and queries information from the network. 
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -18,20 +18,20 @@ To create objects, submit transactions, and start building an application on Sui
 - [x] Have a machine with one of the following supported operating systems:
     - Linux: Ubuntu version 22.04 (Jammy Jellyfish) or newer
     - macOS: macOS Monterey or newer
-    - Microsoft Windows: Windows 10 and 11
+    - Microsoft Windows: Windows 10 or 11
 
 </TabItem>
 </Tabs>
 
 ## Quick install 
 
-The most effective way to install the Sui CLI is to use `suiup`, as it allows you to easily install and switch between different versions of not only the Sui CLI but also other Sui stack components like `walrus` and `mvr`. 
+The most effective way to install the Sui CLI is to use `suiup`, as it allows you to easily install and switch between different versions of not only the Sui CLI but also other Sui stack components like [`walrus`](https://docs.wal.app/usage/setup.html) and [`mvr`](https://github.com/MystenLabs/mvr). 
 
 Alternative quick install instructions for Homebrew or Chocolately do not support installing other Sui stack components. Other components will need to be installed through their individual binaries if you'd like to use them in the future. 
 
 <ImportContent source="quick-install.mdx" mode="snippet" />
 
-:::note
+:::info
 
 The quick install is suitable for most use cases. For those wanting more control over the installation process, you can [install from source](/guides/developer/getting-started/install-source.mdx) or [install binaries](/guides/developer/getting-started/install-binaries.mdx). 
 
@@ -45,39 +45,40 @@ To confirm that Sui installed correctly:
 
 1. Open a terminal or console
 2. Type `sui --version` and press Enter
-3. Verify the displayed version matches your expected installation
 
 If you receive a "command not found" error, verify the Sui binaries directory is in your `PATH` environment variable.
 
+:::info Looking for a project to clone?
+
+Before you can create and publish a smart contract, you must [configure your Sui client](/guides/developer/getting-started/configure-sui-client.mdx) and [obtain testnet SUI](/guides/developer/getting-started/get-coins.mdx).
+
+Then, you can [create a Hello, world! example](/guides/developer/getting-started/hello-world.mdx) or [clone another example](/guides/developer/app-examples.mdx) to start building.
+
+:::
+
 ## Installation details 
 
-Regardless of using `suiup`, Brew, or Chocolately, your Sui installation will include the following packages:
+Regardless of using `suiup`, Homebrew, or Chocolately, your Sui installation will include the following packages:
 
 <ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
 
 ### `suiup` installation details 
 
-On macOS and Linux systems, the `suiup` binaries are copied to `$HOME/.local/bin` by default, unless the `SUIUP_DEFAULT_BIN_DIR` environment variable has been set. macOS and Linux installations also include environment variables for `XDG_DATA_HOME`, `XDG_CACHE_HOME`, and `XDG_CONFIG_HOME`.
+`suiup` copies the binaries to `$HOME/.local/bi`n by default on macOS and Linux systems by default, unless the `SUIUP_DEFAULT_BIN_DIR` environment variable has been set. macOS and Linux installations also include environment variables for `XDG_DATA_HOME`, `XDG_CACHE_HOME`, and `XDG_CONFIG_HOME`.
 
-On Windows, the `suiup` binaries are copied to `LOCALAPPDATA\bin`, and will use `LOCALAPPDATA` or `USERPROFILE\AppData\Local` for storing data and `TEMP` or `USERPROFILE\AppData\Local\Temp` for caching.
+On Windows, `suiup` copies the binaries to `LOCALAPPDATA\bin`, and will use `LOCALAPPDATA` or `USERPROFILE\AppData\Local` for storing data and `TEMP` or `USERPROFILE\AppData\Local\Temp` for caching.
 
 ### Default configuration file
 
-Regardless of whether you used `suiup`, Homebrew, or Chocolately, Sui will store a primary configuration in the `~/.sui/sui_config/client.yaml` file. This file is used to define settings and preferences for your environment, such as:
+Regardless of whether you used `suiup`, Homebrew, or Chocolately, Sui will store a primary configuration in the `~/.sui/sui_config/client.yaml` file. This file defines settings and preferences for your environment, such as:
 
 - Network environment details for the Mainnet, Testnet, Devnet, and Localnet networks.
 
-- Active environment, which specifies which network the CLI commands will target.
+- Active environment, which specifies the network the CLI commands will target.
 
-- Active address, which specifies which Sui address will be used by the CLI for transactions and queries.
+- Active address, which specifies the Sui address the CLI will use for transactions and queries.
 
-- Keystore location, which specifies where your address' private keys are stored.
-
-## Looking for a project to clone? 
-
-Before you can create and publish a smart contract, you must [configure your Sui client](/guides/developer/getting-started/configure-sui-client.mdx) and [obtain testnet SUI](/guides/developer/getting-started/get-coins.mdx).
-
-Then, you can [create a Hello, world! example](/guides/developer/getting-started/hello-world.mdx) or [clone another example](/guides/developer/app-examples.mdx) to start building.
+- Keystore location, which specifies where Sui stores your address' private keys.
 
 ## Next steps {#next-steps}
 
