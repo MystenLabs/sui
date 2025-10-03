@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    data_stores::file_system_store::{FileSystemStore, NODE_MAPPING_FILE, OBJECTS_DIR},
+    replay_interface::{ObjectKey, ObjectStore, VersionQuery},
+    Node,
+};
+
 use anyhow::{anyhow, bail, Context, Result};
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
@@ -18,12 +24,6 @@ use sui_types::{
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object},
     supported_protocol_versions::ProtocolConfig,
-};
-
-use crate::{
-    data_stores::file_system_store::{FileSystemStore, NODE_MAPPING_FILE, OBJECTS_DIR},
-    replay_interface::{ObjectKey, ObjectStore, VersionQuery},
-    Node,
 };
 
 /// Information about a package in the cache
