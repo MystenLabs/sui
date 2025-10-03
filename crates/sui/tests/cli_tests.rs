@@ -2361,7 +2361,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_upgrade");
     let tmp_dir = tempdir().unwrap().keep();
-    copy_dir_all(package_path, &tmp_dir.join("dummy_modules_upgrade"))?;
+    copy_dir_all(package_path, tmp_dir.join("dummy_modules_upgrade"))?;
     let framework_pkgs = PathBuf::from("../sui-framework/packages");
     copy_dir_all(framework_pkgs, tmp_dir.join("system-packages"))?;
 
