@@ -8,7 +8,7 @@ task 0, lines 1-38:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: INVALID_ENUM_SWITCH,
     sub_status: None,
-    location: undefined,
+    location: 0x42,
     indices: [(VariantTag, 2)],
     offsets: [],
     message: "Jump table length 2 does not equal number of variants 3",

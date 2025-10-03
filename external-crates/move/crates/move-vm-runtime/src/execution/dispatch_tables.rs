@@ -154,7 +154,7 @@ impl VMDispatchTables {
                         .with_message(format!(
                             "Defining ID {defining_id} found for {addr} and {prev}"
                         ))
-                        .finish(Location::Undefined));
+                        .finish(Location::Package(pkg.version_id)));
                     }
                 }
             }
@@ -303,7 +303,7 @@ impl VMDispatchTables {
                             .with_message(format!(
                                 "Defining ID {defining_id} does not match defining ID of loaded type: {}", datatype.defining_id.address()
                             ))
-                            .finish(Location::Undefined),
+                            .finish(Location::Package(defining_id)),
                     );
                 }
                 if datatype.type_parameters().is_empty() && struct_tag.type_params.is_empty() {
@@ -314,7 +314,7 @@ impl VMDispatchTables {
                         type_params.push(self.load_type(ty_param)?);
                     }
                     self.verify_ty_args(datatype.type_param_constraints(), &type_params)
-                        .map_err(|e| e.finish(Location::Undefined))?;
+                        .map_err(|e| e.finish(Location::Package(defining_id)))?;
                     Type::DatatypeInstantiation(Box::new((key, type_params)))
                 }
             }

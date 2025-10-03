@@ -60,7 +60,7 @@ impl InMemoryTestAdapter {
                     "Cannot find package {:?} in data cache",
                     original_id
                 ))
-                .finish(Location::Undefined));
+                .finish(Location::Package(*original_id)));
         };
         Ok(pkg)
     }

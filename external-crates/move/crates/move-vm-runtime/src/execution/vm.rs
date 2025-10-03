@@ -324,7 +324,7 @@ impl<'extensions> MoveVM<'extensions> {
             return Err(PartialVMError::new(
                 StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
             )
-            .finish(Location::Undefined));
+            .finish(Location::Module(function.module_id())));
         }
 
         // execute the function

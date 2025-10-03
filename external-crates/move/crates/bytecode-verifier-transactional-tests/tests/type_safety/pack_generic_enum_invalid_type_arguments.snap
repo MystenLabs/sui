@@ -49,7 +49,7 @@ task 4, lines 49-59:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
     sub_status: None,
-    location: undefined,
+    location: 0x2,
     indices: [],
     offsets: [],
     message: "expected 1 type parameters got 2",
@@ -60,7 +60,7 @@ task 5, lines 61-71:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
     sub_status: None,
-    location: undefined,
+    location: 0x2,
     indices: [],
     offsets: [],
     message: "expected 1 type parameters got 2",

@@ -49,7 +49,7 @@ pub fn validate_for_publish(
                 IndexKind::AddressIdentifier,
                 module.value.self_handle_idx().0,
             )
-            .finish(Location::Undefined));
+            .finish(Location::Package(validated_package.version_id)));
         }
     }
 
@@ -87,7 +87,7 @@ pub fn validate_package(
     if pkg.modules.is_empty() {
         return Err(PartialVMError::new(StatusCode::EMPTY_PACKAGE)
             .with_message("Empty packages are not allowed.".to_string())
-            .finish(Location::Undefined));
+            .finish(Location::Package(pkg.version_id)));
     }
     // NB: We don't check for cycles inside of the package just yet since we may need to load
     // further packages.

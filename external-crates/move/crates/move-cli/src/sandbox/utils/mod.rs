@@ -110,6 +110,7 @@ pub(crate) fn explain_execution_error(
                             .unwrap()
                     )
                 }
+                Location::Package(id) => format!("package {}", id),
                 Location::Undefined => "UNDEFINED".to_owned(),
             };
             println!(

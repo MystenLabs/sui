@@ -48,7 +48,7 @@ pub fn resolve_package(
                 .with_message(
                     "Package not found in loaded cache despite just loading it".to_string(),
                 )
-                .finish(Location::Undefined),
+                .finish(Location::Package(package_to_read)),
         );
     };
 
@@ -63,7 +63,7 @@ pub fn resolve_package(
                 .with_message(
                     "More than one package was loaded when only one was requested".to_string(),
                 )
-                .finish(Location::Undefined),
+                .finish(Location::Package(package_to_read)),
         );
     }
 
@@ -159,7 +159,7 @@ fn load_packages(
                 pkg.ok_or_else(|| {
                     PartialVMError::new(StatusCode::LINKER_ERROR)
                         .with_message(format!("Cannot find package {:?} in data cache", ids[idx],))
-                        .finish(Location::Undefined)
+                        .finish(Location::Package(ids[idx]))
                 })
             })
             .collect::<VMResult<Vec<_>>>()?,
@@ -194,7 +194,7 @@ pub fn jit_package_for_publish(
     }
 
     let runtime_pkg = jit::translate_package(&cache.vm_config, natives, verified_pkg.clone())
-        .map_err(|err| err.finish(Location::Undefined))?;
+        .map_err(|err| err.finish(Location::Package(version_id)))?;
 
     Ok(Arc::new(Package::new(
         verified_pkg.into(),
@@ -217,13 +217,13 @@ pub fn jit_and_cache_package(
     }
 
     let runtime_pkg = jit::translate_package(&cache.vm_config, natives, verified_pkg.clone())
-        .map_err(|err| err.finish(Location::Undefined))?;
+        .map_err(|err| err.finish(Location::Package(version_id)))?;
 
     cache.add_to_cache(version_id, verified_pkg, runtime_pkg);
 
     cache.cached_package_at(version_id).ok_or_else(|| {
         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
             .with_message("Package not found in cache after loading".to_string())
-            .finish(Location::Undefined)
+            .finish(Location::Package(version_id))
     })
 }

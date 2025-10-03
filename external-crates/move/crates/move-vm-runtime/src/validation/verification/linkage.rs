@@ -127,7 +127,7 @@ fn verify_package_no_cyclic_relationships(
 fn verify_package_valid_linkage(
     package: &[&Module],
     cached_packages: &BTreeMap<VersionId, &Package>,
-    relocation_map: &HashMap<VersionId, OriginalId>,
+    relocation_map: &HashMap<OriginalId, VersionId>,
 ) -> VMResult<()> {
     let package_module_map = package
         .iter()
@@ -141,16 +141,19 @@ fn verify_package_valid_linkage(
                 if let Some(m) = package_module_map.get(module_id) {
                     Ok(&m.value)
                 } else {
-                    let package = relocation_map
-                        .get(module_id.address())
-                        .and_then(|package_id| cached_packages.get(package_id))
-                        .ok_or_else(|| {
-                            PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                                .finish(Location::Undefined)
-                        })?;
+                    let Some(version_id) = relocation_map.get(module_id.address()) else {
+                        return Err(PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+                            .finish(Location::Undefined));
+                    };
+                    let package = cached_packages.get(version_id).ok_or_else(|| {
+                        PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+                            .finish(Location::Package(*version_id))
+                    })?;
+                    // Question: Should this be a `Location::Module(module_id)` instead of
+                    // `Package`?
                     let module = package.modules.get(&module_id.to_owned()).ok_or_else(|| {
                         PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                            .finish(Location::Undefined)
+                            .finish(Location::Package(*version_id))
                     })?;
                     Ok(&module.value)
                 }

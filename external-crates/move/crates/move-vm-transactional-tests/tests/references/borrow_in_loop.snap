@@ -18,7 +18,7 @@ task 1, line 25:
 Error: Function execution failed with VMError: {
     major_status: LINKER_ERROR,
     sub_status: None,
-    location: undefined,
+    location: 0x42,
     indices: [],
     offsets: [],
     message: "Cannot find package 0000000000000000000000000000000000000000000000000000000000000042 in data cache",
