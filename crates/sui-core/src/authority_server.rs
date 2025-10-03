@@ -1418,7 +1418,7 @@ impl ValidatorService {
         request: WaitForEffectsRequest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<WaitForEffectsResponse> {
-        if request.ping.is_some() {
+        if request.ping_type.is_some() {
             return timeout(
                 Duration::from_secs(10),
                 self.ping_response(request, epoch_store),
@@ -1502,7 +1502,7 @@ impl ValidatorService {
         };
 
         // We assume that the caller has already checked for the existence of the `ping` field, but handling it gracefully here.
-        let Some(ping) = request.ping else {
+        let Some(ping) = request.ping_type else {
             return Err(SuiError::InvalidRequest(
                 "Ping type is required for ping requests".to_string(),
             ));
