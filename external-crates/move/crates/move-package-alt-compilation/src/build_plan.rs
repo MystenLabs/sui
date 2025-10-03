@@ -4,7 +4,6 @@
 
 use std::{collections::BTreeSet, io::Write, path::Path};
 
-use toml_edit::{DocumentMut, value};
 use vfs::VfsPath;
 
 use crate::{
@@ -29,9 +28,6 @@ use move_package_alt::{
     schema::PackageName,
 };
 use move_symbol_pool::Symbol;
-
-const EDITION_NAME: &str = "edition";
-const PACKAGE_NAME: &str = "package";
 
 #[derive(Debug)]
 pub struct BuildPlan<'a, F: MoveFlavor> {
@@ -86,7 +82,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
             },
         )?;
 
-        let project_root = self.root_pkg.package_path().path();
+        let project_root = self.root_pkg.package_path();
         let sorted_deps = self.root_pkg.sorted_deps().into_iter().cloned().collect();
 
         self.clean(
@@ -185,7 +181,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
             }
         };
 
-        let project_root = self.root_pkg.package_path().path();
+        let project_root = self.root_pkg.package_path();
         let sorted_deps = self.root_pkg.sorted_deps().into_iter().cloned().collect();
 
         self.clean(
@@ -197,18 +193,12 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
     }
 
     /// Rewrite the edition field in Move.toml to the given edition.
-    pub fn record_package_edition(&self, edition: Edition) -> anyhow::Result<()> {
-        let move_toml_path = self.root_pkg.path().manifest_path();
-        let mut toml = std::fs::read_to_string(move_toml_path.clone())?
-            .parse::<DocumentMut>()
-            .expect("Failed to read TOML file to update edition");
-        toml[PACKAGE_NAME][EDITION_NAME] = value(edition.to_string());
-        std::fs::write(move_toml_path, toml.to_string())?;
-        Ok(())
+    pub fn record_package_edition(&self, _edition: Edition) -> anyhow::Result<()> {
+        todo!()
     }
 
     /// Get the path to the root package.
     pub fn root_package_path(&self) -> &Path {
-        self.root_pkg.path().path()
+        self.root_pkg.package_path()
     }
 }

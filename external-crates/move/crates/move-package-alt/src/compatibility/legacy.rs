@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::{
     flavor::MoveFlavor,
     package::EnvironmentName,
-    schema::{Environment, Publication, PublishAddresses},
+    schema::{Environment, ParsedPublishedFile, Publication, PublishAddresses},
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde::{Deserialize, Serialize};
@@ -66,6 +66,24 @@ impl<F: MoveFlavor> From<LegacyEnvironment> for Publication<F> {
             addresses: value.addresses,
             version: value.version,
             metadata: F::PublishedMetadata::default(),
+        }
+    }
+}
+
+impl<F: MoveFlavor> From<Publication<F>> for LegacyEnvironment {
+    fn from(value: Publication<F>) -> Self {
+        Self {
+            chain_id: value.chain_id,
+            addresses: value.addresses,
+            version: value.version,
+        }
+    }
+}
+
+impl<F: MoveFlavor> From<BTreeMap<EnvironmentName, LegacyEnvironment>> for ParsedPublishedFile<F> {
+    fn from(value: BTreeMap<EnvironmentName, LegacyEnvironment>) -> Self {
+        Self {
+            published: value.into_iter().map(|(k, v)| (k, v.into())).collect(),
         }
     }
 }

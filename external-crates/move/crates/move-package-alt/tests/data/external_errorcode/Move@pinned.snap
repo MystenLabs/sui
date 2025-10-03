@@ -1,4 +1,0 @@
----
-source: crates/move-package-alt/tests/test_runner.rs
----
-`mock-resolver` returned error code: exit status: 1

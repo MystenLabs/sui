@@ -182,9 +182,10 @@ impl BuildConfig {
 
     pub async fn build_async(self, path: &Path) -> anyhow::Result<CompiledPackage> {
         let env = find_env::<SuiFlavor>(path, &self.config)?;
-        let root_pkg = RootPackage::<SuiFlavor>::load(path.to_path_buf(), env).await?;
+        let mut root_pkg =
+            RootPackage::<SuiFlavor>::load(path.to_path_buf(), env, self.config.mode_set()).await?;
 
-        self.internal_build(&root_pkg)
+        self.internal_build(&mut root_pkg)
     }
 
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
@@ -195,10 +196,13 @@ impl BuildConfig {
         let mut root_pkg =
             RootPackage::<SuiFlavor>::load_sync(path.to_path_buf(), env, self.config.mode_set())?;
 
-        self.internal_build(&root_pkg)
+        self.internal_build(&mut root_pkg)
     }
 
-    fn internal_build(self, root_pkg: &RootPackage<SuiFlavor>) -> anyhow::Result<CompiledPackage> {
+    fn internal_build(
+        self,
+        root_pkg: &mut RootPackage<SuiFlavor>,
+    ) -> anyhow::Result<CompiledPackage> {
         let result = if self.print_diags_to_stderr {
             self.compile_package(root_pkg, &mut std::io::stderr())
         } else {
@@ -219,7 +223,7 @@ impl BuildConfig {
             .publication()
             .map(|p| ObjectID::from_address(p.addresses.published_at.0));
 
-        root_pkg.update_lockfile()?;
+        root_pkg.update_lockfile_sync()?;
 
         Ok(CompiledPackage {
             package,
@@ -597,7 +601,7 @@ impl PackageDependencies {
         let mut published = BTreeMap::new();
         let mut unpublished = BTreeSet::new();
 
-        let packages = root_pkg.packages()?;
+        let packages = root_pkg.packages();
 
         for p in packages {
             if p.is_root() {
