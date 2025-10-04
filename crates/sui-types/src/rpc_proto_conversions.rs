@@ -1874,6 +1874,11 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 message.epoch = Some(epoch);
                 TransactionExpirationKind::Epoch
             }
+            E::ValidDuring { .. } => {
+                // TODO: Implement proper proto conversion for ValidDuring
+                // For now, treat as None to maintain compatibility
+                TransactionExpirationKind::None
+            }
         };
 
         message.set_kind(kind);
