@@ -6,6 +6,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{future, TryFutureExt};
+use itertools::Itertools as _;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     register_gauge_with_registry, register_histogram_vec_with_registry,
@@ -566,7 +567,12 @@ impl ValidatorService {
         Ok((tonic::Response::new(info), Weight::zero()))
     }
 
-    #[instrument(name= "ValidatorService::handle_submit_transaction", level = "error", skip_all, err(level = "debug"), fields(tx_digest = ?tracing::field::Empty))]
+    #[instrument(
+        name = "ValidatorService::handle_submit_transaction",
+        level = "error",
+        skip_all,
+        err(level = "debug")
+    )]
     async fn handle_submit_transaction(
         &self,
         request: tonic::Request<RawSubmitTxRequest>,
@@ -644,6 +650,8 @@ impl ValidatorService {
             .into()
         );
 
+        // Transaction digests.
+        let mut tx_digests = Vec::with_capacity(request.transactions.len());
         // Transactions to submit to consensus.
         let mut consensus_transactions = Vec::with_capacity(request.transactions.len());
         // Indexes of transactions above in the request transactions.
@@ -714,11 +722,12 @@ impl ValidatorService {
             };
 
             let tx_digest = verified_transaction.digest();
+            tx_digests.push(*tx_digest);
 
-            // Only trace the 1st transaction in the request.
-            if idx == 0 {
-                tracing::Span::current().record("tx_digest", tracing::field::debug(&tx_digest));
-            }
+            debug!(
+                ?tx_digest,
+                "handle_submit_transaction: verified transaction"
+            );
 
             // Check if the transaction has executed, before checking input objects
             // which could have been consumed.
@@ -744,17 +753,22 @@ impl ValidatorService {
                         fast_path: false,
                     };
                     results[idx] = Some(executed_result);
+                    debug!(?tx_digest, "handle_submit_transaction: already executed");
                     continue;
                 }
             }
 
+            debug!(
+                ?tx_digest,
+                "handle_submit_transaction: waiting for fastpath dependency objects"
+            );
             if !state
                 .wait_for_fastpath_dependency_objects(&verified_transaction, epoch_store.epoch())
                 .await?
             {
                 debug!(
                     ?tx_digest,
-                    "Fastpath input objects are still unavailable after waiting"
+                    "fastpath input objects are still unavailable after waiting"
                 );
             }
 
@@ -859,6 +873,14 @@ impl ValidatorService {
                 is_ping_request || !consensus_transactions.is_empty(),
                 "A valid soft bundle must have at least one transaction"
             );
+            debug!(
+                "handle_submit_transaction: submitting consensus transactions ({}): {}",
+                req_type,
+                consensus_transactions
+                    .iter()
+                    .map(|t| t.local_display())
+                    .join(", ")
+            );
             self.handle_submit_to_consensus_for_position(
                 consensus_transactions,
                 &epoch_store,
@@ -867,6 +889,11 @@ impl ValidatorService {
             .await?
         } else {
             let futures = consensus_transactions.into_iter().map(|t| {
+                debug!(
+                    "handle_submit_transaction: submitting consensus transaction ({}): {}",
+                    req_type,
+                    t.local_display(),
+                );
                 self.handle_submit_to_consensus_for_position(
                     vec![t],
                     &epoch_store,
@@ -888,9 +915,16 @@ impl ValidatorService {
             }));
         } else {
             // Otherwise, return the consensus position for each transaction.
-            for (idx, consensus_position) in
-                transaction_indexes.into_iter().zip(consensus_positions)
+            for ((idx, tx_digest), consensus_position) in transaction_indexes
+                .into_iter()
+                .zip(tx_digests)
+                .zip(consensus_positions)
             {
+                debug!(
+                    ?tx_digest,
+                    "handle_submit_transaction: submitted consensus transaction at {}",
+                    consensus_position,
+                );
                 results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
             }
         }
@@ -965,6 +999,7 @@ impl ValidatorService {
         //    When multiple certificates are provided, we will either submit all of them or none of them to consensus.
         if certificates.len() == 1 {
             let tx_digest = *certificates[0].digest();
+            debug!(tx_digest=?tx_digest, "Checking if certificate is already executed");
 
             if let Some(signed_effects) = self
                 .state
@@ -1075,7 +1110,7 @@ impl ValidatorService {
         name = "ValidatorService::handle_submit_to_consensus_for_position",
         level = "debug",
         skip_all,
-        err
+        err(level = "debug")
     )]
     async fn handle_submit_to_consensus_for_position(
         &self,
@@ -1418,7 +1453,7 @@ impl ValidatorService {
         request: WaitForEffectsRequest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<WaitForEffectsResponse> {
-        if request.ping.is_some() {
+        if request.ping_type.is_some() {
             return timeout(
                 Duration::from_secs(10),
                 self.ping_response(request, epoch_store),
@@ -1502,7 +1537,7 @@ impl ValidatorService {
         };
 
         // We assume that the caller has already checked for the existence of the `ping` field, but handling it gracefully here.
-        let Some(ping) = request.ping else {
+        let Some(ping) = request.ping_type else {
             return Err(SuiError::InvalidRequest(
                 "Ping type is required for ping requests".to_string(),
             ));
