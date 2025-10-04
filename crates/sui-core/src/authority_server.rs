@@ -611,6 +611,11 @@ impl ValidatorService {
                 ))
                 .into()
             );
+
+            self.state.check_system_overload_for_ping(
+                &*consensus_adapter,
+                state.check_system_overload_at_signing(),
+            )?;
         } else {
             // Ensure default and soft bundle requests contain at least one transaction.
             fp_ensure!(
