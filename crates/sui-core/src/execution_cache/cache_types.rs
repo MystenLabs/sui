@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::{cmp::Ordering, hash::DefaultHasher};
 
 use moka::sync::SegmentedCache as MokaCache;
-use mysten_common::debug_fatal;
+use mysten_common::{debug_fatal, fatal};
 use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
 
@@ -50,12 +50,13 @@ impl<V> CachedVersionMap<V> {
     pub fn insert(&mut self, version: SequenceNumber, value: V) {
         if !self.values.is_empty() {
             let back = self.values.back().unwrap().0;
-            assert!(
-                back < version,
-                "version must be monotonically increasing ({} < {})",
-                back,
-                version
-            );
+            if back >= version {
+                fatal!(
+                    "version must be monotonically increasing ({} < {})",
+                    back,
+                    version
+                );
+            }
         }
         self.values.push_back((version, value));
     }
