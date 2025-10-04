@@ -5,14 +5,16 @@ source: crates/move-decompiler/tests/tests.rs
 
 module enums::geometry;
 
-// -- structs -- 
-
 // -- enums -- 
 
 public enum Shape has copy, drop {
     Square { side: u64 },
     Triangle { base: u64, height: u64 },
 }
+
+// -- constants -- 
+
+const C0: u64 = 1u64;
 
 // -- functions -- 
 
@@ -51,7 +53,7 @@ public fun get_square_side(l0: &enums::geometry::Shape): u64 {
                 return *reg_9 : &0x0::geometry::Shape
             },
             Triangle => {
-                abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] }
+                abort C0
             }
         }
     }
@@ -63,7 +65,7 @@ public fun get_triangle_size(l0: &enums::geometry::Shape): ( u64, u64) {
         let l2 = l3;
         switch 0x0::geometry::Shape (l2) {
             Square => {
-                abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] }
+                abort C0
             },
             Triangle => {
                 0x0::geometry::Shape::Triangle { base: reg_7, height: reg_8 } = &l2;
@@ -71,7 +73,7 @@ public fun get_triangle_size(l0: &enums::geometry::Shape): ( u64, u64) {
                 let l1 = reg_11 : &0x0::geometry::Shape;
                 let l4 = reg_10 : &0x0::geometry::Shape;
                 let l5 = l1;
-                return *l5, *l4
+                return (*l5, *l4)
             }
         }
     }
@@ -80,7 +82,7 @@ public fun get_triangle_size(l0: &enums::geometry::Shape): ( u64, u64) {
 public fun set_square_side(l0: &mut enums::geometry::Shape, l1: u64) {
     {
         let l3 = l0;
-        let l2 = freeze (l3);
+        let l2 = freeze(l3);
         switch 0x0::geometry::Shape (l2) {
             Square => {
                 0x0::geometry::Shape::Square { side: reg_8 } = &l2;
@@ -90,7 +92,7 @@ public fun set_square_side(l0: &mut enums::geometry::Shape, l1: u64) {
                 return
             },
             Triangle => {
-                abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] }
+                abort C0
             }
         }
     }
@@ -99,10 +101,10 @@ public fun set_square_side(l0: &mut enums::geometry::Shape, l1: u64) {
 public fun set_triangle_dimensions(l0: &mut enums::geometry::Shape, l1: u64, l2: u64) {
     {
         let l5 = l0;
-        let l4 = freeze (l5);
+        let l4 = freeze(l5);
         switch 0x0::geometry::Shape (l4) {
             Square => {
-                abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] }
+                abort C0
             },
             Triangle => {
                 0x0::geometry::Shape::Triangle { base: reg_8, height: reg_9 } = &l4;

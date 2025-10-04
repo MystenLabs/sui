@@ -5,10 +5,6 @@ source: crates/move-decompiler/tests/tests.rs
 
 module loops::loop_mod;
 
-// -- structs -- 
-
-// -- enums -- 
-
 // -- functions -- 
 
 public fun do_0(l0: &mut bool) {

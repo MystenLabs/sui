@@ -4,7 +4,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
   Module: counter
     Function: create (entry: LBL_0)
       Label LBL_0:
-        reg_0 : u64 = Immediate(U64(0))
+        reg_0 : u64 = Immediate(0u64)
         reg_1 : 0x0::counter::Counter = Pack<Counter>(reg_0 : u64)
         Return(reg_1 : 0x0::counter::Counter)
 
@@ -14,7 +14,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
         reg_0 : &mut 0x0::counter::Counter = Copy(lcl_0)
         reg_1 : &u64 = ImmBorrowField<u64>(reg_0 : &mut 0x0::counter::Counter)
         reg_2 : u64 = ReadRef(reg_1 : &u64)
-        reg_3 : u64 = Immediate(U64(1))
+        reg_3 : u64 = Immediate(1u64)
         reg_4 : u64 = Add(reg_2 : u64, reg_3 : u64)
         reg_5 : &mut 0x0::counter::Counter = Move(lcl_0)
         reg_6 : &mut u64 = MutBorrowField<u64>(reg_5 : &mut 0x0::counter::Counter)

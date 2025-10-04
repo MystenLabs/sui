@@ -8064,6 +8064,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap",
+ "indexmap 2.8.0",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-command-line-common",
