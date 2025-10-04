@@ -6,12 +6,12 @@ use anyhow::bail;
 use move_command_line_common::testing::insta_assert;
 
 use move_package_alt::{
-    dependency::{CombinedDependency, PinnedDependencyInfo},
+    dependency::{CombinedDependency, Pinned, PinnedDependencyInfo},
     flavor::{
         Vanilla,
         vanilla::{self, default_environment},
     },
-    package::{RootPackage, manifest::Manifest},
+    package::{RootPackage, manifest::Manifest, paths::PackagePath},
 };
 use std::{collections::BTreeMap, path::Path};
 use tracing::debug;
@@ -103,7 +103,14 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     let env = default_environment();
 
     // This is the "root's" source.
-    let source = PinnedDependencyInfo::root_dependency(*manifest.file_handle(), env.name().clone());
+    let path = PackagePath::new(
+        input_path
+            .parent()
+            .expect("files have parents")
+            .to_path_buf(),
+    )
+    .unwrap();
+    let source = Pinned::Root(path);
 
     let deps = CombinedDependency::combine_deps(
         manifest.file_handle(),
