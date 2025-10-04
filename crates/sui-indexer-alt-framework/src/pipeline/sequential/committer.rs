@@ -231,7 +231,7 @@ where
 
                     let affected = store.transaction(|conn| {
                         async {
-                            conn.set_committer_watermark(H::NAME, watermark).await?;
+                            conn.set_committer_watermark(H::NAME, None, watermark).await?;
                             H::commit(&batch, conn).await
                         }.scope_boxed()
                     }).await;
