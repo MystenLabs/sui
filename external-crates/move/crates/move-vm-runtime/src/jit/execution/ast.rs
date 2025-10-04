@@ -56,11 +56,9 @@ pub struct Package {
 // so that any data needed for execution is immediately available
 #[derive(Debug)]
 pub struct Module {
-    #[allow(dead_code)]
     pub id: ModuleId,
 
     /// Types as indexes into the package's vtable
-    #[allow(dead_code)]
     pub type_refs: ArenaVec<IntraPackageKey>,
 
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
