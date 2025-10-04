@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-use super::{processor::processor, CommitterConfig, Processor, PIPELINE_BUFFER};
+use super::{processor::processor, CommitterConfig, ProcessorAsync, PIPELINE_BUFFER};
 
 use crate::{
     metrics::IndexerMetrics,
@@ -37,7 +37,7 @@ mod committer;
 /// liveness and limits the amount of memory the pipeline can consume, by bounding the number of
 /// checkpoints that can be received before the next checkpoint.
 #[async_trait::async_trait]
-pub trait Handler: Processor {
+pub trait Handler: ProcessorAsync {
     type Store: TransactionalStore;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.

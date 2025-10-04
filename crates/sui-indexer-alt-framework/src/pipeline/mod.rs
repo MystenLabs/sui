@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-pub use processor::Processor;
+pub use processor::{Processor, ProcessorAsync, ProcessorError};
 use serde::{Deserialize, Serialize};
 
 use crate::store::CommitterWatermark;
@@ -40,7 +40,7 @@ pub struct CommitterConfig {
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
 /// communicate between the processor and the collector parts of the pipeline.
-struct IndexedCheckpoint<P: Processor> {
+struct IndexedCheckpoint<P: ProcessorAsync> {
     /// Values to be inserted into the database from this checkpoint
     values: Vec<P::Value>,
     /// The watermark associated with this checkpoint
@@ -79,7 +79,7 @@ impl CommitterConfig {
     }
 }
 
-impl<P: Processor> IndexedCheckpoint<P> {
+impl<P: ProcessorAsync> IndexedCheckpoint<P> {
     fn new(
         epoch: u64,
         cp_sequence_number: u64,
