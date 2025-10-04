@@ -1,12 +1,22 @@
 {
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json",
   "name": "move",
   "word": "identifier",
   "rules": {
     "source_file": {
       "type": "REPEAT",
       "content": {
-        "type": "SYMBOL",
-        "name": "module_definition"
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "module_extension_definition"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "module_definition"
+          }
+        ]
       }
     },
     "use_declaration": {
@@ -556,6 +566,23 @@
         {
           "type": "STRING",
           "value": "key"
+        }
+      ]
+    },
+    "module_extension_definition": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "extend"
+        },
+        {
+          "type": "FIELD",
+          "name": "module",
+          "content": {
+            "type": "SYMBOL",
+            "name": "module_definition"
+          }
         }
       ]
     },
@@ -7060,5 +7087,6 @@
   "inline": [],
   "supertypes": [
     "_spec_block_target"
-  ]
+  ],
+  "reserved": {}
 }
