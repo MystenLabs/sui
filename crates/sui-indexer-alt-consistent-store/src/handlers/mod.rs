@@ -31,7 +31,8 @@ pub(crate) fn checkpoint_input_objects(
         for change in tx.effects.object_changes() {
             let id = change.id;
 
-            let (Some(version), Some(digest)) = (change.input_version, change.input_digest) else {
+            // Get input version - if None, this object was created in this transaction
+            let Some(version) = change.input_version else {
                 continue;
             };
 
@@ -50,6 +51,10 @@ pub(crate) fn checkpoint_input_objects(
                 .get(&(id, version))
                 .copied()
                 .with_context(|| format!("{id} at {version} in effects, not in input_objects"))?;
+
+            // Input digests are only populated in Effects V2. For Effects V1, we need to calculate
+            // the digest from the input object's contents.
+            let digest = change.input_digest.unwrap_or_else(|| input_object.digest());
 
             entry.insert((input_object, digest));
         }
