@@ -16,7 +16,6 @@ use url::Url;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
-use crate::ingestion::regulator::regulator;
 use crate::metrics::IndexerMetrics;
 use crate::types::full_checkpoint_content::CheckpointData;
 
@@ -24,7 +23,6 @@ mod broadcaster;
 pub mod client;
 pub mod error;
 mod local_client;
-mod regulator;
 mod remote_client;
 mod rpc_client;
 #[cfg(test)]
@@ -159,10 +157,9 @@ impl IngestionService {
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub async fn run<I>(self, checkpoints: I) -> Result<(JoinHandle<()>, JoinHandle<()>)>
+    pub async fn run<R>(self, checkpoints: R) -> Result<JoinHandle<()>>
     where
-        I: IntoIterator<Item = u64> + Send + Sync + 'static,
-        I::IntoIter: Send + Sync + 'static,
+        R: std::ops::RangeBounds<u64> + Send + 'static,
     {
         let IngestionService {
             config,
@@ -177,19 +174,16 @@ impl IngestionService {
             return Err(Error::NoSubscribers);
         }
 
-        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(config.ingest_concurrency);
-
-        let regulator = regulator(
+        let broadcaster = broadcaster(
             checkpoints,
-            config.checkpoint_buffer_size,
+            config,
+            client,
             ingest_hi_rx,
-            checkpoint_tx,
+            subscribers,
             cancel.clone(),
         );
 
-        let broadcaster = broadcaster(config, client, checkpoint_rx, subscribers, cancel.clone());
-
-        Ok((regulator, broadcaster))
+        Ok(broadcaster)
     }
 }
 
@@ -298,11 +292,10 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(usize::MAX, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancel();
         subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
     }
 
@@ -324,11 +317,10 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(1, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
         subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
     }
 
@@ -356,11 +348,10 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(5, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
         let seqs = subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
 
         assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
@@ -389,11 +380,10 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(5, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
         let seqs = subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
 
         assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
@@ -428,7 +418,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(5, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0..).await.unwrap();
 
         // At this point, the service will have been able to pass 3 checkpoints to the non-lagging
         // subscriber, while the laggard's buffer fills up. Now the laggard will pull two
@@ -439,7 +429,6 @@ mod tests {
 
         cancel.cancelled().await;
         let seqs = subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
 
         assert_eq!(seqs, vec![1, 2, 3, 4, 5]);
