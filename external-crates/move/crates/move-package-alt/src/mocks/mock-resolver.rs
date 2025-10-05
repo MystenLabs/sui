@@ -23,8 +23,11 @@
 
 use std::{collections::BTreeMap, env, io::stdin};
 
-use jsonrpc::types::{BatchRequest, JsonRpcResult, RequestID, Response, TwoPointZero};
-use move_package_alt::schema::{EXTERNAL_RESOLVE_ARG, EXTERNAL_RESOLVE_METHOD};
+use jsonrpc::types::{BatchRequest, RequestID, Response, TwoPointZero};
+use move_package_alt::{
+    schema::{EXTERNAL_RESOLVE_ARG, EXTERNAL_RESOLVE_METHOD},
+    test_utils::mock_resolver::RequestData,
+};
 use serde::Deserialize;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
@@ -32,39 +35,10 @@ use tracing_subscriber::EnvFilter;
 type EnvironmentID = String;
 
 #[derive(Deserialize)]
-struct ResolveRequest {
+pub struct ResolveRequest {
     #[serde(default)]
-    env: Option<EnvironmentID>,
-    data: RequestData,
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum RequestData {
-    /// Execution should be halted with [exit_code] and return the given [stdout]/[stderr]
-    Stdio(Exit),
-
-    /// [stderr] should be printed and [output] should be included in the output
-    Echo(EchoRequest),
-}
-
-#[derive(Deserialize)]
-struct Exit {
-    stdout: String,
-
-    #[serde(default)]
-    stderr: Option<String>,
-
-    #[serde(default)]
-    exit_code: Option<i32>,
-}
-
-#[derive(Deserialize)]
-struct EchoRequest {
-    output: BTreeMap<EnvironmentID, JsonRpcResult<serde_json::Value>>,
-
-    #[serde(default)]
-    stderr: Option<String>,
+    pub env: Option<EnvironmentID>,
+    pub data: RequestData,
 }
 
 pub fn main() {
