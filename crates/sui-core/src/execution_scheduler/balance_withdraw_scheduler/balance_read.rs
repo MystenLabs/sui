@@ -10,35 +10,25 @@ use parking_lot::RwLock;
 #[cfg(test)]
 use sui_types::base_types::ObjectID;
 use sui_types::{
-    accumulator_root::{AccumulatorObjId, AccumulatorValue, U128},
+    accumulator_root::{AccumulatorObjId, AccumulatorValue},
     base_types::SequenceNumber,
-    storage::ChildObjectResolver,
+    storage::ObjectStore,
 };
 
 pub(crate) trait AccountBalanceRead: Send + Sync {
-    fn get_account_balance(
+    /// Given an account ID, return the latest balance and the current version of the account object.
+    fn get_latest_account_balance(
         &self,
         account_id: &AccumulatorObjId,
-        // Version of the accumulator root object, used to
-        // bound the version when we look for child account objects.
-        accumulator_version: SequenceNumber,
-    ) -> u128;
+    ) -> Option<(u128, SequenceNumber)>;
 }
 
-impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
-    fn get_account_balance(
+impl AccountBalanceRead for Arc<dyn ObjectStore + Send + Sync> {
+    fn get_latest_account_balance(
         &self,
         account_id: &AccumulatorObjId,
-        accumulator_version: SequenceNumber,
-    ) -> u128 {
-        let value: U128 =
-            AccumulatorValue::load_by_id(self.as_ref(), Some(accumulator_version), *account_id)
-                // Expect is safe because at this point we should know that we are dealing with a Balance<T>
-                // object
-                .expect("read cannot fail")
-                .unwrap_or(U128 { value: 0 });
-
-        value.value
+    ) -> Option<(u128, SequenceNumber)> {
+        AccumulatorValue::load_latest_by_id(self.as_ref(), *account_id).expect("read cannot fail")
     }
 }
 
@@ -78,19 +68,42 @@ impl MockBalanceRead {
         }
     }
 
-    pub(crate) fn settle_balance_changes(&self, balance_changes: BTreeMap<AccumulatorObjId, i128>) {
+    pub(crate) fn cur_version(&self) -> SequenceNumber {
+        let inner = self.inner.read();
+        inner.cur_version
+    }
+
+    pub(crate) fn settle_balance_changes(
+        &self,
+        balance_changes: BTreeMap<AccumulatorObjId, i128>,
+        next_accumulator_version: SequenceNumber,
+    ) {
         let mut inner = self.inner.write();
-        inner.settle_balance_changes(balance_changes);
+        inner.settle_balance_changes(balance_changes, next_accumulator_version);
     }
 }
 
 #[cfg(test)]
 impl MockBalanceReadInner {
-    fn settle_balance_changes(&mut self, balance_changes: BTreeMap<AccumulatorObjId, i128>) {
+    fn settle_balance_changes(
+        &mut self,
+        balance_changes: BTreeMap<AccumulatorObjId, i128>,
+        next_accumulator_version: SequenceNumber,
+    ) {
+        use tracing::debug;
+
+        debug!(
+            ?next_accumulator_version,
+            "Updating balance states in MockBalanceRead: {:?}", balance_changes,
+        );
         let new_accumulator_version = self.cur_version.next();
+        assert_eq!(new_accumulator_version, next_accumulator_version);
         self.cur_version = new_accumulator_version;
         for (account_id, balance_change) in balance_changes {
-            let balance = self.get_account_balance(&account_id, self.cur_version);
+            let balance = self
+                .get_latest_account_balance(&account_id)
+                .map(|(balance, _)| balance)
+                .unwrap_or_default();
             let new_balance = balance as i128 + balance_change;
             assert!(new_balance >= 0);
             self.balances
@@ -100,19 +113,14 @@ impl MockBalanceReadInner {
         }
     }
 
-    fn get_account_balance(
+    fn get_latest_account_balance(
         &self,
         account_id: &AccumulatorObjId,
-        accumulator_version: SequenceNumber,
-    ) -> u128 {
-        let Some(account_balances) = self.balances.get(account_id) else {
-            return 0;
-        };
+    ) -> Option<(u128, SequenceNumber)> {
+        let account_balances = self.balances.get(account_id)?;
         account_balances
-            .range(..=accumulator_version)
-            .last()
-            .map(|(_, balance)| *balance)
-            .unwrap_or_default()
+            .last_key_value()
+            .map(|(version, balance)| (*balance, *version))
     }
 }
 
@@ -121,12 +129,11 @@ impl AccountBalanceRead for MockBalanceRead {
     /// Mimic the behavior of child object read.
     /// Find the balance for the given account at the max version
     /// less or equal to the given accumulator version.
-    fn get_account_balance(
+    fn get_latest_account_balance(
         &self,
         account_id: &AccumulatorObjId,
-        accumulator_version: SequenceNumber,
-    ) -> u128 {
+    ) -> Option<(u128, SequenceNumber)> {
         let inner = self.inner.read();
-        inner.get_account_balance(account_id, accumulator_version)
+        inner.get_latest_account_balance(account_id)
     }
 }
