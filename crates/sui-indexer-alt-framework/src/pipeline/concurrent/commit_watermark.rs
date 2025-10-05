@@ -125,7 +125,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         match next_checkpoint.cmp(&part.watermark.checkpoint_hi_inclusive) {
                             // Next pending checkpoint is from the future.
                             Ordering::Less => break,
-
                             // This is the next checkpoint -- include it.
                             Ordering::Equal => {
                                 watermark = Some(pending.remove().watermark);
