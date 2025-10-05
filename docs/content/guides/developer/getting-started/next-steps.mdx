@@ -1,18 +1,57 @@
 ---
-title: Next steps
+title: Next Steps
 description: placeholder
-keywords: [ placeholder ]
+keywords: [placeholder]
 ---
 
-## Next steps
+If you have followed the Getting Started path, you should be ready to continue your journey on Sui. To make sure you have everything you need, paste the following commands into a console on your operating system. 
 
-- Links to next recommended areas of learning
-    - Concepts, other areas of guides, move book, etc
-    - Access Sui Data
-- Link to glossary
-- Link to Awesome Sui
-- Sign up for Dev Newsletter
-- Join Discord, Telegram, etc
-- Video resources
-- Developer portal
-- The Move Book
+```sh
+$ sui --version
+$ sui client active-address
+$ sui client active-env
+$ sui client gas
+```
+
+If all commands are successful, your console displays output similar to the following:
+
+```sh
+sui [version_number]-[commit_hash]
+0x6543...7241
+testnet
+╭───────────────┬────────────────────┬──────────────────╮
+│ gasCoinId     │ mistBalance (MIST) │ suiBalance (SUI) │
+├───────────────┼────────────────────┼──────────────────┤
+│ 0x1e86...63b2 │ 5041161576         │ 5.04             │
+╰───────────────┴────────────────────┴──────────────────╯
+```
+
+If you receive an error, revisit the content relevant to the command that caused the error or lacked output.
+
+| Command | Successful if |
+| ------- | -------------- |
+| `sui --version` | You [installed Sui](/guides/developer/getting-started/sui-install.mdx) correctly. |
+| `sui client active-address` | You have a [Sui address](/guides/developer/getting-started/get-address.mdx) that is currently active. |
+| `sui client active-env` | You have set up a [connection to Testnet](/guides/developer/getting-started/connect.mdx) that is currently active. |
+| `sui client objects` | You address owns [SUI for testing](/guides/developer/getting-started/get-coins.mdx). |
+
+## Connect with the Sui community
+
+Join the Discord 
+The best place to go next depends on your goals for using Sui.
+
+Join SuiRiders on Telegram 
+
+## Developer newsletter
+
+## Sui essentials
+
+## Learn Move
+
+Move is the language of smart contracts on Sui. [The Move Book](https://move-book.com/) details the language.
+
+## Developer portal
+
+## Awesome Sui
+
+The [Awesome Sui](/resources/awesome-sui.mdx) repo is a curated list of awesome developer tools and infrastructure projects within the Sui ecosystem. 

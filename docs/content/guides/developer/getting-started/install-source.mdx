@@ -1,106 +1,95 @@
 ---
-title: Install From Source
-description: Install the Sui framework from source.
-keywords: [ install sui, how to install sui, install sui cli, interact with sui networks, connect to sui networks, sui command line interface, install from source, source install ]
+title: Install from Source
+description: Install the Sui framework from source, either locally or directly from GitHub.
+keywords: [ install sui, how to install sui, install sui cli, sui command line interface, install from source, source install ]
 ---
+
+<ImportContent source="info-easy-install" mode="snippet" /> 
 
 To install Sui from source, you first need to install the following prerequisites for your operating system. You can also download the [source code](/references/contribute/sui-environment) to have local access to files.
 
-<Tabs className="tabsHeadingCentered--small">
-<TabItem value="prereq" label="Prerequisites">
+You can install Sui from source, either locally or directly from GitHub. You need Rust and Cargo installed for the Sui framework. If you need to install other binaries, you might need the additional prerequisites listed in the following collapsible.
+
+<details>
+<summary>
+Show prerequisites
+</summary>
+<ImportContent source="install-prereqs.mdx" mode="snippet" />
+</details>
+
+## Installation
+
+You can install from source either directly from GitHub or from your local drive.
 
 <Tabs>
-<TabItem label="macOS" value="macos">
 
-- [x] Download and install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+<TabItem label="GitHub source" value="github">
 
-    - If you have Rust installed, update to the latest version: `rustup update stable`
+Use Cargo to install Sui directly from the GitHub repo. 
 
-- [x] Download and install Cargo: `curl https://sh.rustup.rs -sSf | sh`
+```sh
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
+```
 
-- [x] Download and install [Homebrew](https://brew.sh/): `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
+Replace the `testnet` branch in the previous command as needed.
 
-- [x] Download and install [cURL](https://curl.se): `brew install curl`. Verify installation with `curl --version`
+    - `main`: Latest updates. Least stable.
+    - `devnet`: Includes experimental features.
+    - `testnet`: Includes beta features.
+    - `mainnet`: Stable release.
 
-- [x] Download and install CMake: `brew install cmake`. Verify installation with `cmake --version`
+You can install additional binaries as needed. Replace `sui` in the previous command with the name of the binary in the following table.
 
-- [x] Download and install **libpq**: `brew install libpq`. Verify installation with `libpq --version`
-
-- [x] Download and install Git: `brew install git`. Verify installation with `git --version`
-
-- [x] Download and install [PostgreSQL](https://wiki.postgresql.org/wiki/Main_Page).
-
-</TabItem>
-
-<TabItem label="Linux" value="linux">
-
-These prerequisites use the `apt` package manager for Linux. Adjust the commands accordingly per your package manager.
-
-- [x] Download and install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-
-    - If you have Rust installed, update to the latest version: `rustup update stable`
-
-- [x] Download and install Cargo: `curl https://sh.rustup.rs -sSf | sh`
-
-- [x] Download and install cURL: `sudo apt-get install curl`. Verify installation with `curl --version`
-
-- [x] Download and install Git CLI: `sudo apt-get install git-all`. Verify installation with `git --version`
-
-- [x] Download and install CMake: `sudo apt-get install cmake`. Verify installation with `cmake --version`
-
-- [x] Download and install GCC: `sudo apt-get install gcc`. Verify installation with `gcc --version`
-
-- [x] Download and install **libssl-dev**: `sudo apt-get install libssl-dev`.
-    
-    - If the version of Linux you use doesn't support **libssl-dev**, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libssl-dev/).
-
-    - If you have OpenSSL you might also need to also install **pkg-config**: `sudo apt-get install pkg-config`
-
-- [x] Download and install **libclang-dev**: `sudo apt-get install libclang-dev`
-
-    - If the version of Linux you use doesn't support **libclang-dev**, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libclang-dev/).
-
-- [x] If you plan to use the `--with-indexer` and `--with-graphql` options with `sui start`, download and install **libpq-dev**: `sudo apt-get install libpq-dev`
-
-    - See [Local Network](/guides/developer/sui-101/local-network) for more information.
-
-    - If the version of Linux you use doesn't support **libpq-dev**, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libpq-dev/).
-
-- [x] Download and install **build-essential**: `sudo apt-get install build-essential`
-
-You can install all of the prerequisites for Linux at once using the following command:
-
-<ImportContent source="linux-deps.mdx" mode="snippet" />
+<ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
 
 </TabItem>
 
-<TabItem label="Windows" value="windows">
+<TabItem label="Local source" value="local">
 
-- [x] Download and install [C++ build tools](https://visualstudio.microsoft.com/downloads/) before downloading Rust.
+You can clone the public Sui repo and install from source on your local drive.
 
-- [x] Download and install Rust: If you use Windows 11, see information about using the [Rust installer](https://www.rust-lang.org/tools/install) on the Rust website. The installer checks for C++ build tools and prompts you to install them if necessary. Select the option that best defines your environment and follow the instructions in the install wizard.
+1. Fork the [Sui repo](https://github.com/MystenLabs/sui).
 
-    - If you have Rust installed, update to the latest version: `rustup update stable`
+1. Use a console to clone the fork to the desired directory. 
 
-- [x] Download and install Cargo: Download and install [`rustup-init.exe`](https://win.rustup.rs/)
+    ```sh
+    $ git clone https://github.com/YourOrg/sui.git
+    ```
+1. Navigate to the repo directory and switch to the branch you want to build against.
 
-- [x] Windows 11 ships with a Microsoft version of [cURL](https://curl.se/windows/microsoft.html) already installed; however, if you are using Windows 10 or want to use the cURL project version instead, download and install it from [https://curl.se/windows/](https://curl.se/windows/).
+    - `main`: Latest updates. Least stable.
+    - `devnet`: Includes experimental features.
+    - `testnet`: Includes beta features.
+    - `mainnet`: Stable release.
 
-- [x] Download and install the [Git command line interface](https://git-scm.com/download/).
+    ```sh
+    $ git switch testnet
+    ```
+1. Build the binaries from the repo root using cargo.
 
-- [x] Download and install [CMake](https://cmake.org/download/).
+    ```sh
+    cargo build --profile release --bin sui
+    ```
 
-- [x] Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases) (`protoc-xx.x-win32.zip` or `protoc-xx.x-win64.zip`) and add the `\bin` directory to your Windows `PATH` environment variable.
+1. Run the `cargo install` command from the repo root.
 
-- [x] For Windows on ARM64 only: Download and install [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/).
-
-- [x] Download and install the [LLVM Compiler Infrastructure](https://releases.llvm.org/). Look for a file with a name similar to `LLVM-15.0.7-win64.exe` for 64-bit Windows, or `LLVM-15.0.7-win32.exe` for 32-bit Windows.
-
-
+    ```sh
+    $ cargo install --locked --path crates/sui --features tracing
+    ```
 </TabItem>
-</Tabs>
-</TabItem>
+
 </Tabs>
 
+:::info
 
-## [add instructions for how to download source code and build it locally]
+The tracing feature enables Move test coverage and debugger support in the Sui CLI. These features are not available unless you enable tracing.
+
+:::
+
+Regardless of which install from source method you use, the Sui components are found in the `~/.cargo/bin` folder.
+
+## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
+
+<ImportContent source="install-sui-node.mdx" mode="snippet" />
+
+## Related links

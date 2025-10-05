@@ -1,10 +1,10 @@
 ---
-title: Install From Binaries
-description: placeholder
-keywords: [ placeholder ]
+title: Install from Binaries
+description: Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
+keywords: [ install sui, install sui binaries, binaries ]
 ---
 
-## Download binaries from GitHub {#install-binaries}
+<ImportContent source="info-easy-install" mode="snippet" />
 
 Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
 
@@ -42,8 +42,8 @@ Each Sui release provides a set of binaries for several operating systems. You c
     <ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
 
 1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.zshrc` or `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
-1. Start a new terminal session or type `source ~/.zshrc` (or `.bashrc`) to load the new `PATH` value.
-1. If running the binaries for the first time, you might receive an error from MacOS that prevents the binaries from running. If you receive this error, close the dialog and type `xattr -d com.apple.quarantine ~/sui/*` in your terminal and press Enter (be sure to adjust the path if different).
+1. Start a new console session or type `source ~/.zshrc` (or `.bashrc`) to load the new `PATH` value.
+1. If running the binaries for the first time, you might receive an error from MacOS that prevents the binaries from running. If you receive this error, close the dialog and type `xattr -d com.apple.quarantine ~/sui/*` in your console and press <kbd>Enter</kbd> (be sure to adjust the path if different).
 
 </TabItem>
 
@@ -76,43 +76,6 @@ Each Sui release provides a set of binaries for several operating systems. You c
 
 </Tabs>
 
-:::tip
-Running binaries other than `sui` might require installing prerequisites listed in the following section.
-::::
-
-
-## Install from Cargo {#install-sui-binaries-from-source}
-
-Run the following command to install Sui binaries from the `testnet` branch:
-
-```sh
-$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
-```
-
-Enabling the `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Without it these two features will not be able to be used.
-
-The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
-
-To update to the latest stable version of Rust:
-
-```sh
-$ rustup update stable
-```
-
-The command installs Sui components in the `~/.cargo/bin` folder.
-
 ## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
 
-    - The [`sui-node` binary from AWS](#aws-sui-node) supports only version 22.04
-
-
-The `sui-node` binaries for Ubuntu 22.04 are available for download from AWS. You can use either the commit sha or version tag in the URL to retrieve the specific version of Sui you want. Use one of these values to construct the AWS download URL.
-
-The URL is in the form `https://sui-releases.s3-accelerate.amazonaws.com/<SHA-OR-TAG>/sui-node`, where you replace `<SHA-OR-TAG>` with the proper value. For example, the URL is `https://sui-releases.s3-accelerate.amazonaws.com/00544a588bb71c395d49d91f756e8bfe96067eca/sui-node` to download the release with the relevant commit sha. If you visit the URL using a browser, the binary downloads automatically.
-
-After downloading, open a console to the file's location and change its permission to `755`.
-```sh
-$ chmod 755 sui-node
-```
-
-Add the file's location to your PATH variable if its directory is not already included. Follow the steps in [Configure a Sui full node](../../operator/sui-full-node.mdx) to complete the setup.
+<ImportContent source="install-sui-node.mdx" mode="snippet" />
