@@ -386,7 +386,7 @@ pub(crate) enum Bytecode {
     ///
     /// Stack transition:
     ///
-    /// ```..., integer_value -> ..., u8_value```
+    /// ```..., integer_value -> ..., u64_value```
     CastU64,
     /// Convert the value at the top of the stack into u128.
     ///
@@ -943,6 +943,7 @@ impl VariantDef {
 
 impl VariantInstantiation {
     pub fn field_count(&self) -> usize {
+        // TODO: Check if variant is a valid VMPointer.
         self.variant.fields.len()
     }
 }
@@ -988,11 +989,10 @@ impl ModuleIdKey {
         &self.address
     }
 
-    pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
+    pub fn name(&self, interner: &IdentifierInterner) -> PartialVMResult<Identifier> {
         interner
             .resolve_ident(&self.name, "module name")
             .expect("Uninterned key")
-    }
 }
 
 impl DatatypeDescriptor {
