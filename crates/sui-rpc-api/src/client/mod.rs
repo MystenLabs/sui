@@ -265,7 +265,7 @@ fn certified_checkpoint_summary_try_from_proto(
 
 /// Attempts to parse `CheckpointData` from a proto::Checkpoint
 #[allow(clippy::result_large_err)]
-fn checkpoint_data_try_from_proto(
+pub fn checkpoint_data_try_from_proto(
     checkpoint: &proto::Checkpoint,
 ) -> Result<CheckpointData, TryFromProtoError> {
     let checkpoint_summary = certified_checkpoint_summary_try_from_proto(checkpoint)?;
