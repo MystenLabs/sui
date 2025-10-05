@@ -25,7 +25,7 @@ pub mod client;
 pub mod error;
 mod local_client;
 mod regulator;
-mod remote_client;
+pub mod remote_client;
 mod rpc_client;
 #[cfg(test)]
 mod test_utils;
