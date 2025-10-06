@@ -8,6 +8,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
+use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_graphql::{
     config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
 };
@@ -16,8 +18,10 @@ use sui_indexer_alt_reader::{
     fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
 };
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_macros::sim_test;
-use sui_pg_db::{temp::get_available_port, DbArgs};
+use sui_pg_db::{
+    temp::{get_available_port, TempDb},
+    DbArgs,
+};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::gas_coin::GasCoin;
 
@@ -146,37 +150,60 @@ struct GraphQlTestCluster {
     url: Url,
     handle: JoinHandle<()>,
     cancel: CancellationToken,
+    indexer_handle: JoinHandle<()>,
+    /// Hold on to the database so it doesn't get dropped until the cluster is stopped.
+    #[allow(unused)]
+    database: TempDb,
 }
 
 impl GraphQlTestCluster {
     async fn new(validator_cluster: &TestCluster) -> Self {
         let graphql_port = get_available_port();
         let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
+        let cancel = CancellationToken::new();
 
-        let graphql_args = GraphQlArgs {
-            rpc_listen_address: graphql_listen_address,
-            no_ide: true,
-        };
+        let database = TempDb::new().expect("Failed to create temp database");
+        let database_url = database.database().url().clone();
 
         let fullnode_args = FullnodeArgs {
             fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
         };
+        let client_args = ClientArgs {
+            rpc_api_url: Some(Url::parse(validator_cluster.rpc_url()).expect("Invalid RPC URL")),
+            ..Default::default()
+        };
 
-        let cancel = CancellationToken::new();
+        let indexer = setup_indexer(
+            database_url.clone(),
+            DbArgs::default(),
+            IndexerArgs::default(),
+            client_args,
+            IndexerConfig::for_test(),
+            None,
+            &Registry::new(),
+            cancel.child_token(),
+        )
+        .await
+        .expect("Failed to setup indexer");
 
-        // Start GraphQL server that connects directly to TestCluster's RPC
+        let pipelines: Vec<String> = indexer.pipelines().map(|s| s.to_string()).collect();
+        let indexer_handle = indexer.run().await.expect("Failed to start indexer");
+
         let graphql_handle = start_graphql(
-            None, // No database - GraphQL will use fullnode RPC for simulateTransaction
-            None, // No bigtable
+            Some(database_url),
+            None,
             fullnode_args,
             DbArgs::default(),
             BigtableArgs::default(),
             ConsistentReaderArgs::default(),
-            graphql_args,
+            GraphQlArgs {
+                rpc_listen_address: graphql_listen_address,
+                no_ide: true,
+            },
             SystemPackageTaskArgs::default(),
             "0.0.0",
             GraphQlConfig::default(),
-            vec![], // No pipelines since we're not using database
+            pipelines,
             &Registry::new(),
             cancel.child_token(),
         )
@@ -190,6 +217,8 @@ impl GraphQlTestCluster {
             url,
             handle: graphql_handle,
             cancel,
+            indexer_handle,
+            database,
         }
     }
 
@@ -219,10 +248,11 @@ impl GraphQlTestCluster {
     async fn stopped(self) {
         self.cancel.cancel();
         let _ = self.handle.await;
+        let _ = self.indexer_handle.await;
     }
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_basic() {
     let validator_cluster = TestClusterBuilder::new().build().await;
 
@@ -289,7 +319,7 @@ async fn test_simulate_transaction_basic() {
     graphql_cluster.stopped().await;
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_with_events() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -349,7 +379,7 @@ async fn test_simulate_transaction_with_events() {
     graphql_cluster.stopped().await;
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_input_validation() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -382,7 +412,7 @@ async fn test_simulate_transaction_input_validation() {
     graphql_cluster.stopped().await;
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_object_changes() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -511,7 +541,7 @@ async fn test_simulate_transaction_object_changes() {
     graphql_cluster.stopped().await;
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_command_results() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -721,7 +751,7 @@ async fn test_simulate_transaction_command_results() {
     graphql_cluster.stopped().await;
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_json_transfer() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -830,11 +860,7 @@ async fn test_simulate_transaction_json_transfer() {
     graphql_cluster.stopped().await;
 }
 
-//TODO(joey) We need to setup a DB so that package resolution can properly find packages that are
-//not included in the response (like 0x2). This test previously passed since simulate was
-//incorretly returning the system package as a part of the input objects.
-#[sim_test]
-#[ignore]
+#[tokio::test]
 async fn test_package_resolver_finds_newly_published_package() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -855,7 +881,7 @@ async fn test_package_resolver_finds_newly_published_package() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
+            query($txData: JSON!) {
                 simulateTransaction(transaction: $txData) {
                     effects {
                         status
