@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::identifier::Identifier;
+use move_core_types::{identifier::Identifier, u256::U256};
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -336,24 +336,24 @@ fn withdraw_from_balance_tx_with_reservation(
         reservation_amount,
         sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
     );
-    builder.funds_withdrawal(withdraw_arg).unwrap();
+    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
 
-    let amount = builder.pure(amount).unwrap();
+    let amount_arg = builder.pure(U256::from(amount)).unwrap();
 
-    let balance = builder.programmable_move_call(
+    let split_withdraw_arg = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("balance").unwrap(),
-        Identifier::new("withdraw_from_account").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![amount],
+        Identifier::new("funds_accumulator").unwrap(),
+        Identifier::new("withdrawal_split").unwrap(),
+        vec!["0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap()],
+        vec![withdraw_arg, amount_arg],
     );
 
     let coin = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("coin").unwrap(),
-        Identifier::new("from_balance").unwrap(),
+        Identifier::new("redeem_funds").unwrap(),
         vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![balance],
+        vec![split_withdraw_arg],
     );
 
     builder.transfer_arg(sender, coin);
@@ -382,20 +382,12 @@ fn make_send_to_account_tx(
 
     let coin = Argument::NestedResult(coin_idx, 0);
 
-    let balance = builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("coin").unwrap(),
-        Identifier::new("into_balance").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![coin],
-    );
-
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("balance").unwrap(),
-        Identifier::new("send_to_account").unwrap(),
+        Identifier::new("coin").unwrap(),
+        Identifier::new("send_funds").unwrap(),
         vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![balance, recipient_arg],
+        vec![coin, recipient_arg],
     );
 
     let tx = TransactionKind::ProgrammableTransaction(builder.finish());
