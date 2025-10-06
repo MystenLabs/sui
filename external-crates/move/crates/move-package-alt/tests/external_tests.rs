@@ -58,7 +58,7 @@ async fn external_basic() {
     [pinned._test_env.a]
     source = { local = "../a" }
     use_environment = "_test_env"
-    manifest_digest = "2E37503481BAC28476D7D3FFE88C18448E7FF86A3B69D59266B2DD8818767EC2"
+    manifest_digest = "C9B56CF5F834B627DA03B64D16218ACBF2A4A89EFCC4161B8966D6D709A39066"
     deps = { b = "b" }
 
     [pinned._test_env.b]
@@ -109,7 +109,7 @@ async fn external_multiple_resolvers() {
     [pinned._test_env.a]
     source = { local = "../a" }
     use_environment = "_test_env"
-    manifest_digest = "A79831553B8AF3284B83589BEA0B3318A7C11560F8DAABC9144CE592E516A89B"
+    manifest_digest = "B3DE727C8DC77E014D73F2318E70FCF101D768696FB2FF72F583435C2D450D91"
     deps = { res_1 = "res_1", res_2 = "res_2" }
 
     [pinned._test_env.res_1]
