@@ -2134,9 +2134,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // Transaction has appeared in consensus output, we can increment the submission count
                     // for this tx for DoS protection.
                     if self.epoch_store.protocol_config().mysticeti_fastpath() {
-                        if let ConsensusTransactionKind::UserTransaction(tx) =
-                            &parsed.transaction.kind
-                        {
+                        if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
                             let digest = tx.digest();
                             if let Some((spam_weight, submitter_client_addrs)) = self
                                 .epoch_store
@@ -2196,6 +2194,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         &parsed.transaction.kind,
                         ConsensusTransactionKind::CertifiedTransaction(_)
                             | ConsensusTransactionKind::UserTransaction(_)
+                            | ConsensusTransactionKind::UserTransactionV2(_)
                     ) {
                         self.last_consensus_stats
                             .stats
@@ -2403,8 +2402,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // Transaction has appeared in consensus output, we can increment the submission count
                 // for this tx for DoS protection.
                 if self.epoch_store.protocol_config().mysticeti_fastpath() {
-                    if let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind
-                    {
+                    if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
                         let digest = tx.digest();
                         if let Some((spam_weight, submitter_client_addrs)) = self
                             .epoch_store
@@ -2441,6 +2439,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     if matches!(
                         parsed.transaction.kind,
                         ConsensusTransactionKind::UserTransaction(_)
+                            | ConsensusTransactionKind::UserTransactionV2(_)
                     ) {
                         self.epoch_store
                             .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
@@ -2453,6 +2452,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 if matches!(
                     parsed.transaction.kind,
                     ConsensusTransactionKind::UserTransaction(_)
+                        | ConsensusTransactionKind::UserTransactionV2(_)
                 ) {
                     self.epoch_store
                         .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
@@ -2472,6 +2472,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     &parsed.transaction.kind,
                     ConsensusTransactionKind::CertifiedTransaction(_)
                         | ConsensusTransactionKind::UserTransaction(_)
+                        | ConsensusTransactionKind::UserTransactionV2(_)
                 ) {
                     self.last_consensus_stats
                         .stats
@@ -2569,6 +2570,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 if matches!(
                     &parsed.transaction.kind,
                     ConsensusTransactionKind::UserTransaction(_)
+                        | ConsensusTransactionKind::UserTransactionV2(_)
                         | ConsensusTransactionKind::CertifiedTransaction(_)
                 ) {
                     let author_name = self
@@ -3112,6 +3114,7 @@ impl SequencedConsensusTransactionKind {
             SequencedConsensusTransactionKind::External(ext) => match &ext.kind {
                 ConsensusTransactionKind::CertifiedTransaction(txn) => Some(*txn.digest()),
                 ConsensusTransactionKind::UserTransaction(txn) => Some(*txn.digest()),
+                ConsensusTransactionKind::UserTransactionV2(txn) => Some(*txn.tx().digest()),
                 _ => None,
             },
             SequencedConsensusTransactionKind::System(txn) => Some(*txn.digest()),
@@ -3179,6 +3182,10 @@ impl SequencedConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(txn),
                 ..
             }) => txn.transaction_data().uses_randomness(),
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransactionV2(txn),
+                ..
+            }) => txn.tx().transaction_data().uses_randomness(),
             _ => false,
         }
     }
@@ -3193,6 +3200,10 @@ impl SequencedConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(txn),
                 ..
             }) if txn.is_consensus_tx() => Some(txn.data()),
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransactionV2(txn),
+                ..
+            }) if txn.tx().is_consensus_tx() => Some(txn.tx().data()),
             SequencedConsensusTransactionKind::System(txn) if txn.is_consensus_tx() => {
                 Some(txn.data())
             }
@@ -3309,7 +3320,7 @@ impl ConsensusBlockHandler {
                 } else {
                     "certified"
                 };
-                if let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind {
+                if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
                     debug!(
                         "User Transaction in position: {:} with digest {:} is {:}",
                         position,
@@ -3339,14 +3350,14 @@ impl ConsensusBlockHandler {
                     .with_label_values(&["certified"])
                     .inc();
 
-                if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
+                if let Some(tx) = parsed.transaction.kind.into_user_transaction() {
                     if tx.is_consensus_tx() {
                         continue;
                     }
                     // Only set fastpath certified status on transactions intended for fastpath execution.
                     self.epoch_store
                         .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
-                    let tx = VerifiedTransaction::new_unchecked(*tx);
+                    let tx = VerifiedTransaction::new_unchecked(tx);
                     executable_transactions.push(Schedulable::Transaction(
                         VerifiedExecutableTransaction::new_from_consensus(
                             tx,
@@ -4161,6 +4172,9 @@ mod tests {
                 }
                 ConsensusTransactionKind::UserTransaction(txn) => {
                     format!("user({})", txn.transaction_data().gas_price())
+                }
+                ConsensusTransactionKind::UserTransactionV2(txn) => {
+                    format!("userv2({})", txn.tx().transaction_data().gas_price())
                 }
                 _ => unreachable!(),
             },
