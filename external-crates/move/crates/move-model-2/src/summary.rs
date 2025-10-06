@@ -25,10 +25,7 @@ use move_symbol_pool::Symbol;
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    rc::Rc,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Indicates that the information came from the source code
 pub type FromSource<T> = Option<T>;
