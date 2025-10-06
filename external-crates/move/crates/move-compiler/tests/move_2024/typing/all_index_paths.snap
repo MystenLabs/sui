@@ -66,11 +66,27 @@ error[E04027]: invalid 'move' usage
 85 │         (move t2.u).vs[2];
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
+error[E04039]: unable to determine princiapl type for literal
+   ┌─ tests/move_2024/typing/all_index_paths.move:85:24
+   │
+85 │         (move t2.u).vs[2];
+   │                        ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
+
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:86:10
    │
 86 │         (move t2.u).vs[2].w;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04039]: unable to determine princiapl type for literal
+   ┌─ tests/move_2024/typing/all_index_paths.move:86:24
+   │
+86 │         (move t2.u).vs[2].w;
+   │                        ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:87:10
@@ -78,17 +94,41 @@ error[E04027]: invalid 'move' usage
 87 │         (move t2.u).vs[2].w.xs[m+1];
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
+error[E04039]: unable to determine princiapl type for literal
+   ┌─ tests/move_2024/typing/all_index_paths.move:87:24
+   │
+87 │         (move t2.u).vs[2].w.xs[m+1];
+   │                        ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
+
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:88:10
    │
 88 │         (move t2.u).vs[2].w.xs[m+1].y;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
+error[E04039]: unable to determine princiapl type for literal
+   ┌─ tests/move_2024/typing/all_index_paths.move:88:24
+   │
+88 │         (move t2.u).vs[2].w.xs[m+1].y;
+   │                        ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
+
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:89:10
    │
 89 │         (move t2.u).vs[2].w.xs[m+1].y.z;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04039]: unable to determine princiapl type for literal
+   ┌─ tests/move_2024/typing/all_index_paths.move:89:24
+   │
+89 │         (move t2.u).vs[2].w.xs[m+1].y.z;
+   │                        ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
 
 error[E01013]: invalid 'move' or 'copy'
    ┌─ tests/move_2024/typing/all_index_paths.move:90:9
