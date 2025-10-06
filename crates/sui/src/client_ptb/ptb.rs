@@ -214,6 +214,7 @@ impl PTB {
         let processing = TxProcessingArgs {
             tx_digest: program_metadata.tx_digest_set,
             dry_run: program_metadata.dry_run_set,
+            verify_first: false, // PTB flow currently does not expose --verify-first; set default
             dev_inspect: program_metadata.dev_inspect_set,
             serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
             serialize_signed_transaction: program_metadata.serialize_signed_set,
