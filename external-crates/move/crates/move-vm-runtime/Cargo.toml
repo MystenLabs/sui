@@ -50,6 +50,7 @@ memory-stats.workspace = true
 tempfile.workspace = true
 move-stdlib.workspace = true
 move-proc-macros.workspace = true
+insta.workspace = true
 
 [features]
 default = []

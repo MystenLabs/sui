@@ -1,0 +1,6 @@
+---
+source: crates/move-vm-runtime/src/unit_tests/value_tests.rs
+expression: output
+---
+size of struct "{  }": 2
+size of struct "{ { 0, 0 } }": 36

@@ -2,12 +2,33 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write as _;
+
 use crate::{
-    execution::{interpreter::locals::MachineHeap, values::*},
+    execution::{
+        interpreter::locals::MachineHeap,
+        values::{
+            debug::{print_reference, print_value},
+            *,
+        },
+    },
     jit::execution::ast::Type,
+    shared::views::*,
 };
 use move_binary_format::errors::*;
 use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256};
+
+#[cfg(test)]
+const SIZE_CONFIG: SizeConfig = SizeConfig {
+    traverse_references: false,
+    include_vector_size: true,
+};
+
+#[cfg(test)]
+const SIZE_CONFIG_TRAVERSE: SizeConfig = SizeConfig {
+    traverse_references: true,
+    include_vector_size: true,
+};
 
 #[test]
 fn locals() -> PartialVMResult<()> {
@@ -164,6 +185,144 @@ fn global_value_non_struct() -> PartialVMResult<()> {
     assert!(GlobalValue::create(r).is_err(), "cache error 2");
 
     let _ = heap.free_stack_frame(locals);
+
+    Ok(())
+}
+
+fn print_val(v: &Value) -> String {
+    let mut s = String::new();
+    print_value(&mut s, v).unwrap();
+    s
+}
+
+fn print_ref(r: &Reference) -> String {
+    let mut s = String::new();
+    print_reference(&mut s, r).unwrap();
+    s
+}
+
+#[test]
+fn ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
+    #![allow(deprecated)]
+    let mut heap = MachineHeap::new();
+    let mut locals = heap.allocate_stack_frame(vec![], 10)?;
+
+    let mut output = String::new();
+
+    let mut record_val_size = |val: &Value| {
+        let val_size = val.abstract_memory_size(&SIZE_CONFIG);
+        writeln!(&mut output, "size of {:?}: {}, ", print_val(val), val_size).unwrap();
+    };
+
+    locals.store_loc(0, Value::u128(0))?;
+    let r = locals.borrow_loc(0)?;
+    record_val_size(&r);
+
+    locals.store_loc(1, Value::vector_u8([1, 2, 3]))?;
+    let r = locals.borrow_loc(1)?;
+    record_val_size(&r);
+
+    let r: VectorRef = VMValueCast::cast(r)?;
+    let r = r.borrow_elem(0, &Type::U8)?;
+    record_val_size(&r);
+
+    locals.store_loc(2, Value::make_struct(vec![]))?;
+    let r: Reference = VMValueCast::cast(locals.borrow_loc(2)?)?;
+    let val_size = r.abstract_memory_size(&SIZE_CONFIG);
+    writeln!(&mut output, "size of {:?}: {}, ", print_ref(&r), val_size).unwrap();
+
+    let val_size_traverse = r.abstract_memory_size(&SIZE_CONFIG_TRAVERSE);
+    writeln!(
+        &mut output,
+        "traversed size of {:?}: {}, ",
+        print_ref(&r),
+        val_size_traverse
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(output);
+
+    Ok(())
+}
+
+#[test]
+fn struct_abstract_memory_size_consistenty() -> PartialVMResult<()> {
+    let structs = [
+        Struct::pack([]),
+        Struct::pack([Value::make_struct(vec![Value::u8(0), Value::u64(0)])]),
+    ];
+
+    let mut output = String::new();
+
+    for s in structs {
+        writeln!(
+            &mut output,
+            "size of struct {1:?}: {0}",
+            s.abstract_memory_size(&SIZE_CONFIG),
+            print_val(&Value::Struct(s)),
+        )
+        .unwrap();
+    }
+    insta::assert_snapshot!(output);
+
+    Ok(())
+}
+
+#[test]
+fn val_abstract_memory_size_consistency() -> PartialVMResult<()> {
+    let mut output = String::new();
+    let vals = [
+        Value::u8(0),
+        Value::u16(0),
+        Value::u32(0),
+        Value::u64(0),
+        Value::u128(0),
+        Value::u256(U256::zero()),
+        Value::bool(true),
+        Value::address(AccountAddress::ZERO),
+        Value::vector_u8([0, 1, 2]),
+        Value::vector_u16([0, 1, 2]),
+        Value::vector_u32([0, 1, 2]),
+        Value::vector_u64([]),
+        Value::vector_u128([1, 2, 3, 4]),
+        Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
+        Value::make_struct([]),
+        Value::make_struct([Value::u8(0), Value::bool(false)]),
+        Vector::pack(VectorSpecialization::Container, [])?,
+        Vector::pack(VectorSpecialization::U8, [Value::u8(0), Value::u8(1)])?,
+    ];
+
+    let mut heap = MachineHeap::new();
+    let mut locals = heap.allocate_stack_frame(vec![], vals.len())?;
+
+    let record_val_size = |output: &mut String, val: &Value| {
+        let val_size = val.abstract_memory_size(&SIZE_CONFIG);
+        writeln!(output, "size of {:?}: {}, ", print_val(val), val_size).unwrap();
+    };
+
+    let record_ref_size = |output: &mut String, val: &Reference| {
+        let val_size = val.abstract_memory_size(&SIZE_CONFIG);
+        let val_size_traverse = val.abstract_memory_size(&SIZE_CONFIG_TRAVERSE);
+        writeln!(output, "size of {:?}: {}, ", print_ref(val), val_size).unwrap();
+        writeln!(
+            output,
+            "traversed size of {:?}: {}, ",
+            print_ref(val),
+            val_size_traverse
+        )
+        .unwrap();
+    };
+
+    for (idx, val) in vals.iter().enumerate() {
+        locals.store_loc(idx, val.copy_value())?;
+
+        record_val_size(&mut output, val);
+
+        let ref_: Reference = VMValueCast::cast(locals.borrow_loc(idx)?)?;
+        record_ref_size(&mut output, &ref_);
+    }
+
+    insta::assert_snapshot!(output);
 
     Ok(())
 }
