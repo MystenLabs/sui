@@ -43,7 +43,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
-use typed_store::rocksdb::{MergeOperands, WriteOptions};
+use typed_store::rocksdb::{compaction_filter::Decision, MergeOperands, WriteOptions};
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
@@ -245,9 +245,23 @@ fn balance_delta_merge_operator(
     )
 }
 
+fn balance_compaction_filter(_level: u32, _key: &[u8], value: &[u8]) -> Decision {
+    let balance_info = match bcs::from_bytes::<BalanceIndexInfo>(value) {
+        Ok(info) => info,
+        Err(_) => return Decision::Keep,
+    };
+
+    if balance_info.balance_delta == 0 {
+        Decision::Remove
+    } else {
+        Decision::Keep
+    }
+}
+
 fn balance_table_options() -> typed_store::rocks::DBOptions {
     default_table_options()
         .set_merge_operator_associative("balance_merge", balance_delta_merge_operator)
+        .set_compaction_filter("balance_zero_filter", balance_compaction_filter)
 }
 
 impl CoinIndexInfo {
