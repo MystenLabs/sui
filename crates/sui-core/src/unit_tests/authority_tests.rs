@@ -6835,3 +6835,52 @@ async fn test_should_wait_for_dependency_object() {
     let result = authority_state.should_wait_for_dependency_object(deleted_obj_ref);
     assert!(result.is_none(), "Should not wait for deleted object");
 }
+
+#[tokio::test]
+async fn test_dry_run_transaction_block_override_empty() {
+    // Build a simple transfer with no explicit gas coin so dry-run will mock gas.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(42);
+    let gas_object_id = ObjectID::random();
+    let (_, fullnode, _) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+
+    let amount = 1_000_000_000u64;
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.transfer_sui(recipient, Some(amount));
+    let pt = builder.finish();
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![],
+        pt,
+        ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas(),
+        fullnode.reference_gas_price_for_testing().unwrap(),
+    );
+
+    let signed = to_sender_signed_transaction(data, &sender_key);
+    let txn_data = signed.data().intent_message().value.clone();
+    let digest = *signed.digest();
+
+    // Baseline dry run
+    let (resp_base, written_base, _eff_base, mock_gas_base) = fullnode
+        .dry_exec_transaction(txn_data.clone(), digest)
+        .await
+        .unwrap();
+    assert!(resp_base.effects.status().is_ok());
+
+    // Dry run with empty overrides should match baseline semantics
+    let (resp_override, written_override, _eff_override, mock_gas_override) = fullnode
+        .dry_exec_transaction_override_objects(txn_data, digest, Vec::new())
+        .await
+        .unwrap();
+
+    // Compare key fields
+    assert_eq!(resp_base.effects.status(), resp_override.effects.status());
+    assert_eq!(
+        resp_base.effects.gas_cost_summary(),
+        resp_override.effects.gas_cost_summary()
+    );
+    assert_eq!(written_base.len(), written_override.len());
+    // mock gas presence should be same in both paths
+    assert_eq!(mock_gas_base.is_some(), mock_gas_override.is_some());
+}
