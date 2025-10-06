@@ -404,6 +404,7 @@ where
                     } else {
                         OperationType::Consensus
                     },
+                    ping,
                     result: Ok(start_time.elapsed()),
                 });
         }
