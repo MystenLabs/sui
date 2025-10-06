@@ -368,7 +368,7 @@ impl EventStreamHead {
     }
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub struct EventCommitment {
     pub checkpoint_seq: u64,
     pub transaction_idx: u64,
@@ -385,4 +385,36 @@ impl EventCommitment {
             digest,
         }
     }
+}
+
+impl PartialOrd for EventCommitment {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for EventCommitment {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.checkpoint_seq, self.transaction_idx, self.event_idx).cmp(&(
+            other.checkpoint_seq,
+            other.transaction_idx,
+            other.event_idx,
+        ))
+    }
+}
+
+pub fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
+    use fastcrypto::hash::Blake2b256;
+    use fastcrypto::merkle::MerkleTree;
+
+    debug_assert!(
+        events.windows(2).all(|w| w[0] <= w[1]),
+        "Events must be ordered by (checkpoint_seq, transaction_idx, event_idx)"
+    );
+
+    let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
+        .expect("failed to serialize event commitments for merkle root");
+    let root_node = merkle_tree.root();
+    let root_digest = root_node.bytes();
+    Digest::new(root_digest)
 }

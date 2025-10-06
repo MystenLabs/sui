@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::hash::{Blake2b256, HashFunction};
-use fastcrypto::merkle::MerkleTree;
 use move_core_types::u256::U256;
-use sui_types::accumulator_root::{EventCommitment, EventStreamHead};
+use sui_types::accumulator_root::{build_event_merkle_root, EventCommitment, EventStreamHead};
 
 const U256_ZERO: U256 = U256::zero();
 
@@ -13,25 +12,6 @@ fn hash_two_to_one_u256(left: U256, right: U256) -> U256 {
     concatenated.extend_from_slice(&bcs::to_bytes(&right).expect("Failed to serialize right U256"));
     let hash = Blake2b256::digest(&concatenated);
     U256::from_le_bytes(&hash.digest)
-}
-
-// Build the Merkle root of all events in a single checkpoint
-fn build_event_merkle_root(events: &[EventCommitment]) -> U256 {
-    // Debug assertion to ensure events are ordered by the natural order of EventCommitment
-    debug_assert!(
-        events.windows(2).all(|pair| {
-            let (a, b) = (&pair[0], &pair[1]);
-            (a.checkpoint_seq, a.transaction_idx, a.event_idx)
-                <= (b.checkpoint_seq, b.transaction_idx, b.event_idx)
-        }),
-        "Events must be ordered by (checkpoint_seq, transaction_idx, event_idx)"
-    );
-
-    let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
-        .expect("failed to serialize event commitments for merkle root");
-    let root_node = merkle_tree.root();
-    let root_digest = root_node.bytes();
-    U256::from_le_bytes(&root_digest)
 }
 
 fn add_to_stream(mmr: &mut Vec<U256>, new_val: U256) {
@@ -68,7 +48,8 @@ pub fn apply_stream_updates(
 
         // TODO: checkpoint_seq in EventCommitment is always 0, so we don't validate it
 
-        let merkle_root = build_event_merkle_root(&cp_events);
+        let digest = build_event_merkle_root(&cp_events);
+        let merkle_root = U256::from_le_bytes(&digest.into_inner());
         add_to_stream(&mut new_head.mmr, merkle_root);
         new_head.num_events += cp_events.len() as u64;
     }

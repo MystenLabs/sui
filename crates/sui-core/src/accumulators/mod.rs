@@ -3,14 +3,13 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use fastcrypto::hash::Blake2b256;
-use fastcrypto::merkle::MerkleTree;
 use move_core_types::u256::U256;
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
-    AccumulatorObjId, EventCommitment, ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC,
-    ACCUMULATOR_ROOT_SETTLE_U128_FUNC, ACCUMULATOR_SETTLEMENT_MODULE,
+    build_event_merkle_root, AccumulatorObjId, EventCommitment,
+    ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC, ACCUMULATOR_ROOT_SETTLE_U128_FUNC,
+    ACCUMULATOR_SETTLEMENT_MODULE,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::base_types::SequenceNumber;
@@ -137,24 +136,6 @@ impl From<MergedValueIntermediate> for MergedValue {
             }
         }
     }
-}
-
-fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
-    // Debug assertion to ensure events are ordered by the natural order of EventCommitment
-    debug_assert!(
-        events.windows(2).all(|pair| {
-            let (a, b) = (&pair[0], &pair[1]);
-            (a.checkpoint_seq, a.transaction_idx, a.event_idx)
-                <= (b.checkpoint_seq, b.transaction_idx, b.event_idx)
-        }),
-        "Events must be ordered by (checkpoint_seq, transaction_idx, event_idx)"
-    );
-
-    let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
-        .expect("failed to serialize event commitments for merkle root");
-    let root_node = merkle_tree.root();
-    let root_digest = root_node.bytes();
-    Digest::new(root_digest)
 }
 
 /// MergedValueIntermediate is an intermediate / in-memory representation of the for

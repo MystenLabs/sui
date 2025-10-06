@@ -215,8 +215,6 @@ fun test_mmr_with_different_values() {
     assert!(mmr[2] != 0);
 }
 
-// use std::debug::print;
-
 #[test]
 fun test_mmr_digest_compat_with_rust() {
     let mut mmr = vector::empty();
