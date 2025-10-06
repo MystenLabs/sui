@@ -222,7 +222,7 @@ fn collect_pipelines(
         (
             "Object",
             field @ Some(
-                "address" | "balance" | "balances" | "defaultSuiNsName" | "multiGetBalances"
+                "address" | "balance" | "balances" | "defaultSuinsName" | "multiGetBalances"
                 | "objects",
             ),
             filters,
