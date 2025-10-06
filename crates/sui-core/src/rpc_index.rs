@@ -1114,15 +1114,21 @@ impl RpcIndexStore {
         checkpoint_store: &CheckpointStore,
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        pruning_watermark: Arc<std::sync::atomic::AtomicU64>,
         rpc_config: sui_config::RpcConfig,
     ) -> Self {
+        let events_filter = EventsCompactionFilter::new(pruning_watermark);
+        let index_options = IndexStoreOptions {
+            events_compaction_filter: Some(events_filter),
+        };
+
         Self::new_with_options(
             dir,
             authority_store,
             checkpoint_store,
             epoch_store,
             package_store,
-            IndexStoreOptions::default(),
+            index_options,
             rpc_config,
         )
         .await
@@ -1524,32 +1530,6 @@ impl RpcIndexStore {
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
         self.tables.watermark.get(&Watermark::Indexed)
-    }
-
-    pub async fn new_with_compaction_filter(
-        dir: &Path,
-        authority_store: &AuthorityStore,
-        checkpoint_store: &CheckpointStore,
-        epoch_store: &AuthorityPerEpochStore,
-        package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-        pruning_watermark: Arc<std::sync::atomic::AtomicU64>,
-        rpc_config: sui_config::RpcConfig,
-    ) -> Self {
-        let events_filter = EventsCompactionFilter::new(pruning_watermark);
-        let index_options = IndexStoreOptions {
-            events_compaction_filter: Some(events_filter),
-        };
-
-        Self::new_with_options(
-            dir,
-            authority_store,
-            checkpoint_store,
-            epoch_store,
-            package_store,
-            index_options,
-            rpc_config,
-        )
-        .await
     }
 }
 

@@ -260,6 +260,7 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         pruning_config,
         metrics,
         EPOCH_DURATION_MS_FOR_TESTING,
+        None,
     )
     .await?;
     Ok(())
