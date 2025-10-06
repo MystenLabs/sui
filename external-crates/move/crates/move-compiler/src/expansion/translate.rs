@@ -780,7 +780,8 @@ pub fn program(
 
     for (addr, pkg) in module_extensions {
         if matches!(addr, Address::NamedUnassigned(_)) {
-            // If the address is not known, the error has already been reported
+            // If the address is not known (NamedUnassigned), an error was already reported
+            // during address resolution or module definition. No need to report again here.
             continue;
         }
         for (name, ext) in pkg {
