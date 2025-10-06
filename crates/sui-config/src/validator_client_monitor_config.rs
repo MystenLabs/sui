@@ -156,7 +156,7 @@ fn default_reliability_weight() -> f64 {
 }
 
 fn default_latency_moving_window_size() -> usize {
-    200
+    40
 }
 
 fn default_reliability_moving_window_size() -> usize {
