@@ -3590,6 +3590,7 @@ impl AuthorityState {
             config.authority_store_pruning_config,
             metrics,
             EPOCH_DURATION_MS_FOR_TESTING,
+            None,
         )
         .await
     }

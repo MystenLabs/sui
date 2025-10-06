@@ -243,6 +243,7 @@ impl AuthorityStorePruner {
         checkpoint_content_to_prune: Vec<CheckpointContents>,
         effects_to_prune: &Vec<TransactionEffects>,
         metrics: Arc<AuthorityStorePruningMetrics>,
+        pruning_watermark: Option<Arc<PrunerWatermarks>>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("EffectsLivePruner");
 
@@ -310,6 +311,13 @@ impl AuthorityStorePruner {
         metrics
             .last_pruned_effects_checkpoint
             .set(checkpoint_number as i64);
+
+        if let Some(watermark) = pruning_watermark {
+            watermark
+                .checkpoint_id
+                .store(checkpoint_number, std::sync::atomic::Ordering::Relaxed);
+        }
+
         Ok(())
     }
 
@@ -352,6 +360,7 @@ impl AuthorityStorePruner {
             max_eligible_checkpoint_number,
             config,
             metrics.clone(),
+            None, /* pruning_watermark needed only if PruningMode::Checkpoints */
         )
         .await
     }
@@ -364,6 +373,7 @@ impl AuthorityStorePruner {
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         epoch_duration_ms: u64,
+        pruning_watermark: Option<Arc<PrunerWatermarks>>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("PruneCheckpointsForEligibleEpochs");
         let pruned_checkpoint_number = checkpoint_store
@@ -407,6 +417,7 @@ impl AuthorityStorePruner {
             max_eligible_checkpoint,
             config,
             metrics.clone(),
+            pruning_watermark,
         )
         .await
     }
@@ -423,6 +434,7 @@ impl AuthorityStorePruner {
         max_eligible_checkpoint: CheckpointSequenceNumber,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
+        pruning_watermark: Option<Arc<PrunerWatermarks>>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("PruneForEligibleEpochs");
 
@@ -497,6 +509,7 @@ impl AuthorityStorePruner {
                         checkpoint_content_to_prune,
                         &effects_to_prune,
                         metrics.clone(),
+                        pruning_watermark.clone(),
                     )?,
                 };
                 checkpoints_to_prune = vec![];
@@ -529,6 +542,7 @@ impl AuthorityStorePruner {
                     checkpoint_content_to_prune,
                     &effects_to_prune,
                     metrics.clone(),
+                    pruning_watermark.clone(),
                 )?,
             };
         }
@@ -695,7 +709,7 @@ impl AuthorityStorePruner {
         jsonrpc_index: Option<Arc<IndexStore>>,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        #[allow(unused_variables)] pruner_watermarks: Arc<PrunerWatermarks>,
+        pruner_watermarks: Arc<PrunerWatermarks>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -780,7 +794,7 @@ impl AuthorityStorePruner {
                             }
                         },
                         _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
+                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms, Some(pruner_watermarks.clone())).await {
                                 error!("Failed to prune checkpoints: {:?}", err);
                             }
                         },
