@@ -333,7 +333,7 @@ async fn get_checkpoint() {
                                 None
                             }
                         })
-                        .expect(&format!("{} should be a string", addr_field));
+                        .unwrap_or_else(|| panic!("{} should be a string", addr_field));
                     assert!(
                         addr.starts_with("0x"),
                         "{} should start with 0x",
