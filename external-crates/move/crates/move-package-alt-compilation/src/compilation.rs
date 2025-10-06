@@ -32,8 +32,11 @@ use move_compiler::{
 };
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, graph::PackageInfo, package::RootPackage,
-    schema::Environment,
+    errors::PackageResult,
+    flavor::MoveFlavor,
+    graph::{NamedAddress, PackageInfo},
+    package::RootPackage,
+    schema::{Environment, OriginalID},
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
