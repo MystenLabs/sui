@@ -28,11 +28,11 @@ module action {
         match(l2: 0x0::action::Action) {
             0x0::action::Action::Stop => {
                 let 0x0::action::Action::Stop {} = &l2;
-                abort!(U64(0));
+                abort!(0u64);
             },
             0x0::action::Action::MoveTo => {
                 let 0x0::action::Action::MoveTo { x: reg_9, y: reg_10 } = &l2;
-                abort!(U64(0));
+                abort!(0u64);
             },
             0x0::action::Action::ChangeSpeed => {
                 let 0x0::action::Action::ChangeSpeed { pos0: reg_13 } = &l2;
@@ -50,7 +50,7 @@ module action {
         match(l2: 0x0::action::Action) {
             0x0::action::Action::Stop => {
                 let 0x0::action::Action::Stop {} = &l2;
-                abort!(U64(0));
+                abort!(0u64);
             },
             0x0::action::Action::MoveTo => {
                 let 0x0::action::Action::MoveTo { x: reg_7, y: reg_8 } = &l2;
