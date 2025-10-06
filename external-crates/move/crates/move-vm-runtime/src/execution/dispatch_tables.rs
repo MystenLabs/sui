@@ -66,7 +66,6 @@ pub struct VMDispatchTables {
     pub(crate) type_depths: BTreeMap<OriginalId, DefinitionMap<DepthFormula>>,
     /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
     /// [SAFETY] Ordering is not guaranteed
-    #[allow(dead_code)]
     pub(crate) defining_id_origins: BTreeMap<DefiningTypeId, OriginalId>,
 }
 
@@ -295,7 +294,7 @@ impl VMDispatchTables {
                     return Err(
                         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                             .with_message(format!(
-                                "Defining ID {defining_id} does not match defining ID {defining_id}"
+                                "Defining ID {defining_id} does not match defining ID of loaded type: {}", datatype.defining_id.address()
                             ))
                             .finish(Location::Undefined),
                     );
