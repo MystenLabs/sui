@@ -1390,11 +1390,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             .push(transaction);
                     } else {
                         assert_sometimes!(
-                            transaction.transaction_data().uses_randomness(),
+                            transaction.tx().data().transaction_data().uses_randomness(),
                             "cancelled randomness-using transaction"
                         );
                         assert_sometimes!(
-                            !transaction.transaction_data().uses_randomness(),
+                            !transaction.tx().data().transaction_data().uses_randomness(),
                             "cancelled non-randomness-using transaction"
                         );
 
@@ -1462,14 +1462,29 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
+        // Extract inner transactions for reordering
+        let mut inner_txns: Vec<VerifiedExecutableTransaction> =
+            txns.into_iter().map(|tx| tx.into_tx()).collect();
         PostConsensusTxReorder::reorder(
-            &mut txns,
+            &mut inner_txns,
             protocol_config.consensus_transaction_ordering(),
         );
+        // Re-wrap with no aliases since we don't have the original aliases after extraction
+        let txns: Vec<VerifiedExecutableTransactionWithAliases> = inner_txns
+            .into_iter()
+            .map(VerifiedExecutableTransactionWithAliases::no_aliases)
+            .collect();
+
+        let mut inner_randomness_txns: Vec<VerifiedExecutableTransaction> =
+            randomness_txns.into_iter().map(|tx| tx.into_tx()).collect();
         PostConsensusTxReorder::reorder(
-            &mut randomness_txns,
+            &mut inner_randomness_txns,
             protocol_config.consensus_transaction_ordering(),
         );
+        let randomness_txns: Vec<VerifiedExecutableTransactionWithAliases> = inner_randomness_txns
+            .into_iter()
+            .map(VerifiedExecutableTransactionWithAliases::no_aliases)
+            .collect();
 
         (txns, randomness_txns, previously_deferred_tx_digests)
     }
@@ -1934,7 +1949,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // Transaction has appeared in consensus output, we can increment the submission count
                 // for this tx for DoS protection.
                 if self.epoch_store.protocol_config().mysticeti_fastpath()
-                    && let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind
+                    && let Some(tx) = parsed.transaction.kind.as_user_transaction()
                 {
                     let digest = tx.digest();
                     if let Some((spam_weight, submitter_client_addrs)) = self
@@ -1971,6 +1986,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     if matches!(
                         parsed.transaction.kind,
                         ConsensusTransactionKind::UserTransaction(_)
+                            | ConsensusTransactionKind::UserTransactionV2(_)
                     ) {
                         self.epoch_store
                             .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
@@ -1983,6 +1999,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 if matches!(
                     parsed.transaction.kind,
                     ConsensusTransactionKind::UserTransaction(_)
+                        | ConsensusTransactionKind::UserTransactionV2(_)
                 ) {
                     self.epoch_store
                         .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
@@ -2002,6 +2019,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     &parsed.transaction.kind,
                     ConsensusTransactionKind::CertifiedTransaction(_)
                         | ConsensusTransactionKind::UserTransaction(_)
+                        | ConsensusTransactionKind::UserTransactionV2(_)
                 ) {
                     self.last_consensus_stats
                         .stats
@@ -2086,6 +2104,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 if matches!(
                     &parsed.transaction.kind,
                     ConsensusTransactionKind::UserTransaction(_)
+                        | ConsensusTransactionKind::UserTransactionV2(_)
                         | ConsensusTransactionKind::CertifiedTransaction(_)
                 ) {
                     let author_name = self
@@ -2633,6 +2652,7 @@ impl SequencedConsensusTransactionKind {
             SequencedConsensusTransactionKind::External(ext) => match &ext.kind {
                 ConsensusTransactionKind::CertifiedTransaction(txn) => Some(*txn.digest()),
                 ConsensusTransactionKind::UserTransaction(txn) => Some(*txn.digest()),
+                ConsensusTransactionKind::UserTransactionV2(txn) => Some(*txn.tx().digest()),
                 _ => None,
             },
             SequencedConsensusTransactionKind::System(txn) => Some(*txn.digest()),
@@ -2700,6 +2720,10 @@ impl SequencedConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(txn),
                 ..
             }) => txn.transaction_data().uses_randomness(),
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransactionV2(txn),
+                ..
+            }) => txn.tx().transaction_data().uses_randomness(),
             _ => false,
         }
     }
@@ -2714,6 +2738,10 @@ impl SequencedConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(txn),
                 ..
             }) if txn.is_consensus_tx() => Some(txn.data()),
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransactionV2(txn),
+                ..
+            }) if txn.tx().is_consensus_tx() => Some(txn.tx().data()),
             SequencedConsensusTransactionKind::System(txn) if txn.is_consensus_tx() => {
                 Some(txn.data())
             }
@@ -2830,7 +2858,7 @@ impl ConsensusBlockHandler {
                 } else {
                     "certified"
                 };
-                if let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind {
+                if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
                     debug!(
                         "User Transaction in position: {:} with digest {:} is {:}",
                         position,
@@ -2860,14 +2888,14 @@ impl ConsensusBlockHandler {
                     .with_label_values(&["certified"])
                     .inc();
 
-                if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
+                if let Some(tx) = parsed.transaction.kind.into_user_transaction() {
                     if tx.is_consensus_tx() {
                         continue;
                     }
                     // Only set fastpath certified status on transactions intended for fastpath execution.
                     self.epoch_store
                         .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
-                    let tx = VerifiedTransaction::new_unchecked(*tx);
+                    let tx = VerifiedTransaction::new_unchecked(tx);
                     executable_transactions.push(Schedulable::Transaction(
                         VerifiedExecutableTransaction::new_from_consensus(
                             tx,
@@ -3348,6 +3376,12 @@ mod tests {
                 digest
             );
         }
+    }
+
+    fn to_short_strings(txs: Vec<VerifiedExecutableTransaction>) -> Vec<String> {
+        txs.into_iter()
+            .map(|tx| format!("transaction({})", tx.data().transaction_data().gas_price()))
+            .collect()
     }
 
     #[test]
