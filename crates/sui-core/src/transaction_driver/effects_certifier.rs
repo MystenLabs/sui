@@ -77,7 +77,6 @@ impl EffectsCertifier {
         // When consensus position is provided, wait for finalized and fastpath outputs at the validators' side.
         // Otherwise, only wait for finalized effects.
         // Skip the first attempt to get full effects if it is already provided.
-
         let (consensus_position, full_effects) = match submit_txn_result {
             SubmitTxResult::Submitted { consensus_position } => (Some(consensus_position), None),
             SubmitTxResult::Executed {
@@ -157,6 +156,7 @@ impl EffectsCertifier {
                             authority_name: current_target,
                             display_name,
                             operation: OperationType::Effects,
+                            ping,
                             result: Err(()),
                         });
                     } else {
@@ -166,6 +166,7 @@ impl EffectsCertifier {
                                 authority_name: current_target,
                                 display_name,
                                 operation: OperationType::Effects,
+                                ping,
                                 result: Ok(latency),
                             });
                         }
@@ -180,6 +181,7 @@ impl EffectsCertifier {
                         authority_name: current_target,
                         display_name,
                         operation: OperationType::Effects,
+                        ping,
                         result: Err(()),
                     });
                     // This emits an error when retrier gathers enough (f+1) non-retriable effects errors,
@@ -312,6 +314,7 @@ impl EffectsCertifier {
                         &client,
                         client_monitor,
                         &raw_request,
+                        ping,
                         options,
                     ),
                 )
@@ -323,6 +326,7 @@ impl EffectsCertifier {
                             authority_name: name,
                             display_name,
                             operation: OperationType::Effects,
+                            ping,
                             result: Err(()),
                         });
                         (name, Err(SuiError::TimeoutError))
@@ -568,6 +572,7 @@ impl EffectsCertifier {
         client: &Arc<SafeClient<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         raw_request: &RawWaitForEffectsRequest,
+        ping: Option<PingType>,
         options: &SubmitTransactionOptions,
     ) -> Result<WaitForEffectsResponse, SuiError>
     where
@@ -590,6 +595,7 @@ impl EffectsCertifier {
                         authority_name: name,
                         display_name: display_name.clone(),
                         operation: OperationType::Effects,
+                        ping,
                         result: Ok(latency),
                     });
                     return Ok(response);
@@ -599,6 +605,7 @@ impl EffectsCertifier {
                         authority_name: name,
                         display_name: display_name.clone(),
                         operation: OperationType::Effects,
+                        ping,
                         result: Err(()),
                     });
                     if !matches!(e, SuiError::RpcError(_, _)) {
