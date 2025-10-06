@@ -427,7 +427,7 @@ impl<'env> Context<'env> {
                     self.reporter(),
                     !overlapping_modes.is_empty(),
                     loc,
-                    "Module extension to add has no modes in common with existing extension"
+                    "Module extension being added has no modes in common with existing extension"
                 );
                 let modes = if overlapping_modes.len() > 1 {
                     "modes"
