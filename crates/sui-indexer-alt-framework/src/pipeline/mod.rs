@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-pub use processor::{Processor, ProcessorAsync, ProcessorError};
+pub use processor::{Processor, ProcessorAsync};
 use serde::{Deserialize, Serialize};
 
 use crate::store::CommitterWatermark;
