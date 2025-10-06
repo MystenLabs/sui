@@ -285,7 +285,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                     .concat_space(D::text("="))
                     .concat_space(recur(context, exp))
             }
-            Exp::UnpackVariant(unpack_kind, (mod_, enum_, variant), items, exp) => {
+            Exp::UnpackVariant(_unpack_kind, (mod_, enum_, variant), items, exp) => {
                 let items_doc = fields(items);
                 D::text(format!("{mod_}::{enum_}::{variant}"))
                     .concat_space(items_doc)
