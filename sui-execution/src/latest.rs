@@ -77,6 +77,7 @@ impl executor::Executor for Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        address_balance_enabled: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -100,6 +101,7 @@ impl executor::Executor for Executor {
             enable_expensive_checks,
             execution_params,
             trace_builder_opt,
+            address_balance_enabled,
         )
     }
 
@@ -119,6 +121,7 @@ impl executor::Executor for Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,
+        address_balance_enabled: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -142,6 +145,7 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 &mut None,
+                address_balance_enabled,
             )
         } else {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
@@ -160,6 +164,7 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 &mut None,
+                address_balance_enabled,
             )
         };
         (inner_temp_store, gas_status, effects, result)

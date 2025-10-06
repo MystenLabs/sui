@@ -101,6 +101,7 @@ mod checked {
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        address_balance_enabled: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -171,6 +172,7 @@ mod checked {
             enable_expensive_checks,
             execution_params,
             trace_builder_opt,
+            address_balance_enabled,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -299,6 +301,7 @@ mod checked {
             &mut gas_charger,
             pt,
             &mut None,
+            false,
         )
         .map_err(|(e, _)| e)?;
         temporary_store.update_object_version_and_prev_tx();
@@ -318,6 +321,7 @@ mod checked {
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        address_balance_enabled: bool,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -359,6 +363,7 @@ mod checked {
                             protocol_config,
                             metrics.clone(),
                             trace_builder_opt,
+                            address_balance_enabled,
                         ),
                     };
 
@@ -587,6 +592,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        address_balance_enabled: bool,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         let result = match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
@@ -697,6 +703,7 @@ mod checked {
                     gas_charger,
                     pt,
                     trace_builder_opt,
+                    address_balance_enabled,
                 )
             }
             TransactionKind::ProgrammableSystemTransaction(pt) => {
@@ -710,6 +717,7 @@ mod checked {
                     gas_charger,
                     pt,
                     trace_builder_opt,
+                    address_balance_enabled,
                 )?;
                 Ok((Mode::empty_results(), vec![]))
             }
@@ -990,6 +998,7 @@ mod checked {
             gas_charger,
             advance_epoch_pt,
             trace_builder_opt,
+            false, // address balance natives not needed by advance epoch
         );
 
         #[cfg(msim)]
@@ -1021,6 +1030,7 @@ mod checked {
                     gas_charger,
                     advance_epoch_safe_mode_pt,
                     trace_builder_opt,
+                    false, // address balance natives not needed by advance epoch
                 )
                 .map_err(|(e, _)| e)
                 .expect("Advance epoch with safe mode must succeed");
@@ -1099,6 +1109,7 @@ mod checked {
                     gas_charger,
                     publish_pt,
                     trace_builder_opt,
+                    false, // address balance natives not needed by advance epoch
                 )
                 .map_err(|(e, _)| e)
                 .expect("System Package Publish must succeed");
@@ -1172,6 +1183,7 @@ mod checked {
             gas_charger,
             pt,
             trace_builder_opt,
+            false, // address balance natives not needed by consensus commit prologue
         )
         .map_err(|(e, _)| e)?;
         Ok(())
@@ -1319,6 +1331,7 @@ mod checked {
             gas_charger,
             pt,
             trace_builder_opt,
+            false, // address balance natives not needed by authenticator state update
         )
         .map_err(|(e, _)| e)?;
         Ok(())
@@ -1391,6 +1404,7 @@ mod checked {
             gas_charger,
             pt,
             trace_builder_opt,
+            false, // address balance natives not needed by randomness state update
         )
         .map_err(|(e, _)| e)?;
         Ok(())

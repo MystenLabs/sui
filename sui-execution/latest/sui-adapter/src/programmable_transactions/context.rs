@@ -155,6 +155,7 @@ mod checked {
             tx_context: Rc<RefCell<TxContext>>,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
+            address_balance_enabled: bool,
         ) -> Result<Self, ExecutionError>
         where
             'a: 'state,
@@ -227,6 +228,7 @@ mod checked {
                 protocol_config,
                 metrics.clone(),
                 tx_context.clone(),
+                address_balance_enabled,
             );
 
             Ok(Self {

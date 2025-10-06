@@ -231,6 +231,11 @@ pub fn execute_transaction_to_effects(
             txn_data.sender(),
             digest,
             trace_builder_opt,
+            // TODO(address-balances): Because we are not consulting the epoch store to see if the
+            // root accumulator exists, this will not be able to correctly replay a transaction
+            // that failed during the epoch in which accumulators were enabled by the protocol config,
+            // but were disabled because the root accumulator did not yet exist.
+            protocol_config.enable_accumulators(),
         );
     let ReplayStore {
         object_cache,

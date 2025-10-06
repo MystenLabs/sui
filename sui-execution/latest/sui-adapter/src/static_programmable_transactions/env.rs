@@ -58,6 +58,7 @@ pub struct Env<'pc, 'vm, 'state, 'linkage> {
     upgrade_receipt_type: OnceCell<Type>,
     upgrade_cap_type: OnceCell<Type>,
     tx_context_type: OnceCell<Type>,
+    pub address_balance_enabled: bool,
 }
 
 macro_rules! get_or_init_ty {
@@ -79,6 +80,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         state_view: &'state mut dyn ExecutionState,
         linkable_store: &'linkage CachedPackageStore<'state>,
         linkage_analysis: &'linkage LinkageAnalyzer,
+        address_balance_enabled: bool,
     ) -> Self {
         Self {
             protocol_config,
@@ -91,6 +93,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             upgrade_receipt_type: OnceCell::new(),
             upgrade_cap_type: OnceCell::new(),
             tx_context_type: OnceCell::new(),
+            address_balance_enabled,
         }
     }
 

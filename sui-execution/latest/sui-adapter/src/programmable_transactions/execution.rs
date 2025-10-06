@@ -89,6 +89,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        address_balance_enabled: bool,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         if protocol_config.enable_ptb_execution_v2() {
             return static_programmable_transactions::execute::<Mode>(
@@ -101,6 +102,7 @@ mod checked {
                 gas_charger,
                 pt,
                 trace_builder_opt,
+                address_balance_enabled,
             );
         }
 
@@ -115,6 +117,7 @@ mod checked {
             gas_charger,
             pt,
             trace_builder_opt,
+            address_balance_enabled,
         );
 
         match result {
@@ -137,6 +140,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        address_balance_enabled: bool,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
@@ -147,6 +151,7 @@ mod checked {
             tx_context,
             gas_charger,
             inputs,
+            address_balance_enabled,
         )?;
 
         trace_utils::trace_ptb_summary::<Mode>(&mut context, trace_builder_opt, &commands)?;

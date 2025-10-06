@@ -242,6 +242,7 @@ impl SingleValidator {
                 signer,
                 *executable.digest(),
                 &mut None,
+                self.epoch_store.accumulators_enabled(),
             );
         assert!(effects.status().is_ok());
         store.commit_objects(inner_temp_store);

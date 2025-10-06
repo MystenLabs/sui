@@ -255,6 +255,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             env.protocol_config,
             metrics.clone(),
             tx_context.clone(),
+            env.address_balance_enabled,
         );
 
         let tx_context_value = Locals::new(vec![Some(Value::new_tx_context(

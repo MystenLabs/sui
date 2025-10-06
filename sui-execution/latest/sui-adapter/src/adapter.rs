@@ -75,6 +75,7 @@ mod checked {
         protocol_config: &'r ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
+        address_balance_enabled: bool,
     ) -> NativeContextExtensions<'r> {
         let current_epoch_id: EpochId = tx_context.borrow().epoch();
         let mut extensions = NativeContextExtensions::default();
@@ -85,6 +86,7 @@ mod checked {
             protocol_config,
             metrics,
             current_epoch_id,
+            address_balance_enabled,
         ));
         extensions.add(NativesCostTable::from_protocol_config(protocol_config));
         extensions.add(TransactionContext::new(tx_context));

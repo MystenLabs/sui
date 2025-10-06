@@ -1989,6 +1989,7 @@ impl AuthorityState {
                 signer,
                 tx_digest,
                 &mut None,
+                epoch_store.accumulators_enabled(),
             );
 
         if let Some(expected_effects_digest) = expected_effects_digest {
@@ -2291,6 +2292,7 @@ impl AuthorityState {
                 signer,
                 transaction_digest,
                 &mut None,
+                epoch_store.accumulators_enabled(),
             );
         let tx_digest = *effects.transaction_digest();
 
@@ -2499,6 +2501,7 @@ impl AuthorityState {
             signer,
             transaction.digest(),
             checks.disabled(),
+            epoch_store.accumulators_enabled(),
         );
 
         let loaded_runtime_objects = tracking_store.into_read_objects();
@@ -2737,6 +2740,7 @@ impl AuthorityState {
             sender,
             transaction_digest,
             skip_checks,
+            epoch_store.accumulators_enabled(),
         );
 
         let raw_effects = if show_raw_txn_data_and_effects {
