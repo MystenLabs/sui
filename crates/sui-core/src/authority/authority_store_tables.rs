@@ -413,6 +413,24 @@ impl AuthorityPerpetualTables {
         )
     }
 
+    #[cfg(not(tidehunter))]
+    /// Opens the authority store in read-only mode but returns a read-write handle.
+    ///
+    /// Warning: Despite returning a read-write handle, this database is opened in RocksDB
+    /// secondary (read-only) mode. All write operations will fail at runtime. This is intended
+    /// for call sites that require a RW-typed handle for API compatibility but only perform reads.
+    pub fn open_readonly_as_rw(parent_path: &Path) -> AuthorityPerpetualTables {
+        Self::get_rw_handle_readonly_inner(
+            Self::path(parent_path),
+            MetricConf::new("perpetual_readonly_as_rw"),
+        )
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_readonly_as_rw(_parent_path: &Path) -> AuthorityPerpetualTables {
+        unimplemented!("read only mode is not supported for TideHunter");
+    }
+
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
         Self::get_read_only_handle(
             Self::path(parent_path),
