@@ -104,13 +104,12 @@ impl Summary {
                     .collect::<BTreeMap<_, _>>(),
             )
         } else {
-            let root_pkg = RootPackage::<F>::load(&path, env).await?;
+            let root_pkg = RootPackage::<F>::load(&path, env, config.mode_set()).await?;
             // Get named addresses from the root package graph
-            let named_addresses: BuildNamedAddresses = root_pkg
-                .package_graph()
-                .root_package_info()
-                .named_addresses()?
-                .into();
+            let named_addresses: BuildNamedAddresses =
+                root_pkg.package_info().named_addresses()?.into();
+
+            // Convert NamedAddress to AccountAddress mapping
             let original_address_mapping = named_addresses
                 .inner
                 .into_iter()

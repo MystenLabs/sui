@@ -87,7 +87,7 @@ async fn run_graph_to_lockfile_test(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let env = vanilla::default_environment();
 
-    let root = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), env).await?;
+    let root = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), env, vec![]).await?;
 
     Ok(root.lockfile_for_testing().render_as_toml())
 }
