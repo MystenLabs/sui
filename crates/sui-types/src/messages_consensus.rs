@@ -244,6 +244,9 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::UserTransaction(tx) => {
                 format!("User({})", tx.digest())
             }
+            ConsensusTransactionKind::UserTransactionV2(tx) => {
+                format!("UserV2({})", tx.tx().digest())
+            }
         }
     }
 }
@@ -492,7 +495,23 @@ pub enum ConsensusTransactionKind {
     UserTransactionV2(Box<TransactionWithAliases>),
 }
 
-impl ConsensusTransactionKind {}
+impl ConsensusTransactionKind {
+    pub fn as_user_transaction(&self) -> Option<&Transaction> {
+        match self {
+            ConsensusTransactionKind::UserTransaction(tx) => Some(tx),
+            ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.tx()),
+            _ => None,
+        }
+    }
+
+    pub fn into_user_transaction(self) -> Option<Transaction> {
+        match self {
+            ConsensusTransactionKind::UserTransaction(tx) => Some(*tx),
+            ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.into_tx()),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
@@ -817,13 +836,18 @@ impl ConsensusTransaction {
     }
 
     pub fn is_mfp_transaction(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+        matches!(
+            self.kind,
+            ConsensusTransactionKind::UserTransaction(_)
+                | ConsensusTransactionKind::UserTransactionV2(_)
+        )
     }
 
     pub fn is_user_transaction(&self) -> bool {
         matches!(
             self.kind,
             ConsensusTransactionKind::UserTransaction(_)
+                | ConsensusTransactionKind::UserTransactionV2(_)
                 | ConsensusTransactionKind::CertifiedTransaction(_)
         )
     }
