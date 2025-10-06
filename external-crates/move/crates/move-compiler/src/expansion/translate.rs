@@ -381,10 +381,12 @@ impl<'env> Context<'env> {
     pub fn set_module_extensions(&mut self, exts: Vec<(OptAddr, PkgDef)>) {
         for (addr, module) in exts {
             let Some(addr) = addr else {
-                self.add_diag(diag!(
+                let mut diag = diag!(
                     Declarations::InvalidAddress,
-                    (module.def.name.loc(), "Module extension address is invalid")
-                ));
+                    (module.def.name.loc(), "Coud not determine the address for this module extension")
+                );
+                diag.add_note("Module extensions must be defined for a concrete address and module, as '<address>::<module>'");
+                self.add_diag(diag);
                 continue;
             };
             let P::PackageDefinition {
