@@ -29,6 +29,9 @@ impl LeaderTimeoutTaskHandle {
 
 pub(crate) struct LeaderTimeoutTask<D: CoreThreadDispatcher> {
     dispatcher: Arc<D>,
+    // Get notified about new quorum round for proposing blocks.
+    // Round may not increase and is for debugging only.
+    // The actual proposed round is determined by additional factors including inflight transactions.
     new_round_receiver: watch::Receiver<Round>,
     leader_timeout: Duration,
     min_round_delay: Duration,
@@ -59,7 +62,6 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
 
     async fn run(&mut self) {
         let new_round = &mut self.new_round_receiver;
-        let mut leader_round: Round = *new_round.borrow_and_update();
         let mut min_leader_round_timed_out = false;
         let mut max_leader_round_timed_out = false;
         let timer_start = Instant::now();
@@ -75,7 +77,7 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
                 // If we already timed out before then the branch gets disabled so we don't attempt
                 // all the time to produce already produced blocks for that round.
                 () = &mut min_leader_timeout, if !min_leader_round_timed_out => {
-                    if let Err(err) = self.dispatcher.new_block(leader_round, false).await {
+                    if let Err(err) = self.dispatcher.new_block(false).await {
                         warn!("Error received while calling dispatcher, probably dispatcher is shutting down, will now exit: {err:?}");
                         return;
                     }
@@ -88,7 +90,7 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
                 // if the round has not advanced in the meantime. Otherwise, the max timeout will not get
                 // triggered at all.
                 () = &mut max_leader_timeout, if !max_leader_round_timed_out => {
-                    if let Err(err) = self.dispatcher.new_block(leader_round, true).await {
+                    if let Err(err) = self.dispatcher.new_block(true).await {
                         warn!("Error received while calling dispatcher, probably dispatcher is shutting down, will now exit: {err:?}");
                         return;
                     }
@@ -97,19 +99,18 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
 
                 // a new round has been produced. Reset the leader timeout.
                 Ok(_) = new_round.changed() => {
-                    leader_round = *new_round.borrow_and_update();
-                    debug!("New round has been received {leader_round}, resetting timer");
+                    debug!("New leader timeout scheduled, resetting timer");
 
                     min_leader_round_timed_out = false;
                     max_leader_round_timed_out = false;
 
                     let now = Instant::now();
                     min_leader_timeout
-                    .as_mut()
-                    .reset(now + self.min_round_delay);
+                        .as_mut()
+                        .reset(now + self.min_round_delay);
                     max_leader_timeout
-                    .as_mut()
-                    .reset(now + self.leader_timeout);
+                        .as_mut()
+                        .reset(now + self.leader_timeout);
                 },
                 _ = &mut self.stop => {
                     debug!("Stop signal has been received, now shutting down");
@@ -141,11 +142,11 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct MockCoreThreadDispatcher {
-        new_block_calls: Arc<Mutex<Vec<(Round, bool, Instant)>>>,
+        new_block_calls: Arc<Mutex<Vec<(bool, Instant)>>>,
     }
 
     impl MockCoreThreadDispatcher {
-        async fn get_new_block_calls(&self) -> Vec<(Round, bool, Instant)> {
+        async fn get_new_block_calls(&self) -> Vec<(bool, Instant)> {
             let mut binding = self.new_block_calls.lock();
             let all_calls = binding.drain(0..);
             all_calls.into_iter().collect()
@@ -175,10 +176,8 @@ mod tests {
             todo!()
         }
 
-        async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
-            self.new_block_calls
-                .lock()
-                .push((round, force, Instant::now()));
+        async fn new_block(&self, force: bool) -> Result<(), CoreError> {
+            self.new_block_calls.lock().push((force, Instant::now()));
             Ok(())
         }
 
@@ -230,8 +229,7 @@ mod tests {
         let all_calls = dispatcher.get_new_block_calls().await;
         assert_eq!(all_calls.len(), 1);
 
-        let (round, force, timestamp) = all_calls[0];
-        assert_eq!(round, 10);
+        let (force, timestamp) = all_calls[0];
         assert!(!force);
         assert!(
             min_round_delay <= timestamp - start,
@@ -245,8 +243,7 @@ mod tests {
         let all_calls = dispatcher.get_new_block_calls().await;
         assert_eq!(all_calls.len(), 1);
 
-        let (round, force, timestamp) = all_calls[0];
-        assert_eq!(round, 10);
+        let (force, timestamp) = all_calls[0];
         assert!(force);
         assert!(
             leader_timeout <= timestamp - start,
@@ -292,13 +289,11 @@ mod tests {
 
         // only the last one should be received
         let all_calls = dispatcher.get_new_block_calls().await;
-        let (round, force, timestamp) = all_calls[0];
-        assert_eq!(round, 15);
+        let (force, timestamp) = all_calls[0];
         assert!(!force);
         assert!(min_round_delay < timestamp - now);
 
-        let (round, force, timestamp) = all_calls[1];
-        assert_eq!(round, 15);
+        let (force, timestamp) = all_calls[1];
         assert!(force);
         assert!(leader_timeout < timestamp - now);
     }

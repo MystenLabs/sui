@@ -843,7 +843,7 @@ mod tests {
             todo!()
         }
 
-        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
+        async fn new_block(&self, _force: bool) -> Result<(), CoreError> {
             Ok(())
         }
 
