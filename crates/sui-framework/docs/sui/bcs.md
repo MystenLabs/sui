@@ -15,7 +15,7 @@ Short summary (for Move-supported types):
 - option - first byte bool: None (0) or Some (1), then value
 
 Usage example:
-```
+```move
 /// This function reads u8 and u64 value from the input
 /// and returns the rest of the bytes.
 fun deserialize(bytes: vector<u8>): (u8, u64, vector<u8>) {
@@ -766,7 +766,7 @@ the corresponding enum variant. Move enums are limited to 127 variants,
 however the tag can be any <code>u32</code> value.
 
 Example:
-```rust
+```move
 let my_enum = match (bcs.peel_enum_tag()) {
 0 => Enum::Empty,
 1 => Enum::U8(bcs.peel_u8()),

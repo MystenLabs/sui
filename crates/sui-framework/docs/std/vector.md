@@ -1277,7 +1277,7 @@ The sort is stable, meaning that equal elements will maintain their relative ord
 Please, note that the comparison function <code>le</code> expects less or equal, not less.
 
 Example:
-```
+```move
 let mut v = vector[2, 1, 3];
 v.insertion_sort_by(|a, b| a <= b);
 assert!(v == vector[1, 2, 3]);
@@ -1328,7 +1328,7 @@ Merge sort is efficient for large vectors, and is a stable sort.
 Please, note that the comparison function <code>le</code> expects less or equal, not less.
 
 Example:
-```
+```move
 let mut v = vector[2, 1, 3];
 v.merge_sort_by(|a, b| a <= b);
 assert!(v == vector[1, 2, 3]);
