@@ -26,6 +26,8 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `into_balance`](#sui_coin_into_balance)
 -  [Function `take`](#sui_coin_take)
 -  [Function `put`](#sui_coin_put)
+-  [Function `redeem_funds`](#sui_coin_redeem_funds)
+-  [Function `send_funds`](#sui_coin_send_funds)
 -  [Function `join`](#sui_coin_join)
 -  [Function `split`](#sui_coin_split)
 -  [Function `divide_into_n`](#sui_coin_divide_into_n)
@@ -691,6 +693,59 @@ Put a <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;</code> to t
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_put">put</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: &<b>mut</b> Balance&lt;T&gt;, <a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;) {
     <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/coin.md#sui_coin_join">join</a>(<a href="../sui/coin.md#sui_coin_into_balance">into_balance</a>(<a href="../sui/coin.md#sui_coin">coin</a>));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_redeem_funds"></a>
+
+## Function `redeem_funds`
+
+Redeem a <code>Withdrawal&lt;Balance&lt;T&gt;&gt;</code> and create a <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;</code> from the withdrawn Balance<T>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_redeem_funds">redeem_funds</a>&lt;T&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_redeem_funds">redeem_funds</a>&lt;T&gt;(
+    withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;Balance&lt;T&gt;&gt;,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt; {
+    <a href="../sui/balance.md#sui_balance_redeem_funds">balance::redeem_funds</a>(withdrawal).into_coin(ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_send_funds"></a>
+
+## Function `send_funds`
+
+Send a coin to an address balance
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, recipient: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;, recipient: <b>address</b>) {
+    <a href="../sui/balance.md#sui_balance_send_funds">balance::send_funds</a>(<a href="../sui/coin.md#sui_coin">coin</a>.<a href="../sui/coin.md#sui_coin_into_balance">into_balance</a>(), recipient);
 }
 </code></pre>
 

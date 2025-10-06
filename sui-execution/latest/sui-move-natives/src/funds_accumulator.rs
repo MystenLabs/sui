@@ -20,6 +20,7 @@ use crate::{
 };
 
 const E_OVERFLOW: u64 = 0;
+const E_ADDRESS_BALANCE_NOT_ENABLED: u64 = 1;
 
 pub fn add_to_accumulator_address(
     context: &mut NativeContext,
@@ -82,7 +83,14 @@ pub fn add_to_accumulator_address(
         );
     };
 
+    let cost = context.gas_used();
+
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+
+    if !obj_runtime.protocol_config.enable_accumulators() {
+        return Ok(NativeResult::err(cost, E_ADDRESS_BALANCE_NOT_ENABLED));
+    }
+
     obj_runtime.emit_accumulator_event(
         accumulator,
         MoveAccumulatorAction::Merge,
