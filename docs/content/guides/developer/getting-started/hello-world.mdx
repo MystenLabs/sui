@@ -195,26 +195,6 @@ To build your "Hello, world!" package, first confirm your working directory is `
 $ sui move build 
 ```
 
-<details>
-
-<summary>Output</summary>
-
-```
-FETCHING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
-Cloning into '/Users/sui_user/.move/https___github_com_MystenLabs_sui_git_framework__testnet'...
-remote: Enumerating objects: 33516, done.
-remote: Counting objects: 100% (49/49), done.
-remote: Compressing objects: 100% (49/49), done.
-remote: Total 33516 (delta 0), reused 0 (delta 0), pack-reused 33467 (from 2)
-Receiving objects: 100% (33516/33516), 17.68 MiB | 31.55 MiB/s, done.
-Resolving deltas: 100% (3465/3465), done.
-INCLUDING DEPENDENCY Sui
-INCLUDING DEPENDENCY MoveStdlib
-BUILDING hello_world
-```
-
-</details>
-
 The build process fetches and compiles the dependencies defined in the `Move.toml` file. The Move compiler checks your `.move` code for type errors, syntax errors, and enforces [resource safety](#resource-safety). 
 
 :::info 
@@ -225,9 +205,9 @@ You must build your package before you can publish it, but also before you test 
 
 ## Publish the Move package 
 
-Now that your package has been built, you need to publish it onto the Testnet. After you publish it, other packages and users can use the package's modules and functions by making calls to the package ID.
+Now that your package has been built, you need to publish it onto Testnet. After you publish it, other packages and users can use the package's modules and functions by making calls to the package ID.
 
-First, confirm your client is configured to use the Testnet as the active environment:
+First, confirm your client is configured to use Testnet as the active environment:
 
 ```
 $ sui client active-env
@@ -235,7 +215,7 @@ $ sui client active-env
 
 This should return `testnet`. If it does not return `testnet`, follow the [client configuration instructions](/guides/developer/getting-started/configure-sui-client.mdx) before continuing.
 
-Then, check your balance of SUI tokens to confirm you have enough to publish to the Testnet:
+Then, check your balance of SUI tokens to confirm you have enough to publish to Testnet:
 
 ```
 $ sui client balance 
@@ -257,7 +237,7 @@ You should have a balance of SUI tokens:
 
 If you do not have a balance, follow the [SUI Testnet faucet instructions](/guides/developer/getting-started/get-coins.mdx).
 
-Now, publish the package to the Testnet with the command:
+Now, publish the package to Testnet with the command:
 
 ```
 $ sui client publish 
@@ -480,7 +460,7 @@ You cannot send 2 or more transactions simultaneously, otherwise you encounter a
 Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction.
 ```
 
-If you receive this error, you must wait until the current epoch is over before submitting your transaction again. 
+If you receive this error, you must wait until the current epoch is over before submitting your transaction again. You can see how long is left in the current epoch using [Sui Explorer](https://suivision.xyz/) or another network explorer [like SuiScan](https://suiscan.xyz/mainnet/home). 
 
 To prevent the same object from being modified by multiple transactions at once, your address 'locks' the object to prevent conflicting modifications. If you'd like to batch multiple transaction commands together, you can use [programmable transaction blocks](/concepts/transactions/prog-txn-blocks.mdx).
 
