@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 97
+version: 98
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -44,8 +44,10 @@ feature_flags:
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
+  enable_poseidon: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
+  enable_group_ops_native_function_msm: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
   reject_mutable_random_on_entry_functions: true
@@ -67,6 +69,7 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
+  enable_vdf: true
   record_consensus_determined_version_assignments_in_prologue: true
   record_consensus_determined_version_assignments_in_prologue_v2: true
   fresh_vm_on_framework_upgrade: true
@@ -112,10 +115,13 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
+  include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true
   additional_borrow_checks: true
+  better_loader_errors: true
+  generate_df_type_layouts: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -234,6 +240,7 @@ event_emit_cost_base: 52
 event_emit_value_size_derivation_cost_per_byte: 2
 event_emit_tag_size_derivation_cost_per_byte: 5
 event_emit_output_cost_per_byte: 10
+event_emit_auth_stream_cost: 52
 object_borrow_uid_cost_base: 52
 object_delete_impl_cost_base: 52
 object_record_new_uid_cost_base: 52
@@ -309,6 +316,7 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 10
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
+poseidon_bn254_cost_base: 260
 poseidon_bn254_cost_per_block: 388
 group_ops_bls12381_decode_scalar_cost: 7
 group_ops_bls12381_decode_g1_cost: 2848
@@ -350,6 +358,8 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
+vdf_verify_vdf_cost: 1500
+vdf_hash_to_input_cost: 100
 nitro_attestation_parse_base_cost: 2650
 nitro_attestation_parse_cost_per_byte: 50
 nitro_attestation_verify_base_cost: 2481600
@@ -413,202 +423,3 @@ gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
 consensus_commit_rate_estimation_window_size: 10
-aliased_addresses:
-  - original:
-      - 205
-      - 137
-      - 98
-      - 218
-      - 210
-      - 120
-      - 216
-      - 181
-      - 15
-      - 160
-      - 249
-      - 235
-      - 1
-      - 134
-      - 191
-      - 164
-      - 203
-      - 222
-      - 204
-      - 109
-      - 89
-      - 55
-      - 114
-      - 20
-      - 200
-      - 141
-      - 2
-      - 134
-      - 160
-      - 172
-      - 149
-      - 98
-    aliased:
-      - 11
-      - 45
-      - 163
-      - 39
-      - 186
-      - 106
-      - 76
-      - 172
-      - 190
-      - 117
-      - 221
-      - 221
-      - 80
-      - 230
-      - 232
-      - 187
-      - 248
-      - 29
-      - 100
-      - 150
-      - 233
-      - 45
-      - 102
-      - 175
-      - 145
-      - 84
-      - 198
-      - 28
-      - 119
-      - 247
-      - 51
-      - 47
-    allowed_tx_digests:
-      - - 2
-        - 145
-        - 170
-        - 78
-        - 99
-        - 246
-        - 130
-        - 221
-        - 11
-        - 53
-        - 228
-        - 241
-        - 202
-        - 113
-        - 56
-        - 105
-        - 120
-        - 236
-        - 143
-        - 114
-        - 165
-        - 106
-        - 212
-        - 165
-        - 196
-        - 178
-        - 239
-        - 253
-        - 97
-        - 66
-        - 98
-        - 197
-  - original:
-      - 226
-      - 139
-      - 80
-      - 206
-      - 241
-      - 214
-      - 51
-      - 234
-      - 67
-      - 211
-      - 41
-      - 106
-      - 63
-      - 107
-      - 103
-      - 255
-      - 3
-      - 18
-      - 165
-      - 241
-      - 169
-      - 159
-      - 10
-      - 247
-      - 83
-      - 200
-      - 91
-      - 139
-      - 93
-      - 232
-      - 255
-      - 6
-    aliased:
-      - 11
-      - 45
-      - 163
-      - 39
-      - 186
-      - 106
-      - 76
-      - 172
-      - 190
-      - 117
-      - 221
-      - 221
-      - 80
-      - 230
-      - 232
-      - 187
-      - 248
-      - 29
-      - 100
-      - 150
-      - 233
-      - 45
-      - 102
-      - 175
-      - 145
-      - 84
-      - 198
-      - 28
-      - 119
-      - 247
-      - 51
-      - 47
-    allowed_tx_digests:
-      - - 253
-        - 118
-        - 94
-        - 221
-        - 205
-        - 105
-        - 164
-        - 185
-        - 146
-        - 65
-        - 207
-        - 179
-        - 194
-        - 136
-        - 51
-        - 126
-        - 222
-        - 28
-        - 78
-        - 230
-        - 151
-        - 0
-        - 147
-        - 120
-        - 44
-        - 55
-        - 155
-        - 111
-        - 243
-        - 35
-        - 173
-        - 119

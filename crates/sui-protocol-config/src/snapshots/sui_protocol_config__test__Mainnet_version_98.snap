@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 97
+version: 98
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -116,6 +116,8 @@ feature_flags:
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true
   additional_borrow_checks: true
+  better_loader_errors: true
+  generate_df_type_layouts: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -234,6 +236,7 @@ event_emit_cost_base: 52
 event_emit_value_size_derivation_cost_per_byte: 2
 event_emit_tag_size_derivation_cost_per_byte: 5
 event_emit_output_cost_per_byte: 10
+event_emit_auth_stream_cost: 52
 object_borrow_uid_cost_base: 52
 object_delete_impl_cost_base: 52
 object_record_new_uid_cost_base: 52
