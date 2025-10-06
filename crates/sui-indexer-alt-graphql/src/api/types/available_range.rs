@@ -304,28 +304,16 @@ fn collect_pipelines(
         }
         ("Query", Some("transactions"), filters) => {
             pipelines.insert("tx_digests".to_string());
-            if filters.contains("sender") {
-                pipelines.insert("tx_affected_addresses".to_string());
-            }
-            if filters.contains("atCheckpoint")
-                || filters.contains("afterCheckpoint")
-                || filters.contains("beforeCheckpoint")
-            {
-                pipelines.insert("cp_sequence_numbers".to_string());
-            }
-
             if filters.contains("function") {
                 pipelines.insert("tx_calls".to_string());
             } else if filters.contains("affectedAddress") {
                 pipelines.insert("tx_affected_addresses".to_string());
-            } else if filters.contains("kind") {
-                if filters.contains("sentAddress") {
-                    pipelines.insert("tx_affected_addresses".to_string());
-                } else {
-                    pipelines.insert("tx_kinds".to_string());
-                }
+            } else if filters.contains("kind") && !filters.contains("sentAddress") {
+                pipelines.insert("tx_kinds".to_string());
             } else if filters.contains("affectedObjects") {
                 pipelines.insert("tx_affected_objects".to_string());
+            } else if filters.contains("sentAddress") {
+                pipelines.insert("tx_affected_addresses".to_string());
             }
         }
         ("TransactionEffects", Some("balanceChanges"), _) => {
