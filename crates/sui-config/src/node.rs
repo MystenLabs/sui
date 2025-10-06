@@ -224,6 +224,7 @@ pub struct NodeConfig {
 
     /// The list of validators that are allowed to submit MFP transactions to (via the transaction driver).
     /// Each entry is a validator display name.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mfp_allowed_list: Vec<String>,
 }
 
