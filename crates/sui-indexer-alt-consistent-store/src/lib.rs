@@ -93,7 +93,6 @@ pub async fn start_service(
                 object_by_type,
             },
         rpc,
-        db_metrics,
     } = config;
 
     let committer = committer.finish(CommitterConfig::default());
@@ -110,25 +109,18 @@ pub async fn start_service(
     )
     .await?;
 
-    let cf_names = vec![
-        "balances".to_string(),
-        "object_by_owner".to_string(),
-        "object_by_type".to_string(),
-        "$watermark".to_string(),
-    ];
-
     // Register the rocksdb column family stats collector
     registry
         .register(Box::new(ColumnFamilyStatsCollector::new(
             Some("rocksdb"),
             indexer.store().db().clone(),
-            cf_names.clone(),
+            indexer.store().cf_names(),
         )))
         .context("Failed to register rocksdb column family stats collector")?;
 
     tracing::info!(
         "Periodic metrics reporting enabled for column families: {:?}",
-        cf_names
+        indexer.store().cf_names()
     );
 
     let state = State {

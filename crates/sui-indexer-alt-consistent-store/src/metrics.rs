@@ -2,22 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use prometheus::{
     core::{Collector, Desc},
     proto::MetricFamily,
-    register_int_gauge_vec_with_registry, IntGaugeVec, Opts, Registry,
+    IntGaugeVec, Opts,
 };
-use rocksdb::{properties, properties::num_files_at_level, AsColumnFamilyRef};
-use tracing::{debug, error, warn};
-
-// Constants for periodic metrics reporting
-const METRICS_ERROR: i64 = -1;
-
-pub struct ConsistentStoreMetrics {
-    pub cf_metrics: ColumnFamilyMetrics,
-}
 
 pub struct ColumnFamilyStatsCollector {
     db: Arc<crate::db::Db>,
@@ -192,164 +182,83 @@ impl Collector for ColumnFamilyStatsCollector {
 
     fn collect(&self) -> Vec<MetricFamily> {
         for cf_name in &self.cf_names {
-            let Some(cf) = self.db.cf(cf_name) else {
-                warn!("unable to report metrics for cf {cf_name:?} in db",);
-                continue;
-            };
+            let cf_metrics = self.db.column_family_metrics(cf_name);
+            self.metrics
+                .current_size_active_mem_tables
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.current_size_active_mem_tables);
 
-            // Access the underlying RocksDB database through the closure method
-            self.db.db(|rocks_db| {
-                self.metrics
-                    .num_level0_files
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        &num_files_at_level(0),
-                    ));
+            self.metrics
+                .size_all_mem_tables
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.size_all_mem_tables);
 
-                self.metrics
-                    .current_size_active_mem_tables
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::CUR_SIZE_ACTIVE_MEM_TABLE,
-                    ));
+            self.metrics
+                .block_cache_usage
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.block_cache_usage);
 
-                self.metrics
-                    .size_all_mem_tables
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::SIZE_ALL_MEM_TABLES,
-                    ));
+            self.metrics
+                .block_cache_pinned_usage
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.block_cache_pinned_usage);
 
-                self.metrics
-                    .num_snapshots
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::NUM_SNAPSHOTS,
-                    ));
+            self.metrics
+                .estimate_table_readers_mem
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.estimate_table_readers_mem);
 
-                self.metrics
-                    .actual_delayed_write_rate
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::ACTUAL_DELAYED_WRITE_RATE,
-                    ));
+            self.metrics
+                .estimate_pending_compaction_bytes
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.estimate_pending_compaction_bytes);
 
-                self.metrics
-                    .is_write_stopped
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::IS_WRITE_STOPPED,
-                    ));
+            self.metrics
+                .num_level0_files
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.num_level0_files);
 
-                self.metrics
-                    .block_cache_usage
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::BLOCK_CACHE_USAGE,
-                    ));
+            self.metrics
+                .actual_delayed_write_rate
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.actual_delayed_write_rate);
 
-                self.metrics
-                    .block_cache_pinned_usage
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::BLOCK_CACHE_PINNED_USAGE,
-                    ));
+            self.metrics
+                .is_write_stopped
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.is_write_stopped);
 
-                self.metrics
-                    .estimate_table_readers_mem
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::ESTIMATE_TABLE_READERS_MEM,
-                    ));
+            self.metrics
+                .num_immutable_mem_tables
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.num_immutable_mem_tables);
 
-                self.metrics
-                    .num_immutable_mem_tables
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::NUM_IMMUTABLE_MEM_TABLE,
-                    ));
+            self.metrics
+                .mem_table_flush_pending
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.mem_table_flush_pending);
 
-                self.metrics
-                    .mem_table_flush_pending
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::MEM_TABLE_FLUSH_PENDING,
-                    ));
+            self.metrics
+                .compaction_pending
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.compaction_pending);
 
-                self.metrics
-                    .compaction_pending
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::COMPACTION_PENDING,
-                    ));
+            self.metrics
+                .num_snapshots
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.num_snapshots);
 
-                self.metrics
-                    .estimate_pending_compaction_bytes
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::ESTIMATE_PENDING_COMPACTION_BYTES,
-                    ));
+            self.metrics
+                .num_running_compactions
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.num_running_compactions);
 
-                self.metrics
-                    .num_running_compactions
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::NUM_RUNNING_COMPACTIONS,
-                    ));
-
-                self.metrics
-                    .num_running_flushes
-                    .with_label_values(&[cf_name])
-                    .set(cf_property_int_to_metric(
-                        rocks_db,
-                        &cf,
-                        properties::NUM_RUNNING_FLUSHES,
-                    ));
-            });
+            self.metrics
+                .num_running_flushes
+                .with_label_values(&[cf_name])
+                .set(cf_metrics.num_running_flushes);
         }
 
         self.metrics.collect_all()
     }
-}
-
-/// Retrieves a RocksDB property from db and maps it to a metric value.
-fn cf_property_int_to_metric(
-    db: &rocksdb::DB,
-    cf: &impl AsColumnFamilyRef,
-    property_name: &std::ffi::CStr,
-) -> i64 {
-    match db.property_int_value_cf(cf, property_name) {
-        Ok(Some(value)) => Ok(value.min(i64::MAX as u64).try_into().unwrap_or_default()),
-        Ok(None) => Ok(0),
-        Err(e) => Err(e.into_string()),
-    }
-    .unwrap_or(METRICS_ERROR)
 }

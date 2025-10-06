@@ -51,6 +51,9 @@ struct Inner<S> {
     /// [`Synchronizer`] to run, and is used to send writes to the database, associated with a
     /// pipeline.
     queue: OnceLock<Queue>,
+
+    /// Names of the column families in the database that will be opened per the Schema.
+    cf_names: Vec<String>,
 }
 
 impl<S: Schema> Store<S> {
@@ -64,22 +67,20 @@ impl<S: Schema> Store<S> {
         snapshots: u64,
     ) -> anyhow::Result<Self> {
         let db_options: rocksdb::Options = config.into();
+        let cfs = S::cfs(&db_options);
+        let cf_names = cfs.iter().map(|(name, _)| name.to_string()).collect();
         let db = Arc::new(
-            Db::open(
-                path,
-                db_options.clone(),
-                snapshots as usize,
-                S::cfs(&db_options),
-            )
-            .context("Failed to open database")?,
+            Db::open(path, db_options.clone(), snapshots as usize, cfs)
+                .context("Failed to open database")?,
         );
 
         let schema = S::open(&db).context("Failed to open schema")?;
 
         Ok(Self(Arc::new(Inner {
+            cf_names,
             db,
-            schema,
             queue: OnceLock::new(),
+            schema,
         })))
     }
 
@@ -102,6 +103,10 @@ impl<S: Schema> Store<S> {
             .set(queue)
             .map_err(|_| anyhow!("Store already has synchronizer"))?;
         Ok(handle)
+    }
+
+    pub(crate) fn cf_names(&self) -> Vec<String> {
+        self.0.cf_names.clone()
     }
 }
 

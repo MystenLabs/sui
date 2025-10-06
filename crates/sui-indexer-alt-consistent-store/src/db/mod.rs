@@ -13,7 +13,7 @@ use std::{
 
 use anyhow::Context;
 use bincode::Encode;
-use rocksdb::AsColumnFamilyRef;
+use rocksdb::{properties, AsColumnFamilyRef};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sui_indexer_alt_framework::store::CommitterWatermark;
 
@@ -27,6 +27,9 @@ pub(crate) mod map;
 
 /// Name of the column family the database adds, to manage the checkpoint watermark.
 const WATERMARK_CF: &str = "$watermark";
+
+// Constants for periodic metrics reporting
+const METRICS_ERROR: i64 = -1;
 
 /// A wrapper around RocksDB that provides arbitrary writes and snapshot-based reads (reads must
 /// specify the checkpoint they want to read from). Keys and values are encoded (using Bincode and
@@ -104,6 +107,34 @@ struct IterBounds<'d>(
     Option<Vec<u8>>,
     Option<rocksdb::DBRawIterator<'d>>,
 );
+
+/// Metrics related to memory usage and backpressure for a column family.
+pub struct ColumnFamilyMetrics {
+    /// Just the active memtable size.
+    pub current_size_active_mem_tables: i64,
+    /// Active, unflushed immutable, and pinned memtable bytes.
+    pub size_all_mem_tables: i64,
+
+    pub block_cache_usage: i64,
+    pub block_cache_pinned_usage: i64,
+
+    pub estimate_table_readers_mem: i64,
+
+    pub estimate_pending_compaction_bytes: i64,
+
+    /// Other indicators of memory backpressure
+    pub num_level0_files: i64,
+    pub actual_delayed_write_rate: i64,
+    pub is_write_stopped: i64,
+    pub num_immutable_mem_tables: i64,
+    pub mem_table_flush_pending: i64,
+    pub compaction_pending: i64,
+
+    /// Informational
+    pub num_snapshots: i64,
+    pub num_running_compactions: i64,
+    pub num_running_flushes: i64,
+}
 
 impl Db {
     /// Open the database at `path`, with the given `capacity` for snapshots.
@@ -211,15 +242,6 @@ impl Db {
 
             Some(*lo..=*hi)
         })
-    }
-
-    /// Access the underlying RocksDB database for metrics collection.
-    pub(crate) fn db<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&rocksdb::DB) -> R,
-    {
-        let i = self.0.read().expect("poisoned");
-        f(i.borrow_db())
     }
 
     /// Point look-up at `checkpoint` for the given `key`, in the column family `cf`.
@@ -427,6 +449,76 @@ impl Db {
         Ok(iter::RevIter::new(Some(inner)))
     }
 
+    pub(crate) fn column_family_metrics(&self, cf_name: &str) -> ColumnFamilyMetrics {
+        let i = self.0.read().expect("poisoned");
+        let db = i.borrow_db();
+        let Some(cf) = db.cf_handle(cf_name) else {
+            return ColumnFamilyMetrics::default();
+        };
+
+        ColumnFamilyMetrics {
+            current_size_active_mem_tables: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::CUR_SIZE_ACTIVE_MEM_TABLE,
+            ),
+            size_all_mem_tables: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::SIZE_ALL_MEM_TABLES,
+            ),
+            block_cache_usage: cf_property_int_to_metric(db, &cf, &properties::BLOCK_CACHE_USAGE),
+            block_cache_pinned_usage: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::BLOCK_CACHE_PINNED_USAGE,
+            ),
+            estimate_table_readers_mem: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::ESTIMATE_TABLE_READERS_MEM,
+            ),
+            estimate_pending_compaction_bytes: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::ESTIMATE_PENDING_COMPACTION_BYTES,
+            ),
+            num_level0_files: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::num_files_at_level(0),
+            ),
+            actual_delayed_write_rate: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::ACTUAL_DELAYED_WRITE_RATE,
+            ),
+            is_write_stopped: cf_property_int_to_metric(db, &cf, &properties::IS_WRITE_STOPPED),
+            num_immutable_mem_tables: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::NUM_IMMUTABLE_MEM_TABLE,
+            ),
+            mem_table_flush_pending: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::MEM_TABLE_FLUSH_PENDING,
+            ),
+            compaction_pending: cf_property_int_to_metric(db, &cf, &properties::COMPACTION_PENDING),
+            num_snapshots: cf_property_int_to_metric(db, &cf, &properties::NUM_SNAPSHOTS),
+            num_running_compactions: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::NUM_RUNNING_COMPACTIONS,
+            ),
+            num_running_flushes: cf_property_int_to_metric(
+                db,
+                &cf,
+                &properties::NUM_RUNNING_FLUSHES,
+            ),
+        }
+    }
+
     fn at_snapshot(&self, checkpoint: u64) -> Result<Arc<rocksdb::Snapshot<'_>>, Error> {
         self.0.read().expect("poisoned").with(|f| {
             let Some((snapshot, _)) = f.snapshots.get(&checkpoint) else {
@@ -541,6 +633,42 @@ impl From<CommitterWatermark> for Watermark {
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
             tx_hi: w.tx_hi,
             timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
+        }
+    }
+}
+
+/// Retrieves a RocksDB property from db and maps it to a metric value.
+fn cf_property_int_to_metric(
+    db: &rocksdb::DB,
+    cf: &impl AsColumnFamilyRef,
+    property_name: &std::ffi::CStr,
+) -> i64 {
+    match db.property_int_value_cf(cf, property_name) {
+        Ok(Some(value)) => Ok(value.min(i64::MAX as u64).try_into().unwrap_or_default()),
+        Ok(None) => Ok(0),
+        Err(e) => Err(e.into_string()),
+    }
+    .unwrap_or(METRICS_ERROR)
+}
+
+impl Default for ColumnFamilyMetrics {
+    fn default() -> Self {
+        Self {
+            current_size_active_mem_tables: METRICS_ERROR,
+            size_all_mem_tables: METRICS_ERROR,
+            block_cache_usage: METRICS_ERROR,
+            block_cache_pinned_usage: METRICS_ERROR,
+            estimate_table_readers_mem: METRICS_ERROR,
+            estimate_pending_compaction_bytes: METRICS_ERROR,
+            num_level0_files: METRICS_ERROR,
+            actual_delayed_write_rate: METRICS_ERROR,
+            is_write_stopped: METRICS_ERROR,
+            num_immutable_mem_tables: METRICS_ERROR,
+            mem_table_flush_pending: METRICS_ERROR,
+            compaction_pending: METRICS_ERROR,
+            num_snapshots: METRICS_ERROR,
+            num_running_compactions: METRICS_ERROR,
+            num_running_flushes: METRICS_ERROR,
         }
     }
 }
