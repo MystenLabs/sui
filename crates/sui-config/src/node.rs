@@ -221,6 +221,10 @@ pub struct NodeConfig {
     /// Fork recovery configuration for handling validator equivocation after forks
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fork_recovery: Option<ForkRecoveryConfig>,
+
+    /// The list of validators that are allowed to submit MFP transactions to (via the transaction driver).
+    /// Each entry is a validator display name.
+    pub mfp_allowed_list: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
