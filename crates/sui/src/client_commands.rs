@@ -3901,7 +3901,7 @@ async fn publish_command(
 
     let compiled_package = compiled_package?;
 
-    root_package.save_to_disk()?;
+    root_package.save_lockfile_to_disk().await?;
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     let dep_ids = compiled_package.get_published_dependencies_ids();
 
