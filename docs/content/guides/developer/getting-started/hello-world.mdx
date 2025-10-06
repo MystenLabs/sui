@@ -49,16 +49,16 @@ A Sui Move module governs a Sui **Move object**, which is typed data from a Sui 
 
     - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
     
-        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download, however, it does not support all functions necessary for this guide.
+        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
 
 - [x] [Download and install Git](https://git-scm.com/downloads).
 
 </TabItem>
 </Tabs>
 
-## Clone "Hello, world!""
+## Clone "Hello, world!"
 
-To demonstrate objects, packages, and how to build your first Sui application, start by cloning the "Hello, world!"" example:
+To demonstrate objects, packages, and how to build your first Sui application, start by cloning the "Hello, world!" example:
 
 ```
 $ git clone https://github.com/MystenLabs/sui-stack-hello-world.git
@@ -92,7 +92,7 @@ hello_world = "0x0"
 
 ### Viewing the smart contract code 
 
-Open the `greeting.move` file in your IDE of choice. You will see the following Move code:
+Open the `greeting.move` file in your IDE of choice. You can see the following Move code:
 
 ```move
 // Copyright (c) Mysten Labs, Inc.
@@ -225,7 +225,7 @@ You must build your package before you can publish it, but also before you test 
 
 ## Publish the Move package 
 
-Now that your package has been built, you need to publish it onto the Sui Testnet. Once you publish it, other packages and users can use the package's modules and functions by making calls to the package ID.
+Now that your package has been built, you need to publish it onto the Testnet. After you publish it, other packages and users can use the package's modules and functions by making calls to the package ID.
 
 First, confirm your client is configured to use the Testnet as the active environment:
 
@@ -404,11 +404,11 @@ Transaction Digest: 8R39iKKLGPDG3QkW2SrRW3QX71csRP2BLhK9H7oz9SwW
 
 When you publish a Move package to the network, the network uploads and stores the bytecode as a Move package with a unique package ID and version number. The network consumes SUI tokens as gas and processes the transaction on-chain.
 
-Once successfully executed, the output will include the new package ID, version number, and the object ID of the newly created and mutated objects. It will also provide details about the transaction used to publish the package, including the gas cost, transaction digest, dependencies, owner, and sender. 
+After successfully executing, the output includes the new package ID, version number, and the object ID of the newly created and mutated objects. It also provides details about the transaction used to publish the package, including the gas cost, transaction digest, dependencies, owner, and sender. 
 
 ## Interact with the Move package
 
-Interact with the newly published package by first making a call to the `new` function that will create a new `Greeting` object and initialize it with the text `"Hello world!"`:
+Interact with the newly published package by first making a call to the `new` function that creates a new `Greeting` object and initialize it with the text `"Hello world!"`:
 
 ```
 $ sui client call --package <PACKAGE_ID> --module greeting --function new  
@@ -416,7 +416,7 @@ $ sui client call --package <PACKAGE_ID> --module greeting --function new
 
 Replace `<PACKAGE_ID>` with the package ID the output of the `sui client publish` command returned. You must include the `--package`, `--module`, and `--function` flags. 
 
-In the output of this call, you will see a newly created object:
+The output of this call includes a newly created object:
 
 ```
 ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -474,7 +474,7 @@ You should see the object's details, including a value of `text: Hello world!`:
 
 ### Important transaction considerations 
 
-You cannot send 2 or more transactions simultaneously, otherwise you will encounter an error such as:
+You cannot send 2 or more transactions simultaneously, otherwise you encounter an error such as:
 
 ```
 Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction.
