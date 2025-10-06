@@ -551,7 +551,7 @@ impl CompiledPackage {
         );
         error_message.extend(errors);
         error_message.push(
-            "If these packages really are unpublished, their self-addresses should be not
+            "If these packages really are unpublished, their self-addresses should not be \
             explicitly set when publishing. If they are already published, ensure they specify the \
             address in the `published-at` of their Published.toml file."
                 .into(),
