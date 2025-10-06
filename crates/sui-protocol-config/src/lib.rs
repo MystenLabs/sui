@@ -4412,7 +4412,6 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
-        self.feature_flags.allow_private_accumulator_entrypoints = true;
     }
 
     pub fn create_root_accumulator_object_for_testing(&mut self) {
