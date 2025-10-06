@@ -243,6 +243,7 @@ impl AuthorityStorePruner {
         checkpoint_content_to_prune: Vec<CheckpointContents>,
         effects_to_prune: &Vec<TransactionEffects>,
         metrics: Arc<AuthorityStorePruningMetrics>,
+        pruning_watermark: Option<Arc<PrunerWatermarks>>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("EffectsLivePruner");
 
@@ -310,6 +311,13 @@ impl AuthorityStorePruner {
         metrics
             .last_pruned_effects_checkpoint
             .set(checkpoint_number as i64);
+
+        if let Some(watermark) = pruning_watermark {
+            watermark
+                .checkpoint_id
+                .store(checkpoint_number, std::sync::atomic::Ordering::Relaxed);
+        }
+
         Ok(())
     }
 
@@ -352,6 +360,7 @@ impl AuthorityStorePruner {
             max_eligible_checkpoint_number,
             config,
             metrics.clone(),
+            None, /* pruning_watermark needed only if PruningMode::Checkpoints */
         )
         .await
     }
@@ -408,6 +417,7 @@ impl AuthorityStorePruner {
             max_eligible_checkpoint,
             config.clone(),
             metrics.clone(),
+            pruning_watermark,
         )
         .await?;
 
@@ -433,6 +443,7 @@ impl AuthorityStorePruner {
         max_eligible_checkpoint: CheckpointSequenceNumber,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
+        pruning_watermark: Option<Arc<PrunerWatermarks>>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("PruneForEligibleEpochs");
 
@@ -507,6 +518,7 @@ impl AuthorityStorePruner {
                         checkpoint_content_to_prune,
                         &effects_to_prune,
                         metrics.clone(),
+                        pruning_watermark.clone(),
                     )?,
                 };
                 checkpoints_to_prune = vec![];
@@ -539,6 +551,7 @@ impl AuthorityStorePruner {
                     checkpoint_content_to_prune,
                     &effects_to_prune,
                     metrics.clone(),
+                    pruning_watermark.clone(),
                 )?,
             };
         }
