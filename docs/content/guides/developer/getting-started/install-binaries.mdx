@@ -76,6 +76,23 @@ Each Sui release provides a set of binaries for several operating systems. You c
 
 </Tabs>
 
+## Build binaries locally
+
+You can download the Sui repo and build the binaries locally. The binaries are exported to the `target/release` directory.
+    
+```sh
+cargo build --profile release --bin sui
+```
+
+Include other packages as needed.
+
+<ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
+
 ## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
 
 <ImportContent source="install-sui-node.mdx" mode="snippet" />
+
+## Related links
+
+<RelatedLink to="/guides/developer/getting-started/sui-install.mdx" />
+<RelatedLink to="/guides/developer/getting-started/install-source.mdx" />

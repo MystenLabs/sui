@@ -38,7 +38,7 @@ Replace the `testnet` branch in the previous command as needed.
     - `testnet`: Includes beta features.
     - `mainnet`: Stable release.
 
-You can install additional binaries as needed. Replace `sui` in the previous command with the name of the binary in the following table.
+You can build and install additional packages as needed. Replace `sui` in the previous command with the package name in the following table.
 
 <ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
 
@@ -65,11 +65,6 @@ You can clone the public Sui repo and install from source on your local drive.
     ```sh
     $ git switch testnet
     ```
-1. Build the binaries from the repo root using cargo.
-
-    ```sh
-    cargo build --profile release --bin sui
-    ```
 
 1. Run the `cargo install` command from the repo root.
 
@@ -93,3 +88,6 @@ Regardless of which install from source method you use, the Sui components are f
 <ImportContent source="install-sui-node.mdx" mode="snippet" />
 
 ## Related links
+
+<RelatedLink to="/guides/developer/getting-started/sui-install.mdx" />
+<RelatedLink to="/guides/developer/getting-started/install-binaries.mdx" />
