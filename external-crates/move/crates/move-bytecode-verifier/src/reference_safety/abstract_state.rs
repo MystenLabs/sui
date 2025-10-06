@@ -16,6 +16,7 @@ use move_binary_format::{
 use move_borrow_graph::references::RefID;
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
+use move_vm_config::verifier::VerifierConfig;
 use std::{
     cmp::max,
     collections::{BTreeMap, BTreeSet},
@@ -344,7 +345,11 @@ impl AbstractState {
         &self,
         idx: LocalIndex,
         meter: &mut (impl Meter + ?Sized),
+        config: &VerifierConfig,
     ) -> PartialVMResult<bool> {
+        if config.additional_borrow_checks && self.has_full_borrows(self.frame_root()) {
+            return Ok(true);
+        }
         charge_graph_size(self.graph_size(), meter)?;
         Ok(self.has_consistent_mutable_borrows(self.frame_root(), Some(Label::Local(idx))))
     }
@@ -398,6 +403,7 @@ impl AbstractState {
         offset: CodeOffset,
         local: LocalIndex,
         meter: &mut (impl Meter + ?Sized),
+        config: &VerifierConfig,
     ) -> PartialVMResult<AbstractValue> {
         match safe_unwrap!(self.locals.get(local as usize)) {
             AbstractValue::Reference(id) => {
@@ -406,7 +412,9 @@ impl AbstractState {
                 self.add_copy(id, new_id, meter)?;
                 Ok(AbstractValue::Reference(new_id))
             }
-            AbstractValue::NonReference if self.is_local_mutably_borrowed(local, meter)? => {
+            AbstractValue::NonReference
+                if self.is_local_mutably_borrowed(local, meter, config)? =>
+            {
                 Err(self.error(StatusCode::COPYLOC_EXISTS_BORROW_ERROR, offset))
             }
             AbstractValue::NonReference => Ok(AbstractValue::NonReference),
@@ -527,10 +535,15 @@ impl AbstractState {
         mut_: bool,
         local: LocalIndex,
         meter: &mut (impl Meter + ?Sized),
+        config: &VerifierConfig,
     ) -> PartialVMResult<AbstractValue> {
         // nothing to check in case borrow is mutable since the frame cannot have an full borrow/
         // epsilon outgoing edge
-        if !mut_ && self.is_local_mutably_borrowed(local, meter)? {
+        if !mut_ && self.is_local_mutably_borrowed(local, meter, config)? {
+            return Err(self.error(StatusCode::BORROWLOC_EXISTS_BORROW_ERROR, offset));
+        }
+
+        if config.additional_borrow_checks && mut_ && self.has_full_borrows(self.frame_root()) {
             return Err(self.error(StatusCode::BORROWLOC_EXISTS_BORROW_ERROR, offset));
         }
 
