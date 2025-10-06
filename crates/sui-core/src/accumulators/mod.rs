@@ -381,11 +381,35 @@ impl AccumulatorSettlementTxBuilder {
             }))
             .unwrap();
 
+        Self::add_prologue(
+            &mut builder,
+            root,
+            epoch,
+            checkpoint_height,
+            settlements.len() as u64,
+            0u64,
+            0u64,
+        );
+
+        let barrier = TransactionKind::ProgrammableSystemTransaction(builder.finish());
+
+        (settlements, barrier)
+    }
+
+    fn add_prologue(
+        builder: &mut ProgrammableTransactionBuilder,
+        root: Argument,
+        epoch: u64,
+        checkpoint_height: u64,
+        idx: u64,
+        total_input_sui: u64,
+        total_output_sui: u64,
+    ) {
         let epoch_arg = builder.pure(epoch).unwrap();
         let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
-        let idx_arg = builder.pure(settlements.len() as u64).unwrap();
-        let total_input_sui_arg = builder.pure(0u64).unwrap();
-        let total_output_sui_arg = builder.pure(0u64).unwrap();
+        let idx_arg = builder.pure(idx).unwrap();
+        let total_input_sui_arg = builder.pure(total_input_sui).unwrap();
+        let total_output_sui_arg = builder.pure(total_output_sui).unwrap();
 
         builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
@@ -401,9 +425,6 @@ impl AccumulatorSettlementTxBuilder {
                 total_output_sui_arg,
             ],
         );
-        let barrier = TransactionKind::ProgrammableSystemTransaction(builder.finish());
-
-        (settlements, barrier)
     }
 
     fn build_one_settlement_txn(
@@ -426,25 +447,14 @@ impl AccumulatorSettlementTxBuilder {
             }))
             .unwrap();
 
-        let epoch_arg = builder.pure(epoch).unwrap();
-        let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
-        let idx_arg = builder.pure(idx).unwrap();
-        let total_input_sui_arg = builder.pure(total_input_sui).unwrap();
-        let total_output_sui_arg = builder.pure(total_output_sui).unwrap();
-
-        builder.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            ACCUMULATOR_SETTLEMENT_MODULE.into(),
-            ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
-            vec![],
-            vec![
-                root,
-                epoch_arg,
-                checkpoint_height_arg,
-                idx_arg,
-                total_input_sui_arg,
-                total_output_sui_arg,
-            ],
+        Self::add_prologue(
+            &mut builder,
+            root,
+            epoch,
+            checkpoint_height,
+            idx,
+            total_input_sui,
+            total_output_sui,
         );
 
         for (accumulator_obj, update) in updates {

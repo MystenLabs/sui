@@ -796,6 +796,7 @@ pub struct ExecutionEnv {
     /// Status of the balance withdraw scheduling of the transaction.
     pub withdraw_status: BalanceWithdrawStatus,
     /// Transactions that must finish before this transaction can be executed.
+    /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
 }
 
@@ -1862,7 +1863,7 @@ impl AuthorityState {
         fail_point!("crash");
 
         self.get_cache_writer()
-            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs.clone());
+            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
