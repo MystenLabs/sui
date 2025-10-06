@@ -212,7 +212,7 @@ pub fn package(
     // Load modules in dependency order within the package. Needed for both static call
     // resolution and type caching.
     while let Some(mut input_module) = package_modules.pop() {
-        let mut immediate_dependencies = input_module
+        let immediate_dependencies = input_module
             .compiled_module
             .immediate_dependencies()
             .into_iter()
@@ -222,17 +222,22 @@ pub fn package(
 
         // If we haven't processed the immediate dependencies yet, push the module back onto
         // the front and process other modules first.
-        if !immediate_dependencies.all(|dep| {
-            let key = identifier_interner::intern_ident_str(dep.name()).unwrap();
-            package_context.loaded_modules.contains_key(&key)
-        }) {
+        let mut all_deps_loaded = true;
+        for dep in immediate_dependencies {
+            let key = identifier_interner::intern_ident_str(dep.name())?;
+            if !package_context.loaded_modules.contains_key(&key) {
+                all_deps_loaded = false;
+                break;
+            }
+        }
+        if !all_deps_loaded {
             package_modules.insert(0, input_module);
             continue;
         }
 
         let loaded_module = module(&mut package_context, version_id, &mut input_module)?;
 
-        let key = identifier_interner::intern_ident_str(loaded_module.id.name()).unwrap();
+        let key = identifier_interner::intern_ident_str(loaded_module.id.name())?;
         assert!(
             package_context
                 .loaded_modules
@@ -373,7 +378,7 @@ fn initialize_type_refs(
 // Datatype Translation
 // -------------------------------------------------------------------------------------------------
 
-/// Loads strucks and enums, returning them and their datatype descriptors (for vtable entry).
+/// Loads structs and enums, returning them and their datatype descriptors (for vtable entry).
 fn datatypes(
     context: &mut PackageContext,
     version_id: &VersionId,
@@ -399,10 +404,12 @@ fn datatypes(
             .type_origin_table
             .get(&name.inner_pkg_key)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(format!(
-                    "Type origin not found for type {}",
-                    name.to_string().expect("No name")
-                ))
+                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(
+                    match name.to_string() {
+                        Ok(name_str) => format!("Type origin not found for type {}", name_str),
+                        Err(_) => "Type origin not found for unnamed type".to_string(),
+                    },
+                )
             })?;
         dbg_println!("Package ID: {:?}", storage_id);
         dbg_println!("Defining Address: {:?}", defining_address);
@@ -874,7 +881,9 @@ fn functions(
                     format!(
                         "failed to find function {}::{} in optimized function list",
                         package_context.version_id,
-                        fun.name.to_short_string().unwrap(),
+                        fun.name
+                            .to_short_string()
+                            .unwrap_or_else(|_| "unknown".to_string()),
                     ),
                 ),
             );
