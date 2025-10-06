@@ -255,6 +255,7 @@ impl ValidatorConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
+            mfp_allowed_list: vec![],
         }
     }
 
@@ -292,6 +293,7 @@ pub struct FullnodeConfigBuilder {
     data_ingestion_dir: Option<PathBuf>,
     disable_pruning: bool,
     chain_override: Option<Chain>,
+    mfp_allowed_list: Vec<String>,
 }
 
 impl FullnodeConfigBuilder {
@@ -412,6 +414,11 @@ impl FullnodeConfigBuilder {
 
     pub fn with_data_ingestion_dir(mut self, path: Option<PathBuf>) -> Self {
         self.data_ingestion_dir = path;
+        self
+    }
+
+    pub fn with_mfp_allowed_list(mut self, list: Vec<String>) -> Self {
+        self.mfp_allowed_list = list;
         self
     }
 
@@ -564,6 +571,7 @@ impl FullnodeConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
+            mfp_allowed_list: self.mfp_allowed_list,
         }
     }
 }

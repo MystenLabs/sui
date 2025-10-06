@@ -31,7 +31,7 @@ use rand::Rng;
 use sui_config::NodeConfig;
 use sui_protocol_config::Chain;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
-use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::{AuthorityName, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_grpc::{SubmitTxRequest, TxType};
@@ -78,6 +78,7 @@ pub struct TransactionOrchestrator<A: Clone> {
     metrics: Arc<TransactionOrchestratorMetrics>,
     transaction_driver: Option<Arc<TransactionDriver<A>>>,
     td_percentage: u8,
+    td_allowed_list: Vec<AuthorityName>,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -166,6 +167,20 @@ where
             None
         };
 
+        let mut td_allowed_list = Vec::new();
+        for validator_name in &node_config.mfp_allowed_list {
+            for (name, display_name) in validators.validator_display_names.iter() {
+                if *display_name == *validator_name {
+                    td_allowed_list.push(*name);
+                    break;
+                }
+            }
+            warn!(
+                "Validator {} from mfp allowed list not found in current committee. Will skip.",
+                validator_name
+            );
+        }
+
         Self {
             quorum_driver_handler,
             validator_state,
@@ -175,6 +190,7 @@ where
             metrics,
             transaction_driver,
             td_percentage,
+            td_allowed_list,
         }
     }
 }
@@ -654,8 +670,7 @@ where
                 SubmitTxRequest::new_transaction(request.transaction.clone()),
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
-                    // TODO: provide a list of validators to submit the transaction via config
-                    allowed_validators: vec![],
+                    allowed_validators: self.td_allowed_list.clone(),
                 },
                 timeout_duration,
             )
