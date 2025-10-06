@@ -230,6 +230,13 @@ pub fn add_child_object(
             * struct_tag_size.into()
     );
 
+    if get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .generate_df_type_layouts()
+    {
+        context.type_to_type_layout(&child_ty)?;
+    }
+
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     object_runtime.add_child_object(parent, child_id, MoveObjectType::from(tag), child)?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))

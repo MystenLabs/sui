@@ -3,23 +3,23 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 module while_cases {
     public fun while_test () {
-        let l0 = U64(0);
-        while(l0 < U64(10)) {
-            l0 = l0 + U64(1);
+        let l0 = 0u64;
+        while(l0 < 10u64) {
+            l0 = l0 + 1u64;
         }
         return 
     }
 
     public fun while_test_2 () {
-        let l1 = U64(0);
+        let l1 = 0u64;
         loop {
-            if (l1 < U64(10)) {
+            if (l1 < 10u64) {
                 let l0 = true;
             } else {
-                l0 = l1 == U64(7);
+                l0 = l1 == 7u64;
             }
             if (l0) {
-                l1 = l1 + U64(1);
+                l1 = l1 + 1u64;
                 continue;
             } else {
             }
@@ -28,13 +28,13 @@ module while_cases {
     }
 
     public fun while_test_3 () {
-        let l0 = U64(0);
-        while(l0 < U64(10)) {
-            if (l0 % U64(2) == U64(0)) {
-                l0 = l0 + U64(1);
+        let l0 = 0u64;
+        while(l0 < 10u64) {
+            if (l0 % 2u64 == 0u64) {
+                l0 = l0 + 1u64;
                 continue;
             } else {
-                l0 = l0 + U64(2);
+                l0 = l0 + 2u64;
                 continue;
             }
         }
@@ -42,19 +42,19 @@ module while_cases {
     }
 
     public fun while_test_4 () {
-        let l1 = U64(0);
+        let l1 = 0u64;
         loop {
-            if (l1 < U64(10)) {
+            if (l1 < 10u64) {
                 let l0 = true;
             } else {
-                l0 = l1 == U64(7);
+                l0 = l1 == 7u64;
             }
             if (l0) {
-                if (l1 % U64(2) == U64(0)) {
-                    l1 = l1 + U64(1);
+                if (l1 % 2u64 == 0u64) {
+                    l1 = l1 + 1u64;
                     continue;
                 } else {
-                    l1 = l1 + U64(2);
+                    l1 = l1 + 2u64;
                     continue;
                 }
             } else {
@@ -64,19 +64,19 @@ module while_cases {
     }
 
     public fun while_test_5 () {
-        let l0 = U64(0);
-        let l1 = U64(0);
-        let l2 = U64(0);
+        let l0 = 0u64;
+        let l1 = 0u64;
+        let l2 = 0u64;
         loop {
-            if (l0 < U64(10)) {
+            if (l0 < 10u64) {
                 loop {
-                    if (l1 < U64(10)) {
+                    if (l1 < 10u64) {
                         l2 = l2 + l0 * l1 + l1;
-                        l1 = l1 + U64(1);
+                        l1 = l1 + 1u64;
                         continue;
                     } else {
                     }
-                    l0 = l0 + U64(1);
+                    l0 = l0 + 1u64;
                 }
             } else {
             }
@@ -85,15 +85,15 @@ module while_cases {
     }
 
     public fun while_test_6 () {
-        let l1 = U64(0);
+        let l1 = 0u64;
         loop {
-            if (l1 < U64(10)) {
+            if (l1 < 10u64) {
                 let l0 = true;
             } else {
-                l0 = l1 == U64(7);
+                l0 = l1 == 7u64;
             }
             if (l0) {
-                l1 = l1 + U64(1);
+                l1 = l1 + 1u64;
                 continue;
             } else {
             }

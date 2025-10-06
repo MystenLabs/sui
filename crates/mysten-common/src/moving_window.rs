@@ -1,52 +1,52 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::Debug, time::Duration};
 
-/// A moving window that maintains the last N values and calculates their average.
-/// This provides a true arithmetic mean of recent values, with all values in the window
-/// having equal weight. When the window is full and a new value is added, the oldest
-/// value is removed to maintain the window size.
+/// A moving window that maintains the last N values of type `T` and calculates their arithmetic
+/// mean. All values in the window have equal weight and the oldest value is dropped when the
+/// window exceeds its configured capacity.
 #[derive(Debug, Clone)]
-pub struct MovingWindow {
-    values: VecDeque<f64>,
+pub struct MovingWindow<T: MovingWindowValue> {
+    values: VecDeque<T>,
     max_size: usize,
-    sum: f64,
+    sum: T,
 }
 
-impl MovingWindow {
-    /// Create a new MovingWindow with the specified maximum size and an `init_value`. The provided `max_size` must be greater than 0.
-    pub fn new(init_value: f64, max_size: usize) -> Self {
+impl<T: MovingWindowValue> MovingWindow<T> {
+    /// Creates a new `MovingWindow` with the specified maximum size and an `init_value`.
+    /// The provided `max_size` must be greater than 0.
+    pub fn new(init_value: T, max_size: usize) -> Self {
         assert!(max_size > 0, "Window size must be greater than 0");
         let mut window = Self {
             values: VecDeque::with_capacity(max_size),
             max_size,
-            sum: 0.0,
+            sum: T::zero(),
         };
         window.add_value(init_value);
         window
     }
 
-    /// Add a new value to the window. If the window is at capacity, the oldest value is removed before adding the new value.
-    pub fn add_value(&mut self, value: f64) {
+    /// Adds a new value to the window. If the window is at capacity, the oldest value is removed
+    /// before adding the new value.
+    pub fn add_value(&mut self, value: T) {
         if self.values.len() == self.max_size {
-            // Remove oldest value
             if let Some(old_value) = self.values.pop_front() {
-                self.sum -= old_value;
+                T::sub_assign(&mut self.sum, old_value);
             }
         }
 
-        // Add new value
         self.values.push_back(value);
-        self.sum += value;
+        T::add_assign(&mut self.sum, value);
     }
 
-    /// Get the current average of all values in the window. Returns 0.0 if the window is empty.
-    pub fn get(&self) -> f64 {
+    /// Get the current average of all values in the window. Returns the value's zero if the
+    /// window is empty.
+    pub fn get(&self) -> T {
         if self.values.is_empty() {
-            0.0
+            T::zero()
         } else {
-            self.sum / self.values.len() as f64
+            T::average(self.sum, self.values.len())
         }
     }
 
@@ -57,6 +57,50 @@ impl MovingWindow {
 
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
+    }
+}
+
+pub trait MovingWindowValue: Copy + Debug {
+    fn zero() -> Self;
+    fn add_assign(target: &mut Self, value: Self);
+    fn sub_assign(target: &mut Self, value: Self);
+    fn average(total: Self, divisor: usize) -> Self;
+}
+
+impl MovingWindowValue for Duration {
+    fn zero() -> Self {
+        Duration::ZERO
+    }
+
+    fn add_assign(target: &mut Self, value: Self) {
+        *target += value;
+    }
+
+    fn sub_assign(target: &mut Self, value: Self) {
+        *target -= value;
+    }
+
+    fn average(total: Self, divisor: usize) -> Self {
+        let divisor = u32::try_from(divisor).expect("window size too large for Duration average");
+        total / divisor
+    }
+}
+
+impl MovingWindowValue for f64 {
+    fn zero() -> Self {
+        0.0
+    }
+
+    fn add_assign(target: &mut Self, value: Self) {
+        *target += value;
+    }
+
+    fn sub_assign(target: &mut Self, value: Self) {
+        *target -= value;
+    }
+
+    fn average(total: Self, divisor: usize) -> Self {
+        total / divisor as f64
     }
 }
 
@@ -72,45 +116,60 @@ mod tests {
     }
 
     #[test]
-    fn test_add_values_within_capacity() {
-        let mut window = MovingWindow::new(0.0, 3);
+    fn test_duration_window() {
+        let mut window = MovingWindow::new(Duration::ZERO, 3);
+        assert_eq!(window.get(), Duration::ZERO);
 
-        window.add_value(1.0);
-        assert_eq!(window.get(), 0.5);
+        // Adding value within the window size.
+        window.add_value(Duration::from_millis(100));
+        assert_eq!(window.get(), Duration::from_millis(50));
         assert_eq!(window.len(), 2);
 
-        window.add_value(2.0);
-        assert_eq!(window.get(), 1.0);
+        // Adding value within the window size.
+        window.add_value(Duration::from_millis(200));
+        assert_eq!(window.get(), Duration::from_millis(100));
         assert_eq!(window.len(), 3);
 
-        window.add_value(3.0);
-        assert_eq!(window.get(), 2.0);
+        // Adding values exceeding the window size.
+        window.add_value(Duration::from_millis(300));
+        assert_eq!(window.get(), Duration::from_millis(200));
+        assert_eq!(window.len(), 3);
+
+        // Adding values exceeding the window size.
+        window.add_value(Duration::from_millis(400));
+        assert_eq!(window.get(), Duration::from_millis(300));
         assert_eq!(window.len(), 3);
     }
 
     #[test]
-    fn test_add_values_exceeding_capacity() {
-        let mut window = MovingWindow::new(0.0, 3);
+    fn test_float_window() {
+        let mut window = MovingWindow::new(0.0_f64, 3);
+        assert_eq!(window.get(), 0.0);
 
-        // Fill the window
+        // Adding value within the window size.
         window.add_value(1.0);
-        window.add_value(2.0);
-        window.add_value(3.0);
-        assert_eq!(window.get(), 2.0);
+        assert_eq!(window.get(), 0.5);
+        assert_eq!(window.len(), 2);
 
-        // Add fourth value, should remove first
-        window.add_value(4.0);
-        assert_eq!(window.get(), 3.0); // (2 + 3 + 4) / 3
+        // Adding value within the window size.
+        window.add_value(2.0);
+        assert_eq!(window.get(), 1.0);
         assert_eq!(window.len(), 3);
 
-        // Add fifth value, should remove second
-        window.add_value(5.0);
-        assert_eq!(window.get(), 4.0); // (3 + 4 + 5) / 3
+        // Adding value exceeding the window size.
+        window.add_value(3.0);
+        assert_eq!(window.get(), 2.0);
+        assert_eq!(window.len(), 3);
+
+        // Adding value exceeding the window size.
+        window.add_value(4.0);
+        assert_eq!(window.get(), 3.0);
+        assert_eq!(window.len(), 3);
     }
 
     #[test]
     #[should_panic(expected = "Window size must be greater than 0")]
     fn test_zero_size_panics() {
-        MovingWindow::new(0.0, 0);
+        let _window = MovingWindow::new(0.0_f64, 0);
     }
 }

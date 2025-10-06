@@ -336,7 +336,7 @@ Called by the settlement transaction to track conservation of SUI.
 
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settle_events">settle_events</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, stream_id: <b>address</b>, new_root: u256, event_count_delta: u64, checkpoint_seq: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settle_events">settle_events</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, stream_id: <b>address</b>, new_root: u256, event_count_delta: u64, checkpoint_seq: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -345,7 +345,7 @@ Called by the settlement transaction to track conservation of SUI.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settle_events">settle_events</a>(
+<pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_settle_events">settle_events</a>(
     accumulator_root: &<b>mut</b> AccumulatorRoot,
     stream_id: <b>address</b>,
     new_root: u256,

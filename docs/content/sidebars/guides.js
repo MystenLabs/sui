@@ -61,29 +61,23 @@ const guides = [
 						type: 'doc',
 						id: 'guides/developer/sui-101/working-with-ptbs',
 					},
-					items: [
-						'guides/developer/sui-101/building-ptb',
-						'guides/developer/sui-101/coin-mgt',
-						'guides/developer/sui-101/simulating-refs',
-					],
 				},
-			],
-		},
-		{
-			type: 'category',
-			label: 'Coins and Tokens',
-			link: {
-				type: 'doc',
-				id: 'guides/developer/coin-index',
+				],
 			},
-			items: [
-				'guides/developer/coin',
-				'guides/developer/coin/regulated',
-				'guides/developer/coin/in-game-token',
-				'guides/developer/coin/loyalty',
-			],
-		},
-		'guides/developer/stablecoins',
+			{
+				type: 'category',
+				label: 'Currencies and Tokens',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/coin-index',
+				},
+				items: [
+					'guides/developer/currency',
+					'guides/developer/coin/regulated',
+					'guides/developer/coin/in-game-token',
+					'guides/developer/coin/loyalty',
+				],
+			},
 		{
 			type: 'category',
 			label: 'NFTs',
@@ -123,33 +117,37 @@ const guides = [
 						'guides/developer/cryptography/zklogin-integration/zklogin-example',
 					],
 				},
-			],
-		},
-		{
-			type: 'category',
-			label: 'Advanced Topics',
-			link: {
-				type: 'doc',
-				id: 'guides/developer/advanced',
-			},
-			items: [
-				/*{
-					type: 'category',
-					label: 'Efficient Smart Contracts',
-					link: {
-						type: 'doc',
-						id: 'guides/developer/advanced/efficient-smart-contracts',
+				items: [
+					/*{
+						type: 'category',
+						label: 'Efficient Smart Contracts',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/advanced/efficient-smart-contracts',
+						},
+						items: ['guides/developer/advanced/min-gas-fees'],
+					},*/
+					'guides/developer/advanced/move-2024-migration',
+					{
+						type: 'category',
+						label: 'Custom Indexer',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/advanced/custom-indexer',
+						},
+						items: [
+							'guides/developer/advanced/custom-indexer/build',
+							'guides/developer/advanced/custom-indexer/indexer-walrus',
+							'guides/developer/advanced/custom-indexer/indexer-data-integration',
+							'guides/developer/advanced/custom-indexer/indexer-runtime-perf',
+						],
 					},
-					items: ['guides/developer/advanced/min-gas-fees'],
-				},*/
-				'guides/developer/advanced/move-2024-migration',
-				'guides/developer/advanced/custom-indexer',
-				'guides/developer/advanced/custom-indexer/indexer-walrus',
-				'guides/developer/advanced/randomness-onchain',
-				'guides/developer/advanced/graphql-rpc',
-				'guides/developer/advanced/local-fee-markets',
-			],
-		},
+					'guides/developer/advanced/randomness-onchain',
+					'guides/developer/getting-started/graphql-rpc',
+					'guides/developer/advanced/local-fee-markets',
+				],
+				],
+			},
 		{
 			type: 'category',
 			label: 'App Examples',

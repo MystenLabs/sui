@@ -12,6 +12,7 @@ use crate::types::EthToSuiBridgeAction;
 use crate::types::EvmContractUpgradeAction;
 use crate::types::LimitUpdateAction;
 use crate::types::SuiToEthBridgeAction;
+use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use ethers::types::Address as EthAddress;
 use sui_types::base_types::SUI_ADDRESS_LENGTH;
@@ -36,13 +37,13 @@ pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_BRIDGE_MESSAGE";
 #[enum_dispatch]
 pub trait BridgeMessageEncoding {
     /// Convert the entire message to bytes
-    fn as_bytes(&self) -> Vec<u8>;
+    fn as_bytes(&self) -> anyhow::Result<Vec<u8>>;
     /// Convert the payload piece to bytes
-    fn as_payload_bytes(&self) -> Vec<u8>;
+    fn as_payload_bytes(&self) -> anyhow::Result<Vec<u8>>;
 }
 
 impl BridgeMessageEncoding for SuiToEthBridgeAction {
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         let e = &self.sui_bridge_event;
         // Add message type
@@ -55,12 +56,12 @@ impl BridgeMessageEncoding for SuiToEthBridgeAction {
         bytes.push(e.sui_chain_id as u8);
 
         // Add payload bytes
-        bytes.extend_from_slice(&self.as_payload_bytes());
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
 
-        bytes
+        Ok(bytes)
     }
 
-    fn as_payload_bytes(&self) -> Vec<u8> {
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         let e = &self.sui_bridge_event;
 
@@ -81,12 +82,12 @@ impl BridgeMessageEncoding for SuiToEthBridgeAction {
         // Add token amount
         bytes.extend_from_slice(&e.amount_sui_adjusted.to_be_bytes());
 
-        bytes
+        Ok(bytes)
     }
 }
 
 impl BridgeMessageEncoding for EthToSuiBridgeAction {
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         let e = &self.eth_bridge_event;
         // Add message type
@@ -99,12 +100,12 @@ impl BridgeMessageEncoding for EthToSuiBridgeAction {
         bytes.push(e.eth_chain_id as u8);
 
         // Add payload bytes
-        bytes.extend_from_slice(&self.as_payload_bytes());
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
 
-        bytes
+        Ok(bytes)
     }
 
-    fn as_payload_bytes(&self) -> Vec<u8> {
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         let e = &self.eth_bridge_event;
 
@@ -125,12 +126,12 @@ impl BridgeMessageEncoding for EthToSuiBridgeAction {
         // Add token amount
         bytes.extend_from_slice(&e.sui_adjusted_amount.to_be_bytes());
 
-        bytes
+        Ok(bytes)
     }
 }
 
 impl BridgeMessageEncoding for BlocklistCommitteeAction {
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add message type
         bytes.push(BridgeActionType::UpdateCommitteeBlocklist as u8);
@@ -142,19 +143,19 @@ impl BridgeMessageEncoding for BlocklistCommitteeAction {
         bytes.push(self.chain_id as u8);
 
         // Add payload bytes
-        bytes.extend_from_slice(&self.as_payload_bytes());
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
 
-        bytes
+        Ok(bytes)
     }
 
-    fn as_payload_bytes(&self) -> Vec<u8> {
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
 
         // Add blocklist type
         bytes.push(self.blocklist_type as u8);
         // Add length of updated members.
         // Unwrap: It should not overflow given what we have today.
-        bytes.push(u8::try_from(self.members_to_update.len()).unwrap());
+        bytes.push(u8::try_from(self.members_to_update.len())?);
 
         // Add list of updated members
         // Members are represented as pubkey derived evm addresses (20 bytes)
@@ -167,12 +168,12 @@ impl BridgeMessageEncoding for BlocklistCommitteeAction {
             bytes.extend_from_slice(&members_bytes);
         }
 
-        bytes
+        Ok(bytes)
     }
 }
 
 impl BridgeMessageEncoding for EmergencyAction {
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add message type
         bytes.push(BridgeActionType::EmergencyButton as u8);
@@ -184,18 +185,18 @@ impl BridgeMessageEncoding for EmergencyAction {
         bytes.push(self.chain_id as u8);
 
         // Add payload bytes
-        bytes.extend_from_slice(&self.as_payload_bytes());
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
 
-        bytes
+        Ok(bytes)
     }
 
-    fn as_payload_bytes(&self) -> Vec<u8> {
-        vec![self.action_type as u8]
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
+        Ok(vec![self.action_type as u8])
     }
 }
 
 impl BridgeMessageEncoding for LimitUpdateAction {
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add message type
         bytes.push(BridgeActionType::LimitUpdate as u8);
@@ -207,23 +208,23 @@ impl BridgeMessageEncoding for LimitUpdateAction {
         bytes.push(self.chain_id as u8);
 
         // Add payload bytes
-        bytes.extend_from_slice(&self.as_payload_bytes());
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
 
-        bytes
+        Ok(bytes)
     }
 
-    fn as_payload_bytes(&self) -> Vec<u8> {
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add sending chain id
         bytes.push(self.sending_chain_id as u8);
         // Add new usd limit
         bytes.extend_from_slice(&self.new_usd_limit.to_be_bytes());
-        bytes
+        Ok(bytes)
     }
 }
 
 impl BridgeMessageEncoding for AssetPriceUpdateAction {
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add message type
         bytes.push(BridgeActionType::AssetPriceUpdate as u8);
@@ -235,23 +236,23 @@ impl BridgeMessageEncoding for AssetPriceUpdateAction {
         bytes.push(self.chain_id as u8);
 
         // Add payload bytes
-        bytes.extend_from_slice(&self.as_payload_bytes());
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
 
-        bytes
+        Ok(bytes)
     }
 
-    fn as_payload_bytes(&self) -> Vec<u8> {
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add token id
         bytes.push(self.token_id);
         // Add new usd limit
         bytes.extend_from_slice(&self.new_usd_price.to_be_bytes());
-        bytes
+        Ok(bytes)
     }
 }
 
 impl BridgeMessageEncoding for EvmContractUpgradeAction {
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add message type
         bytes.push(BridgeActionType::EvmContractUpgrade as u8);
@@ -263,22 +264,22 @@ impl BridgeMessageEncoding for EvmContractUpgradeAction {
         bytes.push(self.chain_id as u8);
 
         // Add payload bytes
-        bytes.extend_from_slice(&self.as_payload_bytes());
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
 
-        bytes
+        Ok(bytes)
     }
 
-    fn as_payload_bytes(&self) -> Vec<u8> {
-        ethers::abi::encode(&[
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
+        Ok(ethers::abi::encode(&[
             ethers::abi::Token::Address(self.proxy_address),
             ethers::abi::Token::Address(self.new_impl_address),
             ethers::abi::Token::Bytes(self.call_data.clone()),
-        ])
+        ]))
     }
 }
 
 impl BridgeMessageEncoding for AddTokensOnSuiAction {
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add message type
         bytes.push(BridgeActionType::AddTokensOnSui as u8);
@@ -290,42 +291,36 @@ impl BridgeMessageEncoding for AddTokensOnSuiAction {
         bytes.push(self.chain_id as u8);
 
         // Add payload bytes
-        bytes.extend_from_slice(&self.as_payload_bytes());
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
 
-        bytes
+        Ok(bytes)
     }
 
-    fn as_payload_bytes(&self) -> Vec<u8> {
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add native
         bytes.push(self.native as u8);
         // Add token ids
-        // Unwrap: bcs serialization should not fail
-        bytes.extend_from_slice(&bcs::to_bytes(&self.token_ids).unwrap());
+        bytes.extend_from_slice(&bcs::to_bytes(&self.token_ids)?);
 
         // Add token type names
-        // Unwrap: bcs serialization should not fail
-        bytes.extend_from_slice(
-            &bcs::to_bytes(
-                &self
-                    .token_type_names
-                    .iter()
-                    .map(|m| m.to_canonical_string(false))
-                    .collect::<Vec<_>>(),
-            )
-            .unwrap(),
-        );
+        bytes.extend_from_slice(&bcs::to_bytes(
+            &self
+                .token_type_names
+                .iter()
+                .map(|m| m.to_canonical_string(false))
+                .collect::<Vec<_>>(),
+        )?);
 
         // Add token prices
-        // Unwrap: bcs serialization should not fail
-        bytes.extend_from_slice(&bcs::to_bytes(&self.token_prices).unwrap());
+        bytes.extend_from_slice(&bcs::to_bytes(&self.token_prices)?);
 
-        bytes
+        Ok(bytes)
     }
 }
 
 impl BridgeMessageEncoding for AddTokensOnEvmAction {
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add message type
         bytes.push(BridgeActionType::AddTokensOnEvm as u8);
@@ -337,55 +332,51 @@ impl BridgeMessageEncoding for AddTokensOnEvmAction {
         bytes.push(self.chain_id as u8);
 
         // Add payload bytes
-        bytes.extend_from_slice(&self.as_payload_bytes());
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
 
-        bytes
+        Ok(bytes)
     }
 
-    fn as_payload_bytes(&self) -> Vec<u8> {
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add native
         bytes.push(self.native as u8);
         // Add token ids
-        // Unwrap: bcs serialization should not fail
-        bytes.push(u8::try_from(self.token_ids.len()).unwrap());
+        bytes.push(u8::try_from(self.token_ids.len())?);
         for token_id in &self.token_ids {
             bytes.push(*token_id);
         }
 
         // Add token addresses
-        // Unwrap: bcs serialization should not fail
-        bytes.push(u8::try_from(self.token_addresses.len()).unwrap());
+        bytes.push(u8::try_from(self.token_addresses.len())?);
         for token_address in &self.token_addresses {
             bytes.extend_from_slice(&token_address.to_fixed_bytes());
         }
 
         // Add token sui decimals
-        // Unwrap: bcs serialization should not fail
-        bytes.push(u8::try_from(self.token_sui_decimals.len()).unwrap());
+        bytes.push(u8::try_from(self.token_sui_decimals.len())?);
         for token_sui_decimal in &self.token_sui_decimals {
             bytes.push(*token_sui_decimal);
         }
 
         // Add token prices
-        // Unwrap: bcs serialization should not fail
-        bytes.push(u8::try_from(self.token_prices.len()).unwrap());
+        bytes.push(u8::try_from(self.token_prices.len())?);
         for token_price in &self.token_prices {
             bytes.extend_from_slice(&token_price.to_be_bytes());
         }
-        bytes
+        Ok(bytes)
     }
 }
 
 impl BridgeAction {
     /// Convert to message bytes to verify in Move and Solidity
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         // Add prefix
         bytes.extend_from_slice(BRIDGE_MESSAGE_PREFIX);
         // Add bytes from message itself
-        bytes.extend_from_slice(&self.as_bytes());
-        bytes
+        bytes.extend_from_slice(&self.as_bytes()?);
+        Ok(bytes)
     }
 }
 
@@ -446,7 +437,7 @@ mod tests {
             sui_tx_event_index,
             sui_bridge_event,
         })
-        .to_bytes();
+        .to_bytes()?;
 
         // Construct the expected bytes
         let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec(); // len: 18
@@ -524,7 +515,7 @@ mod tests {
             sui_tx_event_index,
             sui_bridge_event,
         })
-        .to_bytes();
+        .to_bytes()?;
         assert_eq!(
             encoded_bytes,
             Hex::decode("5355495f4252494447455f4d4553534147450001000000000000000a012000000000000000000000000000000000000000000000000000000000000000640b1400000000000000000000000000000000000000c8030000000000003039").unwrap(),
@@ -556,7 +547,7 @@ mod tests {
             blocklist_type: BlocklistType::Blocklist,
             members_to_update: vec![pub_key_bytes.clone()],
         });
-        let bytes = blocklist_action.to_bytes();
+        let bytes = blocklist_action.to_bytes().unwrap();
         /*
         5355495f4252494447455f4d455353414745: prefix
         01: msg type
@@ -583,7 +574,7 @@ mod tests {
             blocklist_type: BlocklistType::Unblocklist,
             members_to_update: vec![pub_key_bytes.clone(), pub_key_bytes_2.clone()],
         });
-        let bytes = blocklist_action.to_bytes();
+        let bytes = blocklist_action.to_bytes().unwrap();
         /*
         5355495f4252494447455f4d455353414745: prefix
         01: msg type
@@ -605,7 +596,7 @@ mod tests {
             blocklist_type: BlocklistType::Blocklist,
             members_to_update: vec![pub_key_bytes.clone()],
         });
-        let bytes = blocklist_action.to_bytes();
+        let bytes = blocklist_action.to_bytes().unwrap();
         /*
         5355495f4252494447455f4d455353414745: prefix
         01: msg type
@@ -626,7 +617,7 @@ mod tests {
             blocklist_type: BlocklistType::Unblocklist,
             members_to_update: vec![pub_key_bytes.clone(), pub_key_bytes_2.clone()],
         });
-        let bytes = blocklist_action.to_bytes();
+        let bytes = blocklist_action.to_bytes().unwrap();
         /*
         5355495f4252494447455f4d455353414745: prefix
         01: msg type
@@ -650,7 +641,7 @@ mod tests {
             chain_id: BridgeChainId::SuiCustom,
             action_type: EmergencyActionType::Pause,
         });
-        let bytes = action.to_bytes();
+        let bytes = action.to_bytes().unwrap();
         /*
         5355495f4252494447455f4d455353414745: prefix
         02: msg type
@@ -669,7 +660,7 @@ mod tests {
             chain_id: BridgeChainId::EthSepolia,
             action_type: EmergencyActionType::Unpause,
         });
-        let bytes = action.to_bytes();
+        let bytes = action.to_bytes().unwrap();
         /*
         5355495f4252494447455f4d455353414745: prefix
         02: msg type
@@ -692,7 +683,7 @@ mod tests {
             sending_chain_id: BridgeChainId::EthCustom,
             new_usd_limit: 1_000_000 * USD_MULTIPLIER, // $1M USD
         });
-        let bytes = action.to_bytes();
+        let bytes = action.to_bytes().unwrap();
         /*
         5355495f4252494447455f4d455353414745: prefix
         03: msg type
@@ -719,7 +710,7 @@ mod tests {
             token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000 * USD_MULTIPLIER, // $100k USD
         });
-        let bytes = action.to_bytes();
+        let bytes = action.to_bytes().unwrap();
         /*
         5355495f4252494447455f4d455353414745: prefix
         04: msg type
@@ -766,7 +757,7 @@ mod tests {
         0000000000000000000000000000000000000000000000000000000000000004
         5cd8a76b00000000000000000000000000000000000000000000000000000000: call data
         */
-        assert_eq!(Hex::encode(action.to_bytes().clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c00000000000000000000000006060606060606060606060606060606060606060000000000000000000000000909090909090909090909090909090909090909000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000045cd8a76b00000000000000000000000000000000000000000000000000000000");
+        assert_eq!(Hex::encode(action.to_bytes().unwrap().clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c00000000000000000000000006060606060606060606060606060606060606060000000000000000000000000909090909090909090909090909090909090909000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000045cd8a76b00000000000000000000000000000000000000000000000000000000");
 
         // Calldata with one parameter: `function newMockFunction(bool)`
         let function_signature = "newMockFunction(bool)";
@@ -798,7 +789,7 @@ mod tests {
         417795ef00000000000000000000000000000000000000000000000000000000
         0000000100000000000000000000000000000000000000000000000000000000: call data
         */
-        assert_eq!(Hex::encode(action.to_bytes().clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000024417795ef000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000");
+        assert_eq!(Hex::encode(action.to_bytes().unwrap().clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000024417795ef000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000");
 
         // Calldata with two parameters: `function newerMockFunction(bool, uint8)`
         let function_signature = "newMockFunction(bool,uint8)";
@@ -834,7 +825,7 @@ mod tests {
         0000000100000000000000000000000000000000000000000000000000000000
         0000002a00000000000000000000000000000000000000000000000000000000: call data
         */
-        assert_eq!(Hex::encode(action.to_bytes().clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044be8fc25d0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a00000000000000000000000000000000000000000000000000000000");
+        assert_eq!(Hex::encode(action.to_bytes().unwrap().clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044be8fc25d0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a00000000000000000000000000000000000000000000000000000000");
 
         // Empty calldate
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
@@ -856,7 +847,7 @@ mod tests {
         0000000000000000000000000000000000000000000000000000000000000060
         0000000000000000000000000000000000000000000000000000000000000000: call data
         */
-        let data = action.to_bytes();
+        let data = action.to_bytes().unwrap();
         assert_eq!(Hex::encode(data.clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000");
         let types = vec![ParamType::Address, ParamType::Address, ParamType::Bytes];
         // Ensure that the call data (start from bytes 29) can be decoded
@@ -897,7 +888,7 @@ mod tests {
             eth_event_index,
             eth_bridge_event,
         })
-        .to_bytes();
+        .to_bytes()?;
 
         assert_eq!(
             encoded_bytes,
@@ -935,7 +926,7 @@ mod tests {
                 1_000u64,
             ]
         });
-        let encoded_bytes = action.to_bytes();
+        let encoded_bytes = action.to_bytes().unwrap();
 
         assert_eq!(
             Hex::encode(encoded_bytes),
@@ -959,7 +950,7 @@ mod tests {
             token_sui_decimals: vec![5, 6, 7],
             token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
         });
-        let encoded_bytes = action.to_bytes();
+        let encoded_bytes = action.to_bytes().unwrap();
 
         assert_eq!(
             Hex::encode(encoded_bytes),

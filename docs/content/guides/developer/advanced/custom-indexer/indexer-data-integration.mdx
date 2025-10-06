@@ -1,0 +1,324 @@
+---
+title: Indexer Data and Integration
+description: Learn how to integrate custom data sources and storage systems with Sui indexers. Covers checkpoint data sources, custom store implementations, and Move event deserialization for building flexible indexing solutions.
+keywords: [sui custom indexer, checkpoint data sources, custom storage backend, move event deserialization, BCS serialization, indexer integration, bring your own store, postgresql indexer, blockchain data ingestion, sui indexing framework]
+---
+
+Building a custom indexer on Sui lets you take full control of data ingestion, storage, and processing. You can choose from multiple [checkpoint data sources](#checkpoint-data-sources) such as remote store, local files, or direct RPC API access, depending on whether you're indexing Mainnet data, testing against known checkpoints, or working on a local network. 
+
+For storage, you can either use the built-in `IndexerCluster` with PostgreSQL or implement your own [`Store` and `Connection` traits](#byos) to integrate a different database or storage backend. After connected, you can wire up a manual indexer, add your custom pipelines, and handle watermark coordination to keep data in sync. 
+
+Finally, you need to [deserialize Move events](#deserialize) from raw BCS bytes into Rust structs, using `bcs` and `serde`, so that your pipelines can work with strongly-typed data. This gives you a reproducible, end-to-end setup that you can tune for performance, reliability, and custom analytics.
+
+## Checkpoint data sources {#checkpoint-data-sources}
+
+The `sui-indexer-alt-framework` supports three data sources for accessing Sui blockchain data. For all data sources, the [indexing framework](/concepts/custom-indexing-framework.mdx) is using a polling technique to check for new checkpoints. Data sources are configured through command-line arguments.
+
+### Remote store
+
+The most direct stream source is a subscription to a remote checkpoint store. Sui provides the following endpoints:
+
+- **Testnet**: `https://checkpoints.testnet.sui.io`
+- **Mainnet**: `https://checkpoints.mainnet.sui.io`
+
+```sh
+$ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io
+```
+
+### Local path
+
+Local checkpoint files are useful for development and testing scenarios:
+
+```sh
+$ cargo run -- --local-ingestion-path /path/to/checkpoints
+```
+
+**Common use cases:**
+
+- Unit and integration testing with known checkpoint data
+- Development workflows with reproducible datasets
+
+### RPC API
+
+RPC API access queries full nodes directly using gRPC:
+
+```sh 
+$ cargo run -- --rpc-api-url https://fullnode.testnet.sui.io:443
+```
+
+**Endpoint format:** `https://fullnode.NETWORK.sui.io:443` where `NETWORK` is one of the available networks:
+
+- `testnet`
+- `devnet`
+- `mainnet`
+
+**When to use RPC API:**
+
+- Networks without official remote store (devnet, localnet, custom networks)
+- Development against local Sui networks
+
+## Bring your own store (BYOS) {#byos}
+
+The `IndexerCluster` provides a convenient way to get started with PostgreSQL, but you might want to use a different database or storage system. This requires using the manual `Indexer` class and implementing custom `Store` and `Connection` traits from `sui-indexer-alt-framework-store-traits`.
+
+<details>
+<summary>
+`lib.rs` in `sui-indexer-alt-framework-store-traits`
+</summary>
+
+<ImportContent source="crates/sui-indexer-alt-framework-store-traits/src/lib.rs" mode="code" trait="Connection,Store" />
+
+</details>
+
+**When to use BYOS:**
+
+- **Different database:** MongoDB, CouchDB, or other non-PostgreSQL databases. This also applies if you prefer to use PostgreSQL but without the default Diesel ORM.
+- **Custom requirements:** Specialized storage logic, partitioning, or performance optimizations.
+
+### Core implementation requirements
+
+To implement BYOS, you need to:
+
+1. Define your `Store` and `Connection` struct that manages connections.
+1. Implement the `Store` trait for connection management.
+1. Implement the `Connection` trait for watermark operations.
+1. Use manual `Indexer` instead of `IndexerCluster`.
+
+###step Define your store structure
+
+```rust
+use sui_indexer_alt_framework::store::{Store, Connection};
+use async_trait::async_trait;
+
+#[derive(Clone)]
+pub struct MyCustomStore {
+    // Your database connection details
+    connection_pool: MyDatabasePool,
+    config: MyConfig,
+}
+
+pub struct MyCustomConnection<'a> {
+    // A connection instance
+    conn: MyDatabaseConnection<'a>,
+}
+```
+
+###step Implement the `Store` trait
+
+The `Store` trait manages connection lifecycle:
+
+```rust
+#[async_trait]
+impl Store for MyCustomStore {
+    type Connection<'c> = MyCustomConnection<'c>;
+
+    async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
+        // Your implementation
+    }
+}
+```
+
+###step Implement the `Connection` trait
+
+The `Connection` trait handles watermark operations for pipeline coordination:
+
+```rust
+#[async_trait]
+impl Connection for MyCustomConnection<'_> {
+    // Get the highest checkpoint processed by a pipeline
+    async fn committer_watermark(
+        &mut self,
+        pipeline: &'static str,
+    ) -> anyhow::Result<Option<CommitterWatermark>> {
+        // Query your database for watermark data
+        todo!("Implement based on your storage system")
+    }
+
+    // Get the lowest available checkpoint for readers
+    async fn reader_watermark(
+        &mut self,
+        pipeline: &'static str,
+    ) -> anyhow::Result<Option<ReaderWatermark>> {
+        // Implementation depends on your database schema
+        todo!("Implement based on your storage system")
+    }
+    
+	  // Implement other required methods...
+}
+```
+
+For a complete reference, study the `sui-pg-db` implementation on `Connection`:
+
+<ImportContent source="crates/sui-pg-db/src/store.rs" mode="code" impl="Connection" />
+
+###step Use manual indexer
+
+Replace `IndexerCluster` with manual `Indexer`:
+
+```rust
+use sui_indexer_alt_framework::{Indexer, IndexerArgs};
+use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
+
+async fn main() -> anyhow::Result<()> {
+    // Initialize your custom store
+    let store = MyCustomStore::new(config).await?;
+    
+    // Configure indexer manually
+    let indexer = Indexer::new(
+        store,
+        IndexerArgs::default(),
+        ClientArgs {
+            remote_store_url: Some("https://checkpoints.testnet.sui.io".to_string()),
+            local_ingestion_path: None,
+            rpc_api_url: None,
+            rpc_username: None, 
+            rpc_password: None,
+        },
+        IngestionConfig::default(),
+        &prometheus::Registry::new(),
+        tokio_util::sync::CancellationToken::new(),
+    ).await?;
+
+    // Add your pipelines
+    indexer.concurrent_pipeline(
+        YourHandler::default(),
+        ConcurrentConfig::default(),
+    ).await?;
+
+    // Start the indexer
+    indexer.run().await?;
+    Ok(())
+}
+```
+
+### Example: ClickHouse implementation
+
+For a complete working example of BYOS with [ClickHouse](https://clickhouse.com/) (a high-performance columnar database for analytics), see the [example project in the Sui repo](https://github.com/MystenLabs/sui/tree/main/examples/rust/clickhouse-sui-indexer).
+
+<details>
+<summary>
+ClickHouse example README
+</summary>
+<ImportContent source="examples/rust/clickhouse-sui-indexer/README.md" mode="code" style="md" />
+</details>
+
+This example demonstrates:
+
+- **Custom store** implementation using the [ClickHouse Rust client](https://clickhouse.com/docs/integrations/rust).
+- **Watermark persistence** with ClickHouse-specific SQL syntax.
+- **Transaction digest indexing** similar to the built-in PostgreSQL handler.
+
+The example includes three main components:
+
+1. `store.rs` - ClickHouseStore implementing `Store` and `Connection` traits.
+
+    <details>
+    <summary>
+    `store.rs`
+    </summary>
+    <ImportContent source="examples/rust/clickhouse-sui-indexer/src/store.rs" mode="code" />
+    </details>
+
+1. `handlers.rs` - `TxDigest` handler processing checkpoint data.
+
+    <details>
+    <summary>
+    `handlers.rs`
+    </summary>
+    <ImportContent source="examples/rust/clickhouse-sui-indexer/src/handlers.rs" mode="code" />
+    </details>
+
+1. `main.rs` - Manual indexer setup with ClickHouse backend.
+
+    <details>
+    <summary>
+    `main.rs`
+    </summary>
+    <ImportContent source="examples/rust/clickhouse-sui-indexer/src/main.rs" mode="code" />
+    </details>
+
+## Deserializing Move events {#deserialize}
+
+When Move smart contracts execute on Sui, they can emit events using the `sui::event` module. These events are stored in checkpoints as **BCS-serialized bytes** that your indexer needs to deserialize to extract meaningful data.
+
+### Why deserialization is needed
+
+Move contracts emit events like this:
+
+```rust
+// Move smart contract
+use sui::event;
+
+public fun transfer_balance(...) {
+    event::emit(BalanceEvent {
+        balance_manager_id: id,
+        asset: asset_id, 
+        amount: 100,
+        deposit: true
+    });
+}
+```
+
+But in checkpoint data, these events arrive as **raw BCS bytes** that need to be converted back to Rust structs for processing.
+
+### Step-by-step deserialization
+
+1. Add BCS dependency
+
+    ```rust
+    [dependencies]
+    bcs = "0.1.6"
+    serde = { version = "1.0", features = ["derive"] }
+    ```
+
+1. Define the `Event` struct in Rust
+
+    Define the same structure in Rust as declared in Move. You can do this manually or use [`move-binding`](https://github.com/MystenLabs/move-binding) to auto-generate it from on-chain packages.
+
+    ```rust
+    use serde::Deserialize;
+    use sui_indexer_alt_framework::types::::base_types::ObjectID;
+
+    #[derive(Deserialize, Debug)]
+    struct BalanceEvent {
+        balance_manager_id: ObjectID,
+        asset: ObjectID,
+        amount: u64,
+        deposit: bool,
+    }
+    ```
+
+    :::important
+
+    Field order and types must match the Move event exactly.
+
+    :::
+
+1. Extract event bytes in your processor
+
+    ```rust
+    impl Processor for YourHandler {
+        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+            let mut results = Vec::new();
+            
+            for transaction in &checkpoint.transactions {
+                for event in &transaction.events {
+                    // Get the raw BCS bytes
+                    let event_bytes = &event.contents;
+                    
+                    // Deserialize to your Rust struct
+                    if let Ok(balance_event) = bcs::from_bytes::<BalanceEvent>(event_bytes) {
+                        // Do something
+                    }
+                }
+            }
+            
+            Ok(results)
+        }
+    }
+    ```
+
+## Related links
+
+<RelatedLink to="/concepts/custom-indexing-framework.mdx" />
+<RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />

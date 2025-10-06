@@ -28,8 +28,8 @@ use crate::{
             check_valid_type_parameter_name, valid_local_variable_name,
         },
         path_expander::{
-            Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander, PathExpander,
-            access_result,
+            Access, AccessPath, LegacyPathExpander, Move2024PathExpander, PathExpander,
+            PathExpanderResult, access,
         },
         translate::known_attributes::{DiagnosticAttribute, KnownAttribute},
     },
@@ -40,6 +40,7 @@ use crate::{
         VariantName,
     },
     shared::{
+        self,
         ide::{IDEAnnotation, IDEInfo},
         known_attributes::{AttributeKind_, AttributePosition},
         program_info::ModuleInfo,
@@ -58,6 +59,8 @@ use std::{
     iter::IntoIterator,
     sync::{Arc, Mutex},
 };
+
+use super::ast::StdlibDefinitions;
 
 //**************************************************************************************************
 // Context
@@ -91,6 +94,16 @@ pub(super) struct Context<'env> {
     // and dependency packages
     all_filter_alls: WarningFilters,
     pub path_expander: Option<Box<dyn PathExpander>>,
+}
+
+macro_rules! report_path_expansion_error {
+    ($context:expr, $exp:expr) => {{
+        let PathExpanderResult { result, errors } = $exp;
+        for err in errors {
+            $context.add_diag(err.into_diagnostic());
+        }
+        result
+    }};
 }
 
 impl<'env> Context<'env> {
@@ -232,10 +245,13 @@ impl<'env> Context<'env> {
             defn_context: inner_context,
             ..
         } = self;
-        path_expander
-            .as_mut()
-            .unwrap()
-            .name_access_chain_to_attribute_value(inner_context, attribute_value)
+        report_path_expansion_error!(
+            self,
+            path_expander
+                .as_mut()
+                .unwrap()
+                .name_access_chain_to_attribute_value(inner_context, attribute_value)
+        )
     }
 
     pub fn value_opt(&mut self, pvalue_opt: Option<P::Value>) -> Option<E::Value> {
@@ -254,11 +270,11 @@ impl<'env> Context<'env> {
         value(inner_context, pvalue)
     }
 
-    pub fn name_access_chain_to_module_access(
+    pub fn name_access_chain_to_module_access_result(
         &mut self,
         access: Access,
         chain: P::NameAccessChain,
-    ) -> Option<ModuleAccessResult> {
+    ) -> PathExpanderResult<AccessPath> {
         let Context {
             path_expander,
             defn_context: inner_context,
@@ -270,6 +286,17 @@ impl<'env> Context<'env> {
             .name_access_chain_to_module_access(inner_context, access, chain)
     }
 
+    pub fn name_access_chain_to_module_access(
+        &mut self,
+        access: Access,
+        chain: P::NameAccessChain,
+    ) -> Option<AccessPath> {
+        report_path_expansion_error!(
+            self,
+            self.name_access_chain_to_module_access_result(access, chain)
+        )
+    }
+
     pub fn name_access_chain_to_module_ident(
         &mut self,
         chain: P::NameAccessChain,
@@ -279,10 +306,13 @@ impl<'env> Context<'env> {
             defn_context: inner_context,
             ..
         } = self;
-        path_expander
-            .as_mut()
-            .unwrap()
-            .name_access_chain_to_module_ident(inner_context, chain)
+        report_path_expansion_error!(
+            self,
+            path_expander
+                .as_mut()
+                .unwrap()
+                .name_access_chain_to_module_ident(inner_context, chain)
+        )
     }
 
     fn error_ide_autocomplete_suggestion(&mut self, loc: Loc) {
@@ -525,7 +555,8 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
     }
     // Unused loc since these will not conflict and are implicit so no warnings are given
     let loc = Loc::invalid();
-    let std_address = maybe_make_well_known_address(context, loc, symbol!("std"));
+    let std_address =
+        maybe_make_well_known_address(context, loc, stdlib_definitions::STDLIB_ADDRESS_NAME);
     let sui_address = maybe_make_well_known_address(context, loc, symbol!("sui"));
     let mut modules: Vec<(Address, Symbol)> = vec![];
     let mut members: Vec<(Address, Symbol, Symbol, ModuleMemberKind)> = vec![];
@@ -575,6 +606,44 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
             .unwrap();
     }
     builder
+}
+
+//************************************************
+// ERRORS
+//************************************************
+
+pub(super) enum ValueError {
+    NumTooBig {
+        loc: Loc,
+        type_description: &'static str,
+    },
+    InvalidByteString {
+        error: byte_string::BytestringError,
+    },
+    InvalidHexString {
+        error: hex_string::HexstringError,
+    },
+}
+
+impl ValueError {
+    pub fn into_diagnostic(self) -> Diagnostic {
+        match self {
+            ValueError::NumTooBig {
+                loc,
+                type_description,
+            } => diag!(
+                Syntax::InvalidNumber,
+                (
+                    loc,
+                    format!(
+                        "Invalid number literal. The given literal is too large to fit into {type_description}",
+                    )
+                ),
+            ),
+            ValueError::InvalidByteString { error } => error.into_diagnostic(),
+            ValueError::InvalidHexString { error } => error.into_diagnostic(),
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -1200,6 +1269,8 @@ fn module_(
     let mut use_funs = use_funs(context, use_funs_builder);
     check_visibility_modifiers(context, &functions, &friends, package_name);
 
+    let stdlib_definitions = stdlib_definitions(context, loc);
+
     context.pop_alias_scope(Some(&mut use_funs));
 
     let named_address_map = context.defn_context.named_address_mapping.clone().unwrap();
@@ -1213,6 +1284,7 @@ fn module_(
         use_funs,
         target_kind,
         friends,
+        stdlib_definitions,
         structs,
         enums,
         constants,
@@ -1355,6 +1427,42 @@ fn extension_attributes(context: &mut Context<'_>, attributes: Vec<Spanned<P::At
             }
         }
     }
+}
+
+fn stdlib_definitions(context: &mut Context, mloc: Loc) -> StdlibDefinitions {
+    if maybe_make_well_known_address(context, mloc, stdlib_definitions::STDLIB_ADDRESS_NAME)
+        .is_none()
+    {
+        return StdlibDefinitions {
+            functions: BTreeMap::new(),
+            types: BTreeMap::new(),
+        };
+    }
+
+    let stdlib_functions = shared::stdlib_definitions::stdlib_function_definition(mloc);
+    let stdlib_types = shared::stdlib_definitions::stdlib_type_definition(mloc);
+
+    let functions = stdlib_functions
+        .into_iter()
+        .filter_map(|(key, name)| {
+            context
+                .name_access_chain_to_module_access_result(Access::ApplyPositional, name)
+                .result
+                .map(|name| (key, name.access.value))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let types = stdlib_types
+        .into_iter()
+        .filter_map(|(key, name)| {
+            context
+                .name_access_chain_to_module_access_result(Access::Type, name)
+                .result
+                .map(|name| (key, name.access.value))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    StdlibDefinitions { functions, types }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1908,7 +2016,7 @@ fn explicit_use_fun(
         ty,
         method,
     } = pexplicit;
-    let access_result!(function, tyargs, is_macro) =
+    let access!(function, tyargs, is_macro) =
         context.name_access_chain_to_module_access(Access::ApplyPositional, *function)?;
     ice_assert!(
         context.reporter(),
@@ -1922,7 +2030,7 @@ fn explicit_use_fun(
         loc,
         "Found a 'use fun' as a macro"
     );
-    let access_result!(ty, tyargs, is_macro) =
+    let access!(ty, tyargs, is_macro) =
         context.name_access_chain_to_module_access(Access::Type, *ty)?;
     ice_assert!(
         context.reporter(),
@@ -2527,7 +2635,7 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
                 assert!(context.env().has_errors());
                 ET::UnresolvedError
             }
-            Some(access_result!(n, ptyargs, _)) => ET::Apply(n, sp_types(context, ptyargs)),
+            Some(access!(n, ptyargs, _)) => ET::Apply(n, sp_types(context, ptyargs)),
         },
         PT::Ref(mut_, inner) => ET::Ref(mut_, Box::new(type_(context, *inner))),
         PT::Fun(args, result) => {
@@ -2714,7 +2822,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::Name(pn) => {
             bind_access_result!(
                 context.name_access_chain_to_module_access(Access::Term, pn) =>
-                    Some(access_result!(name, ptys_opt, is_macro)) in {
+                    Some(access!(name, ptys_opt, is_macro)) in {
                         assert!(ptys_opt.is_none());
                         assert!(is_macro.is_none());
                         EE::Name(name, None)
@@ -2726,7 +2834,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             let ers = sp(rloc, exps(context, prs));
             bind_access_result!(
                 en_opt =>
-                    Some(access_result!(name, ptys_opt, is_macro))
+                    Some(access!(name, ptys_opt, is_macro))
                     in EE::Call(name, is_macro, optional_sp_types(context, ptys_opt), ers)
             )
         }
@@ -2739,7 +2847,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             let efields = named_fields(context, loc, "construction", "argument", efields_vec);
             bind_access_result!(
                 en_opt =>
-                    Some(access_result!(name, ptys_opt, is_macro)) in {
+                    Some(access!(name, ptys_opt, is_macro)) in {
                         assert!(is_macro.is_none());
                         EE::Pack(name, optional_sp_types(context, ptys_opt), efields)
                     }
@@ -3183,7 +3291,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
         name_chain: P::NameAccessChain,
         identifier_okay: bool,
     ) -> Option<(E::ModuleAccess, Option<Spanned<Vec<P::Type>>>)> {
-        let ModuleAccessResult {
+        let AccessPath {
             access,
             ptys_opt,
             is_macro,
@@ -3363,99 +3471,89 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
 // Values
 //**************************************************************************************************
 
-pub(super) fn value(context: &mut DefnContext, sp!(loc, pvalue_): P::Value) -> Option<E::Value> {
-    use E::Value_ as EV;
-    use P::Value_ as PV;
-    let value_ = match pvalue_ {
-        PV::Address(addr) => {
-            let addr = top_level_address(context, /* suggest_declaration */ true, addr);
-            EV::Address(addr)
+pub(super) fn value(context: &mut DefnContext, value: P::Value) -> Option<E::Value> {
+    match value_result(context, value) {
+        Ok(value) => Some(value),
+        Err(errs) => {
+            for err in errs {
+                context.add_diag(err.into_diagnostic());
+            }
+            None
         }
-        PV::Num(s) if s.ends_with("u8") => match parse_u8(&s[..s.len() - 2]) {
-            Ok((u, _format)) => EV::U8(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u8'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u16") => match parse_u16(&s[..s.len() - 3]) {
-            Ok((u, _format)) => EV::U16(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u16'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u32") => match parse_u32(&s[..s.len() - 3]) {
-            Ok((u, _format)) => EV::U32(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u32'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u64") => match parse_u64(&s[..s.len() - 3]) {
-            Ok((u, _format)) => EV::U64(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u64'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u128") => match parse_u128(&s[..s.len() - 4]) {
-            Ok((u, _format)) => EV::U128(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u128'"));
-                return None;
-            }
-        },
-        PV::Num(s) if s.ends_with("u256") => match parse_u256(&s[..s.len() - 4]) {
-            Ok((u, _format)) => EV::U256(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(loc, "'u256'"));
-                return None;
-            }
-        },
-
-        PV::Num(s) => match parse_u256(&s) {
-            Ok((u, _format)) => EV::InferredNum(u),
-            Err(_) => {
-                context.add_diag(num_too_big_error(
-                    loc,
-                    "the largest possible integer type, 'u256'",
-                ));
-                return None;
-            }
-        },
-        PV::Bool(b) => EV::Bool(b),
-        PV::HexString(s) => match hex_string::decode(loc, &s) {
-            Ok(v) => EV::Bytearray(v),
-            Err(e) => {
-                context.add_diag(*e);
-                return None;
-            }
-        },
-        PV::ByteString(s) => match byte_string::decode(loc, &s) {
-            Ok(v) => EV::Bytearray(v),
-            Err(e) => {
-                context.add_diags(e);
-                return None;
-            }
-        },
-    };
-    Some(sp(loc, value_))
+    }
 }
 
-// Create an error for an integer literal that is too big to fit in its type.
-// This assumes that the literal is the current token.
-fn num_too_big_error(loc: Loc, type_description: &'static str) -> Diagnostic {
-    diag!(
-        Syntax::InvalidNumber,
-        (
+pub(super) fn value_result(
+    context: &mut DefnContext,
+    sp!(loc, pvalue_): P::Value,
+) -> Result<E::Value, Vec<ValueError>> {
+    use E::Value_ as EV;
+    use P::Value_ as PV;
+
+    fn num_too_big_error(loc: Loc, type_description: &'static str) -> Vec<ValueError> {
+        vec![ValueError::NumTooBig {
             loc,
-            format!(
-                "Invalid number literal. The given literal is too large to fit into {}",
-                type_description
-            )
+            type_description,
+        }]
+    }
+
+    fn hex_error(error: hex_string::HexstringError) -> Vec<ValueError> {
+        vec![ValueError::InvalidHexString { error }]
+    }
+
+    fn string_error(errors: Vec<byte_string::BytestringError>) -> Vec<ValueError> {
+        errors
+            .into_iter()
+            .map(|error| ValueError::InvalidByteString { error })
+            .collect()
+    }
+
+    macro_rules! parse_num {
+        ($exp:expr, $ctor:expr, $ty:expr) => {
+            $exp.map(|(u, _format)| $ctor(u))
+                .map_err(|_| num_too_big_error(loc, $ty))
+        };
+    }
+
+    let value_ = match pvalue_ {
+        PV::Address(addr) => {
+            Ok(EV::Address(top_level_address(
+                context, /* suggest_declaration */ true, addr,
+            )))
+        }
+        PV::Num(s) if s.ends_with("u8") => parse_num!(parse_u8(&s[..s.len() - 2]), EV::U8, "'u8'"),
+        PV::Num(s) if s.ends_with("u16") => {
+            parse_num!(parse_u16(&s[..s.len() - 3]), EV::U16, "'u16'")
+        }
+        PV::Num(s) if s.ends_with("u32") => {
+            parse_num!(parse_u32(&s[..s.len() - 3]), EV::U32, "'u32'")
+        }
+        PV::Num(s) if s.ends_with("u64") => {
+            parse_num!(parse_u64(&s[..s.len() - 3]), EV::U64, "'u64'")
+        }
+        PV::Num(s) if s.ends_with("u128") => {
+            parse_num!(parse_u128(&s[..s.len() - 4]), EV::U128, "'u128'")
+        }
+        PV::Num(s) if s.ends_with("u256") => {
+            parse_num!(parse_u256(&s[..s.len() - 4]), EV::U256, "'u256'")
+        }
+        PV::Num(s) => parse_num!(
+            parse_u256(&s),
+            EV::InferredNum,
+            "the largest possible integer type, 'u256'"
         ),
-    )
+        PV::Bool(b) => Ok(EV::Bool(b)),
+        PV::HexString(s) => hex_string::decode(loc, &s)
+            .map(EV::Bytearray)
+            .map_err(hex_error),
+        PV::ByteString(s) => byte_string::decode(loc, &s)
+            .map(EV::Bytearray)
+            .map_err(string_error),
+        PV::String(s) => byte_string::decode(loc, &s)
+            .map(EV::InferredString)
+            .map_err(string_error),
+    };
+    value_.map(|value_| sp(loc, value_))
 }
 
 //**************************************************************************************************
@@ -3505,7 +3603,7 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
             EL::Var(Some(emut), sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
         PB::Unpack(ptn, pfields) => {
-            let access_result!(name, ptys_opt, is_macro) =
+            let access!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, *ptn)?;
             ice_assert!(
                 context.reporter(),
@@ -3614,7 +3712,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
     match e_ {
         PE::Name(name) => {
             match context.name_access_chain_to_module_access(Access::Term, name.clone()) {
-                Some(access_result!(sp!(_, name @ M::Name(_)), Some(_), _is_macro)) => {
+                Some(access!(sp!(_, name @ M::Name(_)), Some(_), _is_macro)) => {
                     let msg = "Unexpected assignment of instantiated type without fields";
                     let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
                     diag.add_note(format!(
@@ -3624,17 +3722,17 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                     context.add_diag(diag);
                     None
                 }
-                Some(access_result!(_, _ptys_opt, Some(_))) => {
+                Some(access!(_, _ptys_opt, Some(_))) => {
                     let msg = "Unexpected assignment of name with macro invocation";
                     let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
                     diag.add_note("Macro invocation '!' must appear on an invocation");
                     context.add_diag(diag);
                     None
                 }
-                Some(access_result!(sp!(_, name @ M::Name(_)), None, None)) => {
+                Some(access!(sp!(_, name @ M::Name(_)), None, None)) => {
                     Some(sp(loc, EL::Var(None, sp(loc, name), None)))
                 }
-                Some(access_result!(sp!(_, M::ModuleAccess(_, _)), _ptys_opt, _is_macro)) => {
+                Some(access!(sp!(_, M::ModuleAccess(_, _)), _ptys_opt, _is_macro)) => {
                     let msg = "Unexpected assignment of module access without fields";
                     let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
                     diag.add_note(format!(
@@ -3644,7 +3742,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                     context.add_diag(diag);
                     None
                 }
-                Some(access_result!(sp!(loc, M::Variant(_, _)), _tys_opt, _is_macro)) => {
+                Some(access!(sp!(loc, M::Variant(_, _)), _tys_opt, _is_macro)) => {
                     let cur_pkg = context.current_package();
                     if context.check_feature(cur_pkg, FeatureGate::Enums, loc) {
                         let msg = "Unexpected assignment of variant";
@@ -3661,7 +3759,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             }
         }
         PE::Pack(pn, pfields) => {
-            let access_result!(name, ptys_opt, is_macro) =
+            let access!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             ice_assert!(
                 context.reporter(),
@@ -3679,7 +3777,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
         PE::Call(pn, sp!(_, exprs)) => {
             let pkg = context.current_package();
             context.check_feature(pkg, FeatureGate::PositionalFields, loc);
-            let access_result!(name, ptys_opt, is_macro) =
+            let access!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             ice_assert!(
                 context.reporter(),

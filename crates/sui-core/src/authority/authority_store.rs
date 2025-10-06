@@ -332,6 +332,15 @@ impl AuthorityStore {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
+    pub fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<Vec<ObjectKey>>, TypedStoreError> {
+        self.perpetual_tables
+            .unchanged_loaded_runtime_objects
+            .get(digest)
+    }
+
     pub fn multi_get_effects<'a>(
         &self,
         effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,
@@ -763,6 +772,7 @@ impl AuthorityStore {
             deleted,
             written,
             events,
+            unchanged_loaded_runtime_objects,
             locks_to_delete,
             new_locks_to_init,
             ..
@@ -819,6 +829,14 @@ impl AuthorityStore {
             write_batch.insert_batch(
                 &self.perpetual_tables.events_2,
                 [(transaction_digest, events)],
+            )?;
+        }
+
+        // Write unchanged_loaded_runtime_objects
+        if !unchanged_loaded_runtime_objects.is_empty() {
+            write_batch.insert_batch(
+                &self.perpetual_tables.unchanged_loaded_runtime_objects,
+                [(transaction_digest, unchanged_loaded_runtime_objects)],
             )?;
         }
 

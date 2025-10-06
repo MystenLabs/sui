@@ -15,9 +15,11 @@ use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
+use crate::full_checkpoint_content::ObjectSet;
 use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
 use crate::storage::error::Error as StorageError;
+use crate::transaction::TransactionData;
 use crate::transaction::{SenderSignedData, TransactionDataAPI};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -734,4 +736,161 @@ pub fn get_transaction_output_objects(
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(output_objects)
+}
+
+// Returns an iterator over the ObjectKey's of objects read or written by this transaction
+pub fn get_transaction_object_set(
+    transaction: &TransactionData,
+    effects: &TransactionEffects,
+    unchanged_loaded_runtime_objects: &[ObjectKey],
+) -> BTreeSet<ObjectKey> {
+    // enumerate the full set of input objects in order to properly capture immutable objects that
+    // may not appear in the effects.
+    //
+    // This excludes packages
+    let input_objects = transaction
+        .input_objects()
+        .expect("txn was executed and must have valid input objects")
+        .into_iter()
+        .filter_map(|input| {
+            input
+                .version()
+                .map(|version| ObjectKey(input.object_id(), version))
+        });
+
+    // The full set of output/written objects as well as any of their initial versions
+    let modified_set = effects
+        .object_changes()
+        .into_iter()
+        .flat_map(|change| {
+            [
+                change
+                    .input_version
+                    .map(|version| ObjectKey(change.id, version)),
+                change
+                    .output_version
+                    .map(|version| ObjectKey(change.id, version)),
+            ]
+        })
+        .flatten();
+
+    // The set of unchanged consensus objects
+    let unchanged_consensus =
+        effects
+            .unchanged_consensus_objects()
+            .into_iter()
+            .flat_map(|unchanged| {
+                if let crate::effects::UnchangedConsensusKind::ReadOnlyRoot((version, _)) =
+                    unchanged.1
+                {
+                    Some(ObjectKey(unchanged.0, version))
+                } else {
+                    None
+                }
+            });
+
+    input_objects
+        .chain(modified_set)
+        .chain(unchanged_consensus)
+        .chain(unchanged_loaded_runtime_objects.iter().copied())
+        .collect()
+}
+
+// A BackingStore to pass to execution in order to track all objects loaded during execution.
+//
+// Today this is used to very accurately track the objects that were loaded but unchanged during
+// execution.
+pub struct TrackingBackingStore<'a> {
+    inner: &'a dyn crate::storage::BackingStore,
+    read_objects: std::cell::RefCell<ObjectSet>,
+}
+
+impl<'a> TrackingBackingStore<'a> {
+    pub fn new(inner: &'a dyn crate::storage::BackingStore) -> Self {
+        Self {
+            inner,
+            read_objects: Default::default(),
+        }
+    }
+
+    pub fn into_read_objects(self) -> ObjectSet {
+        self.read_objects.into_inner()
+    }
+
+    fn track_object(&self, object: &Object) {
+        self.read_objects.borrow_mut().insert(object.clone());
+    }
+}
+
+impl BackingPackageStore for TrackingBackingStore<'_> {
+    fn get_package_object(
+        &self,
+        package_id: &ObjectID,
+    ) -> crate::error::SuiResult<Option<PackageObject>> {
+        self.inner.get_package_object(package_id).inspect(|o| {
+            o.as_ref()
+                .inspect(|package| self.track_object(package.object()));
+        })
+    }
+}
+
+impl ChildObjectResolver for TrackingBackingStore<'_> {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> crate::error::SuiResult<Option<Object>> {
+        self.inner
+            .read_child_object(parent, child, child_version_upper_bound)
+            .inspect(|o| {
+                o.as_ref().inspect(|object| self.track_object(object));
+            })
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: crate::committee::EpochId,
+    ) -> crate::error::SuiResult<Option<Object>> {
+        self.inner
+            .get_object_received_at_version(
+                owner,
+                receiving_object_id,
+                receive_object_at_version,
+                epoch_id,
+            )
+            .inspect(|o| {
+                o.as_ref().inspect(|object| self.track_object(object));
+            })
+    }
+}
+
+impl crate::storage::ObjectStore for TrackingBackingStore<'_> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.inner
+            .get_object(object_id)
+            .inspect(|o| self.track_object(o))
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: crate::base_types::VersionNumber,
+    ) -> Option<Object> {
+        self.inner
+            .get_object_by_key(object_id, version)
+            .inspect(|o| self.track_object(o))
+    }
+}
+
+impl ParentSync for TrackingBackingStore<'_> {
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> Option<crate::base_types::ObjectRef> {
+        self.inner.get_latest_parent_entry_ref_deprecated(object_id)
+    }
 }

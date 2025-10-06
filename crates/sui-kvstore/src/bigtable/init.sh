@@ -10,7 +10,7 @@ if [[ -n $BIGTABLE_EMULATOR_HOST ]]; then
   command+=(-project emulator)
 fi
 
-for table in objects transactions checkpoints checkpoints_by_digest watermark epochs; do
+for table in objects transactions checkpoints checkpoints_by_digest watermark watermark_alt epochs; do
   (
     set -x
     "${command[@]}" createtable $table

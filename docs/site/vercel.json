@@ -142,5 +142,8 @@
       { "source": "/guides/developer/first-app/publish", "destination": "/guides/developer/getting-started/hello-world"},
       { "source": "/guides/developer/first-app/client-tssdk", "destination": "/guides/developer/sui-101/client-tssdk"},
       { "source": "/guides/developer/first-app/debug", "destination": "/references/ide/debugger"}
+      { "source": "/guides/developer/stablecoins", "destination": "/guides/developer/coin/regulated"},
+      { "source": "/standards/coin", "destination": "/standards/currency"},
+      { "source": "/standards/deepbookv3", "destination": "/standards/deepbook"}
     ]
   }
