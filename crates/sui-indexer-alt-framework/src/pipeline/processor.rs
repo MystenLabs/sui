@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
-
-use backoff::ExponentialBackoff;
+use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
@@ -35,21 +33,9 @@ pub trait Processor {
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
 }
 
-/// Error type for async processing with retry control.
-#[derive(Debug, thiserror::Error)]
-pub enum ProcessorError {
-    /// Transient error - framework will retry with exponential backoff.
-    #[error("Transient processing error: {0}")]
-    Transient(#[source] anyhow::Error),
-
-    /// Permanent error - framework stops processing immediately.
-    #[error("Permanent processing error: {0}")]
-    Permanent(#[source] anyhow::Error),
-}
-
-/// Async version of Processor trait with retry-aware error handling.
+/// Async version of Processor trait.
 /// Implementors can choose to implement this trait for async processing with external API calls
-/// or other async operations. The framework will automatically handle retries for transient errors.
+/// or other async operations.
 #[async_trait::async_trait]
 pub trait ProcessorAsync {
     /// Used to identify the pipeline in logs and metrics.
@@ -61,11 +47,11 @@ pub trait ProcessorAsync {
     /// The type of value being inserted by the handler.
     type Value: Send + Sync + 'static;
 
-    /// Async processing logic with retry-aware error handling.
+    /// Async processing logic for turning a checkpoint into rows of the table.
     async fn process_async(
         &self,
         checkpoint: &Arc<CheckpointData>,
-    ) -> Result<Vec<Self::Value>, ProcessorError>;
+    ) -> anyhow::Result<Vec<Self::Value>>;
 }
 
 /// All sync Processors get async ProcessorAsync.
@@ -83,16 +69,10 @@ where
     async fn process_async(
         &self,
         checkpoint: &Arc<CheckpointData>,
-    ) -> Result<Vec<Self::Value>, ProcessorError> {
-        self.process(checkpoint).map_err(ProcessorError::Permanent)
+    ) -> anyhow::Result<Vec<Self::Value>> {
+        self.process(checkpoint)
     }
 }
-
-/// Initial retry interval for transient errors
-const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
-
-/// Maximum retry interval for transient errors
-const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 
 /// The processor task is responsible for taking checkpoint data and breaking it down into rows
 /// ready to commit. It spins up a supervisor that waits on the `rx` channel for checkpoints, and
@@ -102,7 +82,7 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 /// channel.
 ///
 /// The task will shutdown if the `cancel` token is cancelled, or if any of the workers encounters
-/// a permanent error. Transient errors will be retried with exponential backoff.
+/// an error.
 pub(super) fn processor<P: ProcessorAsync + Send + Sync + 'static>(
     processor: Arc<P>,
     rx: mpsc::Receiver<Arc<CheckpointData>>,
@@ -141,24 +121,7 @@ pub(super) fn processor<P: ProcessorAsync + Send + Sync + 'static>(
                         .with_label_values(&[P::NAME])
                         .start_timer();
 
-                    let backoff = ExponentialBackoff {
-                        initial_interval: INITIAL_RETRY_INTERVAL,
-                        current_interval: INITIAL_RETRY_INTERVAL,
-                        max_interval: MAX_RETRY_INTERVAL,
-                        max_elapsed_time: None,
-                        ..Default::default()
-                    };
-
-                    let values = backoff::future::retry(backoff, || async {
-                        processor
-                            .process_async(&checkpoint)
-                            .await
-                            .map_err(|e| match e {
-                                ProcessorError::Transient(err) => backoff::Error::transient(err),
-                                ProcessorError::Permanent(err) => backoff::Error::permanent(err),
-                            })
-                    })
-                    .await?;
+                    let values = processor.process_async(&checkpoint).await?;
                     let elapsed = guard.stop_and_record();
 
                     let epoch = checkpoint.checkpoint_summary.epoch;
