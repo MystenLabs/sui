@@ -4392,7 +4392,6 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
-        self.feature_flags.allow_private_accumulator_entrypoints = true;
     }
 
     pub fn enable_address_balance_gas_payments_for_testing(&mut self) {
