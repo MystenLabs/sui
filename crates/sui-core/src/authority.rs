@@ -5087,9 +5087,16 @@ impl AuthorityState {
 
             let new_ref = new_object.compute_object_reference();
             if new_ref != system_package_ref {
-                error!(
-                    "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
-                );
+                if cfg!(msim) {
+                    // debug_fatal required here for test_framework_upgrade_conflicting_versions to pass
+                    debug_fatal!(
+                        "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
+                    );
+                } else {
+                    error!(
+                        "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
+                    );
+                }
                 return None;
             }
 
