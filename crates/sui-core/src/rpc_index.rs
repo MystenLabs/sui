@@ -694,37 +694,28 @@ impl IndexStoreTables {
             return Ok(());
         }
 
-        let mut per_tx_indices: Vec<(SuiAddress, u64)> = Vec::new();
-        for acc in acc_events {
-            if let Some(stream_id) =
-                sui_types::accumulator_root::stream_id_from_accumulator_event(&acc)
-            {
-                if let AccumulatorValue::EventDigest(idx, _d) = acc.write.value {
-                    per_tx_indices.push((stream_id, idx));
-                }
-            }
-        }
-
-        if per_tx_indices.is_empty() {
-            return Ok(());
-        }
-
         let Some(tx_events) = tx.events.as_ref() else {
             return Ok(());
         };
 
         let mut entries: Vec<(EventIndexKey, Event)> = Vec::new();
-        for (stream_id, idx) in per_tx_indices {
-            let ui = idx as usize;
-            if ui < tx_events.data.len() {
-                let ev = &tx_events.data[ui];
-                let key = EventIndexKey {
-                    stream_id,
-                    checkpoint_seq,
-                    transaction_idx: tx_idx,
-                    event_index: idx as u32,
-                };
-                entries.push((key, ev.clone()));
+        for acc in acc_events {
+            if let Some(stream_id) =
+                sui_types::accumulator_root::stream_id_from_accumulator_event(&acc)
+            {
+                if let AccumulatorValue::EventDigest(idx, _d) = acc.write.value {
+                    let ui = idx as usize;
+                    if ui < tx_events.data.len() {
+                        let ev = &tx_events.data[ui];
+                        let key = EventIndexKey {
+                            stream_id,
+                            checkpoint_seq,
+                            transaction_idx: tx_idx,
+                            event_index: idx as u32,
+                        };
+                        entries.push((key, ev.clone()));
+                    }
+                }
             }
         }
 
