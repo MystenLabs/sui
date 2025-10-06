@@ -5,4 +5,18 @@ info:
   edition: legacy
   lint: false
 ---
+error[E04039]: unable to determine princiapl type for literal
+  ┌─ tests/move_check/expansion/almost_invalid_local_name.move:8:19
+  │
+8 │         let _No = 100;
+  │                   ^^^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
 
+error[E04039]: unable to determine princiapl type for literal
+   ┌─ tests/move_check/expansion/almost_invalid_local_name.move:13:15
+   │
+13 │         _No = 100;
+   │               ^^^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'

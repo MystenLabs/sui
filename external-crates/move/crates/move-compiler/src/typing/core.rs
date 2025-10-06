@@ -2398,7 +2398,17 @@ pub fn solve_constraints(context: &mut Context) {
                 let tvar = sp(loc, TI::Var(var).into());
                 let ty_ = unfold_type(&subst, &tvar).value;
                 match ty_.inner() {
-                    TI::UnresolvedError | TI::Anything => {
+                    ti @ (TI::UnresolvedError | TI::Anything) => {
+                        if matches!(ti, TI::Anything) {
+                            let msg = "Could not determine a concrete type for this numeric \
+                                       literal, so defaulting to 'u64'";
+                            let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
+                            diag.add_note(
+                                "To avoid this warning, add an explicit type annotation, \
+                                           e.g., '0u64' or '0 as u64'",
+                            );
+                            context.add_diag(diag);
+                        }
                         let next_subst =
                             join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
                                 .unwrap()
@@ -2412,7 +2422,17 @@ pub fn solve_constraints(context: &mut Context) {
                 let tvar = sp(loc, TI::Var(var).into());
                 let ty_ = unfold_type(&subst, &tvar).value;
                 match ty_.inner() {
-                    TI::UnresolvedError | TI::Anything => {
+                    ti @ (TI::UnresolvedError | TI::Anything) => {
+                        if matches!(ti, TI::Anything) {
+                            let msg = "Could not determine a concrete type for this string \
+                                       literal, so defaulting to 'vector<u8>'";
+                            let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
+                            diag.add_note(
+                                "To avoid this warning, add an explicit type annotation, \
+                                       e.g., 'b\"hello\"'",
+                            );
+                            context.add_diag(diag);
+                        }
                         let ty = Type_::vector(loc, Type_::u8(loc));
                         let next_subst = join(&mut context.tvar_counter, subst, &ty, &tvar)
                             .unwrap()
