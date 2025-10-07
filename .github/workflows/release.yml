@@ -128,12 +128,6 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install Xcode Command Line Tools (MacOS Intel)
-        if: ${{ matrix.os == 'macos-latest-large' && env.s3_existing_archive == '' }}
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
       - name: Install postgres (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_existing_archive == '' }}
         shell: bash
@@ -167,6 +161,8 @@ jobs:
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_existing_archive == '' }}
         shell: bash
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
 
