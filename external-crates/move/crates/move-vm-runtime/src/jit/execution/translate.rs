@@ -367,7 +367,7 @@ fn initialize_type_refs(
             let module_name = intern_ident_str(runtime_id.name())?;
             Ok(IntraPackageKey {
                 module_name,
-                member_name: struct_name.to_owned(),
+                member_name: struct_name,
             })
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
@@ -1342,7 +1342,7 @@ fn make_arena_type(
                 package_key: *runtime_address,
                 inner_pkg_key: IntraPackageKey {
                     module_name,
-                    member_name: datatype_name.to_owned(),
+                    member_name: datatype_name,
                 },
             };
             ArenaType::Datatype(cache_idx)
@@ -1363,7 +1363,7 @@ fn make_arena_type(
                 package_key: *runtime_address,
                 inner_pkg_key: IntraPackageKey {
                     module_name,
-                    member_name: datatype_name.to_owned(),
+                    member_name: datatype_name,
                 },
             };
             ArenaType::DatatypeInstantiation(context.arena_box((cache_idx, type_parameters))?)
