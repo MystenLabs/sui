@@ -25,7 +25,7 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     effects: &TransactionEffects,
     input_objs: Vec<InputObjectKind>,
-    mocked_coin: Option<ObjectID>,
+    mocked_coin: Option<Vec<ObjectID>>,
 ) -> Result<Vec<BalanceChange>, E> {
     let (_, gas_owner) = effects.gas_object();
 
@@ -42,7 +42,7 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         .all_changed_objects()
         .into_iter()
         .filter_map(|((id, version, digest), _, _)| {
-            if matches!(mocked_coin, Some(coin) if id == coin) {
+            if mocked_coin.as_ref().map_or(false, |coins| coins.contains(&id)) {
                 return None;
             }
             Some((id, version, Some(digest)))
@@ -67,7 +67,7 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
             .modified_at_versions()
             .into_iter()
             .filter_map(|(id, version)| {
-                if matches!(mocked_coin, Some(coin) if id == coin) {
+                if mocked_coin.as_ref().map_or(false, |coins| coins.contains(&id)) {
                     return None;
                 }
                 // We won't be able to get dynamic object from object provider today
