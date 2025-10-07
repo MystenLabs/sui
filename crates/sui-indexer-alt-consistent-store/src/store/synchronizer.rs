@@ -83,7 +83,7 @@ impl Synchronizer {
     pub(crate) fn register_pipeline(&mut self, pipeline: &'static str) -> anyhow::Result<()> {
         let watermark = self
             .db
-            .watermark(pipeline)
+            .commit_watermark(pipeline)
             .with_context(|| format!("Failed to get {pipeline} initial watermark"))?;
 
         self.last_watermarks.insert(pipeline, watermark);
