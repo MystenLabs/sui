@@ -16,8 +16,8 @@ use sui_types::storage::{
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{
-    InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind, ReceivingObjectReadResult,
-    ReceivingObjectReadResultKind, ReceivingObjects,
+    InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
+    ReceivingObjectReadResult, ReceivingObjectReadResultKind, ReceivingObjects,
 };
 
 /// A cache wrapper for the TransactionInputLoader that allows overriding specific objects.
@@ -58,8 +58,9 @@ impl InputLoaderCache {
                             input_results[i] = Some(ObjectReadResult::new(*kind, object.into()))
                         }
                         _ => {
-                            if let Some((version, digest)) =
-                                self.base.get_last_consensus_stream_end_info(input_full_id, epoch_id)
+                            if let Some((version, digest)) = self
+                                .base
+                                .get_last_consensus_stream_end_info(input_full_id, epoch_id)
                             {
                                 input_results[i] = Some(ObjectReadResult {
                                     input_object_kind: *kind,
@@ -91,7 +92,8 @@ impl InputLoaderCache {
             });
         }
 
-        let receiving_results = self.read_receiving_objects_for_signing(receiving_objects, epoch_id)?;
+        let receiving_results =
+            self.read_receiving_objects_for_signing(receiving_objects, epoch_id)?;
         Ok((
             input_results
                 .into_iter()
@@ -111,10 +113,10 @@ impl InputLoaderCache {
         for objref in receiving_objects {
             let (object_id, version, _) = objref;
             let full_object_id = FullObjectID::new(*object_id, Some(*version));
-            if self
-                .base
-                .have_received_object_at_version(FullObjectKey::new(full_object_id, *version), epoch_id)
-            {
+            if self.base.have_received_object_at_version(
+                FullObjectKey::new(full_object_id, *version),
+                epoch_id,
+            ) {
                 receiving_results.push(ReceivingObjectReadResult::new(
                     *objref,
                     ReceivingObjectReadResultKind::PreviouslyReceivedObject,
@@ -213,7 +215,10 @@ impl ObjectCacheRead for InputLoaderCache {
         self.base.multi_object_exists_by_key(object_keys)
     }
 
-    fn multi_input_objects_available_cache_only(&self, keys: &[sui_types::storage::InputKey]) -> Vec<bool> {
+    fn multi_input_objects_available_cache_only(
+        &self,
+        keys: &[sui_types::storage::InputKey],
+    ) -> Vec<bool> {
         self.base.multi_input_objects_available_cache_only(keys)
     }
 
@@ -360,4 +365,3 @@ impl ParentSync for ObjectCache {
         self.inner.get_latest_parent_entry_ref_deprecated(object_id)
     }
 }
-

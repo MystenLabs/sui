@@ -19,6 +19,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
+use tokio::time::{timeout, Duration};
 use tracing::{error, info, warn};
 
 const SOCKET_PATH: &str = "/tmp/sui/sui_cache_updates.sock";
@@ -37,13 +38,15 @@ struct CacheBroadcastMessage {
 pub struct CacheUpdateHandler {
     socket_path: PathBuf,
     connections: Arc<Mutex<Vec<UnixStream>>>,
-    // Message queue sender
-    tx_sender: mpsc::UnboundedSender<CacheBroadcastMessage>,
+    // Message queue sender (bounded)
+    tx_sender: mpsc::Sender<CacheBroadcastMessage>,
     // Background task handles
     accept_task: Option<JoinHandle<()>>,
     _broadcast_task: Option<JoinHandle<()>>,
     enabled: bool,
     running: Arc<AtomicBool>,
+    // Optional bounded send timeout; if None, drop immediately when full.
+    send_timeout: Option<Duration>,
 }
 
 impl CacheUpdateHandler {
@@ -63,7 +66,10 @@ impl CacheUpdateHandler {
         if enabled {
             if let Some(parent) = socket_path.parent() {
                 if let Err(e) = std::fs::create_dir_all(parent) {
-                    warn!("Failed to create cache socket directory {:?}: {}", parent, e);
+                    warn!(
+                        "Failed to create cache socket directory {:?}: {}",
+                        parent, e
+                    );
                 }
             }
             if socket_path.exists() {
@@ -99,7 +105,19 @@ impl CacheUpdateHandler {
         };
 
         let connections = Arc::new(Mutex::new(Vec::new()));
-        let (tx_sender, tx_receiver) = mpsc::unbounded_channel::<CacheBroadcastMessage>();
+
+        // Configure bounded queue capacity (default 512), and optional send timeout (default 20ms)
+        let cap = std::env::var("SUI_MEV_CACHE_QUEUE_CAP")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(512);
+        let send_timeout = std::env::var("SUI_MEV_SEND_TIMEOUT_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .map(Duration::from_millis)
+            .or_else(|| Some(Duration::from_millis(20)));
+
+        let (tx_sender, tx_receiver) = mpsc::channel::<CacheBroadcastMessage>(cap);
 
         let running = Arc::new(AtomicBool::new(enabled));
         let accept_task = if let Some(listener) = listener {
@@ -130,6 +148,7 @@ impl CacheUpdateHandler {
             _broadcast_task: broadcast_task,
             enabled,
             running,
+            send_timeout,
         }
     }
 
@@ -139,10 +158,32 @@ impl CacheUpdateHandler {
             return Ok(());
         }
         let message = CacheBroadcastMessage { objects };
-        self.tx_sender
-            .send(message)
-            .map_err(|_| anyhow::anyhow!("Cache broadcast task has stopped"))?;
-        Ok(())
+        if let Some(dur) = self.send_timeout {
+            // Wait up to configured timeout; drop on timeout
+            match timeout(dur, self.tx_sender.send(message)).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(_)) => Err(anyhow::anyhow!("Cache broadcast task has stopped")),
+                Err(_) => {
+                    warn!(
+                        "Cache broadcast send timed out after {:?}; dropping message",
+                        dur
+                    );
+                    Ok(())
+                }
+            }
+        } else {
+            // Non-blocking: drop when full
+            match self.tx_sender.try_send(message) {
+                Ok(()) => Ok(()),
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                    warn!("Cache broadcast queue full; dropping message");
+                    Ok(())
+                }
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                    Err(anyhow::anyhow!("Cache broadcast task has stopped"))
+                }
+            }
+        }
     }
 
     /// Compatibility wrapper.
@@ -171,7 +212,7 @@ impl CacheUpdateHandler {
 
     /// Broadcast task loop
     async fn broadcast_loop(
-        mut receiver: mpsc::UnboundedReceiver<CacheBroadcastMessage>,
+        mut receiver: mpsc::Receiver<CacheBroadcastMessage>,
         connections: Arc<Mutex<Vec<UnixStream>>>,
     ) {
         while let Some(message) = receiver.recv().await {

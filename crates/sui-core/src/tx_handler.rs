@@ -11,8 +11,8 @@
 //! - events payload: JSON array of `sui_json_rpc_types::SuiEvent`
 
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use anyhow::Result;
 use sui_json_rpc_types::SuiEvent;
@@ -21,6 +21,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
+use tokio::time::{timeout, Duration};
 use tracing::{error, info, warn};
 
 pub const TX_SOCKET_PATH: &str = "/tmp/sui/sui_tx.sock";
@@ -40,14 +41,16 @@ struct BroadcastMessage {
 pub struct TxHandler {
     socket_path: PathBuf,
     connections: Arc<Mutex<Vec<UnixStream>>>,
-    // Message queue sender
-    tx_sender: mpsc::UnboundedSender<BroadcastMessage>,
+    // Message queue sender (bounded)
+    tx_sender: mpsc::Sender<BroadcastMessage>,
     // Background task handle
     accept_task: Option<JoinHandle<()>>,
     _broadcast_task: Option<JoinHandle<()>>,
     // Whether MEV broadcasting is enabled (gated by env var).
     enabled: bool,
     running: Arc<AtomicBool>,
+    // Optional bounded send timeout; if None, drop immediately when full.
+    send_timeout: Option<Duration>,
 }
 
 impl TxHandler {
@@ -85,10 +88,7 @@ impl TxHandler {
                     Err(_) => {
                         // Stale file; safe to remove.
                         if let Err(e) = std::fs::remove_file(&socket_path) {
-                            warn!(
-                                "Failed to remove stale tx socket {:?}: {}",
-                                socket_path, e
-                            );
+                            warn!("Failed to remove stale tx socket {:?}: {}", socket_path, e);
                         }
                     }
                 }
@@ -97,22 +97,33 @@ impl TxHandler {
 
         let listener = if enabled {
             let l = UnixListener::bind(&socket_path).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to bind tx Unix socket at {:?}: {}",
-                    socket_path, e
-                )
+                panic!("Failed to bind tx Unix socket at {:?}: {}", socket_path, e)
             });
             info!("TxHandler listening on {:?}", socket_path);
             Some(l)
         } else {
-            info!("TxHandler disabled: set {}=1 to enable MEV broadcasting", ENV_MEV_ENABLED);
+            info!(
+                "TxHandler disabled: set {}=1 to enable MEV broadcasting",
+                ENV_MEV_ENABLED
+            );
             None
         };
 
         let connections = Arc::new(Mutex::new(Vec::new()));
 
-        // Create message queue
-        let (tx_sender, tx_receiver) = mpsc::unbounded_channel::<BroadcastMessage>();
+        // Configure bounded queue capacity (default 2048), and optional send timeout (default 20ms)
+        let cap = std::env::var("SUI_MEV_TX_QUEUE_CAP")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(2048);
+        let send_timeout = std::env::var("SUI_MEV_SEND_TIMEOUT_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .map(Duration::from_millis)
+            .or_else(|| Some(Duration::from_millis(20)));
+
+        // Create bounded message queue
+        let (tx_sender, tx_receiver) = mpsc::channel::<BroadcastMessage>(cap);
 
         // Start tasks only if enabled.
         let running = Arc::new(AtomicBool::new(enabled));
@@ -122,7 +133,9 @@ impl TxHandler {
             Some(tokio::spawn(async move {
                 Self::accept_loop(listener, connections_for_accept, running_for_accept).await;
             }))
-        } else { None };
+        } else {
+            None
+        };
 
         let broadcast_task = if enabled {
             let connections_for_broadcast = connections.clone();
@@ -143,6 +156,7 @@ impl TxHandler {
             _broadcast_task: broadcast_task,
             enabled,
             running,
+            send_timeout,
         }
     }
 
@@ -156,10 +170,32 @@ impl TxHandler {
             return Ok(());
         }
         let msg = BroadcastMessage { effects, events };
-        self.tx_sender
-            .send(msg)
-            .map_err(|_| anyhow::anyhow!("Tx broadcast task stopped"))?;
-        Ok(())
+        if let Some(dur) = self.send_timeout {
+            // Wait up to configured timeout; drop on timeout
+            match timeout(dur, self.tx_sender.send(msg)).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(_)) => Err(anyhow::anyhow!("Tx broadcast task stopped")),
+                Err(_) => {
+                    warn!(
+                        "Tx broadcast send timed out after {:?}; dropping message",
+                        dur
+                    );
+                    Ok(())
+                }
+            }
+        } else {
+            // Non-blocking: drop when full
+            match self.tx_sender.try_send(msg) {
+                Ok(()) => Ok(()),
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                    warn!("Tx broadcast queue full; dropping message");
+                    Ok(())
+                }
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                    Err(anyhow::anyhow!("Tx broadcast task stopped"))
+                }
+            }
+        }
     }
 
     /// Compatibility wrapper retained from the reference design.
@@ -190,7 +226,7 @@ impl TxHandler {
     }
 
     async fn broadcast_loop(
-        mut receiver: mpsc::UnboundedReceiver<BroadcastMessage>,
+        mut receiver: mpsc::Receiver<BroadcastMessage>,
         connections: Arc<Mutex<Vec<UnixStream>>>,
     ) {
         while let Some(msg) = receiver.recv().await {

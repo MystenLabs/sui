@@ -42,7 +42,10 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         .all_changed_objects()
         .into_iter()
         .filter_map(|((id, version, digest), _, _)| {
-            if mocked_coin.as_ref().map_or(false, |coins| coins.contains(&id)) {
+            if mocked_coin
+                .as_ref()
+                .is_some_and(|coins| coins.contains(&id))
+            {
                 return None;
             }
             Some((id, version, Some(digest)))
@@ -67,7 +70,10 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
             .modified_at_versions()
             .into_iter()
             .filter_map(|(id, version)| {
-                if mocked_coin.as_ref().map_or(false, |coins| coins.contains(&id)) {
+                if mocked_coin
+                    .as_ref()
+                    .is_some_and(|coins| coins.contains(&id))
+                {
                     return None;
                 }
                 // We won't be able to get dynamic object from object provider today

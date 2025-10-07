@@ -41,13 +41,7 @@ fn main() -> anyhow::Result<()> {
 
         println!("Received {} updated objects", objs.len());
         for (id, o) in objs.iter() {
-            println!(
-                "  id={} version={} owner={:?}",
-                id,
-                o.version(),
-                o.owner()
-            );
+            println!("  id={} version={} owner={:?}", id, o.version(), o.owner());
         }
     }
 }
-
