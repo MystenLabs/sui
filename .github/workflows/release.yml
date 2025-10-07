@@ -128,6 +128,13 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
+      - name: Install Xcode Command Line Tools (MacOS Intel)
+        if: ${{ matrix.os == 'macos-latest-large' && env.s3_existing_archive == '' }}
+        shell: bash
+        run: |
+          xcode-select --install || true
+          sudo xcode-select --switch /Library/Developer/CommandLine
+
       - name: Install postgres (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_existing_archive == '' }}
         shell: bash
