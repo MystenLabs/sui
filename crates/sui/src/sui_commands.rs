@@ -15,6 +15,7 @@ use colored::Colorize;
 use fastcrypto::traits::KeyPair;
 use move_analyzer::analyzer;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
+use move_compiler::editions::Flavor;
 use move_package::BuildConfig;
 use mysten_common::tempdir;
 use rand::rngs::OsRng;
@@ -778,7 +779,10 @@ impl SuiCommand {
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
-                analyzer::run(implicit_deps(latest_system_packages()));
+                let sui_implicit_deps = implicit_deps(latest_system_packages());
+                let flavor = Flavor::Sui;
+                let sui_pkg_hooks = Box::new(SuiPackageHooks);
+                analyzer::run(sui_implicit_deps, Some(flavor), Some(sui_pkg_hooks));
                 Ok(())
             }
             SuiCommand::AnalyzeTrace {
