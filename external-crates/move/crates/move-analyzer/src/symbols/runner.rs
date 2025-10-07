@@ -22,7 +22,7 @@ use std::{
 };
 use vfs::VfsPath;
 
-use move_compiler::linters::LintLevel;
+use move_compiler::{editions::Flavor, linters::LintLevel};
 use move_package::source_package::parsed_manifest::Dependencies;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -52,6 +52,7 @@ impl SymbolicatorRunner {
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: LintLevel,
         implicit_deps: Dependencies,
+        flavor: Option<Flavor>,
     ) -> Self {
         let mtx_cvar = Arc::new((Mutex::new(RunnerState::Wait), Condvar::new()));
         let thread_mtx_cvar = mtx_cvar.clone();
@@ -105,6 +106,7 @@ impl SymbolicatorRunner {
                                 lint,
                                 None,
                                 implicit_deps.clone(),
+                                flavor,
                             ) {
                                 Ok((symbols_opt, lsp_diagnostics)) => {
                                     eprintln!("symbolication finished");

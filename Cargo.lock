@@ -15374,6 +15374,7 @@ dependencies = [
  "bin-version",
  "clap",
  "move-analyzer",
+ "move-compiler",
  "sui-move-build",
  "sui-package-management",
 ]
