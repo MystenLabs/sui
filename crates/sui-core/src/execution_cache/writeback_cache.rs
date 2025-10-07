@@ -456,7 +456,7 @@ pub struct WritebackCache {
     fastpath_transaction_outputs_notify_read:
         NotifyRead<TransactionDigest, Arc<TransactionOutputs>>,
 
-    store: Arc<AuthorityStore>,
+    pub store: Arc<AuthorityStore>,
     backpressure_threshold: u64,
     backpressure_manager: Arc<BackpressureManager>,
     metrics: Arc<ExecutionCacheMetrics>,
