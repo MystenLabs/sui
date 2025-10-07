@@ -1,5 +1,11 @@
 # @mysten/prettier-plugin-move
 
+## 0.3.3
+
+### Patch Changes
+
+- fix incorrect label assignment when extend + regular modules are mixed in the same file
+
 ## 0.3.2
 
 ### Patch Changes

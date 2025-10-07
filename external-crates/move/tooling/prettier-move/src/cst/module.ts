@@ -69,7 +69,19 @@ export function printModuleDefinition(
     // when option is present we must check that there's only one module per file
     if (options.useModuleLabel) {
         const modules = path.parent!.nonFormattingChildren.filter(
-            (node) => node.type === path.node.type,
+            (node) =>
+                node.type === 'module_definition' || node.type === 'module_extension_definition',
+        );
+
+        useLabel = modules.length == 1;
+    }
+
+    // module definition can be a part of the extension, do decide whether to use
+    // the label for it, we need to check its parent's parent
+    if (options.useModuleLabel && path.parent!.type === 'module_extension_definition') {
+        const modules = path.parent!.parent!.nonFormattingChildren.filter(
+            (node) =>
+                node.type === 'module_definition' || node.type === 'module_extension_definition',
         );
 
         useLabel = modules.length == 1;
