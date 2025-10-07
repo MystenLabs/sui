@@ -14,7 +14,7 @@ use sui_config::node::{
     ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
     StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
-use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
+use sui_config::node::{default_zklogin_oauth_providers, RunWithRange, TransactionDriverConfig};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{
@@ -255,7 +255,7 @@ impl ValidatorConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
-            mfp_allowed_list: vec![],
+            transaction_driver_config: None,
         }
     }
 
@@ -293,7 +293,7 @@ pub struct FullnodeConfigBuilder {
     data_ingestion_dir: Option<PathBuf>,
     disable_pruning: bool,
     chain_override: Option<Chain>,
-    mfp_allowed_list: Vec<String>,
+    transaction_driver_config: Option<TransactionDriverConfig>,
 }
 
 impl FullnodeConfigBuilder {
@@ -417,8 +417,8 @@ impl FullnodeConfigBuilder {
         self
     }
 
-    pub fn with_mfp_allowed_list(mut self, list: Vec<String>) -> Self {
-        self.mfp_allowed_list = list;
+    pub fn with_transaction_driver_config(mut self, config: Option<TransactionDriverConfig>) -> Self {
+        self.transaction_driver_config = config;
         self
     }
 
@@ -571,7 +571,7 @@ impl FullnodeConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
-            mfp_allowed_list: self.mfp_allowed_list,
+            transaction_driver_config: self.transaction_driver_config,
         }
     }
 }
