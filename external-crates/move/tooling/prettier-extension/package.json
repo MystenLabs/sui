@@ -76,7 +76,7 @@
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
 	},
 	"dependencies": {
-		"@mysten/prettier-plugin-move": "^0.3.2",
+		"@mysten/prettier-plugin-move": "^0.3.3",
 		"cosmiconfig": "^9.0.0",
 		"prettier": "^3.3.2"
 	},
