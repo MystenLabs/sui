@@ -29,7 +29,7 @@ jobs:
           event-type: build-release-binaries
           client-payload: '{"sui_commit": "${{ github.sha }}"}'
 
-  # Tag all sui images with release tag, so that they can be easily found
+  # Tag all sui images with branch name, so that they can be easily found
   tag-docker-hub-images:
     name: Tag sui docker images in DockerHub
     if: github.event_name == 'push' && contains(fromJSON('["devnet", "testnet", "mainnet"]'), github.ref_name)
