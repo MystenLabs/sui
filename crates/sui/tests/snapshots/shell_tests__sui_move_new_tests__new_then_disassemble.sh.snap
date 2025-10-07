@@ -43,9 +43,7 @@ B0:
 
 ----- stderr -----
 === Build ===
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY SuiSystem
-INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
 BUILDING example
 === Disassemble ===

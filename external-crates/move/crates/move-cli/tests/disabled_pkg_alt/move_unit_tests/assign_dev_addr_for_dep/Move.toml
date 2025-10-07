@@ -1,0 +1,17 @@
+# TODO: pkg-alt this may be testing something other than _ addresses? reenable and fix. DVX-1365
+[package]
+name = "Foo"
+edition = "2024.beta"
+
+[addresses]
+A = "_"
+foo = "0x0"
+
+[dev-addresses]
+std = "0x1"
+A = "0x2"
+B = "0x3"
+
+[dev-dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+Bar = { local = "dep" }
