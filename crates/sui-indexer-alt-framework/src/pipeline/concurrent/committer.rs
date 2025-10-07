@@ -50,9 +50,6 @@ pub(super) fn committer<H: Handler + 'static>(
             &metrics.latest_partially_committed_checkpoint,
         );
 
-        // maybe here if task just check that the checkpoints received ... basically don't send any less than the reader lo
-        // or in the collector ... or processor...? not sure
-
         match ReceiverStream::new(rx)
             .try_for_each_spawned(
                 config.write_concurrency,

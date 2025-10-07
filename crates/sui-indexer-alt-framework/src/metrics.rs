@@ -145,8 +145,7 @@ pub(crate) struct CheckpointLagMetricReporter {
 }
 
 impl IndexerMetrics {
-    // maybe we can have task as the prefix...? like the metrics_prefix?
-    // so we don't need to include task everywhere
+    // TODO (wlmyng) - how do we want to handle tasked pipelines?
     pub fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
         let prefix = prefix.unwrap_or("indexer");
         let name = |n| format!("{prefix}_{n}");

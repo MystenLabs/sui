@@ -11,7 +11,7 @@ use std::time::Duration;
 #[async_trait]
 pub trait Connection: Send {
     /// Given a pipeline and optional indexer task, return the committer watermark from the `Store`.
-    /// The indexer fetches this value for each pipeline added to determine which checkponit to
+    /// The indexer fetches this value for each pipeline added to determine which checkpoint to
     /// resume processing from. By default, there is no task name.
     async fn committer_watermark(
         &mut self,
@@ -19,29 +19,9 @@ pub trait Connection: Send {
         task: Option<&str>,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
-    /// Returns a tuple of the committer watermarks for the task and its main pipeline in that
-    /// order. If there is no task watermark, no result is returned. If there is no main pipeline,
-    /// the task's own watermark is returned.
-    async fn committer_task_and_main_watermark(
-        &mut self,
-        pipeline: &'static str,
-        task: Option<&str>,
-    ) -> anyhow::Result<Option<(CommitterWatermark, CommitterWatermark)>> {
-        let task_watermark = self.committer_watermark(pipeline, task).await?;
-        let main_watermark = self.committer_watermark(pipeline, None).await?;
-
-        match (task_watermark, main_watermark) {
-            (Some(task_watermark), Some(main_watermark)) => {
-                Ok(Some((task_watermark, main_watermark)))
-            }
-            (Some(task_watermark), None) => Ok(Some((task_watermark, task_watermark))),
-            _ => Ok(None),
-        }
-    }
-
     /// Given a pipeline and optional indexer task, return the reader watermark from the database.
     /// This is used by the indexer to determine the new `reader_lo` or inclusive lower bound of
-    /// available data. By default, there is no task name.
+    /// available data.
     async fn reader_watermark(
         &mut self,
         pipeline: &'static str,
@@ -52,7 +32,7 @@ pub trait Connection: Send {
     /// pruning data. The pruner is allowed to prune the region between the returned `pruner_hi`
     /// (inclusive) and `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has
     /// passed. This minimizes the possibility for the pruner to delete data still expected by
-    /// inflight read requests. By default, there is no task name.
+    /// inflight read requests.
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
@@ -69,9 +49,8 @@ pub trait Connection: Send {
     ) -> anyhow::Result<bool>;
 
     /// Update the `reader_lo` of an existing watermark entry only if it raises `reader_lo`. Only
-    /// main pipelines can update the `reader_lo`, and any task pipelines will have the same
-    /// `reader_lo`. Readers will reference this as the inclusive lower bound of available data for
-    /// the corresponding pipeline.
+    /// main pipelines can update the `reader_lo`. Readers will reference this as the inclusive
+    /// lower bound of available data for the corresponding pipeline.
     ///
     /// If an update is to be made, some timestamp (i.e `pruner_timestamp`) should also be set on
     /// the watermark entry to the current time. Ideally, this would be from the perspective of the

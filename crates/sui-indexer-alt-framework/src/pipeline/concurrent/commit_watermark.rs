@@ -4,7 +4,10 @@
 use std::{
     cmp::Ordering,
     collections::{btree_map::Entry, BTreeMap},
-    sync::Arc,
+    sync::{
+        atomic::{self, AtomicU64},
+        Arc,
+    },
 };
 
 use tokio::{
@@ -50,6 +53,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
+    main_reader_lo: Option<Arc<AtomicU64>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut poll = interval(config.watermark_interval());
@@ -90,6 +94,16 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     // The presence of a watermark means that we can update the watermark in db.
                     // However, concurrent pipelines do not need every watermark update to succeed.
                     let mut watermark = None;
+
+                    // If the current `next_checkpoint` is less than the main reader lo, wipe
+                    // `precommitted` and set `next_checkpoint` to the main reader lo.
+                    if let Some(main_reader_lo) = main_reader_lo.as_ref() {
+                        let current_main_reader_lo = main_reader_lo.load(atomic::Ordering::Relaxed);
+                        if next_checkpoint < current_main_reader_lo {
+                            precommitted.clear();
+                            next_checkpoint = current_main_reader_lo;
+                        }
+                    }
 
                     if precommitted.len() > WARN_PENDING_WATERMARKS {
                         warn!(
@@ -335,6 +349,7 @@ mod tests {
             None, // task
             metrics,
             cancel_clone,
+            None, // main_reader_lo
         );
 
         TestSetup {

@@ -53,8 +53,8 @@ pub struct IndexerArgs {
     ///
     /// Task pipelines must be configured to start from a checkpoint no less than the main
     /// pipeline's reader watermark, cannot enable pruning, and will push only their respective
-    /// committer watermarks. Once instantiated and running, the main pipeline is responsible for
-    /// setting the pruner and reader watermark of its tasks.
+    /// committer watermarks. The framework ensures that tasked pipelines do not commit checkpoints
+    /// that are below the main pipeline's reader watermark.
     #[arg(long)]
     pub task: Option<String>,
 
@@ -111,25 +111,13 @@ pub struct Indexer<S: Store> {
     /// (pipeline="objects", task="backfill-2024-01").
     task: Option<String>,
 
-    /// Override for the checkpoint to start ingestion from. The exact behavior is dependent on a
-    /// few factors:
-    ///
-    /// - If the pipeline and optional task combination has not been run before, the watermark will
-    ///   be set up to expect this checkpoint as the next one, and the reader's lower bound will be
-    ///   set to this checkpoint.
-    /// - If the pipeline + task has already been run and there is an existing watermark entry, this
-    ///   value will be ignored (with a warning) and ingestion will resume from the existing
-    ///   committer_hi watermark, unless `--skip-watermark` is also supplied.
-    /// - If `--skip-watermark` is supplied, the pipeline will write data without updating
-    ///   watermarks, but only if `first_checkpoint` is greater than or equal to the current
-    ///   `reader_lo`. If `first_checkpoint < reader_lo`, the operation will fail to prevent writing
-    ///   data that the pruner has already cleaned up.
-    ///
-    /// By default (when not specified), ingestion will start just after the lowest checkpoint
-    /// watermark across all active pipelines.
+    /// Optional override of the checkpoint lowerbound. By default, ingestion will start just after
+    /// the lowest committer watermark across all active pipelines. When set, the indexer will start
+    /// ingestion from this checkpoint.
     first_checkpoint: Option<u64>,
 
-    /// Optional override of the checkpoint upperbound.
+    /// Optional override of the checkpoint upperbound. When set, the indexer will stop ingestion at
+    /// this checkpoint.
     last_checkpoint: Option<u64>,
 
     /// Optional filter for pipelines to run. If `None`, all pipelines added to the indexer will
@@ -165,11 +153,6 @@ impl<S: Store> Indexer<S> {
     ///
     /// After initialization, at least one pipeline must be added using [Self::concurrent_pipeline]
     /// or [Self::sequential_pipeline], before the indexer is started using [Self::run].
-    ///
-    /// Optionally, a task name can be provided to the indexer to support running one-off or
-    /// temporary tasks, like backfills. By default, there is no task name. In this scenario, the
-    /// indexer will write watermark rows for pipeline = `pipeline`. If one is provided, the indexer
-    /// will write watermark rows for pipeline = `pipeline` and task = `task`.
     pub async fn new(
         store: S,
         indexer_args: IndexerArgs,
@@ -249,8 +232,8 @@ impl<S: Store> Indexer<S> {
     /// have a watermark row. Otherwise, the concurrent pipeline will ignore the configured value
     /// and instead resume committing from the existing committer watermark.
     ///
-    /// Additionally, pipelines with a task name must respect the main pipeline's watermark row by
-    /// operating within the main pipeline's `[reader_lo, committer_hi]` range.
+    /// Additionally, pipelines with a task name must respect the main pipeline's watermark row
+    /// committing checkpoints no less than the main pipeline's reader watermark.
     pub async fn concurrent_pipeline<H>(
         &mut self,
         handler: H,
@@ -263,6 +246,8 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
+        // The only requirement for tasked pipelines is that they commit checkpoints no less than
+        // the main pipeline's reader watermark.
         let next_checkpoint = if let Some(task) = self.task.as_deref() {
             let mut conn = self
                 .store
@@ -287,15 +272,15 @@ impl<S: Store> Indexer<S> {
                     task = task,
                     main_reader_lo = main_reader_watermark.reader_lo,
                     "first_checkpoint or task committer watermark is below main pipeline's reader_lo. \
-                     Starting tasked pipeline from main pipeline's reader_lo to avoid data gaps."
+                     Starting tasked pipeline from main pipeline's reader_lo to avoid writing pruned data."
                 );
             }
 
             main_reader_watermark.reader_lo.max(next_checkpoint)
         } else {
             // If this is not a tasked indexer, we're dealing with main pipelines. Check that the
-            // `--first-checkpoint` is not greater than any main pipeline's committer watermark, as
-            // this would create a gap in the indexed data.
+            // `--first-checkpoint` is not greater than this pipeline's committer watermark, as this
+            // would create a gap in the indexed data.
             match (watermark, self.first_checkpoint) {
                 (Some(watermark), Some(first_checkpoint)) => {
                     ensure!(

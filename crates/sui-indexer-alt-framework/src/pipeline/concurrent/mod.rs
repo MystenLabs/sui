@@ -233,7 +233,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         None
     };
 
+    // Any checkpoints below this watermark will not be passed to the tasked pipeline.
     let main_reader_lo_task = main_reader_lo_task::<H>(
+        task.clone(),
         main_reader_lo.clone(),
         pruner_config.clone(),
         cancel.clone(),
@@ -277,8 +279,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         main_reader_lo,
     );
 
-    // task pipelines will skip reader_watermark and pruner. Setting the pruner config to None will
-    // result in the tasks returning early.
+    // Tasked pipelines will skip reader_watermark and pruner. Setting the pruner config to None
+    // will result in the tasks returning early.
     let pruner_config = if task.is_some() { None } else { pruner_config };
 
     let reader_watermark = reader_watermark::<H>(
@@ -318,22 +320,39 @@ const fn max_chunk_rows<H: Handler>() -> usize {
     }
 }
 
-/// Starts a task for tasked pipelines to track the main reader lo. Any checkpoints below this
-/// watermark will not be passed to the tasked pipeline.
+/// Starts a task for tasked pipelines to track the main reader lo.
 pub(super) fn main_reader_lo_task<H: Handler + 'static>(
+    task: Option<String>,
     main_reader_lo: Option<Arc<AtomicU64>>,
     config: Option<PrunerConfig>,
     cancel: CancellationToken,
     store: H::Store,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
+        let Some(task) = task else {
+            info!(
+                pipeline = H::NAME,
+                task = task,
+                "Skipping main reader lo task"
+            );
+            return;
+        };
+
         let Some(main_reader_lo) = main_reader_lo else {
-            info!(pipeline = H::NAME, "Skipping main reader lo task");
+            info!(
+                pipeline = H::NAME,
+                task = task,
+                "Skipping main reader lo task"
+            );
             return;
         };
 
         let Some(config) = config else {
-            info!(pipeline = H::NAME, "Skipping main reader lo task");
+            info!(
+                pipeline = H::NAME,
+                task = task,
+                "Skipping main reader lo task"
+            );
             return;
         };
 
@@ -357,13 +376,12 @@ pub(super) fn main_reader_lo_task<H: Handler + 'static>(
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received");
+                    info!(pipeline = H::NAME, task = task, "Shutdown received");
                     break;
                 }
 
                 // Periodic refresh of the main reader watermark.
                 _ = reader_interval.tick() => {
-                    warn!("reader_interval tick");
                     match store.connect().await {
                         Ok(mut conn) => {
                             match conn.reader_watermark(H::NAME).await {
@@ -372,15 +390,15 @@ pub(super) fn main_reader_lo_task<H: Handler + 'static>(
                                     main_reader_lo.store(current_reader_lo, Ordering::Relaxed);
                                 }
                                 Ok(None) => {
-                                    warn!(pipeline = H::NAME, "No reader watermark found");
+                                    warn!(pipeline = H::NAME, task = task, "No reader watermark found");
                                 }
                                 Err(e) => {
-                                    warn!(pipeline = H::NAME, "Failed to get reader watermark: {e}");
+                                    warn!(pipeline = H::NAME, task = task, "Failed to get reader watermark: {e}");
                                 }
                             }
                         },
                         Err(e) => {
-                            warn!(pipeline = H::NAME, "Failed to connect to store: {e}");
+                            warn!(pipeline = H::NAME, task = task, "Failed to connect to store: {e}");
                         }
                     }
                 }

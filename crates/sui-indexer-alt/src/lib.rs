@@ -38,6 +38,7 @@ pub(crate) mod bootstrap;
 pub mod config;
 pub(crate) mod handlers;
 
+// TODO (wlmyng) - not sure if this is the best place for this
 /// Checks that pipeline and task names don't include the character `@` as this is used by the
 /// generalized indexer to write watermarks to the database with the format `pipeline@task` if a
 /// task name is set.
