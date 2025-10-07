@@ -17,6 +17,7 @@ use sui_indexer_alt_framework::{
 };
 
 use crate::{
+    restore::Restore,
     schema::balances::Key,
     store::{Connection, Store},
     Schema,
@@ -50,26 +51,6 @@ impl Processor for Balances {
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Delta>> {
         let mut deltas = vec![];
 
-        fn delta(obj: &Object) -> anyhow::Result<Option<Delta>> {
-            // Balances are only tracked for address owners. Balances are combined for coins that
-            // are address-owned and consensus address-owned for the same address.
-            let &owner = match obj.owner() {
-                Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => owner,
-                Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => return Ok(None),
-            };
-
-            // Only track coins.
-            let Some((type_, balance)) = Coin::extract_balance_if_coin(obj)? else {
-                return Ok(None);
-            };
-
-            Ok(Some(Delta {
-                owner,
-                type_,
-                delta: balance as i128,
-            }))
-        }
-
         for (_, (i, _)) in checkpoint_input_objects(checkpoint)? {
             if let Some(d) = delta(i)? {
                 deltas.push(d.negated())
@@ -83,6 +64,27 @@ impl Processor for Balances {
         }
 
         Ok(deltas)
+    }
+}
+
+impl Restore<Schema> for Balances {
+    fn restore(
+        schema: &Schema,
+        object: &Object,
+        batch: &mut rocksdb::WriteBatch,
+    ) -> anyhow::Result<()> {
+        if let Some(d) = delta(object)? {
+            schema.balances.merge(
+                &Key {
+                    owner: d.owner,
+                    type_: d.type_,
+                },
+                d.delta,
+                batch,
+            )?;
+        }
+
+        Ok(())
     }
 }
 
@@ -119,4 +121,24 @@ impl sequential::Handler for Balances {
 
         Ok(batch.len())
     }
+}
+
+fn delta(obj: &Object) -> anyhow::Result<Option<Delta>> {
+    // Balances are only tracked for address owners. Balances are combined for coins that
+    // are address-owned and consensus address-owned for the same address.
+    let &owner = match obj.owner() {
+        Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => owner,
+        Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => return Ok(None),
+    };
+
+    // Only track coins.
+    let Some((type_, balance)) = Coin::extract_balance_if_coin(obj)? else {
+        return Ok(None);
+    };
+
+    Ok(Some(Delta {
+        owner,
+        type_,
+        delta: balance as i128,
+    }))
 }
