@@ -6,32 +6,57 @@ keywords: [ install sui, how to install sui, install sui cli, sui command line i
 
 <ImportContent source="info-easy-install" mode="snippet" /> 
 
-To install Sui from source, you first need to install the following prerequisites for your operating system. You can also download the [source code](/references/contribute/sui-environment) to have local access to files.
+You can install Sui from source, either locally or directly from GitHub. At minimum, you will need Rust and Cargo installed for the Sui framework: 
 
-You can install Sui from source, either locally or directly from GitHub. You need Rust and Cargo installed for the Sui framework. If you need to install other binaries, you might need the additional prerequisites listed in the following collapsible.
+- [x] Download and install Rust: 
+  <div className="pl-8">
+    ```sh
+    $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+
+    If you have Rust installed, update to the latest version: 
+  
+    ```sh
+    $ rustup update stable
+    ```
+  </div>
+- [x] Download and install Cargo:
+  <div className="pl-8">
+    ```sh
+    $ curl https://sh.rustup.rs -sSf | sh
+    ```
+  </div>
+  
+  Depending on your operating system, you may require additional prerequisites.
 
 <details>
 <summary>
-Show prerequisites
+Additional prerequisites
 </summary>
 <ImportContent source="install-prereqs.mdx" mode="snippet" />
 </details>
 
-## Installation
+You can install from source either directly from GitHub or from your local drive. Regardless of which install from source method you use, the Sui components are found in the `~/.cargo/bin` folder.
 
-You can install from source either directly from GitHub or from your local drive.
+You can also download the [source code](/references/contribute/sui-environment) to locally access files.
 
 <Tabs>
 
 <TabItem label="GitHub source" value="github">
 
-Use Cargo to install Sui directly from the GitHub repo. 
+Use Cargo to install Sui directly from the GitHub repo: 
 
 ```sh
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
 
-Replace the `testnet` branch in the previous command as needed.
+:::info
+
+The tracing feature enables Move test coverage and debugger support in the Sui CLI. These features are not available unless you enable tracing.
+
+:::
+
+Replace the `testnet` branch in the previous command if necessary. Available options are:
 
     - `main`: Latest updates. Least stable.
     - `devnet`: Includes experimental features.
@@ -46,7 +71,7 @@ You can build and install additional packages as needed. Replace `sui` in the pr
 
 <TabItem label="Local source" value="local">
 
-You can clone the public Sui repo and install from source on your local drive.
+You can clone the public Sui repo and install from source on your local machine.
 
 1. Fork the [Sui repo](https://github.com/MystenLabs/sui).
 
@@ -71,9 +96,6 @@ You can clone the public Sui repo and install from source on your local drive.
     ```sh
     $ cargo install --locked --path crates/sui --features tracing
     ```
-</TabItem>
-
-</Tabs>
 
 :::info
 
@@ -81,11 +103,9 @@ The tracing feature enables Move test coverage and debugger support in the Sui C
 
 :::
 
-Regardless of which install from source method you use, the Sui components are found in the `~/.cargo/bin` folder.
+</TabItem>
 
-## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
-
-<ImportContent source="install-sui-node.mdx" mode="snippet" />
+</Tabs>
 
 ## Related links
 

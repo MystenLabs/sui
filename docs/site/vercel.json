@@ -128,7 +128,7 @@
       { "source": "/guides/operator/validator-config", "destination": "/guides/operator/validator/validator-config"},
       { "source": "/guides/operator/validator-tasks", "destination": "/guides/operator/validator/validator-tasks"},
       { "source": "/standards/deepbookv2/:path*", "destination": "/standards/deepbook"},
-      { "source": "/guides/developer/advanced/graphql-migration", "destination": "/guides/developer/getting-started/graphql-rpc", "permanent": true },
+      { "source": "/guides/developer/advanced/graphql-migration", "destination": "/guides/developer/advanced/graphql-rpc", "permanent": true },
       { "source": "/references/framework/bridge/:path*", "destination": "/references/framework/sui_bridge/:path*"},
       { "source": "/references/framework/std/:path*", "destination": "/references/framework/sui_std/:path*"},
       { "source": "/references/framework/sui/:path*", "destination": "/references/framework/sui_sui/:path*"},
@@ -141,9 +141,10 @@
       { "source": "/guides/developer/first-app/build-test", "destination": "/guides/developer/getting-started/hello-world"},
       { "source": "/guides/developer/first-app/publish", "destination": "/guides/developer/getting-started/hello-world"},
       { "source": "/guides/developer/first-app/client-tssdk", "destination": "/guides/developer/sui-101/client-tssdk"},
-      { "source": "/guides/developer/first-app/debug", "destination": "/references/ide/debugger"}
+      { "source": "/guides/developer/first-app/debug", "destination": "/references/ide/debugger"},
       { "source": "/guides/developer/stablecoins", "destination": "/guides/developer/coin/regulated"},
       { "source": "/standards/coin", "destination": "/standards/currency"},
-      { "source": "/standards/deepbookv3", "destination": "/standards/deepbook"}
+      { "source": "/standards/deepbookv3", "destination": "/standards/deepbook"},
+      { "source": "/guides/developer/getting-started/graphql-rpc", "destination": "/guides/developer/advanced/graphql-rpc"}
     ]
   }

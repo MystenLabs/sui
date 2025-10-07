@@ -1,7 +1,7 @@
 ---
-title: Get a Sui Address
+title: Create a Sui Address
 description: You need an address on the Sui network before you can start trading NFTs, purchase SUI tokens, or perform other transactions.
-keywords: [ get an address, sui address, how to get sui address, sui wallets, slush, suiet, glass wallet, martian extension, surf wallet, private keys ]
+keywords: [ create an address, sui address, how to get sui address, sui wallets, slush, suiet, glass wallet, martian extension, surf wallet, private keys ]
 ---
 
 An _address_ is a unique, anonymous identity on a blockchain network. On Sui, an address specifically represents a location on-chain that can:
@@ -28,7 +28,7 @@ A cryptographic hash function generates a public key from which every address de
 
 :::caution 
 
-If you already have an address or created a new address in [Configure a Sui Client](/guides/developer/getting-started/configure-sui-client.mdx), you can skip to [Using the SUI Faucet](/guides/developer/getting-started/get-coins.mdx) to continue the onboarding steps.
+If you already have an address or created a new address in [Configure a Sui Client](/guides/developer/getting-started/configure-sui-client.mdx), you can skip to [Get SUI from Faucet](/guides/developer/getting-started/get-coins.mdx) to continue the onboarding steps.
 
 :::
 
@@ -91,7 +91,35 @@ When you create a new address on your system, a new line is added to this file t
 
 ## Address aliases 
 
+An _alias_ is a human-readable name that can be used in place of a Sui address's full 32-byte hexadecimal string. They can be used anywhere an address would be used to make referencing the address easier in scripts and CLI commands. 
 
+When an address is created, it is given a random alias by default. You can view an address's current alias with the command:
+
+```
+$ sui client addresses
+```
+
+The output will include the address, its alias, and an indication of which address is active if there are multiple local addresses available:
+
+```
+╭───────────────────────┬────────────────────────────────────────────────────────────────────┬────────────────╮
+│ alias                 │ address                                                            │ active address │
+├───────────────────────┼────────────────────────────────────────────────────────────────────┼────────────────┤
+│ vigorous-spinel       │ 0x6ebb36a3c1ab2124c082d93f60f518f70494b82d8d13c5aabb3abad6ec8cd82d │ *              │
+╰───────────────────────┴────────────────────────────────────────────────────────────────────┴────────────────╯
+```
+
+Then, to update the alias to something else, use the command:
+
+```
+$ sui keytool update-alias <OLD-ALIAS> <NEW-ALIAS>
+```
+
+You can now use the alias in place of the address in commands, such as:
+
+```
+$ sui client objects <NEW-ALIAS>
+```
 
 ## View all local Sui addresses
 
@@ -132,19 +160,6 @@ If you want to switch to another address, first confirm which address is the act
 
 ```
 $ sui client addresses
-```
-
-This returns all available addresses along with their aliases, and indicates which one is currently active:
-
-```
-╭───────────────────────┬────────────────────────────────────────────────────────────────────┬────────────────╮
-│ alias                 │ address                                                            │ active address │
-├───────────────────────┼────────────────────────────────────────────────────────────────────┼────────────────┤
-│ vigorous-spinel       │ 0x6ebb36a3c1ab2124c082d93f60f518f70494b82d8d13c5aabb3abad6ec8cd82d │                │
-│ xenodochial-spodumene │ 0x7df01d3935b7ab3cd1da6828eed763ee2cc556670528a47baa6af8c251866e48 │                │
-│ silly-apatite         │ 0x8345a5f61dcb7027b35c53bb8a6638a00705b4cad92c61de2deb76d6b20c143d │                │
-│ reverent-coral        │ 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803 │ *              │
-╰───────────────────────┴────────────────────────────────────────────────────────────────────┴────────────────╯
 ```
 
 Then, to switch to another address, use the command:

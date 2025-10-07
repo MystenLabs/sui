@@ -4,7 +4,7 @@ description: The Sui client configuration specifies which network to connect to 
 keywords: [ sui client, sui configuration, client.yaml, client config, local config, configure tooling, configure sui client, configure sui, config sui ]
 ---
 
-The Sui client configuration specifies which network to connect to and which address to send transactions. After the client is configured, you typically don't need to alter the configuration unless you want to change the network information. 
+The Sui client configuration specifies which network to connect to and which address to send transactions. 
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -38,7 +38,7 @@ Sui stores the key for the Sui address in a separate file, `~/.sui/sui_config/su
 
 :::caution 
 
-If a previous Sui installation stored a `client.yaml` file locally, you receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
+If a previous Sui installation stored a `client.yaml` file locally, you will receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
 
 :::
 
@@ -90,7 +90,7 @@ The options are:
 
 - `https://fullnode.mainnet.sui.io:443`: The RPC URL for Mainnet network. Publishing applications to Mainnet costs real SUI tokens. 
 
-- `http://0.0.0.0:9000`: The RPC URL for a Localnet network, if configured. [Learn how to setup a local network](/guides/developer/sui-101/local-network.mdx).
+- `http://0.0.0.0:9000`: The RPC URL for a Localnet network, if configured. Learn how to [setup a local network](/guides/developer/sui-101/local-network.mdx).
 
 <ImportContent source="data-wipe.mdx" mode="snippet" />
 
