@@ -568,9 +568,8 @@ pub struct RawWaitForEffectsRequest {
 
 impl RawWaitForEffectsRequest {
     pub fn get_ping_type(&self) -> Option<PingType> {
-        self.ping_type.map(|p| {
-            PingType::try_from(p).expect("Invalid ping type")
-        })
+        self.ping_type
+            .map(|p| PingType::try_from(p).expect("Invalid ping type"))
     }
 }
 
