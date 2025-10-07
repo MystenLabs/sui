@@ -128,7 +128,7 @@ where
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
-                                ping: None,
+                                ping_type: None,
                                 result: Ok(latency),
                             });
                         }
@@ -138,7 +138,7 @@ where
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
-                                ping: None,
+                                ping_type: None,
                                 result: Err(()),
                             });
                         }
@@ -147,7 +147,7 @@ where
                                 authority_name: name,
                                 display_name,
                                 operation: OperationType::HealthCheck,
-                                ping: None,
+                                ping_type: None,
                                 result: Err(()),
                             });
                         }
@@ -215,7 +215,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             OperationType::FastPath => "fast_path",
             OperationType::Consensus => "consensus",
         };
-        let ping_label = if feedback.ping.is_some() {
+        let ping_label = if feedback.ping_type.is_some() {
             "true"
         } else {
             "false"

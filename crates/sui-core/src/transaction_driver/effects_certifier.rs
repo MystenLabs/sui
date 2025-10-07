@@ -101,6 +101,7 @@ impl EffectsCertifier {
 
         let mut retrier =
             RequestRetrier::new(authority_aggregator, client_monitor, tx_type, vec![]);
+        let ping_type = get_ping_type(&tx_digest, tx_type);
 
         // Setting this to None at first because if the full effects are already provided,
         // we do not need to record the latency. We track the time in this function instead of inside
@@ -156,7 +157,7 @@ impl EffectsCertifier {
                             authority_name: current_target,
                             display_name,
                             operation: OperationType::Effects,
-                            ping,
+                            ping_type,
                             result: Err(()),
                         });
                     } else {
@@ -166,7 +167,7 @@ impl EffectsCertifier {
                                 authority_name: current_target,
                                 display_name,
                                 operation: OperationType::Effects,
-                                ping,
+                                ping_type,
                                 result: Ok(latency),
                             });
                         }
@@ -181,7 +182,7 @@ impl EffectsCertifier {
                         authority_name: current_target,
                         display_name,
                         operation: OperationType::Effects,
-                        ping,
+                        ping_type,
                         result: Err(()),
                     });
                     // This emits an error when retrier gathers enough (f+1) non-retriable effects errors,
@@ -314,7 +315,6 @@ impl EffectsCertifier {
                         &client,
                         client_monitor,
                         &raw_request,
-                        ping,
                         options,
                     ),
                 )
@@ -326,7 +326,7 @@ impl EffectsCertifier {
                             authority_name: name,
                             display_name,
                             operation: OperationType::Effects,
-                            ping,
+                            ping_type,
                             result: Err(()),
                         });
                         (name, Err(SuiError::TimeoutError))
@@ -572,7 +572,6 @@ impl EffectsCertifier {
         client: &Arc<SafeClient<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         raw_request: &RawWaitForEffectsRequest,
-        ping: Option<PingType>,
         options: &SubmitTransactionOptions,
     ) -> Result<WaitForEffectsResponse, SuiError>
     where
@@ -582,6 +581,7 @@ impl EffectsCertifier {
         let backoff = ExponentialBackoff::from_millis(100)
             .max_delay(Duration::from_secs(2))
             .map(jitter);
+        let ping_type = raw_request.get_ping_type();
         // This loop should only retry errors that are retriable without new submission.
         for (attempt, delay) in backoff.enumerate() {
             let request: WaitForEffectsRequest = raw_request.clone().try_into().unwrap();
@@ -595,7 +595,7 @@ impl EffectsCertifier {
                         authority_name: name,
                         display_name: display_name.clone(),
                         operation: OperationType::Effects,
-                        ping,
+                        ping_type,
                         result: Ok(latency),
                     });
                     return Ok(response);
@@ -605,7 +605,7 @@ impl EffectsCertifier {
                         authority_name: name,
                         display_name: display_name.clone(),
                         operation: OperationType::Effects,
-                        ping,
+                        ping_type,
                         result: Err(()),
                     });
                     if !matches!(e, SuiError::RpcError(_, _)) {
