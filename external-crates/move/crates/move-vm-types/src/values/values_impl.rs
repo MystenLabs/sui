@@ -39,7 +39,7 @@ use std::{
 
 /// Runtime representation of a Move value.
 #[derive(Debug)]
-enum ValueImpl {
+pub enum ValueImpl {
     Invalid,
 
     U8(u8),
@@ -67,7 +67,7 @@ enum ValueImpl {
 /// Except when not owned by the VM stack, a container always lives inside an Rc<RefCell<>>,
 /// making it possible to be shared by references.
 #[derive(Debug, Clone)]
-enum Container {
+pub enum Container {
     Locals(Rc<RefCell<Vec<ValueImpl>>>),
     Vec(Rc<RefCell<Vec<ValueImpl>>>),
     Struct(Rc<RefCell<Vec<ValueImpl>>>),
@@ -86,7 +86,7 @@ enum Container {
 /// or in global storage. In the latter case, it also keeps a status flag indicating whether
 /// the container has been possibly modified.
 #[derive(Debug)]
-enum ContainerRef {
+pub enum ContainerRef {
     Local(Container),
     Global {
         status: Rc<RefCell<GlobalDataStatus>>,
@@ -98,22 +98,22 @@ enum ContainerRef {
 /// Clean - the data was only read.
 /// Dirty - the data was possibly modified.
 #[derive(Debug, Clone, Copy)]
-enum GlobalDataStatus {
+pub enum GlobalDataStatus {
     Clean,
     Dirty,
 }
 
 /// A Move reference pointing to an element in a container.
 #[derive(Debug)]
-struct IndexedRef {
-    idx: usize,
-    container_ref: ContainerRef,
+pub struct IndexedRef {
+    pub idx: usize,
+    pub container_ref: ContainerRef,
 }
 
 /// An umbrella enum for references. It is used to hide the internals of the public type
 /// Reference.
 #[derive(Debug)]
-enum ReferenceImpl {
+pub enum ReferenceImpl {
     IndexedRef(IndexedRef),
     ContainerRef(ContainerRef),
 }
@@ -136,7 +136,7 @@ enum ReferenceImpl {
 /// A Move value -- a wrapper around `ValueImpl` which can be created only through valid
 /// means.
 #[derive(Debug)]
-pub struct Value(ValueImpl);
+pub struct Value(pub ValueImpl);
 
 /// An integer value in Move.
 #[derive(Debug)]
@@ -186,7 +186,7 @@ pub struct VectorRef(ContainerRef);
 /// of the resource relative to the global state, which is necessary to compute the effects to emit
 /// at the end of transaction execution.
 #[derive(Debug)]
-enum GlobalValueImpl {
+pub enum GlobalValueImpl {
     /// No resource resides in this slot or in storage.
     None,
     /// A resource has been published to this slot and it did not previously exist in storage.
