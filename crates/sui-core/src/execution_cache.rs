@@ -612,6 +612,18 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// transaction outputs.
     #[cfg(test)]
     fn write_object_entry_for_test(&self, object: Object);
+
+    /// Update the in-memory package cache with the provided (id, object) entries.
+    fn update_package_cache<'a>(
+        &'a self,
+        package_updates: &'a [(ObjectID, Object)],
+    ) -> BoxFuture<'a, SuiResult>;
+
+    /// Reload the given objects into the latest-object cache.
+    fn reload_objects(&self, objects: Vec<(ObjectID, Object)>);
+
+    /// Catch up underlying storage from the primary (if secondary) and optionally clear in-memory caches.
+    fn update_underlying(&self, clear_cache: bool);
 }
 
 pub trait CheckpointCache: Send + Sync {

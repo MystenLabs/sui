@@ -84,6 +84,7 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{TransactionDataAPI, VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
+use typed_store::Map;
 
 use super::cache_types::Ticket;
 use super::ExecutionCacheAPI;
@@ -547,6 +548,31 @@ impl WritebackCache {
             self.backpressure_manager.clone(),
         );
         std::mem::swap(self, &mut new);
+    }
+
+    /// Remove all entries from committed caches without assertions.
+    pub fn clear(&self) {
+        self.cached.clear_and_assert_empty();
+        self.object_by_id_cache.invalidate_all();
+        self.packages.invalidate_all();
+    }
+
+    async fn update_package_cache(&self, package_updates: &[(ObjectID, Object)]) -> SuiResult {
+        for (id, object) in package_updates {
+            self.packages
+                .insert(*id, PackageObject::new(object.clone()));
+        }
+        Ok(())
+    }
+
+    pub fn reload_cached(&self, objects: Vec<(ObjectID, Object)>) {
+        for (object_id, object) in objects {
+            let _ = self.object_by_id_cache.insert(
+                &object_id,
+                LatestObjectCacheEntry::Object(object.version(), object.into()),
+                Ticket::Write,
+            );
+        }
     }
 
     fn write_object_entry(
@@ -2248,6 +2274,31 @@ impl ExecutionCacheWrite for WritebackCache {
     #[cfg(test)]
     fn write_object_entry_for_test(&self, object: Object) {
         self.write_object_entry(&object.id(), object.version(), object.into());
+    }
+
+    fn update_package_cache<'a>(
+        &'a self,
+        package_updates: &'a [(ObjectID, Object)],
+    ) -> BoxFuture<'a, SuiResult> {
+        WritebackCache::update_package_cache(self, package_updates).boxed()
+    }
+
+    fn reload_objects(&self, objects: Vec<(ObjectID, Object)>) {
+        self.reload_cached(objects);
+    }
+
+    fn update_underlying(&self, clear_cache: bool) {
+        // Attempt to catch up secondary from primary if applicable.
+        // This is a best-effort operation used by tools and maintenance flows.
+        let _ = self
+            .store
+            .perpetual_tables
+            .objects
+            .try_catch_up_with_primary();
+
+        if clear_cache {
+            self.clear();
+        }
     }
 }
 
