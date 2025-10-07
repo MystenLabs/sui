@@ -182,6 +182,7 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::overload_monitor::{overload_monitor_accept_tx, AuthorityOverloadInfo};
 use crate::stake_aggregator::StakeAggregator;
 use crate::subscription_handler::SubscriptionHandler;
+use crate::tx_handler::TxHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::override_cache::{InputLoaderCache, ObjectCache};
 
@@ -945,6 +946,9 @@ pub struct AuthorityState {
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
 
+    /// Broadcasts committed transaction effects and events to local subscribers.
+    pub tx_handler: Arc<TxHandler>,
+
     /// Fork recovery state for handling equivocation after forks
     fork_recovery_state: Option<ForkRecoveryState>,
 }
@@ -1607,12 +1611,64 @@ impl AuthorityState {
             self.get_cache_writer()
                 .write_fastpath_transaction_outputs(transaction_outputs);
         } else {
+            // Clone outputs for post-commit broadcast without re-reading.
+            let to_broadcast = Arc::clone(&transaction_outputs);
             let commit_result =
                 self.commit_certificate(certificate, transaction_outputs, epoch_store);
             if let Err(err) = commit_result {
                 error!(?tx_digest, "Error committing transaction: {err}");
                 tx_guard.release();
                 return Err(err);
+            }
+            // After successful commit, optionally broadcast effects+events to local subscribers.
+            // Conditions: non-system tx, has events, and wrote objects (avoid empty/no-op cases).
+            if !certificate.data().intent_message().value.is_system_tx() {
+                // Clone fields for async task.
+                let effects_cloned = effects.clone();
+                let tx_handler = Arc::clone(&self.tx_handler);
+                let epoch_store = Arc::clone(epoch_store);
+                let backing_pkg_store = Arc::clone(self.get_backing_package_store());
+
+                // Spawn to avoid blocking the critical path.
+                tokio::spawn(async move {
+                    if !tx_handler.is_enabled() {
+                        return;
+                    }
+                    // Quick checks: events non-empty and written non-empty.
+                    let has_events = !to_broadcast.events.data.is_empty();
+                    let has_writes = !to_broadcast.written.is_empty();
+                    if has_events && has_writes {
+                        // Build SuiEvent list in a non-async scope so non-Send layout resolver
+                        // is dropped before awaiting the socket send.
+                        let sui_events: Vec<sui_json_rpc_types::SuiEvent> = {
+                            let mut layout_resolver = epoch_store
+                                .executor()
+                                .type_layout_resolver(Box::new(backing_pkg_store.as_ref()));
+                            let mut out = Vec::with_capacity(to_broadcast.events.data.len());
+                            for (i, e) in to_broadcast.events.data.iter().cloned().enumerate() {
+                                let layout = match layout_resolver.get_annotated_layout(&e.type_) {
+                                    Ok(l) => l,
+                                    Err(_) => continue, // skip unresolvable event
+                                };
+                                if let Ok(se) = sui_json_rpc_types::SuiEvent::try_from(
+                                    e,
+                                    *effects_cloned.transaction_digest(),
+                                    i as u64,
+                                    None,
+                                    layout,
+                                ) {
+                                    out.push(se);
+                                }
+                            }
+                            out
+                        };
+                        if !sui_events.is_empty() {
+                            let _ = tx_handler
+                                .send_tx_effects_and_events(&effects_cloned, sui_events)
+                                .await;
+                        }
+                    }
+                });
             }
         }
 
@@ -3715,6 +3771,7 @@ impl AuthorityState {
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             traffic_controller,
+            tx_handler: Arc::new(TxHandler::default()),
             fork_recovery_state,
         });
 
