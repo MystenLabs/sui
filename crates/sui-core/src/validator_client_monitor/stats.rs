@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMetrics};
+use crate::validator_client_monitor::{OperationFeedback, OperationType};
 use mysten_common::moving_window::MovingWindow;
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
-use std::time::{Duration, Instant};
+use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::time::Duration;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
@@ -18,12 +18,8 @@ use tracing::debug;
 // 2. Some reports are more critical than others. For example, a health check
 //    report is more critical than a submit report in terms of failures status.
 
-/// Size of the moving window for reliability measurements
-const RELIABILITY_MOVING_WINDOW_SIZE: usize = 40;
-/// Size of the moving window for latency measurements
-const LATENCY_MOVING_WINDOW_SIZE: usize = 40;
 /// Maximum adjusted latency from completely unreachable (reliability = 0.0) or very slow validators.
-const MAX_LATENCY: f64 = 10.0;
+const MAX_LATENCY: Duration = Duration::from_secs(10);
 
 /// Complete client-observed statistics for validator interactions.
 ///
@@ -47,35 +43,35 @@ pub struct ClientObservedStats {
 #[derive(Debug, Clone)]
 pub struct ValidatorClientStats {
     /// Moving window of success rate (0.0 to 1.0)
-    pub reliability: MovingWindow,
+    pub reliability: MovingWindow<f64>,
     /// Moving window of latencies for each operation type (Submit, Effects, HealthCheck)
-    pub average_latencies: HashMap<OperationType, MovingWindow>,
-    /// Counter for consecutive failures - resets on success
-    pub consecutive_failures: u32,
-    /// Time when validator was temporarily excluded due to failures.
-    /// Validators are excluded when consecutive_failures >= max_consecutive_failures
-    pub exclusion_time: Option<Instant>,
+    pub average_latencies: BTreeMap<OperationType, MovingWindow<Duration>>,
+    /// Size of the moving window for latency measurements
+    pub latency_moving_window_size: usize,
 }
 
 impl ValidatorClientStats {
-    pub fn new(init_reliability: f64) -> Self {
+    pub fn new(
+        init_reliability: f64,
+        reliability_moving_window_size: usize,
+        latency_moving_window_size: usize,
+    ) -> Self {
         Self {
-            reliability: MovingWindow::new(init_reliability, RELIABILITY_MOVING_WINDOW_SIZE),
-            average_latencies: HashMap::new(),
-            consecutive_failures: 0,
-            exclusion_time: None,
+            reliability: MovingWindow::new(init_reliability, reliability_moving_window_size),
+            average_latencies: BTreeMap::new(),
+            latency_moving_window_size,
         }
     }
 
     pub fn update_average_latency(&mut self, operation: OperationType, new_latency: Duration) {
         match self.average_latencies.entry(operation) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().add_value(new_latency.as_secs_f64());
+                entry.get_mut().add_value(new_latency);
             }
             Entry::Vacant(entry) => {
                 entry.insert(MovingWindow::new(
-                    new_latency.as_secs_f64(),
-                    LATENCY_MOVING_WINDOW_SIZE,
+                    new_latency,
+                    self.latency_moving_window_size,
                 ));
             }
         }
@@ -92,40 +88,28 @@ impl ClientObservedStats {
 
     /// Record client-observed interaction result with a validator.
     ///
-    /// Updates reliability scores, latency measurements, and failure counts
-    /// based on client observations. Automatically excludes validators that
-    /// exceed the maximum consecutive failure threshold.
-    pub fn record_interaction_result(
-        &mut self,
-        feedback: OperationFeedback,
-        metrics: &ValidatorClientMetrics,
-    ) {
+    /// Updates reliability scores and latency measurements.
+    pub fn record_interaction_result(&mut self, feedback: OperationFeedback) {
         let validator_stats = self
             .validator_stats
             .entry(feedback.authority_name)
-            .or_insert_with(|| ValidatorClientStats::new(1.0));
+            .or_insert_with(|| {
+                ValidatorClientStats::new(
+                    1.0,
+                    self.config.reliability_moving_window_size,
+                    self.config.latency_moving_window_size,
+                )
+            });
 
         match feedback.result {
             Ok(latency) => {
                 validator_stats.reliability.add_value(1.0);
-                validator_stats.consecutive_failures = 0;
                 validator_stats.update_average_latency(feedback.operation, latency);
             }
             Err(()) => {
                 validator_stats.reliability.add_value(0.0);
-                validator_stats.consecutive_failures += 1;
-
-                // Exclude validator temporarily after too many consecutive failures
-                if validator_stats.consecutive_failures >= self.config.max_consecutive_failures {
-                    validator_stats.exclusion_time = Some(Instant::now());
-                }
             }
         }
-
-        metrics
-            .consecutive_failures
-            .with_label_values(&[&feedback.display_name])
-            .set(validator_stats.consecutive_failures as i64);
     }
 
     /// Get validator latencies for all validators in the committee for the provided tx type.
@@ -135,7 +119,7 @@ impl ClientObservedStats {
         &self,
         committee: &Committee,
         tx_type: TxType,
-    ) -> HashMap<AuthorityName, f64> {
+    ) -> HashMap<AuthorityName, Duration> {
         committee
             .names()
             .map(|validator| {
@@ -155,16 +139,10 @@ impl ClientObservedStats {
     /// - FastPath operations (for SingleWriter transactions)
     ///
     /// Returns latency in seconds, with reliability penalty applied as a multiplier.
-    fn calculate_client_latency(&self, validator: &AuthorityName, tx_type: TxType) -> f64 {
+    fn calculate_client_latency(&self, validator: &AuthorityName, tx_type: TxType) -> Duration {
         let Some(stats) = self.validator_stats.get(validator) else {
             return MAX_LATENCY;
         };
-
-        if let Some(exclusion_time) = stats.exclusion_time {
-            if exclusion_time.elapsed() < self.config.failure_cooldown {
-                return MAX_LATENCY;
-            }
-        }
 
         let operation = match tx_type {
             TxType::SharedObject => OperationType::Consensus,
@@ -179,7 +157,8 @@ impl ClientObservedStats {
         let base_latency = latency.get();
         let reliability = stats.reliability.get();
         let reliability_weight = self.config.reliability_weight;
-        (base_latency + (1.0 - reliability) * reliability_weight * MAX_LATENCY).min(MAX_LATENCY)
+        let penalty = MAX_LATENCY.mul_f64((1.0 - reliability) * reliability_weight);
+        (base_latency + penalty).min(MAX_LATENCY)
     }
 
     /// Retain only the specified validators, removing any others.

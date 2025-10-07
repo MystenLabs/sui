@@ -70,7 +70,6 @@ impl EffectsCertifier {
         // Guaranteed to be not the Rejected variant.
         submit_txn_result: SubmitTxResult,
         options: &SubmitTransactionOptions,
-        ping: Option<PingType>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -117,7 +116,6 @@ impl EffectsCertifier {
                 consensus_position,
                 options,
                 current_target,
-                ping
             ),
             async {
                 // No need to send a full effects request if it is already provided.
@@ -132,7 +130,7 @@ impl EffectsCertifier {
                     .expect("there should be at least 1 target");
                 current_target = name;
                 full_effects_start_time = Some(Instant::now());
-                self.get_full_effects(client, tx_digest, consensus_position, options, ping)
+                self.get_full_effects(client, tx_digest, tx_type, consensus_position, options)
                     .await
             },
         );
@@ -200,7 +198,7 @@ impl EffectsCertifier {
             current_target = name;
             full_effects_start_time = Some(Instant::now());
             full_effects_result = self
-                .get_full_effects(client, tx_digest, consensus_position, options, ping)
+                .get_full_effects(client, tx_digest, tx_type, consensus_position, options)
                 .await;
         }
     }
@@ -210,18 +208,19 @@ impl EffectsCertifier {
         &self,
         client: Arc<SafeClient<A>>,
         tx_digest: Option<TransactionDigest>,
+        tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
-        ping: Option<PingType>,
     ) -> Result<(TransactionEffectsDigest, Box<ExecutedData>, bool), TransactionRequestError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
+        let ping_type = get_ping_type(&tx_digest, tx_type);
         let request = WaitForEffectsRequest {
             transaction_digest: tx_digest,
             consensus_position,
             include_details: true,
-            ping,
+            ping_type,
         };
 
         match timeout(
@@ -272,12 +271,12 @@ impl EffectsCertifier {
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
         submitted_tx_to_validator: AuthorityName,
-        ping: Option<PingType>,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let ping_label = if ping.is_some() { "true" } else { "false" };
+        let ping_type = get_ping_type(&tx_digest, tx_type);
+        let ping_label = if tx_digest.is_none() { "true" } else { "false" };
         self.metrics
             .certified_effects_ack_attempts
             .with_label_values(&[tx_type.as_str(), ping_label])
@@ -292,7 +291,7 @@ impl EffectsCertifier {
             transaction_digest: tx_digest,
             consensus_position,
             include_details: false,
-            ping,
+            ping_type,
         })
         .unwrap();
 
@@ -648,5 +647,16 @@ impl EffectsCertifier {
             },
             auxiliary_data: None,
         }
+    }
+}
+
+fn get_ping_type(tx_digest: &Option<TransactionDigest>, tx_type: TxType) -> Option<PingType> {
+    if tx_digest.is_none() {
+        Some(match tx_type {
+            TxType::SingleWriter => PingType::FastPath,
+            TxType::SharedObject => PingType::Consensus,
+        })
+    } else {
+        None
     }
 }

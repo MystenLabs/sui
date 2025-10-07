@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04038]: invalid string after type inference
+  ┌─ tests/move_2024/typing/string_literal_unicode_invalid.move:2:39
+  │
+2 │     fun test0(): std::ascii::String { "asdf\x80" }
+  │                                       ^^^^^^^^^^ string "...sdf\x80". contains invalid ASCII entry at char '\x80' at index '4'
+  │
+  = String literals must be linked against the standard library to be constructed
+
+error[E04038]: invalid string after type inference
+  ┌─ tests/move_2024/typing/string_literal_unicode_invalid.move:3:39
+  │
+3 │     fun test1(): std::ascii::String { "\x80asdf" }
+  │                                       ^^^^^^^^^^ string "\x80asd...". contains invalid ASCII entry at char '\x80' at index '0'
+  │
+  = String literals must be linked against the standard library to be constructed
+
+error[E04038]: invalid string after type inference
+  ┌─ tests/move_2024/typing/string_literal_unicode_invalid.move:4:39
+  │
+4 │     fun test2(): std::ascii::String { "asdf\x80asdf" }
+  │                                       ^^^^^^^^^^^^^^ string "...sdf\x80asd...". contains invalid ASCII entry at char '\x80' at index '4'
+  │
+  = String literals must be linked against the standard library to be constructed

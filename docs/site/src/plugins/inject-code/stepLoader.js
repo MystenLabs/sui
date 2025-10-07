@@ -14,8 +14,8 @@
 // - Fenced code blocks (``` / ~~~), even when indented or with info strings
 // - Optional ATX closing hashes at line end (## ... ##)
 
-const STEP_RE = /^(?<indent>[ \t]*)(?<hashes>#{1,6})[ \t]*step\b[ \t]*:?[ \t]*(?<title>.*?)(?<trail>[ \t]#+[ \t]*)?$/i;
-const SUBSTEP_RE = /^(?<indent>[ \t]*)(?<hashes>#{1,6})[ \t]*substep\b[ \t]*:?[ \t]*(?<title>.*?)(?<trail>[ \t]#+[ \t]*)?$/i;
+const STEP_RE = /^(?<indent>[ \t]*)(?<hashes>#{1,6})step\b[ \t]*:?[ \t]*(?<title>.*?)(?<trail>[ \t]#+[ \t]*)?$/i;
+const SUBSTEP_RE = /^(?<indent>[ \t]*)(?<hashes>#{1,6})substep\b[ \t]*:?[ \t]*(?<title>.*?)(?<trail>[ \t]#+[ \t]*)?$/i;
 
 // Extract a leading YAML frontmatter block if present.
 // Supports optional BOM and \n / \r\n newlines.

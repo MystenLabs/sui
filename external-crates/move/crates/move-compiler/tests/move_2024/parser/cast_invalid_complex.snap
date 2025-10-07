@@ -45,7 +45,7 @@ error[E04003]: built-in operation not supported
 8 │         *if (cond) { &0 } else { &mut 0 } as u32;
   │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │          │           │
-  │          │           Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │          │           Found: '&{integer}'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
   │          Invalid argument to 'as'
 
 error[E01015]: ambiguous 'as'
@@ -82,5 +82,5 @@ error[E04003]: built-in operation not supported
 11 │         (*if (cond) { &0 } else { &mut 0 } as u32);
    │           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │           │           │
-   │           │           Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │           │           Found: '&{integer}'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
    │           Invalid argument to 'as'

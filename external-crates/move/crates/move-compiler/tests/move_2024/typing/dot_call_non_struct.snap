@@ -78,7 +78,7 @@ error[E04005]: expected a single type
    │     ^^^^^^
    │     │
    │     Invalid dot access
-   │     Expected a single type, but found expression list type: '(u64, u64)'
+   │     Expected a single type, but found expression list type: '({integer}, {integer})'
 
 error[E04009]: expected specific type
    ┌─ tests/move_2024/typing/dot_call_non_struct.move:14:5

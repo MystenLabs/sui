@@ -2343,6 +2343,7 @@ dependencies = [
  "bcs",
  "clap 4.5.28",
  "datatest-stable",
+ "indexmap 2.8.0",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-command-line-common",

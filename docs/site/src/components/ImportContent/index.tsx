@@ -45,6 +45,7 @@ type Props = {
   fun?: string; // target functions
   variable?: string;
   struct?: string;
+  impl?: string;
   type?: string;
   trait?: string;
   enumeration?: string;
@@ -59,6 +60,7 @@ type Props = {
   org?: string;
   repo?: string;
   ref?: string;
+  signatureOnly?: boolean; // if included, only display function signature
 };
 
 export default function ImportContent({
@@ -73,6 +75,7 @@ export default function ImportContent({
   variable,
   struct,
   type,
+  impl,
   trait,
   enumeration, // enum is reserved word
   module,
@@ -83,6 +86,7 @@ export default function ImportContent({
   org,
   repo,
   ref,
+  signatureOnly,
 }: Props) {
   const md = React.useMemo(
     () => new MarkdownIt({ html: true, linkify: true, typographer: true }),
@@ -221,7 +225,7 @@ export default function ImportContent({
   }
 
   if (fun) {
-    out = utils.returnFunctions(out, fun, language);
+    out = utils.returnFunctions(out, fun, language, signatureOnly);
   }
 
   if (variable) {
@@ -234,6 +238,10 @@ export default function ImportContent({
 
   if (type) {
     out = utils.returnTypes(out, type);
+  }
+
+  if (impl) {
+    out = utils.returnImplementations(out, impl);
   }
 
   if (trait) {

@@ -54,4 +54,4 @@ error[E04003]: built-in operation not supported
    │          ^^ Invalid argument to 'as'
    ·
 21 │         is_num!(vector[0]);
-   │                 --------- Found: 'vector<u64>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                 --------- Found: 'vector<{integer}>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

@@ -55,6 +55,7 @@ pub struct Model<K: SourceKind> {
     pub(crate) packages: BTreeMap<AccountAddress, PackageData<K>>,
     pub(crate) summary: OnceCell<summary::Packages>,
     pub(crate) _phantom: std::marker::PhantomData<K>,
+    pub(crate) config: ModelConfig,
 }
 
 macro_rules! shared_comments {
@@ -155,7 +156,12 @@ pub struct CompiledConstant<'a, K: SourceKind> {
     pub(crate) data: &'a ConstantData,
 }
 
-pub struct ModelBuilderConfig {
+#[derive(Clone)]
+/// Configuration options for constructing a `Model`. Provides the following options:
+/// - `allow_missing_dependencies`: (default: false) if true, when computing model and summary
+///   information, allow missing dependencies. This can be useful when working with incomplete sets
+///   of modules, but may result in incomplete or inaccurate information.
+pub struct ModelConfig {
     pub allow_missing_dependencies: bool,
 }
 
@@ -767,7 +773,7 @@ pub(crate) struct NamedConstantData {
 
 impl<K: SourceKind> Model<K> {
     /// Panics if a dependency is missing and `allow_missing_dependencies` is false.
-    pub(crate) fn compute_dependencies(&mut self, builder_config: &ModelBuilderConfig) {
+    pub(crate) fn compute_dependencies(&mut self) {
         fn visit(
             allow_missing_dependencies: bool,
             packages: &BTreeMap<AccountAddress, normalized::Package>,
@@ -837,7 +843,7 @@ impl<K: SourceKind> Model<K> {
             for (m, module) in &package.modules {
                 let id = (a, m).module_id();
                 visit(
-                    builder_config.allow_missing_dependencies,
+                    self.config.allow_missing_dependencies,
                     &self.compiled.packages,
                     &mut module_deps,
                     id,
@@ -853,7 +859,7 @@ impl<K: SourceKind> Model<K> {
             for (dep, immediate) in deps {
                 let immediate = *immediate;
                 let Some(used_by) = module_used_by.get_mut(dep) else {
-                    if builder_config.allow_missing_dependencies {
+                    if self.config.allow_missing_dependencies {
                         continue;
                     } else {
                         panic!("Module {:?} depends on missing module {:?}", id, dep);
@@ -1209,7 +1215,7 @@ derive_all!(CompiledConstant);
 //**************************************************************************************************
 
 #[allow(clippy::derivable_impls)]
-impl Default for ModelBuilderConfig {
+impl Default for ModelConfig {
     fn default() -> Self {
         Self {
             allow_missing_dependencies: false,

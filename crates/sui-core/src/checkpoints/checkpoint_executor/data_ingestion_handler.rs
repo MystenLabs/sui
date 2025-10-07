@@ -82,12 +82,9 @@ pub(crate) fn load_checkpoint(
             events,
             unchanged_loaded_runtime_objects: transaction_cache_reader
                 .get_unchanged_loaded_runtime_objects(tx.digest())
-                .ok_or_else(|| {
-                    sui_types::storage::error::Error::custom(format!(
-                        "unabled to load unchanged_loaded_runtime_objects for tx {}",
-                        tx.digest(),
-                    ))
-                })?,
+                // We don't write empty sets to the DB to save space, so if this load went through
+                // the writeback cache to the DB itself it wouldn't find an entry.
+                .unwrap_or_default(),
         };
         transactions.push(transaction);
     }

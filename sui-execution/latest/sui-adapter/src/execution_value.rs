@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 
 use move_binary_format::file_format::AbilitySet;
+use move_core_types::u256::U256;
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
@@ -11,6 +12,7 @@ use sui_types::{
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
+    funds_accumulator::Withdrawal,
     object::Owner,
     storage::{BackingPackageStore, ChildObjectResolver, StorageView},
     transfer::Receiving,
@@ -186,13 +188,16 @@ impl InputValue {
         }
     }
 
-    // TODO(address-balances): Populate withdraw reservation information.
-    pub fn new_balance_withdraw() -> Self {
+    pub fn withdrawal(withdrawal_ty: RawValueType, owner: SuiAddress, limit: U256) -> Self {
+        let value = Value::Raw(
+            withdrawal_ty,
+            bcs::to_bytes(&Withdrawal::new(owner, limit)).unwrap(),
+        );
         InputValue {
             object_metadata: None,
             inner: ResultValue {
                 last_usage_kind: None,
-                value: None,
+                value: Some(value),
                 shared_object_ids: BTreeSet::new(),
             },
         }
