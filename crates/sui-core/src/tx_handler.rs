@@ -24,7 +24,7 @@ use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 
 pub const TX_SOCKET_PATH: &str = "/tmp/sui/sui_tx.sock";
-const ENV_MEV_ENABLED: &str = "SUI_MEV_ENABLED";
+const ENV_MEV_ENABLED: &str = "ENABLE_SUI_MEV";
 
 #[derive(Debug)]
 struct BroadcastMessage {
@@ -105,10 +105,7 @@ impl TxHandler {
             info!("TxHandler listening on {:?}", socket_path);
             Some(l)
         } else {
-            info!(
-                "TxHandler disabled: set {}=1 to enable MEV broadcasting",
-                ENV_MEV_ENABLED
-            );
+            info!("TxHandler disabled: set {}=1 to enable MEV broadcasting", ENV_MEV_ENABLED);
             None
         };
 

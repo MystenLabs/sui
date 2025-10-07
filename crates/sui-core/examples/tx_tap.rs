@@ -11,7 +11,7 @@ use std::io::Read;
 use std::os::unix::net::UnixStream;
 
 use sui_json_rpc_types::SuiEvent;
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 
 const DEFAULT_SOCKET: &str = "/tmp/sui/sui_tx.sock";
 
@@ -63,4 +63,3 @@ fn main() -> anyhow::Result<()> {
         }
     }
 }
-

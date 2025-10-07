@@ -22,7 +22,7 @@ use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 
 const SOCKET_PATH: &str = "/tmp/sui/sui_cache_updates.sock";
-const ENV_MEV_ENABLED: &str = "SUI_MEV_ENABLED";
+const ENV_MEV_ENABLED: &str = "ENABLE_SUI_MEV";
 
 #[derive(Debug)]
 struct CacheBroadcastMessage {
@@ -262,4 +262,3 @@ impl Drop for CacheUpdateHandler {
         self.shutdown();
     }
 }
-
