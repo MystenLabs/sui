@@ -304,6 +304,8 @@ fn collect_pipelines(
         }
         ("Query", Some("transactions"), filters) => {
             pipelines.insert("tx_digests".to_string());
+            pipelines.insert("cp_sequence_numbers".to_string());
+
             if filters.contains("function") {
                 pipelines.insert("tx_calls".to_string());
             } else if filters.contains("affectedAddress") {

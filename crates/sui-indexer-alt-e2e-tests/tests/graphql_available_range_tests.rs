@@ -65,7 +65,7 @@ async fn test_available_range_with_pipelines() {
     let mut cluster = cluster_with_pipelines(PipelineLayer {
         tx_affected_addresses: Some(concurrent_pipeline(5)),
         tx_digests: Some(concurrent_pipeline(10)),
-        cp_sequence_numbers: Some(concurrent_pipeline(5)),
+        cp_sequence_numbers: Some(ConcurrentLayer::default()),
         ..Default::default()
     })
     .await;
