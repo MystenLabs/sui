@@ -10,9 +10,23 @@ on:
       - 'mainnet'
       - 'releases/sui-*-release'
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+concurrency: ${{ github.workflow }}-${{ github.ref_name }}
 
 jobs:
+  # Tag all sui images with release tag, so that they can be easily found
+  tag-docker-hub-images:
+    name: Tag sui docker images in DockerHub
+    if: github.event_name == 'push' &&contains(fromJSON('["devnet", "testnet", "mainnet"]'), github.ref_name)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: build-docker-images
+          client-payload: '{"sui_commit": "${{ github.sha }}", "docker_hub_tag": "${{ github.ref_name }}"}'
+
   release-binaries:
     runs-on: ubuntu-latest
     steps:
