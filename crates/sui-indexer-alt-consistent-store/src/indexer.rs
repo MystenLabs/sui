@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use anyhow::Context as _;
+use anyhow::{ensure, Context as _};
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
     self as framework,
@@ -108,10 +108,29 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
     where
         H: sequential::Handler<Store = Store<S>> + Send + Sync + 'static,
     {
+        let is_restoring = self
+            .store()
+            .db()
+            .restore_watermark(H::NAME)
+            .with_context(|| format!("Bad restore watermark for pipeline {:?}", H::NAME))?
+            .is_some();
+
+        ensure!(
+            !is_restoring,
+            "Restoration in progress for pipeline {:?}",
+            H::NAME
+        );
+
         self.sync
             .register_pipeline(H::NAME)
-            .context("Failed to add pipeline to synchronizer")?;
-        self.indexer.sequential_pipeline(handler, config).await
+            .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;
+
+        self.indexer
+            .sequential_pipeline(handler, config)
+            .await
+            .with_context(|| format!("Failed to add pipeline {:?} to indexer", H::NAME))?;
+
+        Ok(())
     }
 
     /// Start ingesting checkpoints, consuming the indexer in the process.
@@ -127,5 +146,132 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
         Ok(tokio::spawn(async move {
             let (_, _) = futures::join!(h_sync, h_indexer);
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use sui_indexer_alt_framework::{
+        pipeline::Processor,
+        types::{full_checkpoint_content::CheckpointData, object::Object},
+    };
+
+    use crate::{
+        db::{tests::wm, Db},
+        restore::Restore,
+        store::Connection,
+    };
+
+    use super::*;
+
+    /// A handler that never indexes or restores any data.
+    struct TestHandler;
+    struct TestSchema;
+
+    impl Processor for TestHandler {
+        const NAME: &'static str = "test";
+        type Value = ();
+
+        fn process(&self, _: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![])
+        }
+    }
+
+    impl Restore<TestSchema> for TestHandler {
+        fn restore(_: &TestSchema, _: &Object, _: &mut rocksdb::WriteBatch) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl sequential::Handler for TestHandler {
+        type Store = Store<TestSchema>;
+        type Batch = ();
+
+        fn batch(_: &mut (), _: Vec<()>) {}
+
+        async fn commit<'a>(_: &(), _: &mut Connection<'a, TestSchema>) -> anyhow::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    impl Schema for TestSchema {
+        fn cfs(_: &rocksdb::Options) -> Vec<(&'static str, rocksdb::Options)> {
+            vec![("test", rocksdb::Options::default())]
+        }
+
+        fn open(_: &Arc<Db>) -> anyhow::Result<Self> {
+            Ok(Self)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_restore_protection() {
+        let d = tempfile::tempdir().unwrap();
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+        let cfs = TestSchema::cfs(&opts);
+
+        {
+            // Start restoring a pipeline.
+            let db = Db::open(d.path().join("db"), opts.clone(), 0, cfs.clone()).unwrap();
+            db.restore_at("test", wm(10)).unwrap();
+        }
+
+        {
+            // If the pipeline is being restored, then the indexer will not allow it to be added.
+            let mut indexer = Indexer::<TestSchema>::new(
+                d.path().join("db"),
+                IndexerArgs::default(),
+                ClientArgs {
+                    local_ingestion_path: Some(d.path().join("checkpoints")),
+                    ..Default::default()
+                },
+                ConsistencyConfig::default(),
+                IngestionConfig::default(),
+                DbConfig::default(),
+                &prometheus::Registry::new(),
+                CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+
+            indexer
+                .sequential_pipeline(TestHandler, SequentialConfig::default())
+                .await
+                .unwrap_err();
+        }
+
+        {
+            // Indicate that the restoration has completed.
+            let db = Db::open(d.path().join("db"), opts.clone(), 0, cfs.clone()).unwrap();
+            db.complete_restore("test").unwrap();
+        }
+
+        {
+            // Now the indexer will allow the pipeline to be added.
+            let mut indexer = Indexer::<TestSchema>::new(
+                d.path().join("db"),
+                IndexerArgs::default(),
+                ClientArgs {
+                    local_ingestion_path: Some(d.path().join("checkpoints")),
+                    ..Default::default()
+                },
+                ConsistencyConfig::default(),
+                IngestionConfig::default(),
+                DbConfig::default(),
+                &prometheus::Registry::new(),
+                CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+
+            indexer
+                .sequential_pipeline(TestHandler, SequentialConfig::default())
+                .await
+                .unwrap();
+        }
     }
 }
