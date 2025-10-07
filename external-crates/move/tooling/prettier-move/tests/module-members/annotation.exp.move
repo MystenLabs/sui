@@ -57,3 +57,11 @@ fun i() {}
     abort_code = ::other_module::EArithmeticError,
 ]
 fun j() {}
+
+// we support in-annotation comments
+#[
+    // comment
+    // another comment
+    error, // trailing comment
+]
+fun k() {}
