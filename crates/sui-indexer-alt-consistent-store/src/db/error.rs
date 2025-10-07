@@ -21,6 +21,12 @@ pub(crate) enum Error {
     #[error("Checkpoint {checkpoint} not in consistent range")]
     NotInRange { checkpoint: u64 },
 
+    #[error("A restore is already in progress at epoch {0}")]
+    RestoreInProgress(u64),
+
+    #[error("Restoration would overwrite existing data")]
+    RestoreOverwrite,
+
     #[error("Storage error: {0}")]
     Storage(#[from] rocksdb::Error),
 }

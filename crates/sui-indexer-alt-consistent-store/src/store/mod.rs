@@ -163,7 +163,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-        Ok(self.store.0.db.watermark(pipeline)?.map(Into::into))
+        Ok(self.store.0.db.commit_watermark(pipeline)?.map(Into::into))
     }
 
     async fn set_committer_watermark(

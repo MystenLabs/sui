@@ -6,11 +6,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use sui_indexer_alt_framework::{
     pipeline::{sequential, Processor},
-    types::{base_types::VersionDigest, full_checkpoint_content::CheckpointData},
+    types::{base_types::VersionDigest, full_checkpoint_content::CheckpointData, object::Object},
 };
 
-use crate::schema::{object_by_owner::Key, Schema};
 use crate::store::{Connection, Store};
+use crate::{
+    restore::Restore,
+    schema::{object_by_owner::Key, Schema},
+};
 
 use super::{checkpoint_input_objects, checkpoint_output_objects};
 
@@ -63,6 +66,21 @@ impl Processor for ObjectByOwner {
         }
 
         Ok(values)
+    }
+}
+
+impl Restore<Schema> for ObjectByOwner {
+    fn restore(
+        schema: &Schema,
+        object: &Object,
+        batch: &mut rocksdb::WriteBatch,
+    ) -> anyhow::Result<()> {
+        if let Some(key) = Key::from_object(object) {
+            let val = (object.version(), object.digest());
+            schema.object_by_owner.insert(key, val, batch)?;
+        }
+
+        Ok(())
     }
 }
 
