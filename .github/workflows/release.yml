@@ -161,10 +161,8 @@ jobs:
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_existing_archive == '' }}
         shell: bash
-        env:
-          MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo clean -p blst || true && cargo build --release -vv && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_existing_archive == '' }}
