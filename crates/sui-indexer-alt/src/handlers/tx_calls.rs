@@ -10,9 +10,10 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
     postgres::{Connection, Db},
-    types::{full_checkpoint_content::CheckpointData, transaction::TransactionDataAPI},
+    types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::{schema::tx_calls, transactions::StoredTxCalls};
+use sui_types::transaction::TransactionDataAPI;
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
 use async_trait::async_trait;
@@ -25,22 +26,22 @@ impl Processor for TxCalls {
 
     type Value = StoredTxCalls;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
-        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
+        let first_tx = summary.network_total_transactions as usize - transactions.len();
 
         Ok(transactions
             .iter()
             .enumerate()
             .flat_map(|(i, tx)| {
                 let tx_sequence_number = (first_tx + i) as i64;
-                let sender = tx.transaction.sender_address().to_vec();
-                let calls = tx.transaction.data().transaction_data().move_calls();
+                let sender = tx.transaction.sender().to_vec();
+                let calls = tx.transaction.move_calls();
 
                 calls
                     .iter()
@@ -140,7 +141,7 @@ mod tests {
             .start_transaction(0)
             .add_move_call(ObjectID::random(), "module", "function")
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = TxCalls.process(&checkpoint).await.unwrap();
         TxCalls::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
@@ -151,7 +152,7 @@ mod tests {
             .add_move_call(ObjectID::random(), "module", "function")
             .add_move_call(ObjectID::random(), "module", "function")
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = TxCalls.process(&checkpoint).await.unwrap();
         TxCalls::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
@@ -165,7 +166,7 @@ mod tests {
             .add_move_call(reuse_package_id, "donut", "prune3")
             .add_move_call(reuse_package_id, "donut", "prune4")
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = TxCalls.process(&checkpoint).await.unwrap();
         TxCalls::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();

@@ -17,7 +17,7 @@ use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
 use crate::metrics::IndexerMetrics;
-use crate::types::full_checkpoint_content::CheckpointData;
+use crate::types::full_checkpoint_content::Checkpoint;
 
 mod broadcaster;
 pub mod client;
@@ -71,7 +71,7 @@ pub struct IngestionService {
     client: IngestionClient,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-    subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
+    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
     cancel: CancellationToken,
 }
 
@@ -135,7 +135,7 @@ impl IngestionService {
     pub fn subscribe(
         &mut self,
     ) -> (
-        mpsc::Receiver<Arc<CheckpointData>>,
+        mpsc::Receiver<Arc<Checkpoint>>,
         mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
         let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
@@ -242,7 +242,7 @@ mod tests {
 
     async fn test_subscriber(
         stop_after: usize,
-        mut rx: mpsc::Receiver<Arc<CheckpointData>>,
+        mut rx: mpsc::Receiver<Arc<Checkpoint>>,
         cancel: CancellationToken,
     ) -> JoinHandle<Vec<u64>> {
         tokio::spawn(async move {
@@ -251,7 +251,7 @@ mod tests {
                 tokio::select! {
                     _ = cancel.cancelled() => break,
                     Some(checkpoint) = rx.recv() => {
-                        seqs.push(checkpoint.checkpoint_summary.sequence_number);
+                        seqs.push(checkpoint.summary.sequence_number);
                     }
                 }
             }
@@ -416,9 +416,9 @@ mod tests {
 
         // This subscriber will take its sweet time processing checkpoints.
         let (mut laggard, _) = ingestion_service.subscribe();
-        async fn unblock(laggard: &mut mpsc::Receiver<Arc<CheckpointData>>) -> u64 {
+        async fn unblock(laggard: &mut mpsc::Receiver<Arc<Checkpoint>>) -> u64 {
             let checkpoint = laggard.recv().await.unwrap();
-            checkpoint.checkpoint_summary.sequence_number
+            checkpoint.summary.sequence_number
         }
 
         let (rx, _) = ingestion_service.subscribe();

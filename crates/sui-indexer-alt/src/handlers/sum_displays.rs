@@ -11,7 +11,7 @@ use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
     pipeline::{sequential::Handler, Processor},
     postgres::{Connection, Db},
-    types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::CheckpointData},
+    types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::Checkpoint},
     FieldCount,
 };
 use sui_indexer_alt_schema::{displays::StoredDisplay, schema::sum_displays};
@@ -26,8 +26,8 @@ impl Processor for SumDisplays {
 
     type Value = StoredDisplay;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData { transactions, .. } = checkpoint.as_ref();
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint { transactions, .. } = checkpoint.as_ref();
 
         let mut values = vec![];
         for tx in transactions {

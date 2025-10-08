@@ -12,7 +12,7 @@ use sui_indexer_alt_framework::{
     postgres::{Connection, Db},
     types::{
         event::SystemEpochInfoEvent,
-        full_checkpoint_content::CheckpointData,
+        full_checkpoint_content::Checkpoint,
         transaction::{TransactionDataAPI, TransactionKind},
     },
 };
@@ -29,26 +29,26 @@ impl Processor for KvEpochEnds {
 
     type Value = StoredEpochEnd;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
-            checkpoint_summary,
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
+            summary,
             transactions,
             ..
         } = checkpoint.as_ref();
 
-        let Some(end_of_epoch) = checkpoint_summary.end_of_epoch_data.as_ref() else {
+        let Some(end_of_epoch) = summary.end_of_epoch_data.as_ref() else {
             return Ok(vec![]);
         };
 
         let Some(transaction) = transactions.iter().find(|tx| {
             matches!(
-                tx.transaction.intent_message().value.kind(),
+                tx.transaction.kind(),
                 TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
             )
         }) else {
             bail!(
                 "Failed to get end of epoch transaction in checkpoint {} with EndOfEpochData",
-                checkpoint_summary.sequence_number,
+                summary.sequence_number,
             );
         };
 
@@ -76,10 +76,10 @@ impl Processor for KvEpochEnds {
             .context("Failed to deserialize SystemEpochInfoEvent")?
         {
             Ok(vec![StoredEpochEnd {
-                epoch: checkpoint_summary.epoch as i64,
-                cp_hi: checkpoint_summary.sequence_number as i64 + 1,
-                tx_hi: checkpoint_summary.network_total_transactions as i64,
-                end_timestamp_ms: checkpoint_summary.timestamp_ms as i64,
+                epoch: summary.epoch as i64,
+                cp_hi: summary.sequence_number as i64 + 1,
+                tx_hi: summary.network_total_transactions as i64,
+                end_timestamp_ms: summary.timestamp_ms as i64,
 
                 safe_mode: false,
 
@@ -98,10 +98,10 @@ impl Processor for KvEpochEnds {
             }])
         } else {
             Ok(vec![StoredEpochEnd {
-                epoch: checkpoint_summary.epoch as i64,
-                cp_hi: checkpoint_summary.sequence_number as i64 + 1,
-                tx_hi: checkpoint_summary.network_total_transactions as i64,
-                end_timestamp_ms: checkpoint_summary.timestamp_ms as i64,
+                epoch: summary.epoch as i64,
+                cp_hi: summary.sequence_number as i64 + 1,
+                tx_hi: summary.network_total_transactions as i64,
+                end_timestamp_ms: summary.timestamp_ms as i64,
 
                 safe_mode: true,
 
@@ -187,10 +187,14 @@ mod tests {
         let mut conn = indexer.store().connect().await.unwrap();
 
         let mut builder = TestCheckpointDataBuilder::new(0);
-        let checkpoint = Arc::new(builder.advance_epoch(AdvanceEpochConfig {
-            safe_mode: true,
-            ..Default::default()
-        }));
+        let checkpoint: Arc<Checkpoint> = Arc::new(
+            builder
+                .advance_epoch(AdvanceEpochConfig {
+                    safe_mode: true,
+                    ..Default::default()
+                })
+                .into(),
+        );
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
 
@@ -199,7 +203,8 @@ mod tests {
         assert!(epochs[0].safe_mode);
         assert_eq!(epochs[0].total_gas_fees, None);
 
-        let checkpoint = Arc::new(builder.advance_epoch(Default::default()));
+        let checkpoint: Arc<Checkpoint> =
+            Arc::new(builder.advance_epoch(Default::default()).into());
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
 
@@ -216,14 +221,14 @@ mod tests {
 
         // Test that there is nothing to commit while we haven't reached epoch end.
         let mut builder = TestCheckpointDataBuilder::new(0);
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
         assert_eq!(values.len(), 0);
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
         assert_eq!(values.len(), 0);
@@ -231,7 +236,8 @@ mod tests {
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // When the advance epoch tx is detected, there should be an entry to commit.
-        let checkpoint = Arc::new(builder.advance_epoch(Default::default()));
+        let checkpoint: Arc<Checkpoint> =
+            Arc::new(builder.advance_epoch(Default::default()).into());
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
         assert_eq!(values.len(), 1);
@@ -240,14 +246,14 @@ mod tests {
 
         // Afterwards, kv_epoch_ends should not have anything to commit until the next advance epoch
         // tx.
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
         assert_eq!(values.len(), 0);
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
         assert_eq!(values.len(), 0);
@@ -270,19 +276,22 @@ mod tests {
 
         // Advance epoch three times, 0, 1, 2
         let mut builder = TestCheckpointDataBuilder::new(0);
-        let checkpoint = Arc::new(builder.advance_epoch(Default::default()));
+        let checkpoint: Arc<Checkpoint> =
+            Arc::new(builder.advance_epoch(Default::default()).into());
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
-        let checkpoint = Arc::new(builder.advance_epoch(Default::default()));
+        let checkpoint: Arc<Checkpoint> =
+            Arc::new(builder.advance_epoch(Default::default()).into());
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
-        let checkpoint = Arc::new(builder.advance_epoch(Default::default()));
+        let checkpoint: Arc<Checkpoint> =
+            Arc::new(builder.advance_epoch(Default::default()).into());
         let values = KvEpochEnds.process(&checkpoint).await.unwrap();
         KvEpochEnds::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();

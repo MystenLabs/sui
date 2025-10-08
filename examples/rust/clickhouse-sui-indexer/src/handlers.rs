@@ -12,7 +12,7 @@ use sui_indexer_alt_framework::{
     FieldCount,
 };
 use sui_indexer_alt_framework_store_traits::Store;
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::store::ClickHouseStore;
 
@@ -33,14 +33,14 @@ impl Processor for TxDigests {
     const NAME: &'static str = "tx_digests";
     type Value = StoredTxDigest;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
-        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
+        let first_tx = summary.network_total_transactions as usize - transactions.len();
 
         Ok(transactions
             .iter()

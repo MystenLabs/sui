@@ -9,7 +9,7 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
     postgres::{Connection, Db},
-    types::{effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData},
+    types::{effects::TransactionEffectsAPI, full_checkpoint_content::Checkpoint},
 };
 use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
 
@@ -20,14 +20,14 @@ impl Processor for ObjVersions {
     const NAME: &'static str = "obj_versions";
     type Value = StoredObjVersion;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
-        let cp_sequence_number = checkpoint_summary.sequence_number as i64;
+        let cp_sequence_number = summary.sequence_number as i64;
         Ok(transactions
             .iter()
             .flat_map(|tx| {
