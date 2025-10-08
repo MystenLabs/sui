@@ -13,8 +13,7 @@ use tracing::{debug, error, info};
 
 use super::{IngestionConfig, client::IngestionClient};
 use crate::{
-    ingestion::error::Error, task::TrySpawnStreamExt,
-    types::full_checkpoint_content::CheckpointData,
+    ingestion::error::Error, task::TrySpawnStreamExt, types::full_checkpoint_content::Checkpoint,
 };
 
 /// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges.
@@ -32,7 +31,7 @@ pub(super) fn broadcaster<R>(
     config: IngestionConfig,
     client: IngestionClient,
     mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-    subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
+    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
     cancel: CancellationToken,
 ) -> JoinHandle<()>
 where
@@ -145,7 +144,7 @@ async fn ingest_and_broadcast_range(
     ingest_concurrency: usize,
     ingest_hi_rx: watch::Receiver<Option<u64>>,
     client: IngestionClient,
-    subscribers: Arc<Vec<mpsc::Sender<Arc<CheckpointData>>>>,
+    subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     cancel: CancellationToken,
 ) -> Result<(), Error> {
     stream::iter(start..end)
@@ -205,9 +204,9 @@ async fn ingest_and_broadcast_range(
 /// Send a checkpoint to all subscribers.
 /// Returns an error if any subscriber's channel is closed.
 async fn send_checkpoint(
-    checkpoint: Arc<CheckpointData>,
-    subscribers: &[mpsc::Sender<Arc<CheckpointData>>],
-) -> Result<Vec<()>, mpsc::error::SendError<Arc<CheckpointData>>> {
+    checkpoint: Arc<Checkpoint>,
+    subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
+) -> Result<Vec<()>, mpsc::error::SendError<Arc<Checkpoint>>> {
     let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
     try_join_all(futures).await
 }
@@ -271,7 +270,7 @@ mod tests {
 
     /// Verify that a channel receives checkpoints in the given range exactly once each, in any order.
     /// We need this because with ingest concurrency the order is not guaranteed.
-    async fn expect_checkpoints_in_range<R>(rx: &mut mpsc::Receiver<Arc<CheckpointData>>, range: R)
+    async fn expect_checkpoints_in_range<R>(rx: &mut mpsc::Receiver<Arc<Checkpoint>>, range: R)
     where
         R: Iterator<Item = u64>,
     {
@@ -282,7 +281,7 @@ mod tests {
 
         for _ in 0..expected.len() {
             let checkpoint = expect_recv(rx).await.unwrap();
-            let seq = *checkpoint.checkpoint_summary.sequence_number();
+            let seq = *checkpoint.summary.sequence_number();
             assert!(
                 expected.contains(&seq),
                 "Received unexpected checkpoint {seq}",
@@ -483,7 +482,7 @@ mod tests {
         // But updating a's watermark does.
         hi_tx.send(("a", 3)).unwrap();
         let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-        assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), 2);
+        assert_eq!(*checkpoint.summary.sequence_number(), 2);
 
         // ...by one checkpoint.
         expect_timeout(&mut subscriber_rx).await;
@@ -491,7 +490,7 @@ mod tests {
         // And we can make more progress by updating it again.
         hi_tx.send(("a", 4)).unwrap();
         let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-        assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), 3);
+        assert_eq!(*checkpoint.summary.sequence_number(), 3);
 
         // But another update to "a" will now not make a difference, because "b" is still behind.
         hi_tx.send(("a", 5)).unwrap();
