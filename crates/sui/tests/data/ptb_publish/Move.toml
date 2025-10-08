@@ -4,5 +4,5 @@ edition = "2024.beta"
 system-dependencies = []
 
 [dependencies]
-sui = { local = "../sui-framework/packages/sui-framework" }
-std = { local = "../sui-framework/packages/move-stdlib" }
+sui = { local = "../system-packages/sui-framework" }
+std = { local = "../system-packages/move-stdlib" }

@@ -205,7 +205,7 @@ upgrade-capability = "{}""#,
 
         let mut build_config = BuildConfig::new_for_testing();
         build_config.config.environment = Some("localnet".to_string());
-        let compiled_package = build_config.build(&package_path).unwrap();
+        let compiled_package = build_config.build_async(&package_path).await.unwrap();
 
         let context = self.test_cluster.wallet_mut();
 
@@ -2358,16 +2358,9 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     // Provide path to well formed package sources
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("dummy_modules_upgrade");
-    let tmp_dir = tempdir().unwrap().keep();
-    copy_dir_all(package_path, tmp_dir.join("dummy_modules_upgrade"))?;
-    let framework_pkgs = PathBuf::from("../sui-framework/packages");
-    copy_dir_all(framework_pkgs, tmp_dir.join("system-packages"))?;
+    let (_tmp, package_path) =
+        create_temp_dir_with_framework_packages("dummy_modules_upgrade", chain_id)?;
 
-    let mut package_path = tmp_dir;
-    package_path.push("dummy_modules_upgrade");
-    let _ = update_toml_with_localnet_chain_id(&package_path, chain_id);
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish(PublishArgs {
         package_path: package_path.clone(),
@@ -5476,7 +5469,7 @@ fn create_temp_dir_with_framework_packages(
 
     copy_dir_all(
         PathBuf::from("../sui-framework/packages"),
-        tempdir.join("sui-framework").join("packages"),
+        tempdir.join("system-packages"),
     )?;
 
     let _ = update_toml_with_localnet_chain_id(pkg_path, chain_id);
