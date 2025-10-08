@@ -846,6 +846,11 @@ struct FeatureFlags {
     // If true, allow Move functions called in PTBs to return references
     #[serde(skip_serializing_if = "is_false")]
     allow_references_in_ptbs: bool,
+
+    // If true, enable non-exclusive writes for user transactions.
+    // DO NOT ENABLE outside of the transaction test runner.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_non_exclusive_writes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1959,6 +1964,10 @@ impl ProtocolConfig {
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
+    pub fn enable_non_exclusive_writes(&self) -> bool {
+        self.feature_flags.enable_non_exclusive_writes
     }
 
     pub fn enable_coin_registry(&self) -> bool {
@@ -4346,6 +4355,10 @@ impl ProtocolConfig {
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
+    }
+
+    pub fn enable_non_exclusive_writes_for_testing(&mut self) {
+        self.feature_flags.enable_non_exclusive_writes = true;
     }
 
     pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(

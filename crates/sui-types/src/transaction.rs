@@ -726,11 +726,17 @@ impl CallArg {
             }
             CallArg::Object(o) => match o {
                 ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. } => (),
-                ObjectArg::SharedObjectV2 { .. } => {
-                    return Err(UserInputError::Unsupported(
-                        "User transactions cannot use SharedObjectV2".to_string(),
-                    ));
-                }
+                ObjectArg::SharedObjectV2 { mutability, .. } => match mutability {
+                    SharedObjectMutability::Mutable | SharedObjectMutability::Immutable => (),
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        if !config.enable_non_exclusive_writes() {
+                            return Err(UserInputError::Unsupported(
+                                "User transactions cannot use SharedObjectMutability::NonExclusiveWrite".to_string(),
+                            ));
+                        }
+                    }
+                },
+
                 ObjectArg::Receiving(_) => {
                     if !config.receiving_objects_supported() {
                         return Err(UserInputError::Unsupported(format!(
