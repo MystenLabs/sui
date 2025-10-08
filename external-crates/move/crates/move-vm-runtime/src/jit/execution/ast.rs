@@ -940,7 +940,6 @@ impl VariantDef {
 
 impl VariantInstantiation {
     pub fn field_count(&self) -> usize {
-        // TODO: Check if variant is a valid VMPointer.
         self.variant.fields.len()
     }
 }
