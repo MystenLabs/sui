@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/num_literal_bad_op.move:2:37
+  │
+2 │     fun test(): bool { let x = 0; x + b"foo" }
+  │                            -        ^ ------ Found: 'vector<u8>'. It is not compatible with the other type.
+  │                            │        │  
+  │                            │        Incompatible arguments to '+'
+  │                            Found: integer. It is not compatible with the other type.

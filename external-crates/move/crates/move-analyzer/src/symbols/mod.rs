@@ -84,14 +84,16 @@ use vfs::VfsPath;
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    editions::{Edition, FeatureGate},
+    editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_, Visibility},
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, Type_, TypeName_, VariantFields},
     parser::ast::{self as P, DocComment},
-    shared::{Identifier, NamedAddressMap, files::MappedFiles, unique_map::UniqueMap},
+    shared::{
+        Identifier, NamedAddressMap, files::MappedFiles,
+        stdlib_definitions::UNIT_TEST_POISON_INJECTION_NAME, unique_map::UniqueMap,
+    },
     typing::ast::ModuleDefinition,
-    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 use move_ir_types::location::*;
 use move_package::source_package::parsed_manifest::Dependencies;
@@ -154,6 +156,7 @@ pub fn get_symbols(
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     // helper function to avoid holding the lock for too long
     let has_pkg_entry = || {
@@ -183,6 +186,7 @@ pub fn get_symbols(
             pkg_path,
             lint,
             implicit_deps.clone(),
+            flavor,
         )?;
         eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
         let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
@@ -712,7 +716,7 @@ pub fn ignored_function(name: Symbol) -> bool {
     // function preventing publishing of modules compiled in test mode. We need to ignore its
     // definition to avoid spurious on-hover display of this function's info whe hovering close to
     // `module` keyword.
-    name == UNIT_TEST_POISON_FUN_NAME
+    name == UNIT_TEST_POISON_INJECTION_NAME
 }
 
 /// Get symbols for outer definitions in the module (functions, structs, and consts)

@@ -12,8 +12,8 @@ use lsp_types::{
     TypeDefinitionProviderCapability, WorkDoneProgressOptions, notification::Notification as _,
     request::Request as _,
 };
-use move_compiler::linters::LintLevel;
-use move_package::source_package::parsed_manifest::Dependencies;
+use move_compiler::{editions::Flavor, linters::LintLevel};
+use move_package::{package_hooks::PackageHooks, source_package::parsed_manifest::Dependencies};
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -44,7 +44,15 @@ const LINT_DEFAULT: &str = "default";
 const LINT_ALL: &str = "all";
 
 #[allow(deprecated)]
-pub fn run(implicit_deps: Dependencies) {
+pub fn run(
+    implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
+    hooks: Option<Box<dyn PackageHooks + Send + Sync>>,
+) {
+    if let Some(pkg_hooks) = hooks {
+        move_package::package_hooks::register_package_hooks(pkg_hooks);
+    }
+
     // stdio is used to communicate Language Server Protocol requests and responses.
     // stderr is used for logging (and, when Visual Studio Code is used to communicate with this
     // server, it captures this output in a dedicated "output channel").
@@ -159,6 +167,7 @@ pub fn run(implicit_deps: Dependencies) {
         diag_sender,
         lint,
         implicit_deps.clone(),
+        flavor,
     );
 
     // If initialization information from the client contains a path to the directory being
@@ -176,6 +185,7 @@ pub fn run(implicit_deps: Dependencies) {
                 lint,
                 None,
                 implicit_deps.clone(),
+                flavor,
             ) {
                 let mut old_symbols_map = symbols_map.lock().unwrap();
                 old_symbols_map.insert(p, new_symbols);
@@ -276,7 +286,7 @@ pub fn run(implicit_deps: Dependencies) {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, implicit_deps.clone());
+                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, implicit_deps.clone(), flavor);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -312,6 +322,7 @@ fn on_request(
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     shutdown_request_received: bool,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
 ) -> bool {
     if shutdown_request_received {
         let response = lsp_server::Response::new_err(
@@ -335,6 +346,7 @@ fn on_request(
             ide_files_root.clone(),
             pkg_dependencies,
             implicit_deps,
+            flavor,
         ),
         lsp_types::request::GotoDefinition::METHOD => {
             on_go_to_def_request(context, request);
@@ -361,6 +373,7 @@ fn on_request(
                 ide_files_root.clone(),
                 pkg_dependencies,
                 implicit_deps,
+                flavor,
             );
         }
         lsp_types::request::Shutdown::METHOD => {

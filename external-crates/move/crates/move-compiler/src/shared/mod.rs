@@ -58,6 +58,7 @@ pub mod known_attributes;
 pub mod matching;
 pub mod program_info;
 pub mod remembering_unique_map;
+pub mod stdlib_definitions;
 pub mod string_utils;
 pub mod unique_map;
 pub mod unique_set;
@@ -220,7 +221,7 @@ pub struct CompilationEnv {
     flags: Flags,
     modes: BTreeSet<Symbol>,
     top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder>,
-    diags: RwLock<Diagnostics>,
+    diags: Arc<RwLock<Diagnostics>>,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     /// Config for any package not found in `package_configs`, or for inputs without a package.
@@ -234,7 +235,7 @@ pub struct CompilationEnv {
     // pub counter: u64,
     mapped_files: MappedFiles,
     save_hooks: Vec<SaveHook>,
-    ide_information: RwLock<IDEInfo>,
+    ide_information: Arc<RwLock<IDEInfo>>,
     // Files to fully compile (as opposed to omitting function bodies)
     files_to_compile: Option<BTreeSet<PathBuf>>,
 }
@@ -305,7 +306,7 @@ impl CompilationEnv {
             flags,
             modes,
             top_level_warning_filter_scope,
-            diags: RwLock::new(diags),
+            diags: Arc::new(RwLock::new(diags)),
             visitors: Visitors::new(visitors),
             package_configs,
             default_config: default_config.unwrap_or_default(),
@@ -314,7 +315,7 @@ impl CompilationEnv {
             prim_definers: OnceLock::new(),
             mapped_files: MappedFiles::empty(),
             save_hooks,
-            ide_information: RwLock::new(IDEInfo::new()),
+            ide_information: Arc::new(RwLock::new(IDEInfo::new())),
             files_to_compile,
         }
     }
@@ -354,8 +355,16 @@ impl CompilationEnv {
         DiagnosticReporter::new(
             &self.flags,
             &self.known_filter_names,
-            &self.diags,
-            &self.ide_information,
+            Arc::clone(&self.diags),
+            Arc::clone(&self.ide_information),
+            WarningFiltersScope::root(self.top_level_warning_filter_scope),
+        )
+    }
+
+    pub fn dummy_diagnostic_reporter(&self) -> DiagnosticReporter {
+        DiagnosticReporter::dummy_reporter(
+            &self.flags,
+            &self.known_filter_names,
             WarningFiltersScope::root(self.top_level_warning_filter_scope),
         )
     }

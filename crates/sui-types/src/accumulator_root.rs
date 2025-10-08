@@ -4,7 +4,7 @@
 use crate::{
     balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
-    digests::TransactionDigest,
+    digests::{Digest, TransactionDigest},
     dynamic_field::{
         serialize_dynamic_field, BoundedDynamicFieldID, DynamicFieldKey, DynamicFieldObject, Field,
         DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
@@ -19,6 +19,7 @@ use move_core_types::{
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
+    u256::U256,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
@@ -325,4 +326,95 @@ pub(crate) fn extract_balance_type_from_field(s: &StructTag) -> Option<TypeTag> 
         }
     }
     None
+}
+
+/// Rust representation of the Move EventStreamHead struct from accumulator_settlement module.
+/// This represents the state of an authenticated event stream head stored on-chain.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct EventStreamHead {
+    /// The MMR (Merkle Mountain Range) digest representing the accumulated events
+    pub mmr: Vec<U256>,
+    /// The checkpoint sequence number when this stream head was last updated
+    pub checkpoint_seq: u64,
+    /// The total number of events accumulated in this stream
+    pub num_events: u64,
+}
+
+impl Default for EventStreamHead {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EventStreamHead {
+    pub fn new() -> Self {
+        Self {
+            mmr: vec![],
+            checkpoint_seq: 0,
+            num_events: 0,
+        }
+    }
+
+    pub fn num_events(&self) -> u64 {
+        self.num_events
+    }
+
+    pub fn checkpoint_seq(&self) -> u64 {
+        self.checkpoint_seq
+    }
+
+    pub fn mmr(&self) -> &Vec<U256> {
+        &self.mmr
+    }
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+pub struct EventCommitment {
+    pub checkpoint_seq: u64,
+    pub transaction_idx: u64,
+    pub event_idx: u64,
+    pub digest: Digest,
+}
+
+impl EventCommitment {
+    pub fn new(checkpoint_seq: u64, transaction_idx: u64, event_idx: u64, digest: Digest) -> Self {
+        Self {
+            checkpoint_seq,
+            transaction_idx,
+            event_idx,
+            digest,
+        }
+    }
+}
+
+impl PartialOrd for EventCommitment {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for EventCommitment {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.checkpoint_seq, self.transaction_idx, self.event_idx).cmp(&(
+            other.checkpoint_seq,
+            other.transaction_idx,
+            other.event_idx,
+        ))
+    }
+}
+
+pub fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
+    use fastcrypto::hash::Blake2b256;
+    use fastcrypto::merkle::MerkleTree;
+
+    debug_assert!(
+        events.windows(2).all(|w| w[0] <= w[1]),
+        "Events must be ordered by (checkpoint_seq, transaction_idx, event_idx)"
+    );
+
+    let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
+        .expect("failed to serialize event commitments for merkle root");
+    let root_node = merkle_tree.root();
+    let root_digest = root_node.bytes();
+    Digest::new(root_digest)
 }

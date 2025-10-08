@@ -79,13 +79,13 @@ const guides = [
 			},
 			{
 				type: 'category',
-				label: 'Coins and Tokens',
+				label: 'Currencies and Tokens',
 				link: {
 					type: 'doc',
 					id: 'guides/developer/coin-index',
 				},
 				items: [
-					'guides/developer/coin',
+					'guides/developer/currency',
 					'guides/developer/coin/regulated',
 					'guides/developer/coin/in-game-token',
 					'guides/developer/coin/loyalty',
@@ -151,8 +151,20 @@ const guides = [
 						items: ['guides/developer/advanced/min-gas-fees'],
 					},*/
 					'guides/developer/advanced/move-2024-migration',
-					'guides/developer/advanced/custom-indexer',
-					'guides/developer/advanced/custom-indexer/indexer-walrus',
+					{
+						type: 'category',
+						label: 'Custom Indexer',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/advanced/custom-indexer',
+						},
+						items: [
+							'guides/developer/advanced/custom-indexer/build',
+							'guides/developer/advanced/custom-indexer/indexer-walrus',
+							'guides/developer/advanced/custom-indexer/indexer-data-integration',
+							'guides/developer/advanced/custom-indexer/indexer-runtime-perf',
+						]
+					},
 					'guides/developer/advanced/randomness-onchain',
 					'guides/developer/getting-started/graphql-rpc',
 					'guides/developer/advanced/local-fee-markets',

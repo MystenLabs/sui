@@ -193,6 +193,42 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
+impl ConsensusTransaction {
+    /// Displays a ConsensusTransaction created locally by the validator, for example during submission to consensus.
+    pub fn local_display(&self) -> String {
+        match &self.kind {
+            ConsensusTransactionKind::CertifiedTransaction(cert) => {
+                format!("Certified({})", cert.digest())
+            }
+            ConsensusTransactionKind::CheckpointSignature(data) => {
+                format!(
+                    "CkptSig({}, {})",
+                    data.summary.sequence_number,
+                    data.summary.digest()
+                )
+            }
+            ConsensusTransactionKind::CheckpointSignatureV2(data) => {
+                format!(
+                    "CkptSigV2({}, {})",
+                    data.summary.sequence_number,
+                    data.summary.digest()
+                )
+            }
+            ConsensusTransactionKind::EndOfPublish(..) => "EOP".to_string(),
+            ConsensusTransactionKind::CapabilityNotification(..) => "Cap".to_string(),
+            ConsensusTransactionKind::CapabilityNotificationV2(..) => "CapV2".to_string(),
+            ConsensusTransactionKind::NewJWKFetched(..) => "NewJWKFetched".to_string(),
+            ConsensusTransactionKind::RandomnessStateUpdate(..) => "RandStateUpdate".to_string(),
+            ConsensusTransactionKind::RandomnessDkgMessage(..) => "RandDkg".to_string(),
+            ConsensusTransactionKind::RandomnessDkgConfirmation(..) => "RandDkgConf".to_string(),
+            ConsensusTransactionKind::ExecutionTimeObservation(..) => "ExecTimeOb".to_string(),
+            ConsensusTransactionKind::UserTransaction(tx) => {
+                format!("User({})", tx.digest())
+            }
+        }
+    }
+}
+
 // Serialized ordinally - always append to end of enum
 #[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusTransactionKey {

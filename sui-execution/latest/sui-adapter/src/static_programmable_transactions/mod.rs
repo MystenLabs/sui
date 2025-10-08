@@ -9,7 +9,7 @@ use crate::{
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
     gas_charger::GasCharger,
-    static_programmable_transactions::env::Env,
+    static_programmable_transactions::{env::Env, linkage::analysis::LinkageAnalyzer},
 };
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::runtime::MoveRuntime;
@@ -39,19 +39,15 @@ pub fn execute<Mode: ExecutionMode>(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
     let package_store = CachedPackageStore::new(vm, TransactionPackageStore::new(package_store));
-    let linkage_analysis = linkage::analysis::linkage_analysis_for_protocol_config::<Mode>(
-        protocol_config,
-        &txn,
-        &package_store,
-    )
-    .map_err(|e| (e, vec![]))?;
+    let linkage_analysis =
+        LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
 
     let mut env = Env::new(
         protocol_config,
         vm,
         state_view,
         &package_store,
-        linkage_analysis.as_ref(),
+        &linkage_analysis,
     );
     let txn = loading::translate::transaction(&env, txn).map_err(|e| (e, vec![]))?;
     let txn = typing::translate_and_verify::<Mode>(&env, txn).map_err(|e| (e, vec![]))?;

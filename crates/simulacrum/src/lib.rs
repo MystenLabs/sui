@@ -31,6 +31,7 @@ use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::{Object, Owner};
+use sui_types::storage::ObjectKey;
 use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
@@ -143,6 +144,17 @@ where
             .rng(&mut rng)
             .with_chain_start_timestamp_ms(1)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
+            .build();
+        Self::new_with_network_config_in_mem(&config, rng)
+    }
+
+    /// Create a new Simulacrum instance with a specific protocol version.
+    pub fn new_with_protocol_version(mut rng: R, protocol_version: ProtocolVersion) -> Self {
+        let config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .with_chain_start_timestamp_ms(1)
+            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
+            .with_protocol_version(protocol_version)
             .build();
         Self::new_with_network_config_in_mem(&config, rng)
     }
@@ -538,7 +550,9 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     ) -> anyhow::Result<()> {
         if let Some(path) = &self.data_ingestion_path {
             let file_name = format!("{}.chk", checkpoint.sequence_number);
-            let checkpoint_data = self.get_checkpoint_data(checkpoint, checkpoint_contents)?;
+            let checkpoint_data: sui_types::full_checkpoint_content::CheckpointData = self
+                .get_checkpoint_data(checkpoint, checkpoint_contents)?
+                .into();
             std::fs::create_dir_all(path)?;
             let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
             std::fs::write(path.join(file_name), blob.to_bytes())?;
@@ -678,6 +692,13 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         _digest: &sui_types::messages_checkpoint::CheckpointContentsDigest,
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()
+    }
+
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        _digest: &sui_types::digests::TransactionDigest,
+    ) -> Option<Vec<ObjectKey>> {
+        None
     }
 }
 

@@ -10,10 +10,7 @@ use crate::{
     execution_value::ExecutionState,
     static_programmable_transactions::{
         execution::context::subst_signature,
-        linkage::{
-            analysis::{LinkageAnalysis, type_linkage},
-            resolved_linkage::ExecutableLinkage,
-        },
+        linkage::{analysis::LinkageAnalyzer, resolved_linkage::ExecutableLinkage},
         loading::ast::{self as L, Datatype, LoadedFunction, LoadedFunctionInstantiation, Type},
     },
 };
@@ -50,7 +47,7 @@ pub struct Env<'pc, 'vm, 'state, 'linkage> {
     pub vm: &'vm MoveRuntime,
     pub state_view: &'state mut dyn ExecutionState,
     pub linkable_store: &'linkage CachedPackageStore<'state, 'vm>,
-    pub linkage_analysis: &'linkage dyn LinkageAnalysis,
+    pub linkage_analysis: &'linkage LinkageAnalyzer,
     gas_coin_type: OnceCell<Type>,
     upgrade_ticket_type: OnceCell<Type>,
     upgrade_receipt_type: OnceCell<Type>,
@@ -76,7 +73,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         vm: &'vm MoveRuntime,
         state_view: &'state mut dyn ExecutionState,
         linkable_store: &'linkage CachedPackageStore<'state, 'vm>,
-        linkage_analysis: &'linkage dyn LinkageAnalysis,
+        linkage_analysis: &'linkage LinkageAnalyzer,
     ) -> Self {
         Self {
             protocol_config,
@@ -156,7 +153,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 }
                 TypeTag::Struct(struct_tag) => {
                     let objects = struct_tag.all_addresses();
-                    let tag_linkage = type_linkage(
+                    let tag_linkage = ExecutableLinkage::type_linkage(
                         &objects.iter().map(|a| (*a).into()).collect::<Vec<_>>(),
                         env.linkable_store,
                     )?;
@@ -201,7 +198,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 }
                 TypeTag::Struct(struct_tag) => {
                     let objects = struct_tag.all_addresses();
-                    let tag_linkage = type_linkage(
+                    let tag_linkage = ExecutableLinkage::type_linkage(
                         &objects.iter().map(|a| (*a).into()).collect::<Vec<_>>(),
                         env.linkable_store,
                     )?;
@@ -416,7 +413,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             if addresses.is_empty() {
                 None
             } else {
-                let tag_linkage = type_linkage(&addresses, self.linkable_store)?;
+                let tag_linkage = ExecutableLinkage::type_linkage(&addresses, self.linkable_store)?;
                 let link_context = tag_linkage.linkage_context();
                 let move_store = &self.linkable_store.package_store;
                 Some((

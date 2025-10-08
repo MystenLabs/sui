@@ -203,15 +203,20 @@ impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
 //                        Eth Message Conversion                      //
 ////////////////////////////////////////////////////////////////////////
 
-impl From<SuiToEthBridgeAction> for eth_sui_bridge::Message {
-    fn from(action: SuiToEthBridgeAction) -> Self {
-        eth_sui_bridge::Message {
+impl TryFrom<SuiToEthBridgeAction> for eth_sui_bridge::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: SuiToEthBridgeAction) -> BridgeResult<Self> {
+        Ok(eth_sui_bridge::Message {
             message_type: BridgeActionType::TokenTransfer as u8,
             version: TOKEN_TRANSFER_MESSAGE_VERSION,
             nonce: action.sui_bridge_event.nonce,
             chain_id: action.sui_bridge_event.sui_chain_id as u8,
-            payload: action.as_payload_bytes().into(),
-        }
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
     }
 }
 
@@ -227,75 +232,105 @@ impl From<ParsedTokenTransferMessage> for eth_sui_bridge::Message {
     }
 }
 
-impl From<EmergencyAction> for eth_sui_bridge::Message {
-    fn from(action: EmergencyAction) -> Self {
-        eth_sui_bridge::Message {
+impl TryFrom<EmergencyAction> for eth_sui_bridge::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: EmergencyAction) -> BridgeResult<Self> {
+        Ok(eth_sui_bridge::Message {
             message_type: BridgeActionType::EmergencyButton as u8,
             version: EMERGENCY_BUTTON_MESSAGE_VERSION,
             nonce: action.nonce,
             chain_id: action.chain_id as u8,
-            payload: action.as_payload_bytes().into(),
-        }
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
     }
 }
 
-impl From<BlocklistCommitteeAction> for eth_bridge_committee::Message {
-    fn from(action: BlocklistCommitteeAction) -> Self {
-        eth_bridge_committee::Message {
+impl TryFrom<BlocklistCommitteeAction> for eth_bridge_committee::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: BlocklistCommitteeAction) -> BridgeResult<Self> {
+        Ok(eth_bridge_committee::Message {
             message_type: BridgeActionType::UpdateCommitteeBlocklist as u8,
             version: COMMITTEE_BLOCKLIST_MESSAGE_VERSION,
             nonce: action.nonce,
             chain_id: action.chain_id as u8,
-            payload: action.as_payload_bytes().into(),
-        }
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
     }
 }
 
-impl From<LimitUpdateAction> for eth_bridge_limiter::Message {
-    fn from(action: LimitUpdateAction) -> Self {
-        eth_bridge_limiter::Message {
+impl TryFrom<LimitUpdateAction> for eth_bridge_limiter::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: LimitUpdateAction) -> BridgeResult<Self> {
+        Ok(eth_bridge_limiter::Message {
             message_type: BridgeActionType::LimitUpdate as u8,
             version: LIMIT_UPDATE_MESSAGE_VERSION,
             nonce: action.nonce,
             chain_id: action.chain_id as u8,
-            payload: action.as_payload_bytes().into(),
-        }
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
     }
 }
 
-impl From<AssetPriceUpdateAction> for eth_bridge_config::Message {
-    fn from(action: AssetPriceUpdateAction) -> Self {
-        eth_bridge_config::Message {
+impl TryFrom<AssetPriceUpdateAction> for eth_bridge_config::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: AssetPriceUpdateAction) -> BridgeResult<Self> {
+        Ok(eth_bridge_config::Message {
             message_type: BridgeActionType::AssetPriceUpdate as u8,
             version: ASSET_PRICE_UPDATE_MESSAGE_VERSION,
             nonce: action.nonce,
             chain_id: action.chain_id as u8,
-            payload: action.as_payload_bytes().into(),
-        }
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
     }
 }
 
-impl From<AddTokensOnEvmAction> for eth_bridge_config::Message {
-    fn from(action: AddTokensOnEvmAction) -> Self {
-        eth_bridge_config::Message {
+impl TryFrom<AddTokensOnEvmAction> for eth_bridge_config::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: AddTokensOnEvmAction) -> BridgeResult<Self> {
+        Ok(eth_bridge_config::Message {
             message_type: BridgeActionType::AddTokensOnEvm as u8,
             version: ADD_TOKENS_ON_EVM_MESSAGE_VERSION,
             nonce: action.nonce,
             chain_id: action.chain_id as u8,
-            payload: action.as_payload_bytes().into(),
-        }
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
     }
 }
 
-impl From<EvmContractUpgradeAction> for eth_committee_upgradeable_contract::Message {
-    fn from(action: EvmContractUpgradeAction) -> Self {
-        eth_committee_upgradeable_contract::Message {
+impl TryFrom<EvmContractUpgradeAction> for eth_committee_upgradeable_contract::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: EvmContractUpgradeAction) -> BridgeResult<Self> {
+        Ok(eth_committee_upgradeable_contract::Message {
             message_type: BridgeActionType::EvmContractUpgrade as u8,
             version: EVM_CONTRACT_UPGRADE_MESSAGE_VERSION,
             nonce: action.nonce,
             chain_id: action.chain_id as u8,
-            payload: action.as_payload_bytes().into(),
-        }
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
     }
 }
 
@@ -321,7 +356,7 @@ mod tests {
             chain_id: BridgeChainId::EthSepolia,
             action_type: EmergencyActionType::Pause,
         };
-        let message: eth_sui_bridge::Message = action.into();
+        let message: eth_sui_bridge::Message = action.try_into().unwrap();
         assert_eq!(
             message,
             eth_sui_bridge::Message {
@@ -349,7 +384,7 @@ mod tests {
             blocklist_type: BlocklistType::Blocklist,
             members_to_update: vec![pub_key_bytes],
         };
-        let message: eth_bridge_committee::Message = action.into();
+        let message: eth_bridge_committee::Message = action.try_into().unwrap();
         assert_eq!(
             message,
             eth_bridge_committee::Message {
@@ -374,7 +409,7 @@ mod tests {
             sending_chain_id: BridgeChainId::SuiTestnet,
             new_usd_limit: 4200000,
         };
-        let message: eth_bridge_limiter::Message = action.into();
+        let message: eth_bridge_limiter::Message = action.try_into().unwrap();
         assert_eq!(
             message,
             eth_bridge_limiter::Message {
@@ -398,7 +433,7 @@ mod tests {
             new_impl_address: EthAddress::repeat_byte(2),
             call_data: Vec::from("deadbeef"),
         };
-        let message: eth_committee_upgradeable_contract::Message = action.into();
+        let message: eth_committee_upgradeable_contract::Message = action.try_into().unwrap();
         assert_eq!(
             message,
             eth_committee_upgradeable_contract::Message {
@@ -421,7 +456,7 @@ mod tests {
             token_id: TOKEN_ID_ETH,
             new_usd_price: 80000000,
         };
-        let message: eth_bridge_config::Message = action.into();
+        let message: eth_bridge_config::Message = action.try_into().unwrap();
         assert_eq!(
             message,
             eth_bridge_config::Message {
@@ -450,7 +485,7 @@ mod tests {
             token_sui_decimals: vec![5, 6, 7],
             token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
         };
-        let message: eth_bridge_config::Message = action.into();
+        let message: eth_bridge_config::Message = action.try_into().unwrap();
         assert_eq!(
             message,
             eth_bridge_config::Message {

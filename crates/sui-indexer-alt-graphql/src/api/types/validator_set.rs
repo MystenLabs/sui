@@ -1,8 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::Connection, Context, Object};
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
+use std::{collections::BTreeMap, sync::Arc};
+
+use async_graphql::{connection::Connection, indexmap::IndexMap, Context, Object};
+use sui_types::{
+    base_types::SuiAddress as NativeSuiAddress,
+    collection_types::{Entry, VecMap, VecSet},
+    sui_system_state::sui_system_state_inner_v1::ValidatorSetV1,
+};
 
 use crate::{
     api::{
@@ -19,8 +25,14 @@ pub(crate) type CValidator = JsonCursor<usize>;
 /// Representation of `0x3::validator_set::ValidatorSet`.
 #[derive(Clone, Debug)]
 pub(crate) struct ValidatorSet {
-    scope: Scope,
-    native: ValidatorSetV1,
+    pub(crate) contents: Arc<ValidatorSetContents>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ValidatorSetContents {
+    pub(crate) scope: Scope,
+    pub(crate) native: ValidatorSetV1,
+    pub(crate) report_records: IndexMap<NativeSuiAddress, Vec<usize>>,
 }
 
 /// Representation of `0x3::validator_set::ValidatorSet`.
@@ -39,79 +51,107 @@ impl ValidatorSet {
         let limits = pagination.limits("ValidatorSet", "activeValidators");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.native.active_validators.len(), |i| {
-            let validator = &self.native.active_validators[i];
-
-            let at_risk = self
-                .native
-                .at_risk_validators
-                .get(&validator.metadata.sui_address)
-                .map_or(0, |at_risk| *at_risk);
-
-            Ok(Validator::from_validator_v1(
-                self.scope.clone(),
-                validator.clone(),
-                at_risk,
-            ))
+        page.paginate_indices(self.contents.native.active_validators.len(), |idx| {
+            Ok(Validator {
+                contents: Arc::clone(&self.contents),
+                idx,
+            })
         })
         .map(Some)
     }
 
     /// Object ID of the `Table` storing the inactive staking pools.
     async fn inactive_pools_id(&self) -> Option<SuiAddress> {
-        Some(self.native.inactive_validators.id.into())
+        Some(self.contents.native.inactive_validators.id.into())
     }
 
     /// Size of the inactive pools `Table`.
     async fn inactive_pools_size(&self) -> Option<u64> {
-        Some(self.native.inactive_validators.size)
+        Some(self.contents.native.inactive_validators.size)
     }
 
     // TODO: instead of returning the id and size of the table, potentially return the table itself, paginated.
     /// Object ID of the wrapped object `TableVec` storing the pending active validators.
     async fn pending_active_validators_id(&self) -> Option<SuiAddress> {
-        Some(self.native.pending_active_validators.contents.id.into())
+        Some(
+            self.contents
+                .native
+                .pending_active_validators
+                .contents
+                .id
+                .into(),
+        )
     }
 
     /// Size of the pending active validators table.
     async fn pending_active_validators_size(&self) -> Option<u64> {
-        Some(self.native.pending_active_validators.contents.size)
+        Some(self.contents.native.pending_active_validators.contents.size)
     }
 
     /// Validators that are pending removal from the active validator set, expressed as indices in to `activeValidators`.
     async fn pending_removals(&self) -> Option<Vec<u64>> {
-        Some(self.native.pending_removals.clone())
+        Some(self.contents.native.pending_removals.clone())
     }
 
     /// Object ID of the `Table` storing the mapping from staking pool ids to the addresses of the corresponding validators.
     /// This is needed because a validator's address can potentially change but the object ID of its pool will not.
     async fn staking_pool_mappings_id(&self) -> Option<SuiAddress> {
-        Some(self.native.staking_pool_mappings.id.into())
+        Some(self.contents.native.staking_pool_mappings.id.into())
     }
 
     /// Size of the stake pool mappings `Table`.
     async fn staking_pool_mappings_size(&self) -> Option<u64> {
-        Some(self.native.staking_pool_mappings.size)
+        Some(self.contents.native.staking_pool_mappings.size)
     }
 
     /// Total amount of stake for all active validators at the beginning of the epoch.
     async fn total_stake(&self) -> Option<BigInt> {
-        Some(self.native.total_stake.into())
+        Some(self.contents.native.total_stake.into())
     }
 
     /// Object ID of the `Table` storing the validator candidates.
     async fn validator_candidates_id(&self) -> Option<SuiAddress> {
-        Some(self.native.validator_candidates.id.into())
+        Some(self.contents.native.validator_candidates.id.into())
     }
 
     /// Size of the validator candidates `Table`.
     async fn validator_candidates_size(&self) -> Option<u64> {
-        Some(self.native.validator_candidates.size)
+        Some(self.contents.native.validator_candidates.size)
     }
 }
 
 impl ValidatorSet {
-    pub(crate) fn from_validator_set_v1(scope: Scope, native: ValidatorSetV1) -> Self {
-        Self { scope, native }
+    pub(crate) fn from_validator_set_v1(
+        scope: Scope,
+        native: ValidatorSetV1,
+        report_records: VecMap<NativeSuiAddress, VecSet<NativeSuiAddress>>,
+    ) -> Self {
+        let address_to_index: BTreeMap<_, _> = native
+            .active_validators
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (v.metadata.sui_address, i))
+            .collect();
+        let report_records = report_records
+            .contents
+            .into_iter()
+            .map(|Entry { key, value }| {
+                (
+                    key,
+                    value
+                        .contents
+                        .into_iter()
+                        .map(|v| address_to_index[&v])
+                        .collect(),
+                )
+            })
+            .collect();
+        Self {
+            contents: Arc::new(ValidatorSetContents {
+                scope,
+                native,
+                report_records,
+            }),
+        }
     }
 }

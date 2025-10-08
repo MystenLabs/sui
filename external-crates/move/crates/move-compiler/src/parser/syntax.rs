@@ -1432,22 +1432,23 @@ fn parse_lambda_bind_list(context: &mut Context) -> Result<LambdaBindings, Box<D
 // Values
 //**************************************************************************************************
 
-// Parse a byte string:
-//      ByteString = <ByteStringValue>
-fn parse_byte_string(context: &mut Context) -> Result<Value_, Box<Diagnostic>> {
-    if context.tokens.peek() != Tok::ByteStringValue {
-        return Err(unexpected_token_error(
-            context.tokens,
-            "a byte string value",
-        ));
+// Parse a string string:
+//      String = <StringValue>
+fn parse_string(context: &mut Context) -> Result<Value_, Box<Diagnostic>> {
+    if context.tokens.peek() != Tok::StringValue {
+        return Err(unexpected_token_error(context.tokens, "a string value"));
     }
     let s = context.tokens.content();
-    let text = Symbol::from(&s[2..s.len() - 1]);
     let value_ = if s.starts_with("x\"") {
+        let text = Symbol::from(&s[2..s.len() - 1]);
         Value_::HexString(text)
-    } else {
-        assert!(s.starts_with("b\""));
+    } else if s.starts_with("b\"") {
+        let text = Symbol::from(&s[2..s.len() - 1]);
         Value_::ByteString(text)
+    } else {
+        assert!(s.starts_with("\""));
+        let text = Symbol::from(&s[1..s.len() - 1]);
+        Value_::String(text)
     };
     context.tokens.advance()?;
     Ok(value_)
@@ -1460,7 +1461,7 @@ fn parse_byte_string(context: &mut Context) -> Result<Value_, Box<Diagnostic>> {
 //          | "false"
 //          | <Number>
 //          | <NumberTyped>
-//          | <ByteString>
+//          | <String>
 fn maybe_parse_value(context: &mut Context) -> Result<Option<Value>, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let val = match context.tokens.peek() {
@@ -1492,7 +1493,7 @@ fn maybe_parse_value(context: &mut Context) -> Result<Option<Value>, Box<Diagnos
             Value_::Num(num)
         }
 
-        Tok::ByteStringValue => parse_byte_string(context)?,
+        Tok::StringValue => parse_string(context)?,
         _ => return Ok(None),
     };
     let end_loc = context.tokens.previous_end_loc();
@@ -1797,7 +1798,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             }
         }
 
-        Tok::AtSign | Tok::True | Tok::False | Tok::NumTypedValue | Tok::ByteStringValue => {
+        Tok::AtSign | Tok::True | Tok::False | Tok::NumTypedValue | Tok::StringValue => {
             Exp_::Value(parse_value(context)?)
         }
 
@@ -2448,7 +2449,7 @@ fn at_start_of_exp(context: &mut Context) -> bool {
         // value
         Tok::NumValue
             | Tok::NumTypedValue
-            | Tok::ByteStringValue
+            | Tok::StringValue
             | Tok::Identifier
             | Tok::RestrictedIdentifier
             | Tok::AtSign

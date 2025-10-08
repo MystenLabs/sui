@@ -26,6 +26,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::storage::ObjectKey;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
@@ -160,12 +161,12 @@ pub fn simulate_transaction(
     }
 
     let SimulateTransactionResult {
-        input_objects,
-        output_objects,
+        objects,
         events,
         effects,
         execution_result,
         mock_gas_id: _,
+        ..
     } = executor
         .simulate_transaction(transaction.clone(), checks)
         .map_err(anyhow::Error::from)?;
@@ -174,8 +175,16 @@ pub fn simulate_transaction(
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
 
-        let input_objects = input_objects.into_values().collect::<Vec<_>>();
-        let output_objects = output_objects.into_values().collect::<Vec<_>>();
+        let input_objects = effects
+            .modified_at_versions()
+            .into_iter()
+            .filter_map(|(object_id, version)| objects.get(&ObjectKey(object_id, version)).cloned())
+            .collect::<Vec<_>>();
+        let output_objects = effects
+            .all_changed_objects()
+            .into_iter()
+            .filter_map(|(object_ref, _owner, _kind)| objects.get(&object_ref.into()).cloned())
+            .collect::<Vec<_>>();
 
         message.balance_changes = read_mask
             .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
@@ -201,11 +210,7 @@ pub fn simulate_transaction(
                                 continue;
                             };
 
-                            if let Some(object) = input_objects
-                                .iter()
-                                .chain(&output_objects)
-                                .find(|o| o.id() == object_id)
-                            {
+                            if let Some(object) = objects.iter().find(|o| o.id() == object_id) {
                                 changed_object.object_type = Some(match object.struct_tag() {
                                     Some(struct_tag) => struct_tag.to_canonical_string(true),
                                     None => "package".to_owned(),
@@ -224,8 +229,7 @@ pub fn simulate_transaction(
                                 continue;
                             };
 
-                            if let Some(object) = input_objects.iter().find(|o| o.id() == object_id)
-                            {
+                            if let Some(object) = objects.iter().find(|o| o.id() == object_id) {
                                 unchanged_consensus_object.object_type =
                                     Some(match object.struct_tag() {
                                         Some(struct_tag) => struct_tag.to_canonical_string(true),

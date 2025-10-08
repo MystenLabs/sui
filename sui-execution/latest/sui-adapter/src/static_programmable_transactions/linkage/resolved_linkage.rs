@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::linkage::resolution::{
-    ConflictResolution, ResolutionTable,
+use crate::{
+    data_store::PackageStore,
+    static_programmable_transactions::linkage::resolution::{
+        ResolutionTable, VersionConstraint, add_and_unify, get_package,
+    },
 };
 use move_vm_runtime::shared::linkage_context::LinkageContext;
 use std::{collections::BTreeMap, rc::Rc};
-use sui_types::base_types::ObjectID;
+use sui_types::{base_types::ObjectID, error::ExecutionError};
 
 #[derive(Clone, Debug)]
 pub struct ExecutableLinkage(pub Rc<ResolvedLinkage>);
@@ -14,6 +17,43 @@ pub struct ExecutableLinkage(pub Rc<ResolvedLinkage>);
 impl ExecutableLinkage {
     pub fn new(resolved_linkage: ResolvedLinkage) -> Self {
         Self(Rc::new(resolved_linkage))
+    }
+
+    /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
+    /// Since this linkage analysis should only be used for types, all packages are resolved
+    /// "upwards" (i.e., later versions of the package are preferred).
+    pub fn type_linkage(
+        ids: &[ObjectID],
+        store: &dyn PackageStore,
+    ) -> Result<Self, ExecutionError> {
+        let mut resolution_table = ResolutionTable::empty();
+        for id in ids {
+            let pkg = get_package(id, store)?;
+            let transitive_deps = pkg
+                .linkage_table()
+                .values()
+                .map(|version_id| ObjectID::from(*version_id))
+                .collect::<Vec<_>>();
+            let package_id = pkg.version_id().into();
+            add_and_unify(
+                &package_id,
+                store,
+                &mut resolution_table,
+                VersionConstraint::at_least,
+            )?;
+            for object_id in transitive_deps.iter() {
+                add_and_unify(
+                    object_id,
+                    store,
+                    &mut resolution_table,
+                    VersionConstraint::at_least,
+                )?;
+            }
+        }
+
+        Ok(Self::new(ResolvedLinkage::from_resolution_table(
+            resolution_table,
+        )))
     }
 
     pub fn linkage_context(&self) -> LinkageContext {
@@ -43,8 +83,8 @@ impl ResolvedLinkage {
         let mut versions = BTreeMap::new();
         for (original_id, resolution) in resolution_table.resolution_table {
             match resolution {
-                ConflictResolution::Exact(version, object_id)
-                | ConflictResolution::AtLeast(version, object_id) => {
+                VersionConstraint::Exact(version, object_id)
+                | VersionConstraint::AtLeast(version, object_id) => {
                     linkage.insert(original_id, object_id);
                     versions.insert(original_id, version);
                 }
