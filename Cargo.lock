@@ -15903,6 +15903,7 @@ dependencies = [
  "sui-execution",
  "sui-framework",
  "sui-json-rpc-types",
+ "sui-move",
  "sui-move-build",
  "sui-package-management",
  "sui-types",
