@@ -8,9 +8,9 @@ use async_trait::async_trait;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
-    types::full_checkpoint_content::CheckpointData,
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
+    types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransaction};
 
@@ -22,20 +22,20 @@ impl Processor for KvTransactions {
 
     type Value = StoredTransaction;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
-        let cp_sequence_number = checkpoint_summary.sequence_number as i64;
+        let cp_sequence_number = summary.sequence_number as i64;
 
         let mut values = Vec::with_capacity(transactions.len());
         for (i, tx) in transactions.iter().enumerate() {
             let tx_digest = tx.transaction.digest();
-            let transaction = &tx.transaction.data().transaction_data();
-            let signatures = &tx.transaction.data().tx_signatures();
+            let transaction = &tx.transaction;
+            let signatures = &tx.signatures;
 
             let effects = &tx.effects;
             let events: Vec<_> = tx.events.iter().flat_map(|e| e.data.iter()).collect();
@@ -43,7 +43,7 @@ impl Processor for KvTransactions {
             values.push(StoredTransaction {
                 tx_digest: tx_digest.inner().into(),
                 cp_sequence_number,
-                timestamp_ms: checkpoint_summary.timestamp_ms as i64,
+                timestamp_ms: summary.timestamp_ms as i64,
                 raw_transaction: bcs::to_bytes(transaction).with_context(|| {
                     format!("Serializing transaction {tx_digest} (cp {cp_sequence_number}, tx {i})")
                 })?,
@@ -65,8 +65,6 @@ impl Processor for KvTransactions {
 
 #[async_trait]
 impl Handler for KvTransactions {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
@@ -97,7 +95,7 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        Indexer, types::test_checkpoint_data_builder::TestCheckpointDataBuilder,
+        Indexer, types::test_checkpoint_data_builder::TestCheckpointBuilder,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
@@ -112,16 +110,18 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = KvTransactions.process(&checkpoint).await.unwrap();
+
         KvTransactions::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = KvTransactions.process(&checkpoint).await.unwrap();
+
         KvTransactions::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
@@ -130,6 +130,7 @@ mod tests {
         builder = builder.start_transaction(3).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = KvTransactions.process(&checkpoint).await.unwrap();
+
         KvTransactions::commit(&values, &mut conn).await.unwrap();
 
         let transactions = get_all_kv_transactions(&mut conn).await.unwrap();
