@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+
+use backoff::ExponentialBackoff;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
@@ -16,6 +18,12 @@ use crate::{
 
 use super::IndexedCheckpoint;
 use async_trait::async_trait;
+
+/// If the processor needs to retry processing a checkpoint, it will wait this long initially.
+const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
+
+/// If the processor needs to retry processing a checkpoint, it will wait at most this long between retries.
+const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Implementors of this trait are responsible for transforming checkpoint into rows for their
 /// table. The `FANOUT` associated value controls how many concurrent workers will be used to
@@ -32,6 +40,17 @@ pub trait Processor: Send + Sync + 'static {
     type Value: Send + Sync + 'static;
 
     /// The processing logic for turning a checkpoint into rows of the table.
+    ///
+    /// All errors returned from this method are treated as transient and will be retried
+    /// indefinitely with exponential backoff.
+    ///
+    /// If you encounter a permanent error that will never succeed on retry (e.g., invalid data
+    /// format, unsupported protocol version), you must handle it within this function and avoid
+    /// returning it as an error. Otherwise, the indexer will retry forever, causing checkpoint
+    /// lag and blocking the pipeline.
+    ///
+    /// For transient errors (e.g., network issues, rate limiting), simply return the error and
+    /// let the framework retry automatically.
     async fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
 }
 
@@ -82,7 +101,27 @@ pub(super) fn processor<P: Processor>(
                         .with_label_values(&[P::NAME])
                         .start_timer();
 
-                    let values = processor.process(&checkpoint).await?;
+                    // Retry processing with exponential backoff - treat all errors as transient
+                    let backoff = ExponentialBackoff {
+                        initial_interval: INITIAL_RETRY_INTERVAL,
+                        current_interval: INITIAL_RETRY_INTERVAL,
+                        max_interval: MAX_RETRY_INTERVAL,
+                        max_elapsed_time: None, // Retry indefinitely
+                        ..Default::default()
+                    };
+
+                    let values = backoff::future::retry(backoff, || {
+                        let processor = processor.clone();
+                        let checkpoint = checkpoint.clone();
+                        async move {
+                            processor
+                                .process(&checkpoint)
+                                .await
+                                .map_err(backoff::Error::transient)
+                        }
+                    })
+                    .await?;
+
                     let elapsed = guard.stop_and_record();
 
                     let epoch = checkpoint.checkpoint_summary.epoch;
@@ -290,12 +329,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_processor_error_failed_to_process_checkpoint() {
-        // Create a pipeline that succeeds for checkpoint 1 but fails for others
-        struct ErrorPipeline;
+    async fn test_processor_error_retry_behavior() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        // Create a pipeline that fails first 2 attempts, then succeeds on 3rd
+        struct RetryTestPipeline {
+            attempt_count: Arc<AtomicU32>,
+        }
+
         #[async_trait]
-        impl Processor for ErrorPipeline {
-            const NAME: &'static str = "error";
+        impl Processor for RetryTestPipeline {
+            const NAME: &'static str = "retry_test";
             type Value = StoredData;
             async fn process(
                 &self,
@@ -304,7 +348,11 @@ mod tests {
                 if checkpoint.checkpoint_summary.sequence_number == 1 {
                     Ok(vec![])
                 } else {
-                    anyhow::bail!("Test error");
+                    let attempt = self.attempt_count.fetch_add(1, Ordering::Relaxed);
+                    if attempt < 2 {
+                        anyhow::bail!("Transient error - attempt {}", attempt + 1);
+                    }
+                    Ok(vec![])
                 }
             }
         }
@@ -313,17 +361,21 @@ mod tests {
         let checkpoint1 = Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint());
         let checkpoint2 = Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint());
 
-        // Set up the processor, channels, and metrics
-        let processor = Arc::new(ErrorPipeline);
-        let (data_tx, data_rx) = mpsc::channel(1);
-        let (indexed_tx, mut indexed_rx) = mpsc::channel(1);
+        let attempt_count = Arc::new(AtomicU32::new(0));
+        let processor = Arc::new(RetryTestPipeline {
+            attempt_count: attempt_count.clone(),
+        });
+
+        let (data_tx, data_rx) = mpsc::channel(2);
+        let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
+
         let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
 
         // Spawn the processor task
         let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
 
-        // Send and verify first checkpoint (should succeed)
+        // Send and verify first checkpoint (should succeed immediately)
         data_tx.send(checkpoint1.clone()).await.unwrap();
         let indexed1 = indexed_rx
             .recv()
@@ -331,17 +383,20 @@ mod tests {
             .expect("Should receive first IndexedCheckpoint");
         assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
 
-        // Send second checkpoint (should fail and cause processor to stop)
+        // Send second checkpoint (should fail twice, then succeed on 3rd attempt)
         data_tx.send(checkpoint2.clone()).await.unwrap();
 
-        // Verify that the channel is closed after the error
-        let next_result = indexed_rx.recv().await;
-        assert!(
-            next_result.is_none(),
-            "Channel should be closed after processing error"
-        );
+        let indexed2 = timeout(Duration::from_secs(10), indexed_rx.recv())
+            .await
+            .expect("Timeout waiting for second checkpoint")
+            .expect("Should receive second IndexedCheckpoint after retries");
+        assert_eq!(indexed2.watermark.checkpoint_hi_inclusive, 2);
+
+        // Verify that exactly 3 attempts were made (2 failures + 1 success)
+        assert_eq!(attempt_count.load(Ordering::Relaxed), 3);
 
         // Clean up
+        drop(data_tx);
         let _ = handle.await;
     }
 
