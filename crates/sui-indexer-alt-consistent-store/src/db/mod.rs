@@ -108,32 +108,38 @@ struct IterBounds<'d>(
     Option<rocksdb::DBRawIterator<'d>>,
 );
 
-/// Metrics related to memory usage and backpressure for a column family.
-pub struct ColumnFamilyMetrics {
-    /// Just the active memtable size.
+/// Metrics related to memory usage and backpressure.
+pub struct RocksMetrics {
+    /// Size of the active memtable in bytes.
     pub current_size_active_mem_tables: i64,
-    /// Active, unflushed immutable, and pinned memtable bytes.
+    /// Size of active, unflushed immutable, and pinned memtable in bytes.
     pub size_all_mem_tables: i64,
-
+    /// Memory size for the entries residing in the block cache.
     pub block_cache_usage: i64,
+    /// Memory size of entries pinned in the block cache.
     pub block_cache_pinned_usage: i64,
-
+    /// Estimated memory used by SST table readers, not including memory used.
     pub estimate_table_readers_mem: i64,
-
+    /// Total number of bytes that need to be compacted to get all levels down to under target size.
     pub estimate_pending_compaction_bytes: i64,
-
-    /// Other indicators of memory backpressure
+    /// Number of L0 files.
     pub num_level0_files: i64,
-    pub actual_delayed_write_rate: i64,
-    pub is_write_stopped: i64,
+    /// Number of immutable memtables that have not yet been flushed.
     pub num_immutable_mem_tables: i64,
+    /// Boolean flag (0/1) indicating whether a memtable flush is pending.
     pub mem_table_flush_pending: i64,
+    /// Boolean flag (0/1) indicating whether a compaction is pending.
     pub compaction_pending: i64,
-
-    /// Informational
+    /// Number of snapshots.
     pub num_snapshots: i64,
+    /// Number of running compactions.
     pub num_running_compactions: i64,
+    /// Number of running flushes.
     pub num_running_flushes: i64,
+    /// The current delayed write rate. 0 means no delay.
+    pub actual_delayed_write_rate: i64,
+    /// Boolean flag (0/1) indicating whether RocksDB has stopped all writes.
+    pub is_write_stopped: i64,
 }
 
 impl Db {
@@ -449,14 +455,14 @@ impl Db {
         Ok(iter::RevIter::new(Some(inner)))
     }
 
-    pub(crate) fn column_family_metrics(&self, cf_name: &str) -> ColumnFamilyMetrics {
+    pub(crate) fn column_family_metrics(&self, cf_name: &str) -> RocksMetrics {
         let i = self.0.read().expect("poisoned");
         let db = i.borrow_db();
         let Some(cf) = db.cf_handle(cf_name) else {
-            return ColumnFamilyMetrics::default();
+            return RocksMetrics::default();
         };
 
-        ColumnFamilyMetrics {
+        RocksMetrics {
             current_size_active_mem_tables: cf_property_int_to_metric(
                 db,
                 &cf,
@@ -644,14 +650,12 @@ fn cf_property_int_to_metric(
     property_name: &std::ffi::CStr,
 ) -> i64 {
     match db.property_int_value_cf(cf, property_name) {
-        Ok(Some(value)) => Ok(value.min(i64::MAX as u64).try_into().unwrap_or_default()),
-        Ok(None) => Ok(0),
-        Err(e) => Err(e.into_string()),
+        Ok(Some(value)) => value.min(i64::MAX as u64) as i64,
+        Ok(None) | Err(_) => METRICS_ERROR,
     }
-    .unwrap_or(METRICS_ERROR)
 }
 
-impl Default for ColumnFamilyMetrics {
+impl Default for RocksMetrics {
     fn default() -> Self {
         Self {
             current_size_active_mem_tables: METRICS_ERROR,
