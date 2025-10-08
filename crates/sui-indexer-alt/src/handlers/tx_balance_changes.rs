@@ -11,9 +11,7 @@ use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
     postgres::{Connection, Db},
     types::{
-        coin::Coin,
-        effects::TransactionEffectsAPI,
-        full_checkpoint_content::{CheckpointData, CheckpointTransaction},
+        coin::Coin, effects::TransactionEffectsAPI, full_checkpoint_content::Checkpoint,
         gas_coin::GAS,
     },
 };
@@ -21,6 +19,7 @@ use sui_indexer_alt_schema::{
     schema::tx_balance_changes,
     transactions::{BalanceChange, StoredTxBalanceChange},
 };
+use sui_types::{full_checkpoint_content::ExecutedTransaction, storage::ObjectKey};
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
 use async_trait::async_trait;
@@ -33,19 +32,19 @@ impl Processor for TxBalanceChanges {
 
     type Value = StoredTxBalanceChange;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
         let mut values = Vec::new();
-        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
+        let first_tx = summary.network_total_transactions as usize - transactions.len();
 
         for (i, tx) in transactions.iter().enumerate() {
             let tx_sequence_number = (first_tx + i) as i64;
-            let balance_changes = balance_changes(tx).with_context(|| {
+            let balance_changes = balance_changes(tx, checkpoint).with_context(|| {
                 format!("Calculating balance changes for transaction {tx_sequence_number}")
             })?;
 
@@ -95,7 +94,10 @@ impl Handler for TxBalanceChanges {
 }
 
 /// Calculate balance changes based on the object's input and output objects.
-fn balance_changes(transaction: &CheckpointTransaction) -> Result<Vec<BalanceChange>> {
+fn balance_changes(
+    transaction: &ExecutedTransaction,
+    checkpoint: &Checkpoint,
+) -> Result<Vec<BalanceChange>> {
     // Shortcut if the transaction failed -- we know that only gas was charged.
     if transaction.effects.status().is_err() {
         return Ok(vec![BalanceChange::V1 {
@@ -106,13 +108,18 @@ fn balance_changes(transaction: &CheckpointTransaction) -> Result<Vec<BalanceCha
     }
 
     let mut changes = BTreeMap::new();
-    for object in &transaction.input_objects {
-        if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
-            *changes.entry((object.owner(), type_)).or_insert(0i128) -= balance as i128;
+
+    // Get input objects from checkpoint.object_set using modified_at_versions
+    for (object_id, version) in transaction.effects.modified_at_versions() {
+        if let Some(object) = checkpoint.object_set.get(&ObjectKey(object_id, version)) {
+            if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
+                *changes.entry((object.owner(), type_)).or_insert(0i128) -= balance as i128;
+            }
         }
     }
 
-    for object in &transaction.output_objects {
+    // Get output objects from checkpoint.object_set using all_changed_objects
+    for object in transaction.output_objects(&checkpoint.object_set) {
         if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
             *changes.entry((object.owner(), type_)).or_insert(0i128) += balance as i128;
         }
@@ -170,7 +177,7 @@ mod tests {
 
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = TxBalanceChanges.process(&checkpoint).await.unwrap();
         TxBalanceChanges::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
@@ -178,7 +185,7 @@ mod tests {
 
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = TxBalanceChanges.process(&checkpoint).await.unwrap();
         TxBalanceChanges::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
@@ -188,7 +195,7 @@ mod tests {
         builder = builder.start_transaction(1).finish_transaction();
         builder = builder.start_transaction(2).finish_transaction();
         builder = builder.start_transaction(3).finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = TxBalanceChanges.process(&checkpoint).await.unwrap();
         TxBalanceChanges::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();

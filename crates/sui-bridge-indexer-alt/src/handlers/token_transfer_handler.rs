@@ -19,7 +19,8 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
-use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
 use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
 use tracing::info;
 
@@ -58,10 +59,10 @@ impl Processor for TokenTransferHandler {
 
     async fn process(
         &self,
-        checkpoint: &Arc<CheckpointData>,
+        checkpoint: &Arc<Checkpoint>,
     ) -> Result<Vec<Self::Value>, anyhow::Error> {
-        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms as i64;
-        let block_height = checkpoint.checkpoint_summary.sequence_number as i64;
+        let timestamp_ms = checkpoint.summary.timestamp_ms as i64;
+        let block_height = checkpoint.summary.sequence_number as i64;
 
         let mut results = vec![];
 
@@ -142,7 +143,7 @@ impl Processor for TokenTransferHandler {
                     data_source: BridgeDataSource::SUI,
                     is_finalized: true,
                     txn_hash: tx.transaction.digest().inner().to_vec(),
-                    txn_sender: tx.transaction.sender_address().to_vec(),
+                    txn_sender: tx.transaction.sender().to_vec(),
                     gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
                 });
             }

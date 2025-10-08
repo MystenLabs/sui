@@ -19,7 +19,8 @@ use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
 use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
 use tracing::info;
 
@@ -72,8 +73,8 @@ impl Processor for GovernanceActionHandler {
     const NAME: &'static str = "governance_action";
     type Value = GovernanceAction;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
-        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms as i64;
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+        let timestamp_ms = checkpoint.summary.timestamp_ms as i64;
 
         let mut results = vec![];
 
@@ -81,8 +82,7 @@ impl Processor for GovernanceActionHandler {
             if !is_bridge_txn(tx) {
                 continue;
             }
-            let txn_digest = tx.transaction.digest().inner();
-            let sender_address = tx.transaction.sender_address();
+            let sender_address = tx.transaction.sender();
 
             for ev in tx.events.iter().flat_map(|e| &e.data) {
                 use sui_bridge_schema::models::GovernanceActionType::*;
@@ -150,7 +150,7 @@ impl Processor for GovernanceActionHandler {
                 results.push(GovernanceAction {
                     nonce: None,
                     data_source: BridgeDataSource::SUI,
-                    txn_digest: txn_digest.to_vec(),
+                    txn_digest: tx.transaction.digest().inner().to_vec(),
                     sender_address: sender_address.to_vec(),
                     timestamp_ms,
                     action,

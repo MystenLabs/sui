@@ -8,7 +8,6 @@ use move_core_types::{
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk_types::CheckpointTimestamp;
-use tap::Pipe;
 
 use crate::messages_checkpoint::CheckpointCommitment;
 use crate::{
@@ -18,9 +17,13 @@ use crate::{
     },
     committee::Committee,
     digests::TransactionDigest,
-    effects::{TestEffectsBuilder, TransactionEffectsAPI, TransactionEvents},
+    effects::{
+        self, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    },
     event::{Event, SystemEpochInfoEvent},
+    execution_status::ExecutionStatus,
     full_checkpoint_content::{CheckpointData, CheckpointTransaction},
+    gas::GasCostSummary,
     gas_coin::GAS,
     message_envelope::Message,
     messages_checkpoint::{
@@ -658,18 +661,15 @@ impl TestCheckpointDataBuilder {
             Default::default(),
             Default::default(),
         );
-
-        // TODO: need the system state object wrapper and dynamic field object to "correctly" mock
-        // advancing epoch, at least to satisfy kv_epoch_starts pipeline.
-        let end_of_epoch_tx = TransactionData::new(
+        let end_of_epoch_tx_data = TransactionData::new(
             TransactionKind::EndOfEpochTransaction(vec![tx_kind]),
             SuiAddress::default(),
             random_object_ref(),
             1,
             1,
-        )
-        .pipe(|data| SenderSignedData::new(data, vec![]))
-        .pipe(Transaction::new);
+        );
+        let end_of_epoch_tx_signed = SenderSignedData::new(end_of_epoch_tx_data, vec![]);
+        let end_of_epoch_tx = Transaction::new(end_of_epoch_tx_signed.clone());
 
         let events = if !safe_mode {
             let system_epoch_info_event = SystemEpochInfoEvent {
@@ -695,20 +695,59 @@ impl TestCheckpointDataBuilder {
         };
 
         let transaction_events = events.map(|events| TransactionEvents { data: events });
+        let events_digest = transaction_events.as_ref().map(|events| events.digest());
 
-        // Similar to calling self.finish_transaction()
+        let changed_objects = output_objects
+            .iter()
+            .map(|obj| {
+                (
+                    obj.id(),
+                    effects::EffectsObjectChange {
+                        input_state: effects::ObjectIn::NotExist,
+                        output_state: effects::ObjectOut::ObjectWrite((
+                            obj.digest(),
+                            obj.owner().clone(),
+                        )),
+                        id_operation: effects::IDOperation::Created,
+                    },
+                )
+            })
+            .collect();
+
+        let lamport_version = SequenceNumber::from_u64(1);
+
+        let output_objects: Vec<Object> = output_objects
+            .into_iter()
+            .map(|mut obj| {
+                if let Some(move_obj) = obj.data.try_as_move_mut() {
+                    move_obj.increment_version_to(lamport_version);
+                }
+                obj
+            })
+            .collect();
+
+        let effects = TransactionEffects::new_from_execution_v2(
+            ExecutionStatus::Success,
+            self.checkpoint_builder.epoch,
+            GasCostSummary::default(),
+            vec![],
+            BTreeSet::new(),
+            end_of_epoch_tx_signed.digest(),
+            lamport_version,
+            changed_objects,
+            None,
+            events_digest,
+            vec![],
+        );
         self.checkpoint_builder
             .transactions
             .push(CheckpointTransaction {
                 transaction: end_of_epoch_tx,
-                effects: Default::default(),
+                effects,
                 events: transaction_events,
                 input_objects: vec![],
                 output_objects,
             });
-
-        // Call build_checkpoint() to finalize the checkpoint and then populate the checkpoint with
-        // additional end of epoch data.
         let mut checkpoint = self.build_checkpoint();
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: committee.voting_rights.clone(),

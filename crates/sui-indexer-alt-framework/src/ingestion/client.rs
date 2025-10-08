@@ -22,7 +22,7 @@ use crate::ingestion::Result as IngestionResult;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::task::with_slow_future_monitor;
-use crate::types::full_checkpoint_content::CheckpointData;
+use crate::types::full_checkpoint_content::{Checkpoint, CheckpointData};
 use async_trait::async_trait;
 
 /// Wait at most this long between retries for transient errors.
@@ -58,7 +58,7 @@ pub type FetchResult = Result<FetchData, FetchError>;
 #[allow(clippy::large_enum_variant)]
 pub enum FetchData {
     Raw(Bytes),
-    CheckpointData(CheckpointData),
+    Checkpoint(Checkpoint),
 }
 
 #[derive(Clone)]
@@ -129,7 +129,7 @@ impl IngestionClient {
         &self,
         checkpoint: u64,
         retry_interval: Duration,
-    ) -> IngestionResult<Arc<CheckpointData>> {
+    ) -> IngestionResult<Arc<Checkpoint>> {
         let backoff = Constant::new(retry_interval);
         let fetch = || async move {
             use backoff::Error as BE;
@@ -151,10 +151,10 @@ impl IngestionClient {
     /// Repeatedly retries transient errors with an exponential backoff (up to
     /// [MAX_TRANSIENT_RETRY_INTERVAL]). Transient errors are either defined by the client
     /// implementation that returns a [FetchError::Transient] error variant, or within this
-    /// function if we fail to deserialize the result as [CheckpointData].
+    /// function if we fail to deserialize the result as [Checkpoint].
     ///
     /// The function will immediately return if the checkpoint is not found.
-    pub(crate) async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<CheckpointData>> {
+    pub(crate) async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<Checkpoint>> {
         let client = self.client.clone();
         let request = move || {
             let client = client.clone();
@@ -181,18 +181,19 @@ impl IngestionClient {
                     ),
                 })?;
 
-                Ok::<CheckpointData, backoff::Error<IngestionError>>(match fetch_data {
+                Ok::<Checkpoint, backoff::Error<IngestionError>>(match fetch_data {
                     FetchData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
-                        Blob::from_bytes(&bytes).map_err(|e| {
+                        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).map_err(|e| {
                             self.metrics.inc_retry(
                                 checkpoint,
                                 "deserialization",
                                 IngestionError::DeserializationError(checkpoint, e),
                             )
-                        })?
+                        })?;
+                        checkpoint.into()
                     }
-                    FetchData::CheckpointData(data) => {
+                    FetchData::Checkpoint(data) => {
                         // We are not recording size metric for Checkpoint data (from RPC client).
                         // TODO: Record the metric when we have a good way to get the size information
                         data
@@ -219,7 +220,7 @@ impl IngestionClient {
         );
 
         self.checkpoint_lag_reporter
-            .report_lag(checkpoint, data.checkpoint_summary.timestamp_ms);
+            .report_lag(checkpoint, data.summary.timestamp_ms);
 
         self.metrics.total_ingested_checkpoints.inc();
 
@@ -237,14 +238,14 @@ impl IngestionClient {
         self.metrics.total_ingested_inputs.inc_by(
             data.transactions
                 .iter()
-                .map(|tx| tx.input_objects.len() as u64)
+                .map(|tx| tx.input_objects(&data.object_set).count() as u64)
                 .sum(),
         );
 
         self.metrics.total_ingested_outputs.inc_by(
             data.transactions
                 .iter()
-                .map(|tx| tx.output_objects.len() as u64)
+                .map(|tx| tx.output_objects(&data.object_set).count() as u64)
                 .sum(),
         );
 
@@ -316,28 +317,28 @@ mod tests {
     async fn test_fetch_raw_bytes_success() {
         let (client, mock) = setup_test();
 
-        // Create test data using test_checkpoint_data
+        // Create test data using test_checkpoint
         let bytes = Bytes::from(test_checkpoint_data(1));
         mock.checkpoints.insert(1, FetchData::Raw(bytes.clone()));
 
         // Fetch and verify
         let result = client.fetch(1).await.unwrap();
-        assert_eq!(result.checkpoint_summary.sequence_number(), &1);
+        assert_eq!(result.summary.sequence_number(), &1);
     }
 
     #[tokio::test]
-    async fn test_fetch_checkpoint_data_success() {
+    async fn test_fetch_checkpoint_success() {
         let (client, mock) = setup_test();
 
-        // Create test data using test_checkpoint_data
+        // Create test data using test_checkpoint
         let bytes = test_checkpoint_data(1);
-        let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
         mock.checkpoints
-            .insert(1, FetchData::CheckpointData(checkpoint_data.clone()));
+            .insert(1, FetchData::Checkpoint(checkpoint.into()));
 
         // Fetch and verify
         let result = client.fetch(1).await.unwrap();
-        assert_eq!(result.checkpoint_summary.sequence_number(), &1);
+        assert_eq!(result.summary.sequence_number(), &1);
     }
 
     #[tokio::test]
@@ -353,18 +354,18 @@ mod tests {
     async fn test_fetch_transient_error_with_retry() {
         let (client, mock) = setup_test();
 
-        // Create test data using test_checkpoint_data
+        // Create test data using test_checkpoint
         let bytes = test_checkpoint_data(1);
-        let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
 
         // Add checkpoint to mock with 2 transient failures
         mock.checkpoints
-            .insert(1, FetchData::CheckpointData(checkpoint_data.clone()));
+            .insert(1, FetchData::Checkpoint(checkpoint.clone().into()));
         mock.transient_failures.insert(1, 2);
 
         // Fetch and verify it succeeds after retries
         let result = client.fetch(1).await.unwrap();
-        assert_eq!(*result.checkpoint_summary.sequence_number(), 1);
+        assert_eq!(*result.summary.sequence_number(), 1);
 
         // Verify that exactly 2 retries were recorded
         let retries = client
@@ -379,18 +380,18 @@ mod tests {
     async fn test_wait_for_checkpoint_with_retry() {
         let (client, mock) = setup_test();
 
-        // Create test data using test_checkpoint_data
+        // Create test data using test_checkpoint
         let bytes = test_checkpoint_data(1);
-        let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
 
         // Add checkpoint to mock with 1 not_found failures
         mock.checkpoints
-            .insert(1, FetchData::CheckpointData(checkpoint_data));
+            .insert(1, FetchData::Checkpoint(checkpoint.into()));
         mock.not_found_failures.insert(1, 1);
 
         // Wait for checkpoint with short retry interval
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
-        assert_eq!(result.checkpoint_summary.sequence_number(), &1);
+        assert_eq!(result.summary.sequence_number(), &1);
 
         // Verify that exactly 1 retry was recorded
         let retries = client.metrics.total_ingested_not_found_retries.get();
@@ -401,17 +402,17 @@ mod tests {
     async fn test_wait_for_checkpoint_instant() {
         let (client, mock) = setup_test();
 
-        // Create test data using test_checkpoint_data
+        // Create test data using test_checkpoint
         let bytes = test_checkpoint_data(1);
-        let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
 
         // Add checkpoint to mock with no failures - data should be available immediately
         mock.checkpoints
-            .insert(1, FetchData::CheckpointData(checkpoint_data));
+            .insert(1, FetchData::Checkpoint(checkpoint.into()));
 
         // Wait for checkpoint with short retry interval
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
-        assert_eq!(result.checkpoint_summary.sequence_number(), &1);
+        assert_eq!(result.summary.sequence_number(), &1);
     }
 
     #[tokio::test]

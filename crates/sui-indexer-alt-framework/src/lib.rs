@@ -459,7 +459,7 @@ mod tests {
         type Value = MockValue;
         async fn process(
             &self,
-            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
         ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![MockValue(1)])
         }
@@ -509,7 +509,7 @@ mod tests {
         type Value = MockValue;
         async fn process(
             &self,
-            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
         ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![MockValue(1)])
         }

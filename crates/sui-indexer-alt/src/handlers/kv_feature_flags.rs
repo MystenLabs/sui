@@ -9,7 +9,7 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
     postgres::{Connection, Db},
-    types::full_checkpoint_content::CheckpointData,
+    types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::{
     checkpoints::StoredGenesis, epochs::StoredFeatureFlag, schema::kv_feature_flags,
@@ -23,14 +23,12 @@ impl Processor for KvFeatureFlags {
     const NAME: &'static str = "kv_feature_flags";
     type Value = StoredFeatureFlag;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
-            checkpoint_summary, ..
-        } = checkpoint.as_ref();
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint { summary, .. } = checkpoint.as_ref();
 
-        let protocol_version = if checkpoint_summary.sequence_number == 0 {
+        let protocol_version = if summary.sequence_number == 0 {
             self.0.initial_protocol_version()
-        } else if let Some(end_of_epoch) = checkpoint_summary.end_of_epoch_data.as_ref() {
+        } else if let Some(end_of_epoch) = summary.end_of_epoch_data.as_ref() {
             end_of_epoch.next_epoch_protocol_version
         } else {
             return Ok(vec![]);
@@ -87,14 +85,18 @@ mod tests {
     #[tokio::test]
     async fn test_feature_flag_processing() {
         let mut builder = TestCheckpointDataBuilder::new(0);
-        let genesis = Arc::new(builder.build_checkpoint());
-        let checkpoint = Arc::new(builder.advance_epoch(AdvanceEpochConfig {
-            protocol_version: ProtocolVersion::MIN,
-            ..Default::default()
-        }));
+        let genesis: Arc<Checkpoint> = Arc::new(builder.build_checkpoint().into());
+        let checkpoint: Arc<Checkpoint> = Arc::new(
+            builder
+                .advance_epoch(AdvanceEpochConfig {
+                    protocol_version: ProtocolVersion::MIN,
+                    ..Default::default()
+                })
+                .into(),
+        );
 
         let stored_genesis = StoredGenesis {
-            genesis_digest: genesis.checkpoint_summary.digest().inner().to_vec(),
+            genesis_digest: genesis.summary.digest().inner().to_vec(),
             initial_protocol_version: ProtocolVersion::MIN.as_u64() as i64,
         };
 
@@ -114,14 +116,18 @@ mod tests {
     #[tokio::test]
     async fn test_protocol_version_too_high() {
         let mut builder = TestCheckpointDataBuilder::new(0);
-        let genesis = Arc::new(builder.build_checkpoint());
-        let checkpoint = Arc::new(builder.advance_epoch(AdvanceEpochConfig {
-            protocol_version: ProtocolVersion::MAX + 1,
-            ..Default::default()
-        }));
+        let genesis: Arc<Checkpoint> = Arc::new(builder.build_checkpoint().into());
+        let checkpoint: Arc<Checkpoint> = Arc::new(
+            builder
+                .advance_epoch(AdvanceEpochConfig {
+                    protocol_version: ProtocolVersion::MAX + 1,
+                    ..Default::default()
+                })
+                .into(),
+        );
 
         let stored_genesis = StoredGenesis {
-            genesis_digest: genesis.checkpoint_summary.digest().inner().to_vec(),
+            genesis_digest: genesis.summary.digest().inner().to_vec(),
             initial_protocol_version: ProtocolVersion::MIN.as_u64() as i64,
         };
 
