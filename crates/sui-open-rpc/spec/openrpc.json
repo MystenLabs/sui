@@ -1307,6 +1307,7 @@
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_private_accumulator_entrypoints": false,
                 "allow_receiving_object_id": false,
+                "allow_references_in_ptbs": false,
                 "allow_unbounded_system_objects": false,
                 "authority_capabilities_v2": false,
                 "ban_entry_init": false,

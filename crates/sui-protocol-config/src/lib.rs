@@ -837,6 +837,10 @@ struct FeatureFlags {
     // If true generate layouts for dynamic fields
     #[serde(skip_serializing_if = "is_false")]
     generate_df_type_layouts: bool,
+
+    // If true, allow Move functions called in PTBs to return references
+    #[serde(skip_serializing_if = "is_false")]
+    allow_references_in_ptbs: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2273,6 +2277,10 @@ impl ProtocolConfig {
 
     pub fn generate_df_type_layouts(&self) -> bool {
         self.feature_flags.generate_df_type_layouts
+    }
+
+    pub fn allow_references_in_ptbs(&self) -> bool {
+        self.feature_flags.allow_references_in_ptbs
     }
 }
 
@@ -4343,6 +4351,10 @@ impl ProtocolConfig {
 
     pub fn set_authority_capabilities_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.authority_capabilities_v2 = val;
+    }
+
+    pub fn allow_references_in_ptbs_for_testing(&mut self) {
+        self.feature_flags.allow_references_in_ptbs = true;
     }
 }
 

@@ -83,6 +83,7 @@ impl Context {
 /// - private generics rules for move function calls
 /// - no references returned from move calls
 ///    - Can be disabled under certain execution modes
+///    - Can be disabled via a feature flag
 pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(txn);
     for c in &txn.commands {
@@ -164,7 +165,7 @@ fn move_call<Mode: ExecutionMode>(
         function,
         arguments: args,
     } = call;
-    check_signature::<Mode>(function)?;
+    check_signature::<Mode>(env, function)?;
     check_private_generics(&function.runtime_id, function.name.as_ident_str())?;
     let (vis, is_entry) = check_visibility::<Mode>(env, function)?;
     let arg_dirties = args
@@ -190,6 +191,7 @@ fn move_call<Mode: ExecutionMode>(
 }
 
 fn check_signature<Mode: ExecutionMode>(
+    env: &Env,
     function: &T::LoadedFunction,
 ) -> Result<(), ExecutionError> {
     fn check_return_type<Mode: ExecutionMode>(
@@ -205,6 +207,11 @@ fn check_signature<Mode: ExecutionMode>(
         }
         Ok(())
     }
+
+    if env.protocol_config.allow_references_in_ptbs() {
+        return Ok(());
+    }
+
     for (idx, ty) in function.signature.return_.iter().enumerate() {
         check_return_type::<Mode>(idx, ty)?;
     }
