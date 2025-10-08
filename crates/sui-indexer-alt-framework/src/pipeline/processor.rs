@@ -15,11 +15,13 @@ use crate::{
 };
 
 use super::IndexedCheckpoint;
+use async_trait::async_trait;
 
 /// Implementors of this trait are responsible for transforming checkpoint into rows for their
 /// table. The `FANOUT` associated value controls how many concurrent workers will be used to
 /// process checkpoint information.
-pub trait Processor {
+#[async_trait]
+pub trait Processor: Send + Sync + 'static {
     /// Used to identify the pipeline in logs and metrics.
     const NAME: &'static str;
 
@@ -30,48 +32,7 @@ pub trait Processor {
     type Value: Send + Sync + 'static;
 
     /// The processing logic for turning a checkpoint into rows of the table.
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
-}
-
-/// Async version of Processor trait.
-/// Implementors can choose to implement this trait for async processing with external API calls
-/// or other async operations.
-#[async_trait::async_trait]
-pub trait ProcessorAsync {
-    /// Used to identify the pipeline in logs and metrics.
-    const NAME: &'static str;
-
-    /// How much concurrency to use when processing checkpoint data.
-    const FANOUT: usize = 10;
-
-    /// The type of value being inserted by the handler.
-    type Value: Send + Sync + 'static;
-
-    /// Async processing logic for turning a checkpoint into rows of the table.
-    async fn process_async(
-        &self,
-        checkpoint: &Arc<CheckpointData>,
-    ) -> anyhow::Result<Vec<Self::Value>>;
-}
-
-/// All sync Processors get async ProcessorAsync.
-///
-/// This ensures backward compatibility for existing sync processors.
-#[async_trait::async_trait]
-impl<T> ProcessorAsync for T
-where
-    T: Processor + Sync,
-{
-    const NAME: &'static str = T::NAME;
-    const FANOUT: usize = T::FANOUT;
-    type Value = T::Value;
-
-    async fn process_async(
-        &self,
-        checkpoint: &Arc<CheckpointData>,
-    ) -> anyhow::Result<Vec<Self::Value>> {
-        self.process(checkpoint)
-    }
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
 }
 
 /// The processor task is responsible for taking checkpoint data and breaking it down into rows
@@ -83,7 +44,7 @@ where
 ///
 /// The task will shutdown if the `cancel` token is cancelled, or if any of the workers encounters
 /// an error.
-pub(super) fn processor<P: ProcessorAsync + Send + Sync + 'static>(
+pub(super) fn processor<P: Processor>(
     processor: Arc<P>,
     rx: mpsc::Receiver<Arc<CheckpointData>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
@@ -121,7 +82,7 @@ pub(super) fn processor<P: ProcessorAsync + Send + Sync + 'static>(
                         .with_label_values(&[P::NAME])
                         .start_timer();
 
-                    let values = processor.process_async(&checkpoint).await?;
+                    let values = processor.process(&checkpoint).await?;
                     let elapsed = guard.stop_and_record();
 
                     let epoch = checkpoint.checkpoint_summary.epoch;
@@ -195,12 +156,16 @@ mod tests {
 
     pub struct DataPipeline;
 
+    #[async_trait]
     impl Processor for DataPipeline {
         const NAME: &'static str = "data";
 
         type Value = StoredData;
 
-        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(
+            &self,
+            checkpoint: &Arc<CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![
                 StoredData {
                     value: checkpoint.checkpoint_summary.sequence_number * 10 + 1,
@@ -328,10 +293,11 @@ mod tests {
     async fn test_processor_error_failed_to_process_checkpoint() {
         // Create a pipeline that succeeds for checkpoint 1 but fails for others
         struct ErrorPipeline;
+        #[async_trait]
         impl Processor for ErrorPipeline {
             const NAME: &'static str = "error";
             type Value = StoredData;
-            fn process(
+            async fn process(
                 &self,
                 checkpoint: &Arc<CheckpointData>,
             ) -> anyhow::Result<Vec<Self::Value>> {
@@ -386,12 +352,13 @@ mod tests {
     async fn test_processor_concurrency() {
         // Create a processor that simulates work by sleeping
         struct SlowProcessor;
+        #[async_trait]
         impl Processor for SlowProcessor {
             const NAME: &'static str = "slow";
             const FANOUT: usize = 3; // Small fanout for testing
             type Value = StoredData;
 
-            fn process(
+            async fn process(
                 &self,
                 checkpoint: &Arc<CheckpointData>,
             ) -> anyhow::Result<Vec<Self::Value>> {

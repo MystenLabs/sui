@@ -19,15 +19,17 @@ use sui_indexer_alt_framework::{
 use sui_indexer_alt_schema::{epochs::StoredEpochStart, schema::kv_epoch_starts};
 
 use crate::handlers::cp_sequence_numbers::epoch_interval;
+use async_trait::async_trait;
 
 pub(crate) struct KvEpochStarts;
 
+#[async_trait]
 impl Processor for KvEpochStarts {
     const NAME: &'static str = "kv_epoch_starts";
 
     type Value = StoredEpochStart;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             checkpoint_summary,
             transactions,
@@ -67,7 +69,7 @@ impl Processor for KvEpochStarts {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for KvEpochStarts {
     type Store = Db;
 

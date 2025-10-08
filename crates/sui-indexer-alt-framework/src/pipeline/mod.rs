@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-pub use processor::{Processor, ProcessorAsync};
+pub use processor::Processor;
 use serde::{Deserialize, Serialize};
 
 use crate::store::CommitterWatermark;
@@ -40,7 +40,7 @@ pub struct CommitterConfig {
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
 /// communicate between the processor and the collector parts of the pipeline.
-struct IndexedCheckpoint<P: ProcessorAsync> {
+struct IndexedCheckpoint<P: Processor> {
     /// Values to be inserted into the database from this checkpoint
     values: Vec<P::Value>,
     /// The watermark associated with this checkpoint
@@ -79,7 +79,7 @@ impl CommitterConfig {
     }
 }
 
-impl<P: ProcessorAsync> IndexedCheckpoint<P> {
+impl<P: Processor> IndexedCheckpoint<P> {
     fn new(
         epoch: u64,
         cp_sequence_number: u64,
@@ -158,16 +158,21 @@ impl Default for CommitterConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use std::sync::Arc;
     use sui_types::full_checkpoint_content::CheckpointData;
 
     // Test implementation of Processor
     struct TestProcessor;
+    #[async_trait]
     impl Processor for TestProcessor {
         const NAME: &'static str = "test";
         type Value = i32;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(
+            &self,
+            _checkpoint: &Arc<CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![1, 2, 3])
         }
     }

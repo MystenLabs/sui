@@ -44,11 +44,12 @@ impl Delta {
     }
 }
 
+#[async_trait]
 impl Processor for Balances {
     const NAME: &'static str = "balances";
     type Value = Delta;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Delta>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Delta>> {
         let mut deltas = vec![];
 
         for (_, (i, _)) in checkpoint_input_objects(checkpoint)? {
