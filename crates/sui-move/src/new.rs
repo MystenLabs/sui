@@ -14,9 +14,10 @@ pub struct New {
 }
 
 impl New {
-    pub fn execute(self, path: Option<&Path>) -> anyhow::Result<()> {
-        let name = self.new.package_name();
-        let path_name = self.new.name.to_string();
+    pub fn execute(mut self, path: Option<&Path>) -> anyhow::Result<()> {
+        let provided_name = &self.new.name.to_string();
+        self.new.name.make_ascii_lowercase();
+        let name = &self.new.name.to_string();
 
         self.new.execute(path)?;
         let p = path.unwrap_or_else(|| Path::new(&path_name));
