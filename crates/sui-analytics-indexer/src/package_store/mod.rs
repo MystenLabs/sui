@@ -155,6 +155,7 @@ impl LocalDBPackageStore {
         }
         let o = self
             .client
+            .clone()
             .get_object(ObjectID::from(id))
             .await
             .map_err(|_| Error::PackageNotFound(id))?;

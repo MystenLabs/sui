@@ -14,5 +14,5 @@ fn main() {
     // For now, move-analyzer only responds to options built-in to clap,
     // such as `--help` or `--version`.
     Options::parse();
-    analyzer::run(BTreeMap::new());
+    analyzer::run(BTreeMap::new(), None, None);
 }

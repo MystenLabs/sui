@@ -2221,11 +2221,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             self.metrics
                 .consensus_finalized_user_transactions
                 .with_label_values(&[hostname])
-                .set(num_finalized_user_transactions[i.value()] as i64);
+                .add(num_finalized_user_transactions[i.value()] as i64);
             self.metrics
                 .consensus_rejected_user_transactions
                 .with_label_values(&[hostname])
-                .set(num_rejected_user_transactions[i.value()] as i64);
+                .add(num_rejected_user_transactions[i.value()] as i64);
         }
 
         // TODO(commit-handler-rewrite): de-duplicate transactions
@@ -2599,11 +2599,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             self.metrics
                 .consensus_finalized_user_transactions
                 .with_label_values(&[hostname])
-                .set(num_finalized_user_transactions[i.value()] as i64);
+                .add(num_finalized_user_transactions[i.value()] as i64);
             self.metrics
                 .consensus_rejected_user_transactions
                 .with_label_values(&[hostname])
-                .set(num_rejected_user_transactions[i.value()] as i64);
+                .add(num_rejected_user_transactions[i.value()] as i64);
         }
 
         transactions

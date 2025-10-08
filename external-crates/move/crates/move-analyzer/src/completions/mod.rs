@@ -19,7 +19,7 @@ use lsp_server::{Message, Request, Response};
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    editions::Edition,
+    editions::{Edition, Flavor},
     linters::LintLevel,
     parser::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
@@ -83,6 +83,7 @@ pub fn on_completion_request<F: MoveFlavor>(
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
+    flavor: Option<Flavor>,
 ) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
@@ -107,6 +108,7 @@ pub fn on_completion_request<F: MoveFlavor>(
         pkg_dependencies,
         &path,
         pos,
+        flavor,
         context.auto_imports,
     )
     .unwrap_or_default();
@@ -129,6 +131,7 @@ fn completions<F: MoveFlavor>(
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     pos: Position,
+    flavor: Option<Flavor>,
     auto_import: bool,
 ) -> Option<Vec<CompletionItem>> {
     let Some(pkg_path) = SymbolicatorRunner::root_dir(path) else {
@@ -143,6 +146,7 @@ fn completions<F: MoveFlavor>(
         pkg_dependencies,
         path,
         pos,
+        flavor,
         auto_import,
     ))
 }
@@ -155,12 +159,18 @@ pub fn compute_completions<F: MoveFlavor>(
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     pos: Position,
+    flavor: Option<Flavor>,
     auto_import: bool,
 ) -> Vec<CompletionItem> {
-    compute_completions_new_symbols::<F>(ide_files_root, pkg_dependencies, path, pos, auto_import)
-        .unwrap_or_else(|| {
-            compute_completions_with_symbols(current_symbols, path, pos, auto_import)
-        })
+    compute_completions_new_symbols::<F>(
+        ide_files_root,
+        pkg_dependencies,
+        path,
+        pos,
+        flavor,
+        auto_import,
+    )
+    .unwrap_or_else(|| compute_completions_with_symbols(current_symbols, path, pos, auto_import))
 }
 
 /// Computes a list of auto-completions for a given position in a file,
@@ -171,6 +181,7 @@ fn compute_completions_new_symbols<F: MoveFlavor>(
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     cursor_position: Position,
+    flavor: Option<Flavor>,
     auto_import: bool,
 ) -> Option<Vec<CompletionItem>> {
     let Some(pkg_path) = SymbolicatorRunner::root_dir(path) else {
@@ -185,6 +196,7 @@ fn compute_completions_new_symbols<F: MoveFlavor>(
         &pkg_path,
         LintLevel::None,
         cursor_info,
+        flavor,
     )
     .ok()?;
     let symbols = symbols?;

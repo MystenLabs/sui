@@ -5,6 +5,7 @@
 
 use crate::crypto::SuiSignature;
 use crate::message_envelope::Message as _;
+use fastcrypto::traits::ToFromBytes;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::*;
@@ -102,6 +103,102 @@ impl Merge<&crate::full_checkpoint_content::ExecutedTransaction> for ExecutedTra
                 .as_ref()
                 .map(|events| TransactionEvents::merge_from(events, &submask));
         }
+    }
+}
+
+impl TryFrom<&Checkpoint> for crate::full_checkpoint_content::Checkpoint {
+    type Error = TryFromProtoError;
+
+    fn try_from(checkpoint: &Checkpoint) -> Result<Self, Self::Error> {
+        let summary = checkpoint
+            .summary()
+            .bcs()
+            .deserialize()
+            .map_err(|e| TryFromProtoError::invalid("summary.bcs", e))?;
+
+        let signature =
+            crate::crypto::AuthorityStrongQuorumSignInfo::try_from(checkpoint.signature())?;
+
+        let summary = crate::messages_checkpoint::CertifiedCheckpointSummary::new_from_data_and_sig(
+            summary, signature,
+        );
+
+        let contents = checkpoint
+            .contents()
+            .bcs()
+            .deserialize()
+            .map_err(|e| TryFromProtoError::invalid("contents.bcs", e))?;
+
+        let transactions = checkpoint
+            .transactions()
+            .iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()?;
+
+        let object_set = checkpoint.objects().try_into()?;
+
+        Ok(Self {
+            summary,
+            contents,
+            transactions,
+            object_set,
+        })
+    }
+}
+
+impl TryFrom<&ExecutedTransaction> for crate::full_checkpoint_content::ExecutedTransaction {
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &ExecutedTransaction) -> Result<Self, Self::Error> {
+        Ok(Self {
+            transaction: value
+                .transaction()
+                .bcs()
+                .deserialize()
+                .map_err(|e| TryFromProtoError::invalid("transaction.bcs", e))?,
+            signatures: value
+                .signatures()
+                .iter()
+                .map(|sig| {
+                    crate::signature::GenericSignature::from_bytes(sig.bcs().value())
+                        .map_err(|e| TryFromProtoError::invalid("signature.bcs", e))
+                })
+                .collect::<Result<_, _>>()?,
+            effects: value
+                .effects()
+                .bcs()
+                .deserialize()
+                .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?,
+            events: value
+                .events_opt()
+                .map(|events| {
+                    events
+                        .bcs()
+                        .deserialize()
+                        .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))
+                })
+                .transpose()?,
+            unchanged_loaded_runtime_objects: value
+                .effects()
+                .unchanged_loaded_runtime_objects()
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<&ObjectReference> for crate::storage::ObjectKey {
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &ObjectReference) -> Result<Self, Self::Error> {
+        Ok(Self(
+            value
+                .object_id()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid("object_id", e))?,
+            value.version().into(),
+        ))
     }
 }
 
@@ -1226,6 +1323,22 @@ impl<const T: bool> From<crate::crypto::AuthorityQuorumSignInfo<T>>
             .with_epoch(value.epoch)
             .with_signature(value.signature.as_ref().to_vec())
             .with_bitmap(bitmap)
+    }
+}
+
+impl<const T: bool> TryFrom<&ValidatorAggregatedSignature>
+    for crate::crypto::AuthorityQuorumSignInfo<T>
+{
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &ValidatorAggregatedSignature) -> Result<Self, Self::Error> {
+        Ok(Self {
+            epoch: value.epoch(),
+            signature: crate::crypto::AggregateAuthoritySignature::from_bytes(value.signature())
+                .map_err(|e| TryFromProtoError::invalid("signature", e))?,
+            signers_map: crate::sui_serde::deserialize_sui_bitmap(value.bitmap())
+                .map_err(|e| TryFromProtoError::invalid("bitmap", e))?,
+        })
     }
 }
 
@@ -3038,5 +3151,23 @@ impl From<crate::coin::RegulatedCoinMetadata> for RegulatedCoinMetadata {
         message.coin_regulated_state =
             Some(regulated_coin_metadata::CoinRegulatedState::Regulated as i32);
         message
+    }
+}
+
+impl TryFrom<&ObjectSet> for crate::full_checkpoint_content::ObjectSet {
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &ObjectSet) -> Result<Self, Self::Error> {
+        let mut objects = Self::default();
+
+        for o in value.objects() {
+            objects.insert(
+                o.bcs()
+                    .deserialize()
+                    .map_err(|e| TryFromProtoError::invalid("object.bcs", e))?,
+            );
+        }
+
+        Ok(objects)
     }
 }

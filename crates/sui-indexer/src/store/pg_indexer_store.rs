@@ -2329,13 +2329,15 @@ impl IndexerStore for PgIndexerStore {
                         .context("Failed to write to protocol_configs table")?;
                 }
 
-                diesel::insert_into(feature_flags::table)
-                    .values(all_flags.clone())
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed to write to feature_flags table")?;
+                for flag_chunk in all_flags.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(feature_flags::table)
+                        .values(flag_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("Failed to write to feature_flags table")?;
+                }
                 Ok::<(), IndexerError>(())
             }
             .scope_boxed()

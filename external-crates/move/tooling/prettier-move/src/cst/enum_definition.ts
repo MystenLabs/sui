@@ -4,8 +4,8 @@
 import { AstPath, Doc, doc } from 'prettier';
 import { Node } from '..';
 import { MoveOptions, printFn, treeFn } from '../printer';
-import { printIdentifier, printTrailingComment } from '../utilities';
-const { join, lineSuffix, indent, hardline, group, line, ifBreak } = doc.builders;
+import { list, printIdentifier, printTrailingComment } from '../utilities';
+const { join, lineSuffix, group } = doc.builders;
 
 export default function (path: AstPath<Node>): treeFn | null {
     switch (path.node.type) {
@@ -52,14 +52,12 @@ export function printEnumVariants(path: AstPath<Node>, options: MoveOptions, pri
         return ' {}';
     }
 
-    return group([
-        ' {',
-        indent(hardline),
-        indent(join([',', line], path.map(print, 'nonFormattingChildren'))),
-        ifBreak(','),
-        hardline,
-        '}',
-    ]);
+    return [
+        ' ',
+        group(list({ path, print, options, open: '{', close: '}', addWhitespace: true }), {
+            shouldBreak: true,
+        }),
+    ];
 }
 
 /**

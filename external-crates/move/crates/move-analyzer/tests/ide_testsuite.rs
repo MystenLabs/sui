@@ -24,7 +24,7 @@ use move_analyzer::{
     },
 };
 use move_command_line_common::testing::insta_assert;
-use move_compiler::linters::LintLevel;
+use move_compiler::{editions::Flavor, linters::LintLevel};
 use move_package_alt::flavor::{MoveFlavor, Vanilla};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -454,6 +454,7 @@ fn initial_symbols<F: MoveFlavor>(
             ide_files_root.clone(),
             project_path.as_path(),
             LintLevel::None,
+            Some(Flavor::Sui),
         )?;
         let compiled_pkg_info = compiled_pkg_info_opt.ok_or("PACKAGE COMPILATION FAILED")?;
         let symbols = compute_symbols(pkg_deps.clone(), compiled_pkg_info.clone(), None);

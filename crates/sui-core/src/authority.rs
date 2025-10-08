@@ -5087,9 +5087,16 @@ impl AuthorityState {
 
             let new_ref = new_object.compute_object_reference();
             if new_ref != system_package_ref {
-                debug_fatal!(
-                    "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
-                );
+                if cfg!(msim) {
+                    // debug_fatal required here for test_framework_upgrade_conflicting_versions to pass
+                    debug_fatal!(
+                        "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
+                    );
+                } else {
+                    error!(
+                        "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
+                    );
+                }
                 return None;
             }
 
@@ -5689,11 +5696,21 @@ impl AuthorityState {
             .get_system_package_bytes(next_epoch_system_packages.clone(), &binary_config)
             .await
         else {
-            debug_fatal!(
-                "upgraded system packages {:?} are not locally available, cannot create \
-                ChangeEpochTx. validator binary must be upgraded to the correct version!",
-                next_epoch_system_packages
-            );
+            if next_epoch_protocol_version <= ProtocolVersion::MAX {
+                // This case should only be hit if the validator supports the new protocol version,
+                // but carries a different framework. The validator should still be able to
+                // reconfigure, as the correct framework will be installed by the change epoch txn.
+                debug_fatal!(
+                    "upgraded system packages {:?} are not locally available, cannot create \
+                    ChangeEpochTx. validator binary must be upgraded to the correct version!",
+                    next_epoch_system_packages
+                );
+            } else {
+                error!(
+                    "validator does not support next_epoch_protocol_version {:?} - will shut down after reconfig unless upgraded",
+                    next_epoch_protocol_version
+                );
+            }
             // the checkpoint builder will keep retrying forever when it hits this error.
             // Eventually, one of two things will happen:
             // - The operator will upgrade this binary to one that has the new packages locally,

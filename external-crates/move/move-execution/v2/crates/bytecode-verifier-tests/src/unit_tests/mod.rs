@@ -54,6 +54,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             bytecode_version: VERSION_6,
             max_variants_in_enum: Some(VARIANT_COUNT_MAX),
             better_loader_errors: false,
+            additional_borrow_checks: false,
         },
         MeterConfig::old_default(),
     )

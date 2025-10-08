@@ -128,7 +128,7 @@ async fn test_wait_for_effects_position_mismatch() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position1),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context.client.wait_for_effects(request, None).await;
@@ -152,7 +152,7 @@ async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     // Validator does not reject the transaction, but it is rejected by the commit.
@@ -197,7 +197,7 @@ async fn test_wait_for_effects_epoch_mismatch() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context.client.wait_for_effects(request, None).await;
@@ -222,7 +222,7 @@ async fn test_wait_for_effects_timeout() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context.client.wait_for_effects(request, None).await;
@@ -247,7 +247,7 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let state_clone = test_context.state.clone();
@@ -326,7 +326,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context
@@ -354,7 +354,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context
@@ -381,7 +381,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         transaction_digest: Some(tx_digest),
         consensus_position: None,
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context.client.wait_for_effects(request, None).await;
@@ -408,7 +408,7 @@ async fn test_wait_for_effects_fastpath_certified_then_executed() {
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
-        ping: None,
+        ping_type: None,
     };
 
     let state_clone = test_context.state.clone();
@@ -490,7 +490,7 @@ async fn test_wait_for_effects_finalized() {
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context
@@ -518,7 +518,7 @@ async fn test_wait_for_effects_finalized() {
         transaction_digest: Some(tx_digest),
         consensus_position: None,
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context
@@ -562,7 +562,7 @@ async fn test_wait_for_effects_expired() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let state_clone = test_context.state.clone();
@@ -619,7 +619,7 @@ async fn test_wait_for_effects_ping() {
             transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
-            ping: Some(PingType::FastPath),
+            ping_type: Some(PingType::FastPath),
         };
 
         let state_clone = test_context.state.clone();
@@ -663,7 +663,7 @@ async fn test_wait_for_effects_ping() {
             transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
-            ping: Some(PingType::Consensus),
+            ping_type: Some(PingType::Consensus),
         };
 
         let state_clone = test_context.state.clone();
@@ -714,7 +714,7 @@ async fn test_wait_for_effects_ping() {
             transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
-            ping: Some(PingType::Consensus),
+            ping_type: Some(PingType::Consensus),
         };
 
         let state_clone = test_context.state.clone();

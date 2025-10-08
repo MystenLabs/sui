@@ -5,8 +5,6 @@ source: crates/move-decompiler/tests/tests.rs
 
 module enums::temperature;
 
-// -- structs -- 
-
 // -- enums -- 
 
 public enum Temperature {
@@ -17,7 +15,7 @@ public enum Temperature {
 // -- functions -- 
 
 public fun c(): enums::temperature::Temperature {
-    return /* TODO: PackVariant E::V { ... } */
+    return Temperature::Celcius { pos0: 0u32 }
 }
 
 public fun dtor(l0: enums::temperature::Temperature) {
@@ -39,7 +37,7 @@ public fun dtor(l0: enums::temperature::Temperature) {
 }
 
 public fun f(): enums::temperature::Temperature {
-    return /* TODO: PackVariant E::V { ... } */
+    return Temperature::Fahrenheit { pos0: 32u64 }
 }
 
 public fun is_temperature_fahrenheit(l0: &enums::temperature::Temperature): bool {

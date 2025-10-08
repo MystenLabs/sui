@@ -30,6 +30,7 @@ pub struct VerifierConfig {
     pub reject_mutable_random_on_entry_functions: bool,
     pub bytecode_version: u32,
     pub max_variants_in_enum: Option<u64>,
+    pub additional_borrow_checks: bool,
     pub better_loader_errors: bool,
 }
 
@@ -76,6 +77,7 @@ impl Default for VerifierConfig {
             reject_mutable_random_on_entry_functions: true,
             bytecode_version: VERSION_MAX,
             max_variants_in_enum: Some(DEFAULT_MAX_VARIANTS),
+            additional_borrow_checks: true,
             better_loader_errors: true,
         }
     }

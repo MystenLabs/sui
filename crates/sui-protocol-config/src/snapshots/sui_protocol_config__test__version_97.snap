@@ -119,8 +119,7 @@ feature_flags:
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true
-  better_loader_errors: true
-  generate_df_type_layouts: true
+  additional_borrow_checks: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -239,7 +238,6 @@ event_emit_cost_base: 52
 event_emit_value_size_derivation_cost_per_byte: 2
 event_emit_tag_size_derivation_cost_per_byte: 5
 event_emit_output_cost_per_byte: 10
-event_emit_auth_stream_cost: 52
 object_borrow_uid_cost_base: 52
 object_delete_impl_cost_base: 52
 object_record_new_uid_cost_base: 52

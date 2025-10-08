@@ -13,6 +13,7 @@ use colored::Colorize;
 use fastcrypto::traits::KeyPair;
 use move_analyzer::analyzer;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
+use move_compiler::editions::Flavor;
 use move_package_alt_compilation::build_config::BuildConfig;
 use mysten_common::tempdir;
 use rand::rngs::OsRng;
@@ -768,7 +769,7 @@ impl SuiCommand {
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
-                analyzer::run::<SuiFlavor>();
+                analyzer::run::<SuiFlavor>(Some(Flavor::Sui));
                 Ok(())
             }
             SuiCommand::AnalyzeTrace {

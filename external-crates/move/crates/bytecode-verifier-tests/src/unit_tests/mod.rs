@@ -53,6 +53,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             reject_mutable_random_on_entry_functions: true,
             bytecode_version: VERSION_MAX,
             max_variants_in_enum: Some(DEFAULT_MAX_VARIANTS),
+            additional_borrow_checks: true,
             better_loader_errors: true,
         },
         MeterConfig::old_default(),

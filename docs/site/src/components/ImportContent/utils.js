@@ -405,6 +405,47 @@ exports.returnTraits = (source, trait) => {
   return out.join("\n").trim();
 };
 
+exports.returnImplementations = (source, impl) => {
+  if (!impl) return source;
+  const impls = impl.split(",");
+  const out = [];
+  for (const imp of impls) {
+    const implRE = new RegExp(
+      String.raw`^(\s*)(?:\uFEFF)?\s*impl(?:\s*<[\s\S]*?>)?\s+` +
+      String.raw`(?:` +
+        // A) impl <Trait> for <Type> { ... } where the searched name is the TRAIT
+        String.raw`(?:(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?\s+for\s+(?<type>[\s\S]*?)(?:\s+where\s+[\s\S]*?)?)` +
+        String.raw`|` +
+        // B) impl <Trait> for <Type> { ... } where the searched name is the TYPE
+        String.raw`(?:(?<trait>[\s\S]*?)\s+for\s+(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?(?:\s+where\s+[\s\S]*?)?)` +
+        String.raw`|` +
+        // C) impl <Type> { ... }  (inherent impl) where the searched name is the TYPE
+        String.raw`(?:(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?(?:\s+where\s+[\s\S]*?)?)` +
+      String.raw`)\s*\{`,
+      'ms'
+    );
+
+    const m = implRE.exec(source);
+    if (!m) {
+      return "Implementation block match not found. If code is formatted correctly, consider using code comments instead.";
+    }
+    const startIdx = m.index;
+    const sub = source.slice(startIdx);
+    const braceStart = sub.indexOf("{");
+    if (braceStart === -1) {
+      return "Implementation block not found. If code is formatted correctly, consider using code comments instead.";
+    }
+    const block = captureBalanced(sub.slice(braceStart));
+    if (!block) {
+      return "Implementation block not found. If code is formatted correctly, consider using code comments instead.";
+    }
+    const full = sub.slice(0, braceStart) + block; // header .. matched closing }
+    const pre = capturePrepend(m, source);
+    out.push(removeLeadingSpaces(full, pre));
+  }
+  return out.join("\n").trim();
+}
+
 exports.returnEnums = (source, enumVal) => {
   if (!enumVal) return source;
   const enums = enumVal

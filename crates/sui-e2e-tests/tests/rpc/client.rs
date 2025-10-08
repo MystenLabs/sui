@@ -19,7 +19,7 @@ async fn get_object() {
 
     let id: Address = "0x5".parse().unwrap();
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
 
     let _object = client.get_object(id.into()).await.unwrap();
 
@@ -33,7 +33,7 @@ async fn get_object() {
 async fn execute_transaction_transfer() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let address = SuiAddress::random_for_testing_only();
     let amount = 9;
 
@@ -75,7 +75,7 @@ async fn get_full_checkpoint() {
 
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
 
     let latest = client.get_latest_checkpoint().await.unwrap().into_data();
     let _ = client
@@ -96,7 +96,7 @@ async fn get_checkpoint_artifacts() {
     // Send a tx just to make sure a few checkpoints are created
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
 
     let latest = client.get_latest_checkpoint().await.unwrap().into_data();
     println!("latest: {:?}", latest);

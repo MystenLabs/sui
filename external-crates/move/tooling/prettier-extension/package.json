@@ -3,7 +3,7 @@
 	"publisher": "mysten",
 	"displayName": "Move Formatter",
 	"description": "Adds Move code formatting to VSCode using Prettier@v3",
-	"version": "0.3.1",
+	"version": "0.3.2",
 	"private": true,
 	"preview": true,
 	"icon": "img/move.png",
@@ -76,7 +76,7 @@
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
 	},
 	"dependencies": {
-		"@mysten/prettier-plugin-move": "^0.3.1",
+		"@mysten/prettier-plugin-move": "^0.3.3",
 		"cosmiconfig": "^9.0.0",
 		"prettier": "^3.3.2"
 	},

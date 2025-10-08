@@ -33,6 +33,8 @@ pub fn check_for_verifier_timeout(major_status_code: &StatusCode) -> bool {
         StatusCode::PROGRAM_TOO_COMPLEX,
         // Do we want to make this a substatus of `PROGRAM_TOO_COMPLEX`?
         StatusCode::TOO_MANY_BACK_EDGES,
+        StatusCode::BORROWLOC_EXISTS_BORROW_ERROR,
+        StatusCode::COPYLOC_EXISTS_BORROW_ERROR,
     ]
     .contains(major_status_code)
 }

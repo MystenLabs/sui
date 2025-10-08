@@ -335,7 +335,7 @@ The [TypeScript SDK](https://sdk.mystenlabs.com/typedoc/modules/_mysten_sui.grap
 ## Monitoring events
 
 Firing events is not very useful in a vacuum. You also need the ability to respond to those events. There are two methods from which to choose when you need to monitor on-chain events:
-- Incorporate a [custom indexer](../advanced/custom-indexer.mdx) to take advantage of Sui's micro-data ingestion framework.
+- Incorporate a [custom indexer](/guides/developer/advanced/custom-indexer.mdx) to take advantage of Sui's micro-data ingestion framework.
 - Poll the Sui network on a schedule to query events.
 
 Using a custom indexer provides a near-real time monitoring of events, so is most useful when your project requires immediate reaction to the firing of events. Polling the network is most useful when the events you're monitoring don't fire often or the need to act on those events are not immediate. The following section provides a polling example.

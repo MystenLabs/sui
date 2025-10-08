@@ -21,6 +21,14 @@ public enum Test {
     B,
 }
 
+// comments after the enum variant are kept
+public enum Test {
+    A,
+    B,
+    // commented out text
+    // is kept
+}
+
 // abilities do not break
 public enum Test has copy, drop, store {
     A,

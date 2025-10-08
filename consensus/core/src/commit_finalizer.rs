@@ -288,6 +288,11 @@ impl CommitFinalizer {
                 .finalizer_transaction_status
                 .with_label_values(&["direct_finalize"])
                 .inc_by((num_transactions - reject_votes.len()) as u64);
+            let hostname = &self.context.committee.authority(block_ref.author).hostname;
+            metrics
+                .finalizer_reject_votes
+                .with_label_values(&[hostname])
+                .inc_by(reject_votes.len() as u64);
             // If a transaction_index does not exist in reject_votes, the transaction has no reject votes.
             // So it is finalized and does not need to be added to pending_transactions.
             for (transaction_index, stake) in reject_votes {

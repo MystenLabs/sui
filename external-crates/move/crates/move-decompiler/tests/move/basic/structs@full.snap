@@ -32,8 +32,6 @@ public struct S3 has copy, drop { x: u32, y: u32, z: u32 }
 
 public struct S4 has copy, drop { pos0: u64, pos1: u64, pos2: u64 }
 
-// -- enums -- 
-
 // -- functions -- 
 
 fun unpack(l0: basic::structs::S1): u32 {

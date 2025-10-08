@@ -275,8 +275,8 @@ jobs:
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
-          event-type: tag-docker-images
-          client-payload: '{"sui_commit": "${{ github.sha }}", "repo_name": "all", "tag": "${{ env.TAG_NAME }}"}'
+          event-type: build-docker-images
+          client-payload: '{"sui_commit": "${{ github.sha }}", "docker_hub_tag": "${{ env.TAG_NAME }}"}'
 
   # Tag all sui images with release tag, so that they can be easily found
   tag-release-binaries-in-s3:

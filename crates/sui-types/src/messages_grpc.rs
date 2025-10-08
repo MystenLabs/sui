@@ -287,27 +287,27 @@ pub struct RawExecutedData {
 #[derive(Clone, Debug)]
 pub struct SubmitTxRequest {
     pub transaction: Option<Transaction>,
-    pub ping: Option<PingType>,
+    pub ping_type: Option<PingType>,
 }
 
 impl SubmitTxRequest {
     pub fn new_transaction(transaction: Transaction) -> Self {
         Self {
             transaction: Some(transaction),
-            ping: None,
+            ping_type: None,
         }
     }
 
-    pub fn new_ping(ping: PingType) -> Self {
+    pub fn new_ping(ping_type: PingType) -> Self {
         Self {
             transaction: None,
-            ping: Some(ping),
+            ping_type: Some(ping_type),
         }
     }
 
     pub fn tx_type(&self) -> TxType {
-        if let Some(ping) = self.ping {
-            return if ping == PingType::FastPath {
+        if let Some(ping_type) = self.ping_type {
+            return if ping_type == PingType::FastPath {
                 TxType::SingleWriter
             } else {
                 TxType::SharedObject
@@ -355,7 +355,7 @@ impl SubmitTxRequest {
             vec![]
         };
 
-        let submit_type = if self.ping.is_some() {
+        let submit_type = if self.ping_type.is_some() {
             SubmitTxType::Ping
         } else {
             SubmitTxType::Default
@@ -497,8 +497,8 @@ pub struct WaitForEffectsRequest {
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
     pub include_details: bool,
-    /// If this is a ping request, then this is the type of ping.
-    pub ping: Option<PingType>,
+    /// Type of ping request, or None if this is not a ping request.
+    pub ping_type: Option<PingType>,
 }
 
 #[derive(Clone)]
@@ -934,11 +934,11 @@ impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
             Some(cp) => Some(cp.as_ref().try_into()?),
             None => None,
         };
-        let ping = value
+        let ping_type = value
             .ping_type
             .map(|p| {
                 PingType::try_from(p).map_err(|e| SuiError::GrpcMessageDeserializeError {
-                    type_info: "RawWaitForEffectsRequest.ping".to_string(),
+                    type_info: "RawWaitForEffectsRequest.ping_type".to_string(),
                     error: e.to_string(),
                 })
             })
@@ -947,7 +947,7 @@ impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
             consensus_position,
             transaction_digest,
             include_details: value.include_details,
-            ping,
+            ping_type,
         })
     }
 }
@@ -971,7 +971,7 @@ impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
             Some(cp) => Some(cp.into_raw()?),
             None => None,
         };
-        let ping_type = value.ping.map(|p| p.into());
+        let ping_type = value.ping_type.map(|p| p.into());
         Ok(Self {
             consensus_position,
             transaction_digest,

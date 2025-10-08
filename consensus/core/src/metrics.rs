@@ -217,6 +217,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) finalizer_buffered_commits: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
+    pub(crate) finalizer_reject_votes: IntCounterVec,
     pub(crate) finalizer_output_commits: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
@@ -895,6 +896,12 @@ impl NodeMetrics {
                 "finalizer_transaction_status",
                 "Number of transactions finalized by the finalizer, grouped by status.",
                 &["status"],
+                registry
+            ).unwrap(),
+            finalizer_reject_votes: register_int_counter_vec_with_registry!(
+                "finalizer_reject_votes",
+                "Number of reject votes casted by each authority observed by the finalizer.",
+                &["authority"],
                 registry
             ).unwrap(),
             finalizer_output_commits: register_int_counter_vec_with_registry!(

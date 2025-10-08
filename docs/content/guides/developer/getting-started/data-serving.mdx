@@ -18,7 +18,7 @@ Currently, you can use any of the following mechanisms to access Sui network dat
 
 - Directly connect to [JSON-RPC](/references/sui-api.mdx) hosted on Sui [Full nodes](guides/operator/sui-full-node.mdx) that are operated by [RPC providers](https://sui.io/developers#dev-tools) (filter by `RPC`) or [Data indexer operators](https://github.com/sui-foundation/awesome-sui?tab=readme-ov-file#indexers--data-services).
   - The [Mainnet](https://fullnode.mainnet.sui.io:443), [Testnet](https://fullnode.testnet.sui.io:443), or [Devnet](https://fullnode.devnet.sui.io:443) load balancer URLs abstract the Sui Foundation-managed Full nodes. Those are not recommended for production use.
-- Set up your own [custom indexer](/guides/developer/advanced/custom-indexer.mdx) to continuously load the data of interest into a Postgres database.
+- Set up your own [custom indexer](/guides/developer/advanced/custom-indexer/build.mdx) to continuously load the data of interest into a Postgres database.
 
 :::info
 
@@ -38,7 +38,7 @@ WebSocket-based JSON RPCs `suix_subscribeEvent` and `suix_subscribeTransaction` 
 
 ### Custom indexer
 
-If you need more control over the types, granularity, and retention period of the data that you need in your application, or if you have specific query patterns that could be best served from a relational database, then you can set up your own [custom indexer](/guides/developer/advanced/custom-indexer.mdx) or reach out to a [Data indexer operator](https://github.com/sui-foundation/awesome-sui?tab=readme-ov-file#indexers--data-services) that might already have set one up. 
+If you need more control over the types, granularity, and retention period of the data that you need in your application, or if you have specific query patterns that could be best served from a relational database, then you can set up your own [custom indexer](/guides/developer/advanced/custom-indexer/build.mdx) or reach out to a <a href="/references/awesome-sui#indexers--data-services" target="_self">Data indexer operator</a> that might already have set one up. 
 
 If you set up your own indexer, you are responsible for its ongoing maintenance and the related infrastructure and operational costs. You can reduce your costs by implementing a pruning strategy for the relational database by taking into account the retention needs of your application.
 

@@ -61,7 +61,7 @@ fn proto_to_response(
 async fn resolve_transaction_simple_transfer() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
         TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
             .await
@@ -121,7 +121,7 @@ async fn resolve_transaction_simple_transfer() {
 async fn resolve_transaction_transfer_with_sponsor() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
         TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
             .await
@@ -202,7 +202,7 @@ async fn resolve_transaction_transfer_with_sponsor() {
 async fn resolve_transaction_borrowed_shared_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
         TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
             .await
@@ -253,7 +253,7 @@ async fn resolve_transaction_borrowed_shared_object() {
 async fn resolve_transaction_mutable_shared_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
         TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
             .await
@@ -371,7 +371,7 @@ fn assert_contains(haystack: &str, needle: &str) {
 async fn resolve_transaction_gas_budget_clamping() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
         TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
             .await

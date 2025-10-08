@@ -261,5 +261,98 @@ async fn get_checkpoint() {
     // Ensure we found the transaction we used for picking the checkpoint to test against
     assert!(found_transaction);
 
+    let Checkpoint { transactions, .. } = client
+        .get_checkpoint(
+            GetCheckpointRequest::by_sequence_number(checkpoint).with_read_mask(
+                FieldMask::from_paths([
+                    "sequence_number",
+                    "transactions.digest",
+                    "transactions.events.events.json",
+                ]),
+            ),
+        )
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint
+        .unwrap();
+
+    let mut found_transaction_with_events = false;
+    for tx in transactions {
+        if tx.digest == Some(transaction_digest.to_string()) {
+            found_transaction_with_events = true;
+            let events = tx.events.expect("events should be present");
+            assert!(!events.events.is_empty(), "should have events");
+
+            for event in events.events {
+                let json = event
+                    .json
+                    .as_ref()
+                    .expect("json field should be populated when requested in mask");
+
+                let prost_types::value::Kind::StructValue(s) =
+                    json.kind.as_ref().expect("json should have kind")
+                else {
+                    panic!("event json should be a struct value");
+                };
+
+                let amount = s
+                    .fields
+                    .get("amount")
+                    .and_then(|v| {
+                        if let Some(prost_types::value::Kind::StringValue(s)) = &v.kind {
+                            Some(s.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("amount should be a string");
+                assert_eq!(amount, "30000000000000000");
+
+                let epoch = s
+                    .fields
+                    .get("epoch")
+                    .and_then(|v| {
+                        if let Some(prost_types::value::Kind::StringValue(s)) = &v.kind {
+                            Some(s.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("epoch should be a string");
+                assert_eq!(epoch, "0");
+
+                for addr_field in ["pool_id", "staker_address", "validator_address"] {
+                    let addr = s
+                        .fields
+                        .get(addr_field)
+                        .and_then(|v| {
+                            if let Some(prost_types::value::Kind::StringValue(s)) = &v.kind {
+                                Some(s.as_str())
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or_else(|| panic!("{} should be a string", addr_field));
+                    assert!(
+                        addr.starts_with("0x"),
+                        "{} should start with 0x",
+                        addr_field
+                    );
+                    assert_eq!(
+                        addr.len(),
+                        66,
+                        "{} should be 66 chars (0x + 64 hex)",
+                        addr_field
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        found_transaction_with_events,
+        "should have found transaction with events"
+    );
+
     tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 }
