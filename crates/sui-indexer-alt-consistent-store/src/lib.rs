@@ -53,6 +53,7 @@ pub mod config;
 mod db;
 mod handlers;
 mod indexer;
+mod metrics;
 mod rpc;
 pub(crate) mod schema;
 mod store;
