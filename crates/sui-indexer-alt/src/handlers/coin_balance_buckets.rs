@@ -11,7 +11,8 @@ use sui_indexer_alt_framework::{
     postgres::{Connection, Db},
     types::{
         base_types::{ObjectID, SuiAddress},
-        full_checkpoint_content::CheckpointData,
+        effects::TransactionEffectsAPI,
+        full_checkpoint_content::Checkpoint,
         object::{Object, Owner},
         TypeTag,
     },
@@ -59,14 +60,30 @@ impl Processor for CoinBalanceBuckets {
     const NAME: &'static str = "coin_balance_buckets";
     type Value = ProcessedCoinBalanceBucket;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let cp_sequence_number = checkpoint.summary.sequence_number;
         let checkpoint_input_objects = checkpoint_input_objects(checkpoint)?;
-        let latest_live_output_objects: BTreeMap<_, _> = checkpoint
-            .latest_live_output_objects()
-            .into_iter()
-            .map(|o| (o.id(), o))
-            .collect();
+
+        // Build latest_live_output_objects from transaction output objects
+        let mut latest_live_output_objects = BTreeMap::new();
+        for tx in checkpoint.transactions.iter() {
+            for change in tx.effects.object_changes() {
+                let id = change.id;
+
+                // If output_version is None, the object was deleted or wrapped
+                let Some(version) = change.output_version else {
+                    latest_live_output_objects.remove(&id);
+                    continue;
+                };
+
+                if let Some(obj) = checkpoint
+                    .object_set
+                    .get(&sui_types::storage::ObjectKey(id, version))
+                {
+                    latest_live_output_objects.insert(obj.id(), obj.clone());
+                }
+            }
+        }
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
         for (object_id, input_object) in checkpoint_input_objects.iter() {
             // This loop processes all coins that were owned by a single address prior to the checkpoint,
@@ -471,7 +488,7 @@ mod tests {
             .create_sui_object(0, 0)
             .create_sui_object(1, 100)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -515,7 +532,7 @@ mod tests {
             .start_transaction(0)
             .create_coin_object(0, 0, 10, coin_type.clone())
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -550,7 +567,7 @@ mod tests {
             .start_transaction(0)
             .create_sui_object(0, 10010)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -581,7 +598,7 @@ mod tests {
             .start_transaction(0)
             .transfer_coin_balance(0, 1, 1, 10)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -615,7 +632,7 @@ mod tests {
             .start_transaction(0)
             .transfer_coin_balance(0, 2, 1, 1)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -695,7 +712,7 @@ mod tests {
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -709,7 +726,7 @@ mod tests {
             .start_transaction(0)
             .delete_object(0)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -751,7 +768,7 @@ mod tests {
             .start_transaction(0)
             .create_sui_object(0, 100)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -765,7 +782,7 @@ mod tests {
             .start_transaction(0)
             .transfer_object(0, 1)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -812,7 +829,7 @@ mod tests {
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -827,7 +844,7 @@ mod tests {
             .start_transaction(0)
             .change_object_owner(0, Owner::ObjectOwner(dbg_addr(1)))
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -857,7 +874,7 @@ mod tests {
             .start_transaction(0)
             .create_sui_object(0, 100)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -872,7 +889,7 @@ mod tests {
             .start_transaction(0)
             .wrap_object(0)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await
@@ -890,7 +907,7 @@ mod tests {
             .start_transaction(0)
             .unwrap_object(0)
             .finish_transaction();
-        let checkpoint = builder.build_checkpoint();
+        let checkpoint = builder.build_checkpoint().into();
         let values = CoinBalanceBuckets
             .process(&Arc::new(checkpoint))
             .await

@@ -9,7 +9,7 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
     postgres::{Connection, Db},
-    types::full_checkpoint_content::CheckpointData,
+    types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::{events::StoredEvStructInst, schema::ev_struct_inst};
 
@@ -24,15 +24,15 @@ impl Processor for EvStructInst {
 
     type Value = StoredEvStructInst;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
         let mut values = BTreeSet::new();
-        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
+        let first_tx = summary.network_total_transactions as usize - transactions.len();
 
         for (i, tx) in transactions.iter().enumerate() {
             let tx_sequence_number = (first_tx + i) as i64;
@@ -134,11 +134,12 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let checkpoint = Arc::new(
+        let checkpoint: Arc<Checkpoint> = Arc::new(
             TestCheckpointDataBuilder::new(0)
                 .start_transaction(0)
                 .finish_transaction()
-                .build_checkpoint(),
+                .build_checkpoint()
+                .into(),
         );
 
         let values = EvStructInst.process(&checkpoint).await.unwrap();
@@ -152,12 +153,13 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let checkpoint = Arc::new(
+        let checkpoint: Arc<Checkpoint> = Arc::new(
             TestCheckpointDataBuilder::new(0)
                 .start_transaction(0)
                 .with_events(vec![Event::random_for_testing()])
                 .finish_transaction()
-                .build_checkpoint(),
+                .build_checkpoint()
+                .into(),
         );
 
         // Process checkpoint with one event
@@ -176,8 +178,9 @@ mod tests {
         // 0th checkpoint has no events
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = EvStructInst.process(&checkpoint).await.unwrap();
+
         EvStructInst::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
@@ -187,8 +190,9 @@ mod tests {
             .start_transaction(0)
             .with_events(vec![Event::random_for_testing()])
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = EvStructInst.process(&checkpoint).await.unwrap();
+
         EvStructInst::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
@@ -201,8 +205,9 @@ mod tests {
                 Event::random_for_testing(),
             ])
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = EvStructInst.process(&checkpoint).await.unwrap();
+
         EvStructInst::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();

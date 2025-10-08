@@ -10,8 +10,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::{
-    ingestion::error::Error, task::TrySpawnStreamExt,
-    types::full_checkpoint_content::CheckpointData,
+    ingestion::error::Error, task::TrySpawnStreamExt, types::full_checkpoint_content::Checkpoint,
 };
 
 use super::{client::IngestionClient, IngestionConfig};
@@ -26,7 +25,7 @@ pub(super) fn broadcaster(
     config: IngestionConfig,
     client: IngestionClient,
     checkpoint_rx: mpsc::Receiver<u64>,
-    subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
+    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {

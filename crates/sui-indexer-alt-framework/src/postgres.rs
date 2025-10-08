@@ -110,7 +110,7 @@ pub mod tests {
     use async_trait::async_trait;
     use std::sync::Arc;
     use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Store};
-    use sui_types::full_checkpoint_content::CheckpointData;
+    use sui_types::full_checkpoint_content::Checkpoint;
 
     use super::*;
 
@@ -131,7 +131,7 @@ pub mod tests {
                 type Value = V;
                 async fn process(
                     &self,
-                    _checkpoint: &Arc<CheckpointData>,
+                    _checkpoint: &Arc<Checkpoint>,
                 ) -> anyhow::Result<Vec<Self::Value>> {
                     todo!()
                 }
