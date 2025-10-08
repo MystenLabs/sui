@@ -155,7 +155,7 @@ mod tests {
 
     use sui_indexer_alt_framework::{
         pipeline::Processor,
-        types::{full_checkpoint_content::CheckpointData, object::Object},
+        types::{full_checkpoint_content::Checkpoint, object::Object},
     };
 
     use crate::{
@@ -175,7 +175,7 @@ mod tests {
         const NAME: &'static str = "test";
         type Value = ();
 
-        async fn process(&self, _: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, _: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }

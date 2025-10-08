@@ -255,7 +255,7 @@ mod tests {
         temp::{get_available_port, TempDb},
         Connection, Db, DbArgs,
     };
-    use crate::types::full_checkpoint_content::CheckpointData;
+    use crate::types::full_checkpoint_content::Checkpoint;
     use crate::FieldCount;
 
     use super::*;
@@ -283,12 +283,9 @@ mod tests {
         const NAME: &'static str = "tx_counts";
         type Value = StoredTxCount;
 
-        async fn process(
-            &self,
-            checkpoint: &Arc<CheckpointData>,
-        ) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![StoredTxCount {
-                cp_sequence_number: checkpoint.checkpoint_summary.sequence_number as i64,
+                cp_sequence_number: checkpoint.summary.sequence_number as i64,
                 count: checkpoint.transactions.len() as i64,
             }])
         }

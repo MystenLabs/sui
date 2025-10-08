@@ -223,7 +223,7 @@ mod tests {
 
     use anyhow::ensure;
     use async_trait::async_trait;
-    use sui_types::full_checkpoint_content::CheckpointData;
+    use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
 
@@ -259,10 +259,7 @@ mod tests {
 
         type Value = StoredData;
 
-        async fn process(
-            &self,
-            _checkpoint: &Arc<CheckpointData>,
-        ) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }

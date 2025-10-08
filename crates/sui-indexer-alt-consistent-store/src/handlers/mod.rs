@@ -6,7 +6,7 @@ use std::collections::{btree_map::Entry, BTreeMap, HashSet};
 use anyhow::Context;
 use sui_indexer_alt_framework::types::{
     base_types::ObjectID, digests::ObjectDigest, effects::TransactionEffectsAPI,
-    full_checkpoint_content::CheckpointData, object::Object,
+    full_checkpoint_content::Checkpoint, object::Object, storage::ObjectKey,
 };
 
 pub(crate) mod balances;
@@ -17,17 +17,11 @@ pub(crate) mod object_by_type;
 /// checkpoint. These are objects that existed prior to the checkpoint, and excludes objects that
 /// were created or unwrapped within the checkpoint.
 pub(crate) fn checkpoint_input_objects(
-    checkpoint: &CheckpointData,
+    checkpoint: &Checkpoint,
 ) -> anyhow::Result<BTreeMap<ObjectID, (&Object, ObjectDigest)>> {
     let mut from_this_checkpoint = HashSet::new();
     let mut input_objects = BTreeMap::new();
     for tx in &checkpoint.transactions {
-        let input_objects_map: BTreeMap<_, _> = tx
-            .input_objects
-            .iter()
-            .map(|obj| ((obj.id(), obj.version()), obj))
-            .collect();
-
         for change in tx.effects.object_changes() {
             let id = change.id;
 
@@ -47,10 +41,10 @@ pub(crate) fn checkpoint_input_objects(
                 continue;
             };
 
-            let input_object = input_objects_map
-                .get(&(id, version))
-                .copied()
-                .with_context(|| format!("{id} at {version} in effects, not in input_objects"))?;
+            let input_object = checkpoint
+                .object_set
+                .get(&ObjectKey(id, version))
+                .with_context(|| format!("{id} at {version} in effects, not in object_set"))?;
 
             // Input digests are only populated in Effects V2. For Effects V1, we need to calculate
             // the digest from the input object's contents.
@@ -72,16 +66,10 @@ pub(crate) fn checkpoint_input_objects(
 /// Returns all versions of objects that were output by transactions in the checkpoint, and are
 /// still live at the end of the checkpoint.
 pub(crate) fn checkpoint_output_objects(
-    checkpoint: &CheckpointData,
+    checkpoint: &Checkpoint,
 ) -> anyhow::Result<BTreeMap<ObjectID, (&Object, ObjectDigest)>> {
     let mut output_objects = BTreeMap::new();
     for tx in &checkpoint.transactions {
-        let output_objects_map: BTreeMap<_, _> = tx
-            .output_objects
-            .iter()
-            .map(|obj| ((obj.id(), obj.version()), obj))
-            .collect();
-
         for change in tx.effects.object_changes() {
             let id = change.id;
 
@@ -93,10 +81,10 @@ pub(crate) fn checkpoint_output_objects(
                 continue;
             };
 
-            let output_object = output_objects_map
-                .get(&(id, version))
-                .copied()
-                .with_context(|| format!("{id} at {version} in effects, not in output_objects"))?;
+            let output_object = checkpoint
+                .object_set
+                .get(&ObjectKey(id, version))
+                .with_context(|| format!("{id} at {version} in effects, not in object_set"))?;
 
             output_objects.insert(id, (output_object, digest));
         }
