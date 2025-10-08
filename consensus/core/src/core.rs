@@ -282,6 +282,9 @@ impl Core {
                     .join(",")
             );
 
+            // Broadcast accepted blocks to observers
+            self.signals.accepted_blocks(&accepted_blocks)?;
+
             // Try to commit the new blocks if possible.
             self.try_commit(vec![])?;
 
@@ -833,7 +836,12 @@ impl Core {
                 .flat_map(|c| c.blocks())
                 .cloned()
                 .collect::<Vec<_>>();
-            self.block_manager.try_accept_committed_blocks(blocks);
+            let accepted_committed_blocks = self.block_manager.try_accept_committed_blocks(blocks);
+
+            // Broadcast accepted committed blocks to observers
+            if !accepted_committed_blocks.is_empty() {
+                self.signals.accepted_blocks(&accepted_committed_blocks)?;
+            }
 
             // If there is no certified commit to process, run the decision rule.
             let (decided_leaders, local) = if certified_leaders.is_empty() {
@@ -1298,6 +1306,7 @@ impl Core {
 /// Senders of signals from Core, for outputs and events (ex new block produced).
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<ExtendedBlock>,
+    tx_accepted_blocks_broadcast: broadcast::Sender<VerifiedBlock>,
     new_round_sender: watch::Sender<Round>,
     context: Arc<Context>,
 }
@@ -1310,16 +1319,20 @@ impl CoreSignals {
         let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<ExtendedBlock>(
             context.parameters.dag_state_cached_rounds as usize,
         );
+        let (tx_accepted_blocks_broadcast, rx_accepted_blocks_broadcast) =
+            broadcast::channel::<VerifiedBlock>(context.parameters.dag_state_cached_rounds as usize);
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
         let me = Self {
             tx_block_broadcast,
+            tx_accepted_blocks_broadcast,
             new_round_sender,
             context,
         };
 
         let receivers = CoreSignalsReceivers {
             rx_block_broadcast,
+            rx_accepted_blocks_broadcast,
             new_round_receiver,
         };
 
@@ -1349,6 +1362,18 @@ impl CoreSignals {
         Ok(())
     }
 
+    /// Broadcasts accepted blocks to observers
+    pub(crate) fn accepted_blocks(&self, blocks: &[VerifiedBlock]) -> ConsensusResult<()> {
+        for block in blocks {
+            if block.round() == GENESIS_ROUND {
+                continue;
+            }
+            // Ignore send errors - no observers may be connected
+            let _ = self.tx_accepted_blocks_broadcast.send(block.clone());
+        }
+        Ok(())
+    }
+
     /// Sends a signal that threshold clock has advanced to new round. The `round_number` is the round at which the
     /// threshold clock has advanced to.
     pub(crate) fn new_round(&mut self, round_number: Round) {
@@ -1360,12 +1385,17 @@ impl CoreSignals {
 /// Intentionally un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
+    rx_accepted_blocks_broadcast: broadcast::Receiver<VerifiedBlock>,
     new_round_receiver: watch::Receiver<Round>,
 }
 
 impl CoreSignalsReceivers {
     pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<ExtendedBlock> {
         self.rx_block_broadcast.resubscribe()
+    }
+
+    pub(crate) fn accepted_blocks_broadcast_receiver(&self) -> broadcast::Receiver<VerifiedBlock> {
+        self.rx_accepted_blocks_broadcast.resubscribe()
     }
 
     pub(crate) fn new_round_receiver(&self) -> watch::Receiver<Round> {

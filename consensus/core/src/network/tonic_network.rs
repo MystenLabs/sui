@@ -414,6 +414,108 @@ impl ObserverClient {
     }
 }
 
+/// Unified client that can be either a validator client or observer client
+pub(crate) enum ConsensusNetworkClient {
+    Validator(TonicClient),
+    Observer(ObserverClient),
+}
+
+#[async_trait]
+impl NetworkClient for ConsensusNetworkClient {
+    const SUPPORT_STREAMING: bool = true;
+
+    async fn send_block(
+        &self,
+        peer: AuthorityIndex,
+        block: &VerifiedBlock,
+        timeout: Duration,
+    ) -> ConsensusResult<()> {
+        match self {
+            Self::Validator(client) => client.send_block(peer, block, timeout).await,
+            Self::Observer(_) => Err(ConsensusError::NetworkRequest(
+                "Observers cannot send blocks".to_string(),
+            )),
+        }
+    }
+
+    async fn subscribe_blocks(
+        &self,
+        peer: AuthorityIndex,
+        last_received: Round,
+        timeout: Duration,
+    ) -> ConsensusResult<BlockStream> {
+        match self {
+            Self::Validator(client) => client.subscribe_blocks(peer, last_received, timeout).await,
+            Self::Observer(client) => client.subscribe_blocks(peer, last_received, timeout).await,
+        }
+    }
+
+    async fn fetch_blocks(
+        &self,
+        peer: AuthorityIndex,
+        block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        match self {
+            Self::Validator(client) => {
+                client
+                    .fetch_blocks(peer, block_refs, highest_accepted_rounds, breadth_first, timeout)
+                    .await
+            }
+            Self::Observer(_) => Err(ConsensusError::NetworkRequest(
+                "Observers cannot fetch blocks".to_string(),
+            )),
+        }
+    }
+
+    async fn fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        commit_range: CommitRange,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+        match self {
+            Self::Validator(client) => client.fetch_commits(peer, commit_range, timeout).await,
+            Self::Observer(_) => Err(ConsensusError::NetworkRequest(
+                "Observers cannot fetch commits".to_string(),
+            )),
+        }
+    }
+
+    async fn fetch_latest_blocks(
+        &self,
+        peer: AuthorityIndex,
+        authorities: Vec<AuthorityIndex>,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        match self {
+            Self::Validator(client) => {
+                client
+                    .fetch_latest_blocks(peer, authorities, timeout)
+                    .await
+            }
+            Self::Observer(_) => Err(ConsensusError::NetworkRequest(
+                "Observers cannot fetch latest blocks".to_string(),
+            )),
+        }
+    }
+
+    async fn get_latest_rounds(
+        &self,
+        peer: AuthorityIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+        match self {
+            Self::Validator(client) => client.get_latest_rounds(peer, timeout).await,
+            Self::Observer(_) => Err(ConsensusError::NetworkRequest(
+                "Observers cannot get latest rounds".to_string(),
+            )),
+        }
+    }
+}
+
 // Tonic channel wrapped with layers.
 type Channel = mysten_network::callback::Callback<
     tower_http::trace::Trace<
@@ -940,17 +1042,31 @@ struct ObserverPeerInfo {
 pub(crate) struct TonicManager {
     context: Arc<Context>,
     network_keypair: NetworkKeyPair,
-    client: Arc<TonicClient>,
+    client: Arc<ConsensusNetworkClient>,
     validator_server: Option<ServerHandle>,
     observer_server: Option<ServerHandle>,
 }
 
 impl TonicManager {
     pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
+        let is_observer = context.own_index == AuthorityIndex::MAX;
+
+        let client = if is_observer {
+            Arc::new(ConsensusNetworkClient::Observer(ObserverClient::new(
+                context.clone(),
+                network_keypair.clone(),
+            )))
+        } else {
+            Arc::new(ConsensusNetworkClient::Validator(TonicClient::new(
+                context.clone(),
+                network_keypair.clone(),
+            )))
+        };
+
         Self {
-            context: context.clone(),
-            network_keypair: network_keypair.clone(),
-            client: Arc::new(TonicClient::new(context, network_keypair)),
+            context,
+            network_keypair,
+            client,
             validator_server: None,
             observer_server: None,
         }
@@ -958,7 +1074,7 @@ impl TonicManager {
 }
 
 impl<S: NetworkService> NetworkManager<S> for TonicManager {
-    type Client = TonicClient;
+    type Client = ConsensusNetworkClient;
 
     fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
         TonicManager::new(context, network_keypair)

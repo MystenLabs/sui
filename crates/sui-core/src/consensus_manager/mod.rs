@@ -207,11 +207,11 @@ impl ConsensusManager {
         let authority = ConsensusAuthority::start(
             network_type,
             epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
-            own_index,
+            Some(own_index),
             committee.clone(),
             parameters.clone(),
             protocol_config.clone(),
-            self.protocol_keypair.clone(),
+            Some(self.protocol_keypair.clone()),
             self.network_keypair.clone(),
             Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),

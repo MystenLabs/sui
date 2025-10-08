@@ -50,6 +50,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
+    rx_accepted_blocks_broadcast: broadcast::Receiver<VerifiedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
     transaction_certifier: TransactionCertifier,
     dag_state: Arc<RwLock<DagState>>,
@@ -66,6 +67,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
+        rx_accepted_blocks_broadcast: broadcast::Receiver<VerifiedBlock>,
         transaction_certifier: TransactionCertifier,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
@@ -81,6 +83,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             synchronizer,
             core_dispatcher,
             rx_block_broadcast,
+            rx_accepted_blocks_broadcast,
             subscription_counter,
             transaction_certifier,
             dag_state,
@@ -312,29 +315,66 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         fail_point_async!("consensus-rpc-response");
 
         let dag_state = self.dag_state.read();
-        // Find recent own blocks that have not been received by the peer.
-        // If last_received is a valid and more blocks have been proposed since then, this call is
-        // guaranteed to return at least some recent blocks, which will help with liveness.
-        let missed_blocks = stream::iter(
-            dag_state
-                .get_cached_blocks(self.context.own_index, last_received + 1)
-                .into_iter()
-                .map(|block| ExtendedSerializedBlock {
+
+        let missed_blocks: Pin<Box<dyn Stream<Item = ExtendedSerializedBlock> + Send>> =
+            if peer.is_observer() {
+                // For observers: stream all accepted blocks from all authorities
+                let mut all_blocks = Vec::new();
+                for (authority, _) in self.context.committee.authorities() {
+                    all_blocks.extend(
+                        dag_state
+                            .get_cached_blocks(authority, last_received + 1)
+                            .into_iter(),
+                    );
+                }
+                // Sort blocks by round to maintain causal order
+                all_blocks.sort_by_key(|block| block.round());
+
+                Box::pin(stream::iter(all_blocks.into_iter().map(
+                    |block| ExtendedSerializedBlock {
+                        block: block.serialized().clone(),
+                        excluded_ancestors: vec![],
+                    },
+                )))
+            } else {
+                // For validators: stream only own blocks
+                // If last_received is valid and more blocks have been proposed since then, this call is
+                // guaranteed to return at least some recent blocks, which will help with liveness.
+                Box::pin(stream::iter(
+                    dag_state
+                        .get_cached_blocks(self.context.own_index, last_received + 1)
+                        .into_iter()
+                        .map(|block| ExtendedSerializedBlock {
+                            block: block.serialized().clone(),
+                            excluded_ancestors: vec![],
+                        }),
+                ))
+            };
+
+        let broadcasted_blocks: Pin<Box<dyn Stream<Item = ExtendedSerializedBlock> + Send>> =
+            if peer.is_observer() {
+                // For observers: stream all accepted blocks from all authorities
+                let accepted_blocks_stream = BroadcastStream::new(
+                    peer.clone(),
+                    self.rx_accepted_blocks_broadcast.resubscribe(),
+                    self.subscription_counter.clone(),
+                );
+                Box::pin(accepted_blocks_stream.map(|block| ExtendedSerializedBlock {
                     block: block.serialized().clone(),
                     excluded_ancestors: vec![],
-                }),
-        );
-
-        let broadcasted_blocks = BroadcastedBlockStream::new(
-            peer,
-            self.rx_block_broadcast.resubscribe(),
-            self.subscription_counter.clone(),
-        );
+                }))
+            } else {
+                // For validators: stream only own blocks
+                let own_blocks_stream = BroadcastedBlockStream::new(
+                    peer.clone(),
+                    self.rx_block_broadcast.resubscribe(),
+                    self.subscription_counter.clone(),
+                );
+                Box::pin(own_blocks_stream.map(ExtendedSerializedBlock::from))
+            };
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
-        Ok(Box::pin(missed_blocks.chain(
-            broadcasted_blocks.map(ExtendedSerializedBlock::from),
-        )))
+        Ok(Box::pin(missed_blocks.chain(broadcasted_blocks)))
     }
 
     // Handles two types of requests:

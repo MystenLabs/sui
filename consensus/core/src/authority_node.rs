@@ -379,20 +379,21 @@ where
         )
         .start();
 
-        let round_prober_handle = if context.protocol_config.consensus_round_prober() {
-            Some(
-                RoundProber::new(
-                    context.clone(),
-                    core_dispatcher.clone(),
-                    round_tracker.clone(),
-                    dag_state.clone(),
-                    network_client.clone(),
+        let round_prober_handle =
+            if !is_observer && context.protocol_config.consensus_round_prober() {
+                Some(
+                    RoundProber::new(
+                        context.clone(),
+                        core_dispatcher.clone(),
+                        round_tracker.clone(),
+                        dag_state.clone(),
+                        network_client.clone(),
+                    )
+                    .start(),
                 )
-                .start(),
-            )
-        } else {
-            None
-        };
+            } else {
+                None
+            };
 
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
@@ -402,6 +403,7 @@ where
             synchronizer.clone(),
             core_dispatcher,
             signals_receivers.block_broadcast_receiver(),
+            signals_receivers.accepted_blocks_broadcast_receiver(),
             transaction_certifier,
             dag_state.clone(),
             store,
@@ -414,9 +416,21 @@ where
                 network_service.clone(),
                 dag_state,
             );
-            for (peer, _) in context.committee.authorities() {
-                if peer != context.own_index {
+            if is_observer {
+                // Observers connect to only the first authority for now
+                if let Some((peer, _)) = context.committee.authorities().next() {
+                    let hostname = &context.committee.authority(peer).hostname;
+                    info!("Observer subscribing to authority {peer} at {hostname}");
                     s.subscribe(peer);
+                }
+            } else {
+                // Validators subscribe to all other authorities except themselves
+                for (peer, _) in context.committee.authorities() {
+                    if peer != context.own_index {
+                        let hostname = &context.committee.authority(peer).hostname;
+                        info!("Validator subscribing to authority {peer} at {hostname}");
+                        s.subscribe(peer);
+                    }
                 }
             }
             Some(s)
@@ -545,11 +559,11 @@ mod tests {
         let authority = ConsensusAuthority::start(
             network_type,
             0,
-            own_index,
+            Some(own_index),
             committee,
             parameters,
             ProtocolConfig::get_for_max_version_UNSAFE(),
-            protocol_keypair,
+            Some(protocol_keypair),
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
@@ -931,11 +945,11 @@ mod tests {
         let authority = ConsensusAuthority::start(
             network_type,
             0,
-            index,
+            Some(index),
             committee,
             parameters,
             protocol_config,
-            protocol_keypair,
+            Some(protocol_keypair),
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
