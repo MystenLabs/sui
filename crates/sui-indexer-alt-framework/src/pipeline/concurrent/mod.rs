@@ -276,7 +276,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         task.clone(),
         metrics.clone(),
         cancel,
-        main_reader_lo,
     );
 
     // Tasked pipelines will skip reader_watermark and pruner. Setting the pruner config to None

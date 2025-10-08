@@ -90,13 +90,27 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                         .with_label_values(&[P::NAME])
                         .start_timer();
 
-                    let values = processor.process(&checkpoint)?;
-                    let elapsed = guard.stop_and_record();
-
                     let epoch = checkpoint.checkpoint_summary.epoch;
                     let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
                     let tx_hi = checkpoint.checkpoint_summary.network_total_transactions;
                     let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+
+                    // Skip processing checkpoints below the main reader lo to avoid unnecessary
+                    // work.
+                    let should_process = main_reader_lo
+                        .map(|main_reader_lo| {
+                            let current_reader_lo = main_reader_lo.load(Ordering::Relaxed);
+                            cp_sequence_number >= current_reader_lo
+                        })
+                        .unwrap_or(true);
+
+                    let values = if should_process {
+                        processor.process(&checkpoint)?
+                    } else {
+                        vec![]
+                    };
+
+                    let elapsed = guard.stop_and_record();
 
                     debug!(
                         pipeline = P::NAME,
@@ -116,14 +130,6 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                         .total_handler_rows_created
                         .with_label_values(&[P::NAME])
                         .inc_by(values.len() as u64);
-
-                    // Skip processing checkpoints below the main reader lo.
-                    if let Some(main_reader_lo) = main_reader_lo {
-                        let current_reader_lo = main_reader_lo.load(Ordering::Relaxed);
-                        if cp_sequence_number < current_reader_lo {
-                            return Ok(());
-                        }
-                    }
 
                     tx.send(IndexedCheckpoint::new(
                         epoch,
