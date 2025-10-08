@@ -62,8 +62,13 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
         registry: &Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
-        let store = Store::open(path, db_config, consistency_config.snapshots)
-            .context("Failed to create store")?;
+        let store = Store::open(
+            path,
+            db_config,
+            consistency_config.snapshots,
+            Some(registry),
+        )
+        .context("Failed to create store")?;
 
         let sync = Synchronizer::new(
             store.db().clone(),
