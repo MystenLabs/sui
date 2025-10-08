@@ -49,6 +49,92 @@ pub struct AuthenticatedEvent {
     #[prost(string, optional, tag = "5")]
     pub stream_id: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// An event.
+/// TODO: Copied from sui-rust-sdk; we should use the existing struct.
+#[non_exhaustive]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Event {
+    /// Package ID of the top-level function invoked by a `MoveCall` command that triggered this
+    /// event to be emitted.
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Module name of the top-level function invoked by a `MoveCall` command that triggered this
+    /// event to be emitted.
+    #[prost(string, optional, tag = "2")]
+    pub module: ::core::option::Option<::prost::alloc::string::String>,
+    /// Address of the account that sent the transaction where this event was emitted.
+    #[prost(string, optional, tag = "3")]
+    pub sender: ::core::option::Option<::prost::alloc::string::String>,
+    /// The type of the event emitted.
+    #[prost(string, optional, tag = "4")]
+    pub event_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// BCS serialized bytes of the event.
+    #[prost(message, optional, tag = "5")]
+    pub contents: ::core::option::Option<Bcs>,
+    /// JSON rendering of the event.
+    #[prost(message, optional, tag = "6")]
+    pub json: ::core::option::Option<::prost_types::Value>,
+}
+/// BCS-encoded bytes
+#[non_exhaustive]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Bcs {
+    #[prost(bytes = "vec", optional, tag = "1")]
+    pub value: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+}
+/// Object Checkpoint State inclusion proof.
+#[non_exhaustive]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OcsInclusionProof {
+    /// BCS-encoded merkle proof nodes.
+    #[prost(bytes = "vec", optional, tag = "1")]
+    pub merkle_proof: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    /// Leaf index in the merkle tree.
+    #[prost(uint64, optional, tag = "2")]
+    pub leaf_index: ::core::option::Option<u64>,
+    /// Tree root digest (32 bytes).
+    #[prost(bytes = "vec", optional, tag = "3")]
+    pub tree_root: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    /// Object reference being proven (object_id, version, digest).
+    #[prost(message, optional, tag = "4")]
+    pub object_ref: ::core::option::Option<ObjectRef>,
+}
+/// Object reference (ID, version, digest).
+#[non_exhaustive]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ObjectRef {
+    /// Object ID (32 bytes).
+    #[prost(bytes = "vec", optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    /// Object version.
+    #[prost(uint64, optional, tag = "2")]
+    pub version: ::core::option::Option<u64>,
+    /// Object digest (32 bytes).
+    #[prost(bytes = "vec", optional, tag = "3")]
+    pub digest: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+}
+/// Request for object inclusion proof at a checkpoint.
+#[non_exhaustive]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetObjectInclusionProofRequest {
+    /// Required. Object ID to get inclusion proof for.
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. Checkpoint sequence number.
+    #[prost(uint64, optional, tag = "2")]
+    pub checkpoint: ::core::option::Option<u64>,
+}
+/// Response containing object inclusion proof and object data.
+#[non_exhaustive]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetObjectInclusionProofResponse {
+    /// Object inclusion proof.
+    #[prost(message, optional, tag = "1")]
+    pub inclusion_proof: ::core::option::Option<OcsInclusionProof>,
+    /// BCS-encoded object data.
+    #[prost(bytes = "vec", optional, tag = "2")]
+    pub object_data: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+}
 /// Generated client implementations.
 pub mod event_service_client {
     #![allow(
@@ -171,6 +257,36 @@ pub mod event_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /// Returns an inclusion proof if a specified object id was written in a specified checkpoint.
+        pub async fn get_object_inclusion_proof(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetObjectInclusionProofRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetObjectInclusionProofResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.alpha.EventService/GetObjectInclusionProof",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.rpc.alpha.EventService",
+                        "GetObjectInclusionProof",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -192,6 +308,14 @@ pub mod event_service_server {
             request: tonic::Request<super::ListAuthenticatedEventsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ListAuthenticatedEventsResponse>,
+            tonic::Status,
+        >;
+        /// Returns an inclusion proof if a specified object id was written in a specified checkpoint.
+        async fn get_object_inclusion_proof(
+            &self,
+            request: tonic::Request<super::GetObjectInclusionProofRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetObjectInclusionProofResponse>,
             tonic::Status,
         >;
     }
@@ -308,6 +432,57 @@ pub mod event_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListAuthenticatedEventsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.alpha.EventService/GetObjectInclusionProof" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetObjectInclusionProofSvc<T: EventService>(pub Arc<T>);
+                    impl<
+                        T: EventService,
+                    > tonic::server::UnaryService<super::GetObjectInclusionProofRequest>
+                    for GetObjectInclusionProofSvc<T> {
+                        type Response = super::GetObjectInclusionProofResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::GetObjectInclusionProofRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as EventService>::get_object_inclusion_proof(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetObjectInclusionProofSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

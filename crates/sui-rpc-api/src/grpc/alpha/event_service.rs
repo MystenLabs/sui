@@ -3,9 +3,10 @@
 
 use crate::grpc::alpha::event_service_proto::event_service_server::EventService;
 use crate::grpc::alpha::event_service_proto::{
+    GetObjectInclusionProofRequest, GetObjectInclusionProofResponse,
     ListAuthenticatedEventsRequest, ListAuthenticatedEventsResponse,
 };
-use crate::grpc::alpha::list_authenticated_events;
+use crate::grpc::alpha::{get_object_inclusion_proof, list_authenticated_events};
 use crate::RpcService;
 
 #[tonic::async_trait]
@@ -17,6 +18,17 @@ impl EventService for RpcService {
         let req = request.into_inner();
         let resp: ListAuthenticatedEventsResponse =
             list_authenticated_events::list_authenticated_events(self, req)
+                .map_err(tonic::Status::from)?;
+        Ok(tonic::Response::new(resp))
+    }
+
+    async fn get_object_inclusion_proof(
+        &self,
+        request: tonic::Request<GetObjectInclusionProofRequest>,
+    ) -> Result<tonic::Response<GetObjectInclusionProofResponse>, tonic::Status> {
+        let req = request.into_inner();
+        let resp: GetObjectInclusionProofResponse =
+            get_object_inclusion_proof::get_object_inclusion_proof(self, req)
                 .map_err(tonic::Status::from)?;
         Ok(tonic::Response::new(resp))
     }

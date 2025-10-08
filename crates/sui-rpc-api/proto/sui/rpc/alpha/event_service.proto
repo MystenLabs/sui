@@ -5,12 +5,16 @@ syntax = "proto3";
 package sui.rpc.alpha;
 
 import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
 import "sui/rpc/v2/event.proto";
 
 // EventService provides paginated access to authenticated events per stream.
 service EventService {
   // Returns authenticated events for a given event stream ID.
   rpc ListAuthenticatedEvents(ListAuthenticatedEventsRequest) returns (ListAuthenticatedEventsResponse);
+
+  // Returns an inclusion proof if a specified object id was written in a specified checkpoint.
+  rpc GetObjectInclusionProof(GetObjectInclusionProofRequest) returns (GetObjectInclusionProofResponse);
 }
 
 // Request authenticated events for a stream starting from a checkpoint.
@@ -53,4 +57,79 @@ message AuthenticatedEvent {
 
   // The stream identifier (owner address) for which this event is authenticated.
   optional string stream_id = 5;
+}
+
+
+// An event.
+// TODO: Copied from sui-rust-sdk; we should use the existing struct.
+message Event {
+  // Package ID of the top-level function invoked by a `MoveCall` command that triggered this
+  // event to be emitted.
+  optional string package_id = 1;
+
+  // Module name of the top-level function invoked by a `MoveCall` command that triggered this
+  // event to be emitted.
+  optional string module = 2;
+
+  // Address of the account that sent the transaction where this event was emitted.
+  optional string sender = 3;
+
+  // The type of the event emitted.
+  optional string event_type = 4;
+
+  // BCS serialized bytes of the event.
+  optional Bcs contents = 5;
+
+  // JSON rendering of the event.
+  optional google.protobuf.Value json = 6;
+}
+
+// BCS-encoded bytes
+message Bcs {
+  optional bytes value = 1;
+}
+
+// Object Checkpoint State inclusion proof.
+message OCSInclusionProof {
+  // BCS-encoded merkle proof nodes.
+  optional bytes merkle_proof = 1;
+
+  // Leaf index in the merkle tree.
+  optional uint64 leaf_index = 2;
+
+  // Tree root digest (32 bytes).
+  optional bytes tree_root = 3;
+
+  // Object reference being proven (object_id, version, digest).
+  optional ObjectRef object_ref = 4;
+}
+
+// Object reference (ID, version, digest).
+message ObjectRef {
+  // Object ID (32 bytes).
+  optional bytes object_id = 1;
+
+  // Object version.
+  optional uint64 version = 2;
+
+  // Object digest (32 bytes).
+  optional bytes digest = 3;
+}
+
+// Request for object inclusion proof at a checkpoint.
+message GetObjectInclusionProofRequest {
+  // Required. Object ID to get inclusion proof for.
+  optional string object_id = 1;
+
+  // Required. Checkpoint sequence number.
+  optional uint64 checkpoint = 2;
+}
+
+// Response containing object inclusion proof and object data.
+message GetObjectInclusionProofResponse {
+  // Object inclusion proof.
+  optional OCSInclusionProof inclusion_proof = 1;
+
+  // BCS-encoded object data.
+  optional bytes object_data = 2;
 }

@@ -1,0 +1,1 @@
+RUST_LOG=authenticated_events_api_tests cargo simtest --no-capture -p sui-e2e-tests list_authenticated_events_end_to_end 2>&1 | grep -E "INFO.*authenticated_events_api_tests" | sed 's/\x1b\[[0-9;]*m//g' | sed 's/^.*authenticated_events_api_tests.rs:[0-9]*: //'
