@@ -111,7 +111,7 @@ The main sub-directories are:
 
 - **Custom hooks:** To keep the code as structured as possible, multiple custom hooks are utilized to manage the complex state of the game board at each step. The [`useBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useBlackjackGame.ts) custom hook encapsulates the game state and logic, exposing all the required information (with fields such as `game`, `isInitialDealLoading`), and the required functionality (with methods such as `handleCreateGame` and `handleHit`) to display and play the game. Multiple additional custom hooks, such as [`useCreateBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useCreateBlackjackGame.ts), and [`useMakeMoveInBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useMakeMoveInBlackjackGame.ts) are encapsulating their own piece of state and logic to make the code readable and maintainable.
 
-- **Component for game initialization:** The [`StartGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/StartGame.tsx) component is implemented to facilitate the creation of a new game. uses the `handleCreateGame` function of the [`useBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useBlackjackGame.ts) hook to execute the create-game transaction.
+- **Component for game initialization:** The [`StartGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/StartGame.tsx) component is implemented to facilitate the creation of a new game. It uses the `handleCreateGame` function of the [`useBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useBlackjackGame.ts) hook to execute the create-game transaction.
 
 - **Card displaying and management:** The [`DealerCards`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/DealerCards.tsx) and the [`PlayerCards`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/PlayerCards.tsx) components are used to display the total points and the cards owned by the dealer and the player respectively.
 
@@ -127,7 +127,7 @@ The main sub-directories are:
 
 - **State management:** In both games, state management is crucial. For Blackjack, this involves managing the player and dealer's hands and scores using React state hooks. In Coin Flip, the state is managed through Move structs like `HouseData`, which track the house's balance and other game-related details.
 
-- **Randomness and fair play:** Both games emphasize randomness for fairness. Both games use Sui's [on-chain randomness module](https://docs.sui.io/guides/developer/advanced/randomness-onchain), ensuring verifiable and truly random outcomes for every game.
+- **Randomness and fair play:** Both games emphasize randomness for fairness. Both games use Sui's [on-chain randomness module](/guides/developer/advanced/randomness-onchain.mdx), ensuring verifiable and truly random outcomes for every game.
 
 - **Smart contract interactions:** Each game involves smart contract interactions for game actions like placing bets, dealing cards (Blackjack), or making guesses (Coin Flip). These interactions are crucial for executing the game's logic on the blockchain.
 
