@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
@@ -15,12 +16,13 @@ use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransa
 
 pub(crate) struct KvTransactions;
 
+#[async_trait]
 impl Processor for KvTransactions {
     const NAME: &'static str = "kv_transactions";
 
     type Value = StoredTransaction;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,
@@ -61,7 +63,7 @@ impl Processor for KvTransactions {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for KvTransactions {
     type Store = Db;
 
@@ -113,13 +115,13 @@ mod tests {
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = KvTransactions.process(&checkpoint).unwrap();
+        let values = KvTransactions.process(&checkpoint).await.unwrap();
         KvTransactions::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = KvTransactions.process(&checkpoint).unwrap();
+        let values = KvTransactions.process(&checkpoint).await.unwrap();
         KvTransactions::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
@@ -127,7 +129,7 @@ mod tests {
         builder = builder.start_transaction(2).finish_transaction();
         builder = builder.start_transaction(3).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = KvTransactions.process(&checkpoint).unwrap();
+        let values = KvTransactions.process(&checkpoint).await.unwrap();
         KvTransactions::commit(&values, &mut conn).await.unwrap();
 
         let transactions = get_all_kv_transactions(&mut conn).await.unwrap();

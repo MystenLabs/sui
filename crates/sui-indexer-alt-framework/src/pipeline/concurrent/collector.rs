@@ -199,6 +199,7 @@ pub(super) fn collector<H: Handler + 'static>(
 mod tests {
     use std::time::Duration;
 
+    use async_trait::async_trait;
     use sui_pg_db::{Connection, Db};
     use tokio::sync::mpsc;
 
@@ -220,17 +221,22 @@ mod tests {
     }
 
     struct TestHandler;
+
+    #[async_trait]
     impl Processor for TestHandler {
         type Value = Entry;
         const NAME: &'static str = "test_handler";
         const FANOUT: usize = 1;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(
+            &self,
+            _checkpoint: &Arc<CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl Handler for TestHandler {
         type Store = Db;
 

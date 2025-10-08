@@ -18,15 +18,17 @@ use sui_indexer_alt_schema::{
 };
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
+use async_trait::async_trait;
 
 pub(crate) struct TxAffectedAddresses;
 
+#[async_trait]
 impl Processor for TxAffectedAddresses {
     const NAME: &'static str = "tx_affected_addresses";
 
     type Value = StoredTxAffectedAddress;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,
@@ -63,7 +65,7 @@ impl Processor for TxAffectedAddresses {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for TxAffectedAddresses {
     type Store = Db;
 
@@ -138,22 +140,22 @@ mod tests {
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = TxAffectedAddresses.process(&checkpoint).unwrap();
+        let values = TxAffectedAddresses.process(&checkpoint).await.unwrap();
         TxAffectedAddresses::commit(&values, &mut conn)
             .await
             .unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // 1st checkpoint has 2 transactions
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = TxAffectedAddresses.process(&checkpoint).unwrap();
+        let values = TxAffectedAddresses.process(&checkpoint).await.unwrap();
         TxAffectedAddresses::commit(&values, &mut conn)
             .await
             .unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // 2nd checkpoint has 4 transactions
@@ -162,11 +164,11 @@ mod tests {
         builder = builder.start_transaction(2).finish_transaction();
         builder = builder.start_transaction(3).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = TxAffectedAddresses.process(&checkpoint).unwrap();
+        let values = TxAffectedAddresses.process(&checkpoint).await.unwrap();
         TxAffectedAddresses::commit(&values, &mut conn)
             .await
             .unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         let fetched_results = get_all_tx_affected_addresses(&mut conn).await.unwrap();

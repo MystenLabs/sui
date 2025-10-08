@@ -67,11 +67,12 @@ impl Default for GovernanceActionHandler {
     }
 }
 
+#[async_trait]
 impl Processor for GovernanceActionHandler {
     const NAME: &'static str = "governance_action";
     type Value = GovernanceAction;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
         let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms as i64;
 
         let mut results = vec![];

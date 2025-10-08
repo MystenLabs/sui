@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
+use async_trait::async_trait;
 use axum::body::Bytes;
 use std::path::PathBuf;
 
@@ -17,7 +18,7 @@ impl LocalIngestionClient {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl IngestionClientTrait for LocalIngestionClient {
     async fn fetch(&self, checkpoint: u64) -> FetchResult {
         let path = self.path.join(format!("{}.chk", checkpoint));

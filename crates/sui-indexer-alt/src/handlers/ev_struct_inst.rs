@@ -14,15 +14,17 @@ use sui_indexer_alt_framework::{
 use sui_indexer_alt_schema::{events::StoredEvStructInst, schema::ev_struct_inst};
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
+use async_trait::async_trait;
 
 pub(crate) struct EvStructInst;
 
+#[async_trait]
 impl Processor for EvStructInst {
     const NAME: &'static str = "ev_struct_inst";
 
     type Value = StoredEvStructInst;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,
@@ -53,7 +55,7 @@ impl Processor for EvStructInst {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for EvStructInst {
     type Store = Db;
 
@@ -139,7 +141,7 @@ mod tests {
                 .build_checkpoint(),
         );
 
-        let values = EvStructInst.process(&checkpoint).unwrap();
+        let values = EvStructInst.process(&checkpoint).await.unwrap();
         EvStructInst::commit(&values, &mut conn).await.unwrap();
 
         assert_eq!(values.len(), 0);
@@ -159,7 +161,7 @@ mod tests {
         );
 
         // Process checkpoint with one event
-        let values = EvStructInst.process(&checkpoint).unwrap();
+        let values = EvStructInst.process(&checkpoint).await.unwrap();
         EvStructInst::commit(&values, &mut conn).await.unwrap();
 
         let events = get_all_ev_struct_inst(&mut conn).await.unwrap();
@@ -175,9 +177,9 @@ mod tests {
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = EvStructInst.process(&checkpoint).unwrap();
+        let values = EvStructInst.process(&checkpoint).await.unwrap();
         EvStructInst::commit(&values, &mut conn).await.unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // 1st checkpoint has 1 event
@@ -186,9 +188,9 @@ mod tests {
             .with_events(vec![Event::random_for_testing()])
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = EvStructInst.process(&checkpoint).unwrap();
+        let values = EvStructInst.process(&checkpoint).await.unwrap();
         EvStructInst::commit(&values, &mut conn).await.unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // 2nd checkpoint has 2 events
@@ -200,9 +202,9 @@ mod tests {
             ])
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = EvStructInst.process(&checkpoint).unwrap();
+        let values = EvStructInst.process(&checkpoint).await.unwrap();
         EvStructInst::commit(&values, &mut conn).await.unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // Prune checkpoints from `[0, 2)`, expect 2 events remaining

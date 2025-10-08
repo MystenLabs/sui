@@ -23,6 +23,7 @@ use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::task::with_slow_future_monitor;
 use crate::types::full_checkpoint_content::CheckpointData;
+use async_trait::async_trait;
 
 /// Wait at most this long between retries for transient errors.
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
@@ -34,7 +35,7 @@ const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 /// slow remote stores without interrupting the ingestion process.
 const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
-#[async_trait::async_trait]
+#[async_trait]
 pub(crate) trait IngestionClientTrait: Send + Sync {
     async fn fetch(&self, checkpoint: u64) -> FetchResult;
 }
@@ -268,7 +269,7 @@ mod tests {
         not_found_failures: DashMap<u64, usize>,
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl IngestionClientTrait for MockIngestionClient {
         async fn fetch(&self, checkpoint: u64) -> FetchResult {
             // Check for not found failures

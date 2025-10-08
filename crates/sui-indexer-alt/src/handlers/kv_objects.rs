@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
@@ -14,11 +15,12 @@ use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
 
 pub(crate) struct KvObjects;
 
+#[async_trait]
 impl Processor for KvObjects {
     const NAME: &'static str = "kv_objects";
     type Value = StoredObject;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let deleted_objects = checkpoint
             .eventually_removed_object_refs_post_version()
             .into_iter()
@@ -53,7 +55,7 @@ impl Processor for KvObjects {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for KvObjects {
     type Store = Db;
 

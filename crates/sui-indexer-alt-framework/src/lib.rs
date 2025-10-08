@@ -425,17 +425,19 @@ impl<T: TransactionalStore> Indexer<T> {
 mod tests {
     use super::*;
     use crate::mocks::store::MockStore;
-    use crate::pipeline::concurrent::ConcurrentConfig;
+    use crate::pipeline::{concurrent::ConcurrentConfig, Processor};
     use crate::store::CommitterWatermark;
     use crate::FieldCount;
+    use async_trait::async_trait;
     use std::sync::Arc;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tokio_util::sync::CancellationToken;
 
+    #[async_trait]
     impl Processor for MockHandler {
         const NAME: &'static str = "test_processor";
         type Value = MockValue;
-        fn process(
+        async fn process(
             &self,
             _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
         ) -> anyhow::Result<Vec<Self::Value>> {
@@ -449,7 +451,7 @@ mod tests {
 
     struct MockHandler;
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl crate::pipeline::concurrent::Handler for MockHandler {
         type Store = MockStore;
 
@@ -461,7 +463,7 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl crate::pipeline::sequential::Handler for MockHandler {
         type Store = MockStore;
         type Batch = Vec<Self::Value>;

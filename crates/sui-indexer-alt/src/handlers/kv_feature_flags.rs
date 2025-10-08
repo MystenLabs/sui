@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
+use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
@@ -17,11 +18,12 @@ use sui_protocol_config::ProtocolConfig;
 
 pub(crate) struct KvFeatureFlags(pub(crate) StoredGenesis);
 
+#[async_trait]
 impl Processor for KvFeatureFlags {
     const NAME: &'static str = "kv_feature_flags";
     type Value = StoredFeatureFlag;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             checkpoint_summary, ..
         } = checkpoint.as_ref();
@@ -57,7 +59,7 @@ impl Processor for KvFeatureFlags {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for KvFeatureFlags {
     type Store = Db;
 
@@ -96,7 +98,10 @@ mod tests {
             initial_protocol_version: ProtocolVersion::MIN.as_u64() as i64,
         };
 
-        let feature_flags = KvFeatureFlags(stored_genesis).process(&checkpoint).unwrap();
+        let feature_flags = KvFeatureFlags(stored_genesis)
+            .process(&checkpoint)
+            .await
+            .unwrap();
 
         assert!(!feature_flags.is_empty());
         for flag in feature_flags {
@@ -122,6 +127,7 @@ mod tests {
 
         KvFeatureFlags(stored_genesis)
             .process(&checkpoint)
+            .await
             .unwrap_err();
     }
 }

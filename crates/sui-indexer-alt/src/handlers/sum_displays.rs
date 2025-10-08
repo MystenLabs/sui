@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
@@ -19,12 +20,13 @@ const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredDisplay::FIELD_CO
 
 pub(crate) struct SumDisplays;
 
+#[async_trait]
 impl Processor for SumDisplays {
     const NAME: &'static str = "sum_displays";
 
     type Value = StoredDisplay;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData { transactions, .. } = checkpoint.as_ref();
 
         let mut values = vec![];
@@ -58,7 +60,7 @@ impl Processor for SumDisplays {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for SumDisplays {
     type Store = Db;
     type Batch = BTreeMap<Vec<u8>, Self::Value>;
