@@ -1,0 +1,508 @@
+---
+title: Cross-Chain Asset Transfer
+description: Making cross-chain asset transfers using Axelar's Interchain Token Service
+keywords: [Cross-Chain, Axelar]
+---
+
+# Axelar Interchain Token Service (ITS)
+
+The [Axelar Network](https://axelar.network/) is a decentralized interoperability network designed to enable seamless cross-chain communication, it can be thought of as a blockchain for blockchains. It connects a number of different EVM and non-evms [blockchains](https://axelarscan.io/resources/chains) including Sui.
+
+Axelar's [Interchain Token Service (ITS)](https://www.axelar.network/its) is live on Sui to allow for the integration of coins on Sui to be sent to/from other ecosystems connected to the Axelar Network. ITS allows teams to deploy fresh new fungible [Interchain Tokens](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/interchain_token/sources/interchain_token.move) as well as integrate custom tokens that want to go cross-chain. ITS is already live on many different EVM and non-evm chains so you can now send your Sui coins to and from those chains.
+
+The official Sui integration codebase be found [here](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/interchain_token_service)
+
+:::info 
+  The simplest way to use ITS is through Axelar's [ITS
+  Portal](https://interchain.axelar.dev/), which also supports Sui! ([testnet
+  portal](https://testnet.interchain.axelar.dev/))
+:::
+
+## Interchain Token Service (ITS)
+
+This is the module that anyone would directly interact with. It needs to be able to do the following:
+
+1. Register Coin
+1. Deploy Remote Interchain Token
+1. Send Interchain Transfer
+1. Receive Interchain Transfer
+
+### Register Coin
+
+To integrate a coin to ITS the `register_coin()` function must be called. This function takes in the following parameters:
+
+1. `its`: The ITS module that will be updated once the new coin is registered
+1. `coin_info`: The [coin info](#coin-info) represents the of the coin
+1. `coin_management`: The type of [management](#coin-management) the coin will have with ITS
+
+Before you can register your coin however, you first must create a [coin-manager](#coin-management) and a [coin-info](#coin-info) for your coin.
+
+```move
+public fun register_coin<T>(
+    self: &mut ITS,
+    coin_info: CoinInfo<T>,
+    coin_management: CoinManagement<T>,
+): TokenId {
+    let value = self.value_mut!(b"register_coin");
+
+    value.register_coin(coin_info, coin_management)
+}
+```
+
+Once triggered, ITS will generate a unique [token id](#token-id) from the coin's metadata and management details. Then it will [add](https://docs.sui.io/references/framework/sui/bag#sui_bag_add) the tokenId to the `registered_coins` bag. The full implementation of the `register_coin()` function can be found [here](https://github.com/axelarnetwork/axelar-cgp-sui/blob/v1.1.3/move/interchain_token_service/sources/versioned/interchain_token_service_v0.move#L166)
+
+See [here](https://github.com/axelarnetwork/axelar-contract-deployments/blob/main/sui/its-example.js#L195) for an example of how to register a new coin.
+
+### Deploy Remote Interchain Token
+
+If you are starting from scratch and want to deploy a fresh new token with cross-chain functionality built into it, you can trigger the `deploy_remote_interchain_token()` function. This function will deploy a new *Interchain Token* on a different blockchain via a cross-chain [GMP call](https://docs.axelar.dev/dev/general-message-passing/overview/#general-message-passing). 
+
+The function takes three parameters:
+
+1. `its`: The ITS module that will be updated once the new token is registered
+1. `token`: The [token_id](#token-id) representing the token to be deployed on the destination chain
+1. `destination_chain`: The name of the destination chain to deploy the token on
+
+```move
+public fun deploy_remote_interchain_token<T>(
+    self: &ITS,
+    token_id: TokenId,
+    destination_chain: String,
+): MessageTicket {
+    let value = self.value!(b"deploy_remote_interchain_token");
+
+    value.deploy_remote_interchain_token<T>(token_id, destination_chain)
+}
+```
+
+Since this function is making a cross-chain call, it will return a [MessageTicket](/guides/developer/cross-chain/gmp#message-ticket) for the cross-chain transaction. The full implementation of the `deploy_remote_interchain_token()` can be found [here](https://github.com/axelarnetwork/axelar-cgp-sui/blob/v1.1.3/move/interchain_token_service/sources/versioned/interchain_token_service_v0.move#L178).
+
+See here for an [example](https://github.com/axelarnetwork/axelar-contract-deployments/blob/main/sui/its-example.js#L107) of how to run a cross-chain deployment for a new token.
+
+### Interchain Transfer
+
+Once your coin has been integrated with ITS, you can use the `send_interchain_transfer()` function to actually send it cross-chain to another chain where it has been integrated. Sending an interchain transfer is a two step process. The first step is to prepare the [Interchain Transfer Ticket](#interchain-transfer-ticket) via the [prepare_interchain_transfer](#prepare-interchain-transfer) function, then once the ticket is created you can trigger the [send_interchain_transfer](#send-interchain-transfer) function. Breaking up the transfer into a two step process allows the package to be more flexible in the case of an upgrade.
+
+:::info 
+  A note on upgradability:
+  In Sui, modules themselves are immutable once published, so upgradability is achieved by designing your system to use versioned objects and delegating calls through stable interfaces. For example, if you upgrade the gateway and deprecate a function like `send_message()` in v1, any package that calls it directly would break unless upgraded. To avoid this, you can have your package only call a stable function like `prepare_message()` (which remains supported across versions) and then let your frontend chain a call to `send_message()`. This way, when you upgrade, you only need to change which version of `send_message()` the frontend calls, and your package remains unchanged.
+:::
+
+
+#### Prepare Interchain Transfer
+
+This will crete the `InterchainTransferTicket` to be passed in to the `send_interchain_transfer()`
+
+The function takes six parameters:
+1. `token_id`: The id of the token being sent
+1. `coin`: The actual [coin](https://docs.sui.io/standards/coin) being sent
+1. `destination_chain`: The name of the chain the coin is being sent to
+1. `destination_address`: The address on the destination chain the coin is being sent to
+1. `metadata`: Executable data being sent along with the coin for a contract on the destination chain to handle
+1. `source_channel`: The channel where the message is being sent to
+
+```move
+public fun prepare_interchain_transfer<T>(
+    token_id: TokenId,
+    coin: Coin<T>,
+    destination_chain: String,
+    destination_address: vector<u8>,
+    metadata: vector<u8>,
+    source_channel: &Channel,
+): InterchainTransferTicket<T> {
+    interchain_transfer_ticket::new<T>(
+        token_id,
+        coin.into_balance(),
+        source_channel.to_address(),
+        destination_chain,
+        destination_address,
+        metadata,
+        VERSION,
+    )
+}
+```
+
+#### Send Interchain Transfer
+
+This will trigger the cross-chain call to actually send the coin from the source chain to the destination chain.
+
+The function takes three parameters:
+1. `its`: The ITS module that will be updated once the new coin is registered
+1. `ticket`: The [ticket](#interchain-transfer-ticket) representing the coin transfer
+1. `clock`: A [clock](https://docs.sui.io/references/framework/sui/clock) module that provides the time of the transfer
+
+```move
+public fun send_interchain_transfer<T>(
+    self: &mut ITS,
+    ticket: InterchainTransferTicket<T>,
+    clock: &Clock,
+): MessageTicket {
+    let value = self.value_mut!(b"send_interchain_transfer");
+
+    value.send_interchain_transfer<T>(
+        ticket,
+        VERSION,
+        clock,
+    )
+}
+```
+
+See here for an [example](https://github.com/axelarnetwork/axelar-contract-deployments/blob/main/sui/its-example.js#L65) of how to use the `send_interchain_transfer()` 
+
+The full `send_interchain_transfer()` implementation can be found [here](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/interchain_token_service/sources/versioned/interchain_token_service_v0.move#L212) 
+
+
+### Receive Interchain Transfer
+
+When tokens are sent to Sui, the [Relayer Discovery](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/interchain_token_service/sources/discovery.move) module will trigger the `receive_interchain_transfer()` function on the Sui ITS module. An application must register themselves with the `relayer_discovery` and use a `channel` they control as the destination address in order to receive tokens with data. 
+
+The function takes 4 parameters: 
+1. `its`: The ITS module that will be updated once the new coin is registered
+1. `approved_message`: The cross-chain [message](/guides/developer/cross-chain/gmp#approved-message) sent with the receiving instructions for the token.
+1. `clock`: A [clock](https://docs.sui.io/references/framework/sui/clock) module that provides the time of the transfer
+1. `ctx`: The [transaction context](https://docs.sui.io/references/framework/sui/tx_context#sui_tx_context_TxContext) provides the necessary runtime environment for creating or modifying objects and state
+
+```move
+public fun receive_interchain_transfer<T>(
+    self: &mut ITS,
+    approved_message: ApprovedMessage,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let value = self.value_mut!(b"receive_interchain_transfer");
+
+    value.receive_interchain_transfer<T>(approved_message, clock, ctx);
+}
+```
+
+Once the relayer triggers this function it in turn triggers the [give_coin](#give-coin) function on the Coin Management program. Then once `give_coin()` has run the function will transfer the coin to the destination address.
+
+The full `receive_interchain_transfer()`  can be found [here](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/interchain_token_service/sources/versioned/interchain_token_service_v0.move#L247) 
+
+
+#### Receive Interchain Transfer With Data
+
+If the source chain is sending executable metadata along with the transaction that data will be handled by the `receive_interchain_transfer_with_data()` function. 
+
+It takes the same parameters as the previous `receive_interchain_transfer()` function except it also includes a `channel` parameter. The channel is used to check if the destination address in the payload matches the channel's own address, ensuring that messages with extra data are properly routed.
+
+For the channel to be available the package must be registered themselves with `relayer_discovery` and use a `channel` they control as the destination address. 
+
+The key differences with `receive_interchain_transfer_with_data()`, are that the function `asserts` that the `data` being sent is not empty and it does not simply transfer the coin to the destination address. This function is designed for transfers that carry extra information and requires additional routing and validation steps, while the standard version is for simple transfers that don’t include extra data and performs the transfer immediately. It is up to the caller to decide how to transfer the coin once the function returns
+
+```move
+public fun receive_interchain_transfer_with_data<T>(
+    self: &mut InterchainTokenService,
+    approved_message: ApprovedMessage,
+    channel: &Channel,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (String, vector<u8>, vector<u8>, Coin<T>) {
+    let value = self.value_mut!(b"receive_interchain_transfer_with_data");
+
+    value.receive_interchain_transfer_with_data<T>(
+        approved_message,
+        channel,
+        clock,
+        ctx,
+    )
+}
+```
+
+See here for an [example](https://github.com/axelarnetwork/axelar-contract-deployments/blob/main/sui/its-example.js#L124) of how to receive a transfer with data.
+
+The full `receive_interchain_transfer_with_data()` implementation can be found [here](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/interchain_token_service/sources/versioned/interchain_token_service_v0.move#L282)
+
+## Coin Management
+
+A centerpiece of the ITS design is the `Coin Management` module (akin to the [token manager](https://docs.axelar.dev/dev/send-tokens/interchain-tokens/token-manager/#token-managers) contract for evm chains). The `Coin Management` module facilitates the integration between the `coin` and `ITS` itself. It is created before registering a coin. It encapsulates key functionalities such as minting, burning, managing balances, and enforcing [flow limits](#flow-limit) for cross‐chain operations.
+
+Coin managers can be initialized as either a [capped](#capped-management) manager or [locked](#locked-management). The module stores the following fields:
+
+1. `treasury_cap`: An optional [capability](https://docs.sui.io/standards/coin#treasury-capability) that, if present, allows minting and burning of coins.
+1. `balance`: An optional balance used when coins are managed in a locked state (i.e., coins already in circulation).
+1. `distributor`: An optional address authorized to perform minting and burning operations.
+1. `operator`: An optional address authorized to set flow limits for the coin.
+1. `flow_limit`: A structure that tracks the allowed inflow and outflow of coins to control their movement.
+1. `dust`: A field (of type u256) for tracking any leftover coins after transfers.
+
+```move
+public struct CoinManagement<phantom T> has store {
+    treasury_cap: Option<TreasuryCap<T>>,
+    balance: Option<Balance<T>>,
+    distributor: Option<address>,
+    operator: Option<address>,
+    flow_limit: FlowLimit,
+    dust: u256,
+}
+```
+
+#### Capped Management
+
+Capped Management types create a new `CoinManagement` with a [Treasury Cap](https://docs.sui.io/standards/coin#treasury-capability). This type of `CoinManagement` allows minting and burning of coins, meaning when the token is sent out of Sui it is burned and when it is sent back into Sui it is minted. This is a useful manager type if your coin is natively integrated on a number chain. In other words when there is no canonical implementation of the token on a single chain that all other tokens depend on. Integrating a `capped` manager type involves calling the following factory function. 
+
+```move
+public fun new_with_cap<T>(treasury_cap: TreasuryCap<T>): CoinManagement<T> {
+    CoinManagement<T> {
+        treasury_cap: option::some(treasury_cap),
+        balance: option::none(),
+        distributor: option::none(),
+        operator: option::none(),
+        flow_limit: flow_limit::new(),
+        dust: 0,
+    }
+}
+```
+
+See [here](https://github.com/axelarnetwork/axelar-contract-deployments/blob/main/sui/its-example.js#L200) for an example of how deploy a new capped managers.
+
+
+#### Locked Management
+
+Locked Management types Create a new `CoinManagement` with a `Balance`. The stored `Balance` can be used to take and put coins. This manger type will lock the sent coin with ITS when the coin is sent out of Sui and unlock the coin when it sent back into the Sui ecosystem. This type of manager is very useful if Sui is the *home-chain* for your ITS integration and you are using wrapped tokens on other chains that derive back to the canonical token on Sui. Integrating ` new_locked` manager type involves calling the following factory function.
+
+```move
+public fun new_locked<T>(): CoinManagement<T> {
+    CoinManagement<T> {
+        treasury_cap: option::none(),
+        balance: option::some(balance::zero()),
+        distributor: option::none(),
+        operator: option::none(),
+        flow_limit: flow_limit::new(),
+        dust: 0,
+    }
+}
+```
+
+See [here](https://github.com/axelarnetwork/axelar-contract-deployments/blob/main/sui/its-example.js#L194) for an example of how deploy a new capped managers.
+
+
+### Give Coin
+
+When the coin is being sent into the Sui ecosystem, the Management module will trigger the `give_coin()` function. This function updates the incoming [flow limit](#flow-limit) and then either mints new coins (if the instance has a [treasury capability](https://docs.sui.io/standards/coin#treasury-capability)) or withdraws coins from the internal balance. It returns the coin object that is ready to be transferred.
+
+```move
+public(module) fun give_coin<T>(self: &mut CoinManagement<T>, amount: u64, clock: &Clock, ctx: &mut TxContext): Coin<T> {
+    self.flow_limit.add_flow_in(amount, clock);
+    if (has_capability(self)) {
+        self.mint(amount, ctx)
+    } else {
+        coin::take(self.balance.borrow_mut(), amount, ctx)
+    }
+}
+```
+
+
+### Take Balance
+When the coin is being out of the Sui ecosystem, the Management module will trigger the `take_balance()` function. This function updates the [flow limit](#flow-limit) for an outgoing transfer and then either burns the coins (if minting capability is available) or merges the deducted amount into the stored balance. It returns the numeric amount (as a `u64`) that was taken.
+
+
+```move
+public(package) fun take_balance<T>(self: &mut CoinManagement<T>, to_take: Balance<T>, clock: &Clock): u64 {
+    self.flow_limit.add_flow_out(to_take.value(), clock);
+    let amount = to_take.value();
+    if (has_capability(self)) {
+        self.burn(to_take);
+    } else {
+        self.balance.borrow_mut().join(to_take);
+    };
+    amount
+}
+```
+
+### Set Flow Limit
+To set a specific [flow limit](#flow-limit) amount you can trigger the `set_flow_limit_as_token_operator()` function.
+
+The function takes four parameters:
+
+1. `self`:  The module that will be updated once the `flow_limit` is set
+1. `channel`: A reference to the `Channel` object to derive the caller’s address. The address is checked to ensure that only the authorized operator can change the `flow_limit`.
+1. `token_id`: The [token id](#token-id) representing the token to be set
+1. `limit`: An optional unsigned 64-bit integer representing the new flow limit
+
+```move
+public fun set_flow_limit_as_token_operator<T>(
+    self: &mut InterchainTokenService,
+    channel: &Channel,
+    token_id: TokenId,
+    limit: Option<u64>,
+) {}
+```
+
+### Roles
+
+The Coin Management module has set roles that can handle specific functionality
+
+#### Distributor
+An address set within the CoinManagement instance that is authorized to perform minting (and sometimes burning) operations. Only CoinManagement instances with a [treasury capability](https://docs.sui.io/standards/coin#treasury-capability) can add a distributor.
+
+#### Operator
+An address authorized to update [flow limits](#flow-limit) for token transfers. When setting a new flow limit, the module verifies that the caller’s channel address matches the stored operator address to ensure only the operator can make that change.
+
+
+## Flow Limit
+Flow Limits represent the volume of a coin that can be transferred in/out of Sui via ITS. This limit plays a critical role in maintaining network integrity and security. When coins are sent out of Sui. The flow limit logic can be found in its own [Flow Limit Module](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/interchain_token_service/sources/types/flow_limit.move)
+
+The module has several pieces of functionality that are triggered by the [Coin Management](#coin-management) module
+
+### Add Flow In
+This is triggered each time the `give_coin()` function is executed. It increments the `flow_in` value to track when the `flow_limit` is reached
+
+```move
+public(package) fun add_flow_in(self: &mut FlowLimit, amount: u64, clock: &Clock) {
+    if (self.flow_limit.is_none()) {
+        return
+    };
+    let flow_limit = *self.flow_limit.borrow() as u128;
+
+    update_epoch(self, clock);
+    assert!(self.flow_in + (amount as u128) < flow_limit + self.flow_out, EFlowLimitExceeded);
+    self.flow_in = self.flow_in + (amount as u128);
+}
+```
+
+### Add Flow Out
+This is triggered each time the `take_balance()` function is executed. It increments the `flow_out` value to track when the `flow_limit` is reached.
+
+```move
+public(package) fun add_flow_out(self: &mut FlowLimit, amount: u64, clock: &Clock) {
+    if (self.flow_limit.is_none()) {
+        return
+    };
+    let flow_limit = *self.flow_limit.borrow() as u128;
+
+    update_epoch(self, clock);
+    assert!(self.flow_out + (amount as u128) < flow_limit + self.flow_in, EFlowLimitExceeded);
+    self.flow_out = self.flow_out + (amount as u128);
+}
+```
+
+### Set Flow Limit 
+This is triggered by the [set_flow_limit](#set-flow-limit) function of the Coin management module. It sets the `flow_limit` amount for the Flow Limit module.
+
+```move
+public(package) fun set_flow_limit(self: &mut FlowLimit, flow_limit: Option<u64>) {
+    self.flow_limit = flow_limit;
+}
+```
+
+
+## Token Id
+
+A `TokenId` is a unique identifier for an ITS integration. Since ITS is a permisionless service anyone can in theory integrate a deployed coin, what differentiates between the potentially many different integrations of a coin with ITS is the `tokenId`. 
+
+The module for the Sui token id can be found [here](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/interchain_token_service/sources/types/token_id.move). 
+
+A `TokenId` is a wrapper of a coin's address.
+
+```move
+public struct TokenId has copy, drop, store {
+    id: address,
+}
+```
+
+
+## Coin Info
+
+The coin info defines the `CoinInfo` type which stores information about a coin:
+
+The following fields are available for CoinInfo
+
+1. `name`: The name of the coin
+1. `symbol`: The symbol of the coin
+1. `decimals`: The amount of decimals the coin can hold. 
+1. `metadata`: The [metadata](https://docs.sui.io/references/sui-api/sui-graphql/reference/types/objects/coin-metadata) for the coin
+
+:::info 
+Since coins are `u64` some conversion might need to happen when receiving coins as decimals of 18 are too large for Sui to handle.
+:::
+```move
+public struct CoinInfo<phantom T> has store {
+    name: String,
+    symbol: ascii::String,
+    decimals: u8,
+    metadata: Option<CoinMetadata<T>>,
+}
+```
+
+To create a new Coin Info module for your token you can run one of two factory functionalities
+
+### From Info
+
+This will create a new Coin Info from the given name, symbol and decimals. The selection along side the coin type will result in a unique TokenId.
+
+```move
+public fun from_info<T>(name: String, symbol: ascii::String, decimals: u8): CoinInfo<T> {
+    CoinInfo {
+        name,
+        symbol,
+        decimals,
+        metadata: option::none(),
+    }
+}
+```
+
+An example of how to register a new Coin Info with `from_info()` can be found [here](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/example/sources/its/its.move#L126)
+
+### From Metadata
+
+This will create a new coin info from the given `CoinMetadata` object. This can only be done once per token since there is only one CoinMetadata per Coin.
+
+```move
+public fun from_metadata<T>(metadata: CoinMetadata<T>): CoinInfo<T> {
+    CoinInfo {
+        name: metadata.get_name(),
+        symbol: metadata.get_symbol(),
+        decimals: metadata.get_decimals(),
+        metadata: option::some(metadata),
+    }
+}
+```
+
+## Interchain Transfer Ticket
+
+The Interchain Transfer Ticket contains a unique type to be sent for each transfer, holding all the info required for an interchain transfer. It contains the following fields:
+
+1. `token_id`: The id of the coin being sent cross-chain 
+1. `balance`: A wrapped [balance](https://docs.sui.io/references/sui-api/sui-graphql/reference/types/objects/balance) object representing the coin amount to be transferred, which is later converted to a numeric amount.
+1. `source_address`: The address initiating the transfer
+1. `destination_chain`: The name of the blockchain where the coin is being sent to
+1. `destination_address`: The receive address on the destination chain
+1. `metadata`: Additional executable data to be sent with the coin
+1. `version`: The version of ITS that is being used for this transfer
+
+```move
+public struct InterchainTransferTicket<phantom T> {
+    token_id: TokenId,
+    balance: Balance<T>,
+    source_address: address,
+    destination_chain: String,
+    destination_address: vector<u8>,
+    metadata: vector<u8>,
+    version: u64,
+}
+```
+
+To create an `InterchainTransferTicket` you can trigger the `prepare_interchain_transfer_ticket()` on ITS
+
+```move
+public fun prepare_interchain_transfer<T>(
+    token_id: TokenId,
+    coin: Coin<T>,
+    destination_chain: String,
+    destination_address: vector<u8>,
+    metadata: vector<u8>,
+    source_channel: &Channel,
+): InterchainTransferTicket<T> {
+    interchain_transfer_ticket::new<T>(
+        token_id,
+        coin.into_balance(),
+        source_channel.to_address(),
+        destination_chain,
+        destination_address,
+        metadata,
+        VERSION,
+    )
+}
+```
+
