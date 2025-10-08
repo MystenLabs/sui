@@ -1445,7 +1445,7 @@ mod checked {
     ) -> ProgrammableTransactionBuilder {
         let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
 
-        let estimate_chunks = estimates.filter_and_sort_v2(|_| true, usize::MAX, chunk_size);
+        let estimate_chunks = estimates.chunk_observations(chunk_size);
 
         let chunk_bytes: Vec<Vec<u8>> = estimate_chunks
             .into_iter()
