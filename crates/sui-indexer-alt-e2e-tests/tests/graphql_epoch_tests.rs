@@ -25,7 +25,7 @@ use sui_types::{
         SuiSystemState, mock, sui_system_state_inner_v1::SuiSystemStateInnerV1,
         sui_system_state_inner_v2::SuiSystemStateInnerV2,
     },
-    test_checkpoint_data_builder::{AdvanceEpochConfig, TestCheckpointDataBuilder},
+    test_checkpoint_data_builder::{AdvanceEpochConfig, TestCheckpointBuilder},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -230,8 +230,8 @@ async fn test_graphql<T: DeserializeOwned>(
     )
     .await?;
 
-    let checkpoint_data = TestCheckpointDataBuilder::new(0).advance_epoch(advance_epoch_config);
-    write_checkpoint(temp_dir.path(), checkpoint_data).await?;
+    let checkpoint = TestCheckpointBuilder::new(0).advance_epoch(advance_epoch_config);
+    write_checkpoint(temp_dir.path(), checkpoint).await?;
 
     offchain
         .wait_for_graphql(0, Duration::from_secs(10))

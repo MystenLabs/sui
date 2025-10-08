@@ -10,8 +10,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
-    FieldCount, metrics::IndexerMetrics, store::Store,
-    types::full_checkpoint_content::CheckpointData,
+    FieldCount, metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint,
 };
 
 use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
@@ -190,7 +189,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     config: ConcurrentConfig,
     skip_watermark: bool,
     store: H::Store,
-    checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
+    checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -299,8 +298,8 @@ mod tests {
         mocks::store::{MockConnection, MockStore},
         pipeline::Processor,
         types::{
-            full_checkpoint_content::CheckpointData,
-            test_checkpoint_data_builder::TestCheckpointDataBuilder,
+            full_checkpoint_content::Checkpoint,
+            test_checkpoint_data_builder::TestCheckpointBuilder,
         },
     };
 
@@ -323,11 +322,8 @@ mod tests {
         const FANOUT: usize = 2;
         type Value = TestValue;
 
-        async fn process(
-            &self,
-            checkpoint: &Arc<CheckpointData>,
-        ) -> anyhow::Result<Vec<Self::Value>> {
-            let cp_num = checkpoint.checkpoint_summary.sequence_number;
+        async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+            let cp_num = checkpoint.summary.sequence_number;
 
             // Every checkpoint will come with 2 processed values
             Ok(vec![
@@ -380,7 +376,7 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        checkpoint_tx: mpsc::Sender<Arc<CheckpointData>>,
+        checkpoint_tx: mpsc::Sender<Arc<Checkpoint>>,
         pipeline_handle: JoinHandle<()>,
         cancel: CancellationToken,
     }
@@ -413,7 +409,7 @@ mod tests {
 
         async fn send_checkpoint(&self, checkpoint: u64) -> anyhow::Result<()> {
             let checkpoint = Arc::new(
-                TestCheckpointDataBuilder::new(checkpoint)
+                TestCheckpointBuilder::new(checkpoint)
                     .with_epoch(1)
                     .with_network_total_transactions(checkpoint * 2)
                     .with_timestamp_ms(1000000000 + checkpoint * 1000)

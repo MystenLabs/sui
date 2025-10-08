@@ -47,17 +47,22 @@ pub(crate) mod tests {
     async fn local_test_fetch() {
         let tempdir = tempfile::tempdir().unwrap().keep();
         let path = tempdir.join("1.chk");
-        let test_checkpoint = test_checkpoint_data(1);
-        tokio::fs::write(&path, &test_checkpoint).await.unwrap();
+        let test_checkpoint_data = test_checkpoint_data(1);
+        tokio::fs::write(&path, &test_checkpoint_data)
+            .await
+            .unwrap();
 
         let local_client = IngestionClient::new_local(tempdir, test_metrics());
         let checkpoint = local_client.fetch(1).await.unwrap();
 
+        // Convert checkpoint back to CheckpointData for serialization comparison
+        let checkpoint: crate::types::full_checkpoint_content::CheckpointData =
+            (*checkpoint).clone().into();
         assert_eq!(
-            Blob::encode(&*checkpoint, BlobEncoding::Bcs)
+            Blob::encode(&checkpoint, BlobEncoding::Bcs)
                 .unwrap()
                 .to_bytes(),
-            test_checkpoint
+            test_checkpoint_data
         );
     }
 }
