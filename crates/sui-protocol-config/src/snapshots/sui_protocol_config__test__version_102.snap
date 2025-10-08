@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 98
+version: 102
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -44,8 +44,10 @@ feature_flags:
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
+  enable_poseidon: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
+  enable_group_ops_native_function_msm: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
   reject_mutable_random_on_entry_functions: true
@@ -56,9 +58,10 @@ feature_flags:
       randomness_scalar: 20
       max_estimate_us: 1500000
       stored_observations_num_included_checkpoints: 10
-      stored_observations_limit: 18
+      stored_observations_limit: 180
       stake_weighted_median_threshold: 3334
       default_none_duration_for_new_keys: true
+      observations_chunk_size: 18
   consensus_choice: Mysticeti
   consensus_network: Tonic
   correct_gas_payment_limit_check: true
@@ -67,6 +70,7 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
+  enable_vdf: true
   record_consensus_determined_version_assignments_in_prologue: true
   record_consensus_determined_version_assignments_in_prologue_v2: true
   fresh_vm_on_framework_upgrade: true
@@ -104,6 +108,7 @@ feature_flags:
   enable_party_transfer: true
   allow_unbounded_system_objects: true
   type_tags_in_object_runtime: true
+  create_root_accumulator_object: true
   better_adapter_type_resolution_errors: true
   record_time_estimate_processed: true
   dependency_linkage_error: true
@@ -112,10 +117,12 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
+  include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true
   additional_borrow_checks: true
+  use_new_commit_handler: true
   better_loader_errors: true
   generate_df_type_layouts: true
 max_tx_size_bytes: 131072
@@ -312,6 +319,7 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 10
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
+poseidon_bn254_cost_base: 260
 poseidon_bn254_cost_per_block: 388
 group_ops_bls12381_decode_scalar_cost: 7
 group_ops_bls12381_decode_g1_cost: 2848
@@ -353,6 +361,8 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
+vdf_verify_vdf_cost: 1500
+vdf_hash_to_input_cost: 100
 nitro_attestation_parse_base_cost: 2650
 nitro_attestation_parse_cost_per_byte: 50
 nitro_attestation_verify_base_cost: 2481600
@@ -416,3 +426,4 @@ gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
 consensus_commit_rate_estimation_window_size: 10
+max_updates_per_settlement_txn: 100

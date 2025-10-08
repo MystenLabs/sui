@@ -528,7 +528,6 @@ mod test {
                         stored_observations_limit: rng.gen_range(1..=20),
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
-                        enable_observation_chunking: false,
                         observations_chunk_size: None,
                     },
                 ),
@@ -1580,7 +1579,9 @@ mod test {
         );
 
         if old_format_result.is_ok() {
-            panic!("Old execution time estimates storage format found - should not exist with chunking enabled");
+            panic!(
+                "Old execution time estimates storage format found - should not exist with chunking enabled"
+            );
         }
 
         let chunk_count_result: Result<u64, _> = get_dynamic_field_from_store(
@@ -1632,11 +1633,10 @@ mod test {
                         allowed_txn_cost_overage_burst_limit_us: 500_000,
                         randomness_scalar: 20,
                         max_estimate_us: 1_500_000,
-                        stored_observations_num_included_checkpoints: 100,
+                        stored_observations_num_included_checkpoints: 200,
                         stored_observations_limit: 200,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
-                        enable_observation_chunking: true,
                         observations_chunk_size: Some(2),
                     },
                 ),

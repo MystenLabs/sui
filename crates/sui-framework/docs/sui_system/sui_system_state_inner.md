@@ -2785,11 +2785,10 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     estimates: vector&lt;u8&gt;,
 ) {
-    <b>let</b> key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>;
-    <b>if</b> (self.extra_fields.contains(key)) {
-        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(key);
+    <b>if</b> (self.extra_fields.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
+        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
     };
-    self.extra_fields.add(key, estimates);
+    self.extra_fields.add(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>, estimates);
 }
 </code></pre>
 
@@ -2816,13 +2815,13 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     estimate_chunks: vector&lt;vector&lt;u8&gt;&gt;,
 ) {
-    <b>let</b> old_key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>;
-    <b>if</b> (self.extra_fields.contains(old_key)) {
-        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(old_key);
+    <b>if</b> (self.extra_fields.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
+        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
     };
-    <b>let</b> chunk_count_key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>;
-    <b>if</b> (self.extra_fields.contains(chunk_count_key)) {
-        <b>let</b> existing_chunk_count: u64 = self.extra_fields.remove&lt;_, u64&gt;(chunk_count_key);
+    <b>if</b> (self.extra_fields.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>)) {
+        <b>let</b> existing_chunk_count: u64 = self
+            .extra_fields
+            .remove&lt;_, u64&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>);
         <b>let</b> <b>mut</b> chunk_idx = 0;
         <b>while</b> (chunk_idx &lt; existing_chunk_count) {
             <b>let</b> chunk_key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a> { chunk_index: chunk_idx };
@@ -2834,7 +2833,7 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     };
     <b>let</b> total_chunks = estimate_chunks.length();
     <b>if</b> (total_chunks &gt; 0) {
-        self.extra_fields.add(chunk_count_key, total_chunks);
+        self.extra_fields.add(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>, total_chunks);
         <b>let</b> <b>mut</b> i = 0;
         <b>while</b> (i &lt; total_chunks) {
             <b>let</b> chunk_key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a> { chunk_index: i };

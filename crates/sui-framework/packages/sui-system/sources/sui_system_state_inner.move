@@ -1103,25 +1103,24 @@ public(package) fun store_execution_time_estimates(
     self: &mut SuiSystemStateInnerV2,
     estimates: vector<u8>,
 ) {
-    let key = EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
-    if (self.extra_fields.contains(key)) {
-        self.extra_fields.remove<_, vector<u8>>(key);
+    if (self.extra_fields.contains(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY)) {
+        self.extra_fields.remove<_, vector<u8>>(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY);
     };
-    self.extra_fields.add(key, estimates);
+    self.extra_fields.add(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY, estimates);
 }
 
 public(package) fun store_execution_time_estimates_v2(
     self: &mut SuiSystemStateInnerV2,
     estimate_chunks: vector<vector<u8>>,
 ) {
-    let old_key = EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
-    if (self.extra_fields.contains(old_key)) {
-        self.extra_fields.remove<_, vector<u8>>(old_key);
+    if (self.extra_fields.contains(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY)) {
+        self.extra_fields.remove<_, vector<u8>>(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY);
     };
 
-    let chunk_count_key = EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY;
-    if (self.extra_fields.contains(chunk_count_key)) {
-        let existing_chunk_count: u64 = self.extra_fields.remove<_, u64>(chunk_count_key);
+    if (self.extra_fields.contains(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY)) {
+        let existing_chunk_count: u64 = self
+            .extra_fields
+            .remove<_, u64>(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY);
 
         let mut chunk_idx = 0;
         while (chunk_idx < existing_chunk_count) {
@@ -1135,7 +1134,7 @@ public(package) fun store_execution_time_estimates_v2(
 
     let total_chunks = estimate_chunks.length();
     if (total_chunks > 0) {
-        self.extra_fields.add(chunk_count_key, total_chunks);
+        self.extra_fields.add(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY, total_chunks);
 
         let mut i = 0;
         while (i < total_chunks) {

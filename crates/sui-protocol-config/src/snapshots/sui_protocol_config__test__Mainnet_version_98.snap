@@ -56,11 +56,9 @@ feature_flags:
       randomness_scalar: 20
       max_estimate_us: 1500000
       stored_observations_num_included_checkpoints: 10
-      stored_observations_limit: 180
+      stored_observations_limit: 18
       stake_weighted_median_threshold: 3334
       default_none_duration_for_new_keys: true
-      enable_observation_chunking: true
-      observations_chunk_size: 18
   consensus_choice: Mysticeti
   consensus_network: Tonic
   correct_gas_payment_limit_check: true
