@@ -84,7 +84,7 @@ use vfs::VfsPath;
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    editions::{Edition, FeatureGate},
+    editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_, Visibility},
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, Type_, TypeName_, VariantFields},
@@ -161,6 +161,7 @@ pub fn get_symbols<F: MoveFlavor>(
     pkg_path: &Path,
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
+    flavor: Option<Flavor>,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     // helper function to avoid holding the lock for too long
     let has_pkg_entry = || {
@@ -189,6 +190,7 @@ pub fn get_symbols<F: MoveFlavor>(
             ide_files_root.clone(),
             pkg_path,
             lint,
+            flavor,
         )?;
         eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
         let Some(compiled_pkg_info) = compiled_pkg_info_opt else {

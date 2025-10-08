@@ -3,7 +3,9 @@
 
 use clap::*;
 use move_analyzer::analyzer;
+use move_compiler::editions::Flavor;
 use sui_package_alt::SuiFlavor;
+use sui_package_management::system_package_versions::latest_system_packages;
 
 // Define the `GIT_REVISION` and `VERSION` consts
 bin_version::bin_version!();
@@ -19,5 +21,5 @@ struct App {}
 
 fn main() {
     App::parse();
-    analyzer::run::<SuiFlavor>();
+    analyzer::run::<SuiFlavor>(Some(Flavor::Sui));
 }

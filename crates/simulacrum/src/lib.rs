@@ -148,6 +148,17 @@ where
         Self::new_with_network_config_in_mem(&config, rng)
     }
 
+    /// Create a new Simulacrum instance with a specific protocol version.
+    pub fn new_with_protocol_version(mut rng: R, protocol_version: ProtocolVersion) -> Self {
+        let config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .with_chain_start_timestamp_ms(1)
+            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
+            .with_protocol_version(protocol_version)
+            .build();
+        Self::new_with_network_config_in_mem(&config, rng)
+    }
+
     pub fn new_with_protocol_version_and_accounts(
         mut rng: R,
         chain_start_timestamp_ms: u64,

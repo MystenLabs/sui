@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 97;
+const MAX_PROTOCOL_VERSION: u64 = 98;
 
 // Record history of protocol version allocations here:
 //
@@ -264,7 +264,8 @@ const MAX_PROTOCOL_VERSION: u64 = 97;
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
 //             Create Coin Registry object
 //             Enable checkpoint artifacts digest in devnet.
-// Version 97: Add authenticated event streams support via emit_authenticated function.
+// Version 97: Enable additional borrow checks
+// Version 98: Add authenticated event streams support via emit_authenticated function.
 //             Add better error messages to the loader.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -820,6 +821,10 @@ struct FeatureFlags {
     // If true charge for loads into the cache (i.e., fetches from storage) in the object runtime.
     #[serde(skip_serializing_if = "is_false")]
     object_runtime_charge_cache_load_gas: bool,
+
+    // If true, perform additional borrow checks
+    #[serde(skip_serializing_if = "is_false")]
+    additional_borrow_checks: bool,
 
     // If true, use the new commit handler.
     #[serde(skip_serializing_if = "is_false")]
@@ -2252,6 +2257,10 @@ impl ProtocolConfig {
 
     pub fn object_runtime_charge_cache_load_gas(&self) -> bool {
         self.feature_flags.object_runtime_charge_cache_load_gas
+    }
+
+    pub fn additional_borrow_checks(&self) -> bool {
+        self.feature_flags.additional_borrow_checks
     }
 
     pub fn use_new_commit_handler(&self) -> bool {
@@ -4061,6 +4070,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.mysticeti_fastpath = true;
                 }
                 97 => {
+                    cfg.feature_flags.additional_borrow_checks = true;
+                }
+                98 => {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
@@ -4109,6 +4121,13 @@ impl ProtocolConfig {
             (None, None)
         };
 
+        let additional_borrow_checks = if signing_limits.is_some() {
+            // always turn on additional borrow checks during signing
+            true
+        } else {
+            self.additional_borrow_checks()
+        };
+
         VerifierConfig {
             max_loop_depth: Some(self.max_loop_depth() as usize),
             max_generic_instantiation_length: Some(self.max_generic_instantiation_length() as usize),
@@ -4132,6 +4151,7 @@ impl ProtocolConfig {
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
+            additional_borrow_checks,
             better_loader_errors: self.better_loader_errors(),
         }
     }

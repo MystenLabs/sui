@@ -32,6 +32,9 @@
 ;; Module definitions
 (module_identity address: (module_identifier)  @namespace.module.address)
 (module_identity module: (module_identifier)  @namespace.module.name)
+((identifier) @keyword
+  (#eq? @keyword "extend")
+  (#has-ancestor? module_extension_definition))
 
 ;; Function calls
 (call_expression (name_expression access: (module_access module: (module_identifier)  @namespace.module.name)))

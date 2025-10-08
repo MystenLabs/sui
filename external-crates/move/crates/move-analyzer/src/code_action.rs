@@ -33,6 +33,7 @@ use url::Url;
 use vfs::VfsPath;
 
 use move_compiler::{
+    editions::Flavor,
     expansion::ast::ModuleIdent,
     linters::LintLevel,
     parser::ast::{LeadingNameAccess_, NameAccessChain_},
@@ -85,10 +86,17 @@ pub fn on_code_action_request<F: MoveFlavor>(
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
+    flavor: Option<Flavor>,
 ) {
     let response = Response::new_ok(
         request.id.clone(),
-        access_chain_autofix_actions::<F>(context, request, ide_files_root, pkg_dependencies),
+        access_chain_autofix_actions::<F>(
+            context,
+            request,
+            ide_files_root,
+            pkg_dependencies,
+            flavor,
+        ),
     );
     eprintln!("code_action_request: {:?}", request);
     if let Err(err) = context.connection.sender.send(Message::Response(response)) {
@@ -102,6 +110,7 @@ fn access_chain_autofix_actions<F: MoveFlavor>(
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
+    flavor: Option<Flavor>,
 ) -> Vec<CodeAction> {
     let mut code_actions = vec![];
 
@@ -134,6 +143,7 @@ fn access_chain_autofix_actions<F: MoveFlavor>(
         ide_files_root,
         &pkg_path,
         LintLevel::None,
+        flavor,
     ) else {
         return code_actions;
     };

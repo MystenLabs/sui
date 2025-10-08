@@ -73,7 +73,7 @@ impl TransactionSubmitter {
             options.allowed_validators.clone(),
         );
 
-        let ping_label = if request.ping.is_some() {
+        let ping_label = if request.ping_type.is_some() {
             "true"
         } else {
             "false"

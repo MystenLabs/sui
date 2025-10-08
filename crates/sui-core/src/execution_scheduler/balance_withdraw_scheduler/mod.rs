@@ -8,6 +8,7 @@ use sui_types::{
 };
 
 mod balance_read;
+mod eager_scheduler;
 mod naive_scheduler;
 pub(crate) mod scheduler;
 #[cfg(test)]
@@ -26,10 +27,10 @@ pub(crate) enum ScheduleStatus {
     /// This transaction should result in an execution failure without actually executing it, similar to
     /// how transaction cancellation works.
     InsufficientBalance,
-    /// The accumulator version for this transaction has already been executed/settled.
+    /// The accumulator version for this transaction has already been settled.
     /// The caller should stop the scheduling of this transaction.
     /// This happens when the transaction can be executed through checkpoint executor.
-    AlreadyExecuted,
+    AlreadySettled,
 }
 
 /// The result of scheduling the withdraw reservations for a transaction.
@@ -41,15 +42,13 @@ pub(crate) struct ScheduleResult {
 
 /// Details regarding a balance settlement, generated when a settlement transaction has been executed
 /// and committed to the writeback cache.
+#[derive(Debug)]
 pub struct BalanceSettlement {
     // After this settlement, the accumulator object will be at this version.
     // This means that all transactions that read `next_accumulator_version - 1`
     // are settled as part of this settlement.
     pub next_accumulator_version: SequenceNumber,
     /// The balance changes for each account object ID.
-    /// This is currently unused because the naive scheduler
-    /// always load the latest balance during scheduling.
-    #[allow(unused)]
     pub balance_changes: BTreeMap<AccumulatorObjId, i128>,
 }
 

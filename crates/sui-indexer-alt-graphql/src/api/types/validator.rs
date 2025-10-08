@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use async_graphql::{connection::Connection, Context, Object, SimpleObject};
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorV1;
 
 use crate::{
     api::{
         scalars::{
-            base64::Base64, big_int::BigInt, sui_address::SuiAddress, type_filter::TypeInput,
-            uint53::UInt53,
+            base64::Base64, big_int::BigInt, cursor::JsonCursor, sui_address::SuiAddress,
+            type_filter::TypeInput, uint53::UInt53,
         },
         types::{
             address::Address,
@@ -17,17 +19,17 @@ use crate::{
             move_object::MoveObject,
             object::{CLive, Error},
             object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
+            validator_set::ValidatorSetContents,
         },
     },
     error::{upcast, RpcError},
-    scope::Scope,
+    pagination::{Page, PaginationConfig},
 };
 
 #[derive(Clone, Debug)]
 pub(crate) struct Validator {
-    super_: Address,
-    native: ValidatorV1,
-    at_risk: u64,
+    pub(crate) contents: Arc<ValidatorSetContents>,
+    pub(crate) idx: usize,
 }
 
 /// The credentials related fields associated with a validator.
@@ -43,11 +45,13 @@ pub(crate) struct ValidatorCredentials {
     pub worker_address: Option<String>,
 }
 
+type CAddr = JsonCursor<usize>;
+
 #[Object]
 impl Validator {
     /// The validator's address.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
-        self.super_.address(ctx).await
+        self.super_().address(ctx).await
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -58,7 +62,7 @@ impl Validator {
         ctx: &Context<'_>,
         coin_type: TypeInput,
     ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        self.super_.balance(ctx, coin_type).await
+        self.super_().balance(ctx, coin_type).await
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -70,7 +74,9 @@ impl Validator {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        self.super_.balances(ctx, first, after, last, before).await
+        self.super_()
+            .balances(ctx, first, after, last, before)
+            .await
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.
@@ -78,7 +84,7 @@ impl Validator {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<String>, RpcError> {
-        self.super_.default_suins_name(ctx).await
+        self.super_().default_suins_name(ctx).await
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -90,7 +96,7 @@ impl Validator {
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
     ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
-        self.super_.multi_get_balances(ctx, keys).await
+        self.super_().multi_get_balances(ctx, keys).await
     }
 
     /// Objects owned by this object, optionally filtered by type.
@@ -103,14 +109,14 @@ impl Validator {
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, MoveObject>>, RpcError<Error>> {
-        self.super_
+        self.super_()
             .objects(ctx, first, after, last, before, filter)
             .await
     }
 
     /// Validator's set of credentials such as public keys, network addresses and others.
     async fn credentials(&self) -> Option<ValidatorCredentials> {
-        let v = &self.native.metadata;
+        let v = &self.validator().metadata;
         let credentials = ValidatorCredentials {
             protocol_pub_key: Some(Base64::from(v.protocol_pubkey_bytes.clone())),
             network_pub_key: Some(Base64::from(v.network_pubkey_bytes.clone())),
@@ -126,7 +132,7 @@ impl Validator {
 
     /// Validator's set of credentials for the next epoch.
     async fn next_epoch_credentials(&self) -> Option<ValidatorCredentials> {
-        let v = &self.native.metadata;
+        let v = &self.validator().metadata;
         let credentials = ValidatorCredentials {
             protocol_pub_key: v
                 .next_epoch_protocol_pubkey_bytes
@@ -145,22 +151,22 @@ impl Validator {
 
     /// Validator's name.
     async fn name(&self) -> Option<String> {
-        Some(self.native.metadata.name.clone())
+        Some(self.validator().metadata.name.clone())
     }
 
     /// Validator's description.
     async fn description(&self) -> Option<String> {
-        Some(self.native.metadata.description.clone())
+        Some(self.validator().metadata.description.clone())
     }
 
     /// Validator's url containing their custom image.
     async fn image_url(&self) -> Option<String> {
-        Some(self.native.metadata.image_url.clone())
+        Some(self.validator().metadata.image_url.clone())
     }
 
     /// Validator's homepage URL.
     async fn project_url(&self) -> Option<String> {
-        Some(self.native.metadata.project_url.clone())
+        Some(self.validator().metadata.project_url.clone())
     }
 
     /// The validator's current valid `Cap` object. Validators can delegate the operation ability to another address.
@@ -170,8 +176,8 @@ impl Validator {
         ctx: &Context<'_>,
     ) -> Result<Option<MoveObject>, RpcError<Error>> {
         let address = Address::with_address(
-            self.super_.scope.clone(),
-            self.native.operation_cap_id.bytes.into(),
+            self.contents.scope.clone(),
+            self.validator().operation_cap_id.bytes.into(),
         );
         let Some(object) = address.as_object(ctx).await? else {
             return Ok(None);
@@ -181,144 +187,151 @@ impl Validator {
 
     /// The ID of this validator's `0x3::staking_pool::StakingPool`.
     async fn staking_pool_id(&self) -> SuiAddress {
-        self.native.staking_pool.id.into()
+        self.validator().staking_pool.id.into()
     }
 
     /// A wrapped object containing the validator's exchange rates. This is a table from epoch number to `PoolTokenExchangeRate` value.
     /// The exchange rate is used to determine the amount of SUI tokens that each past SUI staker can withdraw in the future.
     async fn exchange_rates_table(&self) -> Option<Address> {
         let address = Address::with_address(
-            self.super_.scope.clone(),
-            self.native.staking_pool.exchange_rates.id.into(),
+            self.contents.scope.clone(),
+            self.validator().staking_pool.exchange_rates.id.into(),
         );
         Some(address)
     }
 
     /// Number of exchange rates in the table.
     async fn exchange_rates_size(&self) -> Option<UInt53> {
-        Some(self.native.staking_pool.exchange_rates.size.into())
+        Some(self.validator().staking_pool.exchange_rates.size.into())
     }
 
     /// The epoch at which this pool became active.
     async fn staking_pool_activation_epoch(&self) -> Option<UInt53> {
-        self.native.staking_pool.activation_epoch.map(UInt53::from)
+        self.validator()
+            .staking_pool
+            .activation_epoch
+            .map(UInt53::from)
     }
 
     /// The total number of SUI tokens in this pool.
     async fn staking_pool_sui_balance(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.staking_pool.sui_balance))
+        Some(BigInt::from(self.validator().staking_pool.sui_balance))
     }
 
     /// The epoch stake rewards will be added here at the end of each epoch.
     async fn rewards_pool(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.staking_pool.rewards_pool.value()))
+        Some(BigInt::from(
+            self.validator().staking_pool.rewards_pool.value(),
+        ))
     }
 
     /// Total number of pool tokens issued by the pool.
     async fn pool_token_balance(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.staking_pool.pool_token_balance))
+        Some(BigInt::from(
+            self.validator().staking_pool.pool_token_balance,
+        ))
     }
 
     /// Pending stake amount for this epoch.
     async fn pending_stake(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.staking_pool.pending_stake))
+        Some(BigInt::from(self.validator().staking_pool.pending_stake))
     }
 
     /// Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
     async fn pending_total_sui_withdraw(&self) -> Option<BigInt> {
         Some(BigInt::from(
-            self.native.staking_pool.pending_total_sui_withdraw,
+            self.validator().staking_pool.pending_total_sui_withdraw,
         ))
     }
 
     /// Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
     async fn pending_pool_token_withdraw(&self) -> Option<BigInt> {
         Some(BigInt::from(
-            self.native.staking_pool.pending_pool_token_withdraw,
+            self.validator().staking_pool.pending_pool_token_withdraw,
         ))
     }
 
     /// The voting power of this validator in basis points (e.g., 100 = 1% voting power).
     async fn voting_power(&self) -> Option<u64> {
-        Some(self.native.voting_power)
+        Some(self.validator().voting_power)
     }
 
     /// The reference gas price for this epoch.
     async fn gas_price(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.gas_price))
+        Some(BigInt::from(self.validator().gas_price))
     }
 
     /// The fee charged by the validator for staking services.
     async fn commission_rate(&self) -> Option<u64> {
-        Some(self.native.commission_rate)
+        Some(self.validator().commission_rate)
     }
 
     /// The total number of SUI tokens in this pool plus the pending stake amount for this epoch.
     async fn next_epoch_stake(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.next_epoch_stake))
+        Some(BigInt::from(self.validator().next_epoch_stake))
     }
 
     /// The validator's gas price quote for the next epoch.
     async fn next_epoch_gas_price(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.next_epoch_gas_price))
+        Some(BigInt::from(self.validator().next_epoch_gas_price))
     }
 
     /// The proposed next epoch fee for the validator's staking services.
     async fn next_epoch_commission_rate(&self) -> Option<u64> {
-        Some(self.native.next_epoch_commission_rate)
+        Some(self.validator().next_epoch_commission_rate)
     }
 
     /// The number of epochs for which this validator has been below the low stake threshold.
     async fn at_risk(&self) -> Option<UInt53> {
-        Some(self.at_risk.into())
+        let at_risk = self
+            .contents
+            .native
+            .at_risk_validators
+            .get(&self.validator().metadata.sui_address)
+            .map_or(0, |at_risk| *at_risk);
+        Some(at_risk.into())
     }
 
-    // todo (ewall)
-    // /// The addresses of other validators this validator has reported.
-    // async fn report_records(
-    //     &self,
-    //     ctx: &Context<'_>,
-    //     first: Option<u64>,
-    //     before: Option<CAddr>,
-    //     last: Option<u64>,
-    //     after: Option<CAddr>,
-    // ) -> async_graphql::Result<Connection<String, Address>> {
-    //     let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-    //
-    //     let mut connection = Connection::new(false, false);
-    //     let Some(addresses) = &self.report_records else {
-    //         return Ok(connection);
-    //     };
-    //
-    //     let Some((prev, next, _, cs)) =
-    //         page.paginate_consistent_indices(addresses.len(), self.checkpoint_viewed_at)?
-    //     else {
-    //         return Ok(connection);
-    //     };
-    //
-    //     connection.has_previous_page = prev;
-    //     connection.has_next_page = next;
-    //
-    //     for c in cs {
-    //         connection.edges.push(Edge::new(
-    //             c.encode_cursor(),
-    //             Address {
-    //                 address: addresses[c.ix].address,
-    //                 checkpoint_viewed_at: c.c,
-    //             },
-    //         ));
-    //     }
-    //
-    //     Ok(connection)
-    // }
+    /// Other validators this validator has reported.
+    async fn report_records(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        before: Option<CAddr>,
+        last: Option<u64>,
+        after: Option<CAddr>,
+    ) -> Result<Option<Connection<String, Validator>>, RpcError> {
+        let Some(report_records) = self
+            .contents
+            .report_records
+            .get(&self.validator().metadata.sui_address)
+        else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Validator", "reportRecords");
+        let page = Page::from_params(limits, first, after, last, before)?;
+        page.paginate_indices(report_records.len(), |i| {
+            let idx = report_records[i];
+            Ok(Validator {
+                contents: Arc::clone(&self.contents),
+                idx,
+            })
+        })
+        .map(Some)
+    }
 }
 
 impl Validator {
-    pub(crate) fn from_validator_v1(scope: Scope, native: ValidatorV1, at_risk: u64) -> Self {
-        Self {
-            super_: Address::with_address(scope, native.metadata.sui_address),
-            native,
-            at_risk,
-        }
+    fn super_(&self) -> Address {
+        Address::with_address(
+            self.contents.scope.clone(),
+            self.validator().metadata.sui_address,
+        )
+    }
+
+    fn validator(&self) -> &ValidatorV1 {
+        &self.contents.native.active_validators[self.idx]
     }
 }
