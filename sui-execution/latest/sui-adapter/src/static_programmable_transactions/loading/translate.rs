@@ -65,12 +65,20 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 ..
             },
         ) => {
-            let mutable = match object_arg {
-                ObjectArg::SharedObject { mutable, .. } => mutable,
+            let mutability = match object_arg {
+                ObjectArg::SharedObject { mutable, .. } => {
+                    if mutable {
+                        L::ObjectMutability::Mutable
+                    } else {
+                        L::ObjectMutability::Immutable
+                    }
+                }
                 ObjectArg::SharedObjectV2 { mutability, .. } => match mutability {
-                    SharedObjectMutability::Mutable => true,
-                    SharedObjectMutability::NonExclusiveWrite => true,
-                    SharedObjectMutability::Immutable => false,
+                    SharedObjectMutability::Mutable => L::ObjectMutability::Mutable,
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        L::ObjectMutability::NonExclusiveWrite
+                    }
+                    SharedObjectMutability::Immutable => L::ObjectMutability::Immutable,
                 },
                 _ => unreachable!(),
             };
@@ -91,7 +99,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 L::InputArg::Object(L::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutability,
                     kind,
                 }),
                 L::InputType::Fixed(ty),

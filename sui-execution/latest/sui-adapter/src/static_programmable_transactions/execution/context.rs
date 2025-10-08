@@ -12,6 +12,7 @@ use crate::{
         env::Env,
         execution::values::{Local, Locals, Value},
         linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
+        loading::ast::ObjectMutability,
         typing::ast::{self as T, Type},
     },
 };
@@ -96,7 +97,7 @@ pub struct CtxValue(Value);
 #[derive(Clone, Debug)]
 pub struct InputObjectMetadata {
     pub id: ObjectID,
-    pub is_mutable_input: bool,
+    pub mutability: ObjectMutability,
     pub owner: Owner,
     pub version: SequenceNumber,
     pub type_: Type,
@@ -235,7 +236,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     env,
                     &mut input_object_map,
                     gas_coin,
-                    true,
+                    ObjectMutability::Mutable,
                     ty,
                 )?;
                 let mut gas_locals = Locals::new([Some(gas_value)])?;
@@ -309,14 +310,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         for (metadata, value_opt) in object_inputs.into_iter().chain(gas) {
             let InputObjectMetadata {
                 id,
-                is_mutable_input,
+                mutability,
                 owner,
                 version,
                 type_,
             } = metadata;
-            // We are only interested in mutable inputs.
-            if !is_mutable_input {
-                continue;
+            // We are only interested in directly-mutable inputs.
+            match mutability {
+                ObjectMutability::Immutable | ObjectMutability::NonExclusiveWrite => continue,
+                ObjectMutability::Mutable => (),
             }
             loaded_runtime_objects.insert(
                 id,
@@ -1130,9 +1132,9 @@ fn load_object_arg(
     input: T::ObjectInput,
 ) -> Result<(T::InputIndex, InputObjectMetadata, Value), ExecutionError> {
     let id = input.arg.id();
-    let is_mutable_input = input.arg.is_mutable();
+    let mutability = input.arg.mutability();
     let (metadata, value) =
-        load_object_arg_impl(meter, env, input_object_map, id, is_mutable_input, input.ty)?;
+        load_object_arg_impl(meter, env, input_object_map, id, mutability, input.ty)?;
     Ok((input.original_input_index, metadata, value))
 }
 
@@ -1141,7 +1143,7 @@ fn load_object_arg_impl(
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
-    is_mutable_input: bool,
+    mutability: ObjectMutability,
     ty: T::Type,
 ) -> Result<(InputObjectMetadata, Value), ExecutionError> {
     let obj = env.read_object(&id)?;
@@ -1149,7 +1151,7 @@ fn load_object_arg_impl(
     let version = obj.version();
     let object_metadata = InputObjectMetadata {
         id,
-        is_mutable_input,
+        mutability,
         owner: owner.clone(),
         version,
         type_: ty.clone(),
