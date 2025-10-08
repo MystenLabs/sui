@@ -5,7 +5,7 @@ External Command `cat P1/Move.toml`:
 # Full documentation for Move.toml can be found at: docs.sui.io
 
 [package]
-name = "P1"
+name = "p1"
 edition = "2024"         # use "2024" for Move 2024 edition
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
@@ -44,7 +44,7 @@ External Command `cat other_dir/Move.toml`:
 # Full documentation for Move.toml can be found at: docs.sui.io
 
 [package]
-name = "P2"
+name = "p2"
 edition = "2024"         # use "2024" for Move 2024 edition
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]

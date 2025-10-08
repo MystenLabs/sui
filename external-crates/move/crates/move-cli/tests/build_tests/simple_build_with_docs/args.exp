@@ -1,10 +1,10 @@
 Command `new --path . Foo`:
 Command `build`:
-BUILDING Foo
+BUILDING foo
 Command `docgen --template template.md --exclude-private-fun --no-collapsed-sections --output-directory doc --references-file template.md --section-level-start 3 --toc-depth 3`:
-BUILDING Foo
+BUILDING foo
 Generated "doc/template.md"
-Generated "doc/Foo/Foo.md"
+Generated "doc/foo/Foo.md"
 
 Documentation generation successful!
 External Command `grep documentation doc/Foo/Foo.md`:
