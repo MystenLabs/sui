@@ -10,7 +10,7 @@ use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::TryFromProtoError;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
@@ -78,7 +78,7 @@ impl Client {
     pub async fn get_full_checkpoint(
         &mut self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<CheckpointData> {
+    ) -> Result<Checkpoint> {
         let request = proto::GetCheckpointRequest::by_sequence_number(sequence_number)
             .with_read_mask(FieldMask::from_paths([
                 "summary.bcs",
@@ -103,7 +103,6 @@ impl Client {
             .checkpoint
             .ok_or_else(|| tonic::Status::not_found("no checkpoint returned"))?;
         sui_types::full_checkpoint_content::Checkpoint::try_from(&checkpoint)
-            .map(Into::into)
             .map_err(|e| status_from_error_with_metadata(e, metadata))
     }
 
