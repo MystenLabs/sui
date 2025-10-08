@@ -110,7 +110,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
 mod tests {
     use std::sync::{Arc, Mutex};
     use sui_pg_db::FieldCount;
-    use sui_types::full_checkpoint_content::CheckpointData;
+    use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
@@ -132,7 +132,7 @@ mod tests {
         const NAME: &'static str = "data";
         type Value = StoredData;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }

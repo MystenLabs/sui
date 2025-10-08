@@ -437,7 +437,7 @@ mod tests {
         type Value = MockValue;
         fn process(
             &self,
-            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
         ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![MockValue(1)])
         }

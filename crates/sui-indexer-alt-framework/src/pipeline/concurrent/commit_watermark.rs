@@ -264,7 +264,7 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use sui_types::full_checkpoint_content::CheckpointData;
+    use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
 
@@ -287,7 +287,7 @@ mod tests {
         const NAME: &'static str = "data";
         type Value = StoredData;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }

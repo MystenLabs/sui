@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::Checkpoint;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -31,7 +31,7 @@ pub trait Processor {
     type Value: Send + Sync + 'static;
 
     /// The processing logic for turning a checkpoint into rows of the table.
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
+    fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>>;
 }
 
 /// The processor task is responsible for taking checkpoint data and breaking it down into rows
@@ -45,7 +45,7 @@ pub trait Processor {
 /// an error -- there is no retry logic at this level.
 pub(super) fn processor<P: Processor + Send + Sync + 'static>(
     processor: Arc<P>,
-    rx: mpsc::Receiver<Arc<CheckpointData>>,
+    rx: mpsc::Receiver<Arc<Checkpoint>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -84,10 +84,10 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                     let values = processor.process(&checkpoint)?;
                     let elapsed = guard.stop_and_record();
 
-                    let epoch = checkpoint.checkpoint_summary.epoch;
-                    let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
-                    let tx_hi = checkpoint.checkpoint_summary.network_total_transactions;
-                    let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+                    let epoch = checkpoint.summary.epoch;
+                    let cp_sequence_number = checkpoint.summary.sequence_number;
+                    let tx_hi = checkpoint.summary.network_total_transactions;
+                    let timestamp_ms = checkpoint.summary.timestamp_ms;
 
                     debug!(
                         pipeline = P::NAME,
@@ -160,13 +160,13 @@ mod tests {
 
         type Value = StoredData;
 
-        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![
                 StoredData {
-                    value: checkpoint.checkpoint_summary.sequence_number * 10 + 1,
+                    value: checkpoint.summary.sequence_number * 10 + 1,
                 },
                 StoredData {
-                    value: checkpoint.checkpoint_summary.sequence_number * 10 + 2,
+                    value: checkpoint.summary.sequence_number * 10 + 2,
                 },
             ])
         }
@@ -175,19 +175,21 @@ mod tests {
     #[tokio::test]
     async fn test_processor_process_checkpoints() {
         // Build two checkpoints using the test builder
-        let checkpoint1 = Arc::new(
+        let checkpoint1: Arc<Checkpoint> = Arc::new(
             TestCheckpointDataBuilder::new(1)
                 .with_epoch(2)
                 .with_network_total_transactions(5)
                 .with_timestamp_ms(1000000001)
-                .build_checkpoint(),
+                .build_checkpoint()
+                .into(),
         );
-        let checkpoint2 = Arc::new(
+        let checkpoint2: Arc<Checkpoint> = Arc::new(
             TestCheckpointDataBuilder::new(2)
                 .with_epoch(2)
                 .with_network_total_transactions(10)
                 .with_timestamp_ms(1000000002)
-                .build_checkpoint(),
+                .build_checkpoint()
+                .into(),
         );
 
         // Set up the processor, channels, and metrics
@@ -244,8 +246,10 @@ mod tests {
     #[tokio::test]
     async fn test_processor_does_not_process_checkpoint_after_cancellation() {
         // Build two checkpoints using the test builder
-        let checkpoint1 = Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint());
-        let checkpoint2 = Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint());
+        let checkpoint1: Arc<Checkpoint> =
+            Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint().into());
+        let checkpoint2: Arc<Checkpoint> =
+            Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint().into());
 
         // Set up the processor, channels, and metrics
         let processor = Arc::new(DataPipeline);
@@ -291,11 +295,8 @@ mod tests {
         impl Processor for ErrorPipeline {
             const NAME: &'static str = "error";
             type Value = StoredData;
-            fn process(
-                &self,
-                checkpoint: &Arc<CheckpointData>,
-            ) -> anyhow::Result<Vec<Self::Value>> {
-                if checkpoint.checkpoint_summary.sequence_number == 1 {
+            fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+                if checkpoint.summary.sequence_number == 1 {
                     Ok(vec![])
                 } else {
                     anyhow::bail!("Test error");
@@ -304,8 +305,10 @@ mod tests {
         }
 
         // Set up test data
-        let checkpoint1 = Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint());
-        let checkpoint2 = Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint());
+        let checkpoint1: Arc<Checkpoint> =
+            Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint().into());
+        let checkpoint2: Arc<Checkpoint> =
+            Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint().into());
 
         // Set up the processor, channels, and metrics
         let processor = Arc::new(ErrorPipeline);
@@ -351,21 +354,18 @@ mod tests {
             const FANOUT: usize = 3; // Small fanout for testing
             type Value = StoredData;
 
-            fn process(
-                &self,
-                checkpoint: &Arc<CheckpointData>,
-            ) -> anyhow::Result<Vec<Self::Value>> {
+            fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
                 // Simulate work by sleeping
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 Ok(vec![StoredData {
-                    value: checkpoint.checkpoint_summary.sequence_number,
+                    value: checkpoint.summary.sequence_number,
                 }])
             }
         }
 
         // Set up test data
-        let checkpoints: Vec<_> = (0..5)
-            .map(|i| Arc::new(TestCheckpointDataBuilder::new(i).build_checkpoint()))
+        let checkpoints: Vec<Arc<Checkpoint>> = (0..5)
+            .map(|i| Arc::new(TestCheckpointDataBuilder::new(i).build_checkpoint().into()))
             .collect();
 
         // Set up channels and metrics

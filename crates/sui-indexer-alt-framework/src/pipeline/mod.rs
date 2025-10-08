@@ -159,7 +159,7 @@ impl Default for CommitterConfig {
 mod tests {
     use super::*;
     use std::sync::Arc;
-    use sui_types::full_checkpoint_content::CheckpointData;
+    use sui_types::full_checkpoint_content::Checkpoint;
 
     // Test implementation of Processor
     struct TestProcessor;
@@ -167,7 +167,7 @@ mod tests {
         const NAME: &'static str = "test";
         type Value = i32;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![1, 2, 3])
         }
     }

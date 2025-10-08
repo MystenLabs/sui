@@ -280,3 +280,42 @@ impl From<Checkpoint> for CheckpointData {
         }
     }
 }
+
+impl From<CheckpointData> for Checkpoint {
+    fn from(value: CheckpointData) -> Self {
+        let mut object_set = ObjectSet::default();
+
+        // Collect all objects from all transactions into the object_set
+        for tx in &value.transactions {
+            for obj in &tx.input_objects {
+                object_set.insert(obj.clone());
+            }
+            for obj in &tx.output_objects {
+                object_set.insert(obj.clone());
+            }
+        }
+
+        let transactions = value
+            .transactions
+            .into_iter()
+            .map(|tx| {
+                let sender_signed_data = tx.transaction.into_data();
+                let sender_signed_tx = sender_signed_data.into_inner();
+                ExecutedTransaction {
+                    transaction: sender_signed_tx.intent_message.value,
+                    signatures: sender_signed_tx.tx_signatures,
+                    effects: tx.effects,
+                    events: tx.events,
+                    unchanged_loaded_runtime_objects: Vec::new(),
+                }
+            })
+            .collect();
+
+        Self {
+            summary: value.checkpoint_summary,
+            contents: value.checkpoint_contents,
+            transactions,
+            object_set,
+        }
+    }
+}

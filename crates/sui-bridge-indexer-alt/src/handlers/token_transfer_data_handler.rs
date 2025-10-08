@@ -13,7 +13,7 @@ use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
 use tracing::info;
 
@@ -33,9 +33,9 @@ impl Processor for TokenTransferDataHandler {
     const NAME: &'static str = "token_transfer_data";
     type Value = TokenTransferData;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>, anyhow::Error> {
-        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms as i64;
-        let block_height = checkpoint.checkpoint_summary.sequence_number as i64;
+    fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>, anyhow::Error> {
+        let timestamp_ms = checkpoint.summary.timestamp_ms as i64;
+        let block_height = checkpoint.summary.sequence_number as i64;
 
         let mut results = vec![];
 
