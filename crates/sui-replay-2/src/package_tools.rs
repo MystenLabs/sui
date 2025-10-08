@@ -330,7 +330,7 @@ impl PackageRebuilder {
     /// Update the package address in compiled modules to match the target package ID
     fn update_module_addresses(
         &self,
-        modules: &mut Vec<CompiledModule>,
+        modules: &mut [CompiledModule],
         target_id: ObjectID,
     ) -> Result<()> {
         let target_address = AccountAddress::from(target_id);
@@ -453,7 +453,7 @@ impl PackageRebuilder {
 
         // Get immediate dependencies from original package modules
         let mut original_deps = BTreeSet::new();
-        for (_, module_bytes) in original_package.serialized_module_map() {
+        for module_bytes in original_package.serialized_module_map().values() {
             // Deserialize original module to extract dependencies
             let original_module = CompiledModule::deserialize_with_defaults(module_bytes)
                 .context("Failed to deserialize original package module")?;
