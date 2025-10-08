@@ -12,7 +12,7 @@ pub use metrics::ValidatorClientMetrics;
 pub use monitor::ValidatorClientMonitor;
 use std::time::Duration;
 use strum::EnumIter;
-use sui_types::base_types::AuthorityName;
+use sui_types::{base_types::AuthorityName, messages_grpc::PingType};
 
 /// Operation types for validator performance tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, EnumIter)]
@@ -45,6 +45,8 @@ pub struct OperationFeedback {
     pub display_name: String,
     /// The operation type
     pub operation: OperationType,
+    /// The ping type. If it's not a ping request, then this is is None.
+    pub ping_type: Option<PingType>,
     /// Result of the operation: Ok(latency) if successful, Err(()) if failed.
     /// Only errors specific to the target validator should be recorded,
     /// for example, timeout, unavailability or misbehavior from validators can be recorded.

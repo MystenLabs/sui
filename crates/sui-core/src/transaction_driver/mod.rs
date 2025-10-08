@@ -360,6 +360,7 @@ where
         let start_time = Instant::now();
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();
+        let ping_type = request.ping_type;
 
         let (name, submit_txn_result) = self
             .submitter
@@ -402,6 +403,7 @@ where
                     } else {
                         OperationType::Consensus
                     },
+                    ping_type,
                     result: Ok(start_time.elapsed()),
                 });
         }
