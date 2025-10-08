@@ -417,7 +417,10 @@ impl FullnodeConfigBuilder {
         self
     }
 
-    pub fn with_transaction_driver_config(mut self, config: Option<TransactionDriverConfig>) -> Self {
+    pub fn with_transaction_driver_config(
+        mut self,
+        config: Option<TransactionDriverConfig>,
+    ) -> Self {
         self.transaction_driver_config = config;
         self
     }
