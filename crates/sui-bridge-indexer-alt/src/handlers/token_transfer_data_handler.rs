@@ -29,7 +29,7 @@ impl Default for TokenTransferDataHandler {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Processor for TokenTransferDataHandler {
     const NAME: &'static str = "token_transfer_data";
     type Value = TokenTransferData;

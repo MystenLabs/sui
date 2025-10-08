@@ -67,7 +67,7 @@ impl Default for GovernanceActionHandler {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Processor for GovernanceActionHandler {
     const NAME: &'static str = "governance_action";
     type Value = GovernanceAction;
