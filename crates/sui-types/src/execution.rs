@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    MoveTypeTagTrait, SUI_SYSTEM_ADDRESS,
     accumulator_event::AccumulatorEvent,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
@@ -12,7 +13,6 @@ use crate::{
     storage::{BackingPackageStore, ObjectChange},
     transaction::{Argument, Command, SharedObjectMutability},
     type_input::TypeInput,
-    MoveTypeTagTrait, SUI_SYSTEM_ADDRESS,
 };
 use move_core_types::{
     identifier::Identifier,
