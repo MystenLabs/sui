@@ -27,7 +27,6 @@ use sui_types::coin::Coin;
 use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{AccumulatorValue, TransactionEffectsAPI};
-use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -372,8 +371,7 @@ struct IndexStoreTables {
     package_version: DBMap<PackageVersionKey, PackageVersionInfo>,
 
     /// Authenticated events index by (stream_id, checkpoint_seq, transaction_idx, event_index)
-    /// Value is the full sui_types::event::Event
-    events_by_stream: DBMap<EventIndexKey, Event>,
+    events_by_stream: DBMap<EventIndexKey, ()>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
     // - are prune-able and have corresponding logic in the `prune` function
@@ -694,27 +692,19 @@ impl IndexStoreTables {
             return Ok(());
         }
 
-        let Some(tx_events) = tx.events.as_ref() else {
-            return Ok(());
-        };
-
-        let mut entries: Vec<(EventIndexKey, Event)> = Vec::new();
+        let mut entries: Vec<(EventIndexKey, ())> = Vec::new();
         for acc in acc_events {
             if let Some(stream_id) =
                 sui_types::accumulator_root::stream_id_from_accumulator_event(&acc)
             {
                 if let AccumulatorValue::EventDigest(idx, _d) = acc.write.value {
-                    let ui = idx as usize;
-                    if ui < tx_events.data.len() {
-                        let ev = &tx_events.data[ui];
-                        let key = EventIndexKey {
-                            stream_id,
-                            checkpoint_seq,
-                            transaction_idx: tx_idx,
-                            event_index: idx as u32,
-                        };
-                        entries.push((key, ev.clone()));
-                    }
+                    let key = EventIndexKey {
+                        stream_id,
+                        checkpoint_seq,
+                        transaction_idx: tx_idx,
+                        event_index: idx as u32,
+                    };
+                    entries.push((key, ()));
                 }
             }
         }
@@ -944,10 +934,8 @@ impl IndexStoreTables {
         start_event_idx: u32,
         end_checkpoint: u64,
         limit: u32,
-    ) -> Result<
-        impl Iterator<Item = Result<(EventIndexKey, Event), TypedStoreError>> + '_,
-        TypedStoreError,
-    > {
+    ) -> Result<impl Iterator<Item = Result<EventIndexKey, TypedStoreError>> + '_, TypedStoreError>
+    {
         let lower = EventIndexKey {
             stream_id,
             checkpoint_seq: start_checkpoint,
@@ -963,6 +951,7 @@ impl IndexStoreTables {
         Ok(self
             .events_by_stream
             .safe_iter_with_bounds(Some(lower), Some(upper))
+            .map(|res| res.map(|(k, _)| k))
             .take(limit as usize))
     }
 
@@ -1512,10 +1501,8 @@ impl RpcIndexStore {
         start_event_idx: u32,
         end_checkpoint: u64,
         limit: u32,
-    ) -> Result<
-        impl Iterator<Item = Result<(EventIndexKey, Event), TypedStoreError>> + '_,
-        TypedStoreError,
-    > {
+    ) -> Result<impl Iterator<Item = Result<EventIndexKey, TypedStoreError>> + '_, TypedStoreError>
+    {
         self.tables.event_iter(
             stream_id,
             start_checkpoint,
@@ -1795,7 +1782,6 @@ mod tests {
     use super::*;
     use std::sync::atomic::AtomicU64;
     use sui_types::base_types::SuiAddress;
-    use sui_types::event::Event;
 
     #[tokio::test]
     async fn test_events_compaction_filter() {
@@ -1812,25 +1798,20 @@ mod tests {
 
         let tables = IndexStoreTables::open_with_index_options(&db_path, index_options);
         let stream_id = SuiAddress::random_for_testing_only();
-        let test_events: Vec<_> = [1, 3, 5, 10, 15]
+        let test_events: Vec<EventIndexKey> = [1, 3, 5, 10, 15]
             .iter()
-            .map(|&checkpoint_seq| {
-                (
-                    EventIndexKey {
-                        stream_id,
-                        checkpoint_seq,
-                        transaction_idx: 0,
-                        event_index: 0,
-                    },
-                    Event::random_for_testing(),
-                )
+            .map(|&checkpoint_seq| EventIndexKey {
+                stream_id,
+                checkpoint_seq,
+                transaction_idx: 0,
+                event_index: 0,
             })
             .collect();
 
         let mut batch = tables.events_by_stream.batch();
-        for (key, event) in &test_events {
+        for key in &test_events {
             batch
-                .insert_batch(&tables.events_by_stream, [(key.clone(), event.clone())])
+                .insert_batch(&tables.events_by_stream, [(key.clone(), ())])
                 .unwrap();
         }
         batch.write().unwrap();
