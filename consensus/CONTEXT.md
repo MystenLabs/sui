@@ -32,6 +32,38 @@
    - Observer server accepts any valid TLS certificate (not just committee members)
    - Both servers properly shut down in `stop()` and `Drop`
 
+5. Implemented observer client (`core/src/network/tonic_network.rs`):
+   - Created `ObserverClient` as a **standalone specialized client** (does NOT implement `NetworkClient`)
+   - Only has one public method: `subscribe_blocks(peer, last_received, timeout) -> BlockStream`
+   - Created `ObserverChannelPool` to manage connections to validator observer ports
+   - Connects to `validator_port + observer_port_offset`
+   - Uses TLS with client certificate authentication
+   - User agent: "mysticeti-observer" for tracking
+   - Simpler interface: no need to stub out validator-only methods
+
+6. Modified `NetworkService::handle_subscribe_blocks()` to accept `NodeId`:
+   - Changed signature from `peer: AuthorityIndex` to `peer: NodeId`
+   - Updated `TonicServiceProxy` to pass `NodeId::Authority(peer_index)` for validators
+   - Updated `ObserverServiceProxy` to pass `NodeId::Observer(peer_public_key)` for observers
+   - Updated `BroadcastStream` in `authority_service.rs` to handle `NodeId`
+
+7. Extended metrics to track observer subscriptions separately:
+   - Added "node_type" label to `subscribed_by` metric (values: "validator" or "observer")
+   - Updated `SubscriptionCounter` to track observer subscriptions separately
+   - Added `increment_node()` and `decrement_node()` methods to handle `NodeId`
+   - Validators tracked individually by hostname with node_type="validator"
+   - Observers tracked collectively as "observers" with node_type="observer"
+   - Both validator and observer subscriptions contribute to `set_subscriber_exists()` dispatcher call
+
+8. Modified Core to support observer mode (2025-10-07):
+   - Made `block_signer: Option<ProtocolKeyPair>` in Core struct
+   - Updated `Core::new()` signature to accept `Option<ProtocolKeyPair>`
+   - Added check in `should_propose()` - returns false when `block_signer.is_none()`
+   - Observers have full Core functionality (process blocks, update DAG, participate in commits)
+   - Observers cannot propose new blocks (no block_signer)
+   - Updated all test callsites to pass `Some(block_signer)`
+   - AuthorityNode passes `protocol_keypair` (already Optional) directly to Core
+
 ## Recent Changes
 <!-- Track recent commits and changes -->
 - 2b533f826e: Add serialising macro for node config
@@ -42,16 +74,26 @@
 - feature/observer-nodes
 
 ## Modified Files
-- core/src/network/mod.rs (removed Hash derive due to NetworkPublicKey)
-- config/src/parameters.rs
-- core/build.rs
+- core/src/network/mod.rs (added NodeId enum, removed Hash derive, included ObserverConsensusService, changed handle_subscribe_blocks signature)
+- config/src/parameters.rs (added observer_port_offset)
+- core/build.rs (added ObserverConsensusService generation)
+- core/src/network/tonic_network.rs (added ObserverClient, ObserverChannelPool, ObserverServiceProxy, dual server support, NodeId usage)
+- core/src/authority_service.rs (updated handle_subscribe_blocks, BroadcastStream, SubscriptionCounter to use NodeId)
+- core/src/metrics.rs (added node_type label to subscribed_by metric)
+- core/src/authority_node.rs (made own_index and protocol_keypair Optional parameters, pass protocol_keypair to Core)
+- core/src/core.rs (made block_signer Optional, updated should_propose() to check for block_signer, updated all test callsites)
 
 ## Next Steps
-1. Modify `NetworkService::handle_subscribe_blocks()` to accept `NodeId` instead of `AuthorityIndex`
-2. Update network implementations (anemo_network, tonic_network) to handle observer connections
-3. Add authentication/authorization for observer nodes
-4. Update metrics to track observer connections separately
-5. Test the observer streaming functionality
+1. ~~Modify `NetworkService::handle_subscribe_blocks()` to accept `NodeId` instead of `AuthorityIndex`~~ ✅ DONE
+2. ~~Update network implementations (anemo_network, tonic_network) to handle observer connections~~ ✅ DONE
+3. ~~Add authentication/authorization for observer nodes~~ ✅ DONE
+4. ~~Update metrics to track observer connections separately~~ ✅ DONE
+5. ~~Make Core support observer mode (optional protocol_keypair, don't propose blocks)~~ ✅ DONE
+6. **NEXT**: Test the observer functionality:
+   - Create integration test with observer node
+   - Verify observer can connect and stream blocks
+   - Verify observer doesn't propose blocks
+   - Verify observer processes received blocks correctly
 
 ## Design Decisions
 
@@ -125,5 +167,21 @@
 ## Notes
 <!-- Any other relevant information -->
 
+### Important Clarification (2025-10-07)
+**Observers DO have a Core!** The initial assumption that observers wouldn't have Core was incorrect.
+
+**Correct design:**
+- Observers **DO** have a Core to process received streamed blocks
+- Observers **DO NOT** propose new blocks (no block_signer/protocol_keypair)
+- Core's `should_propose()` will return false for observers
+- Core's `block_signer` field should be Optional for observers
+- All other components (Synchronizer, CommitSyncer, etc.) are needed for block processing
+
+**Why observers need Core:**
+- To process and validate blocks received from validators
+- To update DAG state with received blocks
+- To participate in commit processing
+- To maintain consensus state for serving other full nodes
+
 ---
-Last updated: 2025-10-06
+Last updated: 2025-10-07

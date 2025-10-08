@@ -99,8 +99,8 @@ pub(crate) struct Core {
     commit_observer: CommitObserver,
     /// Sender of outgoing signals from Core.
     signals: CoreSignals,
-    /// The keypair to be used for block signing
-    block_signer: ProtocolKeyPair,
+    /// The keypair to be used for block signing. None for observer nodes.
+    block_signer: Option<ProtocolKeyPair>,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
     dag_state: Arc<RwLock<DagState>>,
     /// The last known round for which the node has proposed. Any proposal should be for a round > of this.
@@ -129,7 +129,7 @@ impl Core {
         subscriber_exists: bool,
         commit_observer: CommitObserver,
         signals: CoreSignals,
-        block_signer: ProtocolKeyPair,
+        block_signer: Option<ProtocolKeyPair>,
         dag_state: Arc<RwLock<DagState>>,
         sync_last_known_own_block: bool,
         round_tracker: Arc<RwLock<PeerRoundTracker>>,
@@ -666,8 +666,11 @@ impl Core {
                 vec![],
             ))
         };
-        let signed_block =
-            SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
+        let block_signer = self
+            .block_signer
+            .as_ref()
+            .expect("Block signer must exist for validators");
+        let signed_block = SignedBlock::new(block, block_signer).expect("Block signing failed.");
         let serialized = signed_block
             .serialize()
             .expect("Block serialization failed.");
@@ -946,6 +949,14 @@ impl Core {
     pub(crate) fn should_propose(&self) -> bool {
         let clock_round = self.dag_state.read().threshold_clock_round();
         let core_skipped_proposals = &self.context.metrics.node_metrics.core_skipped_proposals;
+
+        if self.block_signer.is_none() {
+            debug!("Skip proposing for round {clock_round}, observer mode (no block signer).");
+            core_skipped_proposals
+                .with_label_values(&["observer_mode"])
+                .inc();
+            return false;
+        }
 
         if !self.subscriber_exists {
             debug!("Skip proposing for round {clock_round}, no subscriber exists.");
@@ -1452,7 +1463,7 @@ impl CoreTextFixture {
             true,
             commit_observer,
             signals,
-            block_signer,
+            Some(block_signer),
             dag_state.clone(),
             sync_last_known_own_block,
             round_tracker,

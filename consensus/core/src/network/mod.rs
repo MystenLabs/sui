@@ -20,7 +20,7 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use futures::Stream;
 
@@ -39,6 +39,10 @@ mod anemo_gen {
 // Tonic generated RPC stubs.
 mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/consensus.ObserverConsensusService.rs"
+    ));
 }
 
 pub mod connection_monitor;
@@ -56,6 +60,41 @@ pub(crate) mod tonic_network;
 #[cfg(msim)]
 pub mod tonic_network;
 mod tonic_tls;
+
+/// Identifies a network client - either a committee member or an observer node.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NodeId {
+    /// A validator/authority in the committee
+    Authority(AuthorityIndex),
+    /// An observer node (full node) identified by its network public key
+    Observer(NetworkPublicKey),
+}
+
+impl NodeId {
+    /// Returns the authority index if this is an authority node
+    pub fn authority_index(&self) -> Option<AuthorityIndex> {
+        match self {
+            NodeId::Authority(index) => Some(*index),
+            NodeId::Observer(_) => None,
+        }
+    }
+
+    /// Returns true if this is an authority node
+    pub fn is_authority(&self) -> bool {
+        matches!(self, NodeId::Authority(_))
+    }
+
+    /// Returns true if this is an observer node
+    pub fn is_observer(&self) -> bool {
+        matches!(self, NodeId::Observer(_))
+    }
+}
+
+impl From<AuthorityIndex> for NodeId {
+    fn from(index: AuthorityIndex) -> Self {
+        NodeId::Authority(index)
+    }
+}
 
 /// A stream of serialized filtered blocks returned over the network.
 pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = ExtendedSerializedBlock> + Send>>;
@@ -148,9 +187,10 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
     /// A stream of newly proposed blocks is returned to the peer.
     /// The stream continues until the end of epoch, peer unsubscribes, or a network error / crash
     /// occurs.
+    /// Peer can be either an Authority (validator) or Observer (full node).
     async fn handle_subscribe_blocks(
         &self,
-        peer: AuthorityIndex,
+        peer: NodeId,
         last_received: Round,
     ) -> ConsensusResult<BlockStream>;
 

@@ -31,7 +31,7 @@ use crate::{
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{BlockStream, ExtendedSerializedBlock, NetworkService},
+    network::{BlockStream, ExtendedSerializedBlock, NetworkService, NodeId},
     round_tracker::PeerRoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
@@ -306,7 +306,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
     async fn handle_subscribe_blocks(
         &self,
-        peer: AuthorityIndex,
+        peer: NodeId,
         last_received: Round,
     ) -> ConsensusResult<BlockStream> {
         fail_point_async!("consensus-rpc-response");
@@ -599,6 +599,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 struct Counter {
     count: usize,
     subscriptions_by_authority: Vec<usize>,
+    observer_subscriptions: usize,
 }
 
 /// Atomically counts the number of active subscriptions to the block broadcast stream,
@@ -617,14 +618,23 @@ impl SubscriptionCounter {
                 .metrics
                 .node_metrics
                 .subscribed_by
-                .with_label_values(&[authority.hostname.as_str()])
+                .with_label_values(&[authority.hostname.as_str(), "validator"])
                 .set(0);
         }
+
+        // Initialize observer counter to 0
+        context
+            .metrics
+            .node_metrics
+            .subscribed_by
+            .with_label_values(&["observers", "observer"])
+            .set(0);
 
         Self {
             counter: parking_lot::Mutex::new(Counter {
                 count: 0,
                 subscriptions_by_authority: vec![0; context.committee.size()],
+                observer_subscriptions: 0,
             }),
             dispatcher,
             context,
@@ -641,7 +651,7 @@ impl SubscriptionCounter {
             .metrics
             .node_metrics
             .subscribed_by
-            .with_label_values(&[peer_hostname])
+            .with_label_values(&[peer_hostname, "validator"])
             .set(1);
 
         if counter.count == 1 {
@@ -663,7 +673,7 @@ impl SubscriptionCounter {
                 .metrics
                 .node_metrics
                 .subscribed_by
-                .with_label_values(&[peer_hostname])
+                .with_label_values(&[peer_hostname, "validator"])
                 .set(0);
         }
 
@@ -674,6 +684,56 @@ impl SubscriptionCounter {
         }
         Ok(())
     }
+
+    fn increment_node(&self, peer: NodeId) -> Result<(), ConsensusError> {
+        match peer {
+            NodeId::Authority(authority_index) => self.increment(authority_index),
+            NodeId::Observer(_) => {
+                let mut counter = self.counter.lock();
+                counter.count += 1;
+                counter.observer_subscriptions += 1;
+
+                self.context
+                    .metrics
+                    .node_metrics
+                    .subscribed_by
+                    .with_label_values(&["observers", "observer"])
+                    .set(counter.observer_subscriptions as i64);
+
+                if counter.count == 1 {
+                    self.dispatcher
+                        .set_subscriber_exists(true)
+                        .map_err(|_| ConsensusError::Shutdown)?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn decrement_node(&self, peer: NodeId) -> Result<(), ConsensusError> {
+        match peer {
+            NodeId::Authority(authority_index) => self.decrement(authority_index),
+            NodeId::Observer(_) => {
+                let mut counter = self.counter.lock();
+                counter.count -= 1;
+                counter.observer_subscriptions -= 1;
+
+                self.context
+                    .metrics
+                    .node_metrics
+                    .subscribed_by
+                    .with_label_values(&["observers", "observer"])
+                    .set(counter.observer_subscriptions as i64);
+
+                if counter.count == 0 {
+                    self.dispatcher
+                        .set_subscriber_exists(false)
+                        .map_err(|_| ConsensusError::Shutdown)?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Each broadcasted block stream wraps a broadcast receiver for blocks.
@@ -683,7 +743,7 @@ type BroadcastedBlockStream = BroadcastStream<ExtendedBlock>;
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
 struct BroadcastStream<T> {
-    peer: AuthorityIndex,
+    peer: NodeId,
     // Stores the receiver across poll_next() calls.
     inner: ReusableBoxFuture<
         'static,
@@ -698,11 +758,11 @@ struct BroadcastStream<T> {
 
 impl<T: 'static + Clone + Send> BroadcastStream<T> {
     pub fn new(
-        peer: AuthorityIndex,
+        peer: NodeId,
         rx: broadcast::Receiver<T>,
         subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
-        if let Err(err) = subscription_counter.increment(peer) {
+        if let Err(err) = subscription_counter.increment_node(peer.clone()) {
             match err {
                 ConsensusError::Shutdown => {}
                 _ => panic!("Unexpected error: {err}"),
@@ -723,7 +783,7 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
         mut self: Pin<&mut Self>,
         cx: &mut task::Context<'_>,
     ) -> task::Poll<Option<Self::Item>> {
-        let peer = self.peer;
+        let peer = self.peer.clone();
         let maybe_item = loop {
             let (result, rx) = ready!(self.inner.poll(cx));
             self.inner.set(make_recv_future(rx));
@@ -731,12 +791,12 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
             match result {
                 Ok(item) => break Some(item),
                 Err(broadcast::error::RecvError::Closed) => {
-                    info!("Block BroadcastedBlockStream {} closed", peer);
+                    info!("Block BroadcastedBlockStream {:?} closed", peer);
                     break None;
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     warn!(
-                        "Block BroadcastedBlockStream {} lagged by {} messages",
+                        "Block BroadcastedBlockStream {:?} lagged by {} messages",
                         peer, n
                     );
                     continue;
@@ -749,7 +809,7 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
 
 impl<T> Drop for BroadcastStream<T> {
     fn drop(&mut self) {
-        if let Err(err) = self.subscription_counter.decrement(self.peer) {
+        if let Err(err) = self.subscription_counter.decrement_node(self.peer.clone()) {
             match err {
                 ConsensusError::Shutdown => {}
                 _ => panic!("Unexpected error: {err}"),

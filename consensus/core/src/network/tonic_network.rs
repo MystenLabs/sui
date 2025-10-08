@@ -32,8 +32,10 @@ use super::{
     tonic_gen::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
+        observer_consensus_service_client::ObserverConsensusServiceClient,
+        observer_consensus_service_server::ObserverConsensusService,
     },
-    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
+    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService, NodeId,
 };
 use crate::{
     block::VerifiedBlock,
@@ -41,7 +43,10 @@ use crate::{
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::{
-        tonic_gen::consensus_service_server::ConsensusServiceServer,
+        tonic_gen::{
+            consensus_service_server::ConsensusServiceServer,
+            observer_consensus_service_server::ObserverConsensusServiceServer,
+        },
         tonic_tls::certificate_server_name,
     },
     CommitIndex,
@@ -331,6 +336,84 @@ impl NetworkClient for TonicClient {
     }
 }
 
+/// Tonic RPC client for Observer nodes to stream blocks from validators.
+/// This is a specialized client that only supports block streaming, not the full NetworkClient interface.
+pub(crate) struct ObserverClient {
+    context: Arc<Context>,
+    network_keypair: NetworkKeyPair,
+    observer_channel_pool: Arc<ObserverChannelPool>,
+}
+
+impl ObserverClient {
+    pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
+        Self {
+            context: context.clone(),
+            network_keypair,
+            observer_channel_pool: Arc::new(ObserverChannelPool::new(context)),
+        }
+    }
+
+    async fn get_client(
+        &self,
+        peer: AuthorityIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<ObserverConsensusServiceClient<Channel>> {
+        let config = &self.context.parameters.tonic;
+        let channel = self
+            .observer_channel_pool
+            .get_channel(self.network_keypair.clone(), peer, timeout)
+            .await?;
+        let mut client = ObserverConsensusServiceClient::new(channel)
+            .max_encoding_message_size(config.message_size_limit)
+            .max_decoding_message_size(config.message_size_limit);
+
+        if self.context.protocol_config.consensus_zstd_compression() {
+            client = client
+                .send_compressed(CompressionEncoding::Zstd)
+                .accept_compressed(CompressionEncoding::Zstd);
+        }
+        Ok(client)
+    }
+
+    /// Subscribes to blocks from a validator's observer port.
+    /// Returns a stream of blocks starting from the specified round.
+    pub(crate) async fn subscribe_blocks(
+        &self,
+        peer: AuthorityIndex,
+        last_received: Round,
+        timeout: Duration,
+    ) -> ConsensusResult<BlockStream> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let request = Request::new(stream::once(async move {
+            SubscribeBlocksRequest {
+                last_received_round: last_received,
+            }
+        }));
+        let response = client.subscribe_blocks(request).await.map_err(|e| {
+            ConsensusError::NetworkRequest(format!("observer subscribe_blocks failed: {e:?}"))
+        })?;
+        let stream = response
+            .into_inner()
+            .take_while(|b| futures::future::ready(b.is_ok()))
+            .filter_map(move |b| async move {
+                match b {
+                    Ok(response) => Some(ExtendedSerializedBlock {
+                        block: response.block,
+                        excluded_ancestors: response.excluded_ancestors,
+                    }),
+                    Err(e) => {
+                        debug!("Network error from validator {}: {e:?}", peer);
+                        None
+                    }
+                }
+            });
+        let rate_limited_stream =
+            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
+                .boxed();
+        Ok(rate_limited_stream)
+    }
+}
+
 // Tonic channel wrapped with layers.
 type Channel = mysten_network::callback::Callback<
     tower_http::trace::Trace<
@@ -437,6 +520,112 @@ impl ChannelPool {
     }
 }
 
+/// Manages a pool of connections to validator observer ports for observer nodes.
+struct ObserverChannelPool {
+    context: Arc<Context>,
+    channels: RwLock<BTreeMap<AuthorityIndex, Channel>>,
+}
+
+impl ObserverChannelPool {
+    fn new(context: Arc<Context>) -> Self {
+        Self {
+            context,
+            channels: RwLock::new(BTreeMap::new()),
+        }
+    }
+
+    async fn get_channel(
+        &self,
+        network_keypair: NetworkKeyPair,
+        peer: AuthorityIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<Channel> {
+        {
+            let channels = self.channels.read();
+            if let Some(channel) = channels.get(&peer) {
+                return Ok(channel.clone());
+            }
+        }
+
+        let authority = self.context.committee.authority(peer);
+        let mut address = to_host_port_str(&authority.address).map_err(|e| {
+            ConsensusError::NetworkConfig(format!("Cannot convert address to host:port: {e:?}"))
+        })?;
+
+        // Parse the address and add the observer port offset
+        let config = &self.context.parameters.tonic;
+        let observer_port_offset = config.observer_port_offset.ok_or_else(|| {
+            ConsensusError::NetworkConfig("Observer port offset not configured".to_string())
+        })?;
+
+        // Extract host and port, then add offset
+        if let Some((host, port_str)) = address.rsplit_once(':') {
+            if let Ok(port) = port_str.parse::<u16>() {
+                let observer_port = port + observer_port_offset;
+                address = format!("{}:{}", host, observer_port);
+            }
+        }
+
+        let address = format!("https://{address}");
+        let buffer_size = config.connection_buffer_size;
+
+        // Observer client connects to validator's observer port
+        // TLS config validates the validator's certificate
+        let client_tls_config = sui_tls::create_rustls_client_config(
+            authority.network_key.clone().into_inner(),
+            certificate_server_name(&self.context),
+            Some(network_keypair.private_key().into_inner()),
+        );
+
+        let endpoint = tonic_rustls::Channel::from_shared(address.clone())
+            .unwrap()
+            .connect_timeout(timeout)
+            .initial_connection_window_size(Some(buffer_size as u32))
+            .initial_stream_window_size(Some(buffer_size as u32 / 2))
+            .keep_alive_while_idle(true)
+            .keep_alive_timeout(config.keepalive_interval)
+            .http2_keep_alive_interval(config.keepalive_interval)
+            .user_agent("mysticeti-observer")
+            .unwrap()
+            .tls_config(client_tls_config)
+            .unwrap();
+
+        let deadline = tokio::time::Instant::now() + timeout;
+        let channel = loop {
+            trace!("Observer connecting to endpoint at {address}");
+            match endpoint.connect().await {
+                Ok(channel) => break channel,
+                Err(e) => {
+                    debug!("Observer failed to connect to endpoint at {address}: {e:?}");
+                    if tokio::time::Instant::now() >= deadline {
+                        return Err(ConsensusError::NetworkClientConnection(format!(
+                            "Observer timed out connecting to endpoint at {address}: {e:?}"
+                        )));
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        };
+        trace!("Observer connected to {address}");
+
+        let channel = tower::ServiceBuilder::new()
+            .layer(CallbackLayer::new(MetricsCallbackMaker::new(
+                self.context.metrics.network_metrics.outbound.clone(),
+                self.context.parameters.tonic.excessive_message_size,
+            )))
+            .layer(
+                TraceLayer::new_for_grpc()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
+            )
+            .service(channel);
+
+        let mut channels = self.channels.write();
+        let channel = channels.entry(peer).or_insert(channel);
+        Ok(channel.clone())
+    }
+}
+
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: NetworkService> {
     context: Arc<Context>,
@@ -504,7 +693,10 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         };
         let stream = self
             .service
-            .handle_subscribe_blocks(peer_index, first_request.last_received_round)
+            .handle_subscribe_blocks(
+                NodeId::Authority(peer_index),
+                first_request.last_received_round,
+            )
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
             .map(|block| {
@@ -666,6 +858,79 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
     }
 }
 
+/// Proxies observer requests to NetworkService for block streaming only.
+struct ObserverServiceProxy<S: NetworkService> {
+    context: Arc<Context>,
+    service: Arc<S>,
+}
+
+impl<S: NetworkService> ObserverServiceProxy<S> {
+    fn new(context: Arc<Context>, service: Arc<S>) -> Self {
+        Self { context, service }
+    }
+}
+
+#[async_trait]
+impl<S: NetworkService> ObserverConsensusService for ObserverServiceProxy<S> {
+    type SubscribeBlocksStream =
+        Pin<Box<dyn Stream<Item = Result<SubscribeBlocksResponse, tonic::Status>> + Send>>;
+
+    async fn subscribe_blocks(
+        &self,
+        request: Request<Streaming<SubscribeBlocksRequest>>,
+    ) -> Result<Response<Self::SubscribeBlocksStream>, tonic::Status> {
+        let Some(peer_public_key) = request
+            .extensions()
+            .get::<ObserverPeerInfo>()
+            .map(|p| p.public_key.clone())
+        else {
+            return Err(tonic::Status::internal("ObserverPeerInfo not found"));
+        };
+
+        debug!("Observer {:?} subscribing to blocks", peer_public_key);
+
+        let mut request_stream = request.into_inner();
+        let first_request = match request_stream.next().await {
+            Some(Ok(r)) => r,
+            Some(Err(e)) => {
+                debug!(
+                    "subscribe_blocks() request from observer {:?} failed: {e:?}",
+                    peer_public_key
+                );
+                return Err(tonic::Status::invalid_argument("Request error"));
+            }
+            None => {
+                return Err(tonic::Status::invalid_argument("Missing request"));
+            }
+        };
+
+        let stream = self
+            .service
+            .handle_subscribe_blocks(
+                NodeId::Observer(peer_public_key),
+                first_request.last_received_round,
+            )
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
+            .map(|block| {
+                Ok(SubscribeBlocksResponse {
+                    block: block.block,
+                    excluded_ancestors: block.excluded_ancestors,
+                })
+            });
+        let rate_limited_stream =
+            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
+                .boxed();
+        Ok(Response::new(rate_limited_stream))
+    }
+}
+
+/// Information about the observer peer, set per connection.
+#[derive(Clone, Debug)]
+struct ObserverPeerInfo {
+    public_key: NetworkPublicKey,
+}
+
 /// Manages the lifecycle of Tonic network client and service. Typical usage during initialization:
 /// 1. Create a new `TonicManager`.
 /// 2. Take `TonicClient` from `TonicManager::client()`.
@@ -676,7 +941,8 @@ pub(crate) struct TonicManager {
     context: Arc<Context>,
     network_keypair: NetworkKeyPair,
     client: Arc<TonicClient>,
-    server: Option<ServerHandle>,
+    validator_server: Option<ServerHandle>,
+    observer_server: Option<ServerHandle>,
 }
 
 impl TonicManager {
@@ -685,7 +951,8 @@ impl TonicManager {
             context: context.clone(),
             network_keypair: network_keypair.clone(),
             client: Arc::new(TonicClient::new(context, network_keypair)),
-            server: None,
+            validator_server: None,
+            observer_server: None,
         }
     }
 }
@@ -720,7 +987,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             authority.address.with_zero_ip()
         };
         let own_address = to_socket_addr(&own_address).unwrap();
-        let service = TonicServiceProxy::new(self.context.clone(), service);
+        let validator_service = TonicServiceProxy::new(self.context.clone(), service.clone());
         let config = &self.context.parameters.tonic;
 
         let connections_info = Arc::new(ConnectionsInfo::new(self.context.clone()));
@@ -756,7 +1023,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 )
             });
 
-        let mut consensus_service_server = ConsensusServiceServer::new(service)
+        let mut consensus_service_server = ConsensusServiceServer::new(validator_service)
             .max_encoding_message_size(config.message_size_limit)
             .max_decoding_message_size(config.message_size_limit);
 
@@ -849,12 +1116,105 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             }
         };
 
-        info!("Server started at: {own_address}");
-        self.server = Some(server);
+        info!("Validator server started at: {own_address}");
+        self.validator_server = Some(server);
+
+        // Start observer server if configured
+        if let Some(observer_port_offset) = config.observer_port_offset {
+            let observer_address = match own_address {
+                SocketAddr::V4(addr) => {
+                    let new_port = addr.port() + observer_port_offset;
+                    SocketAddr::V4(SocketAddrV4::new(*addr.ip(), new_port))
+                }
+                SocketAddr::V6(addr) => {
+                    let new_port = addr.port() + observer_port_offset;
+                    SocketAddr::V6(SocketAddrV6::new(*addr.ip(), new_port, 0, 0))
+                }
+            };
+
+            info!("Starting observer service at {observer_address}");
+
+            let observer_service_proxy =
+                ObserverServiceProxy::new(self.context.clone(), service.clone());
+
+            let observer_layers = tower::ServiceBuilder::new()
+                .map_request(move |mut request: http::Request<_>| {
+                    if let Some(peer_certificates) =
+                        request.extensions().get::<sui_http::PeerCertificates>()
+                    {
+                        if let Some(observer_peer_info) =
+                            observer_peer_info_from_certs(peer_certificates)
+                        {
+                            request.extensions_mut().insert(observer_peer_info);
+                        }
+                    }
+                    request
+                })
+                .layer(CallbackLayer::new(MetricsCallbackMaker::new(
+                    self.context.metrics.network_metrics.inbound.clone(),
+                    self.context.parameters.tonic.excessive_message_size,
+                )))
+                .layer(
+                    TraceLayer::new_for_grpc()
+                        .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
+                        .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
+                )
+                .layer_fn(|service| {
+                    mysten_network::grpc_timeout::GrpcTimeout::new(
+                        service,
+                        DEFAULT_GRPC_SERVER_TIMEOUT,
+                    )
+                });
+
+            let mut observer_service_server =
+                ObserverConsensusServiceServer::new(observer_service_proxy)
+                    .max_encoding_message_size(config.message_size_limit)
+                    .max_decoding_message_size(config.message_size_limit);
+
+            if self.context.protocol_config.consensus_zstd_compression() {
+                observer_service_server = observer_service_server
+                    .send_compressed(CompressionEncoding::Zstd)
+                    .accept_compressed(CompressionEncoding::Zstd);
+            }
+
+            let observer_consensus_service = tonic::service::Routes::new(observer_service_server)
+                .into_axum_router()
+                .route_layer(observer_layers);
+
+            // Observer server accepts any valid TLS certificate (not just committee members)
+            let observer_tls_config = sui_tls::create_rustls_server_config(
+                self.network_keypair.clone().private_key().into_inner(),
+                certificate_server_name(&self.context),
+            );
+
+            let deadline = Instant::now() + Duration::from_secs(20);
+            let observer_server = loop {
+                match sui_http::Builder::new()
+                    .config(http_config.clone())
+                    .tls_config(observer_tls_config.clone())
+                    .serve(observer_address, observer_consensus_service.clone())
+                {
+                    Ok(server) => break server,
+                    Err(err) => {
+                        warn!("Error starting observer server: {err:?}");
+                        if Instant::now() > deadline {
+                            panic!("Failed to start observer server within required deadline");
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                }
+            };
+
+            info!("Observer server started at: {observer_address}");
+            self.observer_server = Some(observer_server);
+        }
     }
 
     async fn stop(&mut self) {
-        if let Some(server) = self.server.take() {
+        if let Some(server) = self.validator_server.take() {
+            server.shutdown().await;
+        }
+        if let Some(server) = self.observer_server.take() {
             server.shutdown().await;
         }
 
@@ -871,7 +1231,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
 // dropped.
 impl Drop for TonicManager {
     fn drop(&mut self) {
-        if let Some(server) = self.server.as_ref() {
+        if let Some(server) = self.validator_server.as_ref() {
+            server.trigger_shutdown();
+        }
+        if let Some(server) = self.observer_server.as_ref() {
             server.trigger_shutdown();
         }
     }
@@ -905,6 +1268,31 @@ fn peer_info_from_certs(
         return None;
     };
     Some(PeerInfo { authority_index })
+}
+
+fn observer_peer_info_from_certs(
+    peer_certificates: &sui_http::PeerCertificates,
+) -> Option<ObserverPeerInfo> {
+    let certs = peer_certificates.peer_certs();
+
+    if certs.len() != 1 {
+        trace!(
+            "Unexpected number of certificates from TLS stream: {}",
+            certs.len()
+        );
+        return None;
+    }
+    trace!("Received {} certificates from observer", certs.len());
+    let public_key = sui_tls::public_key_from_certificate(&certs[0])
+        .map_err(|e| {
+            trace!("Failed to extract public key from certificate: {e:?}");
+            e
+        })
+        .ok()?;
+    let client_public_key = NetworkPublicKey::new(public_key);
+    Some(ObserverPeerInfo {
+        public_key: client_public_key,
+    })
 }
 
 /// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into

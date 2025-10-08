@@ -728,7 +728,7 @@ impl NodeMetrics {
             subscribed_by: register_int_gauge_vec_with_registry!(
                 "subscribed_by",
                 "Peers subscribing for block streams from this authority.",
-                &["authority"],
+                &["peer_id", "node_type"],
                 registry,
             ).unwrap(),
             commit_sync_inflight_fetches: register_int_gauge_with_registry!(

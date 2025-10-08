@@ -90,9 +90,26 @@ fn build_tonic_services(out_dir: &Path) {
         )
         .build();
 
+    let observer_service = tonic_build::manual::Service::builder()
+        .name("ObserverConsensusService")
+        .package("consensus")
+        .comment("Observer node interface for streaming blocks")
+        .method(
+            tonic_build::manual::Method::builder()
+                .name("subscribe_blocks")
+                .route_name("SubscribeBlocks")
+                .input_type("crate::network::tonic_network::SubscribeBlocksRequest")
+                .output_type("crate::network::tonic_network::SubscribeBlocksResponse")
+                .codec_path(codec_path)
+                .server_streaming()
+                .client_streaming()
+                .build(),
+        )
+        .build();
+
     tonic_build::manual::Builder::new()
         .out_dir(out_dir)
-        .compile(&[service]);
+        .compile(&[service, observer_service]);
 }
 
 fn build_anemo_services(out_dir: &Path) {

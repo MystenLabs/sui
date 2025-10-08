@@ -54,11 +54,11 @@ impl ConsensusAuthority {
     pub async fn start(
         network_type: ConsensusNetwork,
         epoch_start_timestamp_ms: u64,
-        own_index: AuthorityIndex,
+        own_index: Option<AuthorityIndex>,
         committee: Committee,
         parameters: Parameters,
         protocol_config: ProtocolConfig,
-        protocol_keypair: ProtocolKeyPair,
+        protocol_keypair: Option<ProtocolKeyPair>,
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
@@ -169,13 +169,13 @@ where
 {
     pub(crate) async fn start(
         epoch_start_timestamp_ms: u64,
-        own_index: AuthorityIndex,
+        own_index: Option<AuthorityIndex>,
         committee: Committee,
         parameters: Parameters,
         protocol_config: ProtocolConfig,
         // To avoid accidentally leaking the private key, the protocol key pair should only be
-        // kept in Core.
-        protocol_keypair: ProtocolKeyPair,
+        // kept in Core. None for observer nodes.
+        protocol_keypair: Option<ProtocolKeyPair>,
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
@@ -183,22 +183,45 @@ where
         registry: Registry,
         boot_counter: u64,
     ) -> Self {
-        assert!(
-            committee.is_valid_index(own_index),
-            "Invalid own index {}",
-            own_index
-        );
-        let own_hostname = committee.authority(own_index).hostname.clone();
-        info!(
-            "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
-            own_index,
-            own_hostname,
-            protocol_config.version,
-            epoch_start_timestamp_ms,
-            boot_counter,
-            commit_consumer.replay_after_commit_index,
-            commit_consumer.consumer_last_processed_commit_index
-        );
+        let is_observer = own_index.is_none();
+
+        // For observers, use a sentinel value (AuthorityIndex::MAX) since Context requires own_index
+        let own_index = own_index.unwrap_or(AuthorityIndex::MAX);
+
+        if !is_observer {
+            assert!(
+                committee.is_valid_index(own_index),
+                "Invalid own index {}",
+                own_index
+            );
+        }
+
+        let own_hostname = if is_observer {
+            "observer".to_string()
+        } else {
+            committee.authority(own_index).hostname.clone()
+        };
+        if is_observer {
+            info!(
+                "Starting consensus observer node, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
+                protocol_config.version,
+                epoch_start_timestamp_ms,
+                boot_counter,
+                commit_consumer.replay_after_commit_index,
+                commit_consumer.consumer_last_processed_commit_index
+            );
+        } else {
+            info!(
+                "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
+                own_index,
+                own_hostname,
+                protocol_config.version,
+                epoch_start_timestamp_ms,
+                boot_counter,
+                commit_consumer.replay_after_commit_index,
+                commit_consumer.consumer_last_processed_commit_index
+            );
+        }
         info!(
             "Consensus authorities: {}",
             committee

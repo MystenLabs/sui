@@ -12,7 +12,7 @@ use crate::{
     block::VerifiedBlock,
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
-    network::{BlockStream, NetworkService},
+    network::{BlockStream, NetworkService, NodeId},
 };
 
 use super::ExtendedSerializedBlock;
@@ -56,11 +56,13 @@ impl NetworkService for Mutex<TestService> {
 
     async fn handle_subscribe_blocks(
         &self,
-        peer: AuthorityIndex,
+        peer: NodeId,
         last_received: Round,
     ) -> ConsensusResult<BlockStream> {
         let mut state = self.lock();
-        state.handle_subscribe_blocks.push((peer, last_received));
+        state
+            .handle_subscribe_blocks
+            .push((peer.authority_index().unwrap(), last_received));
         let own_blocks = state
             .own_blocks
             .iter()

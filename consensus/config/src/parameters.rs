@@ -282,6 +282,14 @@ pub struct TonicParameters {
     /// If unspecified, this will default to 1GiB.
     #[serde(default = "TonicParameters::default_message_size_limit")]
     pub message_size_limit: usize,
+
+    /// Observer network port offset from the validator port.
+    /// Observer nodes (full nodes) connect to this port to stream blocks.
+    /// The actual observer port = validator_port + observer_port_offset.
+    ///
+    /// If unspecified or set to None, the observer network is disabled.
+    #[serde(default = "TonicParameters::default_observer_port_offset")]
+    pub observer_port_offset: Option<u16>,
 }
 
 impl TonicParameters {
@@ -300,6 +308,10 @@ impl TonicParameters {
     fn default_message_size_limit() -> usize {
         64 << 20
     }
+
+    fn default_observer_port_offset() -> Option<u16> {
+        Some(1000)
+    }
 }
 
 impl Default for TonicParameters {
@@ -309,6 +321,7 @@ impl Default for TonicParameters {
             connection_buffer_size: TonicParameters::default_connection_buffer_size(),
             excessive_message_size: TonicParameters::default_excessive_message_size(),
             message_size_limit: TonicParameters::default_message_size_limit(),
+            observer_port_offset: TonicParameters::default_observer_port_offset(),
         }
     }
 }
