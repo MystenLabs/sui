@@ -1,6 +1,15 @@
-use sui_pg_db::Db;
+use std::sync::Arc;
+use std::time::Duration;
 
-struct ObjectStore {
+use async_trait::async_trait;
+use bytes::Bytes;
+use sui_indexer_alt_framework_store_traits::{
+    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store,
+};
+use sui_pg_db::{Connection as PgConnection, Db};
+
+#[derive(Clone)]
+pub struct ObjectStore {
     db: Db,
     object_store: Arc<Box<dyn object_store::ObjectStore>>,
     compression_level: Option<i32>,

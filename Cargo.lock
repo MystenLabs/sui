@@ -13719,6 +13719,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-checkpoint-object-store-indexer"
+version = "1.59.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "clap",
+ "object_store",
+ "prometheus",
+ "prost",
+ "sui-indexer-alt-framework",
+ "sui-indexer-object-store",
+ "sui-pg-db",
+ "sui-rpc",
+ "sui-types",
+ "tokio",
+ "tokio-util 0.7.13",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "sui-cluster-test"
 version = "1.60.0"
 dependencies = [
@@ -14989,9 +15012,15 @@ dependencies = [
 name = "sui-indexer-object-store"
 version = "1.59.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
  "object_store",
  "sui-indexer-alt-framework-store-traits",
  "sui-pg-db",
+ "tokio",
+ "tracing",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
