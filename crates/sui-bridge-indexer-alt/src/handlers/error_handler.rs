@@ -17,7 +17,7 @@ use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
 
 pub struct ErrorTransactionHandler;
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Processor for ErrorTransactionHandler {
     const NAME: &'static str = "error_transactions";
     type Value = SuiErrorTransactions;

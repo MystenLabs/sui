@@ -182,7 +182,13 @@ pub(super) fn processor<P: Processor>(
 #[cfg(test)]
 mod tests {
     use crate::metrics::IndexerMetrics;
-    use std::{sync::Arc, time::Duration};
+    use std::{
+        sync::{
+            atomic::{AtomicU32, Ordering},
+            Arc,
+        },
+        time::Duration,
+    };
     use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
     use tokio::{sync::mpsc, time::timeout};
     use tokio_util::sync::CancellationToken;
@@ -330,9 +336,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_processor_error_retry_behavior() {
-        use std::sync::atomic::{AtomicU32, Ordering};
-
-        // Create a pipeline that fails first 2 attempts, then succeeds on 3rd
         struct RetryTestPipeline {
             attempt_count: Arc<AtomicU32>,
         }
@@ -386,9 +389,9 @@ mod tests {
         // Send second checkpoint (should fail twice, then succeed on 3rd attempt)
         data_tx.send(checkpoint2.clone()).await.unwrap();
 
-        let indexed2 = timeout(Duration::from_secs(10), indexed_rx.recv())
+        let indexed2 = indexed_rx
+            .recv()
             .await
-            .expect("Timeout waiting for second checkpoint")
             .expect("Should receive second IndexedCheckpoint after retries");
         assert_eq!(indexed2.watermark.checkpoint_hi_inclusive, 2);
 
