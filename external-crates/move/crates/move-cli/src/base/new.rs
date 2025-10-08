@@ -41,7 +41,7 @@ impl New {
                 public fun hello_world() {{
 
                 }}"#,
-                name = self.name,
+                name = self.name_var()?,
             ),
         )?;
         self.write_move_toml(&path)?;
@@ -80,8 +80,6 @@ impl New {
 
     /// create default `Move.toml`
     fn write_move_toml(&self, path: &Option<&Path>) -> anyhow::Result<()> {
-        let Self { name } = self;
-
         std::fs::write(
             self.manifest_path(path)?,
             formatdoc!(
@@ -118,7 +116,8 @@ impl New {
                 # Use to replace dependencies for specific environments
                 # [dep-replacements.mainnet]
                 # foo = {{ git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }}
-                "#
+                "#,
+                name = self.name_var()?
             ),
         )?;
 
