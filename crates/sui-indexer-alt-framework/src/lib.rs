@@ -662,60 +662,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_indexer_concurrent_pipeline_allow_inconsistent_first_checkpoint_with_skip_watermark(
-    ) {
-        let cancel = CancellationToken::new();
-        let registry = Registry::new();
-
-        let store = MockStore::default();
-        let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            "test_processor",
-            None,
-            CommitterWatermark {
-                epoch_hi_inclusive: 1,
-                checkpoint_hi_inclusive: 100,
-                tx_hi: 1000,
-                timestamp_ms_hi_inclusive: 1000000,
-            },
-        )
-        .await
-        .unwrap();
-
-        let indexer_args = IndexerArgs {
-            first_checkpoint: Some(1001),
-            last_checkpoint: None,
-            pipeline: vec![],
-            task: None,
-        };
-        let temp_dir = tempfile::tempdir().unwrap();
-        let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
-            ..Default::default()
-        };
-
-        let ingestion_config = IngestionConfig::default();
-
-        let mut indexer = Indexer::new(
-            store,
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-            cancel,
-        )
-        .await
-        .unwrap();
-
-        let result = indexer
-            .concurrent_pipeline::<MockHandler>(MockHandler, ConcurrentConfig::default())
-            .await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
     async fn test_indexer_sequential_pipeline_disallow_inconsistent_first_checkpoint() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
@@ -769,8 +715,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_indexer_sequential_pipeline_disallow_inconsistent_first_checkpoint_with_skip_watermark(
-    ) {
+    async fn test_indexer_sequential_pipeline_disallow_task() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
 
@@ -793,7 +738,7 @@ mod tests {
             first_checkpoint: Some(1001),
             last_checkpoint: None,
             pipeline: vec![],
-            task: None,
+            task: Some("should_fail".to_string()),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
@@ -902,13 +847,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_indexer_concurrent_pipeline_always_resume_from_first_checkpoint() {
+    async fn test_indexer_concurrent_pipeline_always_resume_from_watermark() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
         let pipeline_checkpoint_hi = 10;
         let indexer_first_checkpoint = 5;
-        let num_ingested_checkpoints = 10;
+        let checkpoints_to_ingest = 10;
 
         let mut conn = store.connect().await.unwrap();
         conn.set_committer_watermark(
@@ -926,7 +871,7 @@ mod tests {
 
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(indexer_first_checkpoint),
-            last_checkpoint: Some(indexer_first_checkpoint + num_ingested_checkpoints - 1),
+            last_checkpoint: Some(indexer_first_checkpoint + checkpoints_to_ingest - 1),
             pipeline: vec![],
             task: None,
         };
@@ -934,7 +879,7 @@ mod tests {
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: indexer_first_checkpoint,
-            num_checkpoints: num_ingested_checkpoints,
+            num_checkpoints: checkpoints_to_ingest,
             checkpoint_size: 2,
         })
         .await;
@@ -968,7 +913,7 @@ mod tests {
 
         assert_eq!(
             metrics.total_ingested_checkpoints.get(),
-            num_ingested_checkpoints
+            checkpoints_to_ingest
         );
         assert_eq!(
             metrics
@@ -976,7 +921,15 @@ mod tests {
                 .get_metric_with_label_values(&["test_processor"])
                 .unwrap()
                 .get(),
-            0
+            6
         );
     }
+
+    // async fn test_tasked_pipelines_resume_from_main_reader_lo() {
+
+    // }
+
+    // test_tasked_pipelines_can_run_ahead_of_main_committer_hi
+
+    // test_tasked_pipelines_stop_when_trailing_main_reader_lo
 }
