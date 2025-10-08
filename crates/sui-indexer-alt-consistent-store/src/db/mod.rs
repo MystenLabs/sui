@@ -466,28 +466,28 @@ impl Db {
             current_size_active_mem_tables: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::CUR_SIZE_ACTIVE_MEM_TABLE,
+                properties::CUR_SIZE_ACTIVE_MEM_TABLE,
             ),
             size_all_mem_tables: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::SIZE_ALL_MEM_TABLES,
+                properties::SIZE_ALL_MEM_TABLES,
             ),
-            block_cache_usage: cf_property_int_to_metric(db, &cf, &properties::BLOCK_CACHE_USAGE),
+            block_cache_usage: cf_property_int_to_metric(db, &cf, properties::BLOCK_CACHE_USAGE),
             block_cache_pinned_usage: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::BLOCK_CACHE_PINNED_USAGE,
+                properties::BLOCK_CACHE_PINNED_USAGE,
             ),
             estimate_table_readers_mem: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::ESTIMATE_TABLE_READERS_MEM,
+                properties::ESTIMATE_TABLE_READERS_MEM,
             ),
             estimate_pending_compaction_bytes: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::ESTIMATE_PENDING_COMPACTION_BYTES,
+                properties::ESTIMATE_PENDING_COMPACTION_BYTES,
             ),
             num_level0_files: cf_property_int_to_metric(
                 db,
@@ -497,30 +497,30 @@ impl Db {
             actual_delayed_write_rate: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::ACTUAL_DELAYED_WRITE_RATE,
+                properties::ACTUAL_DELAYED_WRITE_RATE,
             ),
-            is_write_stopped: cf_property_int_to_metric(db, &cf, &properties::IS_WRITE_STOPPED),
+            is_write_stopped: cf_property_int_to_metric(db, &cf, properties::IS_WRITE_STOPPED),
             num_immutable_mem_tables: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::NUM_IMMUTABLE_MEM_TABLE,
+                properties::NUM_IMMUTABLE_MEM_TABLE,
             ),
             mem_table_flush_pending: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::MEM_TABLE_FLUSH_PENDING,
+                properties::MEM_TABLE_FLUSH_PENDING,
             ),
-            compaction_pending: cf_property_int_to_metric(db, &cf, &properties::COMPACTION_PENDING),
-            num_snapshots: cf_property_int_to_metric(db, &cf, &properties::NUM_SNAPSHOTS),
+            compaction_pending: cf_property_int_to_metric(db, &cf, properties::COMPACTION_PENDING),
+            num_snapshots: cf_property_int_to_metric(db, &cf, properties::NUM_SNAPSHOTS),
             num_running_compactions: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::NUM_RUNNING_COMPACTIONS,
+                properties::NUM_RUNNING_COMPACTIONS,
             ),
             num_running_flushes: cf_property_int_to_metric(
                 db,
                 &cf,
-                &properties::NUM_RUNNING_FLUSHES,
+                properties::NUM_RUNNING_FLUSHES,
             ),
         }
     }
