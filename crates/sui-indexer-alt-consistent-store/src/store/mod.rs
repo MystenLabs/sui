@@ -5,6 +5,7 @@ use std::sync::OnceLock;
 use std::{path::Path, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, bail, Context as _};
+use prometheus::Registry;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::store::{self, CommitterWatermark, Store as _};
 use synchronizer::Queue;
@@ -12,6 +13,7 @@ use tokio::task::JoinHandle;
 
 use crate::db::config::DbConfig;
 use crate::db::{Db, Watermark};
+use crate::metrics::ColumnFamilyStatsCollector;
 
 use self::synchronizer::Synchronizer;
 
@@ -51,9 +53,6 @@ struct Inner<S> {
     /// [`Synchronizer`] to run, and is used to send writes to the database, associated with a
     /// pipeline.
     queue: OnceLock<Queue>,
-
-    /// Names of the column families in the database that will be opened per the Schema.
-    cf_names: Vec<String>,
 }
 
 impl<S: Schema> Store<S> {
@@ -65,6 +64,7 @@ impl<S: Schema> Store<S> {
         path: impl AsRef<Path>,
         config: DbConfig,
         snapshots: u64,
+        registry: Option<&Registry>,
     ) -> anyhow::Result<Self> {
         let db_options: rocksdb::Options = config.into();
         let cfs = S::cfs(&db_options);
@@ -76,8 +76,17 @@ impl<S: Schema> Store<S> {
 
         let schema = S::open(&db).context("Failed to open schema")?;
 
+        if let Some(registry) = registry {
+            registry
+                .register(Box::new(ColumnFamilyStatsCollector::new(
+                    Some("rocksdb"),
+                    db.clone(),
+                    cf_names,
+                )))
+                .context("Failed to register rocksdb column family stats collector")?;
+        }
+
         Ok(Self(Arc::new(Inner {
-            cf_names,
             db,
             queue: OnceLock::new(),
             schema,
@@ -103,10 +112,6 @@ impl<S: Schema> Store<S> {
             .set(queue)
             .map_err(|_| anyhow!("Store already has synchronizer"))?;
         Ok(handle)
-    }
-
-    pub(crate) fn cf_names(&self) -> Vec<String> {
-        self.0.cf_names.clone()
     }
 }
 
@@ -289,14 +294,14 @@ mod tests {
     async fn test_open() {
         let d = tempfile::tempdir().unwrap();
         let _store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
     }
 
     #[tokio::test]
     async fn test_no_queue() {
         let d = tempfile::tempdir().unwrap();
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         // If the store is not associated with a synchronizer, all writes will fail.
         let err = write(&store, "test", 0, |s, b| {
@@ -315,7 +320,7 @@ mod tests {
     async fn test_single_pipeline() {
         let d = tempfile::tempdir().unwrap();
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;
@@ -356,7 +361,7 @@ mod tests {
     async fn test_multiple_pipelines() {
         let d = tempfile::tempdir().unwrap();
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;
@@ -433,7 +438,7 @@ mod tests {
         }
 
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), snapshots).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), snapshots, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;
@@ -492,7 +497,7 @@ mod tests {
         }
 
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), snapshots).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), snapshots, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;
@@ -547,7 +552,7 @@ mod tests {
         }
 
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;
@@ -620,7 +625,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
 
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;
@@ -656,7 +661,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
 
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;
@@ -683,7 +688,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
 
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;
@@ -727,7 +732,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
 
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         let stride = 3;
         let buffer_size = 10;
@@ -794,7 +799,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
 
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;
@@ -838,7 +843,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
 
         let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
 
         let stride = 1;
         let buffer_size = 10;

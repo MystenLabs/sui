@@ -31,7 +31,6 @@
 
 use std::{path::Path, sync::Arc};
 
-use anyhow::Context;
 use config::{PipelineLayer, ServiceConfig};
 use db::config::DbConfig;
 use handlers::{balances::Balances, object_by_owner::ObjectByOwner, object_by_type::ObjectByType};
@@ -48,8 +47,6 @@ use sui_indexer_alt_framework::{
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-
-use crate::metrics::ColumnFamilyStatsCollector;
 
 pub mod args;
 pub mod config;
@@ -108,20 +105,6 @@ pub async fn start_service(
         cancel.child_token(),
     )
     .await?;
-
-    // Register the rocksdb column family stats collector
-    registry
-        .register(Box::new(ColumnFamilyStatsCollector::new(
-            Some("rocksdb"),
-            indexer.store().db().clone(),
-            indexer.store().cf_names(),
-        )))
-        .context("Failed to register rocksdb column family stats collector")?;
-
-    tracing::info!(
-        "Periodic metrics reporting enabled for column families: {:?}",
-        indexer.store().cf_names()
-    );
 
     let state = State {
         store: indexer.store().clone(),
