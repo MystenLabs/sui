@@ -515,15 +515,16 @@ mod checked {
                 return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
 
-            // Any input object taken by value must be mutable
-            if matches!(
-                input_metadata_opt,
-                Some(InputObjectMetadata::InputObject {
-                    mutability: Mutability::Immutable | Mutability::NonExclusiveWrite,
-                    ..
-                })
-            ) {
-                return Err(CommandArgumentError::InvalidObjectByValue.into());
+            // Any input object taken by value must be exclusively mutable
+            match input_metadata_opt {
+                Some(InputObjectMetadata::InputObject { mutability, .. }) => match mutability {
+                    Mutability::Mutable => (),
+                    Mutability::Immutable | Mutability::NonExclusiveWrite => {
+                        return Err(CommandArgumentError::InvalidObjectByValue.into());
+                    }
+                },
+                Some(InputObjectMetadata::Receiving { .. }) => (),
+                None => (),
             }
 
             let val = if is_copyable {
@@ -571,12 +572,15 @@ mod checked {
                 // error if taken
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             };
-            if let Some(InputObjectMetadata::InputObject {
-                mutability: Mutability::Immutable,
-                ..
-            }) = input_metadata_opt
-            {
-                return Err(CommandArgumentError::InvalidObjectByMutRef.into());
+            match input_metadata_opt {
+                Some(InputObjectMetadata::InputObject { mutability, .. }) => match mutability {
+                    Mutability::Mutable | Mutability::NonExclusiveWrite => (),
+                    Mutability::Immutable => {
+                        return Err(CommandArgumentError::InvalidObjectByMutRef.into());
+                    }
+                },
+                Some(InputObjectMetadata::Receiving { .. }) => (),
+                None => (),
             }
             // if it is copyable, don't take it as we allow for the value to be copied even if
             // mutably borrowed
