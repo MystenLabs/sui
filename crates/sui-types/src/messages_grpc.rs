@@ -566,6 +566,13 @@ pub struct RawWaitForEffectsRequest {
     pub ping_type: Option<i32>,
 }
 
+impl RawWaitForEffectsRequest {
+    pub fn get_ping_type(&self) -> Option<PingType> {
+        self.ping_type
+            .map(|p| PingType::try_from(p).expect("Invalid ping type"))
+    }
+}
+
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsResponse {
     // In order to represent an enum in protobuf, we need to use oneof.
