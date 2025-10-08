@@ -188,7 +188,6 @@ impl<'a> GasStatus<'a> {
         size: AbstractMemorySize,
     ) -> PartialVMResult<()> {
         // Make sure that the size is always non-zero
-        debug_assert!(size > 0.into());
         let size = std::cmp::max(1.into(), size);
         self.deduct_gas(
             InternalGasPerAbstractMemoryUnit::new(
