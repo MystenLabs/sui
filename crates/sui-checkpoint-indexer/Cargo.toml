@@ -1,0 +1,9 @@
+[package]
+name = "sui-checkpoint-indexer"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -13719,6 +13719,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-checkpoint-indexer"
+version = "1.59.0"
+
+[[package]]
 name = "sui-cluster-test"
 version = "1.59.0"
 dependencies = [
