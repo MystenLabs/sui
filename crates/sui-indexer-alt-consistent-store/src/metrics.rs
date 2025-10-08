@@ -17,33 +17,36 @@ pub struct ColumnFamilyStatsCollector {
 
 #[derive(Debug)]
 pub struct ColumnFamilyMetrics {
-    /// Mem tables
+    /// Size of the active memtable in bytes.
     pub current_size_active_mem_tables: IntGaugeVec,
-    /// Active, unflushed immutable, and pinned memtable bytes.
+    /// Size of active, unflushed immutable, and pinned memtable in bytes.
     pub size_all_mem_tables: IntGaugeVec,
-
-    /// Block Cache
+    /// Memory size for the entries residing in the block cache.
     pub block_cache_usage: IntGaugeVec,
+    /// Memory size of entries pinned in the block cache.
     pub block_cache_pinned_usage: IntGaugeVec,
-
-    /// Table reader memory
+    /// Estimated memory used by SST table readers, not including memory used.
     pub estimate_table_readers_mem: IntGaugeVec,
-
-    /// Pending compaction bytes
+    /// Total number of bytes that need to be compacted to get all levels down to under target size.
     pub estimate_pending_compaction_bytes: IntGaugeVec,
-
-    /// Other indicators of memory backpressure
+    /// Number of L0 files.
     pub num_level0_files: IntGaugeVec,
-    pub actual_delayed_write_rate: IntGaugeVec,
-    pub is_write_stopped: IntGaugeVec,
+    /// Number of immutable memtables that have not yet been flushed.
     pub num_immutable_mem_tables: IntGaugeVec,
+    /// Boolean flag (0/1) indicating whether a memtable flush is pending.
     pub mem_table_flush_pending: IntGaugeVec,
+    /// Boolean flag (0/1) indicating whether a compaction is pending.
     pub compaction_pending: IntGaugeVec,
-
-    /// Informational
+    /// Number of snapshots.
     pub num_snapshots: IntGaugeVec,
+    /// Number of running compactions.
     pub num_running_compactions: IntGaugeVec,
+    /// Number of running flushes.
     pub num_running_flushes: IntGaugeVec,
+    /// The current delayed write rate. 0 means no delay.
+    pub actual_delayed_write_rate: IntGaugeVec,
+    /// Boolean flag (0/1) indicating whether RocksDB has stopped all writes.
+    pub is_write_stopped: IntGaugeVec,
 }
 
 impl ColumnFamilyStatsCollector {
