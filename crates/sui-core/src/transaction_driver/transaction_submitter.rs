@@ -218,6 +218,7 @@ impl TransactionSubmitter {
                 authority_name: validator,
                 display_name: display_name.clone(),
                 operation: OperationType::Submit,
+                ping_type: request.ping_type,
                 result: Err(()),
             });
             TransactionRequestError::TimedOutSubmittingTransaction
@@ -228,6 +229,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name: display_name.clone(),
                     operation: OperationType::Submit,
+                    ping_type: request.ping_type,
                     result: Err(()),
                 });
             }
@@ -249,6 +251,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name,
                     operation: OperationType::Submit,
+                    ping_type: request.ping_type,
                     result: Err(()),
                 });
             }
@@ -260,6 +263,7 @@ impl TransactionSubmitter {
             authority_name: validator,
             display_name,
             operation: OperationType::Submit,
+            ping_type: request.ping_type,
             result: Ok(latency),
         });
         Ok(result)
