@@ -3,6 +3,7 @@
 
 use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 use crate::ingestion::Result as IngestionResult;
+use async_trait::async_trait;
 use reqwest::{Client, StatusCode};
 use std::time::Duration;
 use tracing::{debug, error};
@@ -45,7 +46,7 @@ impl RemoteIngestionClient {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl IngestionClientTrait for RemoteIngestionClient {
     /// Fetch a checkpoint from the remote store.
     ///

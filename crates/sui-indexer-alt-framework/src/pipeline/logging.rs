@@ -7,7 +7,7 @@ use tracing::{debug, info};
 
 use crate::store::CommitterWatermark;
 
-use super::ProcessorAsync;
+use super::Processor;
 
 /// Tracing message for the watermark update will be logged at info level at least this many
 /// checkpoints.
@@ -42,7 +42,7 @@ impl WatermarkLogger {
     ///
     /// If the watermark update is less than `LOUD_WATERMARK_UPDATE_INTERVAL` checkpoints apart,
     /// the log message will be at debug level. Otherwise, it will be at info level.
-    pub fn log<H: ProcessorAsync>(
+    pub fn log<H: Processor>(
         &mut self,
         watermark: impl Into<LoggerWatermark>,
         watermark_update_latency: f64,

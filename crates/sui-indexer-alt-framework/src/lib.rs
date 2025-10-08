@@ -10,7 +10,7 @@ use metrics::IndexerMetrics;
 use pipeline::{
     concurrent::{self, ConcurrentConfig},
     sequential::{self, Handler, SequentialConfig},
-    ProcessorAsync,
+    Processor,
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework_store_traits::{
@@ -303,7 +303,7 @@ impl<S: Store> Indexer<S> {
     /// by adding for handler `H` (as long as it's enabled). Returns `Ok(None)` if the pipeline is
     /// disabled, `Ok(Some(None))` if the pipeline is enabled but its watermark is not found, and
     /// `Ok(Some(Some(watermark)))` if the pipeline is enabled and the watermark is found.
-    async fn add_pipeline<P: ProcessorAsync + 'static>(
+    async fn add_pipeline<P: Processor + 'static>(
         &mut self,
     ) -> Result<Option<Option<CommitterWatermark>>> {
         ensure!(
@@ -428,14 +428,16 @@ mod tests {
     use crate::pipeline::{concurrent::ConcurrentConfig, Processor};
     use crate::store::CommitterWatermark;
     use crate::FieldCount;
+    use async_trait::async_trait;
     use std::sync::Arc;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tokio_util::sync::CancellationToken;
 
+    #[async_trait]
     impl Processor for MockHandler {
         const NAME: &'static str = "test_processor";
         type Value = MockValue;
-        fn process(
+        async fn process(
             &self,
             _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
         ) -> anyhow::Result<Vec<Self::Value>> {
@@ -449,7 +451,7 @@ mod tests {
 
     struct MockHandler;
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl crate::pipeline::concurrent::Handler for MockHandler {
         type Store = MockStore;
 
@@ -461,7 +463,7 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl crate::pipeline::sequential::Handler for MockHandler {
         type Store = MockStore;
         type Batch = Vec<Self::Value>;

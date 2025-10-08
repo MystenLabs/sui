@@ -11,7 +11,7 @@ use prometheus::{
 };
 use tracing::warn;
 
-use crate::{ingestion::error::Error, pipeline::ProcessorAsync};
+use crate::{ingestion::error::Error, pipeline::Processor};
 
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -622,7 +622,7 @@ impl CheckpointLagMetricReporter {
         })
     }
 
-    pub fn new_for_pipeline<P: ProcessorAsync>(
+    pub fn new_for_pipeline<P: Processor>(
         checkpoint_time_lag_histogram: &HistogramVec,
         latest_checkpoint_time_lag_gauge: &IntGaugeVec,
         latest_checkpoint_sequence_number_gauge: &IntGaugeVec,

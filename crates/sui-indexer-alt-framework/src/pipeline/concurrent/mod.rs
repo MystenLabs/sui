@@ -3,6 +3,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -13,9 +14,7 @@ use crate::{
     FieldCount,
 };
 
-use super::{
-    processor::processor, CommitterConfig, ProcessorAsync, WatermarkPart, PIPELINE_BUFFER,
-};
+use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
 use self::{
     collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
@@ -47,8 +46,8 @@ mod reader_watermark;
 /// Back-pressure is handled through the `MAX_PENDING_SIZE` constant -- if more than this many rows
 /// build up, the collector will stop accepting new checkpoints, which will eventually propagate
 /// back to the ingestion service.
-#[async_trait::async_trait]
-pub trait Handler: ProcessorAsync<Value: FieldCount> {
+#[async_trait]
+pub trait Handler: Processor<Value: FieldCount> {
     type Store: Store;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
@@ -290,7 +289,6 @@ const fn max_chunk_rows<H: Handler>() -> usize {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
-    use async_trait::async_trait;
     use prometheus::Registry;
     use tokio::{sync::mpsc, time::timeout};
     use tokio_util::sync::CancellationToken;
@@ -319,12 +317,16 @@ mod tests {
 
     struct DataPipeline;
 
+    #[async_trait]
     impl Processor for DataPipeline {
         const NAME: &'static str = "test_handler";
         const FANOUT: usize = 2;
         type Value = TestValue;
 
-        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(
+            &self,
+            checkpoint: &Arc<CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
             let cp_num = checkpoint.checkpoint_summary.sequence_number;
 
             // Every checkpoint will come with 2 processed values
