@@ -605,7 +605,6 @@ impl VMDispatchTables {
         depth: u64,
     ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
         let ty = self.resolve_type(datatype_name)?.to_ref();
-        // TODO(vm-rewrite): update this code
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(einfo) => {
                 let mut variant_layouts = vec![];

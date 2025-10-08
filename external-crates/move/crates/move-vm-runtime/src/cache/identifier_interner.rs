@@ -98,12 +98,6 @@ pub(crate) struct IdentifierKey(Spur);
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-impl Default for IdentifierInterner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl IdentifierInterner {
     pub fn new() -> Self {
         let rodeo = ThreadedRodeo::with_capacity(lasso::Capacity::for_strings(IDENTIFIER_SLOTS));

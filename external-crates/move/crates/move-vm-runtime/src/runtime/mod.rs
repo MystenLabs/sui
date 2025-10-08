@@ -95,9 +95,6 @@ impl MoveRuntime {
     ///
     /// The resuling map of vtables _must_ be closed under the static dependency graph of the root
     /// package w.r.t, to the current linkage context in `data_store`.
-    ///
-    ///
-    /// TODO: Have this hand back a tokio Notify
     pub fn make_vm<'extensions>(
         &self,
         package_store: impl ModuleResolver,

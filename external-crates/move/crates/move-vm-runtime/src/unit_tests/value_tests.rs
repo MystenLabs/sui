@@ -7,10 +7,7 @@ use std::fmt::Write as _;
 use crate::{
     execution::{
         interpreter::locals::MachineHeap,
-        values::{
-            debug::{print_reference, print_value},
-            *,
-        },
+        values::{debug::print_value, *},
     },
     jit::execution::ast::Type,
     shared::views::*,
@@ -196,14 +193,11 @@ fn print_val(v: &Value) -> String {
 }
 
 fn print_ref(r: &Reference) -> String {
-    let mut s = String::new();
-    print_reference(&mut s, r).unwrap();
-    s
+    format!("(&) {}", print_val(&r.copy_value().read_ref().unwrap()))
 }
 
 #[test]
 fn ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
-    #![allow(deprecated)]
     let mut heap = MachineHeap::new();
     let mut locals = heap.allocate_stack_frame(vec![], 10)?;
 
