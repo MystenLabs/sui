@@ -5,34 +5,4 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04039]: unable to determine princiapl type for literal
-   ┌─ tests/move_check/warning_suppression/all.move:16:17
-   │
-16 │         assert!(1 == 0, 0)
-   │                 ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
 
-error[E04039]: unable to determine princiapl type for literal
-   ┌─ tests/move_check/warning_suppression/all.move:22:17
-   │
-22 │         let y = 0;
-   │                 ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
-
-error[E04039]: unable to determine princiapl type for literal
-   ┌─ tests/move_check/warning_suppression/all.move:36:17
-   │
-36 │         let z = 0;
-   │                 ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
-
-error[E04039]: unable to determine princiapl type for literal
-   ┌─ tests/move_check/warning_suppression/all.move:39:13
-   │
-39 │         x + 1;
-   │             ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '0u64' or '0 as u64'
