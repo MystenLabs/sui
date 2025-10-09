@@ -35,7 +35,6 @@ const AVAILABLE_RANGE_QUERY: &str = r#"
     }
 "#;
 
-/// Tests happy path for SuiNS resolution (forward lookup).
 macro_rules! assert_sequence_numbers_eq {
     ($first:expr, $last:expr, $resp:expr) => {
         let resp = $resp;
