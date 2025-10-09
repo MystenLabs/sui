@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
-use futures::{stream, Stream, StreamExt as _};
+use futures::{stream, Stream, StreamExt as _, TryStreamExt as _};
 use mysten_network::{
     callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
     multiaddr::Protocol,
@@ -412,6 +412,56 @@ impl ObserverClient {
                 .boxed();
         Ok(rate_limited_stream)
     }
+
+    /// Fetches blocks from a validator's observer port.
+    pub(crate) async fn fetch_blocks(
+        &self,
+        peer: AuthorityIndex,
+        block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let request = Request::new(FetchBlocksRequest {
+            block_refs: block_refs.iter().map(|r| bcs::to_bytes(r).unwrap()).collect(),
+            highest_accepted_rounds,
+            breadth_first,
+        });
+        let response = client.fetch_blocks(request).await.map_err(|e| {
+            ConsensusError::NetworkRequest(format!("observer fetch_blocks failed: {e:?}"))
+        })?;
+        let blocks: Vec<Bytes> = response
+            .into_inner()
+            .try_collect::<Vec<_>>()
+            .await
+            .map_err(|e| {
+                ConsensusError::NetworkRequest(format!("observer fetch_blocks stream failed: {e:?}"))
+            })?
+            .into_iter()
+            .flat_map(|r| r.blocks)
+            .collect();
+        Ok(blocks)
+    }
+
+    /// Fetches commits from a validator's observer port.
+    pub(crate) async fn fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        commit_range: CommitRange,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let request = Request::new(FetchCommitsRequest {
+            start: commit_range.start(),
+            end: commit_range.end(),
+        });
+        let response = client.fetch_commits(request).await.map_err(|e| {
+            ConsensusError::NetworkRequest(format!("observer fetch_commits failed: {e:?}"))
+        })?;
+        let inner = response.into_inner();
+        Ok((inner.commits, inner.certifier_blocks))
+    }
 }
 
 /// Unified client that can be either a validator client or observer client
@@ -464,9 +514,11 @@ impl NetworkClient for ConsensusNetworkClient {
                     .fetch_blocks(peer, block_refs, highest_accepted_rounds, breadth_first, timeout)
                     .await
             }
-            Self::Observer(_) => Err(ConsensusError::NetworkRequest(
-                "Observers cannot fetch blocks".to_string(),
-            )),
+            Self::Observer(client) => {
+                client
+                    .fetch_blocks(peer, block_refs, highest_accepted_rounds, breadth_first, timeout)
+                    .await
+            }
         }
     }
 
@@ -478,9 +530,7 @@ impl NetworkClient for ConsensusNetworkClient {
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
         match self {
             Self::Validator(client) => client.fetch_commits(peer, commit_range, timeout).await,
-            Self::Observer(_) => Err(ConsensusError::NetworkRequest(
-                "Observers cannot fetch commits".to_string(),
-            )),
+            Self::Observer(client) => client.fetch_commits(peer, commit_range, timeout).await,
         }
     }
 
@@ -1024,6 +1074,84 @@ impl<S: NetworkService> ObserverConsensusService for ObserverServiceProxy<S> {
             tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
                 .boxed();
         Ok(Response::new(rate_limited_stream))
+    }
+
+    type FetchBlocksStream =
+        Pin<Box<dyn Stream<Item = Result<FetchBlocksResponse, tonic::Status>> + Send>>;
+
+    async fn fetch_blocks(
+        &self,
+        request: Request<FetchBlocksRequest>,
+    ) -> Result<Response<Self::FetchBlocksStream>, tonic::Status> {
+        let Some(_peer_public_key) = request
+            .extensions()
+            .get::<ObserverPeerInfo>()
+            .map(|p| p.public_key.clone())
+        else {
+            return Err(tonic::Status::internal("ObserverPeerInfo not found"));
+        };
+
+        let inner = request.into_inner();
+        let block_refs = inner
+            .block_refs
+            .into_iter()
+            .map(|r| bcs::from_bytes(&r))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| tonic::Status::internal(format!("Failed to deserialize block_refs: {e:?}")))?;
+
+        let blocks = self
+            .service
+            .handle_fetch_blocks(
+                AuthorityIndex::new_for_test(0), // Placeholder, not used for observer requests
+                block_refs,
+                inner.highest_accepted_rounds,
+                inner.breadth_first,
+            )
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+
+        let stream = stream::iter(vec![Ok(FetchBlocksResponse { blocks })]);
+        Ok(Response::new(Box::pin(stream)))
+    }
+
+    async fn fetch_commits(
+        &self,
+        request: Request<FetchCommitsRequest>,
+    ) -> Result<Response<FetchCommitsResponse>, tonic::Status> {
+        let Some(_peer_public_key) = request
+            .extensions()
+            .get::<ObserverPeerInfo>()
+            .map(|p| p.public_key.clone())
+        else {
+            return Err(tonic::Status::internal("ObserverPeerInfo not found"));
+        };
+
+        let inner = request.into_inner();
+        let commit_range = CommitRange::new(inner.start..=inner.end);
+
+        let (trusted_commits, verified_blocks) = self
+            .service
+            .handle_fetch_commits(
+                AuthorityIndex::new_for_test(0), // Placeholder, not used for observer requests
+                commit_range,
+            )
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+
+        // Serialize commits and blocks to bytes
+        let commits = trusted_commits
+            .into_iter()
+            .map(|c| c.serialized().clone())
+            .collect();
+        let certifier_blocks = verified_blocks
+            .into_iter()
+            .map(|b| b.serialized().clone())
+            .collect();
+
+        Ok(Response::new(FetchCommitsResponse {
+            commits,
+            certifier_blocks,
+        }))
     }
 }
 
