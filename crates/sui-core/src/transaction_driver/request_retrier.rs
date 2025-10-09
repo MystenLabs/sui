@@ -41,7 +41,7 @@ impl<A: Clone> RequestRetrier<A> {
         auth_agg: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_type: TxType,
-        allowed_validators: Vec<AuthorityName>,
+        allowed_validators: Vec<String>,
     ) -> Self {
         let ranked_validators = client_monitor.select_shuffled_preferred_validators(
             &auth_agg.committee,
@@ -50,7 +50,10 @@ impl<A: Clone> RequestRetrier<A> {
         );
         let ranked_clients = ranked_validators
             .into_iter()
-            .filter(|name| allowed_validators.is_empty() || allowed_validators.contains(name))
+            .filter(|name| {
+                let display_name = auth_agg.get_display_name(name);
+                allowed_validators.is_empty() || allowed_validators.contains(&display_name)
+            })
             .filter_map(|name| {
                 // There is not guarantee that the `name` are in the `auth_agg.authority_clients` if those are coming from the list
                 // of `allowed_validators`, as the provided `auth_agg` might have been updated with a new committee that doesn't contain the validator in question.
@@ -139,7 +142,10 @@ impl<A: Clone> RequestRetrier<A> {
 
 #[cfg(test)]
 mod tests {
-    use sui_types::error::{SuiError, UserInputError};
+    use sui_types::{
+        base_types::ConciseableName,
+        error::{SuiError, UserInputError},
+    };
 
     use crate::{
         authority_aggregator::{AuthorityAggregatorBuilder, TimeoutConfig},
@@ -199,9 +205,9 @@ mod tests {
         println!("Case 1. Mix of unknown validators and one known validator");
         {
             let allowed_validators = vec![
-                unknown_validator1,
-                unknown_validator2,
-                authorities[0], // This one exists in auth_agg
+                unknown_validator1.concise().to_string(),
+                unknown_validator2.concise().to_string(),
+                authorities[0].concise().to_string(), // This one exists in auth_agg
             ];
 
             let retrier = RequestRetrier::new(
@@ -218,7 +224,10 @@ mod tests {
 
         println!("Case 2. Only unknown validators are provided");
         {
-            let allowed_validators = vec![unknown_validator1, unknown_validator2];
+            let allowed_validators = vec![
+                unknown_validator1.concise().to_string(),
+                unknown_validator2.concise().to_string(),
+            ];
 
             let retrier = RequestRetrier::new(
                 &auth_agg,
