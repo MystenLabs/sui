@@ -12,11 +12,8 @@ use move_core_types::{
     u256::U256,
 };
 
+use super::error::{Expected, ExpectedSet, FormatError, Match};
 use super::peek::{Peekable2, Peekable2Ext};
-use super::{
-    error::{Error, Expected, ExpectedSet, Match},
-    meter::Limits,
-};
 use super::{
     lexer::{Lexeme as Lex, Lexer, Token as T},
     meter::Meter,
@@ -38,18 +35,18 @@ pub enum Strand<'s> {
 /// transform is provided, it is applied to the result to convert it to a string.
 #[derive(PartialEq, Eq)]
 pub struct Expr<'s> {
-    alternates: Vec<Chain<'s>>,
-    transform: Option<&'s str>,
+    pub(crate) alternates: Vec<Chain<'s>>,
+    pub(crate) transform: Option<&'s str>,
 }
 
 /// Chains are a sequence of nested field accesses.
 #[derive(PartialEq, Eq)]
 pub struct Chain<'s> {
     /// An optional root expression. If not provided, the object being displayed is the root.
-    root: Option<Literal<'s>>,
+    pub(crate) root: Option<Literal<'s>>,
 
     /// A sequence of field accessors that go successively deeper into the object.
-    accessors: Vec<Accessor<'s>>,
+    pub(crate) accessors: Vec<Accessor<'s>>,
 }
 
 /// Different ways to nest deeply into an object.
@@ -98,24 +95,24 @@ pub enum Literal<'s> {
 #[derive(PartialEq, Eq)]
 pub struct Vector<'s> {
     /// Element type, optional for non-empty vectors.
-    type_: Option<TypeTag>,
-    elements: Vec<Chain<'s>>,
+    pub(crate) type_: Option<TypeTag>,
+    pub(crate) elements: Vec<Chain<'s>>,
 }
 
 /// Contents of a struct literal.
 #[derive(PartialEq, Eq)]
 pub struct Struct<'s> {
-    type_: StructTag,
-    fields: Fields<'s>,
+    pub(crate) type_: StructTag,
+    pub(crate) fields: Fields<'s>,
 }
 
 /// Contents of an enum literal.
 #[derive(PartialEq, Eq)]
 pub struct Enum<'s> {
-    type_: StructTag,
-    variant_name: Option<&'s str>,
-    variant_index: u16,
-    fields: Fields<'s>,
+    pub(crate) type_: StructTag,
+    pub(crate) variant_name: Option<&'s str>,
+    pub(crate) variant_index: u16,
+    pub(crate) fields: Fields<'s>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -253,13 +250,14 @@ impl<'s> Parser<'s> {
     }
 
     /// Entrypoint into the parser, parsing the root non-terminal -- `format`.
-    pub(crate) fn run(src: &'s str, limits: Limits) -> Result<Vec<Strand<'s>>, Error> {
-        let mut budget = limits.budget();
-        let mut meter = Meter::new(limits.max_depth, &mut budget);
-        Self::new(src).parse_format(&mut meter)
+    pub(crate) fn run<'b>(
+        src: &'s str,
+        meter: &mut Meter<'b>,
+    ) -> Result<Vec<Strand<'s>>, FormatError> {
+        Self::new(src).parse_format(meter)
     }
 
-    fn parse_format<'b>(mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, Error> {
+    fn parse_format<'b>(mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, FormatError> {
         let mut strands = vec![];
         while self.lexer.peek().is_some() {
             strands.push(self.parse_strand(meter)?);
@@ -268,14 +266,14 @@ impl<'s> Parser<'s> {
         Ok(strands)
     }
 
-    fn parse_strand<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Strand<'s>, Error> {
+    fn parse_strand<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Strand<'s>, FormatError> {
         Ok(match_token! { self.lexer;
             Tok(_, T::Text | T::LLBrace | T::RRBrace, _, _) => Strand::Text(self.parse_text(meter)?),
             Tok(_, T::LBrace, _, _) => Strand::Expr(self.parse_expr(meter)?),
         })
     }
 
-    fn parse_text<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Cow<'s, str>, Error> {
+    fn parse_text<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Cow<'s, str>, FormatError> {
         let mut text = self.parse_part()?;
         while let Some(Lex(_, T::Text | T::LLBrace | T::RRBrace, _, _)) = self.lexer.peek() {
             text += self.parse_part()?;
@@ -285,7 +283,7 @@ impl<'s> Parser<'s> {
         Ok(text)
     }
 
-    fn parse_part(&mut self) -> Result<Cow<'s, str>, Error> {
+    fn parse_part(&mut self) -> Result<Cow<'s, str>, FormatError> {
         Ok(match_token! { self.lexer;
             Tok(_, T::Text | T::LLBrace | T::RRBrace, _, slice) => {
                 self.lexer.next();
@@ -294,7 +292,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_expr<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Expr<'s>, Error> {
+    fn parse_expr<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Expr<'s>, FormatError> {
         match_token! { self.lexer; Tok(_, T::LBrace, _, _) => self.lexer.next() };
         let mut alternates = vec![self.parse_chain(meter)?];
         let mut transform = None;
@@ -332,7 +330,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_chain<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Chain<'s>, Error> {
+    fn parse_chain<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Chain<'s>, FormatError> {
         let meter = &mut meter.nest()?;
         let mut accessors = vec![];
 
@@ -343,7 +341,7 @@ impl<'s> Parser<'s> {
             Match::Tried(_, tried) => {
                 accessors.push(match_token! { self.lexer, tried;
                     Tok(_, T::Ident, _, ident) @ lex => {
-                        let ident = IdentStr::new(ident).map_err(|_| Error::InvalidIdentifier(lex.detach()))?;
+                        let ident = IdentStr::new(ident).map_err(|_| FormatError::InvalidIdentifier(lex.detach()))?;
                         self.lexer.next();
                         meter.alloc()?;
                         Accessor::Field(ident)
@@ -364,7 +362,7 @@ impl<'s> Parser<'s> {
     fn try_parse_literal<'b>(
         &mut self,
         meter: &mut Meter<'b>,
-    ) -> Result<Match<Literal<'s>>, Error> {
+    ) -> Result<Match<Literal<'s>>, FormatError> {
         Ok(match_token_opt! { self.lexer;
             Tok(_, T::At, _, _) => {
                 self.lexer.next();
@@ -437,14 +435,14 @@ impl<'s> Parser<'s> {
                     // SAFETY: Bounds check on `type_params.len()` guarantees safety.
                     1 => Some(type_params.pop().unwrap()),
                     0 => None,
-                    arity => return Err(Error::VectorArity { offset, arity }),
+                    arity => return Err(FormatError::VectorArity { offset, arity }),
                 };
 
                 let elements = self.parse_array_elements(meter)?;
 
                 // If the vector is empty, the type parameter becomes mandatory.
                 if elements.is_empty() && type_.is_none() {
-                    return Err(Error::VectorArity {
+                    return Err(FormatError::VectorArity {
                         offset,
                         arity: 0,
                     });
@@ -459,14 +457,14 @@ impl<'s> Parser<'s> {
     fn try_parse_accessor<'b>(
         &mut self,
         meter: &mut Meter<'b>,
-    ) -> Result<Match<Accessor<'s>>, Error> {
+    ) -> Result<Match<Accessor<'s>>, FormatError> {
         Ok(match_token_opt! { self.lexer;
             Tok(_, T::Dot, _, _) => {
                 self.lexer.next();
                 match_token! { self.lexer;
                     Tok(_, T::Ident, _, ident) @ lex => {
                         let ident = IdentStr::new(ident)
-                            .map_err(|_| Error::InvalidIdentifier(lex.detach()))?;
+                            .map_err(|_| FormatError::InvalidIdentifier(lex.detach()))?;
                         self.lexer.next();
                         meter.alloc()?;
                         Accessor::Field(ident)
@@ -520,7 +518,10 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_array_elements<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Vec<Chain<'s>>, Error> {
+    fn parse_array_elements<'b>(
+        &mut self,
+        meter: &mut Meter<'b>,
+    ) -> Result<Vec<Chain<'s>>, FormatError> {
         let mut elements = vec![];
 
         if match_token_opt! { self.lexer; Tok(_, T::LBracket, _, _) => { self.lexer.next(); } }
@@ -564,7 +565,7 @@ impl<'s> Parser<'s> {
         Ok(elements)
     }
 
-    fn parse_data<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Literal<'s>, Error> {
+    fn parse_data<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Literal<'s>, FormatError> {
         let type_ = self.parse_datatype(meter)?;
 
         let enum_ = match_token_opt! { self.lexer;
@@ -616,7 +617,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_fields<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Fields<'s>, Error> {
+    fn parse_fields<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Fields<'s>, FormatError> {
         let is_named = match_token! { self.lexer;
             Tok(_, T::LParen, _, _) => { self.lexer.next(); false },
             Tok(_, T::LBrace, _, _) => { self.lexer.next(); true }
@@ -701,7 +702,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_type(&mut self, meter: &mut Meter<'_>) -> Result<TypeTag, Error> {
+    fn parse_type(&mut self, meter: &mut Meter<'_>) -> Result<TypeTag, FormatError> {
         let meter = &mut meter.nest()?;
         Ok(match_token! { self.lexer;
             Lit(_, T::Ident, _, "address") => {
@@ -764,7 +765,7 @@ impl<'s> Parser<'s> {
                         TypeTag::Vector(Box::new(inner))
                     }
 
-                    arity => return Err(Error::VectorArity { offset, arity }),
+                    arity => return Err(FormatError::VectorArity { offset, arity }),
                 }
             },
 
@@ -774,7 +775,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_datatype(&mut self, meter: &mut Meter<'_>) -> Result<StructTag, Error> {
+    fn parse_datatype(&mut self, meter: &mut Meter<'_>) -> Result<StructTag, FormatError> {
         let address = self.parse_address()?;
 
         match_token! { self.lexer; Tok(_, T::CColon, _, _) => self.lexer.next() };
@@ -794,7 +795,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_type_params(&mut self, meter: &mut Meter<'_>) -> Result<Vec<TypeTag>, Error> {
+    fn parse_type_params(&mut self, meter: &mut Meter<'_>) -> Result<Vec<TypeTag>, FormatError> {
         let mut type_params = vec![];
         if match_token_opt! { self.lexer; Tok(_, T::LAngle, _, _) => { self.lexer.next(); } }
             .is_not_found()
@@ -825,7 +826,7 @@ impl<'s> Parser<'s> {
         Ok(type_params)
     }
 
-    fn parse_address(&mut self) -> Result<AccountAddress, Error> {
+    fn parse_address(&mut self) -> Result<AccountAddress, FormatError> {
         let addr = match_token! { self.lexer;
             Tok(_, T::NumHex, _, slice) => {
                 self.lexer.next();
@@ -841,10 +842,10 @@ impl<'s> Parser<'s> {
         Ok(AccountAddress::from(addr.to_be_bytes()))
     }
 
-    fn parse_identifier(&mut self) -> Result<Identifier, Error> {
+    fn parse_identifier(&mut self) -> Result<Identifier, FormatError> {
         match_token! { self.lexer;
             Tok(_, T::Ident, _, ident) @ lex => {
-                let ident = Identifier::new(ident).map_err(|_| Error::InvalidIdentifier(lex.detach()));
+                let ident = Identifier::new(ident).map_err(|_| FormatError::InvalidIdentifier(lex.detach()));
                 self.lexer.next();
                 ident
             },
@@ -856,7 +857,7 @@ impl<'s> Parser<'s> {
         num: &'s str,
         radix: u32,
         meter: &mut Meter<'b>,
-    ) -> Result<Literal<'s>, Error> {
+    ) -> Result<Literal<'s>, FormatError> {
         Ok(match_token! { self.lexer;
             Lit(false, T::Ident, _, "u8") => {
                 self.lexer.next();
@@ -1056,43 +1057,43 @@ impl fmt::Debug for Enum<'_> {
     }
 }
 
-fn read_u8(slice: &str, radix: u32, what: &'static str) -> Result<u8, Error> {
-    u8::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u8(slice: &str, radix: u32, what: &'static str) -> Result<u8, FormatError> {
+    u8::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u16(slice: &str, radix: u32, what: &'static str) -> Result<u16, Error> {
-    u16::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u16(slice: &str, radix: u32, what: &'static str) -> Result<u16, FormatError> {
+    u16::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u32(slice: &str, radix: u32, what: &'static str) -> Result<u32, Error> {
-    u32::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u32(slice: &str, radix: u32, what: &'static str) -> Result<u32, FormatError> {
+    u32::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u64(slice: &str, radix: u32, what: &'static str) -> Result<u64, Error> {
-    u64::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u64(slice: &str, radix: u32, what: &'static str) -> Result<u64, FormatError> {
+    u64::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u128(slice: &str, radix: u32, what: &'static str) -> Result<u128, Error> {
-    u128::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u128(slice: &str, radix: u32, what: &'static str) -> Result<u128, FormatError> {
+    u128::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, Error> {
-    U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, FormatError> {
+    U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
@@ -1118,15 +1119,15 @@ fn read_string_literal(slice: &str) -> Cow<'_, str> {
     output
 }
 
-fn read_hex_literal(lexeme: &Lex<'_>, slice: &str) -> Result<Vec<u8>, Error> {
+fn read_hex_literal(lexeme: &Lex<'_>, slice: &str) -> Result<Vec<u8>, FormatError> {
     if !slice.len().is_multiple_of(2) {
-        return Err(Error::OddHexLiteral(lexeme.detach()));
+        return Err(FormatError::OddHexLiteral(lexeme.detach()));
     }
 
     let mut output = Vec::with_capacity(slice.len() / 2);
     for i in (0..slice.len()).step_by(2) {
         let byte = u8::from_str_radix(&slice[i..i + 2], 16)
-            .map_err(|_| Error::InvalidHexCharacter(lexeme.detach()))?;
+            .map_err(|_| FormatError::InvalidHexCharacter(lexeme.detach()))?;
         output.push(byte);
     }
 
@@ -1140,10 +1141,16 @@ mod tests {
     use insta::assert_snapshot;
     use move_core_types::ident_str;
 
+    use crate::v2::meter::Limits;
+
     use super::{Accessor as A, Chain as C, Expr as E, Literal as L, Parser, Strand as S, *};
 
     fn strands(src: &str) -> String {
-        let strands = match Parser::run(src, Limits::default()) {
+        let limits = Limits::default();
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+
+        let strands = match Parser::run(src, &mut meter) {
             Ok(strands) => strands,
             Err(e) => return format!("Error: {e}"),
         };
@@ -1174,7 +1181,7 @@ mod tests {
         )
     }
 
-    fn parse_with_depth(depth: usize, src: &str) -> Result<Vec<Strand<'_>>, Error> {
+    fn parse_with_depth(depth: usize, src: &str) -> Result<Vec<Strand<'_>>, FormatError> {
         let limits = Limits {
             max_depth: depth,
             max_nodes: usize::MAX,

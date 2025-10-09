@@ -8,6 +8,11 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 
 move-core-types.workspace = true
@@ -17,3 +22,5 @@ sui-types.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
+serde.workspace = true
+tokio.workspace = true
