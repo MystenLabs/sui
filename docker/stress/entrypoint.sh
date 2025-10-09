@@ -30,6 +30,7 @@ echo 'Setup Complete'
     --in-flight-ratio 30 \
     --shared-counter "${STRESS_SHARED_COUNTER}" \
     --transfer-object "${STRESS_TRANSFER_OBJECT}" \
+    --randomness "${STRESS_RANDOMNESS}" \
     --delegation "${STRESS_DELEGATION}" \
     --batch-payment "${BATCH_PAYMENT}" \
     --batch-payment-size "${BATCH_PAYMENT_SIZE}" \
