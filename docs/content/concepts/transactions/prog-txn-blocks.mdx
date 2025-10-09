@@ -46,7 +46,7 @@ The inputs and results can be seen as populating an array of values. For inputs,
 
 ### Inputs
 
-Input arguments to a PTB are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section describes information or data the Sui network needs when specifying the list of inputs, `[Input]`. Each `Input` is either an object, `Input::Object(ObjectArg)`, which contains the necessary metadata to specify to object being used, or a pure value, `Input::Pure(PureArg)`, which contains the bytes of the value.
+Input arguments to a PTB are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section describes information or data the Sui network needs when specifying the list of inputs, `[Input]`. Each `Input` is either an object, `Input::Object(ObjectArg)`, which contains the necessary metadata to specify the object being used, or a pure value, `Input::Pure(PureArg)`, which contains the bytes of the value.
 
 For object inputs, the metadata needed differs depending on the type of [ownership of the object](../object-ownership.mdx). The data for the `ObjectArg` enum follows:
 
