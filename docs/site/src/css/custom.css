@@ -1119,6 +1119,124 @@ h5 {
   height: auto;
 }
 
+/* Normal Cards for Docusaurus */
+.card-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+/* Target actual Docusaurus card elements */
+.card-container > div[class*='card_'],
+.card-container > a[class*='card_'] {
+  position: relative;
+  padding: 1.25rem 1.5rem !important;
+  border: 1px solid rgba(227, 227, 227, 0.6) !important;
+  border-radius: 0.625rem !important;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(249, 250, 251, 0.9) 100%
+  ) !important;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  text-decoration: none !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+  height: 100%;
+}
+
+.card-container > div[class*='card_']::before,
+.card-container > a[class*='card_']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg,
+    #0b93f6 0%, 
+    rgba(11, 147, 246, 0.4) 50%,
+    rgba(11, 147, 246, 0) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 0.625rem 0 0 0.625rem;
+}
+
+.card-container > div[class*='card_']:hover,
+.card-container > a[class*='card_']:hover {
+  border-color: rgba(11, 147, 246, 0.3) !important;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 1) 0%, 
+    rgba(249, 250, 251, 1) 100%
+  ) !important;
+  box-shadow: 
+    0 4px 12px rgba(11, 147, 246, 0.12),
+    0 2px 4px rgba(0, 0, 0, 0.04) !important;
+  transform: translateY(-2px) !important;
+}
+
+.card-container > div[class*='card_']:hover::before,
+.card-container > a[class*='card_']:hover::before {
+  opacity: 1;
+}
+
+/* Card content styling */
+.card-container div[class*='card__header'] {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.card-container div[class*='card__copy'] {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: rgba(42, 47, 58, 0.85);
+}
+
+/* Dark mode */
+[data-theme='dark'] .card-container > div[class*='card_'],
+[data-theme='dark'] .card-container > a[class*='card_'] {
+  border-color: rgba(227, 227, 227, 0.1) !important;
+  background: linear-gradient(135deg, 
+    rgba(42, 47, 58, 0.9) 0%, 
+    rgba(31, 41, 55, 0.9) 100%
+  ) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+[data-theme='dark'] .card-container > div[class*='card_']:hover,
+[data-theme='dark'] .card-container > a[class*='card_']:hover {
+  border-color: rgba(11, 147, 246, 0.4) !important;
+  background: linear-gradient(135deg, 
+    rgba(42, 47, 58, 1) 0%, 
+    rgba(31, 41, 55, 1) 100%
+  ) !important;
+  box-shadow: 
+    0 4px 12px rgba(11, 147, 246, 0.2),
+    0 2px 4px rgba(0, 0, 0, 0.15) !important;
+}
+
+[data-theme='dark'] .card-container div[class*='card__copy'] {
+  color: rgba(227, 227, 227, 0.85);
+}
+
+/* Responsive */
+@media (max-width: 996px) {
+  .card-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .card-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .card-container > div[class*='card_'],
+  .card-container > a[class*='card_'] {
+    padding: 1rem 1.25rem !important;
+  }
+}
+
 /* Step Cards for Docusaurus */
 .step-card-container {
   counter-reset: step;
