@@ -14052,11 +14052,18 @@ name = "sui-display"
 version = "1.59.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "bcs",
+ "futures",
+ "indexmap 2.8.0",
  "insta",
  "move-core-types",
+ "serde",
+ "serde_json",
  "sui-json-rpc-types",
  "sui-types",
  "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]

@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::error::Error;
+use super::error::FormatError;
 
 /// Limits that the parser enforces while parsing potentially multiple Display formats.
-pub(crate) struct Limits {
+#[derive(Clone)]
+pub struct Limits {
     /// Maximum number of times the parser can recurse into nested structures. Depth does not
     /// account for all nodes, only nodes that can be contained within themselves.
     pub max_depth: usize,
@@ -30,7 +31,7 @@ pub(crate) struct Meter<'b> {
 }
 
 impl Limits {
-    pub fn budget(&self) -> Budget {
+    pub(crate) fn budget(&self) -> Budget {
         Budget {
             nodes: self.max_nodes,
             loads: self.max_loads,
@@ -47,9 +48,9 @@ impl<'b> Meter<'b> {
     }
 
     /// Create a nested meter, with a reduced depth budget.
-    pub fn nest(&mut self) -> Result<Meter<'_>, Error> {
+    pub fn nest(&mut self) -> Result<Meter<'_>, FormatError> {
         if self.depth_budget == 0 {
-            return Err(Error::TooDeep);
+            return Err(FormatError::TooDeep);
         }
 
         Ok(Meter {
@@ -59,9 +60,9 @@ impl<'b> Meter<'b> {
     }
 
     /// Signal that a node has been allocated.
-    pub fn alloc(&mut self) -> Result<(), Error> {
+    pub fn alloc(&mut self) -> Result<(), FormatError> {
         if self.budget.nodes == 0 {
-            return Err(Error::TooBig);
+            return Err(FormatError::TooBig);
         }
 
         self.budget.nodes -= 1;
@@ -69,9 +70,9 @@ impl<'b> Meter<'b> {
     }
 
     /// Signal that a load could be performed.
-    pub fn load(&mut self) -> Result<(), Error> {
+    pub fn load(&mut self) -> Result<(), FormatError> {
         if self.budget.loads == 0 {
-            return Err(Error::TooManyLoads);
+            return Err(FormatError::TooManyLoads);
         }
 
         self.budget.loads -= 1;
