@@ -358,20 +358,6 @@ pub(super) fn main_reader_lo_task<H: Handler + 'static>(
         let mut reader_interval = interval(config.interval());
         reader_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-        // Initialize next pruner wake
-        let next_deadline = {
-            let wait = match store.connect().await {
-                Ok(mut conn) => match conn.pruner_watermark(H::NAME, config.delay()).await {
-                    Ok(Some(wm)) => wm.wait_for(),
-                    _ => None,
-                },
-                _ => None,
-            };
-            Instant::now() + wait.unwrap_or(Duration::from_secs(1))
-        };
-        let pruner_sleep = sleep_until(next_deadline);
-        tokio::pin!(pruner_sleep);
-
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
@@ -400,27 +386,6 @@ pub(super) fn main_reader_lo_task<H: Handler + 'static>(
                             warn!(pipeline = H::NAME, task = task, "Failed to connect to store: {e}");
                         }
                     }
-                }
-
-                // Account for pruning work and ensure we update the reader_lo based on the pruner
-                // timestamp.
-                _ = &mut pruner_sleep => {
-                    let next = if let Ok(mut conn) = store.connect().await {
-                        if let Ok(Some(wm)) = conn.reader_watermark(H::NAME).await {
-                            let lo = wm.reader_lo;
-                            main_reader_lo.store(lo, Ordering::Relaxed);
-                        }
-
-                        match conn.pruner_watermark(H::NAME, config.delay()).await {
-                            Ok(Some(wm)) => wm.wait_for(),
-                            _ => None,
-                        }
-                    } else {
-                        None
-                    };
-
-                    let next_deadline = Instant::now() + next.unwrap_or(Duration::from_secs(1));
-                    pruner_sleep.as_mut().reset(next_deadline);
                 }
             }
         }
