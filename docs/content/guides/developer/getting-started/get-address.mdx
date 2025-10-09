@@ -1,7 +1,9 @@
 ---
 title: Create a Sui Address
-description: You need an address on the Sui network before you can start trading NFTs, purchase SUI tokens, or perform other transactions.
+description: You need an address on the Sui network before you can build packages and own objects.
 keywords: [ create an address, sui address, how to get sui address, sui wallets, slush, suiet, glass wallet, martian extension, surf wallet, private keys ]
+pagination_prev: null
+pagination_next: null
 ---
 
 An _address_ is a unique, anonymous identity on a blockchain network. On Sui, an address specifically represents a location on-chain that can:
@@ -190,9 +192,22 @@ $ sui client objects <ADDRESS>
 
 If an address is not provided, this command returns all objects owned by the active address.
 
-## Next steps 
-
-Next, [obtain Testnet SUI tokens](/guides/developer/getting-started/get-coins.mdx) from the SUI faucet.
-
-If you already have Testnet SUI, then you're ready to [deploy "Hello, world!"](/guides/developer/getting-started/hello-world.mdx).
-
+<div className="next-steps-module">
+  <div className="next-steps-header">
+    <h3>Next steps</h3>
+  </div>
+  <div className="next-steps-grid">
+    <Card 
+      title="Get SUI from Faucet" 
+      href="/guides/developer/getting-started/get-coins"
+    >
+      Obtain SUI from a faucet to deploy packages on Testnet.
+    </Card>
+        <Card 
+      title="Hello, World!" 
+      href="/guides/developer/getting-started/hello-world"
+    >
+      Clone and build the "Hello, World!" project.
+    </Card>
+  </div>
+</div>

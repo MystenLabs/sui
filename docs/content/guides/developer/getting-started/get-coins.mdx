@@ -1,22 +1,24 @@
 ---
 title: Get SUI from Faucet
-description: Use the Sui faucet to obtain free SUI test tokens for use on the Sui Devnet and Testnet networks. 
+description: Use the Sui faucet to obtain free SUI tokens for use on the Sui Devnet and Testnet networks. 
 keywords: [ sui faucet, faucet, token faucet, sui devnet, sui testnet, devnet, testnet, get free tokens, free tokens ]
+pagination_prev: null
+pagination_next: null
 ---
 
-To perform transactions on a Sui network, you need SUI coins to pay for gas and storage. 
+To perform transactions on a Sui network, you need SUI tokens to pay for gas and storage. 
 
-On Mainnet, you buy SUI on exchanges like Coinbase, OKX, or Robinhood. Its value is determined by market factors such as supply and demand, network utility, and perceived value.
+For applications on Mainnet, you must buy real SUI on exchanges like Coinbase, OKX, or Robinhood. Its value is determined by market factors such as supply and demand, network utility, and perceived value.
 
-Because Mainnet coins cost real money, development can be expensive. That's why Sui provides Devnet and Testnet networks, which mirror Mainnet features and enables you to build and test safely.
+Because Mainnet tokens cost real money, development can be expensive. That's why Sui provides Devnet and Testnet networks, which mirror Mainnet features and enable you to build and test safely for an affordable cost.
 
 :::important
 
-SUI on Devnet and Testnet is free and holds no monetary value.
+SUI tokens on Devnet and Testnet are free and hold no monetary value.
 
 :::
 
-You can get free test tokens from the Sui faucet, which lets you deploy and interact with programs on Devnet, Testnet, or a local network.
+You can get free SUI tokens from the Sui faucet, which lets you deploy and interact with smart contracts and objects on Devnet, Testnet, or a local network. There is no faucet for Mainnet.
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -29,7 +31,7 @@ You can get free test tokens from the Sui faucet, which lets you deploy and inte
 
 <summary>
 
-Create Sui account and setup CLI environment
+Create Sui account and setup CLI environment.
 
 </summary>
 
@@ -52,34 +54,37 @@ $ sui client new-address ed25519
 </TabItem>
 </Tabs>
 
-## Request test tokens {#online-faucet}
+## Request SUI tokens from faucet {#online-faucet}
+
+It is recommended to use the Testnet for most use cases before deploying to Mainnet for production. [Learn more](/guides/developer/getting-started/configure-sui-client.mdx) about the available networks and their differences. 
 
 Visit the online faucet to request SUI tokens: https://faucet.sui.io/
 
-How to use:
+Then, follow these steps: 
 
-1. Connect your wallet or paste your wallet address in the address field.
-1. Use the network dropdown to select the correct network.
+1. Connect your wallet or paste your wallet address in the address field. Get your wallet address in the CLI with the command `sui client active-address`. 
+1. Use the network dropdown to select the correct network: Testnet, Devnet, or Localnet.
 1. Click the **Request SUI** button. 
 
-To request more SUI, refresh your browser and click the Request SUI button again. The requests are rate limited, however, so too many requests results in a waiting period before you are able to request more tokens.
+To request more SUI, refresh your browser and click the **Request SUI** button again. The requests are rate limited, however, so too many requests results in a waiting period before you are able to request more tokens.
 
 ### Return unused Testnet SUI
 
-The faucet drains from a finite pool of SUI. If the pool empties, it disrupts faucet service for the rest of the community. To help ensure this doesn't happen, you can use the online faucet to return your unused SUI to the pool.
+The faucet drains from a finite pool of SUI. If the pool empties, it disrupts faucet service for the rest of the community. To help ensure this doesn't happen, you can use the online faucet to return your unused SUI to the Testnet pool. You cannot return SUI to the Devnet or Localnet pools.
 
-There are two ways to return unused Testnet SUI:
+There are two ways to return unused Testnet SUI tokens:
 
-- Connect your wallet to the online faucet, and click the **Return tokens to faucet** button. Approve the transaction using your wallet and your Testnet SUI are returned to the pool.
-- If you prefer not to connect your wallet, click the **Copy** button to the right of the return address and send the tokens via a separate transaction.
+- Connect your wallet to the online faucet, and click the **Return tokens to faucet** button. Approve the transaction using your wallet and your SUI tokens are returned to the pool.
 
-## Alternative methods for getting test SUI
+- If you prefer not to connect your wallet, send the tokens to the address `0x7a9d19d4c210663926eb549da59a54e25777fef63161bfccda08277b58b4212e` via a [separate transaction](/guides/developer/sui-101/sign-and-send-txn.mdx).
 
-If you need an alternative method to get test SUI, you have several options.
+## Alternative methods for getting SUI tokens
+
+If you need an alternative method to get SUI tokens for deployment on Testnet or Devnet, you have several options.
 
 :::tip
 
-Every method to retrieve Testnet and Devnet SUI is rate limited. If you need a large amount of SUI, use a local network.
+Every method to obtain SUI tokens for Testnet and Devnet is rate limited. If you need a large amount of SUI tokens, use a local network.
 
 :::
 
@@ -90,7 +95,7 @@ Every method to retrieve Testnet and Devnet SUI is rate limited. If you need a l
 1. Join [Discord](https://discord.gg/sui).
    
    If you try to join the Sui Discord channel using a newly created Discord account, you might need to wait a few days for validation.
-1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) or [#testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels. Send the following message to the channel, replacing `<YOUR SUI ADDRESS>` with your client address:
+1. Request SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) or [#testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels. Send the following message to the channel, replacing `<YOUR SUI ADDRESS>` with your client address:
    ```sh
    !faucet <YOUR SUI ADDRESS>
    ```
@@ -98,12 +103,12 @@ Every method to retrieve Testnet and Devnet SUI is rate limited. If you need a l
 </TabItem>
 <TabItem value="slush" label="Slush wallet">
 
-You can request test tokens within [Slush](https://chromewebstore.google.com/detail/slush-%E2%80%94-a-sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil).
+You can request Testnet or Devnet SUI tokens tokens within [Slush](https://chromewebstore.google.com/detail/slush-%E2%80%94-a-sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil).
 
 </TabItem>
 <TabItem value="curl" label="cURL">
 
-Use the following cURL commands to set console variables and request tokens directly from the faucet server. Set `NETWORK` to `devnet` if using that network.
+Use the following cURL commands to set console variables and request tokens directly from the faucet server. Set `NETWORK` to either `testnet` or `devnet`.
 
 ```sh
 $ ADDRESS=$(sui client active-address)
@@ -140,13 +145,26 @@ await requestSuiFromFaucetV2({
 </TabItem>
 </Tabs>
 
-## Test tokens on a local network
+## SUI tokens on a local network
 
-If you are running a local Sui network, you can get tokens from your local faucet. See the [Connect to a Local Network](./local-network.mdx#use-the-local-faucet) topic for details.
+If you are running a local Sui network, you can get SUI tokens from your local faucet. See the [Connect to a Local Network](./local-network.mdx#use-the-local-faucet) topic for details.
 
-## Next steps
-
-Now that you have SUI for gas, you can publish smart contracts. Try out one of the beginner projects:
-
-- [Hello, World!](/guides/developer/getting-started/hello-world.mdx)
-- [Distributed Counter](/guides/developer/app-examples/e2e-counter.mdx)
+<div className="next-steps-module">
+  <div className="next-steps-header">
+    <h3>Next steps</h3>
+  </div>
+  <div className="next-steps-grid">
+        <Card 
+      title="Hello, World!" 
+      href="/guides/developer/getting-started/hello-world"
+    >
+      Clone and build the "Hello, World!" project.
+    </Card>
+    <Card 
+      title="View More Example Apps" 
+      href="/guides/developer/app-examples"
+    >
+      Clone and build the "Hello, World!" project.
+    </Card>
+  </div>
+</div>

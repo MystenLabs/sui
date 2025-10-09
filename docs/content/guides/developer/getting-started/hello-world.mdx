@@ -2,6 +2,8 @@
 title: Hello, World!
 description: Create and publish your first Move package using a basic 'Hello, world!' example.
 keywords: [ first dapp, first package, move package, first move package, hello world, hello, world, what is move, what is a package, what is an object, move object, sui move object, sui move package, sui move module, move module, build package, publish package, call package, make call to package, how to call package ]
+pagination_prev: null
+pagination_next: null
 ---
 
 The most basic unit of storage on Sui is an [_object_](/concepts/object-model.mdx). Other blockchains typically structure storage using key-value stores. Sui centers storage around objects with unique ID addresses on-chain. Every Sui smart contract is an object that manipulates other objects.
@@ -469,8 +471,22 @@ To prevent the same object from being modified by multiple transactions at once,
 
 Transactions also have limitations regarding total size, number of objects, and number of inputs. Learn more about limitations in [Building Against Limits](https://move-book.com/guides/building-against-limits/) in The Move Book.
 
-## Next steps 
-
-Making calls to an object or address is only one way to access data on Sui. It is recommended to learn more about [accessing data on Sui](/guides/developer/sui-101/data-serving.mdx).
-
-Or, view other [recommended next steps](/guides/developer/getting-started/next-steps.mdx) to continue learning about Sui development.
+<div className="next-steps-module">
+  <div className="next-steps-header">
+    <h3>Next steps</h3>
+  </div>
+  <div className="next-steps-grid">
+    <Card 
+      title="Access Sui Data" 
+      href="/guides/developer/sui-101/data-serving"
+    >
+      Learn more about accessing data on Sui.
+    </Card>
+    <Card 
+      title="Join the Community" 
+      href="/guides/developer/getting-started/next-steps"
+    >
+      Join the Sui developer community, try out other example projects, or read more documentation.
+    </Card>
+  </div>
+</div>

@@ -4,7 +4,7 @@
 const guides = [
 	{
 		type: 'doc',
-		label: 'Guides',
+		label: 'Developer Guides',
 		id: 'guides',
 	},
 	{
@@ -60,7 +60,11 @@ const guides = [
 					type: 'doc',
 					id: 'guides/developer/sui-101/working-with-ptbs',
 				},
-				items: [],
+				items: [
+					'guides/developer/sui-101/building-ptb',
+					'guides/developer/sui-101/coin-mgt',
+					'guides/developer/sui-101/simulating-refs'
+				],
 			},
 		],
 	},
@@ -216,7 +220,7 @@ const guides = [
 	{
 		type: 'category',
 		label: 'SuiPlay0X1',
-		collapsed: false,
+		collapsed: true,
 		link: {
 			type: 'doc',
 			id: 'guides/suiplay0x1',
