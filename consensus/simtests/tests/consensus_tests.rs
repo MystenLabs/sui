@@ -129,6 +129,98 @@ mod consensus_tests {
         );
     }
 
+    #[sim_test(config = "test_config()")]
+    async fn test_committee_with_observer() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_consensus_gc_depth_for_testing(3);
+            config
+        });
+
+        const NUM_OF_AUTHORITIES: usize = 4;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+
+        let mut authorities = Vec::with_capacity(committee.size());
+        let mut transaction_clients = Vec::with_capacity(committee.size());
+        let mut boot_counters = [0; NUM_OF_AUTHORITIES];
+
+        // Start all validator nodes
+        for (authority_index, _authority_info) in committee.authorities() {
+            let config = Config {
+                authority_index,
+                db_dir: Arc::new(TempDir::new().unwrap()),
+                committee: committee.clone(),
+                keypairs: keypairs.clone(),
+                network_type: sui_protocol_config::ConsensusNetwork::Tonic,
+                boot_counter: boot_counters[authority_index],
+                protocol_config: protocol_config.clone(),
+                clock_drift: 0,
+                transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+            };
+            let node = AuthorityNode::new(config);
+            node.start().await.unwrap();
+            node.spawn_committed_subdag_consumer().unwrap();
+
+            let client = node.transaction_client();
+            transaction_clients.push(client);
+
+            boot_counters[authority_index] += 1;
+            authorities.push(node);
+        }
+
+        // Create and start an observer node
+        tracing::info!("Starting observer node");
+        let observer_config = Config {
+            authority_index: AuthorityIndex::MAX, // Observer nodes use MAX as sentinel
+            db_dir: Arc::new(TempDir::new().unwrap()),
+            committee: committee.clone(),
+            keypairs: keypairs.clone(),
+            network_type: sui_protocol_config::ConsensusNetwork::Tonic,
+            boot_counter: 0,
+            protocol_config: protocol_config.clone(),
+            clock_drift: 0,
+            transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+        };
+        let observer_node = AuthorityNode::new(observer_config);
+
+        // This should not panic - observer nodes should handle this gracefully
+        observer_node.start().await.unwrap();
+        observer_node.spawn_committed_subdag_consumer().unwrap();
+
+        // Submit some transactions through validators
+        let transaction_clients_clone = transaction_clients.clone();
+        tokio::spawn(async move {
+            const NUM_TRANSACTIONS: u16 = 100;
+            for i in 0..NUM_TRANSACTIONS {
+                let txn = vec![i as u8; 16];
+                transaction_clients_clone[i as usize % transaction_clients_clone.len()]
+                    .submit(vec![txn])
+                    .await
+                    .unwrap();
+            }
+        });
+
+        // Wait for some commits to happen
+        sleep(Duration::from_secs(30)).await;
+
+        // Verify that validators are making progress
+        let validator_commit_monitor = authorities[0].commit_consumer_monitor();
+        let validator_commits = validator_commit_monitor.highest_handled_commit();
+        tracing::info!("Validator handled {} commits", validator_commits);
+        assert!(validator_commits > 0, "Validators should have made progress");
+
+        // Verify that observer is also receiving commits (streamed from validators)
+        let observer_commit_monitor = observer_node.commit_consumer_monitor();
+        let observer_commits = observer_commit_monitor.highest_handled_commit();
+        tracing::info!("Observer handled {} commits", observer_commits);
+        assert!(observer_commits > 0, "Observer should have received commits");
+
+        tracing::info!("Test completed successfully - observer node did not panic");
+    }
+
     // Tests the fastpath transactions with randomized votes. The test creates a fixed number of transactions,
     // sends them to random authorities, and randomizes votes on them (accept or reject). The output is verified
     // by comparing commits across validators and ensuring they are consistent.

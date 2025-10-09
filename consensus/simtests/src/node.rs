@@ -286,8 +286,18 @@ pub(crate) async fn make_authority(
         ..Default::default()
     };
 
-    let protocol_keypair = keypairs[authority_index].1.clone();
-    let network_keypair = keypairs[authority_index].0.clone();
+    // Determine if this is an observer node
+    let is_observer = authority_index == AuthorityIndex::MAX;
+
+    // For observers, use first validator's keypairs as a placeholder
+    // Observers don't use protocol keypair for signing
+    let keypair_index = if is_observer { 0 } else { authority_index };
+    let protocol_keypair = if is_observer {
+        None
+    } else {
+        Some(keypairs[keypair_index].1.clone())
+    };
+    let network_keypair = keypairs[keypair_index].0.clone();
 
     let (commit_consumer, commit_receiver, _) = CommitConsumerArgs::new(0, 0);
     let commit_consumer_monitor = commit_consumer.monitor();
@@ -295,11 +305,11 @@ pub(crate) async fn make_authority(
     let authority = ConsensusAuthority::start(
         network_type,
         0,
-        Some(authority_index),
+        if is_observer { None } else { Some(authority_index) },
         committee,
         parameters,
         protocol_config,
-        Some(protocol_keypair),
+        protocol_keypair,
         network_keypair,
         Arc::new(Clock::new_for_test(clock_drift)),
         transaction_verifier,
