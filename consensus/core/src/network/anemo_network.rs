@@ -509,6 +509,12 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
             .with_label_values(&["anemo"])
             .set(1);
 
+        // Observers don't run validator servers
+        if self.context.is_observer {
+            debug!("Observer node - skipping anemo server setup");
+            return;
+        }
+
         debug!("Starting anemo service");
 
         let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));

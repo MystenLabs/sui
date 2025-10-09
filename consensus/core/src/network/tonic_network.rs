@@ -1218,6 +1218,12 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             .with_label_values(&["tonic"])
             .set(1);
 
+        // Observers don't run validator servers, only observer servers
+        if self.context.is_observer {
+            info!("Observer node - skipping validator server setup");
+            return;
+        }
+
         info!("Starting tonic service");
 
         let authority = self.context.committee.authority(self.context.own_index);
