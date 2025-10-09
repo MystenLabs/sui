@@ -516,13 +516,32 @@ impl DagState {
 
     /// Gets the last proposed block from this authority.
     /// If no block is proposed yet, returns the genesis block.
+    /// For observer nodes (own_index >= committee size), returns the first genesis block.
     pub(crate) fn get_last_proposed_block(&self) -> VerifiedBlock {
+        // Observers don't propose blocks, return the first genesis block as a placeholder
+        if !self.context.committee.is_valid_index(self.context.own_index) {
+            return self
+                .genesis
+                .values()
+                .next()
+                .expect("Genesis blocks should exist")
+                .clone();
+        }
         self.get_last_block_for_authority(self.context.own_index)
     }
 
     /// Retrieves the last accepted block from the specified `authority`. If no block is found in cache
     /// then the genesis block is returned as no other block has been received from that authority.
     pub(crate) fn get_last_block_for_authority(&self, authority: AuthorityIndex) -> VerifiedBlock {
+        // Validate authority index to prevent out-of-bounds access
+        if !self.context.committee.is_valid_index(authority) {
+            panic!(
+                "Authority index {} is out of bounds (committee size: {})",
+                authority,
+                self.context.committee.size()
+            );
+        }
+
         if let Some(last) = self.recent_refs_by_authority[authority].last() {
             return self
                 .recent_blocks
