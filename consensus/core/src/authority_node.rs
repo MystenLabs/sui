@@ -183,12 +183,20 @@ where
         registry: Registry,
         boot_counter: u64,
     ) -> Self {
-        let is_observer = own_index.is_none();
-
         // For observers, use a sentinel value (AuthorityIndex::MAX) since Context requires own_index
         let own_index = own_index.unwrap_or(AuthorityIndex::MAX);
 
-        if !is_observer {
+        let context = Arc::new(Context::new(
+            epoch_start_timestamp_ms,
+            own_index,
+            committee.clone(),
+            parameters.clone(),
+            protocol_config.clone(),
+            initialise_metrics(registry),
+            clock.clone(),
+        ));
+
+        if !context.is_observer {
             assert!(
                 committee.is_valid_index(own_index),
                 "Invalid own index {}",
@@ -196,12 +204,12 @@ where
             );
         }
 
-        let own_hostname = if is_observer {
+        let own_hostname = if context.is_observer {
             "observer".to_string()
         } else {
             committee.authority(own_index).hostname.clone()
         };
-        if is_observer {
+        if context.is_observer {
             info!(
                 "Starting consensus observer node, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
                 protocol_config.version,
@@ -231,15 +239,6 @@ where
         );
         info!("Consensus parameters: {:?}", parameters);
         info!("Consensus committee: {:?}", committee);
-        let context = Arc::new(Context::new(
-            epoch_start_timestamp_ms,
-            own_index,
-            committee,
-            parameters,
-            protocol_config,
-            initialise_metrics(registry),
-            clock,
-        ));
         let start_time = Instant::now();
 
         context
@@ -380,7 +379,7 @@ where
         .start();
 
         let round_prober_handle =
-            if !is_observer && context.protocol_config.consensus_round_prober() {
+            if !context.is_observer && context.protocol_config.consensus_round_prober() {
                 Some(
                     RoundProber::new(
                         context.clone(),
@@ -416,7 +415,7 @@ where
                 network_service.clone(),
                 dag_state,
             );
-            if is_observer {
+            if context.is_observer {
                 // Observers connect to only the first authority for now
                 if let Some((peer, _)) = context.committee.authorities().next() {
                     let hostname = &context.committee.authority(peer).hostname;

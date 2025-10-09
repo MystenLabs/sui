@@ -31,6 +31,8 @@ pub struct Context {
     pub metrics: Arc<Metrics>,
     /// Access to local clock
     pub clock: Arc<Clock>,
+    /// Whether this node is an observer (not a committee member)
+    pub is_observer: bool,
 }
 
 impl Context {
@@ -43,6 +45,7 @@ impl Context {
         metrics: Arc<Metrics>,
         clock: Arc<Clock>,
     ) -> Self {
+        let is_observer = !committee.is_valid_index(own_index);
         Self {
             epoch_start_timestamp_ms,
             own_index,
@@ -51,6 +54,7 @@ impl Context {
             protocol_config,
             metrics,
             clock,
+            is_observer,
         }
     }
 

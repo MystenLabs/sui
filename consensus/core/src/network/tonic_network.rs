@@ -1177,9 +1177,7 @@ pub(crate) struct TonicManager {
 
 impl TonicManager {
     pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
-        let is_observer = context.own_index == AuthorityIndex::MAX;
-
-        let client = if is_observer {
+        let client = if context.is_observer {
             Arc::new(ConsensusNetworkClient::Observer(ObserverClient::new(
                 context.clone(),
                 network_keypair.clone(),

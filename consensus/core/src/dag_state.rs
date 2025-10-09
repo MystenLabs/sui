@@ -516,10 +516,9 @@ impl DagState {
 
     /// Gets the last proposed block from this authority.
     /// If no block is proposed yet, returns the genesis block.
-    /// For observer nodes (own_index >= committee size), returns the first genesis block.
+    /// For observer nodes, returns the first genesis block.
     pub(crate) fn get_last_proposed_block(&self) -> VerifiedBlock {
-        // Observers don't propose blocks, return the first genesis block as a placeholder
-        if !self.context.committee.is_valid_index(self.context.own_index) {
+        if self.context.is_observer {
             return self
                 .genesis
                 .values()

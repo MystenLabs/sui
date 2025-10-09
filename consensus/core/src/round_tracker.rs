@@ -49,7 +49,7 @@ pub(crate) struct PeerRoundTracker {
 
 impl PeerRoundTracker {
     pub(crate) fn new(context: Arc<Context>) -> Self {
-        let size = context.committee.size();
+        let size = if context.is_observer { 0 } else { context.committee.size() };
         Self {
             context,
             block_accepted_rounds: vec![vec![0; size]; size],
@@ -61,6 +61,10 @@ impl PeerRoundTracker {
     /// Update accepted rounds based on a new block created locally or received from the network
     /// and its excluded ancestors
     pub(crate) fn update_from_accepted_block(&mut self, extended_block: &ExtendedBlock) {
+        if self.block_accepted_rounds.is_empty() {
+            return;
+        }
+
         let block = &extended_block.block;
         let excluded_ancestors = &extended_block.excluded_ancestors;
         let author = block.author();
@@ -89,12 +93,19 @@ impl PeerRoundTracker {
         accepted_rounds: Vec<Vec<Round>>,
         received_rounds: Vec<Vec<Round>>,
     ) {
+        if self.probed_accepted_rounds.is_empty() {
+            return;
+        }
         self.probed_accepted_rounds = accepted_rounds;
         self.probed_received_rounds = received_rounds;
     }
 
     // Returns the propagation delay of own blocks.
     pub(crate) fn calculate_propagation_delay(&self, last_proposed_round: Round) -> Round {
+        if self.block_accepted_rounds.is_empty() {
+            return 0;
+        }
+
         let own_index = self.context.own_index;
         let node_metrics = &self.context.metrics.node_metrics;
         let received_quorum_rounds = self.compute_received_quorum_rounds();
@@ -171,6 +182,10 @@ impl PeerRoundTracker {
     }
 
     pub(crate) fn compute_accepted_quorum_rounds(&self) -> Vec<QuorumRound> {
+        if self.probed_accepted_rounds.is_empty() {
+            return vec![];
+        }
+
         let highest_accepted_rounds = self
             .probed_accepted_rounds
             .iter()
@@ -206,6 +221,10 @@ impl PeerRoundTracker {
     }
 
     fn compute_received_quorum_rounds(&self) -> Vec<QuorumRound> {
+        if self.probed_received_rounds.is_empty() {
+            return vec![];
+        }
+
         let received_quorum_rounds = self
             .context
             .committee
