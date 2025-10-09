@@ -11,6 +11,7 @@ use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::error::ExecutionErrorKind;
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
@@ -42,6 +43,11 @@ pub struct TemporaryStore<'backing> {
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
     input_objects: BTreeMap<ObjectID, Object>,
+
+    /// Store the original versions of the non-exclusive write inputs, in order to detect
+    /// mutations (which are illegal, but not prevented by the type system).
+    non_exclusive_input_original_versions: BTreeMap<ObjectID, Object>,
+
     stream_ended_consensus_objects: BTreeMap<ObjectID, SequenceNumber /* start_version */>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
@@ -89,6 +95,8 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
+        let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
+
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let stream_ended_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
@@ -113,6 +121,7 @@ impl<'backing> TemporaryStore<'backing> {
             store,
             tx_digest,
             input_objects: objects,
+            non_exclusive_input_original_versions,
             stream_ended_consensus_objects,
             lamport_timestamp,
             mutable_input_refs,
@@ -1081,13 +1090,43 @@ impl Storage for TemporaryStore<'_> {
     }
 
     /// Take execution results v2, and translate it back to be compatible with effects v1.
-    fn record_execution_results(&mut self, results: ExecutionResults) {
-        let ExecutionResults::V2(results) = results else {
+    fn record_execution_results(
+        &mut self,
+        results: ExecutionResults,
+    ) -> Result<(), ExecutionError> {
+        let ExecutionResults::V2(mut results) = results else {
             panic!("ExecutionResults::V2 expected in sui-execution v1 and above");
         };
+
+        // for all non-exclusive write inputs, remove them from written objects
+        let mut to_remove = Vec::new();
+        for (id, original) in &self.non_exclusive_input_original_versions {
+            if !results
+                .written_objects
+                .get(id)
+                .unwrap()
+                .contents_equal(original)
+                || results.deleted_object_ids.contains(id)
+            {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id: *id },
+                    "Non-exclusive write input object has been modified",
+                ));
+            }
+            to_remove.push(*id);
+        }
+
+        for id in to_remove {
+            results.written_objects.remove(&id);
+            results.modified_objects.remove(&id);
+            results.deleted_object_ids.remove(&id);
+        }
+
         // It's important to merge instead of override results because it's
         // possible to execute PT more than once during tx execution.
         self.execution_results.merge_results(results);
+
+        Ok(())
     }
 
     fn save_loaded_runtime_objects(

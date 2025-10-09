@@ -237,6 +237,10 @@ impl MoveObject {
         self.version
     }
 
+    pub fn contents_and_type_equal(&self, other: &Self) -> bool {
+        self.contents == other.contents && self.type_ == other.type_
+    }
+
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
     /// For example if the object was declared as `struct S has key { id: ID, f1: u64, f2: bool },
     /// this returns the slice containing `f1` and `f2`.
@@ -980,6 +984,20 @@ impl ObjectInner {
 
     pub fn to_rust<'de, T: Deserialize<'de>>(&'de self) -> Option<T> {
         self.data.try_as_move().and_then(|data| data.to_rust())
+    }
+
+    /// Compares the owner and payload of an object.
+    /// This is used to detect illegal writes to non-exclusive write objects.
+    pub fn contents_equal(&self, other: &Self) -> bool {
+        let data_equal = match (&self.data, &other.data) {
+            (Data::Move(a), Data::Move(b)) => a.contents_and_type_equal(b),
+            // We don't have a use for package content-equality, so we remain as strict as
+            // possible for now.
+            (Data::Package(a), Data::Package(b)) => a == b,
+            _ => false,
+        };
+
+        data_equal && self.owner == other.owner
     }
 }
 

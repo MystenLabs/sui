@@ -856,6 +856,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
                 todo!("Add InsufficientBalanceForWithdraw to sdk")
             }
+            crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { .. } => {
+                todo!("Add NonExclusiveWriteInputObjectModified to sdk")
+            }
         }
     }
 }

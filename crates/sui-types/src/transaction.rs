@@ -3813,6 +3813,24 @@ impl InputObjects {
             .collect()
     }
 
+    pub fn non_exclusive_input_objects(&self) -> BTreeMap<ObjectID, Object> {
+        self.objects
+            .iter()
+            .filter_map(|read_result| {
+                match (read_result.as_object(), read_result.input_object_kind) {
+                    (
+                        Some(object),
+                        InputObjectKind::SharedMoveObject {
+                            mutability: SharedObjectMutability::NonExclusiveWrite,
+                            ..
+                        },
+                    ) => Some((read_result.id(), object.clone())),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
     /// All inputs that can be taken as &mut T, which includes both
     /// SharedObjectMutability::Mutable and SharedObjectMutability::NonExclusiveWrite inputs.
     pub fn all_mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {

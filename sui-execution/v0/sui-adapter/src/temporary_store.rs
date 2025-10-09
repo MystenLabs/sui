@@ -997,7 +997,10 @@ impl Storage for TemporaryStore<'_> {
         TemporaryStore::read_object(self, id)
     }
 
-    fn record_execution_results(&mut self, results: ExecutionResults) {
+    fn record_execution_results(
+        &mut self,
+        results: ExecutionResults,
+    ) -> Result<(), ExecutionError> {
         let ExecutionResults::V1(results) = results else {
             panic!("ExecutionResults::V1 expected in sui-execution v0");
         };
@@ -1005,6 +1008,7 @@ impl Storage for TemporaryStore<'_> {
         for event in results.user_events {
             TemporaryStore::log_event(self, event);
         }
+        Ok(())
     }
 
     fn save_loaded_runtime_objects(

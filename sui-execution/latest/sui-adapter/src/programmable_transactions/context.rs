@@ -827,8 +827,13 @@ mod checked {
                 let InputValue {
                     object_metadata:
                         Some(InputObjectMetadata::InputObject {
-                            // We are only interested in mutable inputs.
-                            mutability: Mutability::Mutable,
+                            // Both Mutable and NonExclusiveWrite are passed as &mut inputs.
+                            // Therefore, the type checker will allow mutation to either. It
+                            // is illegal to mutate NonExclusiveWrite objects, but we check this
+                            // post-execution.
+                            // Note that NonExclusiveWrite is not currently available to user
+                            // transactions.
+                            mutability: Mutability::Mutable | Mutability::NonExclusiveWrite,
                             id,
                             version,
                             owner,

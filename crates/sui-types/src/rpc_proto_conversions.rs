@@ -1165,6 +1165,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             E::InsufficientBalanceForWithdraw => {
                 todo!("Add InsufficientBalanceForWithdraw to rpc sdk")
             }
+            E::NonExclusiveWriteInputObjectModified { .. } => {
+                todo!("Add NonExclusiveWriteInputObjectModified to rpc sdk")
+            }
         };
 
         message.set_kind(kind);

@@ -315,10 +315,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 version,
                 type_,
             } = metadata;
-            // We are only interested in directly-mutable inputs.
             match mutability {
-                ObjectMutability::Immutable | ObjectMutability::NonExclusiveWrite => continue,
-                ObjectMutability::Mutable => (),
+                ObjectMutability::Immutable => continue,
+                // It is illegal to mutate NonExclusiveWrites, but they are passed as &mut T,
+                // so we need to treat them as mutable here. After execution, we check if they
+                // have been mutated, and abort the tx if they have.
+                ObjectMutability::NonExclusiveWrite | ObjectMutability::Mutable => (),
             }
             loaded_runtime_objects.insert(
                 id,
