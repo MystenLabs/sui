@@ -22,6 +22,8 @@ use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tempfile::TempDir;
 use tracing::{info, trace};
+use rand::{rngs::StdRng, SeedableRng as _};
+use mysten_network::Multiaddr;
 
 #[derive(Clone)]
 pub struct Config {
@@ -34,6 +36,7 @@ pub struct Config {
     pub clock_drift: BlockTimestampMs,
     pub protocol_config: ProtocolConfig,
     pub transaction_verifier: Arc<dyn TransactionVerifier>,
+    pub ip: Option<Multiaddr>
 }
 
 pub struct AuthorityNode {
@@ -159,8 +162,13 @@ impl AuthorityNodeInner {
         let handle = sui_simulator::runtime::Handle::current();
         let builder = handle.create_node();
 
-        let authority = config.committee.authority(config.authority_index);
-        let socket_addr = to_socket_addr(&authority.address).unwrap();
+        let socket_addr = if let Some(ip) = &config.ip {
+            to_socket_addr(ip).unwrap()
+        } else {
+            let authority = config.committee.authority(config.authority_index);
+             to_socket_addr(&authority.address).unwrap()
+        };
+        
         let ip = match socket_addr {
             SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
             _ => panic!("unsupported protocol"),
@@ -272,6 +280,7 @@ pub(crate) async fn make_authority(
         protocol_config,
         clock_drift,
         transaction_verifier,
+        ip: _,
     } = config;
 
     let registry = Registry::new();
@@ -291,13 +300,16 @@ pub(crate) async fn make_authority(
 
     // For observers, use first validator's keypairs as a placeholder
     // Observers don't use protocol keypair for signing
-    let keypair_index = if is_observer { 0 } else { authority_index };
-    let protocol_keypair = if is_observer {
-        None
+    let (protocol_keypair, network_keypair) = if is_observer {
+        let mut rng = StdRng::from_seed([0; 32]);
+        let network_keypair = NetworkKeyPair::generate(&mut rng);
+
+        (None, network_keypair)
     } else {
-        Some(keypairs[keypair_index].1.clone())
+        let network_keypair = keypairs[authority_index.value()].0.clone();
+        let protocol_keypair = keypairs[authority_index.value()].1.clone();
+        (Some(protocol_keypair), network_keypair)
     };
-    let network_keypair = keypairs[keypair_index].0.clone();
 
     let (commit_consumer, commit_receiver, _) = CommitConsumerArgs::new(0, 0);
     let commit_consumer_monitor = commit_consumer.monitor();

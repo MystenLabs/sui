@@ -152,7 +152,7 @@ where
 
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
-    proposed_block_handler: JoinHandle<()>,
+    proposed_block_handler: Option<JoinHandle<()>>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     // Only one of broadcaster and subscriber gets created, depending on
@@ -293,16 +293,24 @@ where
             commit_consumer.replay_after_commit_index,
         );
 
-        let mut proposed_block_handler = ProposedBlockHandler::new(
-            context.clone(),
-            signals_receivers.block_broadcast_receiver(),
-            transaction_certifier.clone(),
-        );
+        // Observer nodes don't propose blocks so they don't need the proposed_block_handler
+        let proposed_block_handler = if !context.is_observer {
+            let mut proposed_block_handler = ProposedBlockHandler::new(
+                context.clone(),
+                signals_receivers.block_broadcast_receiver(),
+                transaction_certifier.clone(),
+            );
+            Some(spawn_logged_monitored_task!(
+                proposed_block_handler.run(),
+                "proposed_block_handler"
+            ))
+        } else {
+            None
+        };
 
-        let proposed_block_handler =
-            spawn_logged_monitored_task!(proposed_block_handler.run(), "proposed_block_handler");
-
-        let sync_last_known_own_block = boot_counter == 0
+        // Observer nodes don't need to sync their last known own block since they don't propose blocks
+        let sync_last_known_own_block = !context.is_observer
+            && boot_counter == 0
             && dag_state.read().highest_accepted_round() == 0
             && !context
                 .parameters
@@ -481,7 +489,9 @@ where
         if let Some(round_prober_handle) = self.round_prober_handle.take() {
             round_prober_handle.stop().await;
         }
-        self.proposed_block_handler.abort();
+        if let Some(handler) = self.proposed_block_handler.take() {
+            handler.abort();
+        }
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.
@@ -521,6 +531,7 @@ mod tests {
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use mysten_metrics::RegistryService;
     use prometheus::Registry;
+    use rand::{rngs::StdRng, SeedableRng};
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
@@ -684,6 +695,109 @@ mod tests {
             authority.stop().await;
         }
     }
+
+
+    #[rstest]
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_authority_committee_with_observer(
+        #[values(ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(5)] gc_depth: u32,
+    ) {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+
+        const NUM_OF_AUTHORITIES: usize = 4;
+        const NUM_OF_OBSERVERS: usize = 1;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+
+        let temp_dirs = (0..NUM_OF_AUTHORITIES + NUM_OF_OBSERVERS)
+            .map(|_| TempDir::new().unwrap())
+            .collect::<Vec<_>>();
+
+        let mut commit_receivers = Vec::with_capacity(NUM_OF_AUTHORITIES + NUM_OF_OBSERVERS);
+        let mut block_receivers = Vec::with_capacity(NUM_OF_AUTHORITIES + NUM_OF_OBSERVERS);
+        let mut authorities = Vec::with_capacity(committee.size());
+        let mut boot_counters = [0; NUM_OF_AUTHORITIES + NUM_OF_OBSERVERS];
+
+        for (index, _authority_info) in committee.authorities() {
+            let (authority, commit_receiver, block_receiver) = make_authority(
+                index,
+                &temp_dirs[index.value()],
+                committee.clone(),
+                keypairs.clone(),
+                network_type,
+                boot_counters[index],
+                protocol_config.clone(),
+            )
+            .await;
+            boot_counters[index] += 1;
+            commit_receivers.push(commit_receiver);
+            block_receivers.push(block_receiver);
+            authorities.push(authority);
+        }
+
+        // Now boot the Observer node
+        let (authority, commit_receiver, block_receiver) = make_authority(
+            AuthorityIndex::MAX,
+            &temp_dirs[NUM_OF_AUTHORITIES],
+            committee.clone(),
+            keypairs.clone(),
+            network_type,
+            boot_counters[NUM_OF_AUTHORITIES],
+            protocol_config.clone(),
+        )
+        .await;
+        boot_counters[NUM_OF_AUTHORITIES] += 1;
+        commit_receivers.push(commit_receiver);
+        block_receivers.push(block_receiver);
+        authorities.push(authority);
+
+        const NUM_TRANSACTIONS: u8 = 15;
+        let mut submitted_transactions = BTreeSet::<Vec<u8>>::new();
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i; 16];
+            submitted_transactions.insert(txn.clone());
+            authorities[i as usize % (authorities.len() - 1)]
+                .transaction_client()
+                .submit(vec![txn])
+                .await
+                .unwrap();
+        }
+
+        // Only check validators (not observer at the end)
+        for receiver in commit_receivers.iter_mut().take(NUM_OF_AUTHORITIES) {
+            let mut expected_transactions = submitted_transactions.clone();
+            loop {
+                let committed_subdag =
+                    tokio::time::timeout(Duration::from_secs(2), receiver.recv())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                for b in committed_subdag.blocks {
+                    for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
+                        assert!(
+                            expected_transactions.remove(&txn),
+                            "Transaction not submitted or already seen: {:?}",
+                            txn
+                        );
+                    }
+                }
+                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
+                if expected_transactions.is_empty() {
+                    break;
+                }
+            }
+        }
+
+       // Stop all authorities and exit.
+        for authority in authorities {
+            authority.stop().await;
+        }
+    }
+
 
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
@@ -936,8 +1050,17 @@ mod tests {
         };
         let txn_verifier = NoopTransactionVerifier {};
 
-        let protocol_keypair = keypairs[index].1.clone();
-        let network_keypair = keypairs[index].0.clone();
+        let (protocol_keypair, network_keypair) = if index == AuthorityIndex::MAX {
+            // Create a network keypair for the observer
+            let mut rng = StdRng::from_seed([0; 32]);
+            let network_keypair = NetworkKeyPair::generate(&mut rng);
+
+            (None, network_keypair)
+        } else {
+            let protocol_keypair = keypairs[index].1.clone();
+            let network_keypair = keypairs[index].0.clone();
+            (Some(protocol_keypair), network_keypair)
+        };
 
         let (commit_consumer, commit_receiver, block_receiver) = CommitConsumerArgs::new(0, 0);
 
@@ -948,7 +1071,7 @@ mod tests {
             committee,
             parameters,
             protocol_config,
-            Some(protocol_keypair),
+            protocol_keypair,
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
