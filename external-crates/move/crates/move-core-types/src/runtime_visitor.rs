@@ -346,7 +346,7 @@ pub struct VariantDriver<'c, 'b, 'l> {
     off: u64,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Copy, Clone)]
 pub enum Error {
     #[error("unexpected end of input")]
     UnexpectedEof,
