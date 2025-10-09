@@ -1173,7 +1173,7 @@ h5 {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0b93f6 0%, #e3e3e3 100%);
+  background: #0b93f6;
   color: #ffffff;
   font-weight: 700;
   font-size: 0.813rem;
@@ -1190,7 +1190,11 @@ h5 {
   top: 0;
   width: 3px;
   height: 100%;
-  background: linear-gradient(180deg, #0b93f6 0%, #e3e3e3 50%, #2a2f3a 100%);
+  background: linear-gradient(180deg, 
+    #0b93f6 0%, 
+    rgba(11, 147, 246, 0.4) 50%,
+    rgba(11, 147, 246, 0) 100%
+  );
   opacity: 0;
   transition: opacity 0.3s ease;
   border-radius: 0.625rem 0 0 0.625rem;
@@ -1281,9 +1285,9 @@ h5 {
   padding: 2rem;
   border-radius: 1rem;
   background: linear-gradient(135deg, 
-    rgba(11, 147, 246, 0.03) 0%, 
-    rgba(11, 147, 246, 0.05) 100%
-  );
+    rgba(255, 255, 255, 1) 0%, 
+    rgba(249, 250, 251, 1) 100%
+  ) !important;
   border: 1px solid rgba(11, 147, 246, 0.15);
   position: relative;
   overflow: hidden;
@@ -1296,7 +1300,11 @@ h5 {
   left: 0;
   right: 0;
   height: 3px;
-  background: #0b93f6;
+  background: linear-gradient(90deg, 
+    #0b93f6 0%, 
+    rgba(11, 147, 246, 0.4) 50%,
+    rgba(11, 147, 246, 0) 100%
+  );
 }
 
 .next-steps-module::after {
@@ -1306,10 +1314,6 @@ h5 {
   right: -10%;
   width: 300px;
   height: 300px;
-  background: radial-gradient(circle, 
-    rgba(11, 147, 246, 0.08) 0%, 
-    transparent 70%
-  );
   pointer-events: none;
 }
 
@@ -1334,7 +1338,6 @@ h5 {
   font-size: 1.25rem;
   font-weight: 700;
   border-radius: 0.625rem;
-  box-shadow: 0 4px 12px rgba(11, 147, 246, 0.3);
 }
 
 .next-steps-header h3 {
@@ -1429,24 +1432,10 @@ h5 {
   }
 }
 
-.next-steps-module.highlight {
-  animation: pulse-glow 2s infinite;
-}
-
 /* Dark mode */
 [data-theme='dark'] .next-steps-module {
-  background: linear-gradient(135deg, 
-    rgba(11, 147, 246, 0.05) 0%, 
-    rgba(11, 147, 246, 0.08) 100%
-  );
+  background: rgba(42, 47, 58, 0.8) !important;
   border-color: rgba(11, 147, 246, 0.25);
-}
-
-[data-theme='dark'] .next-steps-module::after {
-  background: radial-gradient(circle, 
-    rgba(11, 147, 246, 0.12) 0%, 
-    transparent 70%
-  );
 }
 
 [data-theme='dark'] .next-steps-header h3 {
