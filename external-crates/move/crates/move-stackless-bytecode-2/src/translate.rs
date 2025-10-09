@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ast::{self, BasicBlock, Instruction, RValue, Register, Value},
+    ast::{self, BasicBlock, Instruction, RValue, Register},
     optimizations::optimize,
 };
 
@@ -11,10 +11,9 @@ use move_binary_format::{
     file_format::JumpTableInner,
     normalized::{self as N, Bytecode as IB, Type},
 };
-
+use move_core_types::runtime_value::MoveValue as Value;
 use move_model_2::{
     model::{Model, Module, Package},
-    normalized,
     source_kind::SourceKind,
 };
 use move_symbol_pool::Symbol;
@@ -203,7 +202,7 @@ pub(crate) fn function<K: SourceKind>(
         let block_instructions = code_range
             .iter()
             .enumerate()
-            .map(|(i, op)| bytecode(ctxt, op, blk_start as usize + i, function))
+            .map(|(i, op)| bytecode(ctxt, function, blk_start as usize + i, op))
             .collect::<Vec<_>>();
 
         let label = block_id as usize;
@@ -229,9 +228,9 @@ pub(crate) fn function<K: SourceKind>(
 
 pub(crate) fn bytecode<K: SourceKind>(
     ctxt: &mut Context<'_, K>,
-    op: &IB<Symbol>,
+    fdef: &N::Function<Symbol>,
     pc: usize,
-    function: &N::Function<Symbol>,
+    op: &IB<Symbol>,
 ) -> Instruction {
     use N::Type;
     use ast::DataOp;
@@ -322,7 +321,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::Ret => {
             // TODO: check if this needs to be reversed?
-            let returned_vars = make_vec!(function.return_.len(), R(pop!()));
+            let returned_vars = make_vec!(fdef.return_.len(), R(pop!()));
             Instruction::Return(returned_vars)
         }
 
@@ -391,31 +390,24 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Call(function_ref) => {
-            let modules = ctxt.model.modules();
-            if let Some(function) = find_function(modules, function_ref) {
-                let args = make_vec!(function.parameters.len(), R(pop!()));
+            let type_params = function_ref
+                .type_arguments
+                .iter()
+                .map(|ty| ty.as_ref().clone())
+                .collect::<Vec<_>>();
 
-                let type_params = function_ref
-                    .type_arguments
-                    .iter()
-                    .map(|ty| ty.as_ref().clone())
-                    .collect::<Vec<_>>();
-                let lhs = function
-                    .return_
-                    .iter()
-                    .map(|ty| push!(ty.clone().subst(&type_params).into()))
-                    .collect::<Vec<_>>();
+            let args = make_vec!(function_ref.parameters.len(), R(pop!()));
 
-                let target = (function_ref.module, function.name);
-                Instruction::AssignReg {
-                    lhs,
-                    rhs: RValue::Call { target, args },
-                }
-            } else {
-                panic!(
-                    "Function not found: {}::{}",
-                    function_ref.module.name, function_ref.function
-                );
+            let lhs = function_ref
+                .return_
+                .iter()
+                .map(|ty| push!(ty.clone().subst(&type_params).into()))
+                .collect::<Vec<_>>();
+
+            let target = (function_ref.module, function_ref.function);
+            Instruction::AssignReg {
+                lhs,
+                rhs: RValue::Call { target, args },
             }
         }
 
@@ -722,18 +714,6 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::MoveFromDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
     }
-}
-
-fn find_function<'a, K: SourceKind>(
-    mut modules: impl Iterator<Item = Module<'a, K>>,
-    function_ref: &normalized::FunctionRef,
-) -> Option<&'a normalized::Function> {
-    let module = modules.find(|m| {
-        m.compiled().name() == (&function_ref.module.name)
-            && *m.compiled().address() == function_ref.module.address
-    })?;
-    let compiled = module.compiled();
-    compiled.functions.get(&function_ref.function).map(|v| &**v)
 }
 
 fn struct_ref_to_type(struct_ref: &N::StructRef<Symbol>) -> N::Type<Symbol> {

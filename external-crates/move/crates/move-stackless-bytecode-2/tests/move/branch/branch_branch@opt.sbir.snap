@@ -5,12 +5,12 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
     Function: conditions (entry: LBL_0)
       Label LBL_0:
         reg_0 : u64 = Copy(lcl_0)
-        reg_2 : bool = GreaterThan(reg_0 : u64, Immediate(U64(10)))
+        reg_2 : bool = GreaterThan(reg_0 : u64, Immediate(10u64))
         JumpIf(reg_2 : bool, LBL_4, LBL_9)
 
       Label LBL_4:
         reg_3 : u64 = Copy(lcl_1)
-        reg_5 : bool = LessThan(reg_3 : u64, Immediate(U64(20)))
+        reg_5 : bool = LessThan(reg_3 : u64, Immediate(20u64))
         lcl_3 = reg_5 : bool
         Jump(LBL_11)
 
@@ -27,7 +27,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_16:
         reg_9 : u64 = Copy(lcl_0)
-        reg_11 : bool = LessThan(reg_9 : u64, Immediate(U64(30)))
+        reg_11 : bool = LessThan(reg_9 : u64, Immediate(30u64))
         lcl_2 = reg_11 : bool
 
       Label LBL_20:
@@ -54,24 +54,24 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
     Function: is_even (entry: LBL_0)
       Label LBL_0:
-        lcl_2 = Immediate(U64(10))
+        lcl_2 = Immediate(10u64)
         reg_1 : u64 = Move(lcl_0)
-        reg_3 : u64 = Modulo(reg_1 : u64, Immediate(U64(2)))
-        reg_5 : bool = Equal(reg_3 : u64, Immediate(U64(0)))
+        reg_3 : u64 = Modulo(reg_1 : u64, Immediate(2u64))
+        reg_5 : bool = Equal(reg_3 : u64, Immediate(0u64))
         JumpIf(reg_5 : bool, LBL_8, LBL_13)
 
       Label LBL_8:
         reg_6 : u64 = Move(lcl_2)
-        reg_8 : u64 = Add(reg_6 : u64, Immediate(U64(20)))
+        reg_8 : u64 = Add(reg_6 : u64, Immediate(20u64))
         lcl_1 = reg_8 : u64
         Jump(LBL_17)
 
       Label LBL_13:
         reg_9 : u64 = Move(lcl_2)
-        reg_11 : u64 = Add(reg_9 : u64, Immediate(U64(30)))
+        reg_11 : u64 = Add(reg_9 : u64, Immediate(30u64))
         lcl_1 = reg_11 : u64
 
       Label LBL_17:
         reg_12 : u64 = Move(lcl_1)
-        reg_14 : u64 = Multiply(reg_12 : u64, Immediate(U64(13)))
+        reg_14 : u64 = Multiply(reg_12 : u64, Immediate(13u64))
         Return(reg_14 : u64)

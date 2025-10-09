@@ -24,7 +24,6 @@ use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
 use rand::Rng;
 use sui_types::{
-    base_types::AuthorityName,
     committee::EpochId,
     error::{ErrorCategory, UserInputError},
     messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
@@ -55,7 +54,7 @@ pub struct SubmitTransactionOptions {
 
     /// When submitting a transaction, only the validators in the allowed validator list can be used to submit the transaction to.
     /// When the allowed validator list is empty, any validator can be used.
-    pub allowed_validators: Vec<AuthorityName>,
+    pub allowed_validators: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -178,7 +177,7 @@ where
                 }
                 let start_time = Instant::now();
 
-                let ping = if tx_type == TxType::SingleWriter {
+                let ping_type = if tx_type == TxType::SingleWriter {
                     PingType::FastPath
                 } else {
                     PingType::Consensus
@@ -187,9 +186,9 @@ where
                 // Now send a ping transaction to the chosen validator for the provided tx type
                 match self_clone
                     .drive_transaction(
-                        SubmitTxRequest::new_ping(ping),
+                        SubmitTxRequest::new_ping(ping_type),
                         SubmitTransactionOptions {
-                            allowed_validators: vec![name],
+                            allowed_validators: vec![display_name.clone()],
                             ..Default::default()
                         },
                         Some(ping_timeout),
@@ -214,8 +213,8 @@ where
         }
     }
 
-    /// Drives transaction to submission and effects certification. If ping is provided, then the requested will be treated as a ping transaction.
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.as_ref().map(|t| t.digest()), ping = ?request.ping))]
+    /// Drives transaction to submission and effects certification. Ping requests are derived from the submitted payload.
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.as_ref().map(|t| t.digest()), ping = %request.ping_type.is_some()))]
     pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
@@ -223,7 +222,7 @@ where
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         // For ping requests, the amplification factor is always 1.
-        let amplification_factor = if request.ping.is_some() {
+        let amplification_factor = if request.ping_type.is_some() {
             1
         } else {
             let gas_price = request
@@ -247,7 +246,7 @@ where
         };
 
         let tx_type = request.tx_type();
-        let ping_label = if request.ping.is_some() {
+        let ping_label = if request.ping_type.is_some() {
             "true"
         } else {
             "false"
@@ -358,9 +357,9 @@ where
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
-        let ping = request.ping;
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();
+        let ping_type = request.ping_type;
 
         let (name, submit_txn_result) = self
             .submitter
@@ -390,7 +389,6 @@ where
                 name,
                 submit_txn_result,
                 options,
-                ping,
             )
             .await;
 
@@ -404,6 +402,7 @@ where
                     } else {
                         OperationType::Consensus
                     },
+                    ping_type,
                     result: Ok(start_time.elapsed()),
                 });
         }

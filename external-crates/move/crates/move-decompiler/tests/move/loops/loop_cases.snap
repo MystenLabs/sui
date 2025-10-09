@@ -3,10 +3,10 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 module loop_cases {
     public fun loop_test () {
-        let l0 = U64(0);
+        let l0 = 0u64;
         loop {
-            l0 = l0 + U64(1);
-            if (l0 >= U64(10)) {
+            l0 = l0 + 1u64;
+            if (l0 >= 10u64) {
                 break;
             } else {
                 continue;
@@ -20,14 +20,14 @@ module loop_cases {
     }
 
     public fun loop_test_2 () {
-        let l0 = U64(0);
+        let l0 = 0u64;
         loop {
-            l0 = l0 + U64(1);
-            if (l0 % U64(2) == U64(1)) {
+            l0 = l0 + 1u64;
+            if (l0 % 2u64 == 1u64) {
                 continue;
             } else {
             }
-            if (l0 == U64(10)) {
+            if (l0 == 10u64) {
                 break;
             } else {
                 continue;
@@ -37,9 +37,9 @@ module loop_cases {
     }
 
     public fun loop_test_3 () {
-        let l0 = U64(0);
-        while(!(l0 >= U64(10))) {
-            l0 = l0 + U64(1);
+        let l0 = 0u64;
+        while(!(l0 >= 10u64)) {
+            l0 = l0 + 1u64;
         }
         return 
     }
@@ -55,25 +55,25 @@ module loop_cases {
     }
 
     public fun loop_test_6 () {
-        let l1 = U64(0);
-        while(l0 > U64(10)) {
-            l1 = l1 + U64(1);
-            let l0 = l0 - U64(1);
+        let l1 = 0u64;
+        while(l0 > 10u64) {
+            l1 = l1 + 1u64;
+            let l0 = l0 - 1u64;
         }
         return 
     }
 
     public fun loop_test_7 () {
-        return U64(10) * l0
+        return 10u64 * l0
     }
 
     public fun loop_test_8 () {
-        let l0 = U64(0);
-        let l1 = U64(5);
+        let l0 = 0u64;
+        let l1 = 5u64;
         loop {
-            l0 = l0 + U64(1);
-            l1 = l1 * U64(2) + l0;
-            if (l0 >= U64(10)) {
+            l0 = l0 + 1u64;
+            l1 = l1 * 2u64 + l0;
+            if (l0 >= 10u64) {
                 break;
             } else {
                 continue;
@@ -83,16 +83,16 @@ module loop_cases {
     }
 
     public fun loop_test_9 () {
-        let l0 = U64(0);
-        let l1 = U64(5);
+        let l0 = 0u64;
+        let l1 = 5u64;
         loop {
-            l0 = l0 + U64(1);
-            l1 = l1 * U64(2) + l0;
-            if (l1 - l0 % U64(3) == U64(0)) {
-                l1 = U64(100);
+            l0 = l0 + 1u64;
+            l1 = l1 * 2u64 + l0;
+            if (l1 - l0 % 3u64 == 0u64) {
+                l1 = 100u64;
             } else {
             }
-            if (l0 >= U64(10)) {
+            if (l0 >= 10u64) {
                 break;
             } else {
                 continue;

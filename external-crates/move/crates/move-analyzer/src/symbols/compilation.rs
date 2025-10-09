@@ -298,12 +298,13 @@ pub fn get_compiled_pkg(
     pkg_path: &Path,
     lint: LintLevel,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let cached_deps_exist = has_precompiled_deps(pkg_path, packages_info.clone());
     let build_config = move_package::BuildConfig {
         test_mode: true,
         install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-        default_flavor: Some(Flavor::Sui),
+        default_flavor: flavor,
         lint_flag: lint.into(),
         force_lock_file: cached_deps_exist,
         skip_fetch_latest_git_deps: cached_deps_exist,

@@ -23,7 +23,7 @@ You can also find the [full repository for this example here](https://github.com
 
 ## Gameplay
 
-In this single-player version of blackjack, the player competes against a dealer, which is automated by the system. The dealer is equipped with a public BLS key that plays a central role in the game's mechanics. The dealer's actions are triggered by HTTP requests to serverless functions. Players generate randomness for the game by interacting with their mouse on the screen, after which they place their bet to start the game. Upon initiating the game, a request is made to the backend (dealer), which processes it by signing and subsequently dealing two cards to the player and one to themselves.
+In this single-player version of blackjack, the player competes against a dealer, which is automated by the system. The dealer is equipped with a public BLS key that plays a central role in the game's mechanics. The dealer's actions are triggered by HTTP requests to serverless functions. Players place their bet to start the game. Upon initiating the game, a request is made to the backend (dealer), which processes it by signing and subsequently dealing two cards to the player and one to themselves.
 
 The player has the option to 'Hit' or 'Stand.' Selecting 'Stand' triggers the dealer to draw cards until the total reaches 17 or higher. After the dealer stops, the smart contract steps in to compare the totals and declare the winner. On the other hand, choosing 'Hit' prompts the dealer to draw an additional card for the player.
 
@@ -49,10 +49,6 @@ The module's functions can be broadly categorized into initialization, game mana
 Utility functions like `get_next_random_card` and `get_card_sum` are essential for the game's mechanics, generating random cards and calculating hand values. The module also includes accessors for retrieving various pieces of game and house data.
 
 For testing purposes, the module provides special functions like `get_house_admin_cap_for_testing`, `player_won_post_handling_for_test` and `house_won_post_handling_for_test`, ensuring that developers can thoroughly test the game mechanics and house data handling.
-
-### `counter_nft` module
-
-The next module, [`counter_nft.move`](https://github.com/MystenLabs/blackjack-sui/blob/main/move/blackjack/sources/counter_nft.move), introduces the Counter NFT, a key component in the game's mechanics. It serves as the [verifiable random function (VRF)](../cryptography/ecvrf.mdx) input, ensuring uniqueness in each game. The Counter NFT's value increases after each use, maintaining its distinctiveness for every new request. For first time players, the creation of a Counter NFT is mandatory. To enhance user experience, the user interface can automate this process by integrating the Counter NFT's creation with the game initiation in a single transaction block. This seamless integration simplifies the process for the player, allowing them to focus on the gameplay. This counter serves the same purpose as the one in the [Coin Flip example](./coin-flip.mdx).
 
 ## Backend
 
@@ -115,9 +111,7 @@ The main sub-directories are:
 
 - **Custom hooks:** To keep the code as structured as possible, multiple custom hooks are utilized to manage the complex state of the game board at each step. The [`useBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useBlackjackGame.ts) custom hook encapsulates the game state and logic, exposing all the required information (with fields such as `game`, `isInitialDealLoading`), and the required functionality (with methods such as `handleCreateGame` and `handleHit`) to display and play the game. Multiple additional custom hooks, such as [`useCreateBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useCreateBlackjackGame.ts), and [`useMakeMoveInBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useMakeMoveInBlackjackGame.ts) are encapsulating their own piece of state and logic to make the code readable and maintainable.
 
-- **Component for game initialization:** The [`StartGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/StartGame.tsx) component is implemented to facilitate the creation of a new game. It renders the [`CollectMouseRandomness`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/CollectMouseRandomness.tsx) to capture the randomness and uses the `handleCreateGame` function of the [`useBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useBlackjackGame.ts) hook to execute the create-game transaction.
-
-- **Randomness generation:** Fair game outcomes are also ensured by the [`CollectMouseRandomness`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/CollectMouseRandomness.tsx) component. This component uses the [`useMouseRandomness`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useMouseRandomness.ts) custom hook, and is in charge of capturing some user's mouse movements and generating a random bytes array. This array is converted to a hexadecimal string (`randomness`) and used in the create-game transaction.
+- **Component for game initialization:** The [`StartGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/StartGame.tsx) component is implemented to facilitate the creation of a new game. It uses the `handleCreateGame` function of the [`useBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useBlackjackGame.ts) hook to execute the create-game transaction.
 
 - **Card displaying and management:** The [`DealerCards`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/DealerCards.tsx) and the [`PlayerCards`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/PlayerCards.tsx) components are used to display the total points and the cards owned by the dealer and the player respectively.
 
@@ -133,7 +127,7 @@ The main sub-directories are:
 
 - **State management:** In both games, state management is crucial. For Blackjack, this involves managing the player and dealer's hands and scores using React state hooks. In Coin Flip, the state is managed through Move structs like `HouseData`, which track the house's balance and other game-related details.
 
-- **Randomness and fair play:** Both games emphasize randomness for fairness. Blackjack uses a Counter NFT and player mouse movements to generate randomness, while Coin Flip only uses a Counter NFT as a unique input for the [Verifiable Random Function (VRF)](../cryptography/ecvrf.mdx) in each game.
+- **Randomness and fair play:** Both games emphasize randomness for fairness. Both games use Sui's [on-chain randomness module](/guides/developer/advanced/randomness-onchain.mdx), ensuring verifiable and truly random outcomes for every game.
 
 - **Smart contract interactions:** Each game involves smart contract interactions for game actions like placing bets, dealing cards (Blackjack), or making guesses (Coin Flip). These interactions are crucial for executing the game's logic on the blockchain.
 

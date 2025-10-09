@@ -5,10 +5,6 @@ source: crates/move-decompiler/tests/tests.rs
 
 module loops::loop_cases;
 
-// -- structs -- 
-
-// -- enums -- 
-
 // -- functions -- 
 
 public fun loop_test() {

@@ -179,6 +179,10 @@ h1 {
   letter-spacing: -0.04em;
 }
 
+.import-content--nofence h1 {
+  @apply text-3xl;
+}
+
 .h1 {
   font-family: var(--headerFont);
   font-size: 4.75rem;         /* larger than h1 for display */
@@ -196,6 +200,10 @@ h2 {
   font-weight: 600;
   line-height: 2.75rem;
   letter-spacing: -0.03em;
+}
+
+.import-content--nofence h2 {
+  @apply text-2xl;
 }
 
 .h2 {
@@ -217,6 +225,10 @@ h3 {
   letter-spacing: -0.02em;
 }
 
+.import-content--nofence h3 {
+  @apply text-xl;
+}
+
 .h3 {
   font-family: var(--headerFont);
   font-size: 1.5rem;
@@ -231,6 +243,10 @@ h4 {
   font-size: 1.375rem;       /* larger than h5, smaller than h3 */
   font-weight: 500;
   line-height: 1.75rem;
+}
+
+.import-content--nofence h4 {
+  @apply text-lg;
 }
 
 .h4 {
@@ -248,6 +264,10 @@ h5 {
   font-weight: 600;          
   line-height: 1.5rem;
   letter-spacing: 0.01em;    
+}
+
+.import-content--nofence h5 {
+  @apply text-lg;
 }
 
 

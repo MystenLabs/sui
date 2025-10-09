@@ -241,6 +241,7 @@ impl AdapterInitConfig {
             rest_api_url,
             enable_accumulators,
             enable_authenticated_event_streams,
+            allow_references_in_ptbs,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -258,6 +259,9 @@ impl AdapterInitConfig {
         }
         if enable_authenticated_event_streams {
             protocol_config.enable_authenticated_event_streams_for_testing();
+        }
+        if allow_references_in_ptbs {
+            protocol_config.allow_references_in_ptbs_for_testing();
         }
         if let Some(enable) = shared_object_deletion {
             protocol_config.set_shared_object_deletion_for_testing(enable);

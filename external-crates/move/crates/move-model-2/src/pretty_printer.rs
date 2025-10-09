@@ -360,9 +360,8 @@ impl ToDoc for Fields {
 
 impl ToDoc for ModuleId {
     fn to_doc(&self) -> Doc {
-        use Doc as D;
         let ModuleId { address, name } = self;
-        D::text(format!("{address}::{name}"))
+        Doc::text(format!("{address}::{name}"))
     }
 }
 

@@ -3,7 +3,7 @@
 
 // tests valid transfers/writes of mut references
 
-//# init --addresses test=0x0 --accounts A
+//# init --addresses test=0x0 --accounts A --allow-references-in-ptbs
 
 //# publish
 module test::m {
@@ -51,21 +51,21 @@ module test::m {
 
 // single mut child
 
-//# programmable --dev-inspect
+//# programmable
 // write to child, write to parent
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_mut(Result(0));
 //> 2: test::m::write_u64(Result(1));
 //> 3: test::m::write_pair(Result(0));
 
-//# programmable --dev-inspect
+//# programmable
 // read parent, write to child
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_mut(Result(0));
 //> 2: test::m::use_ref<test::m::Pair>(Result(0));
 //> 3: test::m::write_u64(Result(1));
 
-//# programmable --dev-inspect
+//# programmable
 // borrow parent, write to child, write to parent
 //> 0: test::m::pair();
 //> 1: test::m::borrow_mut<test::m::Pair>(Result(0));
@@ -73,7 +73,7 @@ module test::m {
 //> 3: test::m::write_u64(Result(2));
 //> test::m::write_pair(Result(1));
 
-//# programmable --dev-inspect
+//# programmable
 // borrow parent, read parent, write to child
 //> 0: test::m::pair();
 //> 1: test::m::borrow_mut<test::m::Pair>(Result(0));
@@ -84,7 +84,7 @@ module test::m {
 
 // multiple mut children
 
-//# programmable --dev-inspect
+//# programmable
 // write to children, write to parent
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_y_mut(Result(0));
@@ -92,7 +92,7 @@ module test::m {
 //> 3: test::m::write_u64(NestedResult(1,1));
 //> 4: test::m::write_pair(Result(0));
 
-//# programmable --dev-inspect
+//# programmable
 // borrow parent, write to children, read parent
 //> 0: test::m::pair();
 //> 1: test::m::borrow_mut<test::m::Pair>(Result(0));
@@ -103,7 +103,7 @@ module test::m {
 
 // mut child, imm child
 
-//# programmable --dev-inspect
+//# programmable
 // write to child, read child, write to parent
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_mut_y_imm(Result(0));
@@ -113,7 +113,7 @@ module test::m {
 //> 5: test::m::use_ref<u64>(NestedResult(1,1));
 //> 6: test::m::write_pair(Result(0));
 
-//# programmable --dev-inspect
+//# programmable
 // borrow parent, write to child, read child, read parent
 //> 0: test::m::pair();
 //> 1: test::m::borrow_mut<test::m::Pair>(Result(0));
