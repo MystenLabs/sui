@@ -169,6 +169,12 @@ impl<S: Store> Indexer<S> {
             task,
         } = indexer_args;
 
+        let metrics_prefix = if let Some(task) = task {
+            format!("{}_{}", metrics_prefix.unwrap_or("indexer"), task)
+        } else {
+            metrics_prefix.unwrap_or("indexer")
+        };
+
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
 
         let ingestion_service = IngestionService::new(
