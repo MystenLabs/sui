@@ -88,10 +88,12 @@ impl Temperature {
 }
 
 impl Cliques {
+    /// Creates a new empty set of cliques
     fn new() -> Self {
         Self(vec![])
     }
 
+    /// Creates a new clique and returns its ID
     fn next(&mut self) -> CliqueID {
         let id = self.0.len();
         self.0.push(Clique::Root(Temperature::Count(0)));
