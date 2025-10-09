@@ -36,17 +36,11 @@ const ARENA_SIZE: usize = 10_000_000;
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-impl Default for Arena {
-    fn default() -> Self {
+impl Arena {
+    pub fn new_bounded() -> Self {
         let bump = Bump::new();
         bump.set_allocation_limit(Some(ARENA_SIZE));
         Arena(bump)
-    }
-}
-
-impl Arena {
-    pub fn new() -> Self {
-        Arena(Bump::new())
     }
 
     /// SAFETY:

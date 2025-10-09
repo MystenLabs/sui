@@ -134,7 +134,9 @@ fn native_sub_string(
     native_charge_gas_early_exit!(context, gas_params.base);
 
     if j < i {
-        // TODO: what abort code should we use here?
+        // This should probably be an abort with error code 2 (invalid indices), however this abort
+        // code is part of the public API of the string module, so we cannot change it without
+        // gating the change behind a feature flag, so best to keep this as-is, at least for now.
         return Ok(NativeResult::err(context.gas_used(), 1));
     }
     let cost = gas_params.base + gas_params.per_byte * NumBytes::new((j - i) as u64);

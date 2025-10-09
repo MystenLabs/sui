@@ -8,10 +8,6 @@ use move_core_types::{
 // -------------------------------------------------------------------------------------------------
 // Abstract Memory Size
 // -------------------------------------------------------------------------------------------------
-// TODO(gas): This is the oldest implementation of abstract memory size. It is now kept only as a
-// reference impl, which is used to ensure the new implementation is fully backward compatible. We
-// should be able to get this removed after we use the new impl for a while and gain enough
-// confidence in that.
 
 /// The size in bytes for a non-string or address constant on the stack
 pub(crate) const CONST_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);

@@ -247,7 +247,7 @@ fn test_flatten_and_renumber_blocks_with_jump_table() {
     use crate::cache::arena::Arena;
     use crate::jit::optimization::ast as input;
 
-    let arena = Arena::new();
+    let arena = Arena::new_bounded();
     // Create a jump table that points to block offsets 0, 10, 20
     let jump_table = arena.alloc_vec([0u16, 10u16, 20u16].into_iter()).unwrap();
     let jump_table_ptr = VMPointer::from_ref(&jump_table);
@@ -279,7 +279,7 @@ fn test_flatten_and_renumber_blocks_variant_switch() {
     use crate::cache::arena::Arena;
     use crate::jit::optimization::ast as input;
 
-    let arena = Arena::new();
+    let arena = Arena::new_bounded();
     // Create a jump table for variant switch
     let jump_table = arena.alloc_vec([0u16, 5u16, 10u16].into_iter()).unwrap();
     let jump_table_ptr = VMPointer::from_ref(&jump_table);

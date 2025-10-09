@@ -120,12 +120,6 @@ impl BaseHeap {
 // Machine (Runtime) Heap
 // -------------------------------------------------------------------------------------------------
 
-impl Default for MachineHeap {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl MachineHeap {
     pub fn new() -> Self {
         Self {}

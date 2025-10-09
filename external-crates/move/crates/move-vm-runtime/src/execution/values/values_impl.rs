@@ -2510,7 +2510,10 @@ pub mod debug {
             Value::U256(x) => print_u256(buf, x),
             Value::Bool(x) => print_bool(buf, x),
             Value::Address(x) => print_address(buf, x),
-            Value::Reference(r) => print_reference(buf, r),
+            Value::Reference(r) => {
+                debug_write!(buf, "(&) ")?;
+                print_value_impl(buf, &r.copy_value().read_ref()?)
+            }
             Value::Vec(items) => print_list(buf, "[", items.iter(), print_box_value_impl, "]"),
             Value::PrimVec(prim_vec) => match prim_vec {
                 PrimVec::VecU8(items) => print_list(buf, "[", items.iter(), print_u8, "]"),
@@ -2569,15 +2572,6 @@ pub mod debug {
         }
         debug_write!(buf, "{}", end)?;
         Ok(())
-    }
-
-    // TODO: This function was used in an old implementation of std::debug::print, and can probably be removed.
-    pub fn print_reference<B: Write>(buf: &mut B, r: &Reference) -> PartialVMResult<()> {
-        debug_write!(buf, "(&) ")?;
-        match r {
-            Reference::Value(mem_box) => print_box_value_impl(buf, mem_box),
-            Reference::Indexed(entry) => print_value_impl(buf, &entry.copy_element()?),
-        }
     }
 
     pub fn print_stack_frame<B: Write>(
