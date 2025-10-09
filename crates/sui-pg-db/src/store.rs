@@ -20,6 +20,8 @@ use crate::{Connection, Db};
 
 pub use sui_indexer_alt_framework_store_traits::Store;
 
+const WATERMARK_DELIMITER: char = '@';
+
 #[async_trait]
 impl store::Connection for Connection<'_> {
     async fn committer_watermark(
@@ -202,7 +204,7 @@ impl store::TransactionalStore for Db {
 
 fn watermark_key(pipeline: &str, task: Option<&str>) -> String {
     if let Some(task) = task {
-        format!("{}@{}", pipeline, task)
+        format!("{}{WATERMARK_DELIMITER}{}", pipeline, task)
     } else {
         pipeline.to_string()
     }
