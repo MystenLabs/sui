@@ -122,9 +122,8 @@ impl CheckpointReader {
             .clone()
             .get_full_checkpoint(checkpoint_number)
             .await?;
-        let checkpoint_data: CheckpointData = checkpoint.into();
-        let size = bcs::serialized_size(&checkpoint_data)?;
-        Ok((Arc::new(checkpoint_data), size))
+        let size = bcs::serialized_size(&checkpoint)?;
+        Ok((Arc::new(checkpoint), size))
     }
 
     async fn remote_fetch_checkpoint_internal(
