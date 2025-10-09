@@ -3,7 +3,8 @@
 
 // Exercise test functions that emit authenticated events
 
-//# init --addresses test=0x0 --accounts A B --simulator --enable-authenticated-event-streams
+// Protocol version pinned to avoid snapshot churn from genesis changes
+//# init --addresses test=0x0 --accounts A B --simulator --enable-authenticated-event-streams --protocol-version 98
 
 //# publish
 
