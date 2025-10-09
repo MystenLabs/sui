@@ -78,6 +78,7 @@ pub struct TransactionOrchestrator<A: Clone> {
     metrics: Arc<TransactionOrchestratorMetrics>,
     transaction_driver: Option<Arc<TransactionDriver<A>>>,
     td_percentage: u8,
+    td_allowed_submission_list: Vec<String>,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -166,6 +167,12 @@ where
             None
         };
 
+        let td_allowed_submission_list = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.allowed_submission_validators.clone())
+            .unwrap_or_default();
+
         Self {
             quorum_driver_handler,
             validator_state,
@@ -175,6 +182,7 @@ where
             metrics,
             transaction_driver,
             td_percentage,
+            td_allowed_submission_list,
         }
     }
 }
@@ -654,8 +662,7 @@ where
                 SubmitTxRequest::new_transaction(request.transaction.clone()),
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
-                    // TODO: provide a list of validators to submit the transaction via config
-                    allowed_validators: vec![],
+                    allowed_validators: self.td_allowed_submission_list.clone(),
                 },
                 timeout_duration,
             )
