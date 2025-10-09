@@ -30,8 +30,8 @@ enum Input {
 }
 
 impl Decompile {
-    pub fn execute(self, path: Option<&Path>, _config: BuildConfig) -> anyhow::Result<()> {
-        let rerooted_path = reroot_path(path)?;
+    pub fn execute(self, _path: Option<&Path>, _config: BuildConfig) -> anyhow::Result<()> {
+        println!("Starting decompilation...");
         let Self { input, output_path } = self;
         // Ensure the input file exists
         let input_path = Path::new(&input);
@@ -73,14 +73,7 @@ impl Decompile {
         };
 
         // Ensure the output path exists
-        let output_path = if Path::new(&output_path).is_absolute() {
-            output_path
-        } else {
-            rerooted_path
-                .join(output_path)
-                .to_string_lossy()
-                .to_string()
-        };
+        let output_path = Path::new(&output_path).canonicalize().expect("Invalid output path");
         let output_path = PathBuf::from(output_path);
         std::fs::create_dir_all(&output_path).map_err(|_| anyhow!("Failed to create directory"))?;
         let _paths = move_decompiler::generate_from_files(&files_to_process, &output_path)?;
