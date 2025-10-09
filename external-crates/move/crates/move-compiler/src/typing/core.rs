@@ -2365,48 +2365,46 @@ pub fn solve_constraints(context: &mut Context) {
         match constraint {
             VarConstraint::Num(loc) => {
                 let tvar = sp(loc, Type_::Var(var));
-                match unfold_type(&subst, tvar.clone()).value {
-                    ty @ (Type_::UnresolvedError | Type_::Anything) => {
-                        if matches!(ty, Type_::Anything) {
-                            let msg = "Could not determine a concrete type for this numeric \
+                if let ty @ (Type_::UnresolvedError | Type_::Anything) =
+                    unfold_type(&subst, tvar.clone()).value
+                {
+                    if matches!(ty, Type_::Anything) {
+                        let msg = "Could not determine a concrete type for this numeric \
                                        literal, so defaulting to 'u64'";
-                            let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
-                            diag.add_note(
-                                "To avoid this warning, add an explicit type annotation, \
-                                           e.g., '0u64' or '0 as u64'",
-                            );
-                            context.add_diag(diag);
-                        }
-                        let next_subst =
-                            join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
-                                .unwrap()
-                                .0;
-                        subst = next_subst;
+                        let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
+                        diag.add_note(
+                            "To avoid this warning, add an explicit type annotation, \
+                                           e.g., '0u64'",
+                        );
+                        context.add_diag(diag);
                     }
-                    _ => (),
+                    let next_subst =
+                        join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
+                            .unwrap()
+                            .0;
+                    subst = next_subst;
                 }
             }
             VarConstraint::String(loc) => {
                 let tvar = sp(loc, Type_::Var(var));
-                match unfold_type(&subst, tvar.clone()).value {
-                    ty @ (Type_::UnresolvedError | Type_::Anything) => {
-                        if matches!(ty, Type_::Anything) {
-                            let msg = "Could not determine a concrete type for this string \
+                if let ty @ (Type_::UnresolvedError | Type_::Anything) =
+                    unfold_type(&subst, tvar.clone()).value
+                {
+                    if matches!(ty, Type_::Anything) {
+                        let msg = "Could not determine a concrete type for this string \
                                        literal, so defaulting to 'vector<u8>'";
-                            let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
-                            diag.add_note(
-                                "To avoid this warning, add an explicit type annotation, \
+                        let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
+                        diag.add_note(
+                            "To avoid this warning, add an explicit type annotation, \
                                        e.g., 'b\"hello\"'",
-                            );
-                            context.add_diag(diag);
-                        }
-                        let ty = Type_::vector(loc, Type_::u8(loc));
-                        let next_subst = join(&mut context.tvar_counter, subst, &ty, &tvar)
-                            .unwrap()
-                            .0;
-                        subst = next_subst;
+                        );
+                        context.add_diag(diag);
                     }
-                    _ => (),
+                    let ty = Type_::vector(loc, Type_::u8(loc));
+                    let next_subst = join(&mut context.tvar_counter, subst, &ty, &tvar)
+                        .unwrap()
+                        .0;
+                    subst = next_subst;
                 }
             }
             VarConstraint::Divergent(loc) => {

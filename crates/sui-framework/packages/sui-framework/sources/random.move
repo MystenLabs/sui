@@ -225,7 +225,7 @@ public fun generate_u8(g: &mut RandomGenerator): u8 {
 
 /// Generate a boolean.
 public fun generate_bool(g: &mut RandomGenerator): bool {
-    (uint_from_bytes!(g, 1) & 1) == 1
+    (uint_from_bytes!(g, 1) & 1u64) == 1
 }
 
 /// Helper macro to generate a random uint in [min, max] using a random number with num_of_bytes bytes.

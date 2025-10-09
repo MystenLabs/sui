@@ -141,7 +141,7 @@ public fun peel_u256(bcs: &mut BCS): u256 {
 /// In BCS `vector` length is implemented with ULEB128;
 /// See more here: https://en.wikipedia.org/wiki/LEB128
 public fun peel_vec_length(bcs: &mut BCS): u64 {
-    let (mut total, mut shift, mut len) = (0u64, 0, 0);
+    let (mut total, mut shift, mut len) = (0u64, 0u8, 0u64);
     loop {
         assert!(len <= 4, ELenOutOfRange);
         let byte = bcs.bytes.pop_back() as u64;
