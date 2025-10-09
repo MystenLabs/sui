@@ -183,7 +183,6 @@ fn collect_pipelines(
                 | "dynamicField"
                 | "hasPublicTransfer"
                 | "dynamicObjectField"
-                | "objectVersionsBefore"
                 | "moveObjectBcs"
                 | "multiGetDynamicFields"
                 | "multiGetDynamicObjectFields",
@@ -194,9 +193,6 @@ fn collect_pipelines(
         }
 
         // IObject fields
-        ("IObject", Some("objects"), _) => {
-            pipelines.insert("consistent".to_string());
-        }
         ("IObject", Some("receivedTransactions"), mut filters) => {
             filters.insert("affectedAddress".to_string());
             collect_pipelines("Query", Some("transactions"), filters, pipelines);
