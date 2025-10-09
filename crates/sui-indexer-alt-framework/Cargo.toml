@@ -11,6 +11,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 backoff.workspace = true
+base64.workspace = true
 bb8 = "0.8.5"
 chrono.workspace = true
 clap = { workspace = true, features = ["env"] }

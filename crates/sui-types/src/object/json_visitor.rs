@@ -1,31 +1,51 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A visitor implementation that constructs JSON values directly from BCS bytes.
+//! A visitor implementation that constructs JSON values from BCS bytes.
 //!
 //! This visitor traverses BCS-encoded Move data and builds a `serde_json::Value`
-//! without creating intermediate MoveStruct representations, making it more memory
-//! efficient for large objects.
+//! representation. Note that this approach loads the entire JSON structure into
+//! memory, which may have significant memory implications for large objects or
+//! collections. It should not be used in memory-constrained contexts like RPC
+//! handlers where the size of the data is unbounded.
 
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value::{MoveStruct, MoveTypeLayout, MoveValue},
     annotated_visitor::{self, StructDriver, ValueDriver, VariantDriver, VecDriver, Visitor},
     u256::U256,
 };
 use serde_json::{Map, Value};
 
 /// A visitor that constructs JSON values from BCS bytes.
+///
+/// Number representation:
+/// - u8, u16, u32 are represented as JSON numbers
+/// - u64, u128, u256 are represented as strings to avoid precision loss
+///
+/// Special types:
+/// - Addresses use full 64-character hex format with "0x" prefix
+/// - Byte vectors (Vec<u8>) are Base64-encoded strings
 pub struct JsonVisitor;
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error(transparent)]
-    Visitor(#[from] annotated_visitor::Error),
-}
 
 impl JsonVisitor {
     pub fn new() -> Self {
         Self
+    }
+
+    /// Deserialize BCS bytes as JSON using the provided type layout.
+    pub fn deserialize_value(bytes: &[u8], layout: &MoveTypeLayout) -> anyhow::Result<Value> {
+        let mut visitor = Self::new();
+        MoveValue::visit_deserialize(bytes, layout, &mut visitor)
+    }
+
+    /// Deserialize BCS bytes as a JSON object representing a struct.
+    pub fn deserialize_struct(
+        bytes: &[u8],
+        layout: &move_core_types::annotated_value::MoveStructLayout,
+    ) -> anyhow::Result<Value> {
+        let mut visitor = Self::new();
+        MoveStruct::visit_deserialize(bytes, layout, &mut visitor)
     }
 }
 
@@ -37,14 +57,14 @@ impl Default for JsonVisitor {
 
 impl<'b, 'l> Visitor<'b, 'l> for JsonVisitor {
     type Value = Value;
-    type Error = Error;
+    type Error = annotated_visitor::Error;
 
     fn visit_u8(
         &mut self,
         _driver: &ValueDriver<'_, 'b, 'l>,
         value: u8,
     ) -> Result<Self::Value, Self::Error> {
-        Ok(Value::String(value.to_string()))
+        Ok(Value::Number(value.into()))
     }
 
     fn visit_u16(
@@ -52,7 +72,7 @@ impl<'b, 'l> Visitor<'b, 'l> for JsonVisitor {
         _driver: &ValueDriver<'_, 'b, 'l>,
         value: u16,
     ) -> Result<Self::Value, Self::Error> {
-        Ok(Value::String(value.to_string()))
+        Ok(Value::Number(value.into()))
     }
 
     fn visit_u32(
@@ -60,7 +80,7 @@ impl<'b, 'l> Visitor<'b, 'l> for JsonVisitor {
         _driver: &ValueDriver<'_, 'b, 'l>,
         value: u32,
     ) -> Result<Self::Value, Self::Error> {
-        Ok(Value::String(value.to_string()))
+        Ok(Value::Number(value.into()))
     }
 
     fn visit_u64(
@@ -117,11 +137,29 @@ impl<'b, 'l> Visitor<'b, 'l> for JsonVisitor {
         &mut self,
         driver: &mut VecDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
-        let mut elements = Vec::new();
-        while let Some(elem) = driver.next_element(self)? {
-            elements.push(elem);
+        // If this is a vector of u8 (bytes), encode it using Base64
+        if driver
+            .element_layout()
+            .is_type(&move_core_types::language_storage::TypeTag::U8)
+        {
+            use base64::{engine::general_purpose::STANDARD, Engine};
+
+            if let Some(bytes) = driver
+                .bytes()
+                .get(driver.position()..(driver.position() + driver.len() as usize))
+            {
+                Ok(Value::String(STANDARD.encode(bytes)))
+            } else {
+                Err(annotated_visitor::Error::UnexpectedEof)
+            }
+        } else {
+            // Regular vector - collect elements
+            let mut elements = Vec::new();
+            while let Some(elem) = driver.next_element(self)? {
+                elements.push(elem);
+            }
+            Ok(Value::Array(elements))
         }
-        Ok(Value::Array(elements))
     }
 
     fn visit_struct(
@@ -144,14 +182,11 @@ impl<'b, 'l> Visitor<'b, 'l> for JsonVisitor {
     ) -> Result<Self::Value, Self::Error> {
         let mut fields = Map::new();
 
-        // Include full variant information - essential for understanding enum values
-        let type_tag = driver.enum_layout().type_.clone();
-        fields.insert("$type".to_string(), Value::String(type_tag.to_string()));
+        // Follow GraphQL/gRPC format: only include @variant field
         fields.insert(
-            "$variant".to_string(),
+            "@variant".to_string(),
             Value::String(driver.variant_name().to_string()),
         );
-        fields.insert("$tag".to_string(), Value::String(driver.tag().to_string()));
 
         // Add all variant fields
         while let Some((field, value)) = driver.next_field(self)? {
@@ -260,10 +295,10 @@ mod tests {
         let expected = json!({
             "items": [
                 {
-                    "value": "10"
+                    "value": 10
                 },
                 {
-                    "value": "20"
+                    "value": 20
                 }
             ],
             "count": "2"
@@ -308,10 +343,8 @@ mod tests {
         let json = MoveValue::visit_deserialize(&bytes, &enum_layout, &mut visitor).unwrap();
 
         let expected = json!({
-            "$type": "0x1::option::Option<u64>",
-            "$variant": "Some",
-            "$tag": "1",
-            "value": "42"
+            "@variant": "Some",
+            "value": "42"  // u64 as string
         });
         assert_eq!(json, expected);
 
@@ -327,11 +360,46 @@ mod tests {
         let json = MoveValue::visit_deserialize(&bytes, &enum_layout, &mut visitor).unwrap();
 
         let expected_none = json!({
-            "$type": "0x1::option::Option<u64>",
-            "$variant": "None",
-            "$tag": "0"
+            "@variant": "None"
         });
         assert_eq!(json, expected_none);
+    }
+
+    #[test]
+    fn test_byte_vector_base64() {
+        use MoveTypeLayout as T;
+        use MoveValue as V;
+
+        let layout = make_layout(
+            "0x1::test::Data",
+            vec![
+                ("bytes", T::Vector(Box::new(T::U8))),
+                ("numbers", T::Vector(Box::new(T::U32))),
+            ],
+        );
+
+        // "Hello" in bytes
+        let bytes_vec = vec![72u8, 101, 108, 108, 111];
+        let value = make_value(
+            "0x1::test::Data",
+            vec![
+                (
+                    "bytes",
+                    V::Vector(bytes_vec.into_iter().map(V::U8).collect()),
+                ),
+                ("numbers", V::Vector(vec![V::U32(1), V::U32(2), V::U32(3)])),
+            ],
+        );
+
+        let bytes = serialize_value(value);
+        let mut visitor = JsonVisitor::new();
+        let json = MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+
+        let expected = json!({
+            "bytes": "SGVsbG8=",  // "Hello" Base64 encoded
+            "numbers": [1, 2, 3]  // u32 values as JSON numbers
+        });
+        assert_eq!(json, expected);
     }
 
     #[test]
