@@ -40,5 +40,5 @@ jobs:
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
-          event-type: build-docker-images
-          client-payload: '{"sui_commit": "${{ github.sha }}", "docker_hub_tag": "${{ github.ref_name }}"}'
+          event-type: tag-docker-images
+          client-payload: '{"sui_commit": "${{ github.sha }}", "tag": "${{ github.ref_name }}"}'
