@@ -3,4 +3,5 @@
 
 //! Utility functions for the indexer framework.
 
+pub mod event_json;
 pub mod package_store;
