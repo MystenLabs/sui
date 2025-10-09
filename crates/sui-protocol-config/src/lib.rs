@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 98;
+const MAX_PROTOCOL_VERSION: u64 = 99;
 
 // Record history of protocol version allocations here:
 //
@@ -4120,6 +4120,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
                 }
+                99 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
