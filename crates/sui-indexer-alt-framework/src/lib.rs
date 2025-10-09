@@ -34,6 +34,7 @@ pub mod pipeline;
 #[cfg(feature = "postgres")]
 pub mod postgres;
 pub mod task;
+pub mod utils;
 
 #[cfg(test)]
 pub mod mocks;
