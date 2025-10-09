@@ -361,7 +361,7 @@ public fun new_shared(deposit: Coin<SUI>, ctx: &mut TxContext) {
 
 ### Admin capability
 
-In admin-gated functions, the first parameter should be the capability. It helps the autocomplete with user types.
+In admin-gated functions, the capability should be placed as the second parameter. This keeps the capability visible in method signatures and maintains method associativity.
 
 ```move
 module conventions::social_network;
@@ -377,14 +377,14 @@ public struct Admin has key {
     id: UID,
 }
 
-// right -> cap.update(&mut account, b"jose".to_string());
-public fun update(_: &Admin, account: &mut Account, new_name: String) {
+// right -> account.set(&cap, b"jose".to_string()); (normal method associativity)
+public fun set(account: &mut Account, _: &Admin, new_name: String) {
     // Implementation omitted.
     abort(0)
 }
 
-// wrong -> account.update(&cap, b"jose".to_string());
-public fun set(account: &mut Account, _: &Admin, new_name: String) {
+// wrong -> cap.update(&mut account, b"jose".to_string()); (reversed associativity)
+public fun update(_: &Admin, account: &mut Account, new_name: String) {
     // Implementation omitted.
     abort(0)
 }
