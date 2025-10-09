@@ -8,9 +8,9 @@ use crate::{error::RpcError, scope::Scope, task::watermark::Watermarks};
 
 use super::checkpoint::Checkpoint;
 
-/// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint)
+/// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint).
 ///
-/// Both `type_` and `field` are required. The `filter` is optional and provides retention information for filtered queries.
+/// Provides retention information for the type and optional field and filters. If field or filters are not provided we fall back to the available range for the type.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct AvailableRangeKey {
     /// The GraphQL type to check retention for
@@ -130,18 +130,43 @@ fn collect_pipelines(
         }
 
         // CoinMetadata fields
-        ("CoinMetadata", filter @ Some("balance" | "balances" | "multiGetBalances"), filters) => {
-            collect_pipelines("IAddressable", filter, filters, pipelines);
-        }
-        ("CoinMetadata", Some("dynamicFields"), filters) => {
-            collect_pipelines("IMoveObject", Some("dynamicFields"), filters, pipelines);
-        }
-        ("CoinMetadata", filter @ Some("objects" | "receivedTransactions"), filters) => {
-            collect_pipelines("IObject", filter, filters, pipelines);
+        (
+            "CoinMetadata",
+            field @ Some("balance" | "balances" | "multiGetBalances" | "objects"),
+            filters,
+        ) => {
+            collect_pipelines("IAddressable", field, filters, pipelines);
         }
         (
             "CoinMetadata",
-            field @ Some("objectAt" | "objectVersionsAfter" | "objectVersionsBefore"),
+            field @ Some(
+                "hasPublicTransfer"
+                | "dynamicFields"
+                | "dynamicObjectField"
+                | "moveObjectBcs"
+                | "multiGetDynamicFields"
+                | "multiGetDynamicObjectFields",
+            ),
+            filters,
+        ) => {
+            collect_pipelines("IMoveObject", field, filters, pipelines);
+        }
+        ("CoinMetadata", field @ Some("receivedTransactions"), filters) => {
+            collect_pipelines("IObject", field, filters, pipelines);
+        }
+        (
+            "CoinMetadata",
+            field @ Some(
+                "digest"
+                | "objectAt"
+                | "objectBcs"
+                | "objectVersionsAfter"
+                | "objectVersionsBefore"
+                | "owner"
+                | "previousTransaction"
+                | "storageRebate"
+                | "version",
+            ),
             filters,
         ) => {
             collect_pipelines("IObject", field, filters, pipelines);
@@ -179,8 +204,7 @@ fn collect_pipelines(
         (
             "IMoveObject",
             Some(
-                "contents"
-                | "dynamicField"
+                "dynamicField"
                 | "hasPublicTransfer"
                 | "dynamicObjectField"
                 | "moveObjectBcs"
@@ -253,7 +277,11 @@ fn collect_pipelines(
         ) => collect_pipelines("IObject", field, filters, pipelines),
 
         // MovePackage fields
-        ("MovePackage", field @ Some("balance" | "balances" | "multiGetBalances"), filters) => {
+        (
+            "MovePackage",
+            field @ Some("balance" | "balances" | "multiGetBalances" | "objects"),
+            filters,
+        ) => {
             collect_pipelines("IAddressable", field, filters, pipelines);
         }
         (
@@ -280,6 +308,7 @@ fn collect_pipelines(
         }
         ("Query", Some("coinMetadata"), _) => {
             pipelines.insert("consistent".to_string());
+            pipelines.insert("obj_versions".to_string());
         }
         ("Query", Some("events"), filters) => {
             pipelines.insert("tx_digests".to_string());
@@ -289,8 +318,10 @@ fn collect_pipelines(
                 pipelines.insert("ev_struct_inst".to_string());
             }
         }
-        ("Query", Some("object"), _) => {
-            pipelines.insert("obj_versions".to_string());
+        ("Query", Some("object"), filters) => {
+            if !filters.contains("version") {
+                pipelines.insert("obj_versions".to_string());
+            }
         }
         ("Query", Some("objects"), _) => {
             pipelines.insert("consistent".to_string());
