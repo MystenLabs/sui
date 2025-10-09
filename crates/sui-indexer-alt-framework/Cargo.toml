@@ -23,6 +23,7 @@ prometheus.workspace = true
 reqwest.workspace = true
 scoped-futures.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -33,9 +34,11 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
 url.workspace = true
 
+move-core-types.workspace = true
 sui-field-count.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-metrics.workspace = true
+sui-package-resolver.workspace = true
 sui-rpc-api.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
