@@ -106,6 +106,9 @@ fn collect_pipelines(
         ) => {
             collect_pipelines("IAddressable", field, filters, pipelines);
         }
+        ("Address", Some("defaultSuinsName"), filters) => {
+            collect_pipelines("IAddressable", Some("defaultSuinsName"), filters, pipelines);
+        }
         // Address has `dynamicFields` to allow for fetching fields on wrapped objects. But we do not want
         // to add `dynamicFields` to `IAddressable`, because that would incorrectly require MovePackage
         // to offer it.
@@ -137,13 +140,14 @@ fn collect_pipelines(
         ) => {
             collect_pipelines("IAddressable", field, filters, pipelines);
         }
+        ("CoinMetadata", Some("defaultSuinsName"), filters) => {
+            collect_pipelines("IAddressable", Some("defaultSuinsName"), filters, pipelines);
+        }
         (
             "CoinMetadata",
             field @ Some(
-                "hasPublicTransfer"
-                | "dynamicFields"
+                "dynamicField"
                 | "dynamicObjectField"
-                | "moveObjectBcs"
                 | "multiGetDynamicFields"
                 | "multiGetDynamicObjectFields",
             ),
@@ -156,17 +160,7 @@ fn collect_pipelines(
         }
         (
             "CoinMetadata",
-            field @ Some(
-                "digest"
-                | "objectAt"
-                | "objectBcs"
-                | "objectVersionsAfter"
-                | "objectVersionsBefore"
-                | "owner"
-                | "previousTransaction"
-                | "storageRebate"
-                | "version",
-            ),
+            field @ Some("objectAt" | "objectVersionsAfter" | "objectVersionsBefore"),
             filters,
         ) => {
             collect_pipelines("IObject", field, filters, pipelines);
@@ -205,9 +199,7 @@ fn collect_pipelines(
             "IMoveObject",
             Some(
                 "dynamicField"
-                | "hasPublicTransfer"
                 | "dynamicObjectField"
-                | "moveObjectBcs"
                 | "multiGetDynamicFields"
                 | "multiGetDynamicObjectFields",
             ),
@@ -221,32 +213,18 @@ fn collect_pipelines(
             filters.insert("affectedAddress".to_string());
             collect_pipelines("Query", Some("transactions"), filters, pipelines);
         }
-        (
-            "IObject",
-            Some(
-                "digest"
-                | "objectAt"
-                | "objectBcs"
-                | "objectVersionsAfter"
-                | "objectVersionsBefore"
-                | "owner"
-                | "previousTransaction"
-                | "storageRebate"
-                | "version",
-            ),
-            _,
-        ) => {
+        ("IObject", Some("objectAt" | "objectVersionsAfter" | "objectVersionsBefore"), _) => {
             pipelines.insert("obj_versions".to_string());
         }
         // Object fields
         (
             "Object",
-            field @ Some(
-                "address" | "balance" | "balances" | "defaultSuinsName" | "multiGetBalances"
-                | "objects",
-            ),
+            field @ Some("balance" | "balances" | "multiGetBalances" | "objects"),
             filters,
         ) => collect_pipelines("IAddressable", field, filters, pipelines),
+        ("Object", Some("defaultSuinsName"), filters) => {
+            collect_pipelines("IAddressable", Some("defaultSuinsName"), filters, pipelines);
+        }
         (
             "Object",
             field @ Some(
@@ -284,19 +262,12 @@ fn collect_pipelines(
         ) => {
             collect_pipelines("IAddressable", field, filters, pipelines);
         }
+        ("MovePackage", Some("defaultSuinsName"), filters) => {
+            collect_pipelines("IAddressable", Some("defaultSuinsName"), filters, pipelines);
+        }
         (
             "MovePackage",
-            field @ Some(
-                "digest"
-                | "objectAt"
-                | "objectBcs"
-                | "objectVersionsAfter"
-                | "objectVersionsBefore"
-                | "owner"
-                | "receivedTransactions"
-                | "storageRebate"
-                | "version",
-            ),
+            field @ Some("objectAt" | "objectVersionsAfter" | "objectVersionsBefore"),
             filters,
         ) => {
             collect_pipelines("IObject", field, filters, pipelines);
@@ -383,7 +354,7 @@ mod tests {
 
     #[test]
     fn test_address_other_fields() {
-        let result = test_collect_pipelines("Address", Some("defaultSuinsName"), BTreeSet::new());
+        let result = test_collect_pipelines("Address", Some("address"), BTreeSet::new());
         assert!(result.is_empty());
     }
 
