@@ -312,7 +312,7 @@ fn collect_pipelines(
                 pipelines.insert("tx_affected_addresses".to_string());
             } else if filters.contains("kind") && !filters.contains("sentAddress") {
                 pipelines.insert("tx_kinds".to_string());
-            } else if filters.contains("affectedObjects") {
+            } else if filters.contains("affectedObject") {
                 pipelines.insert("tx_affected_objects".to_string());
             } else if filters.contains("sentAddress") {
                 pipelines.insert("tx_affected_addresses".to_string());
