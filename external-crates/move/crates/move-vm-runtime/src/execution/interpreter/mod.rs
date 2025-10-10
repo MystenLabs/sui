@@ -57,7 +57,9 @@ pub(crate) fn run(
         )
         .map_err(|e| {
             e.at_code_offset(fun_ref.index(), 0)
-                .finish(Location::Module(fun_ref.module_id().clone()))
+                .finish(Location::Module(
+                    fun_ref.module_id(&vtables.interner).clone(),
+                ))
         });
         trace(tracer, |tracer| {
             tracer.exit_initial_native_frame(&return_result, &gas_meter.remaining_gas().into())
@@ -66,18 +68,20 @@ pub(crate) fn run(
     } else {
         let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {
             e.at_code_offset(fun_ref.index(), 0)
-                .finish(Location::Module(fun_ref.module_id().clone()))
+                .finish(Location::Module(
+                    fun_ref.module_id(&vtables.interner).clone(),
+                ))
         })?;
-        let state = MachineState::new(call_stack);
+        let state = MachineState::new(Arc::clone(&vtables.interner), call_stack);
         eval::run(state, vtables, vm_config, extensions, tracer, gas_meter)
     }
 }
 
 macro_rules! set_err_info {
-    ($frame:expr, $e:expr) => {{
+    ($interner:expr, $frame:expr, $e:expr) => {{
         let function = $frame.function();
         $e.at_code_offset(function.index(), $frame.pc)
-            .finish($frame.location())
+            .finish($frame.location($interner))
     }};
 }
 

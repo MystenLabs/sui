@@ -5,8 +5,11 @@ pub mod execution;
 pub mod optimization;
 
 use crate::{
-    jit::execution::ast::Package,
-    jit::optimization::{optimize, to_optimized_form},
+    cache::identifier_interner::IdentifierInterner,
+    jit::{
+        execution::ast::Package,
+        optimization::{optimize, to_optimized_form},
+    },
     natives::functions::NativeFunctions,
     validation::verification,
 };
@@ -15,6 +18,7 @@ use move_vm_config::runtime::VMConfig;
 
 pub fn translate_package(
     vm_config: &VMConfig,
+    interner: &IdentifierInterner,
     natives: &NativeFunctions,
     loaded_package: verification::ast::Package,
 ) -> PartialVMResult<Package> {
@@ -23,13 +27,15 @@ pub fn translate_package(
     } else {
         to_optimized_form(loaded_package)
     };
-    execution::translate::package(natives, opt_package)
+    execution::translate::package(natives, interner, opt_package)
 }
 
+// TODO: move this to unit testing folder.
 #[cfg(test)]
 mod tests {
     use super::translate_package;
     use crate::{
+        cache::identifier_interner::IdentifierInterner,
         jit::execution::ast::Package as RuntimePackage, validation::verification::ast as verif_ast,
     };
     use indexmap::IndexMap;
@@ -79,8 +85,9 @@ mod tests {
             ..VMConfig::default()
         };
         let natives = crate::natives::functions::NativeFunctions::empty_for_testing().unwrap();
+        let interner = IdentifierInterner::new();
 
-        let result = translate_package(&vm_config, &natives, verified);
+        let result = translate_package(&vm_config, &interner, &natives, verified);
         let runtime_pkg = result.expect("translate_package should succeed for minimal package");
         assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
     }
@@ -96,8 +103,9 @@ mod tests {
             ..VMConfig::default()
         };
         let natives = crate::natives::functions::NativeFunctions::empty_for_testing().unwrap();
+        let interner = IdentifierInterner::new();
 
-        let result = translate_package(&vm_config, &natives, verified);
+        let result = translate_package(&vm_config, &interner, &natives, verified);
         let runtime_pkg = result.expect("translate_package should succeed for minimal package");
         assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
     }

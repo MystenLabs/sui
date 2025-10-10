@@ -4,7 +4,7 @@
 use crate::{
     cache::{
         arena::{Arena, ArenaBox, ArenaVec},
-        identifier_interner::{IdentifierKey, resolve_interned},
+        identifier_interner::{IdentifierInterner, IdentifierKey},
     },
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
@@ -828,13 +828,17 @@ pub(crate) enum Bytecode {
 // -------------------------------------------------------------------------------------------------
 
 impl Function {
+    pub fn vtable_key(&self) -> &VirtualTableKey {
+        &self.name
+    }
+
     #[allow(unused)]
     pub fn file_format_version(&self) -> u32 {
         self.file_format_version
     }
 
-    pub fn module_id(&self) -> ModuleId {
-        self.name.module_id().unwrap()
+    pub fn module_id(&self, interner: &IdentifierInterner) -> ModuleId {
+        self.name.module_id(interner).unwrap()
     }
 
     pub fn index(&self) -> FunctionDefinitionIndex {
@@ -853,12 +857,12 @@ impl Function {
         self.return_.len()
     }
 
-    pub fn name_str(&self) -> String {
-        self.name().to_string()
+    pub fn name_str(&self, interner: &IdentifierInterner) -> String {
+        self.name(interner).to_string()
     }
 
-    pub fn name(&self) -> Identifier {
-        self.name.member_name().unwrap()
+    pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
+        self.name.member_name(interner).unwrap()
     }
 
     pub(crate) fn code(&self) -> &[Bytecode] {
@@ -873,26 +877,29 @@ impl Function {
         &self.type_parameters
     }
 
-    pub fn pretty_string(&self) -> String {
-        self.name.to_string().unwrap()
+    pub fn pretty_string(&self, interner: &IdentifierInterner) -> String {
+        self.name.to_string(interner).unwrap()
     }
 
-    pub fn pretty_short_string(&self) -> String {
-        self.name.to_short_string().unwrap()
+    pub fn pretty_short_string(&self, interner: &IdentifierInterner) -> String {
+        self.name.to_short_string(interner).unwrap()
     }
 
     pub fn is_native(&self) -> bool {
         self.def_is_native
     }
 
-    pub fn get_native(&self) -> PartialVMResult<&UnboxedNativeFunction> {
+    pub fn get_native(
+        &self,
+        interner: &IdentifierInterner,
+    ) -> PartialVMResult<&UnboxedNativeFunction> {
         if cfg!(feature = "lazy_natives") {
             // If lazy_natives is configured, this is a MISSING_DEPENDENCY error, as we skip
             // checking those at module loading time.
             self.native.as_deref().ok_or_else(|| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
                     "Missing Native Function `{}`",
-                    self.name.member_name().unwrap()
+                    self.name.member_name(interner).unwrap()
                 ))
             })
         } else {
@@ -906,10 +913,10 @@ impl Function {
 }
 
 impl CallType {
-    fn name(&self) -> String {
+    fn vtable_key(&self) -> &VirtualTableKey {
         match self {
-            CallType::Direct(vmpointer) => vmpointer.pretty_short_string().to_string(),
-            CallType::Virtual(virtual_table_key) => virtual_table_key.to_short_string().unwrap(),
+            CallType::Direct(vmpointer) => vmpointer.vtable_key(),
+            CallType::Virtual(vtable_key) => vtable_key,
         }
     }
 }
@@ -978,8 +985,8 @@ impl ModuleIdKey {
         Self { address, name }
     }
 
-    pub fn as_id(&self) -> PartialVMResult<ModuleId> {
-        let name = resolve_interned(&self.name, "module id")?;
+    pub fn as_id(&self, interner: &IdentifierInterner) -> PartialVMResult<ModuleId> {
+        let name = interner.resolve_ident(&self.name, "module id")?;
         Ok(ModuleId::new(self.address, name))
     }
 
@@ -987,8 +994,10 @@ impl ModuleIdKey {
         &self.address
     }
 
-    pub fn name(&self) -> Identifier {
-        resolve_interned(&self.name, "module name").expect("Uninterned key")
+    pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
+        interner
+            .resolve_ident(&self.name, "module name")
+            .expect("Uninterned key")
     }
 }
 
@@ -1381,7 +1390,7 @@ impl From<&Bytecode> for Opcodes {
 
 impl ::std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}#{}", self.name.to_short_string().unwrap(), self.index)
+        write!(f, "{:?}#{}", self.name, self.index)
     }
 }
 
@@ -1411,45 +1420,15 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
-            Bytecode::DirectCall(fun) => write!(f, "Call({})", fun.pretty_short_string()),
+            Bytecode::DirectCall(fun) => write!(f, "Call({:?})", fun.name),
             Bytecode::VirtualCall(vtable_key) => {
-                write!(
-                    f,
-                    "Call(~{})",
-                    vtable_key
-                        .to_short_string()
-                        .expect("Failed to find interned ident")
-                )
+                write!(f, "Call(~{:?})", vtable_key)
             }
-            Bytecode::CallGeneric(inst) => write!(f, "CallGeneric({})", inst.handle.name()),
-            Bytecode::Pack(a) => write!(
-                f,
-                "Pack({})",
-                a.def_vtable_key
-                    .to_short_string()
-                    .expect("Failed to find interned ident")
-            ),
-            Bytecode::PackGeneric(a) => write!(
-                f,
-                "PackGeneric({})",
-                a.def_vtable_key
-                    .to_short_string()
-                    .expect("Failed to find interned ident")
-            ),
-            Bytecode::Unpack(a) => write!(
-                f,
-                "Unpack({})",
-                a.def_vtable_key
-                    .to_short_string()
-                    .expect("Failed to find interned ident")
-            ),
-            Bytecode::UnpackGeneric(a) => write!(
-                f,
-                "UnpackGeneric({})",
-                a.def_vtable_key
-                    .to_short_string()
-                    .expect("Failed to find interned ident")
-            ),
+            Bytecode::CallGeneric(inst) => write!(f, "CallGeneric({:?})", inst.handle.vtable_key()),
+            Bytecode::Pack(a) => write!(f, "Pack({:?})", a.def_vtable_key),
+            Bytecode::PackGeneric(a) => write!(f, "PackGeneric({:?})", a.def_vtable_key),
+            Bytecode::Unpack(a) => write!(f, "Unpack({:?})", a.def_vtable_key),
+            Bytecode::UnpackGeneric(a) => write!(f, "UnpackGeneric({:?})", a.def_vtable_key),
             Bytecode::ReadRef => write!(f, "ReadRef"),
             Bytecode::WriteRef => write!(f, "WriteRef"),
             Bytecode::FreezeRef => write!(f, "FreezeRef"),
@@ -1516,9 +1495,9 @@ impl ::std::fmt::Debug for Bytecode {
 impl std::fmt::Debug for CallType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CallType::Direct(fun) => write!(f, "Known({})", fun.pretty_short_string()),
+            CallType::Direct(fun) => write!(f, "Known({:?})", fun.vtable_key()),
             CallType::Virtual(vtable_key) => {
-                write!(f, "Virtual({})", vtable_key.to_short_string().unwrap())
+                write!(f, "Virtual({:?})", vtable_key)
             }
         }
     }
@@ -1546,11 +1525,11 @@ impl std::fmt::Debug for ArenaType {
             ArenaType::Address => write!(f, "address"),
             ArenaType::Signer => write!(f, "signer"),
             ArenaType::Vector(inner) => write!(f, "vector<{:?}>", inner.inner_ref()),
-            ArenaType::Datatype(key) => write!(f, "{}", key.to_short_string().unwrap()),
+            ArenaType::Datatype(key) => write!(f, "{:?}", key),
             ArenaType::DatatypeInstantiation(inst) => {
                 // inst is an ArenaBox<(VirtualTableKey, ArenaVec<ArenaType>)>
                 let (key, types) = inst.inner_ref();
-                write!(f, "{}<", key.to_short_string().unwrap())?;
+                write!(f, "{:?}<", key)?;
                 let types = types
                     .iter()
                     .map(|x| format!("{:?}", x) + ",")

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::identifier_interner::{intern_ident_str, intern_identifier},
+    cache::identifier_interner::IdentifierInterner,
     dbg_println,
     execution::{dispatch_tables::VMDispatchTables, interpreter, values::Value},
     jit::execution::ast::{Function, Type},
@@ -53,6 +53,8 @@ pub struct MoveVM<'extensions> {
     pub(crate) native_extensions: NativeExtensions<'extensions>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
+    /// The Move VM's interner.
+    pub(crate) interner: Arc<IdentifierInterner>,
 }
 
 pub(crate) struct MoveVMFunction {
@@ -324,7 +326,7 @@ impl<'extensions> MoveVM<'extensions> {
             return Err(PartialVMError::new(
                 StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
             )
-            .finish(Location::Module(function.module_id())));
+            .finish(Location::Module(function.module_id(&self.interner))));
         }
 
         // execute the function
@@ -332,7 +334,7 @@ impl<'extensions> MoveVM<'extensions> {
             function,
             type_arguments,
             args,
-            &mut tracer.map(VMTracer::new),
+            &mut tracer.map(|tracer| VMTracer::new(tracer, self.interner.clone())),
             gas_meter,
         )
     }
@@ -348,10 +350,14 @@ impl<'extensions> MoveVM<'extensions> {
         ty_args: &[Type],
     ) -> VMResult<MoveVMFunction> {
         let (package_key, module_id) = original_id.clone().into();
-        let module_name =
-            intern_identifier(&module_id).map_err(|err| err.finish(Location::Undefined))?;
-        let member_name =
-            intern_ident_str(function_name).map_err(|err| err.finish(Location::Undefined))?;
+        let module_name = self
+            .interner
+            .intern_identifier(&module_id)
+            .map_err(|err| err.finish(Location::Undefined))?;
+        let member_name = self
+            .interner
+            .intern_ident_str(function_name)
+            .map_err(|err| err.finish(Location::Undefined))?;
         let vtable_key = VirtualTableKey {
             package_key,
             inner_pkg_key: IntraPackageKey {

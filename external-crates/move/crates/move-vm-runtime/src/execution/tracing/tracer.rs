@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    cache::identifier_interner::IdentifierInterner,
     execution::{
         dispatch_tables::VMDispatchTables,
         interpreter::{
@@ -27,11 +28,12 @@ use move_trace_format::{
 };
 
 use smallvec::SmallVec;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 /// Internal state for the tracer. This is where the actual tracing logic is implemented.
 pub(crate) struct VMTracer<'a> {
     trace: &'a mut MoveTraceBuilder,
+    interner: Arc<IdentifierInterner>,
     pc: Option<u16>,
     active_frames: BTreeMap<TraceIndex, FrameInfo>,
     type_stack: Vec<StackType>,
@@ -673,13 +675,13 @@ impl VMTracer<'_> {
                 return_types: function_type_info.return_types.clone(),
             },
         );
-        let version_id = get_version_id(vtables, &function.module_id());
+        let version_id = get_version_id(vtables, &function.module_id(&self.interner));
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
-            function.name().to_string(),
-            function.module_id().clone(),
+            function.name(&self.interner).to_string(),
+            function.module_id(&self.interner).clone(),
             version_id,
             call_args
                 .into_iter()
@@ -801,13 +803,13 @@ impl VMTracer<'_> {
                 return_types: function_type_info.return_types.clone(),
             },
         );
-        let version_id = get_version_id(vtables, &function.module_id());
+        let version_id = get_version_id(vtables, &function.module_id(&self.interner));
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
-            function.name().to_string(),
-            function.module_id().clone(),
+            function.name(&self.interner).to_string(),
+            function.module_id(&self.interner).clone(),
             version_id,
             call_args,
             function_type_info.ty_args,
@@ -887,7 +889,12 @@ impl VMTracer<'_> {
             self.type_stack.len(),
             machine.operand_stack.len(),
             "Type stack and operand stack must be the same length {} {}",
-            machine.call_stack.current_frame.function.to_ref().name(),
+            machine
+                .call_stack
+                .current_frame
+                .function
+                .to_ref()
+                .name(&self.interner),
             pc,
         );
 
@@ -1660,9 +1667,10 @@ impl VMTracer<'_> {
 
 /// The (public crate) API for the VM tracer.
 impl<'a> VMTracer<'a> {
-    pub(crate) fn new(trace: &'a mut MoveTraceBuilder) -> Self {
+    pub(crate) fn new(trace: &'a mut MoveTraceBuilder, interner: Arc<IdentifierInterner>) -> Self {
         Self {
             trace,
+            interner,
             pc: None,
             active_frames: BTreeMap::new(),
             type_stack: vec![],

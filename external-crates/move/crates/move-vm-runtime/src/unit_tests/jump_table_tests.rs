@@ -1,3 +1,4 @@
+use crate::cache::identifier_interner::IdentifierInterner;
 use crate::shared::vm_pointer::VMPointer;
 use crate::{
     jit::execution::translate::*,
@@ -43,9 +44,10 @@ fn create_test_input_package() -> input::Package {
 #[test]
 fn test_package_empty() {
     let natives = create_test_natives();
+    let interner = IdentifierInterner::new();
     let input_package = create_test_input_package();
 
-    let result = package(&natives, input_package);
+    let result = package(&natives, &interner, input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -56,6 +58,7 @@ fn test_package_empty() {
 #[test]
 fn test_package_preserves_version_and_original_id() {
     let natives = create_test_natives();
+    let interner = IdentifierInterner::new();
     let mut input_package = create_test_input_package();
 
     let test_version_id = VersionId::from(AccountAddress::from([3u8; AccountAddress::LENGTH]));
@@ -63,7 +66,7 @@ fn test_package_preserves_version_and_original_id() {
     input_package.version_id = test_version_id;
     input_package.original_id = test_original_id;
 
-    let result = package(&natives, input_package);
+    let result = package(&natives, &interner, input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -74,6 +77,7 @@ fn test_package_preserves_version_and_original_id() {
 #[test]
 fn test_package_with_type_origin_table() {
     let natives = create_test_natives();
+    let interner = IdentifierInterner::new();
     let mut input_package = create_test_input_package();
 
     // Add a type origin entry
@@ -85,13 +89,14 @@ fn test_package_with_type_origin_table() {
         input_package.original_id,
     );
 
-    let result = package(&natives, input_package);
+    let result = package(&natives, &interner, input_package);
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_package_multiple_modules_dependency_order() {
     let natives = create_test_natives();
+    let interner = IdentifierInterner::new();
 
     // Create a simpler test with just two distinct modules
     let module_a = create_empty_input_module();
@@ -127,7 +132,7 @@ fn test_package_multiple_modules_dependency_order() {
         linkage_table: BTreeMap::from([(original_id, version_id)]),
     };
 
-    let result = package(&natives, input_package);
+    let result = package(&natives, &interner, input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -137,9 +142,10 @@ fn test_package_multiple_modules_dependency_order() {
 #[test]
 fn test_package_creates_virtual_table() {
     let natives = create_test_natives();
+    let interner = IdentifierInterner::new();
     let input_package = create_test_input_package();
 
-    let result = package(&natives, input_package);
+    let result = package(&natives, &interner, input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -151,6 +157,7 @@ fn test_package_creates_virtual_table() {
 #[test]
 fn test_package_error_handling_invalid_identifier() {
     let natives = create_test_natives();
+    let interner = IdentifierInterner::new();
     let mut input_package = create_test_input_package();
 
     // Add a type origin entry
@@ -162,7 +169,7 @@ fn test_package_error_handling_invalid_identifier() {
         input_package.original_id,
     );
 
-    let result = package(&natives, input_package);
+    let result = package(&natives, &interner, input_package);
     assert!(result.is_ok());
 }
 

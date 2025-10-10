@@ -131,12 +131,17 @@ impl MoveRuntime {
             .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
             .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
 
-        let virtual_tables = VMDispatchTables::new(self.vm_config.clone(), runtime_packages)?;
+        let virtual_tables = VMDispatchTables::new(
+            self.vm_config.clone(),
+            self.cache.interner.clone(),
+            runtime_packages,
+        )?;
 
         // Called and checked linkage, etc.
         let instance = MoveVM {
             virtual_tables,
             vm_config: self.vm_config.clone(),
+            interner: self.cache.interner.clone(),
             link_context,
             native_extensions: native_extensions.clone(),
         };
@@ -204,12 +209,17 @@ impl MoveRuntime {
             .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
             .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
 
-        let virtual_tables = VMDispatchTables::new(self.vm_config.clone(), runtime_packages)?;
+        let virtual_tables = VMDispatchTables::new(
+            self.vm_config.clone(),
+            self.cache.interner.clone(),
+            runtime_packages,
+        )?;
 
         // Called and checked linkage, etc.
         let instance = MoveVM {
             virtual_tables,
             vm_config: self.vm_config.clone(),
+            interner: self.cache.interner.clone(),
             link_context,
             native_extensions: native_extensions.clone(),
         };
