@@ -364,6 +364,7 @@ impl AuthorityStorePruner {
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         epoch_duration_ms: u64,
+        pruner_watermarks: &Arc<PrunerWatermarks>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("PruneCheckpointsForEligibleEpochs");
         let pruned_checkpoint_number = checkpoint_store
@@ -405,10 +406,19 @@ impl AuthorityStorePruner {
                 .ok_or_else(|| anyhow!("config value not set"))?,
             pruned_checkpoint_number,
             max_eligible_checkpoint,
-            config,
+            config.clone(),
             metrics.clone(),
         )
-        .await
+        .await?;
+
+        if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints() {
+            Self::update_pruning_watermarks(
+                checkpoint_store,
+                num_epochs_to_retain,
+                pruner_watermarks,
+            )?;
+        }
+        Ok(())
     }
 
     /// Prunes old object versions based on effects from all checkpoints from epochs eligible for pruning
@@ -561,14 +571,11 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
-    #[cfg(tidehunter)]
-    fn prune_th(
-        perpetual_db: &Arc<AuthorityPerpetualTables>,
+    fn update_pruning_watermarks(
         checkpoint_store: &Arc<CheckpointStore>,
         num_epochs_to_retain: u64,
-        pruning_watermark: Arc<PrunerWatermarks>,
-    ) -> anyhow::Result<()> {
-        // TODO: add support for checkpoints db pruning
+        pruning_watermark: &Arc<PrunerWatermarks>,
+    ) -> anyhow::Result<bool> {
         use std::sync::atomic::Ordering;
         let current_watermark = pruning_watermark.epoch_id.load(Ordering::Relaxed);
         let current_epoch_id = checkpoint_store
@@ -576,7 +583,7 @@ impl AuthorityStorePruner {
             .map(|c| c.epoch)
             .unwrap_or_default();
         if current_epoch_id < num_epochs_to_retain {
-            return Ok(());
+            return Ok(false);
         }
         let target_epoch_id = current_epoch_id - num_epochs_to_retain;
         let checkpoint_id =
@@ -584,8 +591,7 @@ impl AuthorityStorePruner {
 
         let new_watermark = target_epoch_id + 1;
         if current_watermark == new_watermark {
-            info!("skip relocation. Watermark hasn't changed");
-            return Ok(());
+            return Ok(false);
         }
         info!("relocation: setting epoch watermark to {}", new_watermark);
         pruning_watermark
@@ -599,6 +605,25 @@ impl AuthorityStorePruner {
             pruning_watermark
                 .checkpoint_id
                 .store(checkpoint_id, Ordering::Relaxed);
+        }
+        Ok(true)
+    }
+
+    #[cfg(tidehunter)]
+    fn prune_th(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
+        num_epochs_to_retain: u64,
+        pruning_watermark: Arc<PrunerWatermarks>,
+    ) -> anyhow::Result<()> {
+        let watermark_updated = Self::update_pruning_watermarks(
+            checkpoint_store,
+            num_epochs_to_retain,
+            &pruning_watermark,
+        )?;
+        if !watermark_updated {
+            info!("skip relocation. Watermark hasn't changed");
+            return Ok(());
         }
         perpetual_db.objects.db.start_relocation()?;
         checkpoint_store.tables.watermarks.db.start_relocation()?;
@@ -695,7 +720,7 @@ impl AuthorityStorePruner {
         jsonrpc_index: Option<Arc<IndexStore>>,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        #[allow(unused_variables)] pruner_watermarks: Arc<PrunerWatermarks>,
+        pruner_watermarks: Arc<PrunerWatermarks>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -780,7 +805,7 @@ impl AuthorityStorePruner {
                             }
                         },
                         _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
+                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms, &pruner_watermarks).await {
                                 error!("Failed to prune checkpoints: {:?}", err);
                             }
                         },
