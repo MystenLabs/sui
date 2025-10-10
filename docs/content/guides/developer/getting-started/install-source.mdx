@@ -1,0 +1,114 @@
+---
+title: Install from Source
+description: Install the Sui framework from source, either locally or directly from GitHub.
+keywords: [ install sui, how to install sui, install sui cli, sui command line interface, install from source, source install ]
+hide_table_of_contents: true
+---
+
+<ImportContent source="info-easy-install" mode="snippet" /> 
+
+You can install Sui from source, either locally or directly from GitHub. At minimum, you will need Rust and Cargo installed for the Sui framework: 
+
+- [x] Download and install Rust: 
+  <div className="pl-8">
+    ```sh
+    $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+
+    If you have Rust installed, update to the latest version: 
+  
+    ```sh
+    $ rustup update stable
+    ```
+  </div>
+- [x] Download and install Cargo:
+  <div className="pl-8">
+    ```sh
+    $ curl https://sh.rustup.rs -sSf | sh
+    ```
+  </div>
+  
+  Depending on your operating system, you may require additional prerequisites.
+
+<details>
+<summary>
+Additional prerequisites
+</summary>
+<ImportContent source="install-prereqs.mdx" mode="snippet" />
+</details>
+
+You can install from source either directly from GitHub or from your local drive. Regardless of which install from source method you use, the Sui components are found in the `~/.cargo/bin` folder.
+
+You can also download the [source code](/references/contribute/sui-environment) to locally access files.
+
+<Tabs>
+
+<TabItem label="GitHub source" value="github">
+
+Use Cargo to install Sui directly from the GitHub repo: 
+
+```sh
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
+```
+
+:::info
+
+The tracing feature enables Move test coverage and debugger support in the Sui CLI. These features are not available unless you enable tracing.
+
+:::
+
+Replace the `testnet` branch in the previous command if necessary. Available options are:
+
+    - `main`: Latest updates. Least stable.
+    - `devnet`: Includes experimental features.
+    - `testnet`: Includes beta features.
+    - `mainnet`: Stable release.
+
+You can build and install additional packages as needed. Replace `sui` in the previous command with the package name in the following table.
+
+<ImportContent source="lists/binaries-file-list.mdx" mode="snippet" />
+
+</TabItem>
+
+<TabItem label="Local source" value="local">
+
+You can clone the public Sui repo and install from source on your local machine.
+
+1. Fork the [Sui repo](https://github.com/MystenLabs/sui).
+
+1. Use a console to clone the fork to the desired directory. 
+
+    ```sh
+    $ git clone https://github.com/YourOrg/sui.git
+    ```
+1. Navigate to the repo directory and switch to the branch you want to build against.
+
+    - `main`: Latest updates. Least stable.
+    - `devnet`: Includes experimental features.
+    - `testnet`: Includes beta features.
+    - `mainnet`: Stable release.
+
+    ```sh
+    $ git switch testnet
+    ```
+
+1. Run the `cargo install` command from the repo root.
+
+    ```sh
+    $ cargo install --locked --path crates/sui --features tracing
+    ```
+
+:::info
+
+The tracing feature enables Move test coverage and debugger support in the Sui CLI. These features are not available unless you enable tracing.
+
+:::
+
+</TabItem>
+
+</Tabs>
+
+## Related links
+
+<RelatedLink to="/guides/developer/getting-started/sui-install.mdx" />
+<RelatedLink to="/guides/developer/getting-started/install-binaries.mdx" />

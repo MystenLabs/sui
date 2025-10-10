@@ -137,7 +137,7 @@ export default function Home() {
           <HomeCardCTA>
             <Link
               className={styles.cardCTALink}
-              to="/guides/developer/first-app"
+              to="/guides/developer/getting-started/hello-world"
             >
               <span>Build your dApp on Sui</span>
               <svg

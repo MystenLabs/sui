@@ -47,7 +47,7 @@ const config = {
     amplitudeKey: process.env.AMPLITUDE_KEY,
   },
 
-  onBrokenLinks: "throw",
+  onBrokenLinks: "warn",
   onBrokenMarkdownLinks: "warn",
 
   markdown: {

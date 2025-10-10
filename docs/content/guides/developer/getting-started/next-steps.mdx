@@ -1,0 +1,88 @@
+---
+title: Next Steps
+description: To continue your journey building on Sui, you can review other documentation, join the community of other Sui builders, or check out the Awesome Sui repo.
+keywords: [ next steps, now what, sui community, developer help, builder help ]
+---
+
+If you have followed the Getting Started path, you should be ready to continue your journey on Sui. This page details additional resources, ways to join the developer community, and where to find sample applications. 
+
+<details>
+
+<summary>Verify "Getting Started" essentials</summary>
+
+To make sure you have everything you need, paste the following commands into a console in your local environment:
+
+```sh
+$ sui --version
+$ sui client active-address
+$ sui client active-env
+$ sui client gas
+```
+
+If all commands are successful, your console displays output similar to the following:
+
+```sh
+sui [version_number]-[commit_hash]
+0x6543...7241
+testnet
+╭───────────────┬────────────────────┬──────────────────╮
+│ gasCoinId     │ mistBalance (MIST) │ suiBalance (SUI) │
+├───────────────┼────────────────────┼──────────────────┤
+│ 0x1e86...63b2 │ 5041161576         │ 5.04             │
+╰───────────────┴────────────────────┴──────────────────╯
+```
+
+If you receive an error, revisit the content relevant to the command that caused the error or lacked output.
+
+| Command | Successful if |
+| ------- | -------------- |
+| `sui --version` | You [installed Sui](/guides/developer/getting-started/sui-install.mdx) correctly. |
+| `sui client active-address` | You have a [Sui address](/guides/developer/getting-started/get-address.mdx) that is currently active. |
+| `sui client active-env` | You have set up a [connection to Testnet](/guides/developer/getting-started/configure-sui-client.mdx) that is currently active. |
+| `sui client objects` | You address owns [SUI for testing](/guides/developer/getting-started/get-coins.mdx). |
+
+</details>
+
+## Additional documentation
+
+The rest of the documentation on this site contains important concepts, guides, and examples for you to continue your Sui journey. There are also resources beyond this documentation that you can reference, as well as a large and growing community whose experience and knowledge you can leverage to get the most out of Sui. 
+
+### SDK documentation
+
+Mysten Labs, the company that initiated the creation of Sui, provides SDKs to interact with the network and associated assets. Visit the [SDK docs](https://sdk.mystenlabs.com/typescript) to learn more.
+
+### The Move Book
+
+Move is the language of smart contracts on Sui. [The Move Book](https://move-book.com/) details the language.
+
+## Connect with the Sui community
+
+- Join the [Sui Discord](https://discord.gg/sui) 
+- Join **Suinami Riders** on [Telegram](https://web.telegram.org/z/?ref=blog.sui.io#-1742460518)
+- Checkout the [Sui Developer Forum](https://forums.sui.io/)
+- Follow [@SuiFoundation](https://twitter.com/@SuiFoundation) on X
+
+### Schedule office hours 
+
+[Sign up](https://cal.com/forms/08983b87-8001-4df6-896a-0d7b60acfd79) for 1:1 sessions to get developer support or advice from the Sui team.
+
+### Awesome Sui
+
+The [Awesome Sui](/references/awesome-sui.mdx) repo is a curated list of developer tools and infrastructure projects within the Sui ecosystem. 
+
+### Upcoming hackathons 
+
+Check out [upcoming hackathon events](https://sui.io/ecosystem-hub) to build applications alongside other developers. 
+
+### Developer newsletter
+
+Sign up for the [Sui Developer Newsletter](https://sui.io/dev-newsletter) to receive hyperfocused content to help you build on Sui.
+
+### Developer portal
+
+Visit the [Sui Developer Portal](https://sui.io/developers) to find links to courses, videos, and other learning resources.
+
+## Looking for example projects?
+
+Check out [App Examples](/guides/developer/app-examples.mdx) for sample projects like [Blackjack](/guides/developer/app-examples/blackjack.mdx), [Trustless Swap](/guides/developer/app-examples/trustless-swap.mdx), or [Weather Oracle](/guides/developer/app-examples/weather-oracle.mdx).
+

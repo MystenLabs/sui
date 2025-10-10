@@ -1,0 +1,186 @@
+<Tabs>
+<TabItem label="macOS" value="macos">
+
+Most modern MacOS systems have Homebrew and cURL preinstalled.
+
+- [x] Download and install [Homebrew](https://brew.sh/): 
+  <div className="pl-8">
+    ```sh
+    $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    ```
+  </div>
+
+- [x] Download and install CMake:
+  <div className="pl-8">
+    ```sh
+    $ brew install cmake
+    ``` 
+    Verify installation with 
+    ```sh
+    $ cmake --version
+    ```
+  </div>
+
+- [x] Download and install **libpq**:
+  <div className="pl-8">
+    ```sh
+    $ brew install libpq
+    ```
+    Verify installation with
+    ```sh
+    $ libpq --version
+    ```
+  </div>
+
+- [x] Download and install [PostgreSQL](https://wiki.postgresql.org/wiki/Main_Page).
+
+</TabItem>
+
+<TabItem label="Linux" value="linux">
+
+These prerequisites use the `apt` package manager for Linux. Adjust the commands accordingly per your package manager.
+
+:::tip
+You can install all of the prerequisites for Linux at once using the following command:
+
+<ImportContent source="linux-deps.mdx" mode="snippet" />
+:::
+
+- [x] Download and install Rust:
+  <div className="pl-8">
+    ```sh
+    $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+    If you have Rust installed, update to the latest version: 
+    ```sh
+    $ rustup update stable
+    ```
+  </div>
+
+- [x] Download and install Cargo
+  <div className="pl-8">
+    ```sh
+    $ curl https://sh.rustup.rs -sSf | sh
+    ```
+  </div>
+- [x] Download and install cURL:
+  <div className="pl-8">
+    ```sh
+    $ sudo apt-get install curl
+    ```
+    Verify installation with 
+    ```sh
+    curl --version
+    ```
+  </div>
+- [x] Download and install Git CLI:
+  <div className="pl-8">
+    ```sh
+    $ sudo apt-get install git-all
+    ```
+    Verify installation with 
+    ```sh
+    $ git --version
+    ```
+  </div>
+- [x] Download and install CMake:
+  <div className="pl-8">
+    ```sh
+    $ sudo apt-get install cmake
+    ```
+    
+    Verify installation with
+
+    ```sh
+    $ cmake --version
+    ```
+  </div>
+- [x] Download and install GCC:
+
+  <div className="pl-8">
+    ```sh
+    $ sudo apt-get install gcc
+    ```
+    Verify installation with 
+    ```sh
+    $ gcc --version
+    ```
+  </div>
+
+- [x] Download and install **libssl-dev**:
+
+  <div className="pl-8">
+    ```sh
+    $ sudo apt-get install libssl-dev
+    ```
+    If the version of Linux you use doesn't support **libssl-dev**, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libssl-dev/).
+
+    If you have OpenSSL you might also need to also install **pkg-config**:
+    ```sh
+    $ sudo apt-get install pkg-config
+    ```
+  </div>
+
+- [x] Download and install **libclang-dev**:
+  <div className="pl-8">
+
+    ```sh
+    $ sudo apt-get install libclang-dev
+    ```
+
+    If the version of Linux you use doesn't support **libclang-dev**, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libclang-dev/).
+
+  </div>
+
+- [x] If you plan to use the `--with-indexer` and `--with-graphql` options with `sui start`, download and install **libpq-dev**:
+  <div className="pl-8">
+
+    ```sh
+    $ sudo apt-get install libpq-dev
+    ```
+
+    See [Local Network](/guides/developer/sui-101/local-network) for more information.
+
+    If the version of Linux you use doesn't support **libpq-dev**, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libpq-dev/).
+
+  </div>
+
+- [x] Download and install **build-essential**: 
+  <div className="pl-8">
+    ```sh
+    $ sudo apt-get install build-essential
+    ```
+  </div>
+
+</TabItem>
+
+<TabItem label="Windows" value="windows">
+
+- [x] Download and install [C++ build tools](https://visualstudio.microsoft.com/downloads/) before downloading Rust.
+
+- [x] Download and install Rust. 
+  <div className="pl-8">
+  If you use Windows 11, see information about using the [Rust installer](https://www.rust-lang.org/tools/install) on the Rust website. The installer checks for C++ build tools and prompts you to install them if necessary. Select the option that best defines your environment and follow the instructions in the install wizard.
+
+  If you have Rust installed, update to the latest version: 
+  ```sh
+  $ rustup update stable
+  ```
+  </div>
+
+- [x] Download and install Cargo: Download and install [`rustup-init.exe`](https://win.rustup.rs/)
+
+- [x] Windows 11 ships with a Microsoft version of [cURL](https://curl.se/windows/microsoft.html) already installed; however, if you are using Windows 10 or want to use the cURL project version instead, download and install it from [https://curl.se/windows/](https://curl.se/windows/).
+
+- [x] Download and install the [Git command line interface](https://git-scm.com/download/).
+
+- [x] Download and install [CMake](https://cmake.org/download/).
+
+- [x] Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases) (`protoc-xx.x-win32.zip` or `protoc-xx.x-win64.zip`) and add the `\bin` directory to your Windows `PATH` environment variable.
+
+- [x] For Windows on ARM64 only: Download and install [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/).
+
+- [x] Download and install the [LLVM Compiler Infrastructure](https://releases.llvm.org/). Look for a file with a name similar to `LLVM-15.0.7-win64.exe` for 64-bit Windows, or `LLVM-15.0.7-win32.exe` for 32-bit Windows.
+
+</TabItem>
+</Tabs>

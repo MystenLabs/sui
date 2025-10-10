@@ -42,7 +42,7 @@ In Move on Diem, there is a 16-byte `address` type used to represent account add
 
 Sui doesn't have global storage, so `address` is re-purposed as a 32-byte identifier used for both objects and accounts. Each transaction is signed by an account (the sender) that is accessible from the transaction context, and each object stores its `address` wrapped in its `id: UID` field. 
 
-See [Address](https://move-book.com/reference/primitive-types/address.html) in The Move Book for an overview on addresses and refer to <UnsafeLink href="/references/framework/sui-framework/object">object.move</UnsafeLink> in the Sui Framework for implementation details.
+See [Address](https://move-book.com/reference/primitive-types/address.html) in The Move Book for an overview on addresses and refer to <UnsafeLink href="/references/framework/sui-framework/sui_sui/object">object.move</UnsafeLink> in the Sui Framework for implementation details.
 
 ### Object with key ability, globally unique IDs {#global-unique}
 

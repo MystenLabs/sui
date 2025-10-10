@@ -1,11 +1,29 @@
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Use one of the following commands for [Homebrew](https://brew.sh/) (MacOS, Linux, or Windows Subsystem for Linux), [Chocolatey](https://chocolatey.org/) (Windows), or [suiup](https://github.com/MystenLabs/suiup) (a custom installer and version manager for Sui related tools) to install Sui.
-
 <Tabs groupId="install-tool">
 
+<TabItem label="suiup" value="suiup">
+
+First, install `suiup`:
+
+```sh
+$ curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
+```
+
+Then, install Sui:
+
+```sh
+$ suiup install sui@testnet
+```
+
+For alternative installation methods, refer to the [`suiup` repository](https://github.com/MystenLabs/suiup).
+
+</TabItem>
+
 <TabItem label="Homebrew" value="brew">
+
+You must have [Homebrew](https://brew.sh/) installed before running the following command:
 
 ```sh
 $ brew install sui
@@ -15,21 +33,13 @@ $ brew install sui
 
 <TabItem label="Chocolatey" value="choco">
 
+You must have [Chocolately](https://chocolatey.org/) installed before running the following command:
+
 ```sh
 $ choco install sui
 ```
 
 Find more [versions of Sui for Windows](https://community.chocolatey.org/packages/sui) on the Chocolatey community website.
-
-</TabItem>
-
-<TabItem label="suiup (experimental)" value="suiup">
-
-```sh
-$ suiup install sui@testnet
-```
-
-Find more information on installation and a quick start guide in the suiup repository: [https://github.com/MystenLabs/suiup](https://github.com/MystenLabs/suiup).
 
 </TabItem>
 
