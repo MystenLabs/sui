@@ -1337,6 +1337,7 @@
                 "disallow_new_modules_in_deps_only_packages": false,
                 "disallow_self_identifier": false,
                 "enable_accumulators": false,
+                "enable_address_balance_gas_payments": false,
                 "enable_authenticated_event_streams": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,

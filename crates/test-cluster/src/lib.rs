@@ -45,6 +45,7 @@ use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
@@ -248,6 +249,10 @@ impl TestCluster {
             .get_reference_gas_price()
             .await
             .expect("failed to get reference gas price")
+    }
+
+    pub fn get_chain_identifier(&self) -> ChainIdentifier {
+        ChainIdentifier::from(*self.swarm.config().genesis.checkpoint().digest())
     }
 
     pub async fn get_object_from_fullnode_store(&self, object_id: &ObjectID) -> Option<Object> {

@@ -83,6 +83,10 @@ mod messages_tests;
 #[path = "unit_tests/balance_withdraw_tests.rs"]
 mod balance_withdraw_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/address_balance_gas_tests.rs"]
+mod address_balance_gas_tests;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum CallArg {
     // contains no structs or objects
@@ -1734,6 +1738,12 @@ pub struct GasData {
     pub budget: u64,
 }
 
+impl GasData {
+    pub fn is_paid_from_address_balance(&self) -> bool {
+        self.payment.is_empty()
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum TransactionExpiration {
     /// The transaction has no expiration
@@ -1741,6 +1751,29 @@ pub enum TransactionExpiration {
     /// Validators wont sign a transaction unless the expiration Epoch
     /// is greater than or equal to the current epoch
     Epoch(EpochId),
+    /// ValidDuring enables gas payments from address balances.
+    ///  
+    /// When transactions use address balances for gas payment instead of explicit gas coins,
+    /// we lose the natural transaction uniqueness and replay prevention that comes from
+    /// mutation of gas coin objects.
+    ///
+    /// By bounding expiration and providing a nonce, validators must only retain
+    /// executed digests for the maximum possible expiry range to differentiate
+    /// retries from unique transactions with otherwise identical inputs.
+    ValidDuring {
+        /// Transaction invalid before this epoch. Must equal current epoch.
+        min_epoch: Option<EpochId>,
+        /// Transaction expires after this epoch. Must equal current epoch
+        max_epoch: Option<EpochId>,
+        /// Future support for sub-epoch timing (not yet implemented)
+        min_timestamp_seconds: Option<u64>,
+        /// Future support for sub-epoch timing (not yet implemented)
+        max_timestamp_seconds: Option<u64>,
+        /// Network identifier to prevent cross-chain replay
+        chain: ChainIdentifier,
+        /// User-provided uniqueness identifier to differentiate otherwise identical transactions
+        nonce: u32,
+    },
 }
 
 #[enum_dispatch(TransactionDataAPI)]
@@ -2429,7 +2462,57 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        fp_ensure!(!self.gas().is_empty(), UserInputError::MissingGasPayment);
+        if let TransactionExpiration::ValidDuring {
+            min_epoch,
+            max_epoch,
+            min_timestamp_seconds,
+            max_timestamp_seconds,
+            ..
+        } = self.expiration()
+        {
+            if min_timestamp_seconds.is_some() || max_timestamp_seconds.is_some() {
+                return Err(UserInputError::Unsupported(
+                    "Timestamp-based transaction expiration is not yet supported".to_string(),
+                ));
+            }
+
+            /* Initially, we validate that (current_epoch == min_epoch == max_epoch) for simplicity.
+            This is intentionally overly strict, we intend to relax these rules as needed. */
+            match (min_epoch, max_epoch) {
+                (Some(min), Some(max)) => {
+                    if min != max {
+                        return Err(UserInputError::Unsupported(
+                            "Multi-epoch transaction expiration is not yet supported. min_epoch must equal max_epoch".to_string()
+                        ));
+                    }
+                }
+                _ => {
+                    return Err(UserInputError::Unsupported(
+                        "Both min_epoch and max_epoch must be specified and equal".to_string(),
+                    ));
+                }
+            }
+        }
+
+        if config.enable_accumulators()
+            && config.enable_address_balance_gas_payments()
+            && self.gas_data().is_paid_from_address_balance()
+        {
+            match self.expiration() {
+                TransactionExpiration::None => {
+                    return Err(UserInputError::MissingTransactionExpiration);
+                }
+                TransactionExpiration::Epoch(_) => {
+                    return Err(UserInputError::InvalidExpiration {
+                        error: "Address balance gas payments require ValidDuring expiration"
+                            .to_string(),
+                    });
+                }
+                TransactionExpiration::ValidDuring { .. } => {}
+            }
+        } else {
+            fp_ensure!(!self.gas().is_empty(), UserInputError::MissingGasPayment);
+        }
 
         let gas_len = self.gas().len();
         let max_gas_objects = config.max_gas_payment_objects() as usize;
@@ -2447,6 +2530,7 @@ impl TransactionDataAPI for TransactionDataV1 {
                 value: config.max_gas_payment_objects().to_string()
             }
         );
+
         self.validity_check_no_gas_check(config)
     }
 
@@ -2525,6 +2609,7 @@ pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
     pub epoch: EpochId,
     pub accumulator_object_init_shared_version: Option<SequenceNumber>,
+    pub chain_identifier: ChainIdentifier,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -2759,11 +2844,41 @@ impl SenderSignedData {
         );
 
         // Checks to see if the transaction has expired
-        if match &tx_data.expiration() {
-            TransactionExpiration::None => false,
-            TransactionExpiration::Epoch(exp_poch) => *exp_poch < context.epoch,
-        } {
-            return Err(SuiError::TransactionExpired);
+        match tx_data.expiration() {
+            TransactionExpiration::None => {
+                // No expiration, always valid
+            }
+            TransactionExpiration::Epoch(exp_epoch) => {
+                if *exp_epoch < context.epoch {
+                    return Err(SuiError::TransactionExpired);
+                }
+            }
+            TransactionExpiration::ValidDuring {
+                min_epoch,
+                max_epoch,
+                chain,
+                ..
+            } => {
+                if *chain != context.chain_identifier {
+                    return Err(SuiError::UserInputError {
+                        error: UserInputError::InvalidChainId {
+                            provided: format!("{:?}", chain),
+                            expected: format!("{:?}", context.chain_identifier),
+                        },
+                    });
+                }
+
+                if let Some(min) = min_epoch {
+                    if context.epoch < *min {
+                        return Err(SuiError::TransactionExpired);
+                    }
+                }
+                if let Some(max) = max_epoch {
+                    if context.epoch > *max {
+                        return Err(SuiError::TransactionExpired);
+                    }
+                }
+            }
         }
 
         if tx_data.has_funds_withdrawals() {

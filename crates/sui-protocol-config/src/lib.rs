@@ -751,6 +751,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_authenticated_event_streams: bool,
 
+    // Enable address balance gas payments
+    #[serde(skip_serializing_if = "is_false")]
+    enable_address_balance_gas_payments: bool,
+
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
@@ -1943,6 +1947,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn enable_address_balance_gas_payments(&self) -> bool {
+        self.feature_flags.enable_address_balance_gas_payments
     }
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
@@ -4318,6 +4326,12 @@ impl ProtocolConfig {
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
+    }
+
+    pub fn enable_address_balance_gas_payments_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = true;
+        self.feature_flags.allow_private_accumulator_entrypoints = true;
+        self.feature_flags.enable_address_balance_gas_payments = true;
     }
 
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
