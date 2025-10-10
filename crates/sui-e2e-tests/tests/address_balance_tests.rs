@@ -424,22 +424,13 @@ async fn test_empty_gas_payment_with_address_balance() {
         .execute_transaction_return_raw_effects(signed_tx)
         .await;
 
-    match result {
-        Err(err) => {
-            let error_message = format!("{:?}", err);
-            assert!(
-                error_message.contains("GasBalanceTooLow"),
-                "Expected GasBalanceTooLow because gas payments with address balance not implemented, but got: {}",
-                error_message
-            );
-        }
-        Ok((effects, _)) => {
-            assert!(
-                effects.status().is_err(),
-                "Expected transaction to fail due to unimplemented charge mechanics, but got success"
-            );
-        }
-    }
+    let err = result.expect_err("Expected transaction to fail with GasBalanceTooLow");
+    let err_str = format!("{:?}", err);
+    assert!(
+        err_str.contains("GasBalanceTooLow"),
+        "Expected GasBalanceTooLow because gas payments with address balance not implemented, but got: {:?}",
+        err
+    );
 
     // ensure that no conservation failures are detected during reconfig.
     test_cluster.trigger_reconfiguration().await;

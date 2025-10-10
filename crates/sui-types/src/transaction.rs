@@ -2476,6 +2476,8 @@ impl TransactionDataAPI for TransactionDataV1 {
                 ));
             }
 
+            /* Initially, we validate that (current_epoch == min_epoch == max_epoch) for simplicity.
+            This is intentionally overly strict, we intend to relax these rules as needed. */
             match (min_epoch, max_epoch) {
                 (Some(min), Some(max)) => {
                     if min != max {
