@@ -52,6 +52,18 @@ use crate::{
     CommitIndex,
 };
 
+/// Calculates throttle duration based on configuration.
+/// Returns None if throttling is disabled.
+fn calculate_throttle_duration(
+    min_round_delay: Duration,
+    throttle_divisor: Option<f64>,
+) -> Option<Duration> {
+    throttle_divisor.map(|divisor| {
+        let millis = (min_round_delay.as_millis() as f64 / divisor) as u64;
+        Duration::from_millis(millis)
+    })
+}
+
 // Maximum bytes size in a single fetch_blocks()response.
 // TODO: put max RPC response size in protocol config.
 const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
@@ -154,10 +166,18 @@ impl NetworkClient for TonicClient {
                     }
                 }
             });
-        let rate_limited_stream =
-            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
-                .boxed();
-        Ok(rate_limited_stream)
+
+        // Apply throttling based on configuration for validator-to-validator streams
+        let final_stream: BlockStream = if let Some(throttle_duration) = calculate_throttle_duration(
+            self.context.parameters.min_round_delay,
+            self.context.parameters.tonic.validator_stream_throttle_divisor,
+        ) {
+            tokio_stream::StreamExt::throttle(stream, throttle_duration).boxed()
+        } else {
+            stream.boxed()
+        };
+
+        Ok(final_stream)
     }
 
     async fn fetch_blocks(
@@ -407,10 +427,18 @@ impl ObserverClient {
                     }
                 }
             });
-        let rate_limited_stream =
-            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
-                .boxed();
-        Ok(rate_limited_stream)
+
+        // Apply throttling based on configuration for validator-to-observer streams
+        let final_stream: BlockStream = if let Some(throttle_duration) = calculate_throttle_duration(
+            self.context.parameters.min_round_delay,
+            self.context.parameters.tonic.observer_stream_throttle_divisor,
+        ) {
+            tokio_stream::StreamExt::throttle(stream, throttle_duration).boxed()
+        } else {
+            stream.boxed()
+        };
+
+        Ok(final_stream)
     }
 
     /// Fetches blocks from a validator's observer port.
@@ -424,7 +452,10 @@ impl ObserverClient {
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
         let request = Request::new(FetchBlocksRequest {
-            block_refs: block_refs.iter().map(|r| bcs::to_bytes(r).unwrap()).collect(),
+            block_refs: block_refs
+                .iter()
+                .map(|r| bcs::to_bytes(r).unwrap())
+                .collect(),
             highest_accepted_rounds,
             breadth_first,
         });
@@ -436,7 +467,9 @@ impl ObserverClient {
             .try_collect::<Vec<_>>()
             .await
             .map_err(|e| {
-                ConsensusError::NetworkRequest(format!("observer fetch_blocks stream failed: {e:?}"))
+                ConsensusError::NetworkRequest(format!(
+                    "observer fetch_blocks stream failed: {e:?}"
+                ))
             })?
             .into_iter()
             .flat_map(|r| r.blocks)
@@ -511,12 +544,24 @@ impl NetworkClient for ConsensusNetworkClient {
         match self {
             Self::Validator(client) => {
                 client
-                    .fetch_blocks(peer, block_refs, highest_accepted_rounds, breadth_first, timeout)
+                    .fetch_blocks(
+                        peer,
+                        block_refs,
+                        highest_accepted_rounds,
+                        breadth_first,
+                        timeout,
+                    )
                     .await
             }
             Self::Observer(client) => {
                 client
-                    .fetch_blocks(peer, block_refs, highest_accepted_rounds, breadth_first, timeout)
+                    .fetch_blocks(
+                        peer,
+                        block_refs,
+                        highest_accepted_rounds,
+                        breadth_first,
+                        timeout,
+                    )
                     .await
             }
         }
@@ -541,11 +586,7 @@ impl NetworkClient for ConsensusNetworkClient {
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         match self {
-            Self::Validator(client) => {
-                client
-                    .fetch_latest_blocks(peer, authorities, timeout)
-                    .await
-            }
+            Self::Validator(client) => client.fetch_latest_blocks(peer, authorities, timeout).await,
             Self::Observer(_) => Err(ConsensusError::NetworkRequest(
                 "Observers cannot fetch latest blocks".to_string(),
             )),
@@ -857,10 +898,18 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
                     excluded_ancestors: block.excluded_ancestors,
                 })
             });
-        let rate_limited_stream =
-            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
-                .boxed();
-        Ok(Response::new(rate_limited_stream))
+
+        // Apply throttling based on configuration for validator-to-validator streams
+        let final_stream = if let Some(throttle_duration) = calculate_throttle_duration(
+            self.context.parameters.min_round_delay,
+            self.context.parameters.tonic.validator_stream_throttle_divisor,
+        ) {
+            tokio_stream::StreamExt::throttle(stream, throttle_duration).boxed()
+        } else {
+            stream.boxed()
+        };
+
+        Ok(Response::new(final_stream))
     }
 
     type FetchBlocksStream = Iter<std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>>>;
@@ -1070,10 +1119,18 @@ impl<S: NetworkService> ObserverConsensusService for ObserverServiceProxy<S> {
                     excluded_ancestors: block.excluded_ancestors,
                 })
             });
-        let rate_limited_stream =
-            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
-                .boxed();
-        Ok(Response::new(rate_limited_stream))
+
+        // Apply throttling based on configuration for validator-to-observer streams
+        let final_stream = if let Some(throttle_duration) = calculate_throttle_duration(
+            self.context.parameters.min_round_delay,
+            self.context.parameters.tonic.observer_stream_throttle_divisor,
+        ) {
+            tokio_stream::StreamExt::throttle(stream, throttle_duration).boxed()
+        } else {
+            stream.boxed()
+        };
+
+        Ok(Response::new(final_stream))
     }
 
     type FetchBlocksStream =
@@ -1097,7 +1154,9 @@ impl<S: NetworkService> ObserverConsensusService for ObserverServiceProxy<S> {
             .into_iter()
             .map(|r| bcs::from_bytes(&r))
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| tonic::Status::internal(format!("Failed to deserialize block_refs: {e:?}")))?;
+            .map_err(|e| {
+                tonic::Status::internal(format!("Failed to deserialize block_refs: {e:?}"))
+            })?;
 
         let blocks = self
             .service
@@ -1393,8 +1452,11 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                         if let Some(observer_peer_info) =
                             observer_peer_info_from_certs(peer_certificates)
                         {
+                            debug!("Inserting observer peer info: {:?}", observer_peer_info);
                             request.extensions_mut().insert(observer_peer_info);
                         }
+                    } else {
+                        debug!("No peer certificates found for observer");
                     }
                     request
                 })
@@ -1429,10 +1491,11 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 .into_axum_router()
                 .route_layer(observer_layers);
 
-            // Observer server accepts any valid TLS certificate (not just committee members)
-            let observer_tls_config = sui_tls::create_rustls_server_config(
+            // Observer server requires mTLS but accepts any valid certificate (not just committee members)
+            let observer_tls_config = sui_tls::create_rustls_server_config_with_client_verifier(
                 self.network_keypair.clone().private_key().into_inner(),
                 certificate_server_name(&self.context),
+                sui_tls::AllowAll,
             );
 
             let deadline = Instant::now() + Duration::from_secs(20);

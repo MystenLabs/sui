@@ -128,6 +128,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) highest_accepted_round: IntGauge,
     pub(crate) accepted_block_time_drift_ms: IntCounterVec,
     pub(crate) accepted_blocks: IntCounterVec,
+    pub(crate) accepted_blocks_broadcast: IntCounter,
     pub(crate) dag_state_recent_blocks: IntGauge,
     pub(crate) dag_state_recent_refs: IntGauge,
     pub(crate) dag_state_store_read_count: IntCounterVec,
@@ -392,6 +393,11 @@ impl NodeMetrics {
                 "accepted_blocks",
                 "Number of accepted blocks by source (own, others)",
                 &["source"],
+                registry,
+            ).unwrap(),
+            accepted_blocks_broadcast: register_int_counter_with_registry!(
+                "accepted_blocks_broadcast",
+                "Number of accepted blocks sent to broadcast channel for observers",
                 registry,
             ).unwrap(),
             dag_state_recent_blocks: register_int_gauge_with_registry!(

@@ -290,6 +290,22 @@ pub struct TonicParameters {
     /// If unspecified or set to None, the observer network is disabled.
     #[serde(default = "TonicParameters::default_observer_port_offset")]
     pub observer_port_offset: Option<u16>,
+
+    /// Rate limit for block subscription streams sent to validators.
+    /// Expressed as a fraction of min_round_delay (e.g., 0.5 = min_round_delay / 2).
+    /// Set to None to disable throttling for validator-to-validator streams.
+    ///
+    /// If unspecified, defaults to min_round_delay / 2.
+    #[serde(default = "TonicParameters::default_validator_stream_throttle_divisor")]
+    pub validator_stream_throttle_divisor: Option<f64>,
+
+    /// Rate limit for block subscription streams sent to observers.
+    /// Expressed as a fraction of min_round_delay (e.g., 0.5 = min_round_delay / 2).
+    /// Set to None to disable throttling for validator-to-observer streams.
+    ///
+    /// If unspecified, defaults to None (no throttling).
+    #[serde(default = "TonicParameters::default_observer_stream_throttle_divisor")]
+    pub observer_stream_throttle_divisor: Option<f64>,
 }
 
 impl TonicParameters {
@@ -312,6 +328,14 @@ impl TonicParameters {
     fn default_observer_port_offset() -> Option<u16> {
         Some(1000)
     }
+
+    fn default_validator_stream_throttle_divisor() -> Option<f64> {
+        Some(2.0)
+    }
+
+    fn default_observer_stream_throttle_divisor() -> Option<f64> {
+        None
+    }
 }
 
 impl Default for TonicParameters {
@@ -322,6 +346,10 @@ impl Default for TonicParameters {
             excessive_message_size: TonicParameters::default_excessive_message_size(),
             message_size_limit: TonicParameters::default_message_size_limit(),
             observer_port_offset: TonicParameters::default_observer_port_offset(),
+            validator_stream_throttle_divisor:
+                TonicParameters::default_validator_stream_throttle_divisor(),
+            observer_stream_throttle_divisor:
+                TonicParameters::default_observer_stream_throttle_divisor(),
         }
     }
 }

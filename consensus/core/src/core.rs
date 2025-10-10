@@ -706,6 +706,7 @@ impl Core {
         let (accepted_blocks, missing) = self
             .block_manager
             .try_accept_blocks(vec![verified_block.clone()]);
+        let _= self.signals.accepted_blocks(&accepted_blocks);
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
 
@@ -1320,7 +1321,9 @@ impl CoreSignals {
             context.parameters.dag_state_cached_rounds as usize,
         );
         let (tx_accepted_blocks_broadcast, rx_accepted_blocks_broadcast) =
-            broadcast::channel::<VerifiedBlock>(context.parameters.dag_state_cached_rounds as usize);
+            broadcast::channel::<VerifiedBlock>(
+                100 * context.committee.size() * context.parameters.dag_state_cached_rounds as usize,
+            );
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
         let me = Self {
@@ -1369,7 +1372,17 @@ impl CoreSignals {
                 continue;
             }
             // Ignore send errors - no observers may be connected
-            let _ = self.tx_accepted_blocks_broadcast.send(block.clone());
+            let block_ref = block.reference();
+            if let Ok(subscribers) = self.tx_accepted_blocks_broadcast.send(block.clone()) {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .accepted_blocks_broadcast
+                    .inc();
+                info!("Broadcasting accepted block {block_ref} to observers, subscribers: {subscribers}");
+            } else {
+                warn!("Failed to broadcast accepted block {block_ref} to observers");
+            }
         }
         Ok(())
     }
@@ -1632,7 +1645,7 @@ mod test {
             true,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             false,
             round_tracker,
@@ -1766,7 +1779,7 @@ mod test {
             true,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             false,
             round_tracker,
@@ -1863,7 +1876,7 @@ mod test {
             true,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             false,
             round_tracker,
@@ -2106,7 +2119,7 @@ mod test {
             true,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             false,
             round_tracker,
@@ -2266,7 +2279,7 @@ mod test {
             true,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             true,
             round_tracker,
@@ -2343,7 +2356,7 @@ mod test {
             true,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             true,
             round_tracker,
@@ -2698,7 +2711,7 @@ mod test {
             true,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             true,
             round_tracker.clone(),
@@ -2995,7 +3008,7 @@ mod test {
             true,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             true,
             round_tracker,
@@ -3089,7 +3102,7 @@ mod test {
             false,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             false,
             round_tracker,
@@ -3159,7 +3172,7 @@ mod test {
             false,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             false,
             round_tracker.clone(),
@@ -3614,7 +3627,7 @@ mod test {
             true,
             commit_observer,
             signals,
-            key_pairs.remove(context.own_index.value()).1,
+            Some(key_pairs.remove(context.own_index.value()).1),
             dag_state.clone(),
             true,
             round_tracker,

@@ -72,16 +72,12 @@ pub enum NodeId {
 
 impl NodeId {
     /// Returns the authority index if this is an authority node
+    #[cfg(test)]
     pub fn authority_index(&self) -> Option<AuthorityIndex> {
         match self {
             NodeId::Authority(index) => Some(*index),
             NodeId::Observer(_) => None,
         }
-    }
-
-    /// Returns true if this is an authority node
-    pub fn is_authority(&self) -> bool {
-        matches!(self, NodeId::Authority(_))
     }
 
     /// Returns true if this is an observer node
@@ -177,6 +173,9 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
     /// But serialized_block must be verified before its contents are trusted.
     /// Excluded ancestors are also included as part of an effort to further propagate
     /// blocks to peers despite the current exclusion.
+    /// When `skip_authority_check` is true, the block author validation is skipped.
+    /// This is used for observer subscriptions where blocks from all authorities
+    /// are streamed through a single peer's observer port.
     async fn handle_send_block(
         &self,
         peer: AuthorityIndex,
