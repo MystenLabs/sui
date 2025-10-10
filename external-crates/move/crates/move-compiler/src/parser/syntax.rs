@@ -4565,13 +4565,14 @@ fn parse_module(
         // Ensure there is always a mode on extension definitions. We opt to error here instead of
         // returning a definition for risk avoidance.
         if !(attributes.iter().any(|attr| !attr.value.modes().is_empty())) {
-            let diag = diag!(
+            let mut diag = diag!(
                 Syntax::InvalidModifier,
                 (
                     loc,
-                    "Module extensions must have a 'mode' or 'test_only' attribute"
+                    "Module extensions must be gated by a 'mode' or 'test_only' attribute"
                 )
             );
+            diag.add_note("Add '#[mode(...)]' or '#[test_only]' to this module extension");
             return Err(Box::new(diag));
         }
     }

@@ -843,6 +843,16 @@ impl fmt::Debug for LeadingNameAccess_ {
 // Impl
 //**************************************************************************************************
 
+impl ModuleDefinition {
+    pub fn modes(&self) -> UniqueSet<Name> {
+        let mut result = UniqueSet::new();
+        for attr in self.attributes.iter().map(|attr| attr.value.modes()) {
+            result = result.union(&attr);
+        }
+        result
+    }
+}
+
 impl ParsedAttribute_ {
     pub fn loc_str(&self) -> Spanned<&str> {
         match self {

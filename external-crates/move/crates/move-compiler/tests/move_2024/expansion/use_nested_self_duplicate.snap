@@ -17,9 +17,9 @@ error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/expansion/use_nested_self_duplicate.move:8:17
   │
 7 │     use 0x2::X;
-  │              - Alias previously defined here
+  │              - Module member or alias previously defined here
 8 │     use 0x2::X::Self;
-  │                 ^^^^ Duplicate module alias 'X'. Module aliases must be unique within a given namespace
+  │                 ^^^^ Duplicate alias 'X'. Module aliases must be unique within a given namespace
 
 error[E01003]: invalid modifier
    ┌─ tests/move_2024/expansion/use_nested_self_duplicate.move:10:5

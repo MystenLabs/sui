@@ -9,7 +9,9 @@ error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/extensions/invalid_fn_redefinition.move:7:9
   │
 2 │     fun f(): u64 { 0 }
-  │         - Alias previously defined here
+  │         - Module member or alias previously defined here
   ·
 7 │     fun f(): u64 { 1 }
-  │         ^ Duplicate module member or alias 'f'. Top level names in a namespace must be unique
+  │         ^ Module extension defines member 'f', which shadows previous definition
+  │
+  = Top level names in a namespace must be unique

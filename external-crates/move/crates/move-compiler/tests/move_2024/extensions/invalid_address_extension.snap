@@ -1,0 +1,27 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/extensions/invalid_address_extension.move:6:8
+  │
+6 │ extend address a {
+  │        ^^^^^^^
+  │        │
+  │        Unexpected 'address'
+  │        Expected 'module'
+
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_2024/extensions/invalid_address_extension.move:7:12
+  │
+7 │     module m {
+  │            ^ Invalid module declaration. The module does not have a specified address. Either declare it inside of an 'address <address> {' block or declare it with an address 'module <address>::m''
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/extensions/invalid_address_extension.move:10:1
+   │
+10 │ }
+   │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'

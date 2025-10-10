@@ -12,3 +12,5 @@ error[E02004]: invalid 'module' declaration
 7 │ │     fun g(): u64 { 24 }
 8 │ │ }
   │ ╰─^ Cannot extend unknown module 'a::n'
+  │  
+  = Module extensions must correspond to a previously defined module

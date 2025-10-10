@@ -33,9 +33,9 @@ error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/parser/struct_public.move:4:27
   │
 3 │     public struct Foo {}
-  │                   --- Alias previously defined here
+  │                   --- Module member or alias previously defined here
 4 │     public(friend) struct Foo {}
-  │                           ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique
+  │                           ^^^ Duplicate module member 'Foo'. Top level names in a namespace must be unique
 
 error[E01003]: invalid modifier
   ┌─ tests/move_check/parser/struct_public.move:5:5
@@ -49,6 +49,6 @@ error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/parser/struct_public.move:5:28
   │
 4 │     public(friend) struct Foo {}
-  │                           --- Alias previously defined here
+  │                           --- Module member or alias previously defined here
 5 │     public(package) struct Foo {}
-  │                            ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique
+  │                            ^^^ Duplicate module member 'Foo'. Top level names in a namespace must be unique
