@@ -82,6 +82,7 @@ async fn query_authenticated_events(
     rpc_url: &str,
     stream_id: &str,
     start_checkpoint: u64,
+    end_checkpoint: Option<u64>,
     page_size: Option<u32>,
 ) -> Result<
     sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsResponse,
@@ -94,6 +95,7 @@ async fn query_authenticated_events(
     let mut req = ListAuthenticatedEventsRequest::default();
     req.stream_id = Some(stream_id.to_string());
     req.start_checkpoint = Some(start_checkpoint);
+    req.end_checkpoint = end_checkpoint;
     req.page_size = page_size;
     req.page_token = None;
 
@@ -126,10 +128,15 @@ async fn list_authenticated_events_end_to_end() {
         emit_test_event(&test_cluster, package_id, sender, 100 + i).await;
     }
 
-    let response =
-        query_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, None)
-            .await
-            .unwrap();
+    let response = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &package_id.to_string(),
+        0,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     let count = response.events.len();
     assert_eq!(count, 10, "expected 10 authenticated events, got {count}");
@@ -154,10 +161,15 @@ async fn list_authenticated_events_page_size_validation() {
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let response =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(1500))
-            .await
-            .unwrap();
+    let response = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &sender.to_string(),
+        0,
+        None,
+        Some(1500),
+    )
+    .await
+    .unwrap();
 
     assert!(response.events.is_empty());
 }
@@ -172,16 +184,22 @@ async fn list_authenticated_events_start_beyond_highest() {
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let probe_response =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(1))
-            .await
-            .unwrap();
-    let highest = probe_response.highest_indexed_checkpoint.unwrap_or(0);
+    let probe_response = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &sender.to_string(),
+        0,
+        None,
+        Some(1),
+    )
+    .await
+    .unwrap();
+    let highest = probe_response.end_checkpoint.unwrap_or(0);
 
     let response = query_authenticated_events(
         test_cluster.rpc_url(),
         &sender.to_string(),
         highest + 1000,
+        None,
         Some(10),
     )
     .await
@@ -200,10 +218,15 @@ async fn list_authenticated_events_pruned_checkpoint_error() {
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let response =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(10))
-            .await
-            .unwrap();
+    let response = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &sender.to_string(),
+        0,
+        None,
+        Some(10),
+    )
+    .await
+    .unwrap();
 
     assert!(response.events.is_empty());
 }
@@ -219,8 +242,14 @@ async fn authenticated_events_disabled_test() {
     let test_cluster = test_cluster::TestClusterBuilder::new().build().await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let result =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(10)).await;
+    let result = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &sender.to_string(),
+        0,
+        None,
+        Some(10),
+    )
+    .await;
 
     assert!(
         result.is_err(),
@@ -280,10 +309,15 @@ async fn authenticated_events_backfill_test() {
 
     let start = tokio::time::Instant::now();
     let response = loop {
-        let response =
-            query_authenticated_events(&rpc_url_with_indexing, &package_id.to_string(), 0, None)
-                .await
-                .unwrap();
+        let response = query_authenticated_events(
+            &rpc_url_with_indexing,
+            &package_id.to_string(),
+            0,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         if response.events.len() == 5 {
             break response;
@@ -303,5 +337,192 @@ async fn authenticated_events_backfill_test() {
     assert_eq!(
         count, 5,
         "expected 5 authenticated events after backfill, got {count}"
+    );
+}
+
+#[sim_test]
+async fn list_authenticated_events_with_end_checkpoint() {
+    let _guard: sui_protocol_config::OverrideGuard =
+        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_authenticated_event_streams_for_testing();
+            cfg
+        });
+
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
+    let test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .with_rpc_config(rpc_config)
+        .build()
+        .await;
+
+    let package_id = publish_test_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+
+    for i in 0..10 {
+        emit_test_event(&test_cluster, package_id, sender, 100 + i).await;
+    }
+
+    let probe_response = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &package_id.to_string(),
+        0,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    let highest = probe_response.end_checkpoint.unwrap_or(0);
+
+    let mid_checkpoint = highest / 2;
+    let response = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &package_id.to_string(),
+        0,
+        Some(mid_checkpoint),
+        None,
+    )
+    .await
+    .unwrap();
+
+    for event in &response.events {
+        let cp = event.checkpoint.unwrap();
+        assert!(
+            cp <= mid_checkpoint,
+            "event checkpoint {cp} exceeds end_checkpoint {mid_checkpoint}"
+        );
+    }
+}
+
+#[sim_test]
+async fn list_authenticated_events_end_checkpoint_validation() {
+    let _guard: sui_protocol_config::OverrideGuard =
+        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_authenticated_event_streams_for_testing();
+            cfg
+        });
+
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
+    let test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .with_rpc_config(rpc_config)
+        .build()
+        .await;
+
+    let package_id = publish_test_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+
+    for i in 0..5 {
+        emit_test_event(&test_cluster, package_id, sender, 100 + i).await;
+    }
+
+    let probe_response = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &package_id.to_string(),
+        0,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    let highest = probe_response.end_checkpoint.unwrap_or(0);
+
+    let result = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &package_id.to_string(),
+        0,
+        Some(highest + 1000),
+        None,
+    )
+    .await;
+
+    assert!(
+        result.is_err(),
+        "Expected error when end_checkpoint exceeds highest_indexed"
+    );
+    let error = result.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert!(error
+        .message()
+        .contains("exceeds highest_indexed_checkpoint"));
+}
+
+#[sim_test]
+async fn list_authenticated_events_pagination_with_end_checkpoint() {
+    let _guard: sui_protocol_config::OverrideGuard =
+        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_authenticated_event_streams_for_testing();
+            cfg
+        });
+
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
+    let test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .with_rpc_config(rpc_config)
+        .build()
+        .await;
+
+    let package_id = publish_test_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+
+    for i in 0..10 {
+        emit_test_event(&test_cluster, package_id, sender, 100 + i).await;
+    }
+
+    let probe_response = query_authenticated_events(
+        test_cluster.rpc_url(),
+        &package_id.to_string(),
+        0,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    let highest = probe_response.end_checkpoint.unwrap_or(0);
+
+    let mid_checkpoint = highest / 2;
+
+    let mut client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let mut all_events = Vec::new();
+    let mut next_page_token = None;
+
+    loop {
+        let mut req = ListAuthenticatedEventsRequest::default();
+        req.stream_id = Some(package_id.to_string());
+        req.start_checkpoint = Some(0);
+        req.end_checkpoint = Some(mid_checkpoint);
+        req.page_size = Some(2);
+        req.page_token = next_page_token.clone();
+
+        let response = client
+            .list_authenticated_events(req)
+            .await
+            .unwrap()
+            .into_inner();
+
+        for event in &response.events {
+            let cp = event.checkpoint.unwrap();
+            assert!(
+                cp <= mid_checkpoint,
+                "event checkpoint {cp} exceeds end_checkpoint {mid_checkpoint}"
+            );
+        }
+
+        all_events.extend(response.events);
+
+        if response.next_page_token.is_none() {
+            break;
+        }
+        next_page_token = response.next_page_token;
+    }
+
+    assert!(
+        !all_events.is_empty(),
+        "Expected to fetch events with pagination"
     );
 }

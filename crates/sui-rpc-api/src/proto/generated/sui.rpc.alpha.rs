@@ -9,11 +9,15 @@ pub struct ListAuthenticatedEventsRequest {
     /// Inclusive start checkpoint. Must not yet be pruned. (default: 0)
     #[prost(uint64, optional, tag = "2")]
     pub start_checkpoint: ::core::option::Option<u64>,
+    /// Inclusive end checkpoint. Must be \<= highest_indexed_checkpoint. If not provided,
+    /// defaults to highest_indexed_checkpoint at the time of the first request.
+    #[prost(uint64, optional, tag = "3")]
+    pub end_checkpoint: ::core::option::Option<u64>,
     /// Number of events to return per page (default: 1000, max: 1000)
-    #[prost(uint32, optional, tag = "3")]
+    #[prost(uint32, optional, tag = "4")]
     pub page_size: ::core::option::Option<u32>,
     /// Page token for pagination. Use the next_page_token from previous response.
-    #[prost(bytes = "vec", optional, tag = "4")]
+    #[prost(bytes = "vec", optional, tag = "5")]
     pub page_token: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
 }
 /// Response containing events and metadata.
@@ -22,9 +26,10 @@ pub struct ListAuthenticatedEventsRequest {
 pub struct ListAuthenticatedEventsResponse {
     #[prost(message, repeated, tag = "1")]
     pub events: ::prost::alloc::vec::Vec<AuthenticatedEvent>,
-    /// The highest indexed checkpoint.
+    /// The end checkpoint of the query range (inclusive). This is either the user-provided
+    /// end_checkpoint or the highest_indexed_checkpoint at the time of the first request.
     #[prost(uint64, optional, tag = "2")]
-    pub highest_indexed_checkpoint: ::core::option::Option<u64>,
+    pub end_checkpoint: ::core::option::Option<u64>,
     /// Token for fetching the next page of results. Contains event key index range. Empty if no more pages.
     #[prost(bytes = "vec", optional, tag = "3")]
     pub next_page_token: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,

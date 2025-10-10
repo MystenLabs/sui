@@ -22,6 +22,7 @@ const MAX_PAGE_SIZE_BYTES: usize = 512 * 1024; // 512KiB
 struct PageToken {
     stream_id: SuiAddress,
     start_checkpoint: u64,
+    end_checkpoint: u64,
     last_event_checkpoint: u64,
     last_event_transaction_idx: u32,
     last_event_index: u32,
@@ -112,17 +113,6 @@ pub fn list_authenticated_events(
         .map(|token| decode_page_token(token))
         .transpose()?;
 
-    if let Some(token) = &page_token {
-        if token.stream_id != stream_addr {
-            return Err(RpcError::new(
-                tonic::Code::InvalidArgument,
-                "page_token stream_id mismatch".to_string(),
-            ));
-        }
-    }
-
-    let start = request.start_checkpoint.unwrap_or(0);
-
     let reader = service.reader.inner();
     let indexes = reader.indexes().ok_or_else(RpcError::not_found)?;
 
@@ -134,6 +124,50 @@ pub fn list_authenticated_events(
     let lowest_available = reader
         .get_lowest_available_checkpoint_objects()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+
+    let (start, end) = if let Some(token) = &page_token {
+        if token.stream_id != stream_addr {
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
+                "page_token stream_id mismatch".to_string(),
+            ));
+        }
+
+        if let Some(req_start) = request.start_checkpoint {
+            if req_start != token.start_checkpoint {
+                return Err(RpcError::new(
+                    tonic::Code::InvalidArgument,
+                    "start_checkpoint does not match page_token".to_string(),
+                ));
+            }
+        }
+
+        if let Some(req_end) = request.end_checkpoint {
+            if req_end != token.end_checkpoint {
+                return Err(RpcError::new(
+                    tonic::Code::InvalidArgument,
+                    "end_checkpoint does not match page_token".to_string(),
+                ));
+            }
+        }
+
+        (token.start_checkpoint, token.end_checkpoint)
+    } else {
+        let start = request.start_checkpoint.unwrap_or(0);
+        let end = request.end_checkpoint.unwrap_or(highest_indexed);
+
+        if end > highest_indexed {
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
+                format!(
+                    "end_checkpoint {} exceeds highest_indexed_checkpoint {}",
+                    end, highest_indexed
+                ),
+            ));
+        }
+
+        (start, end)
+    };
 
     if start < lowest_available {
         return Err(RpcError::new(
@@ -148,7 +182,7 @@ pub fn list_authenticated_events(
     if start > highest_indexed {
         let mut response = ListAuthenticatedEventsResponse::default();
         response.events = vec![];
-        response.highest_indexed_checkpoint = Some(highest_indexed);
+        response.end_checkpoint = Some(end);
         response.next_page_token = None;
         return Ok(response);
     }
@@ -162,7 +196,7 @@ pub fn list_authenticated_events(
             start,
             start_transaction_idx,
             start_event_idx,
-            highest_indexed,
+            end,
             page_size,
         )
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
@@ -194,6 +228,7 @@ pub fn list_authenticated_events(
             encode_page_token(PageToken {
                 stream_id: stream_addr,
                 start_checkpoint: start,
+                end_checkpoint: end,
                 last_event_checkpoint: last_cp,
                 last_event_transaction_idx: last_tx_idx,
                 last_event_index: last_ev_idx,
@@ -205,7 +240,7 @@ pub fn list_authenticated_events(
 
     let mut response = ListAuthenticatedEventsResponse::default();
     response.events = events;
-    response.highest_indexed_checkpoint = Some(highest_indexed);
+    response.end_checkpoint = Some(end);
     response.next_page_token = next_page_token.map(|token| token.to_vec());
     Ok(response)
 }
