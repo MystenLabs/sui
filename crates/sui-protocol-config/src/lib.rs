@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 98;
+const MAX_PROTOCOL_VERSION: u64 = 99;
 
 // Record history of protocol version allocations here:
 //
@@ -908,6 +908,10 @@ pub struct ExecutionTimeEstimateParams {
     // This can be removed once set to "true" on mainnet.
     #[serde(skip_serializing_if = "is_false")]
     pub default_none_duration_for_new_keys: bool,
+
+    // Number of observations per chunk. When None, chunking is disabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observations_chunk_size: Option<u64>,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -2289,6 +2293,26 @@ impl ProtocolConfig {
 
     pub fn allow_references_in_ptbs(&self) -> bool {
         self.feature_flags.allow_references_in_ptbs
+    }
+
+    pub fn enable_observation_chunking(&self) -> bool {
+        if let PerObjectCongestionControlMode::ExecutionTimeEstimate(params) =
+            &self.feature_flags.per_object_congestion_control_mode
+        {
+            params.observations_chunk_size.is_some()
+        } else {
+            false
+        }
+    }
+
+    pub fn observations_chunk_size(&self) -> u64 {
+        if let PerObjectCongestionControlMode::ExecutionTimeEstimate(params) =
+            &self.feature_flags.per_object_congestion_control_mode
+        {
+            params.observations_chunk_size.unwrap_or(18)
+        } else {
+            18
+        }
     }
 }
 
@@ -3804,6 +3828,7 @@ impl ProtocolConfig {
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
                                     default_none_duration_for_new_keys: false,
+                                    observations_chunk_size: None,
                                 },
                             );
                     }
@@ -3885,6 +3910,7 @@ impl ProtocolConfig {
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
                                     default_none_duration_for_new_keys: false,
+                                    observations_chunk_size: None,
                                 },
                             );
 
@@ -3916,6 +3942,7 @@ impl ProtocolConfig {
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
                                     default_none_duration_for_new_keys: false,
+                                    observations_chunk_size: None,
                                 },
                             );
 
@@ -3940,6 +3967,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
                                 default_none_duration_for_new_keys: false,
+                                observations_chunk_size: None,
                             },
                         );
                     cfg.feature_flags.allow_unbounded_system_objects = true;
@@ -3963,6 +3991,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
                                 default_none_duration_for_new_keys: false,
+                                observations_chunk_size: None,
                             },
                         );
                 }
@@ -3982,6 +4011,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 3334,
                                 default_none_duration_for_new_keys: false,
+                                observations_chunk_size: None,
                             },
                         );
                     // Enable party transfer for testnet.
@@ -4014,6 +4044,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 3334,
                                 default_none_duration_for_new_keys: true,
+                                observations_chunk_size: None,
                             },
                         );
                 }
@@ -4058,6 +4089,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 18,
                                 stake_weighted_median_threshold: 3334,
                                 default_none_duration_for_new_keys: true,
+                                observations_chunk_size: None,
                             },
                         );
 
@@ -4092,6 +4124,25 @@ impl ProtocolConfig {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
+                }
+                99 => {
+                    // Enable execution time observation chunking and increase limit to 180.
+                    // max_move_object_size is 250 KB, we've experientially determined that fits ~ 18 estimates
+                    // so if we have 10 chunks, that's 2.5MB, < 8MB max_serialized_tx_effects_size_bytes_system_tx
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 50,
+                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 180,
+                                stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: true,
+                                observations_chunk_size: Some(18),
+                            },
+                        );
                 }
                 // Use this template when making changes:
                 //
