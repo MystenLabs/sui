@@ -13,7 +13,10 @@ use std::{
 
 use jsonrpsee::{
     server::middleware::rpc::RpcServiceT,
-    types::{error::INTERNAL_ERROR_CODE, Request},
+    types::{
+        error::{INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE},
+        Request,
+    },
     MethodResponse,
 };
 use pin_project::{pin_project, pinned_drop};
@@ -43,6 +46,7 @@ struct RequestMetrics {
     timer: HistogramTimer,
     succeeded: IntCounterVec,
     failed: IntCounterVec,
+    invalid_params: IntCounterVec,
     cancelled: IntCounterVec,
 }
 
@@ -119,6 +123,7 @@ where
                 timer,
                 succeeded: self.layer.metrics.requests_succeeded.clone(),
                 failed: self.layer.metrics.requests_failed.clone(),
+                invalid_params: self.layer.metrics.invalid_params.clone(),
                 cancelled: self.layer.metrics.requests_cancelled.clone(),
             }),
             method,
@@ -171,38 +176,64 @@ where
             ("", String::new())
         };
 
-        if let Some(code) = resp.as_error_code() {
-            metrics
-                .failed
-                .with_label_values(&[method, &format!("{code}")])
-                .inc();
+        match resp.as_error_code() {
+            Some(INVALID_PARAMS_CODE) => {
+                metrics
+                    .invalid_params
+                    .with_label_values(&[method, &format!("{INVALID_PARAMS_CODE}")])
+                    .inc();
 
-            if code == INTERNAL_ERROR_CODE {
-                error!(
-                    method,
-                    params, code, response, elapsed_ms, "Request failed with internal error"
-                );
-            } else if tracing::enabled!(tracing::Level::DEBUG) {
-                debug!(
-                    method,
-                    params, code, response, elapsed_ms, "Request failed with non-internal error"
-                );
-            } else {
-                info!(method, code, elapsed_ms, "Request failed");
+                if tracing::enabled!(tracing::Level::DEBUG) {
+                    debug!(
+                        method,
+                        params,
+                        INVALID_PARAMS_CODE,
+                        response,
+                        elapsed_ms,
+                        "Request failed with invalid params error"
+                    );
+                } else {
+                    info!(method, INVALID_PARAMS_CODE, elapsed_ms, "Invalid params");
+                }
             }
-        } else {
-            metrics.succeeded.with_label_values(&[method]).inc();
-            if elapsed_ms > slow_threshold_ms {
-                warn!(
-                    method,
-                    params,
-                    response,
-                    elapsed_ms,
-                    threshold_ms = slow_threshold_ms,
-                    "Slow request - exceeded threshold but succeeded"
-                );
-            } else {
-                info!(method, elapsed_ms, "Request succeeded");
+            Some(code) => {
+                metrics
+                    .failed
+                    .with_label_values(&[method, &format!("{code}")])
+                    .inc();
+
+                if code == INTERNAL_ERROR_CODE {
+                    error!(
+                        method,
+                        params, code, response, elapsed_ms, "Request failed with internal error"
+                    );
+                } else if tracing::enabled!(tracing::Level::DEBUG) {
+                    debug!(
+                        method,
+                        params,
+                        code,
+                        response,
+                        elapsed_ms,
+                        "Request failed with non-internal error"
+                    );
+                } else {
+                    info!(method, code, elapsed_ms, "Request failed");
+                }
+            }
+            None => {
+                metrics.succeeded.with_label_values(&[method]).inc();
+                if elapsed_ms > slow_threshold_ms {
+                    warn!(
+                        method,
+                        params,
+                        response,
+                        elapsed_ms,
+                        threshold_ms = slow_threshold_ms,
+                        "Slow request - exceeded threshold but succeeded"
+                    );
+                } else {
+                    info!(method, elapsed_ms, "Request succeeded");
+                }
             }
         }
 

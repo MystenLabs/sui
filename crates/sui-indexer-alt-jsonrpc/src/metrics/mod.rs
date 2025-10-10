@@ -30,6 +30,7 @@ pub struct RpcMetrics {
     pub requests_received: IntCounterVec,
     pub requests_succeeded: IntCounterVec,
     pub requests_failed: IntCounterVec,
+    pub invalid_params: IntCounterVec,
     pub requests_cancelled: IntCounterVec,
 
     pub owned_objects_filter_scans: Histogram,
@@ -67,11 +68,20 @@ impl RpcMetrics {
 
             requests_failed: register_int_counter_vec_with_registry!(
                 "jsonrpc_requests_failed",
-                "Number of requests that completed with an error for each JSON-RPC method, by error code",
+                "Number of requests that completed with an error (excluding invalid params) for each JSON-RPC method, by error code",
                 &["method", "code"],
                 registry
             )
             .unwrap(),
+
+            invalid_params: register_int_counter_vec_with_registry!(
+                "jsonrpc_invalid_params",
+                "Number of requests that failed due to invalid params for each JSON-RPC method",
+                &["method", "code"],
+                registry
+            )
+            .unwrap(),
+
 
             requests_cancelled: register_int_counter_vec_with_registry!(
                 "jsonrpc_requests_cancelled",
