@@ -24,51 +24,11 @@ If this command returns `sui not found`, then Sui is not installed and you must 
 
 ## `sui client` 
 
-<Tabs>
-
-<TabItem label="macOS/Linux" value="macos-linux">
-
 Run the Sui CLI with the command:
 
 ```
 $ sui client
 ```
-
-The CLI prompts you to create a new Sui address and setup a network environment configuration. By default, Sui stores this information in the `~/.sui/sui_config/client.yaml` file. You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
-
-Sui stores the key for the Sui address in a separate file, `~/.sui/sui_config/sui.keystore`. Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
-
-:::caution 
-
-If a previous Sui installation stored a `client.yaml` file locally, you will receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
-
-:::
-
-</TabItem>
-
-<TabItem label="Windows" value="windows">
-
-Run the Sui CLI with the command:
-
-```
-$ sui client
-```
-
-The CLI prompts you to create a new Sui address and setup a network environment configuration. By default, Sui stores this information in the `%USERPROFILE%\.sui\sui_config\client.yaml` file. You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
-
-Sui stores the key for the Sui address in a separate file, `%USERPROFILE/.sui/sui_config/sui.keystore`. Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
-
-:::caution
-
-If you already have a `client.yaml` file stored locally from a previous Sui installation, you will receive the `sui client --help` output in the console. You can delete the existing `%USERPROFILE%\.sui\sui_config\client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
-
-:::
-
-</TabItem>
-</Tabs>
-
-
-### Configuration options
 
 The first prompt confirms if you want to create the `client.yaml` file, select `Y`:
 
@@ -96,7 +56,7 @@ The options are:
 
 <ImportContent source="data-wipe.mdx" mode="snippet" />
 
-The final prompt is to select an encryption scheme. After you select a scheme, the client generates a new Sui address. Press <kbd>0</kbd>, <kbd>1</kbd>, or <kbd>2</kbd> to select a key scheme:
+The final prompt is to select an encryption scheme. You must select a key scheme by pressing <kbd>0</kbd>, <kbd>1</kbd>, or <kbd>2</kbd>. After you select a scheme, the client generates a new Sui address.
 
 ```
 Select key scheme to generate key pair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
@@ -104,9 +64,27 @@ Select key scheme to generate key pair (0 for ed25519, 1 for secp256k1, 2 for se
 
 <ImportContent source="crypto-schemes.mdx" mode="snippet" />
 
+:::caution 
+
+Save this recovery phrase in a secure location. It will not be visible again once the CLI history disappears.
+
 [Learn more](/guides/developer/getting-started/get-address.mdx) about Sui addresses, key generation, and recovery phrases.
 
-Your Sui client is now configured. The `client.yaml` file contains the following configuration information:
+:::
+
+## `client.yaml`
+
+Your Sui client is now configured. By default, Sui stores this information in either the `~/.sui/sui_config/client.yaml` file (macOS/Linux) or `%USERPROFILE%\.sui\sui_config\client.yaml` file (Windows). You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
+
+Sui stores the key for the Sui address in a separate file, `~/.sui/sui_config/sui.keystore` (macOS/Linux) or `%USERPROFILE/.sui/sui_config/sui.keystore` (Windows). Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
+
+:::caution 
+
+If a previous Sui installation stored a `client.yaml` file locally, you will receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
+
+:::
+
+The `client.yaml` file contains the following configuration information:
 
 ```yaml
 keystore:
@@ -127,7 +105,7 @@ active_address: "0x7df01d3935b7ab3cd1da6828eed763ee2cc556670528a47baa6af8c251866
   </div>
   <div className="next-steps-grid">
     <Card 
-      title="Create a Sui Address" 
+      title="Sui Addresses" 
       href="/guides/developer/getting-started/get-address"
     >
       Learn more about your Sui address.
