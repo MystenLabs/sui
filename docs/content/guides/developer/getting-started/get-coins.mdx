@@ -68,6 +68,30 @@ Then, follow these steps:
 
 To request more SUI, refresh your browser and click the **Request SUI** button again. The requests are rate limited, however, so too many requests results in a waiting period before you are able to request more tokens.
 
+### Verify token balance 
+
+To check your balance of SUI tokens and confirm you received some from the faucet, use the command:
+
+```
+$ sui client balance 
+```
+
+You should have a balance of SUI tokens:
+
+```
+╭────────────────────────────────────────────╮
+│ Balance of coins owned by this address     │
+├────────────────────────────────────────────┤
+│ ╭────────────────────────────────────────╮ │
+│ │ coin       balance (raw)  balance      │ │
+│ ├────────────────────────────────────────┤ │
+│ │ Sui        56804696124     0.50 SUI    │ │
+│ ╰────────────────────────────────────────╯ │
+╰────────────────────────────────────────────╯
+```
+
+If you do not have a balance, repeat the [request SUI tokens from faucet](#online-faucet) steps, or use an [alternative faucet method](#alternative-faucets).
+
 ### Return unused Testnet SUI
 
 The faucet drains from a finite pool of SUI. If the pool empties, it disrupts faucet service for the rest of the community. To help ensure this doesn't happen, you can use the online faucet to return your unused SUI to the Testnet pool. You cannot return SUI to the Devnet or Localnet pools.
@@ -78,7 +102,7 @@ There are two ways to return unused Testnet SUI tokens:
 
 - If you prefer not to connect your wallet, send the tokens to the address `0x7a9d19d4c210663926eb549da59a54e25777fef63161bfccda08277b58b4212e` via a [separate transaction](/guides/developer/sui-101/sign-and-send-txn.mdx).
 
-## Alternative methods for getting SUI tokens
+## Alternative methods for getting SUI tokens {#alternative-faucets}
 
 If you need an alternative method to get SUI tokens for deployment on Testnet or Devnet, you have several options.
 
