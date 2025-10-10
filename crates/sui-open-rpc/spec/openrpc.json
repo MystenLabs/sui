@@ -10568,7 +10568,8 @@
       "SuiWithdrawFrom": {
         "type": "string",
         "enum": [
-          "sender"
+          "sender",
+          "sponsor"
         ]
       },
       "SuiWithdrawalTypeArg": {
