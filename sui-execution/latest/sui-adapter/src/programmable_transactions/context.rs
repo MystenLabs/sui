@@ -518,8 +518,10 @@ mod checked {
             // Any input object taken by value must be exclusively mutable
             match input_metadata_opt {
                 Some(InputObjectMetadata::InputObject { mutability, .. }) => match mutability {
-                    Mutability::Mutable => (),
-                    Mutability::Immutable | Mutability::NonExclusiveWrite => {
+                    // NonExclusiveWrite can be taken by value, but unless it is re-shared
+                    // with no mutations, the transaction will abort.
+                    Mutability::Mutable | Mutability::NonExclusiveWrite => (),
+                    Mutability::Immutable => {
                         return Err(CommandArgumentError::InvalidObjectByValue.into());
                     }
                 },

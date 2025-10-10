@@ -28,6 +28,20 @@ public fun mutate(obj: &mut Obj) {
   obj.val = 1;
 }
 
+public fun by_value_with_mutation(mut obj: Obj) {
+  obj.val = 2;
+  transfer::public_share_object(obj);
+}
+
+public fun by_value_delete(obj: Obj) {
+  let Obj { id, val: _ } = obj;
+  object::delete(id);
+}
+
+public fun by_value_without_mutation(obj: Obj) {
+  transfer::public_share_object(obj);
+}
+
 public fun remove_and_transfer(obj: &mut Obj, ctx: &mut TxContext) {
   let val = remove<u64, u64>(&mut obj.id, 0);
   transfer::public_share_object(Obj { id: object::new(ctx), val });
@@ -61,5 +75,16 @@ public fun remove_and_transfer(obj: &mut Obj, ctx: &mut TxContext) {
 
 // Can mutate mutable shared object
 //# run a::m::mutate --sender A --args object(2,0)
+
+//# view-object 2,0
+
+// Passing by value without mutation is allowed
+//# run a::m::by_value_without_mutation --sender A --args nonexclusive(2,0)
+
+// Passing by value with mutation is not allowed
+//# run a::m::by_value_with_mutation --sender A --args nonexclusive(2,0)
+
+// Deleting is not allowed
+//# run a::m::by_value_delete --sender A --args nonexclusive(2,0)
 
 //# view-object 2,0

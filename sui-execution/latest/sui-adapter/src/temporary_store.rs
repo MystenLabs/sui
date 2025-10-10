@@ -19,6 +19,7 @@ use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
+use sui_types::object::Data;
 use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::{
@@ -1080,6 +1081,42 @@ impl ChildObjectResolver for TemporaryStore<'_> {
     }
 }
 
+/// Compares the owner and payload of an object.
+/// This is used to detect illegal writes to non-exclusive write objects.
+fn was_object_mutated(object: &Object, original: &Object) -> bool {
+    let data_equal = match (&object.data, &original.data) {
+        (Data::Move(a), Data::Move(b)) => a.contents_and_type_equal(b),
+        // We don't have a use for package content-equality, so we remain as strict as
+        // possible for now.
+        (Data::Package(a), Data::Package(b)) => a == b,
+        _ => false,
+    };
+
+    let owner_equal = match (&object.owner, &original.owner) {
+        // We don't compare initial shared versions, because re-shared objects do not have the
+        // correct initial shared version at this point in time, and this field is not something
+        // that can be modified by a single transaction anyway.
+        (Owner::Shared { .. }, Owner::Shared { .. }) => true,
+        (
+            Owner::ConsensusAddressOwner { owner: a, .. },
+            Owner::ConsensusAddressOwner { owner: b, .. },
+        ) => a == b,
+        (Owner::AddressOwner(a), Owner::AddressOwner(b)) => a == b,
+        (Owner::Immutable, Owner::Immutable) => true,
+        (Owner::ObjectOwner(a), Owner::ObjectOwner(b)) => a == b,
+
+        // Keep the left hand side of the match exhaustive to catch future
+        // changes to Owner
+        (Owner::AddressOwner(_), _)
+        | (Owner::Immutable, _)
+        | (Owner::ObjectOwner(_), _)
+        | (Owner::Shared { .. }, _)
+        | (Owner::ConsensusAddressOwner { .. }, _) => false,
+    };
+
+    !data_equal || !owner_equal
+}
+
 impl Storage for TemporaryStore<'_> {
     fn reset(&mut self) {
         self.drop_writes();
@@ -1101,16 +1138,16 @@ impl Storage for TemporaryStore<'_> {
         // for all non-exclusive write inputs, remove them from written objects
         let mut to_remove = Vec::new();
         for (id, original) in &self.non_exclusive_input_original_versions {
-            if !results
+            // Object must be present in `written_objects` and identical
+            if results
                 .written_objects
                 .get(id)
-                .unwrap()
-                .contents_equal(original)
-                || results.deleted_object_ids.contains(id)
+                .map(|obj| was_object_mutated(obj, original))
+                .unwrap_or(true)
             {
                 return Err(ExecutionError::new_with_source(
                     ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id: *id },
-                    "Non-exclusive write input object has been modified",
+                    "Non-exclusive write input object has been modified or deleted",
                 ));
             }
             to_remove.push(*id);
@@ -1119,7 +1156,6 @@ impl Storage for TemporaryStore<'_> {
         for id in to_remove {
             results.written_objects.remove(&id);
             results.modified_objects.remove(&id);
-            results.deleted_object_ids.remove(&id);
         }
 
         // It's important to merge instead of override results because it's

@@ -47,7 +47,9 @@ impl Context {
                     allow_by_value: match mutability {
                         ObjectMutability::Mutable => true,
                         ObjectMutability::Immutable => false,
-                        ObjectMutability::NonExclusiveWrite => false,
+                        // NonExclusiveWrite can be taken by value, but unless it is re-shared
+                        // with no mutations, the transaction will abort.
+                        ObjectMutability::NonExclusiveWrite => true,
                     },
                     allow_by_mut_ref: match mutability {
                         ObjectMutability::Mutable => true,
