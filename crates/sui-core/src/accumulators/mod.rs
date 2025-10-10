@@ -355,7 +355,11 @@ impl AccumulatorSettlementTxBuilder {
         for (obj, update) in updates.into_iter() {
             pending_updates.push((obj, update));
 
-            if pending_updates.len() == protocol_config.max_updates_per_settlement_txn() as usize {
+            if pending_updates.len()
+                == protocol_config
+                    .max_updates_per_settlement_txn_as_option()
+                    .unwrap_or(u32::MAX) as usize
+            {
                 settlements.push(build_one_settlement_txn(
                     settlements.len() as u64,
                     // pending_updates will be drained and can be re-used
