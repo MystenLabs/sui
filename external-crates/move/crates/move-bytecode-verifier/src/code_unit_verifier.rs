@@ -7,8 +7,8 @@
 //! abstract_interpreter.rs. CodeUnitVerifier simply orchestrates calls into these two files.
 use crate::{
     ability_cache::AbilityCache, absint::FunctionContext, acquires_list_verifier::AcquiresVerifier,
-    control_flow, locals_safety, reference_safety, stack_usage_verifier::StackUsageVerifier,
-    type_safety,
+    control_flow, locals_safety, reference_safety, regex_reference_safety,
+    stack_usage_verifier::StackUsageVerifier, type_safety,
 };
 use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_binary_format::{
@@ -18,7 +18,7 @@ use move_binary_format::{
         CompiledModule, FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,
     },
 };
-use move_bytecode_verifier_meter::{Meter, Scope};
+use move_bytecode_verifier_meter::{Meter, Scope, dummy::DummyMeter};
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 use std::collections::HashMap;
@@ -145,12 +145,29 @@ impl<'env> CodeUnitVerifier<'env, '_> {
         StackUsageVerifier::verify(verifier_config, self.module, &self.function_context, meter)?;
         type_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
         locals_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
-        reference_safety::verify(
+        let reference_safety_res = reference_safety::verify(
             verifier_config,
             self.module,
             &self.function_context,
             self.name_def_map,
             meter,
-        )
+        );
+        if verifier_config.sanity_check_with_regex_reference_safety {
+            let regex_res = regex_reference_safety::verify(
+                self.module,
+                &self.function_context,
+                &mut DummyMeter,
+            );
+            if reference_safety_res.is_err() && regex_res.is_ok() {
+                return Err(
+                    PartialVMError::new(StatusCode::REFERENCE_SAFETY_INCONSISTENT).with_message(
+                        "regex reference safety should be strictly more permissive \
+                         than the current"
+                            .to_string(),
+                    ),
+                );
+            }
+        }
+        reference_safety_res
     }
 }
