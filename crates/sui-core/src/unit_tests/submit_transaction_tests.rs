@@ -577,20 +577,27 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
     };
 
     // Submit request with batched transactions, using grpc client directly.
-    let error = test_context
+    let raw_response = test_context
         .client
         .client()
         .unwrap()
         .submit_transaction(request)
         .await
-        .unwrap_err()
-        .into();
+        .unwrap()
+        .into_inner();
 
-    // Verify the error is AlreadyExecutedInSoftBundleError.
-    assert!(matches!(
-        error,
-        SuiError::UserInputError {
-            error: UserInputError::AlreadyExecutedInSoftBundleError { .. }
+    // First should be already executed, second should be submitted
+    match &raw_response.results[0].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Executed(_)) => {
+            // Expected: first transaction was already executed
         }
-    ));
+        _ => panic!("Expected Executed status for first transaction"),
+    }
+
+    match &raw_response.results[1].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {
+            // Expected: second transaction was submitted to consensus
+        }
+        _ => panic!("Expected Submitted status for second transaction"),
+    }
 }
