@@ -2,12 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    cache::identifier_interner::IdentifierInterner,
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::{locals::MachineHeap, set_err_info},
+        interpreter::{
+            locals::{MachineHeap, StackFrame},
+            set_err_info,
+        },
         values::values_impl::{self as values, VMValueCast, Value},
     },
-    jit::execution::ast::{Function, Type},
+    jit::execution::ast::{Function, InternedDisplay, Type},
     shared::{
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         views::TypeView,
@@ -20,10 +24,8 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 
-use std::{cmp::min, fmt::Write};
+use std::{fmt::Write, sync::Arc};
 use tracing::error;
-
-use super::locals::StackFrame;
 
 macro_rules! debug_write {
     ($($toks: tt)*) => {
@@ -55,6 +57,7 @@ pub(crate) struct MachineState {
     pub(crate) call_stack: CallStack,
     /// Operand stack, where Move `Value`s are stored for stack operations.
     pub(crate) operand_stack: ValueStack,
+    pub(crate) interner: Arc<IdentifierInterner>,
 }
 
 /// The operand stack.
@@ -93,10 +96,11 @@ pub(super) struct ResolvableType<'a, 'b> {
 // -------------------------------------------------------------------------------------------------
 
 impl MachineState {
-    pub(super) fn new(call_stack: CallStack) -> Self {
+    pub(super) fn new(interner: Arc<IdentifierInterner>, call_stack: CallStack) -> Self {
         MachineState {
             operand_stack: ValueStack::new(),
             call_stack,
+            interner,
         }
     }
 
@@ -147,7 +151,8 @@ impl MachineState {
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> VMResult<()> {
-        self.call_stack.push_call(function, ty_args, args)
+        self.call_stack
+            .push_call(&self.interner, function, ty_args, args)
     }
 
     /// Returns true if there is a frame to pop.
@@ -160,7 +165,7 @@ impl MachineState {
     /// is not a frame to pop.
     #[inline]
     pub(super) fn pop_call_frame(&mut self) -> VMResult<()> {
-        self.call_stack.pop_frame()
+        self.call_stack.pop_frame(&self.interner)
     }
 
     //
@@ -199,15 +204,16 @@ impl MachineState {
         idx: usize,
         frame: &CallFrame,
     ) -> PartialVMResult<()> {
-        // Print out the function name with type arguments.
-        let _func_ptr = &frame.function;
+        use std::cmp::min;
+
+        // Print function header (module::function<ty_args...>)
         let func = frame.function();
 
         debug_write!(buf, "    [{}] ", idx)?;
-        let module = func.module_id();
-        debug_write!(buf, "{}::{}::", module.address(), module.name(),)?;
+        let module = func.module_id(&vtables.interner);
+        debug_write!(buf, "{}::{}::", module.address(), module.name())?;
 
-        debug_write!(buf, "{}", func.name())?;
+        debug_write!(buf, "{}", func.name(&vtables.interner))?;
         let ty_args = frame.ty_args();
         let mut ty_tags = vec![];
         for ty in ty_args {
@@ -227,22 +233,44 @@ impl MachineState {
         }
         debug_writeln!(buf)?;
 
-        // Print out the current instruction.
+        // Print out the current instruction and a small window around it.
         debug_writeln!(buf)?;
         debug_writeln!(buf, "        Code:")?;
+
         let pc = frame.pc as usize;
         let code = func.code();
-        let before = if pc > 3 { pc - 3 } else { 0 };
-        let after = min(code.len(), pc + 4);
-        for (idx, instr) in code.iter().enumerate().take(pc).skip(before) {
-            debug_writeln!(buf, "            [{}] {:?}", idx, instr)?;
-        }
-        debug_writeln!(buf, "          > [{}] {:?}", pc, &code[pc])?;
-        for (idx, instr) in code.iter().enumerate().take(after).skip(pc + 1) {
-            debug_writeln!(buf, "            [{}] {:?}", idx, instr)?;
+
+        if pc < code.len() {
+            let before = if pc > 3 { pc - 3 } else { 0 };
+            let after = min(code.len(), pc + 4);
+
+            for (ndx, instr) in code.iter().enumerate().take(pc).skip(before) {
+                debug_write!(buf, "            [{}] ", ndx)?;
+                let _ = &instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
+                debug_writeln!(buf)?;
+            }
+            debug_write!(buf, "          > [{}] ", pc,)?;
+            let _ = &code[pc]
+                .fmt(&mut *buf, &vtables.interner)
+                .map_err(fmt_err)?;
+            debug_writeln!(buf)?;
+            for (ndx, instr) in code.iter().enumerate().take(after).skip(pc + 1) {
+                debug_write!(buf, "            [{}] ", ndx)?;
+                instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
+                debug_writeln!(buf)?;
+            }
+        } else {
+            // PC is past end (e.g., right after Ret); just show last few instructions.
+            let start = code.len().saturating_sub(4);
+            for (ndx, instr) in code.iter().enumerate().skip(start) {
+                debug_write!(buf, "            [{}] ", ndx)?;
+                instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
+                debug_writeln!(buf)?;
+            }
+            debug_writeln!(buf, "          > [{}] <pc out of bounds>", pc)?;
         }
 
-        // Print out the locals.
+        // Locals
         debug_writeln!(buf)?;
         debug_writeln!(buf, "        Locals:")?;
         if func.local_count() > 0 {
@@ -259,8 +287,8 @@ impl MachineState {
     #[allow(dead_code)]
     pub(crate) fn debug_print_stack_trace<B: Write>(
         &self,
-        buf: &mut B,
         vtables: &VMDispatchTables,
+        buf: &mut B,
     ) -> PartialVMResult<()> {
         debug_writeln!(buf, "Call Stack:")?;
         self.debug_print_frame(buf, vtables, 0, &self.call_stack.current_frame)?;
@@ -285,57 +313,67 @@ impl MachineState {
     /// It will be exposed via a debug module to give developers a way to print the internals
     /// of an execution.
     fn internal_state_str(&self) -> String {
-        let mut internal_state = "Call stack:\n".to_string();
+        let mut internal_state = String::from("Call stack:\n");
 
         for (i, frame) in self.call_stack.frames.iter().enumerate() {
-            internal_state.push_str(
-                format!(
-                    " frame #{}: {} [pc = {}]\n",
-                    i,
-                    frame.function().pretty_string(),
-                    frame.pc,
-                )
-                .as_str(),
-            );
+            let fun = frame.function();
+            internal_state.push_str(&format!(
+                " frame #{}: {} [pc = {}]\n",
+                i,
+                fun.pretty_string(&self.interner),
+                frame.pc
+            ));
         }
-        internal_state.push_str(
-            format!(
-                "*frame #{}: {} [pc = {}]:\n",
-                self.call_stack.frames.len(),
-                self.call_stack.current_frame.function().pretty_string(),
-                self.call_stack.current_frame.pc,
-            )
-            .as_str(),
-        );
+
+        internal_state.push_str(&format!(
+            "*frame #{}: {} [pc = {}]:\n",
+            self.call_stack.frames.len(),
+            self.call_stack
+                .current_frame
+                .function()
+                .pretty_string(&self.interner),
+            self.call_stack.current_frame.pc
+        ));
+
         let code = self.call_stack.current_frame.function().code();
         let pc = self.call_stack.current_frame.pc as usize;
+
         if pc < code.len() {
-            let mut i = 0;
-            for bytecode in &code[..pc] {
-                internal_state.push_str(format!("{}> {:?}\n", i, bytecode).as_str());
-                i += 1;
+            let interner = &self.interner;
+
+            for (i, bytecode) in code[..pc].iter().enumerate() {
+                // prefix "i> " then the formatted instruction
+                write!(internal_state, "{}> ", i).unwrap();
+                bytecode.fmt(&mut internal_state, interner).unwrap();
+                internal_state.push('\n');
             }
-            internal_state.push_str(format!("{}* {:?}\n", i, code[pc]).as_str());
+
+            write!(internal_state, "{}* ", pc).unwrap();
+            let _ = &code[pc].fmt(&mut internal_state, interner).unwrap();
+            internal_state.push('\n');
         }
-        internal_state
-            .push_str(format!("Locals:\n{}\n", self.call_stack.current_frame.stack_frame).as_str());
+
+        internal_state.push_str(&format!(
+            "Locals:\n{}\n",
+            self.call_stack.current_frame.stack_frame
+        ));
         internal_state.push_str("Operand Stack:\n");
         for value in &self.operand_stack.value {
-            internal_state.push_str(format!("{}\n", value).as_str());
+            internal_state.push_str(&format!("{}\n", value));
         }
         internal_state
     }
 
     pub(super) fn set_location(&self, err: PartialVMError) -> VMError {
-        err.finish(self.call_stack.current_frame.location())
+        err.finish(self.call_stack.current_frame.location(&self.interner))
     }
 
     pub(super) fn get_internal_state(&self) -> ExecutionState {
-        self.get_stack_frames(usize::MAX)
+        self.get_stack_frames(&self.interner, usize::MAX)
     }
 
     /// Get count stack frames starting from the top of the stack.
-    pub fn get_stack_frames(&self, count: usize) -> ExecutionState {
+    pub fn get_stack_frames(&self, interner: &IdentifierInterner, count: usize) -> ExecutionState {
         // collect frames in the reverse order as this is what is
         // normally expected from the stack trace (outermost frame
         // is the last one)
@@ -347,7 +385,7 @@ impl MachineState {
             .take(count)
             .map(|frame| {
                 let fun = frame.function();
-                (fun.module_id().clone(), fun.index(), frame.pc)
+                (fun.module_id(interner).clone(), fun.index(), frame.pc)
             })
             .collect();
         ExecutionState::new(stack_trace)
@@ -442,8 +480,9 @@ impl CallStack {
     /// Create a new `Frame` given a `Function` and the function's `ty_args` and `args`.
     /// This loads the locals, padding appropriately, and sets the call stack's current frame.
     #[inline]
-    pub fn push_call(
+    fn push_call(
         &mut self,
+        interner: &IdentifierInterner,
         function: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
@@ -451,7 +490,7 @@ impl CallStack {
         let stack_frame = self
             .heap
             .allocate_stack_frame(args, function.local_count())
-            .map_err(|err| set_err_info!(&self.current_frame, err))?;
+            .map_err(|err| set_err_info!(interner, &self.current_frame, err))?;
         let new_frame = CallFrame {
             pc: 0,
             stack_frame,
@@ -464,7 +503,7 @@ impl CallStack {
             Ok(())
         } else {
             let err = PartialVMError::new(StatusCode::CALL_STACK_OVERFLOW);
-            let err = set_err_info!(new_frame, err);
+            let err = set_err_info!(interner, new_frame, err);
             Err(err)
         }
     }
@@ -472,16 +511,16 @@ impl CallStack {
     /// Pop a `Frame` off the call stack, freeing the old one. Returns an error if there is no
     /// frame to pop.
     #[inline]
-    fn pop_frame(&mut self) -> VMResult<()> {
+    fn pop_frame(&mut self, interner: &IdentifierInterner) -> VMResult<()> {
         let Some(return_frame) = self.frames.pop() else {
             let err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
-            let err = set_err_info!(self.current_frame, err);
+            let err = set_err_info!(interner, self.current_frame, err);
             return Err(err);
         };
         let frame = std::mem::replace(&mut self.current_frame, return_frame);
         let index = frame.function().index();
         let pc = frame.pc;
-        let loc = frame.location();
+        let loc = frame.location(interner);
         self.heap
             .free_stack_frame(frame.stack_frame)
             .map_err(|e| e.at_code_offset(index, pc).finish(loc))
@@ -497,8 +536,8 @@ impl CallFrame {
         &self.ty_args
     }
 
-    pub(super) fn location(&self) -> Location {
-        Location::Module(self.function().module_id().clone())
+    pub(super) fn location(&self, interner: &IdentifierInterner) -> Location {
+        Location::Module(self.function().module_id(interner).clone())
     }
 }
 
@@ -510,4 +549,13 @@ impl TypeView for ResolvableType<'_, '_> {
     fn to_type_tag(&self) -> TypeTag {
         self.vtables.type_to_type_tag(self.ty).unwrap()
     }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------------------------------------
+
+fn fmt_err(_input: std::fmt::Error) -> PartialVMError {
+    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+        .with_message("failed to write to buffer".to_string())
 }

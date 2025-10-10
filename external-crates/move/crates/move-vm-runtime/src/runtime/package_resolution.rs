@@ -193,8 +193,13 @@ pub fn jit_package_for_publish(
         return Ok(cache.cached_package_at(version_id).unwrap());
     }
 
-    let runtime_pkg = jit::translate_package(&cache.vm_config, natives, verified_pkg.clone())
-        .map_err(|err| err.finish(Location::Package(version_id)))?;
+    let runtime_pkg = jit::translate_package(
+        &cache.vm_config,
+        &cache.interner,
+        natives,
+        verified_pkg.clone(),
+    )
+    .map_err(|err| err.finish(Location::Package(version_id)))?;
 
     Ok(Arc::new(Package::new(
         verified_pkg.into(),
@@ -216,8 +221,13 @@ pub fn jit_and_cache_package(
         return Ok(cache.cached_package_at(version_id).unwrap());
     }
 
-    let runtime_pkg = jit::translate_package(&cache.vm_config, natives, verified_pkg.clone())
-        .map_err(|err| err.finish(Location::Package(version_id)))?;
+    let runtime_pkg = jit::translate_package(
+        &cache.vm_config,
+        &cache.interner,
+        natives,
+        verified_pkg.clone(),
+    )
+    .map_err(|err| err.finish(Location::Package(version_id)))?;
 
     cache.add_to_cache(version_id, verified_pkg, runtime_pkg);
 

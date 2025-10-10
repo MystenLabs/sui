@@ -4,7 +4,7 @@
 use crate::{
     cache::{
         arena::{Arena, ArenaBox, ArenaVec},
-        identifier_interner::{IdentifierKey, resolve_interned},
+        identifier_interner::{IdentifierInterner, IdentifierKey},
     },
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
@@ -828,13 +828,17 @@ pub(crate) enum Bytecode {
 // -------------------------------------------------------------------------------------------------
 
 impl Function {
+    pub fn vtable_key(&self) -> &VirtualTableKey {
+        &self.name
+    }
+
     #[allow(unused)]
     pub fn file_format_version(&self) -> u32 {
         self.file_format_version
     }
 
-    pub fn module_id(&self) -> ModuleId {
-        self.name.module_id().unwrap()
+    pub fn module_id(&self, interner: &IdentifierInterner) -> ModuleId {
+        self.name.module_id(interner).unwrap()
     }
 
     pub fn index(&self) -> FunctionDefinitionIndex {
@@ -853,12 +857,12 @@ impl Function {
         self.return_.len()
     }
 
-    pub fn name_str(&self) -> String {
-        self.name().to_string()
+    pub fn name_str(&self, interner: &IdentifierInterner) -> String {
+        self.name(interner).to_string()
     }
 
-    pub fn name(&self) -> Identifier {
-        self.name.member_name().unwrap()
+    pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
+        self.name.member_name(interner).unwrap()
     }
 
     pub(crate) fn code(&self) -> &[Bytecode] {
@@ -873,26 +877,29 @@ impl Function {
         &self.type_parameters
     }
 
-    pub fn pretty_string(&self) -> String {
-        self.name.to_string().unwrap()
+    pub fn pretty_string(&self, interner: &IdentifierInterner) -> String {
+        self.name.to_string(interner).unwrap()
     }
 
-    pub fn pretty_short_string(&self) -> String {
-        self.name.to_short_string().unwrap()
+    pub fn pretty_short_string(&self, interner: &IdentifierInterner) -> String {
+        self.name.to_short_string(interner).unwrap()
     }
 
     pub fn is_native(&self) -> bool {
         self.def_is_native
     }
 
-    pub fn get_native(&self) -> PartialVMResult<&UnboxedNativeFunction> {
+    pub fn get_native(
+        &self,
+        interner: &IdentifierInterner,
+    ) -> PartialVMResult<&UnboxedNativeFunction> {
         if cfg!(feature = "lazy_natives") {
             // If lazy_natives is configured, this is a MISSING_DEPENDENCY error, as we skip
             // checking those at module loading time.
             self.native.as_deref().ok_or_else(|| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
                     "Missing Native Function `{}`",
-                    self.name.member_name().unwrap()
+                    self.name.member_name(interner).unwrap()
                 ))
             })
         } else {
@@ -906,10 +913,10 @@ impl Function {
 }
 
 impl CallType {
-    fn name(&self) -> String {
+    fn vtable_key(&self) -> &VirtualTableKey {
         match self {
-            CallType::Direct(vmpointer) => vmpointer.pretty_short_string().to_string(),
-            CallType::Virtual(virtual_table_key) => virtual_table_key.to_short_string().unwrap(),
+            CallType::Direct(vmpointer) => vmpointer.vtable_key(),
+            CallType::Virtual(vtable_key) => vtable_key,
         }
     }
 }
@@ -978,8 +985,8 @@ impl ModuleIdKey {
         Self { address, name }
     }
 
-    pub fn as_id(&self) -> PartialVMResult<ModuleId> {
-        let name = resolve_interned(&self.name, "module id")?;
+    pub fn as_id(&self, interner: &IdentifierInterner) -> PartialVMResult<ModuleId> {
+        let name = interner.resolve_ident(&self.name, "module id")?;
         Ok(ModuleId::new(self.address, name))
     }
 
@@ -987,8 +994,10 @@ impl ModuleIdKey {
         &self.address
     }
 
-    pub fn name(&self) -> Identifier {
-        resolve_interned(&self.name, "module name").expect("Uninterned key")
+    pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
+        interner
+            .resolve_ident(&self.name, "module name")
+            .expect("Uninterned key")
     }
 }
 
@@ -1381,7 +1390,7 @@ impl From<&Bytecode> for Opcodes {
 
 impl ::std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}#{}", self.name.to_short_string().unwrap(), self.index)
+        write!(f, "{:?}#{}", self.name, self.index)
     }
 }
 
@@ -1411,45 +1420,15 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
-            Bytecode::DirectCall(fun) => write!(f, "Call({})", fun.pretty_short_string()),
+            Bytecode::DirectCall(fun) => write!(f, "Call({:?})", fun.name),
             Bytecode::VirtualCall(vtable_key) => {
-                write!(
-                    f,
-                    "Call(~{})",
-                    vtable_key
-                        .to_short_string()
-                        .expect("Failed to find interned ident")
-                )
+                write!(f, "Call(~{:?})", vtable_key)
             }
-            Bytecode::CallGeneric(inst) => write!(f, "CallGeneric({})", inst.handle.name()),
-            Bytecode::Pack(a) => write!(
-                f,
-                "Pack({})",
-                a.def_vtable_key
-                    .to_short_string()
-                    .expect("Failed to find interned ident")
-            ),
-            Bytecode::PackGeneric(a) => write!(
-                f,
-                "PackGeneric({})",
-                a.def_vtable_key
-                    .to_short_string()
-                    .expect("Failed to find interned ident")
-            ),
-            Bytecode::Unpack(a) => write!(
-                f,
-                "Unpack({})",
-                a.def_vtable_key
-                    .to_short_string()
-                    .expect("Failed to find interned ident")
-            ),
-            Bytecode::UnpackGeneric(a) => write!(
-                f,
-                "UnpackGeneric({})",
-                a.def_vtable_key
-                    .to_short_string()
-                    .expect("Failed to find interned ident")
-            ),
+            Bytecode::CallGeneric(inst) => write!(f, "CallGeneric({:?})", inst.handle.vtable_key()),
+            Bytecode::Pack(a) => write!(f, "Pack({:?})", a.def_vtable_key),
+            Bytecode::PackGeneric(a) => write!(f, "PackGeneric({:?})", a.def_vtable_key),
+            Bytecode::Unpack(a) => write!(f, "Unpack({:?})", a.def_vtable_key),
+            Bytecode::UnpackGeneric(a) => write!(f, "UnpackGeneric({:?})", a.def_vtable_key),
             Bytecode::ReadRef => write!(f, "ReadRef"),
             Bytecode::WriteRef => write!(f, "WriteRef"),
             Bytecode::FreezeRef => write!(f, "FreezeRef"),
@@ -1516,9 +1495,9 @@ impl ::std::fmt::Debug for Bytecode {
 impl std::fmt::Debug for CallType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CallType::Direct(fun) => write!(f, "Known({})", fun.pretty_short_string()),
+            CallType::Direct(fun) => write!(f, "Known({:?})", fun.vtable_key()),
             CallType::Virtual(vtable_key) => {
-                write!(f, "Virtual({})", vtable_key.to_short_string().unwrap())
+                write!(f, "Virtual({:?})", vtable_key)
             }
         }
     }
@@ -1546,11 +1525,11 @@ impl std::fmt::Debug for ArenaType {
             ArenaType::Address => write!(f, "address"),
             ArenaType::Signer => write!(f, "signer"),
             ArenaType::Vector(inner) => write!(f, "vector<{:?}>", inner.inner_ref()),
-            ArenaType::Datatype(key) => write!(f, "{}", key.to_short_string().unwrap()),
+            ArenaType::Datatype(key) => write!(f, "{:?}", key),
             ArenaType::DatatypeInstantiation(inst) => {
                 // inst is an ArenaBox<(VirtualTableKey, ArenaVec<ArenaType>)>
                 let (key, types) = inst.inner_ref();
-                write!(f, "{}<", key.to_short_string().unwrap())?;
+                write!(f, "{:?}<", key)?;
                 let types = types
                     .iter()
                     .map(|x| format!("{:?}", x) + ",")
@@ -1563,6 +1542,475 @@ impl std::fmt::Debug for ArenaType {
             ArenaType::U16 => write!(f, "u16"),
             ArenaType::U32 => write!(f, "u32"),
             ArenaType::U256 => write!(f, "u256"),
+        }
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Interned Display Printing
+// -------------------------------------------------------------------------------------------------
+// This is to easily print out interned structures, passing the interner around to resolve names.
+
+/// Trait for types that can be displayed with an interner.
+/// This is similar to `std::fmt::Display` but takes an interner as argument. It is used for
+/// printing stack traces and other debug situations.
+pub trait InternedDisplay<B: std::fmt::Write> {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result;
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for IdentifierKey {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        let name = interner
+            .resolve_ident(self, "module name")
+            .map_err(|_| ::std::fmt::Error)?;
+        write!(f, "{}", name)
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for VirtualTableKey {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        let str = self
+            .to_short_string(interner)
+            .map_err(|_| ::std::fmt::Error)?;
+        write!(f, "{}", str)
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for StructDef {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        // Name
+        self.def_vtable_key.fmt(f, interner)?;
+        // Fields (name: ty)
+        let field_tys = self.fields.as_ref();
+        let field_names = self.field_names.as_ref();
+        if !field_tys.is_empty() {
+            write!(f, " {{ ")?;
+            for (i, ty) in field_tys.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                if let Some(name) = field_names.get(i) {
+                    name.fmt(f, interner)?;
+                    write!(f, ": ")?;
+                } else {
+                    write!(f, "_{}: ", i)?;
+                }
+                ty.fmt(f, interner)?;
+            }
+            write!(f, " }}")?;
+        }
+        Ok(())
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for EnumDef {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        // Name
+        self.def_vtable_key.fmt(f, interner)?;
+        // Variants (just names, compact)
+        let variants = self.variants.as_ref();
+        if !variants.is_empty() {
+            write!(f, " {{ ")?;
+            for (i, v) in variants.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                v.fmt(f, interner)?;
+            }
+            write!(f, " }}")?;
+        }
+        Ok(())
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for VariantDef {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        // Prefix with Enum name
+        self.enum_def.to_ref().def_vtable_key.fmt(f, interner)?;
+        write!(f, "::")?;
+        // Variant name
+        self.variant_name.fmt(f, interner)?;
+        // Fields (name: ty)
+        let tys = self.fields.as_ref();
+        let names = self.field_names.as_ref();
+        if !tys.is_empty() {
+            write!(f, " {{ ")?;
+            for (i, ty) in tys.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                if let Some(n) = names.get(i) {
+                    n.fmt(f, interner)?;
+                    write!(f, ": ")?;
+                }
+                ty.fmt(f, interner)?;
+            }
+            write!(f, " }}")?;
+        }
+        Ok(())
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for FunctionInstantiation {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        // callee
+        self.handle.fmt(f, interner)?;
+        // type args
+        let targs = self.instantiation.to_ref();
+        if !targs.is_empty() {
+            write!(f, "<")?;
+            for (i, t) in targs.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                t.fmt(f, interner)?;
+            }
+            write!(f, ">")?;
+        }
+        Ok(())
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for StructInstantiation {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        // Head
+        self.def_vtable_key.fmt(f, interner)?;
+        // <type params>
+        let tps = self.type_params.to_ref();
+        if !tps.is_empty() {
+            write!(f, "<")?;
+            for (i, t) in tps.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                t.fmt(f, interner)?;
+            }
+            write!(f, ">")?;
+        }
+        Ok(())
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for FieldHandle {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        self.owner.fmt(f, interner)?;
+        write!(f, ".{}", self.offset)
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for FieldInstantiation {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        // Owner may be unused operationally, but it’s very helpful in logs
+        self.owner.fmt(f, interner)?;
+        write!(f, ".{}", self.offset)
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for EnumInstantiation {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        // Head
+        self.def_vtable_key.fmt(f, interner)?;
+        // <type params>
+        let tps = self.type_params.to_ref();
+        if !tps.is_empty() {
+            write!(f, "<")?;
+            for (i, t) in tps.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                t.fmt(f, interner)?;
+            }
+            write!(f, ">")?;
+        }
+        Ok(())
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for VariantInstantiation {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        // Enum head with type params from enum_inst
+        let einst = self.enum_inst.to_ref();
+        einst.def_vtable_key.fmt(f, interner)?;
+        let tps = einst.type_params.to_ref();
+        if !tps.is_empty() {
+            write!(f, "<")?;
+            for (i, t) in tps.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                t.fmt(f, interner)?;
+            }
+            write!(f, ">")?;
+        }
+        write!(f, "::")?;
+        // Variant name
+        self.variant.to_ref().variant_name.fmt(f, interner)
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for Bytecode {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        match self {
+            Bytecode::Pop => write!(f, "Pop"),
+            Bytecode::Ret => write!(f, "Ret"),
+            Bytecode::BrTrue(a) => write!(f, "BrTrue({})", a),
+            Bytecode::BrFalse(a) => write!(f, "BrFalse({})", a),
+            Bytecode::Branch(a) => write!(f, "Branch({})", a),
+
+            Bytecode::LdU8(a) => write!(f, "LdU8({})", a),
+            Bytecode::LdU16(a) => write!(f, "LdU16({})", a),
+            Bytecode::LdU32(a) => write!(f, "LdU32({})", a),
+            Bytecode::LdU64(a) => write!(f, "LdU64({})", a),
+            Bytecode::LdU128(a) => write!(f, "LdU128({})", **a),
+            Bytecode::LdU256(a) => write!(f, "LdU256({})", **a),
+
+            Bytecode::CastU8 => write!(f, "CastU8"),
+            Bytecode::CastU16 => write!(f, "CastU16"),
+            Bytecode::CastU32 => write!(f, "CastU32"),
+            Bytecode::CastU64 => write!(f, "CastU64"),
+            Bytecode::CastU128 => write!(f, "CastU128"),
+            Bytecode::CastU256 => write!(f, "CastU256"),
+
+            Bytecode::LdConst(a) => write!(f, "LdConst({})", a.to_ref().value),
+
+            Bytecode::LdTrue => write!(f, "LdTrue"),
+            Bytecode::LdFalse => write!(f, "LdFalse"),
+
+            Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
+            Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
+            Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
+
+            // Calls
+            Bytecode::DirectCall(fun) => {
+                write!(f, "Call(")?;
+                fun.vtable_key().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::VirtualCall(vtable_key) => {
+                write!(f, "Call(~")?;
+                vtable_key.fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::CallGeneric(inst) => {
+                write!(f, "CallGeneric(")?;
+                inst.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+
+            // Structs
+            Bytecode::Pack(a) => {
+                write!(f, "Pack(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::PackGeneric(a) => {
+                write!(f, "PackGeneric(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::Unpack(a) => {
+                write!(f, "Unpack(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::UnpackGeneric(a) => {
+                write!(f, "UnpackGeneric(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+
+            // References & fields
+            Bytecode::ReadRef => write!(f, "ReadRef"),
+            Bytecode::WriteRef => write!(f, "WriteRef"),
+            Bytecode::FreezeRef => write!(f, "FreezeRef"),
+            Bytecode::MutBorrowLoc(a) => write!(f, "MutBorrowLoc({})", a),
+            Bytecode::ImmBorrowLoc(a) => write!(f, "ImmBorrowLoc({})", a),
+            Bytecode::MutBorrowField(h) => {
+                write!(f, "MutBorrowField(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::MutBorrowFieldGeneric(h) => {
+                write!(f, "MutBorrowFieldGeneric(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::ImmBorrowField(h) => {
+                write!(f, "ImmBorrowField(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::ImmBorrowFieldGeneric(h) => {
+                write!(f, "ImmBorrowFieldGeneric(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+
+            // ALU / logic
+            Bytecode::Add => write!(f, "Add"),
+            Bytecode::Sub => write!(f, "Sub"),
+            Bytecode::Mul => write!(f, "Mul"),
+            Bytecode::Mod => write!(f, "Mod"),
+            Bytecode::Div => write!(f, "Div"),
+            Bytecode::BitOr => write!(f, "BitOr"),
+            Bytecode::BitAnd => write!(f, "BitAnd"),
+            Bytecode::Xor => write!(f, "Xor"),
+            Bytecode::Shl => write!(f, "Shl"),
+            Bytecode::Shr => write!(f, "Shr"),
+            Bytecode::Or => write!(f, "Or"),
+            Bytecode::And => write!(f, "And"),
+            Bytecode::Not => write!(f, "Not"),
+            Bytecode::Eq => write!(f, "Eq"),
+            Bytecode::Neq => write!(f, "Neq"),
+            Bytecode::Lt => write!(f, "Lt"),
+            Bytecode::Gt => write!(f, "Gt"),
+            Bytecode::Le => write!(f, "Le"),
+            Bytecode::Ge => write!(f, "Ge"),
+
+            Bytecode::Abort => write!(f, "Abort"),
+            Bytecode::Nop => write!(f, "Nop"),
+
+            // Vectors
+            Bytecode::VecPack(a, n) => {
+                write!(f, "VecPack(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ", {})", n)
+            }
+            Bytecode::VecLen(a) => {
+                write!(f, "VecLen(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::VecImmBorrow(a) => {
+                write!(f, "VecImmBorrow(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::VecMutBorrow(a) => {
+                write!(f, "VecMutBorrow(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::VecPushBack(a) => {
+                write!(f, "VecPushBack(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::VecPopBack(a) => {
+                write!(f, "VecPopBack(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::VecUnpack(a, n) => {
+                write!(f, "VecUnpack(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ", {})", n)
+            }
+            Bytecode::VecSwap(a) => {
+                write!(f, "VecSwap(")?;
+                a.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+
+            // Variants
+            Bytecode::PackVariant(h) => {
+                write!(f, "PackVariant(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::PackVariantGeneric(h) => {
+                write!(f, "PackVariantGeneric(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::UnpackVariant(h) => {
+                write!(f, "UnpackVariant(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::UnpackVariantGeneric(h) => {
+                write!(f, "UnpackVariantGeneric(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::UnpackVariantImmRef(h) => {
+                write!(f, "UnpackVariantImmRef(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::UnpackVariantGenericImmRef(h) => {
+                write!(f, "UnpackVariantGenericImmRef(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::UnpackVariantMutRef(h) => {
+                write!(f, "UnpackVariantMutRef(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::UnpackVariantGenericMutRef(h) => {
+                write!(f, "UnpackVariantGenericMutRef(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+
+            // Still using Debug for the jump table unless you have an InternedDisplay for it
+            Bytecode::VariantSwitch(jt) => write!(f, "VariantSwitch({:?})", jt),
+        }
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for CallType {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        match self {
+            CallType::Direct(vmpointer) => vmpointer.vtable_key().fmt(f, interner),
+            CallType::Virtual(vtable_key) => {
+                write!(f, "~")?;
+                vtable_key.fmt(f, interner)
+            }
+        }
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for ArenaType {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        match self {
+            ArenaType::TyParam(idx) => write!(f, "T{}", idx),
+            ArenaType::Bool => write!(f, "bool"),
+            ArenaType::U8 => write!(f, "u8"),
+            ArenaType::U16 => write!(f, "u16"),
+            ArenaType::U32 => write!(f, "u32"),
+            ArenaType::U64 => write!(f, "u64"),
+            ArenaType::U128 => write!(f, "u128"),
+            ArenaType::U256 => write!(f, "u256"),
+            ArenaType::Address => write!(f, "address"),
+            ArenaType::Signer => write!(f, "signer"),
+            ArenaType::Vector(ty) => {
+                write!(f, "vector<")?;
+                ty.fmt(f, interner)?;
+                write!(f, ">")
+            }
+            ArenaType::Reference(ty) => {
+                write!(f, "&")?;
+                ty.fmt(f, interner)
+            }
+            ArenaType::MutableReference(ty) => {
+                write!(f, "&mut ")?;
+                ty.fmt(f, interner)
+            }
+            ArenaType::Datatype(def_idx) => def_idx.fmt(f, interner),
+            ArenaType::DatatypeInstantiation(def_inst) => {
+                let (def_idx, instantiation) = &**def_inst;
+                def_idx.fmt(f, interner)?;
+                write!(f, "<")?;
+                for (i, ty) in instantiation.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    ty.fmt(f, interner)?;
+                }
+                write!(f, ">")
+            }
         }
     }
 }

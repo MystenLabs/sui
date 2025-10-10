@@ -344,7 +344,7 @@ impl<'b> NativeContext<'_, 'b, '_> {
     pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
         // If this native was a base invocation, it won't have a stack to speak of.
         if let Some(state) = self.state {
-            state.debug_print_stack_trace(buf, self.vtables)
+            state.debug_print_stack_trace(self.vtables, buf)
         } else {
             debug_writeln!(buf, "No Call Stack Available")?;
             debug_writeln!(buf, "Base Native Invocations Do Not Create Call Stacks")

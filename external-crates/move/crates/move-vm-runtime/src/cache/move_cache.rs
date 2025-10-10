@@ -10,6 +10,8 @@ use move_vm_config::runtime::VMConfig;
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 
+use super::identifier_interner::IdentifierInterner;
+
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
@@ -28,6 +30,7 @@ type PackageCache = HashMap<VersionId, Arc<Package>>;
 pub struct MoveCache {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) package_cache: Arc<RwLock<PackageCache>>,
+    pub(crate) interner: Arc<IdentifierInterner>,
 }
 
 #[derive(Debug)]
@@ -47,6 +50,7 @@ impl MoveCache {
         Self {
             vm_config,
             package_cache: Arc::new(RwLock::new(HashMap::new())),
+            interner: Arc::new(IdentifierInterner::new()),
         }
     }
 
@@ -130,10 +134,12 @@ impl Clone for MoveCache {
         let MoveCache {
             vm_config,
             package_cache,
+            interner,
         } = self;
         Self {
-            vm_config: vm_config.clone(),
-            package_cache: package_cache.clone(),
+            vm_config: Arc::clone(vm_config),
+            package_cache: Arc::clone(package_cache),
+            interner: Arc::clone(interner),
         }
     }
 }
