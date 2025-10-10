@@ -97,21 +97,27 @@ const concepts = [
 					'concepts/transactions/gas-smashing',
 				],
 			},
-			'concepts/grpc-overview',
 			'concepts/gaming'
 		],
 	},
-	{ 
+	{
 		type: 'category',
-		label: 'GraphQL and Indexer Framework',
-		link: {
-			type: 'doc',
-			id: 'concepts/graphql-indexer',
-		},
+		label: 'Data access',
 		items: [
-			'concepts/graphql-rpc',
-			'concepts/custom-indexing-framework',
-			'concepts/custom-indexer/pipeline-architecture',
+			'concepts/grpc-overview',
+			{ 
+				type: 'category',
+				label: 'GraphQL and Indexer Framework',
+				link: {
+					type: 'doc',
+					id: 'concepts/graphql-indexer',
+				},
+				items: [
+					'concepts/graphql-rpc',
+					'concepts/custom-indexing-framework',
+					'concepts/custom-indexer/pipeline-architecture'
+				]
+			},
 			'concepts/archival-store'
 		]
 	},
