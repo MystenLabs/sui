@@ -423,13 +423,11 @@ impl AvailableRange {
             &mut pipelines,
         );
 
-        let first = pipelines
-            .iter()
-            .try_fold(0, |acc, pipeline| {
-                watermarks
-                    .pipeline_lo_watermark(pipeline)
-                    .map(|wm| acc.max(wm.checkpoint()))
-            })?;
+        let first = pipelines.iter().try_fold(0, |acc, pipeline| {
+            watermarks
+                .pipeline_lo_watermark(pipeline)
+                .map(|wm| acc.max(wm.checkpoint()))
+        })?;
 
         Ok(Self {
             scope: scope.clone(),
