@@ -6,13 +6,13 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-36:
+task 1, lines 8-38:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6452400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 38-42:
+task 2, lines 40-44:
 //# programmable --sender A --inputs @A
 //> test::m::a();
 //> sui::transfer::public_transfer<test::m::A>(Result(0), Input(0));
@@ -22,7 +22,7 @@ created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3404800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 44-49:
+task 3, lines 46-51:
 //# programmable --sender A --inputs @A object(2,0)
 // Valid in V2 (but not the original adapter)
 //> 0: test::m::trade(Input(1));
@@ -33,7 +33,7 @@ mutated: object(0,0)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
-task 4, lines 51-57:
+task 4, lines 53-59:
 //# programmable --sender A --inputs @A object(2,1)
 // invalid in both
 //> 0: test::m::trade(Input(1));

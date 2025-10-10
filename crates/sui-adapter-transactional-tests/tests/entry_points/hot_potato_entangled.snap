@@ -6,13 +6,13 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-55:
+task 1, lines 8-57:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 8033200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 57-69:
+task 2, lines 59-71:
 //# programmable --sender A --inputs @A
 // Cannot use D in an entry since it is hot
 //> 0: test::m::a();
@@ -29,7 +29,7 @@ task 2, lines 57-69:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(8) } }
 
-task 3, lines 71-83:
+task 3, lines 73-85:
 //# programmable --sender A --inputs @A
 // Cannot use C in an entry since it is hot via D
 //> 0: test::m::a();
@@ -46,7 +46,7 @@ task 3, lines 71-83:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(8) } }
 
-task 4, lines 85-97:
+task 4, lines 87-99:
 //# programmable --sender A --inputs @A
 // Cannot use B in an entry since it is hot via D via C
 //> 0: test::m::a();
@@ -63,7 +63,7 @@ task 4, lines 85-97:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(8) } }
 
-task 5, lines 99-111:
+task 5, lines 101-113:
 //# programmable --sender A --inputs @A
 // Cannot use A in an entry since it is hot via D via C via B
 //> 0: test::m::a();
@@ -80,7 +80,7 @@ task 5, lines 99-111:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(8) } }
 
-task 6, lines 113-128:
+task 6, lines 115-130:
 //# programmable --sender A --inputs @A
 // All allowed (in v2) if Hot is cooled first
 //> 0: test::m::a();

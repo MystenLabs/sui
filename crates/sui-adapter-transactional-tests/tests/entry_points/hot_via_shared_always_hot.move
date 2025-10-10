@@ -23,11 +23,11 @@ public fun share(ctx: &mut TxContext) {
     sui::transfer::share_object(Shared { id: object::new(ctx) })
 }
 
-public fun heat_via_shared(a: &A, obj: Shared, _: &mut TxContext): Shared {
+public fun heat_via_shared(_: &A, obj: Shared, _: &mut TxContext): Shared {
     obj
 }
 
-public fun heat(a: &A): Hot {
+public fun heat(_: &A): Hot {
     Hot {}
 }
 

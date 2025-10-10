@@ -8,22 +8,6 @@ A: object(0,0)
 
 task 1, lines 8-45:
 //# publish
-warning[W09002]: unused variable
-   ┌─ /var/folders/0_/j3dn9z3j3213833kj0q00hrc0000gp/T/.tmpWr3Bmp:19:28
-   │
-19 │ public fun heat_via_shared(a: &A, obj: Shared, _: &mut TxContext): Shared {
-   │                            ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09002]: unused variable
-   ┌─ /var/folders/0_/j3dn9z3j3213833kj0q00hrc0000gp/T/.tmpWr3Bmp:22:17
-   │
-22 │ public fun heat(a: &A): Hot {
-   │                 ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7166800,  storage_rebate: 0, non_refundable_storage_fee: 0
