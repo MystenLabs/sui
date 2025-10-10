@@ -853,6 +853,31 @@ impl NodeConfig {
     pub fn rpc(&self) -> Option<&crate::RpcConfig> {
         self.rpc.as_ref()
     }
+
+    /// Determines the type of node based on the configuration
+    pub fn node_type(&self) -> NodeType {
+        match &self.consensus_config {
+            None => NodeType::FullNode,
+            Some(config) => {
+                if config.is_observer {
+                    NodeType::Observer
+                } else {
+                    NodeType::Validator
+                }
+            }
+        }
+    }
+}
+
+/// Represents the type of node in the Sui network
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeType {
+    /// A validator that participates in consensus and produces blocks
+    Validator,
+    /// An observer (full node) that follows consensus without participating
+    Observer,
+    /// A regular full node that does not run consensus
+    FullNode,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -890,6 +915,11 @@ pub struct ConsensusConfig {
     /// override the current back off logic otherwise the default backoff logic will be applied based
     /// on consensus latency estimates.
     pub submit_delay_step_override_millis: Option<u64>,
+
+    /// When true, this node runs consensus as an observer (full node) rather than a validator.
+    /// Observer nodes follow consensus without participating in block production.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_observer: bool,
 
     pub parameters: Option<ConsensusParameters>,
 }

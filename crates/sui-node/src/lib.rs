@@ -461,8 +461,9 @@ impl SuiNode {
         }
 
         let run_with_range = config.run_with_range;
-        let is_validator = config.consensus_config().is_some();
-        let is_full_node = !is_validator;
+        let node_type = config.node_type();
+        let is_validator = matches!(node_type, sui_config::NodeType::Validator);
+        let is_full_node = matches!(node_type, sui_config::NodeType::FullNode);
         let prometheus_registry = registry_service.default_registry();
 
         info!(node =? config.protocol_public_key(),

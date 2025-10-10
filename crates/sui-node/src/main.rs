@@ -117,7 +117,8 @@ fn main() {
         config.network_address = listen_address;
     }
 
-    let is_validator = config.consensus_config().is_some();
+    let node_type = config.node_type();
+    let is_validator = matches!(node_type, sui_config::NodeType::Validator);
 
     let admin_interface_port = config.admin_interface_port;
 
@@ -164,13 +165,14 @@ fn main() {
         let node = node_once_cell_clone.get().await;
         let chain_identifier = node.state().get_chain_identifier().to_string();
         info!("Sui chain identifier: {chain_identifier}");
+        let node_type_label = match node_type {
+            sui_config::NodeType::Validator => "validator",
+            sui_config::NodeType::Observer => "observer",
+            sui_config::NodeType::FullNode => "fullnode",
+        };
         prometheus_registry
             .register(mysten_metrics::uptime_metric(
-                if is_validator {
-                    "validator"
-                } else {
-                    "fullnode"
-                },
+                node_type_label,
                 VERSION,
                 chain_identifier.as_str(),
             ))
