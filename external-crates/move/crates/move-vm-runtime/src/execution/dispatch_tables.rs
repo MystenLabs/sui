@@ -407,7 +407,7 @@ impl VMDispatchTables {
                 Some(DatatypeInfo {
                     original_id: *descriptor.original_id.address(),
                     defining_id: *descriptor.defining_id.address(),
-                    module_name: descriptor.defining_id.name(),
+                    module_name: descriptor.defining_id.name()?,
                     type_name: resolve_interned(&descriptor.name, "type name")?,
                 })
             }
@@ -417,7 +417,7 @@ impl VMDispatchTables {
                 Some(DatatypeInfo {
                     original_id: *descriptor.original_id.address(),
                     defining_id: *descriptor.defining_id.address(),
-                    module_name: descriptor.defining_id.name(),
+                    module_name: descriptor.defining_id.name()?,
                     type_name: resolve_interned(&descriptor.name, "type name")?,
                 })
             }
@@ -554,7 +554,7 @@ impl VMDispatchTables {
 
         let tag = StructTag {
             address,
-            module,
+            module: module?,
             name,
             type_params,
         };
