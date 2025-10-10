@@ -14986,6 +14986,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-object-store"
+version = "1.59.0"
+dependencies = [
+ "object_store",
+ "sui-indexer-alt-framework-store-traits",
+ "sui-pg-db",
+]
+
+[[package]]
 name = "sui-json"
 version = "0.0.0"
 dependencies = [

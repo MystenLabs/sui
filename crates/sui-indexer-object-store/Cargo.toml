@@ -1,0 +1,12 @@
+[package]
+name = "sui-indexer-object-store"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+object_store.workspace = true
+sui-indexer-alt-framework-store-traits.workspace = true
+sui-pg-db.workspace = true
+
+[lints]
+workspace = true
