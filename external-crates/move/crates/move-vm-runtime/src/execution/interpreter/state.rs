@@ -11,7 +11,7 @@ use crate::{
         },
         values::values_impl::{self as values, VMValueCast, Value},
     },
-    jit::execution::ast::{Function, Type},
+    jit::execution::ast::{Function, InternedDisplay, Type},
     shared::{
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         views::TypeView,
@@ -24,7 +24,7 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 
-use std::{cmp::min, fmt::Write, sync::Arc};
+use std::{fmt::Write, sync::Arc};
 use tracing::error;
 
 macro_rules! debug_write {
@@ -204,13 +204,14 @@ impl MachineState {
         idx: usize,
         frame: &CallFrame,
     ) -> PartialVMResult<()> {
-        // Print out the function name with type arguments.
-        let _func_ptr = &frame.function;
+        use std::cmp::min;
+
+        // Print function header (module::function<ty_args...>)
         let func = frame.function();
 
         debug_write!(buf, "    [{}] ", idx)?;
         let module = func.module_id(&vtables.interner);
-        debug_write!(buf, "{}::{}::", module.address(), module.name(),)?;
+        debug_write!(buf, "{}::{}::", module.address(), module.name())?;
 
         debug_write!(buf, "{}", func.name(&vtables.interner))?;
         let ty_args = frame.ty_args();
@@ -232,22 +233,44 @@ impl MachineState {
         }
         debug_writeln!(buf)?;
 
-        // Print out the current instruction.
+        // Print out the current instruction and a small window around it.
         debug_writeln!(buf)?;
         debug_writeln!(buf, "        Code:")?;
+
         let pc = frame.pc as usize;
         let code = func.code();
-        let before = if pc > 3 { pc - 3 } else { 0 };
-        let after = min(code.len(), pc + 4);
-        for (idx, instr) in code.iter().enumerate().take(pc).skip(before) {
-            debug_writeln!(buf, "            [{}] {:?}", idx, instr)?;
-        }
-        debug_writeln!(buf, "          > [{}] {:?}", pc, &code[pc])?;
-        for (idx, instr) in code.iter().enumerate().take(after).skip(pc + 1) {
-            debug_writeln!(buf, "            [{}] {:?}", idx, instr)?;
+
+        if pc < code.len() {
+            let before = if pc > 3 { pc - 3 } else { 0 };
+            let after = min(code.len(), pc + 4);
+
+            for (ndx, instr) in code.iter().enumerate().take(pc).skip(before) {
+                debug_write!(buf, "            [{}] ", ndx)?;
+                let _ = &instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
+                debug_writeln!(buf)?;
+            }
+            debug_write!(buf, "          > [{}] ", pc,)?;
+            let _ = &code[pc]
+                .fmt(&mut *buf, &vtables.interner)
+                .map_err(fmt_err)?;
+            debug_writeln!(buf)?;
+            for (ndx, instr) in code.iter().enumerate().take(after).skip(pc + 1) {
+                debug_write!(buf, "            [{}] ", ndx)?;
+                instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
+                debug_writeln!(buf)?;
+            }
+        } else {
+            // PC is past end (e.g., right after Ret); just show last few instructions.
+            let start = code.len().saturating_sub(4);
+            for (ndx, instr) in code.iter().enumerate().skip(start) {
+                debug_write!(buf, "            [{}] ", ndx)?;
+                instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
+                debug_writeln!(buf)?;
+            }
+            debug_writeln!(buf, "          > [{}] <pc out of bounds>", pc)?;
         }
 
-        // Print out the locals.
+        // Locals
         debug_writeln!(buf)?;
         debug_writeln!(buf, "        Locals:")?;
         if func.local_count() > 0 {
@@ -290,46 +313,53 @@ impl MachineState {
     /// It will be exposed via a debug module to give developers a way to print the internals
     /// of an execution.
     fn internal_state_str(&self) -> String {
-        let mut internal_state = "Call stack:\n".to_string();
+        let mut internal_state = String::from("Call stack:\n");
 
         for (i, frame) in self.call_stack.frames.iter().enumerate() {
-            internal_state.push_str(
-                format!(
-                    " frame #{}: {} [pc = {}]\n",
-                    i,
-                    frame.function().pretty_string(&self.interner),
-                    frame.pc,
-                )
-                .as_str(),
-            );
+            let fun = frame.function();
+            internal_state.push_str(&format!(
+                " frame #{}: {} [pc = {}]\n",
+                i,
+                fun.pretty_string(&self.interner),
+                frame.pc
+            ));
         }
-        internal_state.push_str(
-            format!(
-                "*frame #{}: {} [pc = {}]:\n",
-                self.call_stack.frames.len(),
-                self.call_stack
-                    .current_frame
-                    .function()
-                    .pretty_string(&self.interner),
-                self.call_stack.current_frame.pc,
-            )
-            .as_str(),
-        );
+
+        internal_state.push_str(&format!(
+            "*frame #{}: {} [pc = {}]:\n",
+            self.call_stack.frames.len(),
+            self.call_stack
+                .current_frame
+                .function()
+                .pretty_string(&self.interner),
+            self.call_stack.current_frame.pc
+        ));
+
         let code = self.call_stack.current_frame.function().code();
         let pc = self.call_stack.current_frame.pc as usize;
+
         if pc < code.len() {
-            let mut i = 0;
-            for bytecode in &code[..pc] {
-                internal_state.push_str(format!("{}> {:?}\n", i, bytecode).as_str());
-                i += 1;
+            let interner = &self.interner;
+
+            for (i, bytecode) in code[..pc].iter().enumerate() {
+                // prefix "i> " then the formatted instruction
+                write!(internal_state, "{}> ", i).unwrap();
+                bytecode.fmt(&mut internal_state, interner).unwrap();
+                internal_state.push('\n');
             }
-            internal_state.push_str(format!("{}* {:?}\n", i, code[pc]).as_str());
+
+            write!(internal_state, "{}* ", pc).unwrap();
+            let _ = &code[pc].fmt(&mut internal_state, interner).unwrap();
+            internal_state.push('\n');
         }
-        internal_state
-            .push_str(format!("Locals:\n{}\n", self.call_stack.current_frame.stack_frame).as_str());
+
+        internal_state.push_str(&format!(
+            "Locals:\n{}\n",
+            self.call_stack.current_frame.stack_frame
+        ));
         internal_state.push_str("Operand Stack:\n");
         for value in &self.operand_stack.value {
-            internal_state.push_str(format!("{}\n", value).as_str());
+            internal_state.push_str(&format!("{}\n", value));
         }
         internal_state
     }
@@ -519,4 +549,13 @@ impl TypeView for ResolvableType<'_, '_> {
     fn to_type_tag(&self) -> TypeTag {
         self.vtables.type_to_type_tag(self.ty).unwrap()
     }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------------------------------------
+
+fn fmt_err(_input: std::fmt::Error) -> PartialVMError {
+    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+        .with_message("failed to write to buffer".to_string())
 }
