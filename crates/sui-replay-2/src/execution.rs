@@ -165,7 +165,8 @@ impl ReplayCacheSummary {
     }
 }
 
-/// Datatype definition: (address, module, name, variants)
+/// Datatype definition: (address, module, name, formal_type_params).
+/// This contains linking information in the binary format.
 pub type Datatype = (AccountAddress, String, String, Vec<MoveType>);
 
 /// Custom Move type representation for JSON serialization.
