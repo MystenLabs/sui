@@ -5,6 +5,7 @@
 module sui::poseidon_tests;
 
 use sui::poseidon::poseidon_bn254;
+use std::u64::min;
 
 #[test]
 fun test_poseidon_bn254_hash() {
@@ -98,4 +99,61 @@ fun test_poseidon_bn254_too_many_inputs() {
         17u256,
     ];
     poseidon_bn254(&msg);
+}
+
+#[test]
+fun test_poseidon_bn254_tree() {
+    let msg = vector[
+        0u256,
+        1u256,
+        2u256,
+        3u256,
+        4u256,
+        5u256,
+        6u256,
+        7u256,
+        8u256,
+        9u256,
+        10u256,
+        11u256,
+        12u256,
+        13u256,
+        14u256,
+        15u256,
+        16u256,
+        17u256,
+        18u256,
+        19u256,
+        20u256,
+        21u256,
+        22u256,
+        23u256,
+        24u256,
+        25u256,
+        26u256,
+        27u256,
+        28u256,
+        29u256,
+    ];
+
+    // Construct tree with a fixed arity
+    let mut msg = msg;
+    let mut next = vector[];
+    let k = 16; // arity
+
+    while (msg.length() > 1) {
+        msg.reverse();
+        while (!msg.is_empty()) {
+            let mut chunk = vector[];
+            min(k, msg.length()).do!(|_| {
+                chunk.push_back(msg.pop_back());
+            });
+            next.push_back(poseidon_bn254(&chunk));
+        };
+        msg = next;
+        next = vector[];
+    };
+
+    let expected = 4123755143677678663754455867798672266093104048057302051129414708339780424023u256;
+    assert!(msg[0] == expected);
 }
