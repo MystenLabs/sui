@@ -52,30 +52,43 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
             }
         }
         if *receiver.borrow() > withdraws.accumulator_version {
-            debug!("Withdraws at accumulator version are already settled");
-            for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
-                let _ = sender.send(ScheduleResult {
-                    tx_digest: withdraw.tx_digest,
-                    status: ScheduleStatus::AlreadySettled,
-                });
-            }
+            withdraws.notify_already_settled();
             return;
         }
 
         // Map from each account ID that we have seen so far to the current
         // remaining balance for reservation.
         let mut cur_balances = BTreeMap::new();
+        for account_id in withdraws.all_accounts() {
+            // Load the current balance for the account.
+            // It is possible that executions through checkpoint executor have already settled this version,
+            // and hence the current version is greater than the withdraws' accumulator version.
+            // In this case, we simply skip processing the withdraws and notify the caller that the withdraws are already settled.
+            // This is safe because these transactions have already been executed.
+            let balance = match self.balance_read.get_latest_account_balance(&account_id) {
+                Some((balance, cur_version)) => {
+                    if cur_version > withdraws.accumulator_version {
+                        debug!(
+                            ?account_id,
+                            "Accumulator account object is already at version {:?}, but the withdraws are at version {:?}",
+                            cur_version, withdraws.accumulator_version
+                        );
+                        withdraws.notify_already_settled();
+                        return;
+                    }
+                    balance
+                }
+                None => 0,
+            };
+            cur_balances.insert(account_id, balance);
+        }
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
             // Try to reserve all withdraws in this transaction.
             // Note that this is not atomic, so it is possible that we reserve some withdraws and not others.
             // This is intentional to be semantically consistent with the eager scheduler.
             let mut success = true;
             for (object_id, reservation) in &withdraw.reservations {
-                let entry = cur_balances.entry(*object_id).or_insert_with(|| {
-                    self.balance_read
-                        .get_account_balance(object_id, withdraws.accumulator_version)
-                });
-
+                let entry = cur_balances.get_mut(object_id).unwrap();
                 if *entry < *reservation as u128 {
                     debug!(
                         tx_digest =? withdraw.tx_digest,
@@ -126,5 +139,10 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
 
     fn close_epoch(&self) {
         debug!("Closing epoch in NaiveBalanceWithdrawScheduler");
+    }
+
+    #[cfg(test)]
+    fn get_current_accumulator_version(&self) -> SequenceNumber {
+        *self.accumulator_version_receiver.borrow()
     }
 }
