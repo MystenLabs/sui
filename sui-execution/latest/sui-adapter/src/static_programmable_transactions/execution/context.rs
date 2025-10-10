@@ -772,10 +772,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             sui_verifier::verifier::sui_verify_module_unmetered(
                 module,
                 &BTreeMap::new(),
-                &self
-                    .env
-                    .protocol_config
-                    .verifier_config(/* signing_limits */ None),
+                &self.env.protocol_config.verifier_config(
+                    /* signing_limits */ None,
+                    /* sanity_check_with_regex_reference_safety */ false,
+                ),
             )?;
         }
 

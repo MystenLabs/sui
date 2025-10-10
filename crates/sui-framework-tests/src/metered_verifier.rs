@@ -36,8 +36,10 @@ fn test_metered_move_bytecode_verifier() {
 
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     let signing_config = VerifierSigningConfig::default();
-    let mut verifier_config =
-        protocol_config.verifier_config(Some(signing_config.limits_for_signing()));
+    let mut verifier_config = protocol_config.verifier_config(
+        Some(signing_config.limits_for_signing()),
+        /* sanity_check_with_regex_reference_safety */ true,
+    );
     let mut meter_config = signing_config.meter_config_for_signing();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
@@ -205,8 +207,10 @@ fn test_metered_move_bytecode_verifier() {
 
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let verifier_config =
-        protocol_config.verifier_config(Some(signing_config.limits_for_signing()));
+    let verifier_config = protocol_config.verifier_config(
+        Some(signing_config.limits_for_signing()),
+        /* sanity_check_with_regex_reference_safety */ true,
+    );
     let meter_config = signing_config.meter_config_for_signing();
 
     // Check if the same meter is indeed used multiple invocations of the verifier
@@ -234,8 +238,10 @@ fn test_meter_system_packages() {
 
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let verifier_config =
-        protocol_config.verifier_config(Some(signing_config.limits_for_signing()));
+    let verifier_config = protocol_config.verifier_config(
+        Some(signing_config.limits_for_signing()),
+        /* sanity_check_with_regex_reference_safety */ true,
+    );
     let meter_config = signing_config.meter_config_for_signing();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
@@ -290,8 +296,10 @@ fn test_build_and_verify_programmability_examples() {
 
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let verifier_config =
-        protocol_config.verifier_config(Some(signing_config.limits_for_signing()));
+    let verifier_config = protocol_config.verifier_config(
+        Some(signing_config.limits_for_signing()),
+        /* sanity_check_with_regex_reference_safety */ true,
+    );
     let meter_config = signing_config.meter_config_for_signing();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
