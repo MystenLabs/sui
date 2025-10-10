@@ -44,7 +44,7 @@ Use these definitions to generate client libraries in various programming langua
 
 :::info
 
-If you were using the `v2beta2` proto files previously, note that the latest definitions are now under the `v2` version. Also, the `LiveDataService` has been renamed to `StateService`.
+If you were using the `v2beta2` proto files previously, note that the latest definitions are now under the `v2` version. Also, the `LiveDataService` has been renamed to `StateService`, and the `SimulateTransaction` API has been moved to the `TransactionExecutionService`.
 
 :::
 
@@ -134,7 +134,7 @@ Streaming APIs are useful for building indexers, dashboards, or bots that need t
 
 ## Handling pruned data
 
-If a full node doesn’t return a specific object, transaction, or event, it’s likely that the data has been pruned based on the node’s retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store & Service](./archival-store.mdx). The Archival Store retains historical data for the network.
+If a full node doesn’t return a specific object, transaction, or event, it’s likely that the data has been pruned based on the node’s retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store & Service](/concepts/archival-store.mdx). The Archival Store retains historical data for the network.
 
 You can reuse the same gRPC `LedgerService` methods for this lookup. Simply change the endpoint in your client from the full node’s address to the archival service endpoint.
 
@@ -585,4 +585,4 @@ python client.py
 
 ## Full node operator configuration
 
-Refer to [Considerations to enable gRPC](/guides/operator/sui-full-node.mdx#considerations-to-enable-grpc-beta).
+Refer to [Considerations to enable gRPC](/guides/operator/sui-full-node.mdx#considerations-to-enable-grpc).
