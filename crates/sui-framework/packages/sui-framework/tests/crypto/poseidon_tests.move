@@ -19,6 +19,12 @@ fun test_poseidon_bn254_hash() {
     let actual = poseidon_bn254(&msg);
     assert!(actual == expected);
 
+    let msg = vector[0u256];
+    let expected =
+        19014214495641488759237505126948346942972912379615652741039992445865937985820u256;
+    let actual = poseidon_bn254(&msg);
+    assert!(actual == expected);
+
     let msg = vector[
         1u256,
         2u256,
