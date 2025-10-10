@@ -30,6 +30,7 @@ use typed_store_error::TypedStoreError;
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
     Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
+pub type AuthenticatedEventRecord = (u64, u32, u32, crate::event::Event);
 
 pub trait ReadStore: ObjectStore {
     //
@@ -665,6 +666,19 @@ pub trait RpcIndexes: Send + Sync {
         original_id: ObjectID,
         cursor: Option<u64>,
     ) -> Result<PackageVersionsIterator<'_>>;
+
+    fn get_highest_indexed_checkpoint_seq_number(&self)
+        -> Result<Option<CheckpointSequenceNumber>>;
+
+    fn authenticated_event_iter(
+        &self,
+        stream_id: SuiAddress,
+        start_checkpoint: u64,
+        start_transaction_idx: Option<u32>,
+        start_event_idx: Option<u32>,
+        end_checkpoint: u64,
+        limit: u32,
+    ) -> Result<Box<dyn Iterator<Item = Result<AuthenticatedEventRecord, TypedStoreError>> + '_>>;
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

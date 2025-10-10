@@ -860,6 +860,7 @@ pub struct TestClusterBuilder {
     validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
 
     indexer_backed_rpc: bool,
+    rpc_config: Option<sui_config::RpcConfig>,
 
     chain_override: Option<Chain>,
 
@@ -901,6 +902,7 @@ impl TestClusterBuilder {
                 true,
             ),
             indexer_backed_rpc: false,
+            rpc_config: None,
             transaction_driver_percentage: None,
             #[cfg(msim)]
             inject_synthetic_execution_time: false,
@@ -1121,6 +1123,11 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_rpc_config(mut self, config: sui_config::RpcConfig) -> Self {
+        self.rpc_config = Some(config);
+        self
+    }
+
     pub fn with_chain_override(mut self, chain: Chain) -> Self {
         self.chain_override = Some(chain);
         self
@@ -1289,6 +1296,10 @@ impl TestClusterBuilder {
 
         if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {
             builder = builder.with_fullnode_rpc_port(fullnode_rpc_port);
+        }
+
+        if let Some(rpc_config) = &self.rpc_config {
+            builder = builder.with_fullnode_rpc_config(rpc_config.clone());
         }
         if let Some(num_unpruned_validators) = self.num_unpruned_validators {
             builder = builder.with_num_unpruned_validators(num_unpruned_validators);
