@@ -708,13 +708,11 @@ fn struct_instantiations(
             let field_count = struct_def.fields.len() as u16;
             let instantiation_idx = struct_inst.type_parameters;
             let type_params = signatures[instantiation_idx.0 as usize].ptr_clone();
-            let instantiation = signatures[struct_inst.type_parameters.0 as usize].ptr_clone();
 
             Ok(StructInstantiation {
                 field_count,
                 def_vtable_key: struct_def.def_vtable_key.clone(),
                 type_params,
-                instantiation,
             })
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
@@ -737,7 +735,6 @@ fn enum_instantiations(
                 context.arena_vec(enum_def.variants.iter().map(|v| v.fields.len() as u16))?;
             let instantiation_idx = enum_inst.type_parameters;
             let type_params = signatures[instantiation_idx.0 as usize].ptr_clone();
-            let instantiation = signatures[enum_inst.type_parameters.0 as usize].ptr_clone();
 
             let def_vtable_key = enum_def.def_vtable_key.clone();
             let enum_def = VMPointer::from_ref(enum_def);
@@ -747,7 +744,6 @@ fn enum_instantiations(
                 enum_def,
                 def_vtable_key,
                 type_params,
-                instantiation,
             })
         })
         .collect::<PartialVMResult<Vec<_>>>()?;

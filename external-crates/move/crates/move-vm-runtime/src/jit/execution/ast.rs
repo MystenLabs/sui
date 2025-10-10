@@ -217,8 +217,6 @@ pub struct StructInstantiation {
     pub field_count: u16,
     pub def_vtable_key: VirtualTableKey,
     pub(crate) type_params: VMPointer<ArenaVec<ArenaType>>,
-    #[allow(dead_code)]
-    pub(crate) instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
@@ -243,8 +241,6 @@ pub struct EnumInstantiation {
     pub enum_def: VMPointer<EnumDef>,
     pub def_vtable_key: VirtualTableKey,
     pub(crate) type_params: VMPointer<ArenaVec<ArenaType>>,
-    #[allow(dead_code)]
-    pub(crate) instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
 // A variant instantiation.
