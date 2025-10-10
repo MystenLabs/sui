@@ -136,11 +136,21 @@ mod checked {
         };
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
+        let address_balance_payer = if gas_data.is_paid_from_address_balance()
+            && matches!(
+                transaction_kind,
+                TransactionKind::ProgrammableTransaction(_)
+            ) {
+            Some(gas_data.owner)
+        } else {
+            None
+        };
         let mut gas_charger = GasCharger::new(
             transaction_digest,
             gas_data.payment,
             gas_status,
             protocol_config,
+            address_balance_payer,
         );
 
         let tx_ctx = TxContext::new_from_components(

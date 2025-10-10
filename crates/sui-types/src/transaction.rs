@@ -15,6 +15,7 @@ use crate::crypto::{
 use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
+use crate::gas_coin::GAS;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
@@ -188,7 +189,9 @@ pub struct FundsWithdrawalArg {
 pub enum WithdrawFrom {
     /// Withdraw from the sender of the transaction.
     Sender,
-    // TODO(address-balances): Add more options here, such as Sponsor, or even multi-party withdraws.
+    /// Withdraw from the sponsor of the transaction (gas owner).
+    Sponsor,
+    // TODO(address-balances): Add more options here, such as multi-party withdraws.
 }
 
 impl FundsWithdrawalArg {
@@ -198,6 +201,15 @@ impl FundsWithdrawalArg {
             reservation: Reservation::MaxAmountU64(amount),
             type_arg: WithdrawalTypeArg::Balance(balance_type),
             withdraw_from: WithdrawFrom::Sender,
+        }
+    }
+
+    /// Withdraws from `Balance<balance_type>` in the sponsor's address (gas owner).
+    pub fn balance_from_sponsor(amount: u64, balance_type: TypeInput) -> Self {
+        Self {
+            reservation: Reservation::MaxAmountU64(amount),
+            type_arg: WithdrawalTypeArg::Balance(balance_type),
+            withdraw_from: WithdrawFrom::Sponsor,
         }
     }
 }
@@ -2418,9 +2430,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
-        let withdraws = self.get_funds_withdrawals();
-        // TODO(address-balances): Once we support paying gas using address balances,
-        // we add gas reservations here.
+        let mut withdraws = self.get_funds_withdrawals();
         // TODO(address-balances): Use a protocol config parameter for max_withdraws.
         let max_withdraws = 10;
         if withdraws.len() > max_withdraws {
@@ -2429,6 +2439,29 @@ impl TransactionDataAPI for TransactionDataV1 {
                     "Maximum number of balance withdraw reservations is {max_withdraws}"
                 ),
             });
+        }
+
+        if self.gas_data().is_paid_from_address_balance() {
+            let gas_withdraw = if self.sender() != self.gas_owner() {
+                FundsWithdrawalArg::balance_from_sponsor(
+                    self.gas_data().budget,
+                    TypeInput::from(GAS::type_tag()),
+                )
+            } else {
+                FundsWithdrawalArg::balance_from_sender(
+                    self.gas_data().budget,
+                    TypeInput::from(GAS::type_tag()),
+                )
+            };
+            withdraws.push(gas_withdraw);
+
+            if withdraws.len() > max_withdraws {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: format!(
+                        "Maximum number of balance withdraw reservations is {max_withdraws} (including gas reservation)"
+                    ),
+                });
+            }
         }
 
         // Accumulate all withdraws per account.
@@ -2449,9 +2482,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                     error: "Balance withdraw reservation amount must be non-zero".to_string(),
                 });
             }
-            let WithdrawFrom::Sender = withdraw.withdraw_from;
+            let account_address = match withdraw.withdraw_from {
+                WithdrawFrom::Sender => self.sender(),
+                WithdrawFrom::Sponsor => self.gas_owner(),
+            };
             let account_id =
-                AccumulatorValue::get_field_id(self.sender(), &withdraw.type_arg.to_type_tag()?)
+                AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag()?)
                     .map_err(|e| UserInputError::InvalidWithdrawReservation {
                         error: e.to_string(),
                     })?;
