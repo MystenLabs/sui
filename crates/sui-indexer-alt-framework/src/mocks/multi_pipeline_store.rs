@@ -236,7 +236,6 @@ impl MockMultiPipelineStore {
     pub async fn commit_data(
         &self,
         pipeline: &'static str,
-        task: Option<&str>,
         values: std::collections::HashMap<u64, Vec<u64>>,
     ) -> anyhow::Result<usize> {
         // Apply commit delay if configured
@@ -255,31 +254,30 @@ impl MockMultiPipelineStore {
             self.commit_failures.failures - prev
         );
 
-        // Store the data
-        let mut total_count = 0;
-        // Get or create the pipeline's data map
-        let pipeline_data = self
-            .data
-            .entry(watermark_key(pipeline, task))
-            .or_insert_with(DashMap::new);
-
-        for (checkpoint, checkpoint_values) in values {
-            total_count += checkpoint_values.len();
-
-            // Get or create the checkpoint's data vector
-            let mut data_vec = pipeline_data.entry(checkpoint).or_insert_with(Vec::new);
-
-            // Extend the existing vector
-            data_vec.extend(checkpoint_values);
+        let key = watermark_key(pipeline, None);
+        let mut total = 0;
+        if let Some(inner) = self.data.get(&key) {
+            for (cp, v) in values {
+                total += v.len();
+                inner.entry(cp).or_insert_with(Vec::new).extend(v);
+            }
+            return Ok(total);
         }
-        Ok(total_count)
+
+        // create once, then insert
+        let inner = DashMap::new();
+        for (cp, v) in values {
+            total += v.len();
+            inner.entry(cp).or_insert_with(Vec::new).extend(v);
+        }
+        self.data.insert(key, inner);
+        Ok(total)
     }
 
     /// Prunes data for the given checkpoints, handling failure simulation
     pub fn prune_data(
         &self,
         pipeline: &'static str,
-        task: Option<&str>,
         from: u64,
         to_exclusive: u64,
     ) -> anyhow::Result<usize> {
@@ -291,7 +289,7 @@ impl MockMultiPipelineStore {
         ensure!(!should_fail, "Pruning failed");
 
         // Remove the data
-        let Some(pipeline_data) = self.data.get_mut(&watermark_key(pipeline, task)) else {
+        let Some(pipeline_data) = self.data.get_mut(&watermark_key(pipeline, None)) else {
             return Ok(0);
         };
         let mut pruned_count = 0;
@@ -410,21 +408,16 @@ impl MockMultiPipelineStore {
     }
 
     /// Wait for any data to be processed and stored, panicking if timeout is reached
-    pub async fn wait_for_any_data(
-        &self,
-        pipeline: &'static str,
-        task: Option<&str>,
-        timeout_duration: Duration,
-    ) {
+    pub async fn wait_for_any_data(&self, pipeline: &'static str, timeout_duration: Duration) {
         let start = std::time::Instant::now();
+        let key = watermark_key(pipeline, None);
         while start.elapsed() < timeout_duration {
             {
-                let data = self.data.get(&watermark_key(pipeline, task)).unwrap();
-                if !data.is_empty() {
+                if self.data.contains_key(&key) {
                     return;
                 }
             }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
         }
         panic!("Timeout waiting for any data to be processed - pipeline may be stuck");
     }
@@ -433,14 +426,13 @@ impl MockMultiPipelineStore {
     pub async fn wait_for_data(
         &self,
         pipeline: &'static str,
-        task: Option<&str>,
         checkpoint: u64,
         timeout_duration: Duration,
     ) -> Vec<u64> {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout_duration {
             {
-                if let Some(pipeline_data) = self.data.get(&watermark_key(pipeline, task)) {
+                if let Some(pipeline_data) = self.data.get(&watermark_key(pipeline, None)) {
                     if let Some(values) = pipeline_data.get(&checkpoint) {
                         return values.clone();
                     }

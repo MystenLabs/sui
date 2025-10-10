@@ -14,7 +14,7 @@ use sui_indexer_alt_framework_store_traits::Connection;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
-    time::{interval, sleep_until, Instant, MissedTickBehavior},
+    time::{interval, MissedTickBehavior},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
@@ -238,7 +238,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         task.clone(),
         main_reader_lo.clone(),
         pruner_config.clone(),
-        cancel.clone(),
+        pruner_cancel.clone(),
         store.clone(),
     );
 
@@ -298,16 +298,10 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     tokio::spawn(async move {
-        let (_, _, _, _, _) = futures::join!(
-            main_reader_lo_task,
-            processor,
-            collector,
-            committer,
-            commit_watermark
-        );
+        let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
 
         pruner_cancel.cancel();
-        let _ = futures::join!(reader_watermark, pruner);
+        let _ = futures::join!(main_reader_lo_task, reader_watermark, pruner);
     })
 }
 

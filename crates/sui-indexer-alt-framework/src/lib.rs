@@ -51,10 +51,12 @@ pub struct IndexerArgs {
     /// Sequential pipelines can only be run as main pipelines. Concurrent pipelines can be run as
     /// main and/ or task pipelines.
     ///
-    /// Task pipelines must be configured to start from a checkpoint no less than the main
-    /// pipeline's reader watermark, cannot enable pruning, and will push only their respective
-    /// committer watermarks. The framework ensures that tasked pipelines do not commit checkpoints
-    /// that are below the main pipeline's reader watermark.
+    /// Task pipelines start from a checkpoint no less than the main pipeline's reader watermark,
+    /// cannot enable pruning, and will push only their respective committer watermarks. The
+    /// framework ensures that tasked pipelines do not commit checkpoints that are below the main
+    /// pipeline's reader watermark. If the main pipeline has pruning enabled, the tasked pipeline
+    /// should be run with the same pruning configuration so that the tasked indexer can correctly
+    /// track the main pipeline's pruning and reader watermarks.
     #[arg(long)]
     pub task: Option<String>,
 
@@ -168,12 +170,6 @@ impl<S: Store> Indexer<S> {
             pipeline,
             task,
         } = indexer_args;
-
-        let metrics_prefix = if let Some(task) = task {
-            format!("{}_{}", metrics_prefix.unwrap_or("indexer"), task)
-        } else {
-            metrics_prefix.unwrap_or("indexer")
-        };
 
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
 
@@ -506,13 +502,33 @@ impl<T: TransactionalStore> Indexer<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mocks::store::MockStore;
     use crate::pipeline::concurrent::ConcurrentConfig;
     use crate::store::CommitterWatermark;
     use crate::FieldCount;
+    use crate::{
+        mocks::{
+            multi_pipeline_store::{
+                MockConnection as MockMultiPipelineConnection, MockMultiPipelineStore,
+            },
+            store::MockStore,
+        },
+        pipeline::concurrent::PrunerConfig,
+    };
     use std::sync::Arc;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tokio_util::sync::CancellationToken;
+
+    #[allow(dead_code)]
+    #[derive(Clone, FieldCount)]
+    struct MockValue(u64);
+
+    struct MockHandler;
+
+    #[allow(dead_code)]
+    #[derive(Clone, FieldCount)]
+    struct MockMultiPipelineValue(u64);
+
+    struct MockMultiPipelineHandler;
 
     impl Processor for MockHandler {
         const NAME: &'static str = "test_processor";
@@ -524,12 +540,6 @@ mod tests {
             Ok(vec![MockValue(1)])
         }
     }
-
-    #[allow(dead_code)]
-    #[derive(Clone, FieldCount)]
-    struct MockValue(u64);
-
-    struct MockHandler;
 
     #[async_trait::async_trait]
     impl crate::pipeline::concurrent::Handler for MockHandler {
@@ -556,6 +566,34 @@ mod tests {
             _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
+            Ok(1)
+        }
+    }
+
+    impl Processor for MockMultiPipelineHandler {
+        const NAME: &'static str = "test";
+        type Value = MockValue;
+        fn process(
+            &self,
+            checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![MockValue(
+                checkpoint.checkpoint_summary.sequence_number,
+            )])
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::pipeline::concurrent::Handler for MockMultiPipelineHandler {
+        type Store = MockMultiPipelineStore;
+
+        async fn commit<'a>(
+            values: &[Self::Value],
+            conn: &mut MockMultiPipelineConnection<'a>,
+        ) -> anyhow::Result<usize> {
+            conn.0
+                .commit_data("test", values.iter().map(|v| (v.0, vec![v.0])).collect())
+                .await?;
             Ok(1)
         }
     }
@@ -931,11 +969,298 @@ mod tests {
         );
     }
 
-    // async fn test_tasked_pipelines_resume_from_main_reader_lo() {
+    /// When a tasked pipeline is run with a `first_checkpoint` less than the main pipeline's
+    /// reader_lo, the indexer will set the `next_checkpoint` of the tasked pipeline to the latest
+    /// `reader_lo`.
+    #[tokio::test]
+    async fn test_tasked_pipelines_ignore_below_main_reader_lo() {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+        let store = MockMultiPipelineStore::default();
 
-    // }
+        // Mock the store as if we have a main pipeline with a committer watermark at `10` and a
+        // reader watermark at `7`.
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test",
+            None,
+            CommitterWatermark {
+                checkpoint_hi_inclusive: 10,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        conn.set_reader_watermark("test", 7).await.unwrap();
 
-    // test_tasked_pipelines_can_run_ahead_of_main_committer_hi
+        // Start a tasked indexer that will ingest from checkpoint 0. Checkpoints 0 through 6 should
+        // be ignored by the tasked indexer.
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(0),
+            last_checkpoint: Some(15),
+            pipeline: vec![],
+            task: Some("task".to_string()),
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: 0,
+            num_checkpoints: 16,
+            checkpoint_size: 2,
+        })
+        .await;
 
-    // test_tasked_pipelines_stop_when_trailing_main_reader_lo
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut tasked_indexer = Indexer::new(
+            store.clone(),
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        let _ = tasked_indexer
+            .concurrent_pipeline(MockMultiPipelineHandler, ConcurrentConfig::default())
+            .await;
+
+        let metrics = tasked_indexer.metrics().clone();
+
+        tasked_indexer.run().await.unwrap().await.unwrap();
+
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 16);
+        // 7 checkpoints out of order, 0 through 6 inclusive.
+        assert_eq!(
+            metrics
+                .total_watermarks_out_of_order
+                .get_metric_with_label_values(&["test"])
+                .unwrap()
+                .get(),
+            7
+        );
+        // assert that we have no data from checkpoints 0 through 6.
+        let data = store.data.get("test").unwrap();
+        assert_eq!(data.len(), 9);
+        for i in 0..7 {
+            assert!(data.get(&i).is_none());
+        }
+        for i in 7..16 {
+            assert!(data.get(&i).is_some());
+        }
+    }
+
+    /// Tasked pipelines can run ahead of the main pipeline's committer watermark.
+    #[tokio::test]
+    async fn test_tasked_pipelines_surpass_main_pipeline_committer_hi() {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+        let store = MockMultiPipelineStore::default();
+
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test",
+            None,
+            CommitterWatermark {
+                checkpoint_hi_inclusive: 10,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        conn.set_reader_watermark("test", 5).await.unwrap();
+
+        // Start a tasked indexer that will ingest from checkpoint 9 and go past the main pipeline's
+        // watermarks.
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(9),
+            last_checkpoint: Some(25),
+            pipeline: vec![],
+            task: Some("task".to_string()),
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: 9,
+            num_checkpoints: 17,
+            checkpoint_size: 2,
+        })
+        .await;
+
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut tasked_indexer = Indexer::new(
+            store.clone(),
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        let _ = tasked_indexer
+            .concurrent_pipeline(MockMultiPipelineHandler, ConcurrentConfig::default())
+            .await;
+
+        let metrics = tasked_indexer.metrics().clone();
+
+        tasked_indexer.run().await.unwrap().await.unwrap();
+
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 17);
+        assert_eq!(
+            metrics
+                .total_watermarks_out_of_order
+                .get_metric_with_label_values(&["test"])
+                .unwrap()
+                .get(),
+            0
+        );
+        let data = store.data.get("test").unwrap();
+        assert!(data.len() == 17);
+        for i in 0..9 {
+            assert!(data.get(&i).is_none());
+        }
+        for i in 9..26 {
+            assert!(data.get(&i).is_some());
+        }
+        let main_pipeline_watermark = store.watermark("test", None).unwrap();
+        // assert that the main pipeline's watermarks are not updated
+        assert_eq!(main_pipeline_watermark.checkpoint_hi_inclusive, 10);
+        assert_eq!(main_pipeline_watermark.reader_lo, 5);
+        let tasked_pipeline_watermark = store.watermark("test", Some("task")).unwrap();
+        assert_eq!(tasked_pipeline_watermark.checkpoint_hi_inclusive, 25);
+        assert_eq!(tasked_pipeline_watermark.reader_lo, 0);
+    }
+
+    /// During a run, the tasked pipeline will stop processing checkpoints before the main
+    /// pipeline's reader watermark.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn test_tasked_pipelines_stop_when_trailing_main_reader_lo() {
+        let cancel = CancellationToken::new();
+        let registry = Registry::new();
+        let store = MockMultiPipelineStore::default();
+
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            "test",
+            None,
+            CommitterWatermark {
+                checkpoint_hi_inclusive: 10,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        // Start a tasked indexer that will ingest from checkpoint 20.
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(20),
+            last_checkpoint: Some(31),
+            pipeline: vec![],
+            task: Some("task".to_string()),
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: 20,
+            num_checkpoints: 12,
+            checkpoint_size: 2,
+        })
+        .await;
+
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        };
+
+        let ingestion_config = IngestionConfig::default();
+
+        let mut tasked_indexer = Indexer::new(
+            store.clone(),
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        let _ = tasked_indexer
+            .concurrent_pipeline(
+                MockMultiPipelineHandler,
+                ConcurrentConfig {
+                    pruner: Some(PrunerConfig {
+                        interval_ms: 10,
+                        delay_ms: 10,
+                        retention: 10,
+                        max_chunk_size: 10,
+                        prune_concurrency: 1,
+                    }),
+                    ..ConcurrentConfig::default()
+                },
+                // ConcurrentConfig::default(),
+            )
+            .await;
+
+        let metrics = tasked_indexer.metrics().clone();
+
+        let indexer_handle = tokio::spawn(async move {
+            tasked_indexer.run().await.unwrap().await.unwrap();
+        });
+
+        store
+            .wait_for_any_data("test", std::time::Duration::from_millis(5000))
+            .await;
+
+        // Artificially bump the main pipeline's watermarks.
+        conn.set_committer_watermark(
+            "test",
+            None,
+            CommitterWatermark {
+                checkpoint_hi_inclusive: 30,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        conn.set_reader_watermark("test", 26).await.unwrap();
+        // And prune data
+        store.prune_data("test", 0, 26).unwrap();
+
+        indexer_handle.await.unwrap();
+        let data = store.data.get("test").unwrap();
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 12);
+        for i in 0..26 {
+            assert!(
+                data.get(&i).is_none(),
+                "Data for checkpoint {} should be none",
+                i
+            );
+        }
+        for i in 26..32 {
+            assert!(
+                data.get(&i).is_some(),
+                "Data for checkpoint {} should be some",
+                i
+            );
+        }
+    }
 }
