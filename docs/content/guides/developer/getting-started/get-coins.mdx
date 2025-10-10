@@ -56,17 +56,25 @@ $ sui client new-address ed25519
 
 ## Request SUI tokens from faucet {#online-faucet}
 
-It is recommended to use the Testnet for most use cases before deploying to Mainnet for production. [Learn more](/guides/developer/getting-started/configure-sui-client.mdx) about the available networks and their differences. 
-
 Visit the online faucet to request SUI tokens: https://faucet.sui.io/
 
 Then, follow these steps: 
 
 1. Connect your wallet or paste your wallet address in the address field. Get your wallet address in the CLI with the command `sui client active-address`. 
-1. Use the network dropdown to select the correct network: Testnet, Devnet, or Localnet.
+1. Use the network dropdown to select the correct network: Testnet, Devnet, or Localnet. It is recommended to use the Testnet for most use cases before deploying to Mainnet for production. [Learn more](/guides/developer/getting-started/configure-sui-client.mdx) about the available networks and their differences. 
 1. Click the **Request SUI** button. 
 
 To request more SUI, refresh your browser and click the **Request SUI** button again. The requests are rate limited, however, so too many requests results in a waiting period before you are able to request more tokens.
+
+### Community faucets 
+
+You can also use the following community-provided faucets to obtain SUI tokens:
+
+- http://faucet.n1stake.com/
+
+- http://faucet.suilearn.io/
+
+These faucets have their own separate limits, such as one request per day or one request every few hours.
 
 ### Verify token balance 
 
@@ -75,6 +83,8 @@ To check your balance of SUI tokens and confirm you received some from the fauce
 ```
 $ sui client balance 
 ```
+
+Alternatively, use a Sui Explorer such as [SuiVision](https://suivision.xyz/) or [SuiScan](https://suiscan.xyz/mainnet/accounts) to check the SUI token balance of an address.
 
 You should have a balance of SUI tokens:
 
