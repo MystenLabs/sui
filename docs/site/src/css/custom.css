@@ -1814,3 +1814,40 @@ h5 {
 span.absolute.rounded[class*="-top-3"][class*="-left-1"] {
   display: none !important;
 }
+
+/* Style external links in sidebar */
+.menu__link[href^="http"]::after,
+.menu__link[href^="https://"]::after {
+  content: '↗';
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+/* Optional: Add background badge */
+.menu__link[href^="http"]::after,
+.menu__link[href^="https://"]::after {
+  content: '↗';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 1rem;
+  height: 1rem;
+  font-size: 0.7rem;
+  background: rgba(0, 123, 255, 0.1);
+  border-radius: 0.25rem;
+  opacity: 0.7;
+}
+
+.menu__link[href^="http"]:hover::after,
+.menu__link[href^="https://"]:hover::after {
+  opacity: 1;
+  background: rgba(0, 123, 255, 0.15);
+}
+
+/* Dark mode */
+[data-theme='dark'] .menu__link[href^="http"]::after,
+[data-theme='dark'] .menu__link[href^="https://"]::after {
+  background: rgba(0, 123, 255, 0.2);
+}
