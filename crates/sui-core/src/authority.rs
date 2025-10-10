@@ -1490,6 +1490,11 @@ impl AuthorityState {
         mut execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+        antithesis_sdk::assert_sometimes!(
+            certificate.transaction_data().uses_randomness(),
+            "randomness_transactions_are_scheduled"
+        );
+
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
