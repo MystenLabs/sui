@@ -1,0 +1,29 @@
+
+# Generated on Fri, 5 Jul 2024 19:09:17 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//third-party:proc-macro2_1_0_78",
+  "//third-party:quote_1_0_35",
+  "//third-party:syn_1_0_107"
+]
+# buckify!
+
+rust_library(
+    name = "sui-protocol-config-macros",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_DESCRIPTION": "",
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "sui-protocol-config-macros",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_VERSION": "0.1.0",
+    },
+    crate_root = "src/lib.rs",
+    proc_macro = True,
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

@@ -1,0 +1,69 @@
+buildscript = []
+# [env]
+# OUT_DIR = "."
+# TODO aarch64 and mac
+[[platform_fixup.'cfg(target_os = "linux")'.buildscript]]
+[platform_fixup.'cfg(target_os = "linux")'.buildscript.cxx_library]
+name = "libz-sys-linux"
+srcs = [
+    "src/zlib/adler32.c",
+    "src/zlib/compress.c",
+    "src/zlib/crc32.c",
+    "src/zlib/deflate.c",
+    "src/zlib/infback.c",
+    "src/zlib/inffast.c",
+    "src/zlib/inflate.c",
+    "src/zlib/inftrees.c",
+    "src/zlib/trees.c",
+    "src/zlib/uncompr.c",
+    "src/zlib/zutil.c",
+    "src/zlib/gzclose.c",
+    "src/zlib/gzlib.c",
+    "src/zlib/gzread.c",
+    "src/zlib/gzwrite.c",
+]
+headers = ["src/zlib/*.h"]
+preprocessor_flags = [
+    "-DSTDC",
+    "-DZLIB_CONST",
+    "-D_LARGEFILE64_SOURCE",
+    "-D_POSIX_SOURCE",
+    "-D_C99_SOURCE",
+
+]
+compiler_flags = ["-O0"]
+include_paths = ["src/zlib"]
+
+[[platform_fixup.'cfg(target_os = "macos")'.buildscript]]
+[platform_fixup.'cfg(target_os = "macos")'.buildscript.cxx_library]
+name = "libz-sys-macos"
+srcs = [
+    "src/zlib/adler32.c",
+    "src/zlib/compress.c",
+    "src/zlib/crc32.c",
+    "src/zlib/deflate.c",
+    "src/zlib/infback.c",
+    "src/zlib/inffast.c",
+    "src/zlib/inflate.c",
+    "src/zlib/inftrees.c",
+    "src/zlib/trees.c",
+    "src/zlib/uncompr.c",
+    "src/zlib/zutil.c",
+    "src/zlib/gzclose.c",
+    "src/zlib/gzlib.c",
+    "src/zlib/gzread.c",
+    "src/zlib/gzwrite.c",
+]
+headers = ["src/zlib/*.h"]
+preprocessor_flags = [
+    "-DSTDC",
+    "-DZLIB_CONST",
+    "-D_LARGEFILE64_SOURCE",
+    "-D_POSIX_SOURCE",
+    "-D_C99_SOURCE",
+
+]
+compiler_flags = ["-O3"]
+include_paths = ["src/zlib"]
+
+# cargo:rustc-link-lib=z
