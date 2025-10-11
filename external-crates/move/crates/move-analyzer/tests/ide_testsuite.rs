@@ -129,7 +129,7 @@ impl UseDefTest {
         let Some(use_def) = uses.iter().nth(*use_ndx) else {
             writeln!(
                 output,
-                "ERROR: No use_line {use_ndx} in uses {uses:#?} for file {use_file}"
+                "ERROR: No symbol at index {use_ndx} in line {use_line} uses {uses:#?} for file {use_file}"
             )?;
             return Ok(());
         };

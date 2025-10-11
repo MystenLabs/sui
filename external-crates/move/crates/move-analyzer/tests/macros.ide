@@ -36,10 +36,6 @@
           "use_ndx": 2
         },
         {
-          "use_line": 7,
-          "use_ndx": 3
-        },
-        {
           "use_line": 15,
           "use_ndx": 0
         },
@@ -145,6 +141,12 @@
         },
         {
           "use_line": 52,
+          "use_ndx": 2
+        }
+      ],
+      "spurious.move": [
+        {
+          "use_line": 22,
           "use_ndx": 2
         }
       ]

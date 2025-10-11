@@ -156,9 +156,8 @@ pub struct SymbolsComputationData {
     /// Outermost definitions in a module (structs, consts, functions), keyed on a ModuleIdent
     /// string
     pub mod_outer_defs: BTreeMap<String, ModuleDefs>,
-    /// A UseDefMap for a given module (needs to be appropriately set before the module
-    /// processing starts) keyed on a ModuleIdent string
-    pub mod_use_defs: BTreeMap<String, UseDefMap>,
+    /// A UseDefMap for a given file
+    pub use_defs: BTreeMap<FileHash, UseDefMap>,
     /// Uses (references) for a definition at a given location
     pub references: BTreeMap<Loc, BTreeSet<UseLoc>>,
     /// Additional information about a definitions at a given location
@@ -243,7 +242,7 @@ impl SymbolsComputationData {
     pub fn new() -> Self {
         Self {
             mod_outer_defs: BTreeMap::new(),
-            mod_use_defs: BTreeMap::new(),
+            use_defs: BTreeMap::new(),
             references: BTreeMap::new(),
             def_info: BTreeMap::new(),
             mod_to_alias_lengths: BTreeMap::new(),
