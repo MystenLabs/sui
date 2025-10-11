@@ -16,20 +16,20 @@ task 2, lines 17-19:
 //# programmable
 //> 0: test::m1::v1();
 //> test::m1::priv(Result(0));
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::priv (function index 3) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 3, instruction: 1, function_name: Some("priv") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m1::priv at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(1) } }
 
 task 3, lines 21-25:
 //# programmable
 //> 0: test::m1::v2();
 //> test::m1::priv(Result(0));
 // pure value has been "dirtied" and cannot be used
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::priv (function index 3) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 3, instruction: 1, function_name: Some("priv") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m1::priv at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(1) } }
 
 task 4, lines 26-28:
 //# programmable --inputs 0
 //> test::m1::dirty(Input(0));
 //> test::m1::priv(Input(0));
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::priv (function index 3) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 3, instruction: 1, function_name: Some("priv") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m1::priv at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(1) } }

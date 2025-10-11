@@ -37,7 +37,7 @@ task 4, lines 30-34:
 //> sui::transfer::public_party_transfer<ex::m::S>(Input(0), Result(0))
 // Create a party object.
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command Some(1)
+Debug of error: SharedObjectOperationNotAllowed at command None
 
 task 5, lines 35-36:
 //# programmable --sender A

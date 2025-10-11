@@ -64,4 +64,4 @@ task 7, lines 38-41:
 //> 1: TransferObjects([Result(0)], Input(2));
 //> 2: TransferObjects([Input(1)], Input(2));
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command Some(2)
+Debug of error: SharedObjectOperationNotAllowed at command None

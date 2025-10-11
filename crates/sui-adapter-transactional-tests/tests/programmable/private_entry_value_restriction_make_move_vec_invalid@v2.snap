@@ -27,13 +27,13 @@ task 3, lines 26-29:
 //> 0: test::m1::dirty(Input(2));
 //> 1: MakeMoveVec([Input(0), Input(1), Input(2)]);
 //> test::m1::priv(Result(1))
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(2) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::priv (function index 3) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 3, instruction: 1, function_name: Some("priv") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m1::priv at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(2) } }
 
 task 4, lines 31-34:
 //# programmable --sender A --inputs 0 0 0
 //> 0: test::m1::dirty_u64(Input(1));
 //> 1: MakeMoveVec<u64>([Input(0), Input(1), Input(2)]);
 //> test::m1::priv2(Result(1))
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(2) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::priv2 (function index 4) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 4, instruction: 1, function_name: Some("priv2") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m1::priv2 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(2) } }

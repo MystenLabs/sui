@@ -9,6 +9,7 @@ use crate::{
 };
 
 pub mod drop_safety;
+pub mod hot_entry_arguments;
 pub mod input_arguments;
 pub mod memory_safety;
 pub mod move_functions;
@@ -21,5 +22,6 @@ pub fn transaction<Mode: ExecutionMode>(
     move_functions::verify::<Mode>(env, &*ast)?;
     memory_safety::verify(env, &*ast)?;
     drop_safety::refine_and_verify::<Mode>(env, ast)?;
+    hot_entry_arguments::verify::<Mode>(env, &*ast)?;
     Ok(())
 }
