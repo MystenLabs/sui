@@ -361,6 +361,16 @@ impl ToDoc for Fields {
 impl ToDoc for ModuleId {
     fn to_doc(&self) -> Doc {
         let ModuleId { address, name } = self;
+        let address = if address.starts_with("0x") {
+            let short_address = address[2..].trim_start_matches('0');
+            if short_address.is_empty() {
+                "0x0".to_string()
+            } else {
+                format!("0x{short_address}")
+            }
+        } else {
+            format!("{address}")
+        };
         Doc::text(format!("{address}::{name}"))
     }
 }
