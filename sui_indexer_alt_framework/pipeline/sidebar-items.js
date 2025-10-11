@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["concurrent","sequential"],"struct":["CommitterConfig"],"trait":["Processor"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CommitteeConfig","GlobalStateHashV2EnabledConfig","ProtocolVersionsConfig"],"struct":["ConfigBuilder","KeyPairWrapper"],"type":["GlobalStateHashV2EnabledCallback","SupportedProtocolVersionsCallback"]};

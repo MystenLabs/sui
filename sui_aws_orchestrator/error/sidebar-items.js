@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CloudProviderError","MonitorError","SettingsError","SshError","TestbedError"],"type":["CloudProviderResult","MonitorResult","SettingsResult","SshResult","TestbedResult"]};
