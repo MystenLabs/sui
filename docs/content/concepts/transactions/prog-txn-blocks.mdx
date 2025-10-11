@@ -239,7 +239,7 @@ For inputs, the following checks are performed:
 For results, the following checks are performed:
 
 - Any remaining result with the `drop` ability is dropped.
-- If the value has `copy` but not `drop`, it's last usage must have been by-value. In that way, it's last usage is treated as a move.
+- If the value has `copy` but not `drop`, its last usage must have been by-value. In that way, it's last usage is treated as a move.
 - Otherwise, an error is given because there is an unused value without `drop`.
 
 Any remaining SUI deducted from the gas coin at the beginning of execution is returned to the coin, even if the owner has changed. In other words, the maximum possible gas is deducted at the beginning of execution, and then the unused gas is returned at the end of execution (all in SUI). Because you can take the gas coin only by-value with `TransferObjects`, it will not have been wrapped or deleted.
