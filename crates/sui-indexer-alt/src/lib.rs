@@ -102,6 +102,7 @@ pub async fn setup_indexer(
     )))?;
 
     let metrics_prefix = None;
+    let task = indexer_args.task.clone();
     let mut indexer = Indexer::new(
         store,
         indexer_args,

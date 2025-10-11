@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::HashMap,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
@@ -14,12 +13,9 @@ use dashmap::DashMap;
 
 use anyhow::ensure;
 use async_trait::async_trait;
-use scoped_futures::ScopedBoxFuture;
 use tokio::time::Duration;
 
-use crate::store::{
-    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
-};
+use crate::store::{CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store};
 
 #[derive(Default, Clone)]
 pub struct MockWatermark {
@@ -52,19 +48,13 @@ pub struct Failures {
     pub attempts: AtomicUsize,
 }
 
-/// A mock store for testing. Represents an indexer with a single pipeline. It maintains a map of
-/// checkpoint sequence numbers to transaction sequence numbers, and a watermark that can be used to
-/// test the watermark task.
+/// Mock store for testing concurrent pipelines driven by one or more indexers.
 #[derive(Clone, Default)]
-pub struct MockStore {
-    /// Tracks various watermark states (committer, reader, pruner). This value can be optional
-    /// until a checkpoint is committed.
-    pub watermark: Arc<Mutex<Option<MockWatermark>>>,
-    /// Stores the actual data, mapping checkpoint sequence numbers to transaction sequence numbers
-    pub data: Arc<Mutex<HashMap<u64, Vec<u64>>>>,
-    /// Tracks the order of checkpoint processing for testing sequential processing
-    /// Each entry is the checkpoint number that was processed
-    pub sequential_checkpoint_data: Arc<Mutex<Vec<u64>>>,
+pub struct MockMultiPipelineStore {
+    /// Maps each pipeline name to its watermark.
+    pub watermarks: Arc<DashMap<String, MockWatermark>>,
+    /// Maps each pipeline name to a map of checkpoint sequence numbers to a vector of numbers.
+    pub data: Arc<DashMap<String, DashMap<u64, Vec<u64>>>>,
     /// Controls pruning failure simulation for testing retry behavior.
     /// Maps from [from_checkpoint, to_checkpoint_exclusive) to Failures struct.
     /// Thread-safe for concurrent access during pruning operations.
@@ -73,8 +63,6 @@ pub struct MockStore {
     pub connection_failure: Arc<Mutex<ConnectionFailure>>,
     /// Number of remaining failures for set_reader_watermark operation
     pub set_reader_watermark_failure_attempts: Arc<Mutex<usize>>,
-    /// Configuration for simulating transaction failures in tests
-    pub transaction_failures: Arc<Failures>,
     /// Configuration for simulating commit failures in tests
     pub commit_failures: Arc<Failures>,
     /// Configuration for simulating commit watermark failures in tests
@@ -84,16 +72,16 @@ pub struct MockStore {
 }
 
 #[derive(Clone)]
-pub struct MockConnection<'c>(pub &'c MockStore);
+pub struct MockConnection<'c>(pub &'c MockMultiPipelineStore);
 
 #[async_trait]
 impl Connection for MockConnection<'_> {
     async fn committer_watermark(
         &mut self,
-        _pipeline: &'static str,
-        _task: Option<&str>,
+        pipeline: &'static str,
+        task: Option<&str>,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
-        let watermark = self.0.watermark();
+        let watermark = self.0.watermarks.get(&watermark_key(pipeline, task));
         Ok(watermark.map(|w| CommitterWatermark {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
@@ -104,9 +92,9 @@ impl Connection for MockConnection<'_> {
 
     async fn reader_watermark(
         &mut self,
-        _pipeline: &'static str,
+        pipeline: &'static str,
     ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
-        let watermark = self.0.watermark();
+        let watermark = self.0.watermarks.get(&watermark_key(pipeline, None));
         Ok(watermark.map(|w| ReaderWatermark {
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
             reader_lo: w.reader_lo,
@@ -115,10 +103,10 @@ impl Connection for MockConnection<'_> {
 
     async fn pruner_watermark(
         &mut self,
-        _pipeline: &'static str,
+        pipeline: &'static str,
         delay: Duration,
     ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
-        let watermark = self.0.watermark();
+        let watermark = self.0.watermarks.get(&watermark_key(pipeline, None));
         Ok(watermark.map(|w| {
             let elapsed_ms = w.pruner_timestamp as i64
                 - SystemTime::now()
@@ -136,8 +124,8 @@ impl Connection for MockConnection<'_> {
 
     async fn set_committer_watermark(
         &mut self,
-        _pipeline: &'static str,
-        _task: Option<&str>,
+        pipeline: &'static str,
+        task: Option<&str>,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Check if we should simulate a commit failure
@@ -152,22 +140,22 @@ impl Connection for MockConnection<'_> {
             self.0.commit_watermark_failures.failures - prev
         );
 
-        let mut curr = self.0.watermark.lock().unwrap();
-        *curr = Some(MockWatermark {
-            epoch_hi_inclusive: watermark.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
-            tx_hi: watermark.tx_hi,
-            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
-            reader_lo: curr.as_ref().map(|w| w.reader_lo).unwrap_or(0),
-            pruner_timestamp: curr.as_ref().map(|w| w.pruner_timestamp).unwrap_or(0),
-            pruner_hi: curr.as_ref().map(|w| w.pruner_hi).unwrap_or(0),
-        });
+        let mut wm = self
+            .0
+            .watermarks
+            .entry(watermark_key(pipeline, task))
+            .or_insert_with(|| MockWatermark::default());
+
+        wm.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
+        wm.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;
+        wm.tx_hi = watermark.tx_hi;
+        wm.timestamp_ms_hi_inclusive = watermark.timestamp_ms_hi_inclusive;
         Ok(true)
     }
 
     async fn set_reader_watermark(
         &mut self,
-        _pipeline: &'static str,
+        pipeline: &'static str,
         reader_lo: u64,
     ) -> anyhow::Result<bool> {
         // Check for set_reader_watermark failure simulation
@@ -185,34 +173,36 @@ impl Connection for MockConnection<'_> {
             return Err(anyhow::anyhow!("set_reader_watermark failed"));
         }
 
-        let mut curr = self.0.watermark.lock().unwrap();
-        *curr = Some(MockWatermark {
-            reader_lo,
-            pruner_timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
-            ..curr.as_ref().unwrap().clone()
-        });
+        let mut curr = self
+            .0
+            .watermarks
+            .get_mut(&watermark_key(pipeline, None))
+            .unwrap();
+        curr.reader_lo = reader_lo;
+        curr.pruner_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         Ok(true)
     }
 
     async fn set_pruner_watermark(
         &mut self,
-        _pipeline: &'static str,
+        pipeline: &'static str,
         pruner_hi: u64,
     ) -> anyhow::Result<bool> {
-        let mut curr = self.0.watermark.lock().unwrap();
-        *curr = Some(MockWatermark {
-            pruner_hi,
-            ..curr.as_ref().unwrap().clone()
-        });
+        let mut curr = self
+            .0
+            .watermarks
+            .get_mut(&watermark_key(pipeline, None))
+            .unwrap();
+        curr.pruner_hi = pruner_hi;
         Ok(true)
     }
 }
 
 #[async_trait]
-impl Store for MockStore {
+impl Store for MockMultiPipelineStore {
     type Connection<'c> = MockConnection<'c>;
 
     async fn connect(&self) -> anyhow::Result<Self::Connection<'_>> {
@@ -241,36 +231,11 @@ impl Store for MockStore {
     }
 }
 
-#[async_trait]
-impl TransactionalStore for MockStore {
-    async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
-    where
-        R: Send + 'a,
-        F: Send + 'a,
-        F: for<'r> FnOnce(
-            &'r mut Self::Connection<'_>,
-        ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>,
-    {
-        // Check if we should simulate a transaction failure
-        let prev = self
-            .transaction_failures
-            .attempts
-            .fetch_add(1, Ordering::Relaxed);
-        ensure!(
-            prev >= self.transaction_failures.failures,
-            "Transaction failed, remaining failures: {}",
-            self.transaction_failures.failures - prev
-        );
-
-        let mut conn = self.connect().await?;
-        f(&mut conn).await
-    }
-}
-
-impl MockStore {
+impl MockMultiPipelineStore {
     /// Commits data to the mock store, handling delays and simulated failures
     pub async fn commit_data(
         &self,
+        pipeline: &'static str,
         values: std::collections::HashMap<u64, Vec<u64>>,
     ) -> anyhow::Result<usize> {
         // Apply commit delay if configured
@@ -289,23 +254,33 @@ impl MockStore {
             self.commit_failures.failures - prev
         );
 
-        // Store the data
-        let mut total_count = 0;
-        {
-            let mut data = self.data.lock().unwrap();
-            for (checkpoint, checkpoint_values) in values {
-                total_count += checkpoint_values.len();
-                data.entry(checkpoint)
-                    .or_default()
-                    .extend(checkpoint_values);
+        let key = watermark_key(pipeline, None);
+        let mut total = 0;
+        if let Some(inner) = self.data.get(&key) {
+            for (cp, v) in values {
+                total += v.len();
+                inner.entry(cp).or_insert_with(Vec::new).extend(v);
             }
+            return Ok(total);
         }
 
-        Ok(total_count)
+        // create once, then insert
+        let inner = DashMap::new();
+        for (cp, v) in values {
+            total += v.len();
+            inner.entry(cp).or_insert_with(Vec::new).extend(v);
+        }
+        self.data.insert(key, inner);
+        Ok(total)
     }
 
     /// Prunes data for the given checkpoints, handling failure simulation
-    pub fn prune_data(&self, from: u64, to_exclusive: u64) -> anyhow::Result<usize> {
+    pub fn prune_data(
+        &self,
+        pipeline: &'static str,
+        from: u64,
+        to_exclusive: u64,
+    ) -> anyhow::Result<usize> {
         let should_fail = self
             .prune_failure_attempts
             .get(&(from, to_exclusive))
@@ -314,10 +289,12 @@ impl MockStore {
         ensure!(!should_fail, "Pruning failed");
 
         // Remove the data
-        let mut data = self.data.lock().unwrap();
+        let Some(pipeline_data) = self.data.get_mut(&watermark_key(pipeline, None)) else {
+            return Ok(0);
+        };
         let mut pruned_count = 0;
         for checkpoint in from..to_exclusive {
-            if data.remove(&checkpoint).is_some() {
+            if pipeline_data.remove(&checkpoint).is_some() {
                 pruned_count += 1;
             }
         }
@@ -334,15 +311,6 @@ impl MockStore {
         self
     }
 
-    /// Helper to configure transaction failure simulation
-    pub fn with_transaction_failures(mut self, failures: usize) -> Self {
-        self.transaction_failures = Arc::new(Failures {
-            failures,
-            attempts: AtomicUsize::new(0),
-        });
-        self
-    }
-
     /// Helper to configure commit watermark failure simulation
     pub fn with_commit_watermark_failures(mut self, failures: usize) -> Self {
         self.commit_watermark_failures = Arc::new(Failures {
@@ -352,7 +320,7 @@ impl MockStore {
         self
     }
 
-    /// Create a new MockStore with commit delay
+    /// Create a new MockMultiPipelineStore with commit delay
     pub fn with_commit_delay(mut self, delay_ms: u64) -> Self {
         self.commit_delay_ms = delay_ms;
         self
@@ -385,14 +353,11 @@ impl MockStore {
         self
     }
 
-    /// Get the sequential checkpoint data
-    pub fn get_sequential_data(&self) -> Vec<u64> {
-        self.sequential_checkpoint_data.lock().unwrap().clone()
-    }
-
     /// Helper to get the current watermark state for testing.
-    pub fn watermark(&self) -> Option<MockWatermark> {
-        self.watermark.lock().unwrap().clone()
+    pub fn watermark(&self, pipeline: &'static str, task: Option<&str>) -> Option<MockWatermark> {
+        self.watermarks
+            .get(&watermark_key(pipeline, task))
+            .map(|w| w.clone())
     }
 
     /// Helper to get the number of connection attempts for testing
@@ -443,28 +408,34 @@ impl MockStore {
     }
 
     /// Wait for any data to be processed and stored, panicking if timeout is reached
-    pub async fn wait_for_any_data(&self, timeout_duration: Duration) {
+    pub async fn wait_for_any_data(&self, pipeline: &'static str, timeout_duration: Duration) {
         let start = std::time::Instant::now();
+        let key = watermark_key(pipeline, None);
         while start.elapsed() < timeout_duration {
             {
-                let data = self.data.lock().unwrap();
-                if !data.is_empty() {
+                if self.data.contains_key(&key) {
                     return;
                 }
             }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
         }
         panic!("Timeout waiting for any data to be processed - pipeline may be stuck");
     }
 
     /// Wait for data from a specific checkpoint, panicking if timeout is reached
-    pub async fn wait_for_data(&self, checkpoint: u64, timeout_duration: Duration) -> Vec<u64> {
+    pub async fn wait_for_data(
+        &self,
+        pipeline: &'static str,
+        checkpoint: u64,
+        timeout_duration: Duration,
+    ) -> Vec<u64> {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout_duration {
             {
-                let data = self.data.lock().unwrap();
-                if let Some(values) = data.get(&checkpoint) {
-                    return values.clone();
+                if let Some(pipeline_data) = self.data.get(&watermark_key(pipeline, None)) {
+                    if let Some(values) = pipeline_data.get(&checkpoint) {
+                        return values.clone();
+                    }
                 }
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -475,12 +446,14 @@ impl MockStore {
     /// Wait for watermark to reach the expected checkpoint, returning the watermark when reached
     pub async fn wait_for_watermark(
         &self,
+        pipeline: &'static str,
+        task: Option<&str>,
         checkpoint: u64,
         timeout_duration: Duration,
     ) -> MockWatermark {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout_duration {
-            if let Some(watermark) = self.watermark() {
+            if let Some(watermark) = self.watermark(pipeline, task) {
                 if watermark.checkpoint_hi_inclusive >= checkpoint {
                     return watermark;
                 }
@@ -488,5 +461,12 @@ impl MockStore {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         panic!("Timeout waiting for watermark to reach {}", checkpoint);
+    }
+}
+
+fn watermark_key(pipeline: &str, task: Option<&str>) -> String {
+    match task {
+        Some(task) => format!("{}@{}", pipeline, task),
+        None => pipeline.to_string(),
     }
 }

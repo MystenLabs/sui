@@ -118,6 +118,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_tx,
         metrics.clone(),
         cancel.clone(),
+        None, // No main reader lo for sequential pipelines
     );
 
     let committer = committer::<H>(

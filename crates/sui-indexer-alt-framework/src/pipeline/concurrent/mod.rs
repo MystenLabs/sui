@@ -1,12 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
-use tokio::{sync::mpsc, task::JoinHandle};
+use sui_indexer_alt_framework_store_traits::Connection;
+use tokio::{
+    sync::mpsc,
+    task::JoinHandle,
+    time::{interval, MissedTickBehavior},
+};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::CheckpointData,
@@ -176,8 +187,7 @@ impl Default for PrunerConfig {
 /// time.
 ///
 /// The pipeline also maintains a row in the `watermarks` table for the pipeline which tracks the
-/// watermark below which all data has been committed (modulo pruning), as long as `skip_watermark`
-/// is not true.
+/// watermark below which all data has been committed (modulo pruning).
 ///
 /// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, and internal
 /// channels are created to communicate between its various components. The pipeline can be
@@ -187,8 +197,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     next_checkpoint: u64,
     config: ConcurrentConfig,
-    skip_watermark: bool,
     store: H::Store,
+    task: Option<String>,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -217,12 +227,28 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let pruner_cancel = cancel.child_token();
     let handler = Arc::new(handler);
 
+    let main_reader_lo = if task.is_some() {
+        Some(Arc::new(AtomicU64::new(next_checkpoint)))
+    } else {
+        None
+    };
+
+    // Any checkpoints below this watermark will not be passed to the tasked pipeline.
+    let main_reader_lo_task = main_reader_lo_task::<H>(
+        task.clone(),
+        main_reader_lo.clone(),
+        pruner_config.clone(),
+        pruner_cancel.clone(),
+        store.clone(),
+    );
+
     let processor = processor(
         handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
         cancel.clone(),
+        main_reader_lo.clone(),
     );
 
     let collector = collector::<H>(
@@ -235,7 +261,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let committer = committer::<H>(
         committer_config.clone(),
-        skip_watermark,
         committer_rx,
         committer_tx,
         store.clone(),
@@ -246,12 +271,16 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let commit_watermark = commit_watermark::<H>(
         next_checkpoint,
         committer_config,
-        skip_watermark,
         watermark_rx,
         store.clone(),
+        task.clone(),
         metrics.clone(),
         cancel,
     );
+
+    // Tasked pipelines will skip reader_watermark and pruner. Setting the pruner config to None
+    // will result in the tasks returning early.
+    let pruner_config = if task.is_some() { None } else { pruner_config };
 
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
@@ -272,7 +301,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
 
         pruner_cancel.cancel();
-        let _ = futures::join!(reader_watermark, pruner);
+        let _ = futures::join!(main_reader_lo_task, reader_watermark, pruner);
     })
 }
 
@@ -282,6 +311,79 @@ const fn max_chunk_rows<H: Handler>() -> usize {
     } else {
         i16::MAX as usize / H::Value::FIELD_COUNT
     }
+}
+
+/// Starts a task for tasked pipelines to track the main reader lo.
+pub(super) fn main_reader_lo_task<H: Handler + 'static>(
+    task: Option<String>,
+    main_reader_lo: Option<Arc<AtomicU64>>,
+    config: Option<PrunerConfig>,
+    cancel: CancellationToken,
+    store: H::Store,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let Some(task) = task else {
+            info!(
+                pipeline = H::NAME,
+                task = task,
+                "Skipping main reader lo task"
+            );
+            return;
+        };
+
+        let Some(main_reader_lo) = main_reader_lo else {
+            info!(
+                pipeline = H::NAME,
+                task = task,
+                "Skipping main reader lo task"
+            );
+            return;
+        };
+
+        let Some(config) = config else {
+            info!(
+                pipeline = H::NAME,
+                task = task,
+                "Skipping main reader lo task"
+            );
+            return;
+        };
+
+        let mut reader_interval = interval(config.interval());
+        reader_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+        loop {
+            tokio::select! {
+                _ = cancel.cancelled() => {
+                    info!(pipeline = H::NAME, task = task, "Shutdown received");
+                    break;
+                }
+
+                // Periodic refresh of the main reader watermark.
+                _ = reader_interval.tick() => {
+                    match store.connect().await {
+                        Ok(mut conn) => {
+                            match conn.reader_watermark(H::NAME).await {
+                                Ok(Some(main_reader_watermark)) => {
+                                    let current_reader_lo = main_reader_watermark.reader_lo;
+                                    main_reader_lo.store(current_reader_lo, Ordering::Relaxed);
+                                }
+                                Ok(None) => {
+                                    warn!(pipeline = H::NAME, task = task, "No reader watermark found");
+                                }
+                                Err(e) => {
+                                    warn!(pipeline = H::NAME, task = task, "Failed to get reader watermark: {e}");
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            warn!(pipeline = H::NAME, task = task, "Failed to connect to store: {e}");
+                        }
+                    }
+                }
+            }
+        }
+    })
 }
 
 #[cfg(test)]
@@ -387,13 +489,12 @@ mod tests {
             let metrics = IndexerMetrics::new(None, &Registry::default());
             let cancel = CancellationToken::new();
 
-            let skip_watermark = false;
             let pipeline_handle = pipeline(
                 DataPipeline,
                 next_checkpoint,
                 config,
-                skip_watermark,
                 store.clone(),
+                None, // task
                 checkpoint_rx,
                 metrics,
                 cancel.clone(),

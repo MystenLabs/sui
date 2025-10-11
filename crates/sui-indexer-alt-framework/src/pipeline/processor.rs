@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -43,12 +46,17 @@ pub trait Processor {
 ///
 /// The task will shutdown if the `cancel` token is cancelled, or if any of the workers encounters
 /// an error -- there is no retry logic at this level.
+///
+/// When `main_reader_lo` is present, the processor for the tasked pipeline will skip checkpoints
+/// that are below the main pipeline's reader watermark, to avoid writing data that has already been
+/// considered pruned by the main pipeline.
 pub(super) fn processor<P: Processor + Send + Sync + 'static>(
     processor: Arc<P>,
     rx: mpsc::Receiver<Arc<CheckpointData>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
+    main_reader_lo: Option<Arc<AtomicU64>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         info!(pipeline = P::NAME, "Starting processor");
@@ -65,6 +73,7 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                 let cancel = cancel.clone();
                 let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                 let processor = processor.clone();
+                let main_reader_lo = main_reader_lo.clone();
 
                 async move {
                     if cancel.is_cancelled() {
@@ -81,13 +90,27 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                         .with_label_values(&[P::NAME])
                         .start_timer();
 
-                    let values = processor.process(&checkpoint)?;
-                    let elapsed = guard.stop_and_record();
-
                     let epoch = checkpoint.checkpoint_summary.epoch;
                     let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
                     let tx_hi = checkpoint.checkpoint_summary.network_total_transactions;
                     let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+
+                    // Skip processing checkpoints below the main reader lo to avoid unnecessary
+                    // work.
+                    let should_process = main_reader_lo
+                        .map(|main_reader_lo| {
+                            let current_reader_lo = main_reader_lo.load(Ordering::Relaxed);
+                            cp_sequence_number >= current_reader_lo
+                        })
+                        .unwrap_or(true);
+
+                    let values = if should_process {
+                        processor.process(&checkpoint)?
+                    } else {
+                        vec![]
+                    };
+
+                    let elapsed = guard.stop_and_record();
 
                     debug!(
                         pipeline = P::NAME,
@@ -198,7 +221,14 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Spawn the processor task
-        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+        let handle = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            cancel.clone(),
+            None,
+        );
 
         // Send both checkpoints
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -255,7 +285,14 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Spawn the processor task
-        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+        let handle = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            cancel.clone(),
+            None,
+        );
 
         // Send first checkpoint.
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -315,7 +352,14 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Spawn the processor task
-        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+        let handle = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            cancel.clone(),
+            None,
+        );
 
         // Send and verify first checkpoint (should succeed)
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -376,7 +420,14 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Spawn processor task
-        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+        let handle = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            cancel.clone(),
+            None,
+        );
 
         // Send all checkpoints and measure time
         let start = std::time::Instant::now();

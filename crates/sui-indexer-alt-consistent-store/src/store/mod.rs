@@ -162,6 +162,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
+        _task: Option<&str>,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
         Ok(self.store.0.db.commit_watermark(pipeline)?.map(Into::into))
     }
@@ -169,6 +170,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
+        _task: Option<&str>,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
         self.watermark = Some((pipeline, watermark.into()));
@@ -281,8 +283,12 @@ mod tests {
             .transaction(move |c| {
                 async move {
                     mutator(c.store.schema(), &mut c.batch)?;
-                    c.set_committer_watermark(pipeline, CommitterWatermark::new_for_testing(cp))
-                        .await?;
+                    c.set_committer_watermark(
+                        pipeline,
+                        None,
+                        CommitterWatermark::new_for_testing(cp),
+                    )
+                    .await?;
                     Ok(())
                 }
                 .scope_boxed()
