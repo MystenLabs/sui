@@ -9,7 +9,7 @@ use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::{
     TransactionData as KVTransactionData, TransactionEventsData as KVTransactionEventsData,
 };
-use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
+use sui_rpc::proto::proto_to_timestamp_ms;
 use sui_types::{
     base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
@@ -28,12 +28,13 @@ use crate::{
     checkpoints::CheckpointKey,
     error::Error,
     events::{StoredTransactionEvents, TransactionEventsKey},
+    kv_grpc_reader::KvGrpcReader,
     objects::VersionedObjectKey,
     pg_reader::PgReader,
     transactions::TransactionKey,
 };
 
-/// A loader for point lookups in kv stores backed by either Bigtable or Postgres.
+/// A loader for point lookups in kv stores backed by either Bigtable, Postgres, or KV gRPC.
 /// Supported lookups:
 /// - Objects by id and version
 /// - Checkpoints by sequence number
@@ -42,9 +43,11 @@ use crate::{
 pub enum KvLoader {
     Bigtable(Arc<DataLoader<BigtableReader>>),
     Pg(Arc<DataLoader<PgReader>>),
+    KvGrpc(Arc<DataLoader<KvGrpcReader>>),
 }
 
 /// A wrapper for the contents of a transaction, either from Bigtable, Postgres, or just executed.
+#[derive(Clone)]
 pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),
@@ -53,6 +56,8 @@ pub enum TransactionContents {
         events: Option<Vec<Event>>,
         transaction_data: Box<TransactionData>,
         signatures: Vec<GenericSignature>,
+        timestamp_ms: Option<u64>,
+        cp_sequence_number: Option<u64>,
     },
 }
 
@@ -69,6 +74,10 @@ impl KvLoader {
 
     pub fn new_with_pg(pg_loader: Arc<DataLoader<PgReader>>) -> Self {
         Self::Pg(pg_loader)
+    }
+
+    pub fn new_with_kv_grpc(kv_grpc_loader: Arc<DataLoader<KvGrpcReader>>) -> Self {
+        Self::KvGrpc(kv_grpc_loader)
     }
 
     pub async fn load_one_object(
@@ -91,6 +100,7 @@ impl KvLoader {
                         })
                 })
                 .transpose(),
+            Self::KvGrpc(loader) => loader.load_one(key).await,
         }
     }
 
@@ -114,6 +124,7 @@ impl KvLoader {
 
                 Ok(results)
             }
+            Self::KvGrpc(loader) => loader.load_many(keys).await,
         }
     }
 
@@ -148,6 +159,7 @@ impl KvLoader {
                     Ok((summary, contents, signature))
                 })
                 .transpose(),
+            Self::KvGrpc(loader) => loader.load_one(key).await,
         }
     }
 
@@ -162,6 +174,7 @@ impl KvLoader {
                 .await?
                 .map(TransactionContents::Bigtable)),
             Self::Pg(loader) => Ok(loader.load_one(key).await?.map(TransactionContents::Pg)),
+            Self::KvGrpc(loader) => Ok(loader.load_one(key).await?),
         }
     }
 
@@ -185,6 +198,12 @@ impl KvLoader {
                 .await?
                 .into_iter()
                 .map(|(key, stored)| (key.0, TransactionEventsContents::Pg(stored)))
+                .collect()),
+            Self::KvGrpc(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| (key.0, TransactionEventsContents::Bigtable(stored)))
                 .collect()),
         }
     }
@@ -210,14 +229,21 @@ impl KvLoader {
                 .into_iter()
                 .map(|(key, stored)| (key.0, TransactionContents::Pg(stored)))
                 .collect()),
+            Self::KvGrpc(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| (key.0, stored))
+                .collect()),
         }
     }
 }
 
 impl TransactionContents {
+    // TODO merge this with from_executed_transaction_v2 when we update everything from v2beta2 to v2.
     /// Create a TransactionContents from an ExecutedTransaction.
     pub fn from_executed_transaction(
-        executed_transaction: &ExecutedTransaction,
+        executed_transaction: &sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
     ) -> anyhow::Result<Self> {
@@ -239,11 +265,42 @@ impl TransactionContents {
             .transpose()?
             .map(|events: TransactionEvents| events.data);
 
+        let timestamp_ms = executed_transaction
+            .timestamp
+            .map(proto_to_timestamp_ms)
+            .transpose()
+            .map_err(|e| anyhow::anyhow!("Failed to parse timestamp: {}", e))?;
+
         Ok(Self::ExecutedTransaction {
             effects: Box::new(effects),
             events,
             transaction_data: Box::new(transaction_data),
             signatures,
+            timestamp_ms,
+            cp_sequence_number: executed_transaction.checkpoint,
+        })
+    }
+
+    pub fn from_executed_transaction_v2(
+        proto_transaction: &sui_rpc::proto::sui::rpc::v2::ExecutedTransaction,
+    ) -> anyhow::Result<Self> {
+        let full_tx: sui_types::full_checkpoint_content::ExecutedTransaction = proto_transaction
+            .try_into()
+            .context("Failed to convert ExecutedTransaction from proto")?;
+
+        let timestamp_ms = proto_transaction
+            .timestamp
+            .map(proto_to_timestamp_ms)
+            .transpose()
+            .map_err(|e| anyhow::anyhow!("Failed to parse timestamp: {}", e))?;
+
+        Ok(Self::ExecutedTransaction {
+            effects: Box::new(full_tx.effects),
+            events: full_tx.events.map(|events| events.data),
+            transaction_data: Box::new(full_tx.transaction),
+            signatures: full_tx.signatures,
+            timestamp_ms,
+            cp_sequence_number: proto_transaction.checkpoint,
         })
     }
 
@@ -337,7 +394,7 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => stored.timestamp_ms as u64,
             Self::Bigtable(kv) => kv.timestamp,
-            Self::ExecutedTransaction { .. } => 0, // No timestamp until checkpointed
+            Self::ExecutedTransaction { timestamp_ms, .. } => timestamp_ms.unwrap_or_default(),
         }
     }
 
@@ -345,7 +402,9 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => Some(stored.cp_sequence_number as u64),
             Self::Bigtable(kv) => Some(kv.checkpoint_number),
-            Self::ExecutedTransaction { .. } => None, // No checkpoint until indexed
+            Self::ExecutedTransaction {
+                cp_sequence_number, ..
+            } => *cp_sequence_number,
         }
     }
 }

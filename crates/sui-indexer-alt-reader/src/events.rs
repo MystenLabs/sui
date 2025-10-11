@@ -3,10 +3,7 @@
 
 use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeSet, HashMap};
 use sui_indexer_alt_schema::schema::kv_transactions;
 use sui_kvstore::TransactionEventsData;
 use sui_types::digests::TransactionDigest;
@@ -40,7 +37,7 @@ impl Loader<TransactionEventsKey> for PgReader {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let digests: BTreeSet<_> = keys.iter().map(|d| d.0.into_inner()).collect();
         let transactions: Vec<(Vec<u8>, StoredTransactionEvents)> = conn

@@ -11,6 +11,7 @@ pub mod epochs;
 pub mod error;
 pub mod events;
 pub mod fullnode_client;
+pub mod kv_grpc_reader;
 pub mod kv_loader;
 pub(crate) mod metrics;
 pub mod object_versions;
