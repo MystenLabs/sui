@@ -988,9 +988,7 @@ impl DBMetrics {
         // registries. The problem is underlying metrics cannot be re-initialized
         // or prometheus complains. We essentially need to pass in DBMetrics
         // everywhere we create DBMap as the right fix
-        ONCE.get_or_init(|| {
-            Arc::new(DBMetrics::new(registry_service))
-        })
+        ONCE.get_or_init(|| Arc::new(DBMetrics::new(registry_service)))
     }
     pub fn increment_num_active_dbs(&self, db_name: &str) {
         self.op_metrics
