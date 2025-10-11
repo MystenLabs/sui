@@ -15,8 +15,9 @@ mod checked {
         },
         execution_mode::ExecutionMode,
         execution_value::{
-            CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents,
-            ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue, UsageKind, Value,
+            CommandKind, ExecutionState, InputObjectMetadata, InputValue, Mutability,
+            ObjectContents, ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue,
+            UsageKind, Value,
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
@@ -73,7 +74,9 @@ mod checked {
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::DenyListResult,
-        transaction::{Argument, CallArg, FundsWithdrawalArg, ObjectArg, WithdrawFrom},
+        transaction::{
+            Argument, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability, WithdrawFrom,
+        },
     };
     use tracing::instrument;
 
@@ -188,7 +191,7 @@ mod checked {
                     &mut linkage_view,
                     &[],
                     &mut input_object_map,
-                    /* imm override */ false,
+                    /* mutability override */ None,
                     gas_coin,
                 )?;
                 // subtract the max gas budget. This amount is off limits in the programmable transaction,
@@ -512,15 +515,18 @@ mod checked {
                 return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
 
-            // Any input object taken by value must be mutable
-            if matches!(
-                input_metadata_opt,
-                Some(InputObjectMetadata::InputObject {
-                    is_mutable_input: false,
-                    ..
-                })
-            ) {
-                return Err(CommandArgumentError::InvalidObjectByValue.into());
+            // Any input object taken by value must be exclusively mutable
+            match input_metadata_opt {
+                Some(InputObjectMetadata::InputObject { mutability, .. }) => match mutability {
+                    // NonExclusiveWrite can be taken by value, but unless it is re-shared
+                    // with no mutations, the transaction will abort.
+                    Mutability::Mutable | Mutability::NonExclusiveWrite => (),
+                    Mutability::Immutable => {
+                        return Err(CommandArgumentError::InvalidObjectByValue.into());
+                    }
+                },
+                Some(InputObjectMetadata::Receiving { .. }) => (),
+                None => (),
             }
 
             let val = if is_copyable {
@@ -568,12 +574,15 @@ mod checked {
                 // error if taken
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             };
-            if let Some(InputObjectMetadata::InputObject {
-                is_mutable_input: false,
-                ..
-            }) = input_metadata_opt
-            {
-                return Err(CommandArgumentError::InvalidObjectByMutRef.into());
+            match input_metadata_opt {
+                Some(InputObjectMetadata::InputObject { mutability, .. }) => match mutability {
+                    Mutability::Mutable | Mutability::NonExclusiveWrite => (),
+                    Mutability::Immutable => {
+                        return Err(CommandArgumentError::InvalidObjectByMutRef.into());
+                    }
+                },
+                Some(InputObjectMetadata::Receiving { .. }) => (),
+                None => (),
             }
             // if it is copyable, don't take it as we allow for the value to be copied even if
             // mutably borrowed
@@ -820,8 +829,13 @@ mod checked {
                 let InputValue {
                     object_metadata:
                         Some(InputObjectMetadata::InputObject {
-                            // We are only interested in mutable inputs.
-                            is_mutable_input: true,
+                            // Both Mutable and NonExclusiveWrite are passed as &mut inputs.
+                            // Therefore, the type checker will allow mutation to either. It
+                            // is illegal to mutate NonExclusiveWrite objects, but we check this
+                            // post-execution.
+                            // Note that NonExclusiveWrite is not currently available to user
+                            // transactions.
+                            mutability: Mutability::Mutable | Mutability::NonExclusiveWrite,
                             id,
                             version,
                             owner,
@@ -1775,7 +1789,7 @@ mod checked {
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
-        override_as_immutable: bool,
+        mutability_override: Option<Mutability>,
         id: ObjectID,
     ) -> Result<InputValue, ExecutionError> {
         let Some(obj) = state_view.read_object(&id) else {
@@ -1784,17 +1798,19 @@ mod checked {
         };
         // override_as_immutable ==> Owner::Shared or Owner::ConsensusAddressOwner
         assert_invariant!(
-            !override_as_immutable
+            mutability_override.is_none()
                 || matches!(
                     obj.owner,
                     Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. }
                 ),
             "override_as_immutable should only be set for consensus objects"
         );
-        let is_mutable_input = match obj.owner {
-            Owner::AddressOwner(_) => true,
-            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => !override_as_immutable,
-            Owner::Immutable => false,
+        let mutability = match obj.owner {
+            Owner::AddressOwner(_) => Mutability::Mutable,
+            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
+                mutability_override.unwrap_or(Mutability::Mutable)
+            }
+            Owner::Immutable => Mutability::Immutable,
             Owner::ObjectOwner(_) => {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
@@ -1804,7 +1820,7 @@ mod checked {
         let version = obj.version();
         let object_metadata = InputObjectMetadata::InputObject {
             id,
-            is_mutable_input,
+            mutability,
             owner: owner.clone(),
             version,
         };
@@ -1940,19 +1956,46 @@ mod checked {
                 linkage_view,
                 new_packages,
                 input_object_map,
-                /* imm override */ false,
+                /* mutability override */ None,
                 id,
             ),
-            ObjectArg::SharedObject { id, mutable, .. } => load_object(
-                protocol_config,
-                vm,
-                state_view,
-                linkage_view,
-                new_packages,
-                input_object_map,
-                /* imm override */ !mutable,
-                id,
-            ),
+            ObjectArg::SharedObject { id, mutable, .. } => {
+                let mutability = if mutable {
+                    Mutability::Mutable
+                } else {
+                    Mutability::Immutable
+                };
+                load_object(
+                    protocol_config,
+                    vm,
+                    state_view,
+                    linkage_view,
+                    new_packages,
+                    input_object_map,
+                    Some(mutability),
+                    id,
+                )
+            }
+            ObjectArg::SharedObjectV2 { id, mutability, .. } => {
+                let mutability = match mutability {
+                    SharedObjectMutability::Mutable => Mutability::Mutable,
+                    // From the perspective of the adapter, non-exclusive write are mutable,
+                    // in that the move code will receive a &mut arg. The object itself
+                    // cannot be written to, this is enforced by post execution checks.
+                    SharedObjectMutability::NonExclusiveWrite => Mutability::NonExclusiveWrite,
+                    SharedObjectMutability::Immutable => Mutability::Immutable,
+                };
+                load_object(
+                    protocol_config,
+                    vm,
+                    state_view,
+                    linkage_view,
+                    new_packages,
+                    input_object_map,
+                    Some(mutability),
+                    id,
+                )
+            }
             ObjectArg::Receiving((id, version, _)) => {
                 Ok(InputValue::new_receiving_object(id, version))
             }

@@ -8,7 +8,7 @@ use move_core_types::language_storage::StructTag;
 use sui_types::{
     error::ExecutionError,
     object::Owner,
-    transaction::{self as P, CallArg, ObjectArg},
+    transaction::{self as P, CallArg, ObjectArg, SharedObjectMutability},
 };
 
 pub fn transaction(
@@ -53,11 +53,35 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
             };
             (L::InputArg::Object(arg), L::InputType::Fixed(ty))
         }
-        CallArg::Object(ObjectArg::SharedObject {
-            id,
-            initial_shared_version,
-            mutable,
-        }) => {
+        CallArg::Object(
+            object_arg @ ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                ..
+            }
+            | object_arg @ ObjectArg::SharedObjectV2 {
+                id,
+                initial_shared_version,
+                ..
+            },
+        ) => {
+            let mutability = match object_arg {
+                ObjectArg::SharedObject { mutable, .. } => {
+                    if mutable {
+                        L::ObjectMutability::Mutable
+                    } else {
+                        L::ObjectMutability::Immutable
+                    }
+                }
+                ObjectArg::SharedObjectV2 { mutability, .. } => match mutability {
+                    SharedObjectMutability::Mutable => L::ObjectMutability::Mutable,
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        L::ObjectMutability::NonExclusiveWrite
+                    }
+                    SharedObjectMutability::Immutable => L::ObjectMutability::Immutable,
+                },
+                _ => unreachable!(),
+            };
             let obj = env.read_object(&id)?;
             let Some(ty) = obj.type_() else {
                 invariant_violation!("Object {:?} has does not have a Move type", id);
@@ -75,7 +99,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 L::InputArg::Object(L::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutability,
                     kind,
                 }),
                 L::InputType::Fixed(ty),

@@ -856,6 +856,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
                 todo!("Add InsufficientBalanceForWithdraw to sdk")
             }
+            crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { .. } => {
+                todo!("Add NonExclusiveWriteInputObjectModified to sdk")
+            }
         }
     }
 }
@@ -1163,6 +1166,20 @@ impl From<crate::transaction::CallArg> for Input {
                     object_id: id.into(),
                     initial_shared_version: initial_shared_version.value(),
                     mutable,
+                },
+                crate::transaction::ObjectArg::SharedObjectV2 {
+                    id,
+                    initial_shared_version,
+                    mutability,
+                } => Self::Shared {
+                    object_id: id.into(),
+                    initial_shared_version: initial_shared_version.value(),
+                    mutable: match mutability {
+                        crate::transaction::SharedObjectMutability::Mutable => true,
+                        crate::transaction::SharedObjectMutability::Immutable => false,
+                        // TODO(address-balances): expose non-exclusive writes to sdk
+                        crate::transaction::SharedObjectMutability::NonExclusiveWrite => false,
+                    },
                 },
                 crate::transaction::ObjectArg::Receiving((id, version, digest)) => Self::Receiving(
                     ObjectReference::new(id.into(), version.value(), digest.into()),

@@ -1077,6 +1077,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             E::InsufficientBalanceForWithdraw => {
                 todo!("Add InsufficientBalanceForWithdraw to rpc sdk")
             }
+            E::NonExclusiveWriteInputObjectModified { .. } => {
+                todo!("Add NonExclusiveWriteInputObjectModified to rpc sdk")
+            }
         };
 
         message.set_kind(kind);
@@ -2307,6 +2310,17 @@ impl From<crate::transaction::CallArg> for Input {
                     message.version = Some(version.value());
                     message.digest = Some(digest.to_string());
                     InputKind::Receiving
+                }
+                O::SharedObjectV2 {
+                    id,
+                    initial_shared_version,
+                    mutability,
+                } => {
+                    message.object_id = Some(id.to_canonical_string(true));
+                    message.version = Some(initial_shared_version.value());
+                    // TODO(address-balances): add enum to schema
+                    message.mutable = Some(mutability.is_exclusive());
+                    InputKind::Shared
                 }
             },
             //TODO
