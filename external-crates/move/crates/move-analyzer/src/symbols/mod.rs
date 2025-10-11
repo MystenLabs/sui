@@ -108,6 +108,22 @@ pub mod requests;
 pub mod runner;
 pub mod use_def;
 
+#[cfg(not(target_os = "macos"))]
+mod alloc_utils {
+    use libmimalloc_sys;
+
+    pub fn mem_collect() {
+        unsafe {
+            libmimalloc_sys::mi_collect(true);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod alloc_utils {
+    pub fn mem_collect() {}
+}
+
 /// Result of the symbolication process
 #[derive(Debug, Clone)]
 pub struct Symbols {
@@ -196,6 +212,9 @@ pub fn get_symbols(
         let symbols = compute_symbols(packages_info.clone(), compiled_pkg_info, cursor_info);
         eprintln!("analysis complete in {:?}", analysis_start.elapsed());
         eprintln!("get_symbols load complete");
+
+        // return pages to the OS
+        alloc_utils::mem_collect();
 
         if !should_retry {
             return Ok((Some(symbols), ide_diagnostics));

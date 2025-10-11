@@ -7,6 +7,28 @@ use move_compiler::editions::Flavor;
 use sui_move_build::{implicit_deps, SuiPackageHooks};
 use sui_package_management::system_package_versions::latest_system_packages;
 
+#[cfg(not(target_os = "macos"))]
+mod alloc_utils {
+    use libmimalloc_sys;
+    use mimalloc::MiMalloc;
+
+    #[global_allocator]
+    static GLOBAL: MiMalloc = MiMalloc;
+
+    pub fn print_custom_alloc_version() {
+        unsafe {
+            eprintln!("mimalloc version = {}", libmimalloc_sys::mi_version());
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod alloc_utils {
+    pub fn print_custom_alloc_version() {
+        eprintln!("using standard allocator");
+    }
+}
+
 // Define the `GIT_REVISION` and `VERSION` consts
 bin_version::bin_version!();
 
@@ -21,6 +43,9 @@ struct App {}
 
 fn main() {
     App::parse();
+
+    alloc_utils::print_custom_alloc_version();
+
     let sui_implicit_deps = implicit_deps(latest_system_packages());
     let flavor = Flavor::Sui;
     let sui_pkg_hooks = Box::new(SuiPackageHooks);
