@@ -80,9 +80,11 @@ clang \
 cmake
 ```
 
-### Considerations to enable gRPC (beta)
+### Considerations to enable gRPC
 
-To serve the [gRPC API in beta](/concepts/grpc-overview.mdx), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node may not be able to handle other traffic — including the [JSON-RPC](/references/sui-api.mdx) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
+You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. Refer to [Sui's data serving roadmap](/guides/developer/getting-started/data-serving.mdx#grpc-api) for guidance on the overall transition plan.
+
+To serve the [gRPC API](/concepts/grpc-overview.mdx), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node may not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api.mdx) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
 
 Enable gRPC indexing on your full node by adding the following entry to the `fullnode.yaml` configuration:
 
@@ -93,7 +95,7 @@ rpc:
 
 ```
 
-Running gRPC alongside JSON-RPC increases your full node’s storage usage. While this is expected in the short term, you can reclaim this storage in the future by disabling JSON-RPC after it is phased out. All applications must gradually migrate to gRPC or [GraphQL RPC](/concepts/graphql-rpc.mdx) (which will internally rely on gRPC). You can also run gRPC and JSON-RPC on separate nodes to optimize resource usage and provide a performant and resilient RPC experience to applications. Add the following to the `fullnode.yaml` configuration of your full node to selectively disable JSON-RPC on it:
+Running gRPC alongside JSON-RPC increases your full node’s storage usage. You can reclaim this storage by disabling JSON-RPC after all your client applications have migrated from JSON-RPC. All applications must gradually migrate to gRPC or [GraphQL RPC](/concepts/graphql-indexer.mdx). You can also run gRPC and JSON-RPC on separate nodes to optimize resource usage and provide a performant and resilient RPC experience to client applications. Add the following to the `fullnode.yaml` configuration of your full node to selectively disable JSON-RPC on it:
 
 ```sh
 
@@ -112,8 +114,6 @@ authority-store-pruning-config:
 ```
 
 Adjust the gRPC data retention period based on your full node’s resource profile and whether you've disabled JSON-RPC or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
-
-It is strongly recommended that you enable gRPC beta support on your full nodes as early as possible to help developers evaluate and integrate the API before general availability. Refer to [Sui's data serving roadmap](/guides/developer/getting-started/data-serving.mdx#grpc-api) for guidance on the upcoming transition from JSON-RPC.
 
 ## Running a full node {#running-a-full-node}
 

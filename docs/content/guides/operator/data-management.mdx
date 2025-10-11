@@ -75,12 +75,6 @@ Keeping some history (5 epochs) provides better RPC performance on full nodes as
 
 To learn more about transaction pruning policies, see [Transaction pruning](#transaction-pruning). To configure transaction pruning, specify the `num-epochs-to-retain-for-checkpoints: X` config option. The checkpoints, including their transactions, effects and events are pruned up to X epochs ago. We suggest setting transaction pruning to 2 epochs.
 
-## Sui full node key-value store backup
-
-To enable historic data queries for the Sui full nodes that prune old transactional data, full node RPC implementation is configured to fallback for querying missing transactional data from a remote store.
-
-If the information about the transaction digest, effects, events, or checkpoints is not available locally, a full node automatically retrieves the historical data from a cloud-based key-value store managed by Sui Foundation. The current key-value store implementation keeps historic transactional data only, but future releases might support retrieving the historic object versions.
-
 ## Object pruning {#object-pruning}
 
 Sui adds new object versions to the database as part of transaction execution. This makes previous versions ready for 

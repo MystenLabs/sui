@@ -1,11 +1,16 @@
 ---
-title: gRPC Overview (Beta)
+title: gRPC Overview
 description: Overview of the gRPC API to access Sui network data.
-beta: devnet, testnet, mainnet
 keywords: [ grpc, g rpc, RPC, sui full node grpc, full node rpc, what is grpc, grpc on sui ]
 ---
 
 The [Sui Full Node gRPC API](../references/fullnode-protocol.mdx) provides a fast, type-safe, and efficient interface for interacting with the Sui blockchain. Designed for power users, indexers, explorers, and decentralized apps, this API enables access to Sui data with high performance and low latency.
+
+:::info
+
+<ImportContent source="json-rpc-deprecation.mdx" mode="snippet" />
+
+:::
 
 :::info
 
@@ -23,23 +28,23 @@ Refer to [when to use gRPC vs GraphQL](../guides/developer/getting-started/data-
 
 ## gRPC on Sui
 
-Protocol buffers define the gRPC interface. You can find the relevant **beta** `.proto` files at [sui-apis on Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), which apart from the gRPC messages (request and response payloads) include the following services:
+Protocol buffers define the gRPC interface. You can find the relevant `.proto` files at [sui-apis on Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), which apart from the gRPC messages (request and response payloads) include the following services:
 
 | Service | Proto | Purpose |
 | --- | --- | --- |
-| `TransactionExecutionService` | `sui/rpc/v2beta2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use the service to send user actions to the network. |
-| `LedgerService` | `sui/rpc/v2beta2/ledger_service.proto` | Lookup specific checkpoints, transactions, objects and more from the current state and recent history of the Sui network. “History” here refers to the recent past - limited to what a full node retains. |
-| `LiveDataService` | `sui/rpc/v2beta2/live_data_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. Also supports dry-run simulations for transactions. |
-| `SubscriptionService` | `sui/rpc/v2beta2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. Refer to [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
-| `MovePackageService` | `sui/rpc/v2beta2/move_package_service.proto` | Access metadata and content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
-| `SignatureVerificationService` | `sui/rpc/v2beta2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that may include [zklogin](./cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
-| `NameService` | `sui/rpc/v2beta2/name_service.proto` | Resolve human-readable SuiNS names to their underlying name records, and perform reverse lookups from Sui addresses back to linked names. |
+| `TransactionExecutionService` | `sui/rpc/v2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use the service to send user actions to the network. |
+| `LedgerService` | `sui/rpc/v2/ledger_service.proto` | Lookup specific checkpoints, transactions, objects and more from the current state and recent history of the Sui network. “History” here refers to the recent past - limited to what a full node retains. |
+| `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. Also supports dry-run simulations for transactions. |
+| `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. Refer to [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
+| `MovePackageService` | `sui/rpc/v2/move_package_service.proto` | Access metadata and content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
+| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that may include [zklogin](./cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
+| `NameService` | `sui/rpc/v2/name_service.proto` | Resolve human-readable SuiNS names to their underlying name records, and perform reverse lookups from Sui addresses back to linked names. |
 
 Use these definitions to generate client libraries in various programming languages.
 
 :::info
 
-If you were using the `v2beta` proto files previously, note that the latest definitions are now under the `v2beta2` version.
+If you were using the `v2beta2` proto files previously, note that the latest definitions are now under the `v2` version. Also, the `LiveDataService` has been renamed to `StateService`, and the `SimulateTransaction` API has been moved to the `TransactionExecutionService`.
 
 :::
 
@@ -127,13 +132,21 @@ If the stream is interrupted — for example, due to client disconnect or networ
 
 Streaming APIs are useful for building indexers, dashboards, or bots that need to react to real-time Sui activity with minimal latency. Refer to [Access streaming data with buf](#access-streaming-data-with-buf) for information on how to test.
 
+## Handling pruned data
+
+If a full node doesn’t return a specific object, transaction, or event, it’s likely that the data has been pruned based on the node’s retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store & Service](/concepts/archival-store.mdx). The Archival Store retains historical data for the network.
+
+You can reuse the same gRPC `LedgerService` methods for this lookup. Simply change the endpoint in your client from the full node’s address to the archival service endpoint.
+
+This ensures that your application can access both recent and historical data reliably, regardless of a full node’s pruning settings.
+
 ## Developer access and usage recipes
 
 The following recipes show how to accomplish some common tasks using gRPC. 
 
 :::info
 
-Refer to the [list of RPC or data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that have enabled gRPC on their Full nodes. Reach out to a provider directly for access with higher rate limits.
+Refer to the [list of RPC or data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that have enabled gRPC on their full nodes. Contact a provider directly to request access. If your RPC or data provider doesn’t yet support gRPC, ask them to enable support or contact the Sui Foundation team on Discord or Telegram for help.
 
 :::
 
@@ -158,61 +171,61 @@ where the port on Sui Foundation managed Full nodes is `443`. It should return s
 ```shell
 grpc.health.v1.Health
 grpc.reflection.v1.ServerReflection
-sui.rpc.v2beta2.LedgerService
-sui.rpc.v2beta2.LiveDataService
-sui.rpc.v2beta2.MovePackageService
-sui.rpc.v2beta2.NameService
-sui.rpc.v2beta2.SignatureVerificationService
-sui.rpc.v2beta2.SubscriptionService
-sui.rpc.v2beta2.TransactionExecutionService
+sui.rpc.v2.LedgerService
+sui.rpc.v2.MovePackageService
+sui.rpc.v2.NameService
+sui.rpc.v2.SignatureVerificationService
+sui.rpc.v2.StateService
+sui.rpc.v2.SubscriptionService
+sui.rpc.v2.TransactionExecutionService
 ```
 
 #### List available APIs in the LedgerService
 
 ```shell
-$ grpcurl <full node URL:port> list sui.rpc.v2beta2.LedgerService
+$ grpcurl <full node URL:port> list sui.rpc.v2.LedgerService
 ```
 
 which should return something like:
 
 ```shell
-sui.rpc.v2beta2.LedgerService.BatchGetObjects
-sui.rpc.v2beta2.LedgerService.BatchGetTransactions
-sui.rpc.v2beta2.LedgerService.GetCheckpoint
-sui.rpc.v2beta2.LedgerService.GetEpoch
-sui.rpc.v2beta2.LedgerService.GetObject
-sui.rpc.v2beta2.LedgerService.GetServiceInfo
-sui.rpc.v2beta2.LedgerService.GetTransaction
+sui.rpc.v2.LedgerService.BatchGetObjects
+sui.rpc.v2.LedgerService.BatchGetTransactions
+sui.rpc.v2.LedgerService.GetCheckpoint
+sui.rpc.v2.LedgerService.GetEpoch
+sui.rpc.v2.LedgerService.GetObject
+sui.rpc.v2.LedgerService.GetServiceInfo
+sui.rpc.v2.LedgerService.GetTransaction
 ```
 
 #### Get the `events` and `effects` details of a particular transaction
 
 ```shell
-$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <full node URL:port> sui.rpc.v2beta2.LedgerService/GetTransaction
+$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <full node URL:port> sui.rpc.v2.LedgerService/GetTransaction
 ```
 
 #### Get the transactions in a particular checkpoint
 
 ```shell
-$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2beta.LedgerService/GetCheckpoint
+$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
 ```
 
 #### Get the latest information for a coin type
 
 ```shell
-$ grpcurl -d '{ "coin_type": "0x2::sui::SUI" }' <full node URL:port> sui.rpc.v2beta2.LiveDataService/GetCoinInfo
+$ grpcurl -d '{ "coin_type": "0x2::sui::SUI" }' <full node URL:port> sui.rpc.v2.StateService/GetCoinInfo
 ```
 
 #### List the objects owned by a particular address
 
 ```shell
-$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2beta2.LiveDataService/ListOwnedObjects
+$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
 ```
 
 #### List the dynamic fields in a particular object
 
 ```shell
-$ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <full node URL:port> sui.rpc.v2beta2.LiveDataService/ListDynamicFields
+$ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <full node URL:port> sui.rpc.v2.StateService/ListDynamicFields
 ```
 
 ### Access streaming data with buf
@@ -220,7 +233,7 @@ $ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e
 `grpcurl` does not support server-side streaming RPCs. To test or experiment with `SubscriptionService`, use the [buf CLI](https://buf.build/docs/cli/) instead.
 
 ```shell
-$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2beta2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
+$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
 ```
 
 which should return something like:
@@ -294,14 +307,14 @@ npm i -D tsx
 ├── protos/
 │   └── sui/
 │       └── node/
-│           └── v2beta/
+│           └── v2/
 │               ├── ledger_service.proto
 │               └── *.proto
 ├── client.ts
 ├── package.json
 ```
 
-Download all the `sui/rpc/v2beta` proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto) in the same folder.
+Download all the `sui/rpc/v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto) in the same folder.
 
 **Sample client.ts to get `events` and `effects` details of a particular transaction**
 
@@ -310,7 +323,7 @@ import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import * as path from 'path';
 
-const PROTO_PATH = path.join(__dirname, 'protos/sui/rpc/v2beta/ledger_service.proto');
+const PROTO_PATH = path.join(__dirname, 'protos/sui/rpc/v2/ledger_service.proto');
 
 // Load proto definitions
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
@@ -323,7 +336,7 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 });
 
 const suiProto = grpc.loadPackageDefinition(packageDefinition) as any;
-const LedgerService = suiProto.sui.rpc.v2beta.LedgerService;
+const LedgerService = suiProto.sui.rpc.v2.LedgerService;
 
 // Create gRPC client
 const client = new LedgerService(
@@ -394,10 +407,10 @@ require (
 
 **Generate Golang code from proto files**
 
-Assuming you have the proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto), run:
+Assuming you have the `v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), run:
 
 ```shell
-protoc --proto_path=./protos --go_out=. --go-grpc_out=. protos/sui/rpc/v2beta/ledger_service.proto
+protoc --proto_path=./protos --go_out=. --go-grpc_out=. protos/sui/rpc/v2/ledger_service.proto
 ```
 
 **Sample main.go to get `events` and `effects` details of a particular transaction**
@@ -415,7 +428,7 @@ import (
     "google.golang.org/grpc"
     "google.golang.org/grpc/credentials"
     
-    pb "your_project/sui/rpc/v2beta" // adjust path based on where your generated .pb.go files are
+    pb "your_project/sui/rpc/v2" // adjust path based on where your generated .pb.go files are
 )
 
 func main() {
@@ -465,9 +478,9 @@ go run main.go
 :::info
 
 - If you see errors like `cannot find package`, ensure you’ve generated the proto files and imported them correctly.
-- If your generated files are in a nested directory like `sui/rpc/v2beta`, your import in `main.go` should match:
+- If your generated files are in a nested directory like `sui/rpc/v2`, your import in `main.go` should match:
 ```go
-import pb "your_project/sui/rpc/v2beta"
+import pb "your_project/sui/rpc/v2"
 ```
 You can replace `your_project` with a module name or relative import path depending on how your `go.mod` is defined.
 - The example assumes that gRPC is available on port `443` which requires SSL.
@@ -491,17 +504,17 @@ pip install grpcio grpcio-tools protobuf
 
 **Generate Python code from proto files**
 
-Assuming you have the proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto), run:
+Assuming you have the `v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), run:
 
 ```shell
-python -m grpc_tools.protoc -I./protos --python_out=. --grpc_python_out=. ./protos/sui/rpc/v2beta/ledger_service.proto
+python -m grpc_tools.protoc -I./protos --python_out=. --grpc_python_out=. ./protos/sui/rpc/v2/ledger_service.proto
 ```
 
 **Sample client.py to get `events` and `effects` details of a particular transaction**
 
 ```python
 import grpc
-from sui.rpc.v2beta import ledger_service_pb2, ledger_service_pb2_grpc
+from sui.rpc.v2 import ledger_service_pb2, ledger_service_pb2_grpc
 
 def main():
     # Create secure channel to port 443
@@ -535,7 +548,7 @@ python client.py
 
 :::info
 
-- The import paths like `sui.rpc.v2beta.ledger_service_pb2` depend on your proto structure.
+- The import paths like `sui.rpc.v2.ledger_service_pb2` depend on your proto structure.
 - You might need to adjust `__init__.py` files or PYTHONPATH to ensure proper module resolution.
 - The example assumes that gRPC is available on port `443` which requires SSL.
 - Digest in the request is directly provided in the `Base58` format, but check if you need to decode from your source format.
@@ -551,7 +564,7 @@ python client.py
 - Always use [field masks](#field-masks) when applicable to reduce response size and latency, especially for large resources.
 - Use `TLS (port 443)` for production traffic to ensure encrypted transport and prevent downgrade attacks.
 - Use [streaming subscriptions](#subscriptions-for-streaming-data) for real-time use cases instead of polling repeatedly.
-- Generate client code from the official `.proto` definitions in [sui-rpc-api](https://github.com/MystenLabs/sui-apis/tree/main/proto) to ensure compatibility and type safety.
+- Generate client code from the official `.proto` definitions in [sui-apis](https://github.com/MystenLabs/sui-apis/tree/main/proto) to ensure compatibility and type safety.
 - [Paginate](#pagination) carefully — always check `next_page_token` and do not assume all data is returned at once.
 - Retry transient failures with [exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff), especially for streaming APIs or busy public nodes.
 - Validate all input data, including encodings and message formats, to prevent hard-to-debug API rejections.
@@ -572,4 +585,4 @@ python client.py
 
 ## Full node operator configuration
 
-Refer to [Considerations to enable gRPC](/guides/operator/sui-full-node.mdx#considerations-to-enable-grpc-beta).
+Refer to [Considerations to enable gRPC](/guides/operator/sui-full-node.mdx#considerations-to-enable-grpc).
