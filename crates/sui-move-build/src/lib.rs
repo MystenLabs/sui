@@ -345,7 +345,10 @@ fn collect_bytecode_deps(
 fn verify_bytecode(package: &MoveCompiledPackage, fn_info: &FnInfoMap) -> SuiResult<()> {
     let compiled_modules = package.root_modules_map();
     let verifier_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
-        .verifier_config(/* signing_limits */ None);
+        .verifier_config(
+            /* signing_limits */ None,
+            /* sanity_check_with_regex_reference_safety */ true,
+        );
 
     for m in compiled_modules.iter_modules() {
         move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {

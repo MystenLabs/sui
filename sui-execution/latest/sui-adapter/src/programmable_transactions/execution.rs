@@ -1074,9 +1074,10 @@ mod checked {
             sui_verifier::verifier::sui_verify_module_unmetered(
                 module,
                 &BTreeMap::new(),
-                &context
-                    .protocol_config
-                    .verifier_config(/* signing_limits */ None),
+                &context.protocol_config.verifier_config(
+                    /* signing_limits */ None,
+                    /* sanity_check_with_regex_reference_safety */ false,
+                ),
             )?;
         }
 

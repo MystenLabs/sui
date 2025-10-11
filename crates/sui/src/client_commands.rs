@@ -1164,6 +1164,7 @@ impl SuiClientCommands {
                 let mut verifier = sui_execution::verifier(
                     &protocol_config,
                     signing_limits,
+                    /* sanity_check_with_regex_reference_safety */ true,
                     &bytecode_verifier_metrics,
                 );
 
