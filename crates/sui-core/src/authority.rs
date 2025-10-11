@@ -3582,6 +3582,8 @@ impl AuthorityState {
         config: NodeConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
+        use crate::authority::authority_store_pruner::PrunerWatermarks;
+        let watermarks = Arc::new(PrunerWatermarks::default());
         AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
@@ -3590,6 +3592,7 @@ impl AuthorityState {
             config.authority_store_pruning_config,
             metrics,
             EPOCH_DURATION_MS_FOR_TESTING,
+            &watermarks,
         )
         .await
     }

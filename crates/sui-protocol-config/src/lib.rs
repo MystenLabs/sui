@@ -751,6 +751,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_authenticated_event_streams: bool,
 
+    // Enable address balance gas payments
+    #[serde(skip_serializing_if = "is_false")]
+    enable_address_balance_gas_payments: bool,
+
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
@@ -837,6 +841,10 @@ struct FeatureFlags {
     // If true generate layouts for dynamic fields
     #[serde(skip_serializing_if = "is_false")]
     generate_df_type_layouts: bool,
+
+    // If true, allow Move functions called in PTBs to return references
+    #[serde(skip_serializing_if = "is_false")]
+    allow_references_in_ptbs: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1941,6 +1949,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_address_balance_gas_payments(&self) -> bool {
+        self.feature_flags.enable_address_balance_gas_payments
+    }
+
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
     }
@@ -2273,6 +2285,10 @@ impl ProtocolConfig {
 
     pub fn generate_df_type_layouts(&self) -> bool {
         self.feature_flags.generate_df_type_layouts
+    }
+
+    pub fn allow_references_in_ptbs(&self) -> bool {
+        self.feature_flags.allow_references_in_ptbs
     }
 }
 
@@ -4312,6 +4328,12 @@ impl ProtocolConfig {
         self.feature_flags.allow_private_accumulator_entrypoints = true;
     }
 
+    pub fn enable_address_balance_gas_payments_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = true;
+        self.feature_flags.allow_private_accumulator_entrypoints = true;
+        self.feature_flags.enable_address_balance_gas_payments = true;
+    }
+
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
@@ -4343,6 +4365,10 @@ impl ProtocolConfig {
 
     pub fn set_authority_capabilities_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.authority_capabilities_v2 = val;
+    }
+
+    pub fn allow_references_in_ptbs_for_testing(&mut self) {
+        self.feature_flags.allow_references_in_ptbs = true;
     }
 }
 

@@ -13,7 +13,7 @@
 use crate::summary_metrics::{log_replay_metrics, tx_metrics_reset};
 use crate::{
     artifacts::{Artifact, ArtifactManager},
-    execution::{execute_transaction_to_effects, ReplayCacheSummary, ReplayExecutor},
+    execution::{execute_transaction_to_effects, MoveCallInfo, ReplayCacheSummary, ReplayExecutor},
     replay_interface::{
         EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
     },
@@ -66,6 +66,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     artifact_manager: &ArtifactManager<'_>,
     tx_digest: &str,
     data_store: &S,
+    network: String,
     trace: bool,
 ) -> anyhow::Result<()> {
     let _span = info_span!("replay_tx", tx_digest = %tx_digest).entered();
@@ -110,6 +111,12 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     log_replay_metrics(tx_digest, total_ms, exec_ms);
 
     artifact_manager
+        .member(Artifact::TransactionData)
+        .serialize_artifact(&context_and_effects.txn_data)
+        .transpose()?
+        .unwrap();
+
+    artifact_manager
         .member(Artifact::TransactionEffects)
         .serialize_artifact(&context_and_effects.execution_effects)
         .transpose()?
@@ -125,6 +132,8 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     let cache_summary = ReplayCacheSummary::from_cache(
         context_and_effects.expected_effects.executed_epoch(),
         context_and_effects.checkpoint,
+        network.clone(),
+        context_and_effects.protocol_version,
         &context_and_effects.object_cache,
     );
     artifact_manager
@@ -133,7 +142,34 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
         .transpose()?
         .unwrap();
 
-    verify_txn_and_save_forked_effects(
+    // Save move call info if the transaction is a ProgrammableTransaction
+    if let sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb) =
+        context_and_effects.txn_data.kind()
+    {
+        info!(tx_digest = %tx_digest, "Extracting move call info for {} commands", ptb.commands.len());
+        match MoveCallInfo::from_transaction(ptb, &context_and_effects.object_cache) {
+            Ok(move_call_info) => {
+                let successful_extractions = move_call_info
+                    .command_signatures
+                    .iter()
+                    .filter(|s| s.is_some())
+                    .count();
+                info!(tx_digest = %tx_digest, "Successfully extracted {} function signatures out of {} commands",
+                    successful_extractions, move_call_info.command_signatures.len());
+
+                artifact_manager
+                    .member(Artifact::MoveCallInfo)
+                    .serialize_artifact(&move_call_info)
+                    .transpose()?
+                    .unwrap();
+            }
+            Err(e) => {
+                info!(tx_digest = %tx_digest, "Failed to extract move call info: {}", e);
+            }
+        }
+    }
+
+    verify_txn_and_save_effects(
         artifact_manager,
         &context_and_effects.expected_effects,
         &context_and_effects.execution_effects,
@@ -142,28 +178,44 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     Ok(())
 }
 
-fn verify_txn_and_save_forked_effects(
+fn verify_txn_and_save_effects(
     artifact_manager: &ArtifactManager<'_>,
     expected_effects: &TransactionEffects,
     effects: &TransactionEffects,
 ) -> anyhow::Result<()> {
+    // If replayed effects are different from the expected ones
+    // (obtained from the chain), save the forked effects and the expected effects
+    // so that they can be diffed in the output.
+    // If replayed and expected effects are the same, save the replayed effects
+    // and try removing the forked effects (if any) so that the output just shows
+    // the replayed effects rather than (now spurious) effects diff.
     if effects != expected_effects {
         error!(
             tx_digest = %effects.transaction_digest(),
-            "Transaction effects do not match expected effects; saving forked effects",
+            "Transaction effects do not match expected effects for transaction {}; saving forked effects",
+            effects.transaction_digest(),
         );
         artifact_manager
             .member(Artifact::ForkedTransactionEffects)
             .serialize_artifact(effects)
             .transpose()?
             .unwrap();
-        bail!(
-            "Transaction effects do not match expected effects for transaction {}",
-            effects.transaction_digest()
-        );
+        artifact_manager
+            .member(Artifact::TransactionEffects)
+            .serialize_artifact(expected_effects)
+            .transpose()?
+            .unwrap();
     } else {
-        Ok(())
+        artifact_manager
+            .member(Artifact::TransactionEffects)
+            .serialize_artifact(effects)
+            .transpose()?
+            .unwrap();
+        artifact_manager
+            .member(Artifact::ForkedTransactionEffects)
+            .try_remove_artifact()?;
     }
+    Ok(())
 }
 
 impl ReplayTransaction {

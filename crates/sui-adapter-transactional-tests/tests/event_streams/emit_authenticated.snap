@@ -6,24 +6,24 @@ processed 14 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 8-23:
+task 1, lines 9-24:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 4909600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 25:
+task 2, line 26:
 //# run test::event_streams::emit_event --sender A --args 10
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 accumulators_written: fake(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 27:
+task 3, line 28:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 29-31:
+task 4, lines 30-32:
 //# view-object 2,0
 Owner: Object ID: ( _ )
 Version: 2
@@ -45,18 +45,18 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     },
 }
 
-task 5, line 32:
+task 5, line 33:
 //# run test::event_streams::emit_event --sender A --args 20
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 accumulators_written: fake(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, line 34:
+task 6, line 35:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 7, lines 36-38:
+task 7, lines 37-39:
 //# view-object 2,0
 Owner: Object ID: ( _ )
 Version: 3
@@ -79,18 +79,18 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     },
 }
 
-task 8, line 39:
+task 8, line 40:
 //# run test::event_streams::emit_event --sender A --args 30
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [30, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 accumulators_written: fake(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9, line 41:
+task 9, line 42:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 10, lines 43-45:
+task 10, lines 44-46:
 //# view-object 2,0
 Owner: Object ID: ( _ )
 Version: 4
@@ -113,18 +113,18 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     },
 }
 
-task 11, line 46:
+task 11, line 47:
 //# run test::event_streams::emit_event --sender A --args 40
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [40, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 accumulators_written: fake(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 12, line 48:
+task 12, line 49:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 13, lines 50-53:
+task 13, lines 51-54:
 //# view-object 2,0
 Owner: Object ID: ( _ )
 Version: 5

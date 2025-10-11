@@ -5,9 +5,8 @@ use crate::{
     data_store::PackageStore,
     execution_mode::ExecutionMode,
     static_programmable_transactions::linkage::{
-        config::ResolutionConfig,
-        legacy_linkage,
-        resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
+        config::{LinkageConfig, ResolutionConfig},
+        resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
         resolved_linkage::ResolvedLinkage,
     },
 };
@@ -17,65 +16,99 @@ use sui_types::{
     transaction as P,
 };
 
-pub trait LinkageAnalysis {
-    fn compute_call_linkage(
+#[derive(Debug)]
+pub struct LinkageAnalyzer {
+    internal: ResolutionConfig,
+}
+
+impl LinkageAnalyzer {
+    pub fn new<Mode: ExecutionMode>(
+        protocol_config: &ProtocolConfig,
+    ) -> Result<Self, ExecutionError> {
+        let always_include_system_packages = !Mode::packages_are_predefined();
+        let linkage_config = LinkageConfig::legacy_linkage_settings(always_include_system_packages);
+        let binary_config = to_binary_config(protocol_config);
+        Ok(Self {
+            internal: ResolutionConfig {
+                linkage_config,
+                binary_config,
+            },
+        })
+    }
+
+    pub fn compute_call_linkage(
         &self,
         move_call: &P::ProgrammableMoveCall,
         store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError>;
+    ) -> Result<ResolvedLinkage, ExecutionError> {
+        Ok(ResolvedLinkage::from_resolution_table(
+            self.compute_call_linkage_(move_call, store)?,
+        ))
+    }
 
-    fn compute_publication_linkage(
+    pub fn compute_publication_linkage(
         &self,
         deps: &[ObjectID],
         store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError>;
+    ) -> Result<ResolvedLinkage, ExecutionError> {
+        Ok(ResolvedLinkage::from_resolution_table(
+            self.compute_publication_linkage_(deps, store)?,
+        ))
+    }
 
-    fn config(&self) -> &ResolutionConfig;
-}
+    pub fn config(&self) -> &ResolutionConfig {
+        &self.internal
+    }
 
-pub fn linkage_analysis_for_protocol_config<Mode: ExecutionMode>(
-    protocol_config: &ProtocolConfig,
-    _tx: &P::ProgrammableTransaction,
-    store: &dyn PackageStore,
-) -> Result<Box<dyn LinkageAnalysis>, ExecutionError> {
-    Ok(Box::new(legacy_linkage::LegacyLinkage::new(
-        !Mode::packages_are_predefined(),
-        to_binary_config(protocol_config),
-        store,
-    )?))
-}
-
-/// Given a list of object IDs, generate a `ResolvedLinkage` for them.
-/// Since this linkage analysis should only be used for types, all packages are resolved
-/// "upwards" (i.e., later versions of the package are preferred).
-pub fn type_linkage(
-    ids: &[ObjectID],
-    store: &dyn PackageStore,
-) -> Result<ResolvedLinkage, ExecutionError> {
-    let mut resolution_table = ResolutionTable::empty();
-    for id in ids {
-        let pkg = get_package(id, store)?;
+    fn compute_call_linkage_(
+        &self,
+        move_call: &P::ProgrammableMoveCall,
+        store: &dyn PackageStore,
+    ) -> Result<ResolutionTable, ExecutionError> {
+        let mut resolution_table = self
+            .internal
+            .linkage_config
+            .resolution_table_with_native_packages(store)?;
+        let pkg = get_package(&move_call.package, store)?;
         let transitive_deps = pkg
             .linkage_table()
             .values()
             .map(|info| info.upgraded_id)
             .collect::<Vec<_>>();
-        let package_id = pkg.id();
-        add_and_unify(
-            &package_id,
-            store,
-            &mut resolution_table,
-            ConflictResolution::at_least,
-        )?;
         for object_id in transitive_deps.iter() {
             add_and_unify(
                 object_id,
                 store,
                 &mut resolution_table,
-                ConflictResolution::at_least,
+                VersionConstraint::exact,
             )?;
         }
+        add_and_unify(
+            &move_call.package,
+            store,
+            &mut resolution_table,
+            VersionConstraint::exact,
+        )?;
+        Ok(resolution_table)
     }
 
-    Ok(ResolvedLinkage::from_resolution_table(resolution_table))
+    /// Compute the linkage for a publish or upgrade command. This is a special case because
+    fn compute_publication_linkage_(
+        &self,
+        deps: &[ObjectID],
+        store: &dyn PackageStore,
+    ) -> Result<ResolutionTable, ExecutionError> {
+        let mut resolution_table = self
+            .internal
+            .linkage_config
+            .resolution_table_with_native_packages(store)?;
+        for id in deps {
+            let pkg = get_package(id, store)?;
+            add_and_unify(id, store, &mut resolution_table, VersionConstraint::exact)?;
+            resolution_table
+                .all_versions_resolution_table
+                .insert(pkg.id(), pkg.original_package_id());
+        }
+        Ok(resolution_table)
+    }
 }

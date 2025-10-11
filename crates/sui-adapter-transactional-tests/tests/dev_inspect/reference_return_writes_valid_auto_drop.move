@@ -4,7 +4,7 @@
 // tests valid transfers/writes of mut references, which are valid only because of automatically
 // dropping references
 
-//# init --addresses test=0x0 --accounts A
+//# init --addresses test=0x0 --accounts A --allow-references-in-ptbs
 
 //# publish
 module test::m {
@@ -50,33 +50,33 @@ module test::m {
 
 }
 
-//# programmable --dev-inspect
+//# programmable
 // transfer parent (dropped child)
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_mut(Result(0));
 //> 2: test::m::write_pair(Result(0));
 
-//# programmable --dev-inspect
+//# programmable
 // borrow parent, transfer parent (dropped child)
 //> 0: test::m::pair();
 //> 1: test::m::borrow_mut<test::m::Pair>(Result(0));
 //> 2: test::m::borrow_x_mut(Result(1));
 //> 3: test::m::write_pair(Result(1));
 
-//# programmable --dev-inspect
+//# programmable
 // transfer parent (drop one, use one)
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_y_mut(Result(0));
 //> 2: test::m::write_u64(NestedResult(1,0));
 //> 3: test::m::write_pair(Result(0));
 
-//# programmable --dev-inspect
+//# programmable
 // transfer parent (drop two)
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_y_mut(Result(0));
 //> 2: test::m::write_pair(Result(0));
 
-//# programmable --dev-inspect
+//# programmable
 // write to parent with imm child (write mut drop imm)
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_mut_y_imm(Result(0));
