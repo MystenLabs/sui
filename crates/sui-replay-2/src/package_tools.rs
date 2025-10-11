@@ -13,7 +13,6 @@ use move_core_types::account_address::AccountAddress;
 use move_package::BuildConfig as MoveBuildConfig;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::BufRead;
 use std::path::PathBuf;
 use sui_move::manage_package::resolve_lock_file_path;
 use sui_move_build::{implicit_deps, BuildConfig, SuiPackageHooks};
@@ -166,32 +165,31 @@ fn get_chain_id_from_mapping(node: &Node) -> Result<String> {
 
     let file =
         fs::File::open(&mapping_file).context(format!("Failed to open {}", NODE_MAPPING_FILE))?;
-    let reader = std::io::BufReader::new(file);
 
-    let node_name = node.node_dir();
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .trim(csv::Trim::All)
+        .from_reader(file);
 
-    // Special case for custom nodes
-    if matches!(node, Node::Custom(_)) {
-        bail!(
-            "Custom node URLs are not supported in {}.",
-            NODE_MAPPING_FILE
-        );
-    }
+    let node_name = node.network_name();
 
     // Read the file and find the matching node
-    for line in reader.lines() {
-        let line = line.context(format!("Failed to read line from {}", NODE_MAPPING_FILE))?;
-        let parts: Vec<&str> = line.split(',').collect();
+    for result in rdr.records() {
+        let record = result.context(format!(
+            "Failed to read CSV record from {}",
+            NODE_MAPPING_FILE
+        ))?;
 
-        if parts.len() != 2 {
+        if record.len() != 2 {
             bail!(
-                "Invalid format in {}. Expected 'node_name,chain_id' but got: {}",
+                "Invalid format in {}. Expected 2 columns (node_name,chain_id), got {}",
                 NODE_MAPPING_FILE,
-                line
+                record.len()
             );
         }
 
-        let (name, chain_id) = (parts[0].trim(), parts[1].trim());
+        let name = record[0].trim();
+        let chain_id = record[1].trim();
 
         if name == node_name {
             return Ok(chain_id.to_string());
