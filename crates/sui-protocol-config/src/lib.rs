@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 98;
+const MAX_PROTOCOL_VERSION: u64 = 99;
 
 // Record history of protocol version allocations here:
 //
@@ -845,6 +845,10 @@ struct FeatureFlags {
     // If true, allow Move functions called in PTBs to return references
     #[serde(skip_serializing_if = "is_false")]
     allow_references_in_ptbs: bool,
+
+    // Enables account aliases.
+    #[serde(skip_serializing_if = "is_false")]
+    account_aliases: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2289,6 +2293,21 @@ impl ProtocolConfig {
 
     pub fn allow_references_in_ptbs(&self) -> bool {
         self.feature_flags.allow_references_in_ptbs
+    }
+
+    pub fn account_aliases(&self) -> bool {
+        let account_aliases = self.feature_flags.account_aliases;
+        assert!(
+            !account_aliases || self.mysticeti_fastpath(),
+            "Account aliases requires Mysticeti fastpath to be enabled"
+        );
+        if account_aliases {
+            // TODO: when flag for disabling CertifiedTransaction is added, add assertion for it here.
+            unimplemented!(
+                "account_aliases depends on disabling CertifiedTransaction, which is not yet implemented"
+            );
+        }
+        account_aliases
     }
 }
 
@@ -4093,6 +4112,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
                 }
+                99 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
