@@ -129,7 +129,8 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         false,
         Box::leak(Box::new(ProtocolConfig::get_for_max_version_UNSAFE())), // leak for testing
         metrics,
-        0, // epoch id
+        0,     // epoch id
+        false, // address balance enabled
     ));
     ext.add(NativesCostTable::from_protocol_config(&protocol_config));
     let tx_context = TxContext::new_from_components(

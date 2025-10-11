@@ -45,6 +45,7 @@ pub trait Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        address_balance_enabled: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -74,6 +75,7 @@ pub trait Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,
+        address_balance_enabled: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,

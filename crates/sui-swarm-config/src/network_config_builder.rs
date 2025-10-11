@@ -674,6 +674,7 @@ mod test {
                 signer,
                 genesis_digest,
                 &mut None,
+                false, // genesis does not use address balances
             );
 
         assert_eq!(&effects, genesis.effects());

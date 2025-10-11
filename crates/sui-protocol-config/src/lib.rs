@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 98;
+const MAX_PROTOCOL_VERSION: u64 = 99;
 
 // Record history of protocol version allocations here:
 //
@@ -267,6 +267,7 @@ const MAX_PROTOCOL_VERSION: u64 = 98;
 // Version 97: Enable additional borrow checks
 // Version 98: Add authenticated event streams support via emit_authenticated function.
 //             Add better error messages to the loader.
+// Version 99: Framework update
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -281,7 +282,7 @@ impl ProtocolVersion {
     pub const MAX: Self = Self(MAX_PROTOCOL_VERSION);
 
     #[cfg(not(msim))]
-    const MAX_ALLOWED: Self = Self::MAX;
+    pub const MAX_ALLOWED: Self = Self::MAX;
 
     // We create one additional "fake" version in simulator builds so that we can test upgrades.
     #[cfg(msim)]
@@ -4093,6 +4094,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
                 }
+                99 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4325,7 +4327,6 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
-        self.feature_flags.allow_private_accumulator_entrypoints = true;
     }
 
     pub fn enable_address_balance_gas_payments_for_testing(&mut self) {

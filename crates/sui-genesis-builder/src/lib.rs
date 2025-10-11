@@ -933,6 +933,7 @@ fn create_genesis_transaction(
                 signer,
                 genesis_digest,
                 &mut None,
+                false, // genesis does not use address balances
             );
         assert!(inner_temp_store.input_objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());

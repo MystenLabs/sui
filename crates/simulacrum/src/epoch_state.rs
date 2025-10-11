@@ -159,6 +159,9 @@ impl EpochState {
                 signer,
                 tx_digest,
                 &mut None,
+                // Simulacrum does not handle the case where accumulators are enabled by the protocol config,
+                // but are disabled because the root accumulator did not yet exist.
+                self.protocol_config.enable_accumulators(),
             );
         Ok((inner_temp_store, gas_status, effects, result))
     }

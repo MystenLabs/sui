@@ -126,6 +126,7 @@ pub struct ObjectRuntime<'a> {
 
     pub(crate) protocol_config: &'a ProtocolConfig,
     pub(crate) metrics: Arc<LimitsMetrics>,
+    pub(crate) address_balance_enabled: bool,
 }
 
 impl<'a> NativeExtensionMarker<'a> for ObjectRuntime<'a> {}
@@ -156,6 +157,7 @@ impl<'a> ObjectRuntime<'a> {
         protocol_config: &'a ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         epoch_id: EpochId,
+        address_balance_enabled: bool,
     ) -> Self {
         let mut input_object_owners = BTreeMap::new();
         let mut root_version = BTreeMap::new();
@@ -203,6 +205,7 @@ impl<'a> ObjectRuntime<'a> {
             is_metered,
             protocol_config,
             metrics,
+            address_balance_enabled,
         }
     }
 

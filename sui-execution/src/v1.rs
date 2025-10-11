@@ -78,6 +78,7 @@ impl executor::Executor for Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         _trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        _address_balance_enabled: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -123,6 +124,7 @@ impl executor::Executor for Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,
+        _address_balance_enabled: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
