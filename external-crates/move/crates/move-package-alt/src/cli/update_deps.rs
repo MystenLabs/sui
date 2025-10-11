@@ -52,7 +52,7 @@ impl UpdateDeps {
         let mut root_package =
             RootPackage::<Vanilla>::load_force_repin(&path, environment, self.modes.clone())
                 .await?;
-        root_package.update_lockfile()?;
+        root_package.save_lockfile_to_disk().await?;
 
         Ok(())
     }

@@ -9,6 +9,9 @@ use std::{
 use clap::*;
 use serde::Serialize;
 
+#[allow(unused)]
+use tracing::debug;
+
 use crate::base::reroot_path;
 
 use move_binary_format::CompiledModule;
@@ -61,14 +64,12 @@ impl Summary {
         additional_metadata: Option<&T>,
         // address_derivation_fn_opt: Option<F>,
     ) -> anyhow::Result<()> {
-        let path = reroot_path(path)?;
-        let env = find_env::<F>(&path, &config)?;
-
         let model_source;
         let model_compiled;
 
         let (summary, address_mapping) = if self.bytecode {
-            let bytecode_files = find_filenames(&[path], |path| {
+            let input_path = path.unwrap_or_else(|| Path::new("."));
+            let bytecode_files = find_filenames(&[input_path], |path| {
                 extension_equals(path, MOVE_COMPILED_EXTENSION)
             })?;
 
@@ -104,6 +105,8 @@ impl Summary {
                     .collect::<BTreeMap<_, _>>(),
             )
         } else {
+            let path = reroot_path(path)?;
+            let env = find_env::<F>(&path, &config)?;
             let root_pkg = RootPackage::<F>::load(&path, env, config.mode_set()).await?;
             // Get named addresses from the root package graph
             let named_addresses: BuildNamedAddresses =

@@ -5,11 +5,11 @@ External Command `cat P1/Move.toml`:
 # Full documentation for Move.toml can be found at: docs.sui.io
 
 [package]
-name = "P1"
+name = "p1"
 edition = "2024"         # use "2024" for Move 2024 edition
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
-# flavor = sui
+# flavor = "sui"
 
 # add the environment names and their chain ids here
 # by default, testnet and mainnet are implicitly available
@@ -29,24 +29,26 @@ edition = "2024"         # use "2024" for Move 2024 edition
 # Setting `override = true` forces your dependencies to use this version of the package.
 # This is required if you need to link against a different version from one of your dependencies, or if
 # two of your dependencies depend on different versions of the same package
-# foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true}
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true }
 
 # Use to replace dependencies for specific environments
 # [dep-replacements.mainnet]
-# foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }External Command `cat P1/.gitignore`:
+# foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }
+External Command `cat P1/.gitignore`:
 build/*
 .trace
 .coverage*
+Pub.*.toml
 Command `new P2 -p other_dir`:
 External Command `cat other_dir/Move.toml`:
 # Full documentation for Move.toml can be found at: docs.sui.io
 
 [package]
-name = "P2"
+name = "p2"
 edition = "2024"         # use "2024" for Move 2024 edition
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
-# flavor = sui
+# flavor = "sui"
 
 # add the environment names and their chain ids here
 # by default, testnet and mainnet are implicitly available
@@ -66,11 +68,13 @@ edition = "2024"         # use "2024" for Move 2024 edition
 # Setting `override = true` forces your dependencies to use this version of the package.
 # This is required if you need to link against a different version from one of your dependencies, or if
 # two of your dependencies depend on different versions of the same package
-# foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true}
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true }
 
 # Use to replace dependencies for specific environments
 # [dep-replacements.mainnet]
-# foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }External Command `cat other_dir/.gitignore`:
+# foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }
+External Command `cat other_dir/.gitignore`:
 build/*
 .trace
 .coverage*
+Pub.*.toml

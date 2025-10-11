@@ -35,8 +35,11 @@ use move_compiler::{
 use move_core_types::account_address::AccountAddress;
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, graph::PackageInfo, package::RootPackage,
-    schema::Environment,
+    errors::PackageResult,
+    flavor::MoveFlavor,
+    graph::{NamedAddress, PackageInfo},
+    package::RootPackage,
+    schema::{Environment, OriginalID},
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -83,7 +86,7 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
-    let project_root = root_pkg.path().as_ref().to_path_buf();
+    let project_root = root_pkg.package_path().to_path_buf();
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let package_name = Symbol::from(root_pkg.name().as_str());
     let (file_map, all_compiled_units) =
@@ -198,7 +201,7 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     root_pkg: &RootPackage<F>,
     compiler_driver: impl FnOnce(Compiler) -> Result<T>,
 ) -> Result<T> {
-    let packages = root_pkg.packages()?;
+    let packages = root_pkg.packages();
     let package_paths = make_deps_for_compiler(w, packages, build_config)?;
 
     debug!("Package paths {:#?}", package_paths);

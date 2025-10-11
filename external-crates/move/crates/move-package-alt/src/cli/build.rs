@@ -51,7 +51,7 @@ impl Build {
         let mut root_pkg =
             RootPackage::<Vanilla>::load(&path, environment, self.modes.clone()).await?;
 
-        for pkg in root_pkg.packages()? {
+        for pkg in root_pkg.packages() {
             println!("Package {}", pkg.name());
             if pkg.is_root() {
                 println!("  (root package)");
@@ -64,7 +64,7 @@ impl Build {
             println!();
         }
 
-        root_pkg.update_lockfile()?;
+        root_pkg.save_lockfile_to_disk().await?;
         Ok(())
     }
 }
