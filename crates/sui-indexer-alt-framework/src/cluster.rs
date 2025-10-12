@@ -355,6 +355,7 @@ mod tests {
                 rpc_api_url: None,
                 rpc_username: None,
                 rpc_password: None,
+                streaming_endpoint: None,
             }),
             indexer_args: IndexerArgs {
                 first_checkpoint: Some(0),

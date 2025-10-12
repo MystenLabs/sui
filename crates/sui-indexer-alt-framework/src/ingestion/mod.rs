@@ -16,6 +16,7 @@ use url::Url;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
+use crate::ingestion::streaming_service::GRPCStreamingService;
 use crate::metrics::IndexerMetrics;
 use crate::types::full_checkpoint_content::CheckpointData;
 
@@ -25,6 +26,7 @@ pub mod error;
 mod local_client;
 pub mod remote_client;
 mod rpc_client;
+mod streaming_service;
 #[cfg(test)]
 mod test_utils;
 
@@ -52,6 +54,10 @@ pub struct ClientArgs {
     /// Optional password for the gRPC service.
     #[clap(long, env)]
     pub rpc_password: Option<String>,
+
+    /// gRPC endpoint for streaming checkpoints
+    #[clap(long, env)]
+    pub streaming_endpoint: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -69,6 +75,8 @@ pub struct IngestionConfig {
 pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
+    metrics: Arc<IndexerMetrics>,
+    streaming_endpoint: Option<String>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
@@ -111,6 +119,8 @@ impl IngestionService {
         Ok(Self {
             config,
             client,
+            metrics,
+            streaming_endpoint: args.streaming_endpoint,
             commit_hi_tx,
             commit_hi_rx,
             subscribers,
@@ -163,11 +173,13 @@ impl IngestionService {
         initial_commit_hi: Option<u64>,
     ) -> Result<JoinHandle<()>>
     where
-        R: std::ops::RangeBounds<u64> + Send + 'static,
+        R: std::ops::RangeBounds<u64> + Send + Sync + 'static,
     {
         let IngestionService {
             config,
             client,
+            metrics,
+            streaming_endpoint,
             commit_hi_tx: _,
             commit_hi_rx,
             subscribers,
@@ -178,13 +190,18 @@ impl IngestionService {
             return Err(Error::NoSubscribers);
         }
 
+        // Create the streaming service
+        let streaming_service = streaming_endpoint.map(GRPCStreamingService::new);
+
         let broadcaster = broadcaster(
             checkpoints,
             initial_commit_hi,
+            streaming_service,
             config,
             client,
             commit_hi_rx,
             subscribers,
+            metrics,
             cancel.clone(),
         );
 
@@ -228,6 +245,7 @@ mod tests {
                 rpc_api_url: None,
                 rpc_username: None,
                 rpc_password: None,
+                streaming_endpoint: None,
             },
             IngestionConfig {
                 checkpoint_buffer_size,
