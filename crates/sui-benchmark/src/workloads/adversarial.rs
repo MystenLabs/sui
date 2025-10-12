@@ -29,7 +29,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
-use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, transaction::Transaction};
 use sui_types::{transaction::TransactionData, utils::to_sender_signed_transaction};
@@ -294,7 +294,7 @@ impl AdversarialTestPayload {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: self.df_parent_obj_ref.0,
                         initial_shared_version: self.df_parent_obj_ref.1,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     })
                     .into(),
                     self.get_pct_of(protocol_config.object_runtime_max_num_store_entries())

@@ -10,7 +10,9 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     effects::TransactionEffects,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{CallArg, Command, ObjectArg, Transaction, TransactionData},
+    transaction::{
+        CallArg, Command, ObjectArg, SharedObjectMutability, Transaction, TransactionData,
+    },
     Identifier, TypeTag, SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
@@ -105,7 +107,7 @@ pub async fn finalize(
                 CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_COIN_REGISTRY_OBJECT_ID,
                     initial_shared_version: 1.into(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }),
                 CallArg::Object(ObjectArg::Receiving(currency)),
             ],
@@ -155,7 +157,7 @@ pub async fn create_dynamic_currency(
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_COIN_REGISTRY_OBJECT_ID,
                 initial_shared_version: 1.into(),
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })],
         )
         .unwrap();
@@ -206,7 +208,7 @@ pub async fn burn_from_currency(
         .obj(ObjectArg::SharedObject {
             id: currency.0,
             initial_shared_version: currency.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
 
@@ -269,7 +271,7 @@ pub async fn burn_from_treasury(
         .obj(ObjectArg::SharedObject {
             id: treasury.0,
             initial_shared_version: treasury.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
 
@@ -324,7 +326,7 @@ pub async fn hide_treasury_cap(
         .obj(ObjectArg::SharedObject {
             id: treasury.0,
             initial_shared_version: treasury.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
 
@@ -375,7 +377,7 @@ pub async fn show_treasury_cap(
         .obj(ObjectArg::SharedObject {
             id: treasury.0,
             initial_shared_version: treasury.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
 
@@ -423,7 +425,7 @@ pub async fn migrate(
         .obj(ObjectArg::SharedObject {
             id: SUI_COIN_REGISTRY_OBJECT_ID,
             initial_shared_version: 1.into(),
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
 
@@ -477,7 +479,7 @@ pub async fn migrate_deny_cap(
         .obj(ObjectArg::SharedObject {
             id: currency.0,
             initial_shared_version: currency.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
 
@@ -533,7 +535,7 @@ pub async fn migrate_regulated_metadata(
         .obj(ObjectArg::SharedObject {
             id: currency.0,
             initial_shared_version: currency.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
 
@@ -587,7 +589,7 @@ pub async fn delete_migrated_legacy_metadata(
         .obj(ObjectArg::SharedObject {
             id: currency.0,
             initial_shared_version: currency.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
 

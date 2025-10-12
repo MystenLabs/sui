@@ -17,7 +17,7 @@ use sui_indexer_alt_reader::{
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
-use sui_types::gas_coin::GasCoin;
+use sui_types::{gas_coin::GasCoin, transaction::SharedObjectMutability};
 
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -453,7 +453,7 @@ async fn test_execute_transaction_unchanged_consensus_objects() {
         .obj(ObjectArg::SharedObject {
             id: sui_types::SUI_CLOCK_OBJECT_ID,
             initial_shared_version: sui_types::base_types::SequenceNumber::from_u64(1),
-            mutable: false,
+            mutability: SharedObjectMutability::Immutable,
         })
         .unwrap();
 

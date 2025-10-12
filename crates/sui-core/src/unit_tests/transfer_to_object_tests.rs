@@ -14,7 +14,7 @@ use sui_types::{
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        CallArg, ObjectArg, ProgrammableTransaction, VerifiedCertificate,
+        CallArg, ObjectArg, ProgrammableTransaction, SharedObjectMutability, VerifiedCertificate,
         TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
     },
 };
@@ -1687,7 +1687,7 @@ async fn receive_and_dof_interleave() {
                         .obj(ObjectArg::SharedObject {
                             id: shared.0 .0,
                             initial_shared_version,
-                            mutable: true,
+                            mutability: SharedObjectMutability::Mutable,
                         })
                         .unwrap();
                     let child = builder.obj(ObjectArg::Receiving(owned.0)).unwrap();
@@ -1709,7 +1709,7 @@ async fn receive_and_dof_interleave() {
                         .obj(ObjectArg::SharedObject {
                             id: shared.0 .0,
                             initial_shared_version,
-                            mutable: true,
+                            mutability: SharedObjectMutability::Mutable,
                         })
                         .unwrap();
                     let child = builder.obj(ObjectArg::ImmOrOwnedObject(owned.0)).unwrap();

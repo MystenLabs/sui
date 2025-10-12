@@ -70,7 +70,8 @@ impl OverloadTracker {
             .shared_input_objects()
             .into_iter()
             .filter_map(|r| {
-                r.mutable
+                r.mutability
+                    .is_mutable()
                     .then_some(FullObjectID::new(r.id, Some(r.initial_shared_version)))
             })
             .collect()

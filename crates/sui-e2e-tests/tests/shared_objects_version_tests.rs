@@ -9,7 +9,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::object::{Owner, OBJECT_START_VERSION};
-use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -226,7 +226,7 @@ impl TestEnvironment {
                 vec![CallArg::Object(ObjectArg::SharedObject {
                     id: counter,
                     initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })],
             )
             .await?;

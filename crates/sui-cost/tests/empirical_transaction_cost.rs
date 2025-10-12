@@ -15,6 +15,7 @@ use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::gas_coin::GAS;
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::TransactionData;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
@@ -199,7 +200,7 @@ async fn create_txes(
                 CallArg::Object(ObjectArg::SharedObject {
                     id: counter_id,
                     initial_shared_version: counter_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }),
                 CallArg::Pure(0u64.to_le_bytes().to_vec()),
             ],

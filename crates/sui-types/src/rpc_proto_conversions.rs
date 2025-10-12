@@ -2458,11 +2458,12 @@ impl From<crate::transaction::CallArg> for Input {
                 O::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutability,
                 } => {
+                    // TODO(address-balances): add full enum to schema
                     message.object_id = Some(id.to_canonical_string(true));
                     message.version = Some(initial_shared_version.value());
-                    message.mutable = Some(mutable);
+                    message.mutable = Some(mutability.is_mutable());
                     InputKind::Shared
                 }
                 O::Receiving((id, version, digest)) => {

@@ -32,6 +32,7 @@ use sui_types::transaction::CallArg;
 use sui_types::transaction::Command;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionKind;
 use sui_types::TypeTag;
@@ -481,7 +482,7 @@ impl SuiClientInner for SuiSdkClient {
         Ok(ObjectArg::SharedObject {
             id: SUI_BRIDGE_OBJECT_ID,
             initial_shared_version: SequenceNumber::from_u64(initial_shared_version),
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
     }
 

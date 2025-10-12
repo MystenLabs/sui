@@ -11,7 +11,7 @@ use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
 use sui_types::base_types::{FullObjectRef, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
-use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
 use tracing::info;
 
@@ -40,7 +40,7 @@ async fn party_object_deletion() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
         )
         .build();
@@ -100,7 +100,7 @@ async fn party_object_deletion_multiple_times() {
                 ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
             )
             .build();
@@ -177,7 +177,7 @@ async fn party_object_deletion_multiple_times_cert_racing() {
                 ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
             )
             .build();
@@ -235,7 +235,7 @@ async fn party_object_transfer() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -305,7 +305,7 @@ async fn party_object_transfer_multiple_times() {
                 ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
                 SuiAddress::ZERO,
             )
@@ -392,7 +392,7 @@ async fn party_object_transfer_multi_certs() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -407,7 +407,7 @@ async fn party_object_transfer_multi_certs() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -423,7 +423,7 @@ async fn party_object_transfer_multi_certs() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -532,7 +532,7 @@ async fn party_object_read() {
                 vec![CallArg::Object(ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: false,
+                    mutability: SharedObjectMutability::Immutable,
                 })],
             )
             .build();
@@ -561,7 +561,7 @@ async fn party_object_read() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             recipient,
         )
@@ -600,7 +600,7 @@ async fn party_object_read() {
                 vec![CallArg::Object(ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: false,
+                    mutability: SharedObjectMutability::Immutable,
                 })],
             )
             .build();
@@ -714,7 +714,7 @@ async fn party_object_grpc() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -1023,7 +1023,7 @@ async fn party_object_jsonrpc() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
