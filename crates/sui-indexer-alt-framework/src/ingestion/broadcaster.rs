@@ -277,6 +277,38 @@ mod tests {
             .unwrap_err()
     }
 
+    /// Verify that a channel receives checkpoints in the given range exactly once each, in any order.
+    /// We need this because with ingest concurrency the order is not guaranteed.
+    async fn expect_checkpoints_in_range<R>(rx: &mut mpsc::Receiver<Arc<CheckpointData>>, range: R)
+    where
+        R: Iterator<Item = u64>,
+    {
+        use std::collections::HashSet;
+
+        let expected: HashSet<u64> = range.collect();
+        let mut received: HashSet<u64> = HashSet::new();
+
+        for _ in 0..expected.len() {
+            let checkpoint = expect_recv(rx).await.unwrap();
+            let seq = *checkpoint.checkpoint_summary.sequence_number();
+            assert!(
+                expected.contains(&seq),
+                "Received unexpected checkpoint {}",
+                seq
+            );
+            assert!(
+                received.insert(seq),
+                "Received duplicate checkpoint {}",
+                seq
+            );
+        }
+
+        assert_eq!(
+            received, expected,
+            "Did not receive all expected checkpoints"
+        );
+    }
+
     #[tokio::test]
     async fn finite_list_of_checkpoints() {
         let (_, hi_rx) = mpsc::unbounded_channel();
@@ -293,10 +325,7 @@ mod tests {
             cancel.clone(),
         );
 
-        for i in 0..5 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..5).await;
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
@@ -317,10 +346,7 @@ mod tests {
             cancel.clone(),
         );
 
-        for i in 0..5 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..5).await;
 
         drop(subscriber_rx);
         h_broadcaster.await.unwrap();
@@ -341,10 +367,7 @@ mod tests {
             cancel.clone(),
         );
 
-        for i in 0..5 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..5).await;
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
@@ -370,10 +393,7 @@ mod tests {
             cancel.clone(),
         );
 
-        for i in 0..=4 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..=4).await;
 
         // Regulator stopped because of watermark.
         expect_timeout(&mut subscriber_rx).await;
@@ -402,10 +422,7 @@ mod tests {
             cancel.clone(),
         );
 
-        for i in 0..=4 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..=4).await;
 
         // Regulator stopped because of watermark (plus buffering).
         expect_timeout(&mut subscriber_rx).await;
@@ -434,19 +451,13 @@ mod tests {
             cancel.clone(),
         );
 
-        for i in 0..=2 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..=2).await;
 
         // Regulator stopped because of watermark, but resumes when that watermark is updated.
         expect_timeout(&mut subscriber_rx).await;
         hi_tx.send(("test", 4)).unwrap();
 
-        for i in 3..=4 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 3..=4).await;
 
         // Halted again.
         expect_timeout(&mut subscriber_rx).await;
@@ -477,10 +488,7 @@ mod tests {
             cancel.clone(),
         );
 
-        for i in 0..=2 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..=2).await;
 
         // Watermark stopped because of a's watermark.
         expect_timeout(&mut subscriber_rx).await;
@@ -526,13 +534,9 @@ mod tests {
             cancel.clone(),
         );
 
-        // Both subscribers should receive checkpoints in order
-        for i in 0..3 {
-            let checkpoint1 = expect_recv(&mut subscriber_rx1).await.unwrap();
-            let checkpoint2 = expect_recv(&mut subscriber_rx2).await.unwrap();
-            assert_eq!(*checkpoint1.checkpoint_summary.sequence_number(), i);
-            assert_eq!(*checkpoint2.checkpoint_summary.sequence_number(), i);
-        }
+        // Both subscribers should receive checkpoints
+        expect_checkpoints_in_range(&mut subscriber_rx1, 0..3).await;
+        expect_checkpoints_in_range(&mut subscriber_rx2, 0..3).await;
 
         // Drop one subscriber - this should cause the broadcaster to shut down
         drop(subscriber_rx1);
@@ -563,10 +567,7 @@ mod tests {
         );
 
         // Should receive checkpoints starting from 1000
-        for i in 1000..=1005 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 1000..=1005).await;
 
         // Should halt at watermark
         expect_timeout(&mut subscriber_rx).await;
@@ -574,10 +575,7 @@ mod tests {
         // Update watermark to allow completion
         hi_tx.send(("test", 1010)).unwrap();
 
-        for i in 1006..1010 {
-            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
-        }
+        expect_checkpoints_in_range(&mut subscriber_rx, 1006..1010).await;
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
