@@ -7,7 +7,6 @@ use crate::{
     id::{ID, UID},
     SUI_FRAMEWORK_ADDRESS,
 };
-use anyhow::bail;
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{self as A, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
@@ -73,29 +72,9 @@ impl ProtoVisitorBuilder {
         mut self,
         bytes: &[u8],
         layout: &A::MoveTypeLayout,
-    ) -> anyhow::Result<Value> {
+    ) -> Result<Value, Error> {
         let mut visitor = self.new_visitor()?;
-
         A::MoveValue::visit_deserialize(bytes, layout, &mut visitor)
-    }
-
-    /// Deserialize `bytes` as a `MoveStruct` with layout `layout`. Can fail if the bytes do not
-    /// represent a struct with this layout, or if the deserialized struct exceeds the field/type
-    /// size budget.
-    pub fn deserialize_struct(
-        mut self,
-        bytes: &[u8],
-        layout: &A::MoveStructLayout,
-    ) -> anyhow::Result<Struct> {
-        let mut visitor = self.new_visitor()?;
-
-        let Value {
-            kind: Some(Kind::StructValue(struct_)),
-        } = A::MoveStruct::visit_deserialize(bytes, layout, &mut visitor)?
-        else {
-            bail!("Expected to deserialize a struct");
-        };
-        Ok(struct_)
     }
 }
 
