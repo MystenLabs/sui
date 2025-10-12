@@ -165,6 +165,26 @@ pub struct ValidatorComponents {
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
+
+pub struct ObserverComponents {
+    consensus_manager: Arc<ConsensusManager>,
+    consensus_store_pruner: ConsensusStorePruner,
+}
+
+pub enum ConsensusComponents {
+    Validator(ValidatorComponents),
+    Observer(ObserverComponents),
+}
+
+impl ConsensusComponents {
+    fn consensus_manager(&self) -> &Arc<ConsensusManager> {
+        match self {
+            ConsensusComponents::Validator(v) => &v.consensus_manager,
+            ConsensusComponents::Observer(o) => &o.consensus_manager,
+        }
+    }
+}
+
 pub struct P2pComponents {
     p2p_network: Network,
     known_peers: HashMap<PeerId, String>,
@@ -241,7 +261,7 @@ const DEFAULT_GRPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct SuiNode {
     config: NodeConfig,
-    validator_components: Mutex<Option<ValidatorComponents>>,
+    validator_components: Mutex<Option<ConsensusComponents>>,
 
     /// The http servers responsible for serving RPC traffic (gRPC and JSON-RPC)
     #[allow(unused)]
@@ -874,35 +894,49 @@ impl SuiNode {
             .configured_max_protocol_version
             .set(config.supported_protocol_versions.unwrap().max.as_u64() as i64);
 
-        let validator_components = if state.is_validator(&epoch_store) {
-            let (components, _) = futures::join!(
-                Self::construct_validator_components(
+        let validator_components = match config.node_type() {
+            sui_config::NodeType::Validator => {
+                if !state.is_validator(&epoch_store) {
+                    return Err(anyhow!("Node is configured as Validator but not in committee"));
+                }
+                let (components, _) = futures::join!(
+                    Self::construct_validator_components(
+                        config.clone(),
+                        state.clone(),
+                        committee,
+                        epoch_store.clone(),
+                        checkpoint_store.clone(),
+                        state_sync_handle.clone(),
+                        randomness_handle.clone(),
+                        Arc::downgrade(&global_state_hasher),
+                        backpressure_manager.clone(),
+                        connection_monitor_status.clone(),
+                        &registry_service,
+                        sui_node_metrics.clone(),
+                        checkpoint_metrics.clone(),
+                    ),
+                    Self::reexecute_pending_consensus_certs(&epoch_store, &state,)
+                );
+                let mut components = components?;
+
+                components.consensus_adapter.submit_recovered(&epoch_store);
+
+                // Start the gRPC server
+                components.validator_server_handle = components.validator_server_handle.start().await;
+
+                Some(ConsensusComponents::Validator(components))
+            }
+            sui_config::NodeType::Observer => {
+                let components = Self::construct_observer_components(
                     config.clone(),
-                    state.clone(),
-                    committee,
                     epoch_store.clone(),
-                    checkpoint_store.clone(),
-                    state_sync_handle.clone(),
-                    randomness_handle.clone(),
-                    Arc::downgrade(&global_state_hasher),
-                    backpressure_manager.clone(),
-                    connection_monitor_status.clone(),
                     &registry_service,
-                    sui_node_metrics.clone(),
-                    checkpoint_metrics.clone(),
-                ),
-                Self::reexecute_pending_consensus_certs(&epoch_store, &state,)
-            );
-            let mut components = components?;
+                )
+                .await?;
 
-            components.consensus_adapter.submit_recovered(&epoch_store);
-
-            // Start the gRPC server
-            components.validator_server_handle = components.validator_server_handle.start().await;
-
-            Some(components)
-        } else {
-            None
+                Some(ConsensusComponents::Observer(components))
+            }
+            sui_config::NodeType::FullNode => None,
         };
 
         // setup shutdown channel
@@ -973,14 +1007,18 @@ impl SuiNode {
     // Init reconfig process by starting to reject user certs
     pub async fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) -> SuiResult {
         info!("close_epoch (current epoch = {})", epoch_store.epoch());
-        self.validator_components
-            .lock()
-            .await
-            .as_ref()
-            .ok_or_else(|| SuiError::from("Node is not a validator"))?
-            .consensus_adapter
-            .close_epoch(epoch_store);
-        Ok(())
+        match self.validator_components.lock().await.as_ref() {
+            Some(ConsensusComponents::Validator(components)) => {
+                components.consensus_adapter.close_epoch(epoch_store);
+                Ok(())
+            }
+            Some(ConsensusComponents::Observer(_)) => {
+                Err(SuiError::from("Node is an observer, not a validator"))
+            }
+            None => {
+                Err(SuiError::from("Node is not a validator"))
+            }
+        }
     }
 
     pub fn clear_override_protocol_upgrade_buffer_stake(&self, epoch: EpochId) -> SuiResult {
@@ -1331,6 +1369,59 @@ impl SuiNode {
             sui_tx_validator_metrics,
         )
         .await
+    }
+
+    async fn construct_observer_components(
+        config: NodeConfig,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        registry_service: &RegistryService,
+    ) -> Result<ObserverComponents> {
+        let mut config_clone = config.clone();
+        let consensus_config = config_clone
+            .consensus_config
+            .as_mut()
+            .ok_or_else(|| anyhow!("Observer is missing consensus config"))?;
+
+        let client = Arc::new(UpdatableConsensusClient::new());
+        let consensus_manager = Arc::new(ConsensusManager::new(
+            &config,
+            consensus_config,
+            registry_service,
+            client,
+        ));
+
+        let consensus_store_pruner = ConsensusStorePruner::new(
+            consensus_manager.get_storage_base_path(),
+            consensus_config.db_retention_epochs(),
+            consensus_config.db_pruner_period(),
+            &registry_service.default_registry(),
+        );
+
+        Self::start_epoch_specific_observer_components(
+            &config,
+            epoch_store,
+            consensus_manager,
+            consensus_store_pruner,
+        )
+        .await
+    }
+
+    async fn start_epoch_specific_observer_components(
+        _config: &NodeConfig,
+        _epoch_store: Arc<AuthorityPerEpochStore>,
+        consensus_manager: Arc<ConsensusManager>,
+        consensus_store_pruner: ConsensusStorePruner,
+    ) -> Result<ObserverComponents> {
+        info!("Starting consensus manager for observer node");
+
+        // For now, observer nodes will start consensus manager when they are ready
+        // The actual consensus start will be handled separately
+        // TODO: Implement observer-specific consensus initialization
+
+        Ok(ObserverComponents {
+            consensus_manager,
+            consensus_store_pruner,
+        })
     }
 
     async fn start_epoch_specific_validator_components(
@@ -1784,7 +1875,7 @@ impl SuiNode {
                 .set(cur_epoch_store.protocol_config().version.as_u64() as i64);
 
             // Advertise capabilities to committee, if we are a validator.
-            if let Some(components) = &*self.validator_components.lock().await {
+            if let Some(ConsensusComponents::Validator(components)) = &*self.validator_components.lock().await {
                 // TODO: without this sleep, the consensus message is not delivered reliably.
                 tokio::time::sleep(Duration::from_millis(1)).await;
 
@@ -1916,103 +2007,169 @@ impl SuiNode {
                 )
                 .await;
 
-            let new_validator_components = if let Some(ValidatorComponents {
-                validator_server_handle,
-                validator_overload_monitor_handle,
-                consensus_manager,
-                consensus_store_pruner,
-                consensus_adapter,
-                checkpoint_metrics,
-                sui_tx_validator_metrics,
-            }) = validator_components_lock_guard.take()
-            {
-                info!("Reconfiguring the validator.");
+            let new_validator_components = match validator_components_lock_guard.take() {
+                Some(ConsensusComponents::Validator(ValidatorComponents {
+                    validator_server_handle,
+                    validator_overload_monitor_handle,
+                    consensus_manager,
+                    consensus_store_pruner,
+                    consensus_adapter,
+                    checkpoint_metrics,
+                    sui_tx_validator_metrics,
+                })) => {
+                    info!("Reconfiguring the validator.");
 
-                consensus_manager.shutdown().await;
-                info!("Consensus has shut down.");
+                    consensus_manager.shutdown().await;
+                    info!("Consensus has shut down.");
 
-                info!("Epoch store finished reconfiguration.");
+                    info!("Epoch store finished reconfiguration.");
 
-                // No other components should be holding a strong reference to state hasher
-                // at this point. Confirm here before we swap in the new hasher.
-                let global_state_hasher_metrics = Arc::into_inner(hasher)
-                    .expect("Object state hasher should have no other references at this point")
-                    .metrics();
-                let new_hasher = Arc::new(GlobalStateHasher::new(
-                    self.state.get_global_state_hash_store().clone(),
-                    global_state_hasher_metrics,
-                ));
-                let weak_hasher = Arc::downgrade(&new_hasher);
-                *hasher_guard = Some(new_hasher);
+                    // No other components should be holding a strong reference to state hasher
+                    // at this point. Confirm here before we swap in the new hasher.
+                    let global_state_hasher_metrics = Arc::into_inner(hasher)
+                        .expect("Object state hasher should have no other references at this point")
+                        .metrics();
+                    let new_hasher = Arc::new(GlobalStateHasher::new(
+                        self.state.get_global_state_hash_store().clone(),
+                        global_state_hasher_metrics,
+                    ));
+                    let weak_hasher = Arc::downgrade(&new_hasher);
+                    *hasher_guard = Some(new_hasher);
 
-                consensus_store_pruner.prune(next_epoch).await;
+                    consensus_store_pruner.prune(next_epoch).await;
 
-                if self.state.is_validator(&new_epoch_store) {
-                    // Only restart consensus if this node is still a validator in the new epoch.
-                    Some(
-                        Self::start_epoch_specific_validator_components(
-                            &self.config,
-                            self.state.clone(),
-                            consensus_adapter,
-                            self.checkpoint_store.clone(),
-                            new_epoch_store.clone(),
-                            self.state_sync_handle.clone(),
-                            self.randomness_handle.clone(),
-                            consensus_manager,
-                            consensus_store_pruner,
-                            weak_hasher,
-                            self.backpressure_manager.clone(),
-                            validator_server_handle,
-                            validator_overload_monitor_handle,
-                            checkpoint_metrics,
-                            self.metrics.clone(),
-                            sui_tx_validator_metrics,
-                        )
-                        .await?,
-                    )
-                } else {
-                    info!("This node is no longer a validator after reconfiguration");
-                    None
+                    match self.config.node_type() {
+                        sui_config::NodeType::Validator => {
+                            if self.state.is_validator(&new_epoch_store) {
+                                Some(ConsensusComponents::Validator(
+                                    Self::start_epoch_specific_validator_components(
+                                        &self.config,
+                                        self.state.clone(),
+                                        consensus_adapter,
+                                        self.checkpoint_store.clone(),
+                                        new_epoch_store.clone(),
+                                        self.state_sync_handle.clone(),
+                                        self.randomness_handle.clone(),
+                                        consensus_manager,
+                                        consensus_store_pruner,
+                                        weak_hasher,
+                                        self.backpressure_manager.clone(),
+                                        validator_server_handle,
+                                        validator_overload_monitor_handle,
+                                        checkpoint_metrics,
+                                        self.metrics.clone(),
+                                        sui_tx_validator_metrics,
+                                    )
+                                    .await?,
+                                ))
+                            } else {
+                                info!("This node is no longer a validator after reconfiguration");
+                                None
+                            }
+                        }
+                        _ => {
+                            info!("Node type changed, validator components will not restart");
+                            None
+                        }
+                    }
                 }
-            } else {
-                // No other components should be holding a strong reference to state hasher
-                // at this point. Confirm here before we swap in the new hasher.
-                let global_state_hasher_metrics = Arc::into_inner(hasher)
-                    .expect("Object state hasher should have no other references at this point")
-                    .metrics();
-                let new_hasher = Arc::new(GlobalStateHasher::new(
-                    self.state.get_global_state_hash_store().clone(),
-                    global_state_hasher_metrics,
-                ));
-                let weak_hasher = Arc::downgrade(&new_hasher);
-                *hasher_guard = Some(new_hasher);
+                Some(ConsensusComponents::Observer(ObserverComponents {
+                    consensus_manager,
+                    consensus_store_pruner,
+                })) => {
+                    info!("Reconfiguring the observer node.");
 
-                if self.state.is_validator(&new_epoch_store) {
-                    info!("Promoting the node from fullnode to validator, starting grpc server");
+                    consensus_manager.shutdown().await;
+                    info!("Consensus has shut down.");
 
-                    let mut components = Self::construct_validator_components(
-                        self.config.clone(),
-                        self.state.clone(),
-                        Arc::new(next_epoch_committee.clone()),
-                        new_epoch_store.clone(),
-                        self.checkpoint_store.clone(),
-                        self.state_sync_handle.clone(),
-                        self.randomness_handle.clone(),
-                        weak_hasher,
-                        self.backpressure_manager.clone(),
-                        self.connection_monitor_status.clone(),
-                        &self.registry_service,
-                        self.metrics.clone(),
-                        self.checkpoint_metrics.clone(),
-                    )
-                    .await?;
+                    // No other components should be holding a strong reference to state hasher
+                    // at this point. Confirm here before we swap in the new hasher.
+                    let global_state_hasher_metrics = Arc::into_inner(hasher)
+                        .expect("Object state hasher should have no other references at this point")
+                        .metrics();
+                    let new_hasher = Arc::new(GlobalStateHasher::new(
+                        self.state.get_global_state_hash_store().clone(),
+                        global_state_hasher_metrics,
+                    ));
+                    *hasher_guard = Some(new_hasher);
 
-                    components.validator_server_handle =
-                        components.validator_server_handle.start().await;
+                    consensus_store_pruner.prune(next_epoch).await;
 
-                    Some(components)
-                } else {
-                    None
+                    match self.config.node_type() {
+                        sui_config::NodeType::Observer => {
+                            Some(ConsensusComponents::Observer(
+                                Self::start_epoch_specific_observer_components(
+                                    &self.config,
+                                    new_epoch_store.clone(),
+                                    consensus_manager,
+                                    consensus_store_pruner,
+                                )
+                                .await?,
+                            ))
+                        }
+                        _ => {
+                            info!("Node type changed, observer components will not restart");
+                            None
+                        }
+                    }
+                }
+                None => {
+                    // No other components should be holding a strong reference to state hasher
+                    // at this point. Confirm here before we swap in the new hasher.
+                    let global_state_hasher_metrics = Arc::into_inner(hasher)
+                        .expect("Object state hasher should have no other references at this point")
+                        .metrics();
+                    let new_hasher = Arc::new(GlobalStateHasher::new(
+                        self.state.get_global_state_hash_store().clone(),
+                        global_state_hasher_metrics,
+                    ));
+                    let weak_hasher = Arc::downgrade(&new_hasher);
+                    *hasher_guard = Some(new_hasher);
+
+                    match self.config.node_type() {
+                        sui_config::NodeType::Validator => {
+                            if self.state.is_validator(&new_epoch_store) {
+                                info!("Promoting the node from fullnode to validator, starting grpc server");
+
+                                let mut components = Self::construct_validator_components(
+                                    self.config.clone(),
+                                    self.state.clone(),
+                                    Arc::new(next_epoch_committee.clone()),
+                                    new_epoch_store.clone(),
+                                    self.checkpoint_store.clone(),
+                                    self.state_sync_handle.clone(),
+                                    self.randomness_handle.clone(),
+                                    weak_hasher,
+                                    self.backpressure_manager.clone(),
+                                    self.connection_monitor_status.clone(),
+                                    &self.registry_service,
+                                    self.metrics.clone(),
+                                    self.checkpoint_metrics.clone(),
+                                )
+                                .await?;
+
+                                components.validator_server_handle =
+                                    components.validator_server_handle.start().await;
+
+                                Some(ConsensusComponents::Validator(components))
+                            } else {
+                                None
+                            }
+                        }
+                        sui_config::NodeType::Observer => {
+                            info!("Starting observer node components");
+
+                            let components = Self::construct_observer_components(
+                                self.config.clone(),
+                                new_epoch_store.clone(),
+                                &self.registry_service,
+                            )
+                            .await?;
+
+                            Some(ConsensusComponents::Observer(components))
+                        }
+                        sui_config::NodeType::FullNode => None,
+                    }
                 }
             };
             *validator_components_lock_guard = new_validator_components;
@@ -2043,8 +2200,8 @@ impl SuiNode {
     }
 
     async fn shutdown(&self) {
-        if let Some(validator_components) = &*self.validator_components.lock().await {
-            validator_components.consensus_manager.shutdown().await;
+        if let Some(consensus_components) = &*self.validator_components.lock().await {
+            consensus_components.consensus_manager().shutdown().await;
         }
     }
 
