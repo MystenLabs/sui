@@ -1,125 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::future::try_join_all;
-use futures::stream;
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use tokio::{sync::mpsc, task::JoinHandle};
+use std::{collections::HashMap, sync::Arc};
+
+use futures::{future::try_join_all, stream};
+use tokio::{
+    sync::{mpsc, watch},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+use super::{client::IngestionClient, IngestionConfig};
 use crate::{
     ingestion::error::Error, task::TrySpawnStreamExt,
     types::full_checkpoint_content::CheckpointData,
 };
 
-use super::{client::IngestionClient, IngestionConfig};
-
-/// Send a checkpoint to all subscribers.
-/// Returns an error if any subscriber's channel is closed.
-async fn send_checkpoint(
-    checkpoint: Arc<CheckpointData>,
-    subscribers: &[mpsc::Sender<Arc<CheckpointData>>],
-) -> Result<(), Error> {
-    let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
-    try_join_all(futures).await.map_err(|_| Error::Cancelled)?;
-    Ok(())
-}
-
-/// Fetch and broadcasts checkpoints from a range to subscribers.
-/// This task is ingest_hi-aware and will stop if it encounters a checkpoint
-/// beyond the current ingest_hi.
-async fn broadcast_range(
-    start: u64,
-    end: u64,
-    retry_interval: std::time::Duration,
-    ingest_concurrency: usize,
-    ingest_hi: Arc<AtomicU64>,
-    watermark: Arc<AtomicU64>,
-    client: Arc<IngestionClient>,
-    subscribers: Arc<Vec<mpsc::Sender<Arc<CheckpointData>>>>,
-    cancel: CancellationToken,
-) -> Result<(), Error> {
-    let checkpoint_stream = stream::iter(start..=end);
-
-    checkpoint_stream
-        .try_for_each_spawned(ingest_concurrency, |cp| {
-            let watermark = watermark.clone();
-            let ingest_hi = ingest_hi.clone();
-            let client = client.clone();
-            let subscribers = subscribers.clone();
-
-            // One clone is for the supervisor to signal a cancel if it detects a
-            // subscriber that wants to wind down ingestion, and the other is to pass to
-            // each worker to detect cancellation.
-            let supervisor_cancel = cancel.clone();
-            let cancel = cancel.clone();
-
-            async move {
-                // Check ingest_hi before fetching
-                let current_ingest_hi = ingest_hi.load(Ordering::Acquire);
-
-                // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                if cp > current_ingest_hi {
-                    info!(
-                        checkpoint = cp,
-                        ingest_hi = current_ingest_hi,
-                        "Stopping broadcast due to ingest_hi"
-                    );
-                    // Return Backpressured error to stop the entire broadcast_range task
-                    return Err(Error::Backpressured(cp, current_ingest_hi));
-                }
-                // docs::/#bound
-
-                // Fetch the checkpoint or stop if cancelled.
-                let checkpoint = tokio::select! {
-                    cp = client.wait_for(cp, retry_interval) => cp?,
-                    _ = cancel.cancelled() => {
-                        return Err(Error::Cancelled);
-                    }
-                };
-
-                // Check ingest_hi again before sending (in case it changed during fetch)
-                let current_ingest_hi = ingest_hi.load(Ordering::Acquire);
-                if cp > current_ingest_hi {
-                    info!(
-                        checkpoint = cp,
-                        ingest_hi = current_ingest_hi,
-                        "Stopping broadcast due to ingest_hi after fetch"
-                    );
-                    return Err(Error::Backpressured(cp, current_ingest_hi));
-                }
-
-                // Send to all subscribers, or stop if any subscriber has closed.
-                tokio::select! {
-                    result = send_checkpoint(checkpoint, &subscribers) => {
-                        if result.is_ok() {
-                            // Atomically update the watermark. We need to use fetch_max here instead of just
-                            // incrementing because multiple tasks may update the watermark out of order.
-                            watermark.fetch_max(cp + 1, Ordering::AcqRel);
-                            info!(checkpoint = cp, "Broadcasted checkpoint and updated watermark");
-                        } else {
-                            // If any subscriber has closed, we consider this a cancellation signal for the entire ingestion.
-                            supervisor_cancel.cancel();
-                        }
-                        result
-                    },
-                    _ = cancel.cancelled() => Err(Error::Cancelled),
-                }
-            }
-        })
-        .await
-}
-
 /// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges.
 ///
 /// This task:
 /// 1. Maintains a ingest_hi based on subscriber feedback
-/// 2. Spawns broadcaster tasks for checkpoint ranges. Right now the entire requested range is given to
+/// 2. Spawns a broadcaster task for the requested checkpoint range. Right now the entire requested range is given to
 ///    each broadcaster, but with streaming support the end of the range could be different.
-/// 3. Monitors broadcaster completion due to backpressure and spawns new ones as needed.
+/// 3. The broadcast_range task waits on the watch channel when it hits the ingest_hi limit
 ///
 /// The task will shut down if the `cancel` token is signalled, or if the `checkpoints` range completes.
 pub(super) fn broadcaster<R>(
@@ -154,45 +58,37 @@ where
 
         let buffer_size = config.checkpoint_buffer_size;
 
-        let client = Arc::new(client);
         let subscribers = Arc::new(subscribers);
-
-        // Initialize shared watermark and ingest_hi states.
-        // ingest_hi starts at max to allow for initial progress and may be adjusted
-        // downwards based on subscriber feedback.
-        let watermark = Arc::new(AtomicU64::new(start_cp));
-        let ingest_hi = Arc::new(AtomicU64::new(u64::MAX));
 
         // Track subscriber watermarks
         let mut subscribers_hi = HashMap::<&'static str, u64>::new();
 
-        // Helper to spawn a new broadcaster if possible.
-        let maybe_spawn_new_broadcaster = || {
-            let current_watermark = watermark.load(Ordering::Acquire);
-            if current_watermark <= ingest_hi.load(Ordering::Acquire) {
-                info!(
-                    start = current_watermark,
-                    end = end_cp,
-                    "Spawning broadcaster for range"
-                );
-                Some(tokio::spawn(broadcast_range(
-                    current_watermark,
-                    end_cp, // Right now we always use the end of the range but may change later with streaming.
-                    retry_interval,
-                    concurrency,
-                    ingest_hi.clone(),
-                    watermark.clone(),
-                    client.clone(),
-                    subscribers.clone(),
-                    cancel.clone(),
-                )))
-            } else {
-                None
-            }
-        };
+        // Try to receive initial subscriber feedback before spawning the broadcaster.
+        // This ensures we don't miss early watermark updates.
+        if let Ok((name, hi)) = ingest_hi_rx.try_recv() {
+            subscribers_hi.insert(name, hi);
+        }
 
-        // First start a broadcaster task.
-        let mut broadcaster_handle = maybe_spawn_new_broadcaster();
+        // Initialize ingest_hi watch channel.
+        // Start with None (no backpressure) or Some if we received initial feedback.
+        let initial_ingest_hi = subscribers_hi
+            .values()
+            .copied()
+            .min()
+            .map(|min_hi| min_hi + buffer_size as u64);
+        let (ingest_hi_watch_tx, ingest_hi_watch_rx) = watch::channel(initial_ingest_hi);
+
+        // Spawn the broadcaster task.
+        let mut broadcaster_handle = tokio::spawn(broadcast_range(
+            start_cp,
+            end_cp,
+            retry_interval,
+            concurrency,
+            ingest_hi_watch_rx.clone(),
+            client.clone(),
+            subscribers.clone(),
+            cancel.clone(),
+        ));
 
         loop {
             tokio::select! {
@@ -208,72 +104,120 @@ where
 
                     if let Some(min_hi) = subscribers_hi.values().copied().min() {
                         let new_ingest_hi = min_hi + buffer_size as u64;
-                        ingest_hi.store(new_ingest_hi, Ordering::Release);
+                        // Update the watch channel, which will notify all waiting tasks
+                        let _ = ingest_hi_watch_tx.send(Some(new_ingest_hi));
                         info!(ingest_hi = new_ingest_hi, "Updated ingest_hi");
-
-                        // Try to spawn a new broadcaster if none is running
-                        if broadcaster_handle.is_none() {
-                            broadcaster_handle = maybe_spawn_new_broadcaster();
-                        }
                     }
                 }
                 // docs::/#regulator
 
                 // Handle broadcaster task completion
-                join_result = async {
-                    match &mut broadcaster_handle {
-                        Some(handle) => Some(handle.await),
-                        None => None,
-                    }
-                }, if broadcaster_handle.is_some() => {
-                    if let Some(result) = join_result {
-                        broadcaster_handle = None;
-
-                        match result {
-                            Ok(Ok(())) => {
-                                info!("Broadcaster completed successfully");
-
-                                // Check for completion of the entire range.
-                                // In fact this is the only possible successful completion case.
-                                let current_watermark = watermark.load(Ordering::Acquire);
-                                if end_cp < current_watermark {
-                                    info!("All checkpoints processed, shutting down broadcaster");
-                                    break;
-                                }
-
-                                broadcaster_handle = maybe_spawn_new_broadcaster();
-                            }
-                            Ok(Err(Error::Backpressured(cp, watermark))) => {
-                                info!(checkpoint = cp, watermark = watermark, "Broadcaster stopped due to backpressure");
-                                broadcaster_handle = maybe_spawn_new_broadcaster();
-                            }
-                            Ok(Err(Error::Cancelled)) => {
-                                info!("Broadcaster was cancelled");
-                                break;
-                            }
-                            Ok(Err(e)) => {
-                                error!("Broadcaster failed: {}", e);
-                                cancel.cancel();
-                                break;
-                            }
-                            Err(e) => {
-                                error!("Broadcaster task panicked: {}", e);
-                                cancel.cancel();
-                                break;
-                            }
+                result = &mut broadcaster_handle => {
+                    match result {
+                        Ok(Ok(())) => {
+                            info!("Broadcaster completed successfully");
+                            break;
+                        }
+                        Ok(Err(Error::Cancelled)) => {
+                            info!("Broadcaster was cancelled");
+                            break;
+                        }
+                        Ok(Err(e)) => {
+                            error!("Broadcaster failed: {}", e);
+                            cancel.cancel();
+                            break;
+                        }
+                        Err(e) => {
+                            error!("Broadcaster task panicked: {}", e);
+                            cancel.cancel();
+                            break;
                         }
                     }
                 }
             }
         }
 
-        // Wait for any active broadcaster to complete
-        if let Some(handle) = broadcaster_handle {
-            let _ = handle.await;
-        }
-
         info!("Broadcaster finished");
     })
+}
+
+/// Fetch and broadcasts checkpoints from a range to subscribers.
+/// This task is ingest_hi-aware and will wait if it encounters a checkpoint
+/// beyond the current ingest_hi, resuming when ingest_hi advances to currently
+/// ingesting checkpoints.
+async fn broadcast_range(
+    start: u64,
+    end: u64,
+    retry_interval: std::time::Duration,
+    ingest_concurrency: usize,
+    ingest_hi_rx: watch::Receiver<Option<u64>>,
+    client: IngestionClient,
+    subscribers: Arc<Vec<mpsc::Sender<Arc<CheckpointData>>>>,
+    cancel: CancellationToken,
+) -> Result<(), Error> {
+    stream::iter(start..=end)
+        .try_for_each_spawned(ingest_concurrency, |cp| {
+            let mut ingest_hi_rx = ingest_hi_rx.clone();
+            let client = client.clone();
+            let subscribers = subscribers.clone();
+
+            // One clone is for the supervisor to signal a cancel if it detects a
+            // subscriber that wants to wind down ingestion, and the other is to pass to
+            // each worker to detect cancellation.
+            let supervisor_cancel = cancel.clone();
+            let cancel = cancel.clone();
+
+            async move {
+                // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
+                // Wait until ingest_hi allows processing this checkpoint.
+                // None means no backpressure limit. If we get Some(hi) we wait wait until cp <= hi.
+                // wait_for only errors if the sender is dropped (main broadcaster shut down) so
+                // we treat an error returned here as cancellation too.
+                if tokio::select! {
+                    result = ingest_hi_rx.wait_for(|hi| hi.is_none_or(|h| cp <= h)) => result.is_err(),
+                    _ = cancel.cancelled() => true,
+                } {
+                    return Err(Error::Cancelled);
+                }
+                // docs::/#bound
+
+                // Fetch the checkpoint or stop if cancelled.
+                let checkpoint = tokio::select! {
+                    cp = client.wait_for(cp, retry_interval) => cp?,
+                    _ = cancel.cancelled() => {
+                        return Err(Error::Cancelled);
+                    }
+                };
+
+                // Send checkpoint to all subscribers.
+                tokio::select! {
+                    result = send_checkpoint(checkpoint, &subscribers) => {
+                        if result.is_ok() {
+                            info!(checkpoint = cp, "Broadcasted checkpoint");
+                            Ok(())
+                        } else {
+                            // An error is returned meaning some subscriber channel has closed, which we consider
+                            // a cancellation signal for the entire ingestion.
+                            supervisor_cancel.cancel();
+                            Err(Error::Cancelled)
+                        }
+                    },
+                    _ = cancel.cancelled() => Err(Error::Cancelled),
+                }
+            }
+        })
+        .await
+}
+
+/// Send a checkpoint to all subscribers.
+/// Returns an error if any subscriber's channel is closed.
+async fn send_checkpoint(
+    checkpoint: Arc<CheckpointData>,
+    subscribers: &[mpsc::Sender<Arc<CheckpointData>>],
+) -> Result<(), mpsc::error::SendError<Arc<CheckpointData>>> {
+    let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
+    try_join_all(futures).await?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -561,6 +505,79 @@ mod tests {
         // But another update to "a" will now not make a difference, because "b" is still behind.
         hi_tx.send(("a", 5)).unwrap();
         expect_timeout(&mut subscriber_rx).await;
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn multiple_physical_subscribers() {
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx1, mut subscriber_rx1) = mpsc::channel(1);
+        let (subscriber_tx2, mut subscriber_rx2) = mpsc::channel(1);
+        let cancel = CancellationToken::new();
+
+        let h_broadcaster = broadcaster(
+            0..,
+            test_config(),
+            mock_client(),
+            hi_rx,
+            vec![subscriber_tx1, subscriber_tx2],
+            cancel.clone(),
+        );
+
+        // Both subscribers should receive checkpoints in order
+        for i in 0..3 {
+            let checkpoint1 = expect_recv(&mut subscriber_rx1).await.unwrap();
+            let checkpoint2 = expect_recv(&mut subscriber_rx2).await.unwrap();
+            assert_eq!(*checkpoint1.checkpoint_summary.sequence_number(), i);
+            assert_eq!(*checkpoint2.checkpoint_summary.sequence_number(), i);
+        }
+
+        // Drop one subscriber - this should cause the broadcaster to shut down
+        drop(subscriber_rx1);
+
+        // The broadcaster should shut down gracefully
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn start_from_non_zero() {
+        let (hi_tx, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+        let cancel = CancellationToken::new();
+
+        // Set watermark before starting
+        hi_tx.send(("test", 1005)).unwrap();
+
+        let mut config = test_config();
+        config.checkpoint_buffer_size = 0; // No buffer
+
+        let h_broadcaster = broadcaster(
+            1000..1010,
+            config,
+            mock_client(),
+            hi_rx,
+            vec![subscriber_tx],
+            cancel.clone(),
+        );
+
+        // Should receive checkpoints starting from 1000
+        for i in 1000..=1005 {
+            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
+            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
+        }
+
+        // Should halt at watermark
+        expect_timeout(&mut subscriber_rx).await;
+
+        // Update watermark to allow completion
+        hi_tx.send(("test", 1010)).unwrap();
+
+        for i in 1006..1010 {
+            let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
+            assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), i);
+        }
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
