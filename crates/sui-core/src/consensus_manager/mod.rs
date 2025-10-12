@@ -236,6 +236,35 @@ impl ConsensusManager {
             self.protocol_keypair.clone()
         };
 
+        // For observer nodes, resolve the target validator hostname to an AuthorityIndex
+        let target_validator_index = if is_observer {
+            if let Some(ref target_hostname) = consensus_config.observer_target_validator {
+                // Find the authority with matching hostname
+                let index = committee
+                    .authorities()
+                    .find(|(_, a)| &a.hostname == target_hostname)
+                    .map(|(index, _)| index);
+
+                match index {
+                    Some(idx) => {
+                        info!("Observer will connect to validator at {target_hostname} (index: {idx})");
+                        Some(idx)
+                    }
+                    None => {
+                        error!(
+                            "Observer target validator hostname '{target_hostname}' not found in committee. Will connect to first validator."
+                        );
+                        None
+                    }
+                }
+            } else {
+                info!("Observer has no target validator configured. Will connect to first validator.");
+                None
+            }
+        } else {
+            None
+        };
+
         let authority = ConsensusAuthority::start(
             network_type,
             epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
@@ -250,6 +279,7 @@ impl ConsensusManager {
             commit_consumer,
             registry.clone(),
             *boot_counter,
+            target_validator_index,
         )
         .await;
         let client = authority.transaction_client();

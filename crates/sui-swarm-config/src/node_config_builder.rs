@@ -164,6 +164,7 @@ impl ValidatorConfigBuilder {
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             is_observer: false,
+            observer_target_validator: None,
             parameters: Default::default(),
         };
 

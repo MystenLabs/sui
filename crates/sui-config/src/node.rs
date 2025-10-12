@@ -921,6 +921,12 @@ pub struct ConsensusConfig {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_observer: bool,
 
+    /// For observer nodes, specifies the hostname of the validator to stream blocks from.
+    /// If not specified, observer will connect to all validators.
+    /// Example: "validator-1.example.com"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observer_target_validator: Option<String>,
+
     pub parameters: Option<ConsensusParameters>,
 }
 

@@ -69,6 +69,8 @@ impl ConsensusAuthority {
         // make decisions on whether amnesia recovery should run or not. When `boot_counter` is 0, then `ConsensusAuthority`
         // will initiate the process of amnesia recovery if that's enabled in the parameters.
         boot_counter: u64,
+        // For observer nodes, specifies which validator to connect to. None means connect to first validator.
+        target_validator_index: Option<AuthorityIndex>,
     ) -> Self {
         match network_type {
             ConsensusNetwork::Anemo => {
@@ -85,6 +87,7 @@ impl ConsensusAuthority {
                     commit_consumer,
                     registry,
                     boot_counter,
+                    target_validator_index,
                 )
                 .await;
                 Self::WithAnemo(authority)
@@ -103,6 +106,7 @@ impl ConsensusAuthority {
                     commit_consumer,
                     registry,
                     boot_counter,
+                    target_validator_index,
                 )
                 .await;
                 Self::WithTonic(authority)
@@ -153,7 +157,7 @@ where
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
     proposed_block_handler: Option<JoinHandle<()>>,
-    leader_timeout_handle: LeaderTimeoutTaskHandle,
+    leader_timeout_handle: Option<LeaderTimeoutTaskHandle>,
     core_thread_handle: CoreThreadHandle,
     // Only one of broadcaster and subscriber gets created, depending on
     // if streaming is supported.
@@ -182,6 +186,8 @@ where
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         boot_counter: u64,
+        // For observer nodes, specifies which validator to connect to. None means connect to first validator.
+        target_validator_index: Option<AuthorityIndex>,
     ) -> Self {
         // For observers, use a sentinel value (AuthorityIndex::MAX) since Context requires own_index
         let own_index = own_index.unwrap_or(AuthorityIndex::MAX);
@@ -205,7 +211,12 @@ where
         }
 
         let own_hostname = if context.is_observer {
-            "observer".to_string()
+            // Use first 4 bytes of public key for a short identifier
+            let key_bytes = network_keypair.public().to_bytes();
+            format!(
+                "observer-{:02x}{:02x}{:02x}{:02x}",
+                key_bytes[0], key_bytes[1], key_bytes[2], key_bytes[3]
+            )
         } else {
             committee.authority(own_index).hostname.clone()
         };
@@ -358,8 +369,17 @@ where
         let (core_dispatcher, core_thread_handle) =
             ChannelCoreThreadDispatcher::start(context.clone(), &dag_state, core);
         let core_dispatcher = Arc::new(core_dispatcher);
-        let leader_timeout_handle =
-            LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
+
+        // Observers don't propose blocks so they don't need leader timeout
+        let leader_timeout_handle = if !context.is_observer {
+            Some(LeaderTimeoutTask::start(
+                core_dispatcher.clone(),
+                &signals_receivers,
+                context.clone(),
+            ))
+        } else {
+            None
+        };
 
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
@@ -424,11 +444,16 @@ where
                 dag_state,
             );
             if context.is_observer {
-                // Observers connect to only the first authority for now
-                if let Some((peer, _)) = context.committee.authorities().next() {
+                // Observers connect to the specified target validator or the first authority
+                let peer = target_validator_index.or_else(|| {
+                    context.committee.authorities().next().map(|(idx, _)| idx)
+                });
+                if let Some(peer) = peer {
                     let hostname = &context.committee.authority(peer).hostname;
                     info!("Observer subscribing to authority {peer} at {hostname}");
                     s.subscribe(peer);
+                } else {
+                    warn!("Observer could not find any authority to subscribe to");
                 }
             } else {
                 // Validators subscribe to all other authorities except themselves
@@ -492,7 +517,9 @@ where
         if let Some(handler) = self.proposed_block_handler.take() {
             handler.abort();
         }
-        self.leader_timeout_handle.stop().await;
+        if let Some(leader_timeout_handle) = self.leader_timeout_handle.take() {
+            leader_timeout_handle.stop().await;
+        }
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.
         self.core_thread_handle.stop().await;
@@ -580,6 +607,7 @@ mod tests {
             commit_consumer,
             registry,
             0,
+            None,
         )
         .await;
 
@@ -696,7 +724,6 @@ mod tests {
         }
     }
 
-
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee_with_observer(
@@ -792,12 +819,11 @@ mod tests {
             }
         }
 
-       // Stop all authorities and exit.
+        // Stop all authorities and exit.
         for authority in authorities {
             authority.stop().await;
         }
     }
-
 
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
@@ -1078,6 +1104,7 @@ mod tests {
             commit_consumer,
             registry,
             boot_counter,
+            None,
         )
         .await;
 
