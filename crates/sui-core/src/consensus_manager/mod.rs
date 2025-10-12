@@ -42,9 +42,10 @@ enum Running {
 }
 
 /// Used by Sui validator to start consensus protocol for each epoch.
+/// Can also be used for observer nodes (full nodes) that follow consensus without participating.
 pub struct ConsensusManager {
     consensus_config: ConsensusConfig,
-    protocol_keypair: ProtocolKeyPair,
+    protocol_keypair: Option<ProtocolKeyPair>,
     network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
     metrics: Arc<ConsensusManagerMetrics>,
@@ -84,9 +85,13 @@ impl ConsensusManager {
         ));
         let client = Arc::new(LazyMysticetiClient::new());
         let (consumer_monitor_sender, _) = broadcast::channel(1);
+
+        // Store the protocol keypair - it will only be used if this node is in the committee
+        let protocol_keypair = Some(ProtocolKeyPair::new(node_config.worker_key_pair().copy()));
+
         Self {
             consensus_config: consensus_config.clone(),
-            protocol_keypair: ProtocolKeyPair::new(node_config.worker_key_pair().copy()),
+            protocol_keypair,
             network_keypair: NetworkKeyPair::new(node_config.network_key_pair().copy()),
             storage_base_path: consensus_config.db_path().to_path_buf(),
             metrics,
@@ -142,11 +147,31 @@ impl ConsensusManager {
             ..consensus_config.parameters.clone().unwrap_or_default()
         };
 
-        let own_protocol_key = self.protocol_keypair.public();
-        let (own_index, _) = committee
-            .authorities()
-            .find(|(_, a)| a.protocol_key == own_protocol_key)
-            .expect("Own authority should be among the consensus authorities!");
+        // Determine if this is a validator or observer node based on node type
+        let node_type = node_config.node_type();
+        let is_observer = matches!(node_type, sui_config::NodeType::Observer);
+
+        // For validators, find our index in the committee
+        let own_index = if is_observer {
+            None
+        } else if let Some(protocol_keypair) = &self.protocol_keypair {
+            let own_protocol_key = protocol_keypair.public();
+            committee
+                .authorities()
+                .find(|(_, a)| a.protocol_key == own_protocol_key)
+                .map(|(index, _)| index)
+        } else {
+            None
+        };
+
+        if is_observer {
+            info!("Starting consensus as observer node (following consensus without participating)");
+        } else if let Some(index) = own_index {
+            info!("Starting consensus as validator with index {:?}", index);
+        } else {
+            error!("Node is configured as validator but not found in committee");
+            return;
+        }
 
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
@@ -204,14 +229,21 @@ impl ConsensusManager {
             );
         }
 
+        // Only pass protocol keypair if this is a validator (not an observer)
+        let protocol_keypair_to_use = if is_observer {
+            None
+        } else {
+            self.protocol_keypair.clone()
+        };
+
         let authority = ConsensusAuthority::start(
             network_type,
             epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
-            Some(own_index),
+            own_index,
             committee.clone(),
             parameters.clone(),
             protocol_config.clone(),
-            Some(self.protocol_keypair.clone()),
+            protocol_keypair_to_use,
             self.network_keypair.clone(),
             Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),
