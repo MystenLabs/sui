@@ -4,11 +4,14 @@
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
+use prost_types::FieldMask;
 use serde_json::json;
 use strum::IntoEnumIterator;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
 
 use fastcrypto::encoding::Hex;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 use crate::errors::{Error, ErrorType};
 use crate::types::{
@@ -17,11 +20,11 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 
-// This module implements the [Rosetta Network API](https://www.rosetta-api.org/docs/NetworkApi.html)
+// This module implements the [Mesh Network API](https://docs.cdp.coinbase.com/mesh/mesh-api-spec/api-reference#network)
 
 /// This endpoint returns a list of NetworkIdentifiers that the Rosetta server supports.
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networklist)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/network/get-list-of-available-network)
 pub async fn list(Extension(env): Extension<SuiEnv>) -> Result<NetworkListResponse, Error> {
     Ok(NetworkListResponse {
         network_identifiers: vec![NetworkIdentifier {
@@ -33,7 +36,7 @@ pub async fn list(Extension(env): Extension<SuiEnv>) -> Result<NetworkListRespon
 
 /// This endpoint returns the current status of the network requested.
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networkstatus)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/network/get-network-status)
 pub async fn status(
     State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
@@ -41,32 +44,52 @@ pub async fn status(
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let system_state = context
-        .client
-        .governance_api()
-        .get_latest_sui_system_state()
-        .await?;
+    let mut client = context.client.clone();
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await?
+        .into_inner();
+
+    let system_state = response.epoch().system_state();
 
     let peers = system_state
-        .active_validators
+        .validators()
+        .active_validators()
         .iter()
-        .map(|validator| Peer {
-            peer_id: ObjectID::from(validator.sui_address).into(),
-            metadata: Some(json!({
-                "public_key": Hex::from_bytes(&validator.protocol_pubkey_bytes),
-                "stake_amount": validator.staking_pool_sui_balance,
-            })),
+        .map(|validator| {
+            let address = validator
+                .address()
+                .parse::<SuiAddress>()
+                .map_err(|e| Error::DataError(format!("Invalid validator address: {}", e)))?;
+            let public_key = validator.protocol_public_key();
+            let stake_amount = validator.staking_pool().sui_balance();
+            Ok(Peer {
+                peer_id: ObjectID::from(address).into(),
+                metadata: Some(json!({
+                    "public_key": Hex::from_bytes(public_key),
+                    "stake_amount": stake_amount,
+                })),
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, Error>>()?;
     let blocks = context.blocks();
     let current_block = blocks.current_block().await?;
     let index = current_block.block.block_identifier.index;
-    let target = context
-        .client
-        .read_api()
-        .get_latest_checkpoint_sequence_number()
-        .await?;
 
+    let mut client = context.client.clone();
+    let checkpoint_request =
+        GetCheckpointRequest::latest().with_read_mask(FieldMask::from_paths(["sequence_number"]));
+
+    let checkpoint_response = client
+        .ledger_client()
+        .get_checkpoint(checkpoint_request)
+        .await?
+        .into_inner();
+
+    let target = checkpoint_response.checkpoint().sequence_number();
     Ok(NetworkStatusResponse {
         current_block_identifier: current_block.block.block_identifier,
         current_block_timestamp: current_block.block.timestamp,
@@ -84,7 +107,7 @@ pub async fn status(
 
 /// This endpoint returns the version information and allowed network-specific types for a NetworkIdentifier.
 ///
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networkoptions)
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/network/get-network-options)
 pub async fn options(
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<NetworkRequest>, Error>,
