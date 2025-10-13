@@ -1772,7 +1772,7 @@ pub enum SuiEndOfEpochTransactionKind {
     StoreExecutionTimeObservations,
     AccumulatorRootCreate,
     CoinRegistryCreate,
-    DisplayRegistryCreate
+    DisplayRegistryCreate,
 }
 
 #[serde_as]
