@@ -11,6 +11,10 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     u256::U256,
 };
+use serde::{
+    Serialize,
+    ser::{SerializeSeq as _, SerializeTuple as _, SerializeTupleVariant},
+};
 use sui_types::{
     MOVE_STDLIB_ADDRESS,
     base_types::{STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME},
@@ -234,11 +238,132 @@ impl<'a> Fields<'a> {
             _ => None,
         }
     }
+
+    fn len(&self) -> usize {
+        match self {
+            Fields::Positional(fs) => fs.len(),
+            Fields::Named(fs) => fs.len(),
+        }
+    }
+}
+
+/// Serialize implementation for Value to support serializing the Value to BCS bytes.
+impl Serialize for Value<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Value::Address(a) => a.serialize(serializer),
+            Value::Bool(b) => b.serialize(serializer),
+            Value::Bytes(b) => b.serialize(serializer),
+            Value::Enum(e) => e.serialize(serializer),
+            Value::Slice(s) => s.serialize(serializer),
+            Value::String(s) => s.serialize(serializer),
+            Value::Struct(s) => s.serialize(serializer),
+            Value::U8(n) => n.serialize(serializer),
+            Value::U16(n) => n.serialize(serializer),
+            Value::U32(n) => n.serialize(serializer),
+            Value::U64(n) => n.serialize(serializer),
+            Value::U128(n) => n.serialize(serializer),
+            Value::U256(n) => n.serialize(serializer),
+            Value::Vector(v) => v.serialize(serializer),
+        }
+    }
+}
+
+/// This implementation makes it so that serializing a `Slice` to BCS bytes produces the bytes
+/// unchanged (but this property is not guaranteed for any other format).
+impl Serialize for Slice<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = serializer.serialize_tuple(self.bytes.len())?;
+        for b in self.bytes {
+            s.serialize_element(b)?;
+        }
+
+        s.end()
+    }
+}
+
+impl Serialize for Vector<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = serializer.serialize_seq(Some(self.elements.len()))?;
+        for e in &self.elements {
+            s.serialize_element(e)?;
+        }
+
+        s.end()
+    }
+}
+
+impl Serialize for Struct<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Serialize the struct as a tuple, regardless of whether it has named or positional
+        // fields, because `serde`'s field names need to be `&'static str`, which we don't have
+        // (and we don't need).
+        let mut s = serializer.serialize_tuple(self.fields.len())?;
+
+        match &self.fields {
+            Fields::Positional(fs) => {
+                for f in fs {
+                    s.serialize_element(f)?;
+                }
+            }
+            Fields::Named(fs) => {
+                for (_, f) in fs {
+                    s.serialize_element(f)?;
+                }
+            }
+        }
+
+        s.end()
+    }
+}
+
+impl Serialize for Enum<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Serialize the enum as a tuple, with empty names, for similar reasons as `Struct`, above.
+        let mut s = serializer.serialize_tuple_variant(
+            "",
+            self.variant_index as u32,
+            "",
+            self.fields.len(),
+        )?;
+
+        match &self.fields {
+            Fields::Positional(fs) => {
+                for f in fs {
+                    s.serialize_field(f)?;
+                }
+            }
+            Fields::Named(fs) => {
+                for (_, f) in fs {
+                    s.serialize_field(f)?;
+                }
+            }
+        }
+
+        s.end()
+    }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use move_core_types::annotated_value::{MoveEnumLayout, MoveFieldLayout, MoveStructLayout};
+    use move_core_types::annotated_value::{
+        MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout as T,
+    };
     use move_core_types::identifier::Identifier;
 
     use super::*;
@@ -289,5 +414,208 @@ pub(crate) mod tests {
 
     pub fn vector_(layout: MoveTypeLayout) -> MoveTypeLayout {
         MoveTypeLayout::Vector(Box::new(layout))
+    }
+
+    #[test]
+    fn test_slice_serialize_roundtrip() {
+        let bytes = &[0x01, 0x02, 0x03, 0x04];
+        let slice = Slice::new_for_test(&T::U64, bytes);
+
+        let serialized = bcs::to_bytes(&slice).unwrap();
+        assert_eq!(serialized, bytes);
+    }
+
+    #[test]
+    fn test_serialize_bool() {
+        assert_eq!(
+            bcs::to_bytes(&Value::Bool(true)).unwrap(),
+            bcs::to_bytes(&true).unwrap()
+        );
+        assert_eq!(
+            bcs::to_bytes(&Value::Bool(false)).unwrap(),
+            bcs::to_bytes(&false).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_u8() {
+        assert_eq!(
+            bcs::to_bytes(&Value::U8(42)).unwrap(),
+            bcs::to_bytes(&42u8).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_u16() {
+        assert_eq!(
+            bcs::to_bytes(&Value::U16(1234)).unwrap(),
+            bcs::to_bytes(&1234u16).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_u32() {
+        assert_eq!(
+            bcs::to_bytes(&Value::U32(123456)).unwrap(),
+            bcs::to_bytes(&123456u32).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_u64() {
+        assert_eq!(
+            bcs::to_bytes(&Value::U64(12345678901234)).unwrap(),
+            bcs::to_bytes(&12345678901234u64).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_u128() {
+        assert_eq!(
+            bcs::to_bytes(&Value::U128(123456789012345678901234567890)).unwrap(),
+            bcs::to_bytes(&123456789012345678901234567890u128).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_u256() {
+        let val = U256::from(42u64);
+        assert_eq!(
+            bcs::to_bytes(&Value::U256(val)).unwrap(),
+            bcs::to_bytes(&val).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_address() {
+        let addr: AccountAddress = "0x1".parse().unwrap();
+        assert_eq!(
+            bcs::to_bytes(&Value::Address(addr)).unwrap(),
+            bcs::to_bytes(&addr).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_string() {
+        assert_eq!(
+            bcs::to_bytes(&Value::String(Cow::Borrowed("hello"))).unwrap(),
+            bcs::to_bytes("hello").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_bytes() {
+        let bytes = vec![1u8, 2, 3, 4, 5];
+        assert_eq!(
+            bcs::to_bytes(&Value::Bytes(Cow::Borrowed(&bytes))).unwrap(),
+            bcs::to_bytes(&bytes).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_positional_struct() {
+        let type_ = &"0x2::foo::Bar".parse().unwrap();
+        let struct_ = Value::Struct(Struct {
+            type_,
+            fields: Fields::Positional(vec![
+                Value::U64(42),
+                Value::Bool(true),
+                Value::String(Cow::Borrowed("test")),
+            ]),
+        });
+
+        assert_eq!(
+            bcs::to_bytes(&struct_).unwrap(),
+            bcs::to_bytes(&(42u64, true, "test")).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_named_struct() {
+        let type_ = &"0x2::foo::Bar".parse().unwrap();
+        let addr = "0x300".parse().unwrap();
+        let struct_ = Value::Struct(Struct {
+            type_,
+            fields: Fields::Named(vec![
+                ("x", Value::U32(100)),
+                ("y", Value::U32(200)),
+                ("z", Value::Address(addr)),
+            ]),
+        });
+
+        assert_eq!(
+            bcs::to_bytes(&struct_).unwrap(),
+            bcs::to_bytes(&(100u32, 200u32, addr)).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_enum() {
+        #[derive(Serialize)]
+        enum E {
+            A(u64, bool),
+            B { x: u32, y: u32 },
+        }
+
+        let type_: StructTag = "0x1::m::E".parse().unwrap();
+        let enum_ = Value::Enum(Enum {
+            type_: &type_,
+            variant_name: Some("A"),
+            variant_index: 0,
+            fields: Fields::Positional(vec![Value::U64(42), Value::Bool(true)]),
+        });
+
+        assert_eq!(
+            bcs::to_bytes(&enum_).unwrap(),
+            bcs::to_bytes(&E::A(42, true)).unwrap()
+        );
+
+        // Test enum with named fields
+        let enum_ = Value::Enum(Enum {
+            type_: &type_,
+            variant_name: Some("B"),
+            variant_index: 1,
+            fields: Fields::Named(vec![("x", Value::U32(100)), ("y", Value::U32(200))]),
+        });
+
+        assert_eq!(
+            bcs::to_bytes(&enum_).unwrap(),
+            bcs::to_bytes(&E::B { x: 100, y: 200 }).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serialize_vector() {
+        let vec = Value::Vector(Vector {
+            type_: None,
+            elements: vec![Value::U64(10), Value::U64(20), Value::U64(30)],
+        });
+
+        assert_eq!(
+            bcs::to_bytes(&vec).unwrap(),
+            bcs::to_bytes(&vec![10u64, 20, 30]).unwrap()
+        );
+
+        // Test vector of strings
+        let vec = Value::Vector(Vector {
+            type_: None,
+            elements: vec![
+                Value::String(Cow::Borrowed("hello")),
+                Value::String(Cow::Borrowed("world")),
+            ],
+        });
+
+        assert_eq!(
+            bcs::to_bytes(&vec).unwrap(),
+            bcs::to_bytes(&vec!["hello", "world"]).unwrap()
+        );
+
+        // Test empty vector
+        let vec = Value::Vector(Vector {
+            type_: None,
+            elements: vec![],
+        });
+
+        assert_eq!(bcs::to_bytes(&vec).unwrap(), &[0x00]);
     }
 }
