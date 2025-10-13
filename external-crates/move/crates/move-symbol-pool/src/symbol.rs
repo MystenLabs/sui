@@ -308,10 +308,10 @@ mod tests {
     use crate::{
         Symbol,
         static_symbols::{STATIC_SYMBOL_IDX, STATIC_SYMBOLS},
-        symbol::{MAX_INLINE_LEN, Tag},
+        symbol::{INLINE_TAG, LEN_OFFSET, MAX_INLINE_LEN, Tag},
     };
-
     use std::mem::size_of;
+    use std::num::NonZeroU64;
 
     #[test]
     fn test_size() {
@@ -397,5 +397,64 @@ mod tests {
             assert_eq!(map_idx, sym_idx);
             assert_eq!(map_s, sym_s);
         }
+    }
+
+    #[test]
+    fn test_inline_symbol_slice_correctness() {
+        // Prepare a symbol with inlined data: "abcdefg"
+        let s = "abcdefg";
+        let len = s.len();
+        assert_eq!(len, 7);
+        let mut data: u64 = (INLINE_TAG as u64) | ((len as u64) << LEN_OFFSET);
+        {
+            let dest = super::inline_symbol_slice_mut(&mut data);
+            dest[..len].copy_from_slice(s.as_bytes());
+        }
+        let nz = NonZeroU64::new(data).unwrap();
+        let bytes = super::inline_symbol_slice(&nz);
+        assert_eq!(&bytes[..len], s.as_bytes());
+    }
+
+    #[test]
+    fn test_inline_symbol_slice_empty() {
+        // Test with empty string
+        let s = "";
+        let len = s.len();
+        let data: u64 = (INLINE_TAG as u64) | ((len as u64) << LEN_OFFSET);
+        let nz = NonZeroU64::new(data).unwrap();
+        let bytes = super::inline_symbol_slice(&nz);
+        assert_eq!(&bytes[..len], s.as_bytes());
+    }
+
+    #[test]
+    fn test_inline_symbol_slice_partial_fill() {
+        // Test with a string shorter than MAX_INLINE_LEN
+        let s = "abc";
+        let len = s.len();
+        let mut data: u64 = (INLINE_TAG as u64) | ((len as u64) << LEN_OFFSET);
+        {
+            let dest = super::inline_symbol_slice_mut(&mut data);
+            dest[..len].copy_from_slice(s.as_bytes());
+        }
+        let nz = NonZeroU64::new(data).unwrap();
+        let bytes = super::inline_symbol_slice(&nz);
+        assert_eq!(&bytes[..len], s.as_bytes());
+    }
+    #[test]
+    fn test_serialize_symbol() {
+        use serde_json::json;
+
+        let sym1 = Symbol::from("test");
+        let serialized1 = serde_json::to_string(&sym1).unwrap();
+        assert_eq!(serialized1, json!("test").to_string());
+
+        let sym2 = Symbol::from("test123456");
+        let serialized2 = serde_json::to_string(&sym2).unwrap();
+        assert_eq!(serialized2, json!("test123456").to_string());
+
+        let deserialized1: Symbol = serde_json::from_str(&serialized1).unwrap();
+        assert_eq!(deserialized1.as_str(), "test");
+        let deserialized2: Symbol = serde_json::from_str(&serialized2).unwrap();
+        assert_eq!(deserialized2.as_str(), "test123456");
     }
 }
