@@ -4092,6 +4092,10 @@ impl ProtocolConfig {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_poseidon = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
