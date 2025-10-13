@@ -778,6 +778,10 @@ mod checked {
                             assert!(protocol_config.enable_coin_registry());
                             builder = setup_coin_registry_create(builder);
                         }
+                        EndOfEpochTransactionKind::DisplayRegistryCreate => {
+                            assert!(protocol_config.enable_display_registry());
+                            builder = setup_display_registry_create(builder);
+                        }
                     }
                 }
                 unreachable!(
@@ -1457,6 +1461,21 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate coin_registry_create transaction!");
+        builder
+    }
+
+    fn setup_display_registry_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("display_registry").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate display_registry_create transaction!");
         builder
     }
 }

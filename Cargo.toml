@@ -661,9 +661,10 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c794
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fe561f3089b3b4acbbd67ff48a278a6c448e488c", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fe561f3089b3b4acbbd67ff48a278a6c448e488c", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fe561f3089b3b4acbbd67ff48a278a6c448e488c" }
+# TODO(manos): Use stable revs when 0.8.1 lands -- the current one is from my PR to make tests pass.
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "00cb3e10a8f0f67abac95d342ae110628cdc9bd1", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "00cb3e10a8f0f67abac95d342ae110628cdc9bd1", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "00cb3e10a8f0f67abac95d342ae110628cdc9bd1" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

@@ -1472,6 +1472,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
                 Self::CoinRegistryCreate
             }
+            crate::transaction::EndOfEpochTransactionKind::DisplayRegistryCreate => {
+                Self::DisplayRegistryCreate
+            }
         }
     }
 }
