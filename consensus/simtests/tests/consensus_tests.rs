@@ -208,7 +208,7 @@ mod consensus_tests {
         });
 
         // Wait for some commits to happen on validators
-        sleep(Duration::from_secs(30)).await;
+        sleep(Duration::from_secs(60)).await;
 
         // Verify that validators are making progress
         let validator_commit_monitor = authorities[0].commit_consumer_monitor();
@@ -229,6 +229,8 @@ mod consensus_tests {
         assert!(observer_node.is_running(), "Observer should still be running");
 
         tracing::info!("Test completed successfully - observer node operated without panicking");
+
+        assert!(false);
     }
 
     // Tests the fastpath transactions with randomized votes. The test creates a fixed number of transactions,

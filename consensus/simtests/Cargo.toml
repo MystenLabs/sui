@@ -28,6 +28,4 @@ tracing.workspace = true
 typed-store.workspace = true
 tempfile.workspace = true
 telemetry-subscribers.workspace = true
-
-[dev-dependencies]
 rand.workspace = true

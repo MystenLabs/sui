@@ -49,7 +49,11 @@ pub(crate) struct PeerRoundTracker {
 
 impl PeerRoundTracker {
     pub(crate) fn new(context: Arc<Context>) -> Self {
-        let size = if context.is_observer { 0 } else { context.committee.size() };
+        let size = if context.is_observer {
+            0
+        } else {
+            context.committee.size()
+        };
         Self {
             context,
             block_accepted_rounds: vec![vec![0; size]; size],

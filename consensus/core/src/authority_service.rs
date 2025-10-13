@@ -91,17 +91,12 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             round_tracker,
         }
     }
-}
 
-#[async_trait]
-impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
-    async fn handle_send_block(
+    async fn handle_send_block_for_validator(
         &self,
         peer: AuthorityIndex,
         serialized_block: ExtendedSerializedBlock,
     ) -> ConsensusResult<()> {
-        fail_point_async!("consensus-rpc-response");
-
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // TODO: dedup block verifications, here and with fetched blocks.
@@ -307,6 +302,128 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         Ok(())
     }
 
+    async fn handle_send_block_for_observer(
+        &self,
+        peer: AuthorityIndex,
+        serialized_block: ExtendedSerializedBlock,
+    ) -> ConsensusResult<()> {
+        // TODO: dedup block verifications, here and with fetched blocks.
+        let signed_block: SignedBlock =
+            bcs::from_bytes(&serialized_block.block).map_err(ConsensusError::MalformedBlock)?;
+
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
+
+        // Reject blocks failing validations.
+        let (verified_block, reject_txn_votes) = self
+            .block_verifier
+            .verify_and_vote(signed_block, serialized_block.block)
+            .tap_err(|e| {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
+                    .inc();
+                info!("Invalid block from {}: {}", peer, e);
+            })?;
+        let block_ref = verified_block.reference();
+        debug!("Received block {} via handle_send_block_for_observer.", block_ref);
+
+        let now = self.context.clock.timestamp_utc_ms();
+        let forward_time_drift =
+            Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
+
+        self.context
+            .metrics
+            .node_metrics
+            .block_timestamp_drift_ms
+            .with_label_values(&[peer_hostname, "handle_send_block_for_observer"])
+            .inc_by(forward_time_drift.as_millis() as u64);
+
+        // Observe the block for the commit votes. When local commit is lagging too much,
+        // commit sync loop will trigger fetching.
+        self.commit_vote_monitor.observe_block(&verified_block);
+
+        // Reject blocks when local commit index is lagging too far from quorum commit index,
+        // to avoid the memory overhead from suspended blocks.
+        //
+        // IMPORTANT: this must be done after observing votes from the block, otherwise
+        // observed quorum commit will no longer progress.
+        //
+        // Since the main issue with too many suspended blocks is memory usage not CPU,
+        // it is ok to reject after block verifications instead of before.
+        let last_commit_index = self.dag_state.read().last_commit_index();
+        let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
+        // The threshold to ignore block should be larger than commit_sync_batch_size,
+        // to avoid excessive block rejections and synchronizations.
+        if last_commit_index
+            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
+            < quorum_commit_index
+        {
+            self.context
+                .metrics
+                .node_metrics
+                .rejected_blocks
+                .with_label_values(&["commit_lagging"])
+                .inc();
+            debug!(
+                "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
+                block_ref,
+                last_commit_index,
+                quorum_commit_index,
+            );
+            return Err(ConsensusError::BlockRejected {
+                block_ref,
+                reason: format!(
+                    "Last commit index is lagging quorum commit index too much ({} < {})",
+                    last_commit_index, quorum_commit_index,
+                ),
+            });
+        }
+
+        self.context
+            .metrics
+            .node_metrics
+            .verified_blocks
+            .with_label_values(&[peer_hostname])
+            .inc();
+
+        // The block is verified and current, so it can be processed in the fastpath.
+        if self.context.protocol_config.mysticeti_fastpath() {
+            self.transaction_certifier
+                .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
+        }
+
+        // Try to accept the block into the DAG.
+        let _missing_ancestors = self
+            .core_dispatcher
+            .add_blocks(vec![verified_block.clone()])
+            .await
+            .map_err(|_| ConsensusError::Shutdown)?;
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
+    async fn handle_send_block(
+        &self,
+        peer: AuthorityIndex,
+        serialized_block: ExtendedSerializedBlock,
+    ) -> ConsensusResult<()> {
+        fail_point_async!("consensus-rpc-response");
+
+        if self.context.is_observer {
+            // Handle blocks from the source without making any checks that it's the peer's
+            self.handle_send_block_for_observer(peer, serialized_block)
+                .await
+        } else {
+            self.handle_send_block_for_validator(peer, serialized_block)
+                .await
+        }
+    }
+
     async fn handle_subscribe_blocks(
         &self,
         peer: NodeId,
@@ -330,12 +447,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 // Sort blocks by round to maintain causal order
                 all_blocks.sort_by_key(|block| block.round());
 
-                Box::pin(stream::iter(all_blocks.into_iter().map(
-                    |block| ExtendedSerializedBlock {
+                Box::pin(stream::iter(all_blocks.into_iter().map(|block| {
+                    ExtendedSerializedBlock {
                         block: block.serialized().clone(),
                         excluded_ancestors: vec![],
-                    },
-                )))
+                    }
+                })))
             } else {
                 // For validators: stream only own blocks
                 // If last_received is valid and more blocks have been proposed since then, this call is
@@ -359,10 +476,14 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     self.rx_accepted_blocks_broadcast.resubscribe(),
                     self.subscription_counter.clone(),
                 );
-                Box::pin(accepted_blocks_stream.map(|block| ExtendedSerializedBlock {
+                Box::pin(accepted_blocks_stream.map(|block| 
+                    {
+                    let block_ref = block.reference();
+                    info!("Broadcasting now accepted block {block_ref} to observer");
+                    ExtendedSerializedBlock {
                     block: block.serialized().clone(),
                     excluded_ancestors: vec![],
-                }))
+                }}))
             } else {
                 // For validators: stream only own blocks
                 let own_blocks_stream = BroadcastedBlockStream::new(
@@ -1042,6 +1163,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_accepted_blocks_broadcast, rx_accepted_blocks_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
@@ -1068,6 +1190,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            rx_accepted_blocks_broadcast,
             transaction_certifier,
             dag_state,
             store,
@@ -1114,6 +1237,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_accepted_blocks_broadcast, rx_accepted_blocks_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
@@ -1140,6 +1264,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            rx_accepted_blocks_broadcast,
             transaction_certifier,
             dag_state.clone(),
             store,
@@ -1277,6 +1402,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_accepted_blocks_broadcast, rx_accepted_blocks_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
@@ -1303,6 +1429,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            rx_accepted_blocks_broadcast,
             transaction_certifier,
             dag_state.clone(),
             store,
