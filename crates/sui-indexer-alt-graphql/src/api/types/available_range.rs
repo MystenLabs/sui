@@ -58,10 +58,9 @@ macro_rules! field_pipelines {
             )?)?
     });* $(;)?) => {
 
-        /// Resolves GraphQL type/field queries to their required watermark pipelines.
+        /// Recursively resolves GraphQL type/field/filter combinations to their required indexer pipelines.
         ///
-        /// Watermark pipelines track data availability ranges. This function gathers
-        /// pipelines used to compute the available checkpoint range for the given type, field and filers.
+        /// Populates `pipelines` with indexer pipeline names by matching against the field_pipelines! macro configuration.
         fn collect_pipelines(
             type_: &str,
             field: Option<&str>,
@@ -116,7 +115,35 @@ macro_rules! field_pipelines {
 
         #[cfg(test)]
         mod field_piplines_tests {
-            use async_graphql::{Context, Object, MergedObject, registry::MetaType};
+            use async_graphql::{
+                registry::{MetaField, MetaType, Registry},
+                Context, MergedObject, Object,
+            };
+            use async_graphql_value::indexmap::IndexMap;
+
+            fn get_type_fields<'a>(registry: &'a Registry, type_name: &str) -> &'a IndexMap<String, MetaField> {
+                let meta_type = registry
+                    .types
+                    .get(type_name)
+                    .unwrap_or_else(|| panic!("Type '{}' not found in schema registry", type_name));
+
+                match meta_type {
+                    MetaType::Object { fields, .. } | MetaType::Interface { fields, .. } => fields,
+                    _ => panic!("Type '{}' is not an Object or Interface type", type_name),
+                }
+            }
+
+            fn filter_exists(registry: &Registry, type_name: &str, field_name: &str, meta_field: &MetaField, filter_name: &str) {
+                if let Some(MetaType::InputObject { input_fields, .. }) = meta_field.args.get("filter")
+                    .and_then(|arg| registry.types.get(&arg.ty))
+                {
+                    assert!(
+                        input_fields.contains_key(filter_name),
+                        "Filter '{}' not found in field '{}.{}'",
+                        filter_name, type_name, field_name
+                    );
+                }
+            }
 
             #[derive(Default)]
             struct SchemaValidator;
@@ -127,45 +154,19 @@ macro_rules! field_pipelines {
                     let registry = &ctx.schema_env.registry;
 
                     $(
-                        // Validate that each type/field pair declared in field_pipelines! exists in the GraphQL schema
                         let type_name = stringify!($ty);
-                        let meta_type = registry
-                            .types
-                            .get(type_name)
-                            .unwrap_or_else(|| panic!("Type '{}' not found in schema registry", type_name));
+                        let fields = get_type_fields(registry, type_name);
+                        let field_names = &[$(stringify!($field)),*];
 
-                        let fields = match meta_type {
-                                MetaType::Object { fields, .. } => fields,
-                                MetaType::Interface { fields, .. } => fields,
-                                _ => panic!("Type '{}' is not an Object or Interface type", type_name),
-                            };
+                        field_names.iter().for_each(|&field_name| {
+                            let _meta_field = fields.get(field_name)
+                                .unwrap_or_else(|| panic!("Field '{}.{}' not found in schema registry", type_name, field_name));
 
-                        let field_names = vec![$(stringify!($field)),*];
-
-                        for field_name in field_names {
-                            assert!(
-                                fields.contains_key(field_name),
-                                "Field '{}.{}' not found in schema registry",
-                                type_name,
-                                field_name
-                            );
-
-                            let _meta_field = fields.get(field_name).unwrap();
-
-                            // Validate that filter arguments referenced in field_pipelines! exist in the schema.
                             $(
-                                let validate_filter = |filter_name: &str| {
-                                    if let Some(MetaType::InputObject { input_fields, .. }) = _meta_field.args.get("filter")
-                                        .and_then(|arg| registry.types.get(&arg.ty))
-                                    {
-                                        assert!(input_fields.contains_key(filter_name),
-                                            "Filter '{}' not found in field '{}.{}'", filter_name, type_name, field_name);
-                                    }
-                                };
-                                validate_filter($if_filter);
-                                $(validate_filter($elif_filter);)*
+                                filter_exists(registry, type_name, field_name, _meta_field, $if_filter);
+                                $(filter_exists(registry, type_name, field_name, _meta_field, $elif_filter);)*
                             )?
-                        }
+                        });
                     )*
 
                     true
