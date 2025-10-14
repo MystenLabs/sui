@@ -17,7 +17,7 @@ use serde::{
 };
 use sui_types::{
     MOVE_STDLIB_ADDRESS,
-    base_types::{STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME},
+    base_types::{RESOLVED_UTF8_STR, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME},
 };
 
 use super::{error::FormatError, format_visitor::FormatVisitor, writer::BoundedWriter};
@@ -26,73 +26,73 @@ use super::{error::FormatError, format_visitor::FormatVisitor, writer::BoundedWr
 /// the raw BCS bytes and the corresponding `MoveTypeLayout` for the object. This implies the
 /// `Store` acts as a pool of cached objects.
 #[async_trait]
-pub trait Store<'a> {
-    async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<Slice<'a>>>;
+pub trait Store<'s> {
+    async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<Slice<'s>>>;
 }
 
 /// Value representation for the Display v2 interpreter.
 #[derive(Clone)]
-pub enum Value<'a> {
+pub enum Value<'s> {
     Address(AccountAddress),
     Bool(bool),
-    Bytes(Cow<'a, [u8]>),
-    Enum(Enum<'a>),
-    Slice(Slice<'a>),
-    String(Cow<'a, str>),
-    Struct(Struct<'a>),
+    Bytes(Cow<'s, [u8]>),
+    Enum(Enum<'s>),
+    Slice(Slice<'s>),
+    String(Cow<'s, str>),
+    Struct(Struct<'s>),
     U8(u8),
     U16(u16),
     U32(u32),
     U64(u64),
     U128(u128),
     U256(U256),
-    Vector(Vector<'a>),
+    Vector(Vector<'s>),
 }
 
 /// A single step in a chain of accesses, with its inner expression (if there is one) evaluated.
-pub enum Accessor<'a> {
-    Field(&'a str),
+pub enum Accessor<'s> {
+    Field(&'s str),
     Positional(u8),
-    Index(Value<'a>),
-    DFIndex(Value<'a>),
-    DOFIndex(Value<'a>),
+    Index(Value<'s>),
+    DFIndex(Value<'s>),
+    DOFIndex(Value<'s>),
 }
 
 /// Bytes extracted from the serialized representation of a Move value, along with its layout.
 #[derive(Copy, Clone)]
-pub struct Slice<'a> {
-    pub(crate) layout: &'a MoveTypeLayout,
-    pub(crate) bytes: &'a [u8],
+pub struct Slice<'s> {
+    pub(crate) layout: &'s MoveTypeLayout,
+    pub(crate) bytes: &'s [u8],
 }
 
 /// An evaluated vector literal.
 #[derive(Clone)]
-pub struct Vector<'a> {
-    pub(crate) type_: Option<&'a TypeTag>,
-    pub(crate) elements: Vec<Value<'a>>,
+pub struct Vector<'s> {
+    pub(crate) type_: Option<&'s TypeTag>,
+    pub(crate) elements: Vec<Value<'s>>,
 }
 
 /// An evaluated struct literal.
 #[derive(Clone)]
-pub struct Struct<'a> {
-    pub(crate) type_: &'a StructTag,
-    pub(crate) fields: Fields<'a>,
+pub struct Struct<'s> {
+    pub(crate) type_: &'s StructTag,
+    pub(crate) fields: Fields<'s>,
 }
 
 /// An evaluated enum/variant literal.
 #[derive(Clone)]
-pub struct Enum<'a> {
-    pub(crate) type_: &'a StructTag,
-    pub(crate) variant_name: Option<&'a str>,
+pub struct Enum<'s> {
+    pub(crate) type_: &'s StructTag,
+    pub(crate) variant_name: Option<&'s str>,
     pub(crate) variant_index: u16,
-    pub(crate) fields: Fields<'a>,
+    pub(crate) fields: Fields<'s>,
 }
 
 /// Evaluated fields that are part of a struct or enum literal.
 #[derive(Clone)]
-pub enum Fields<'a> {
-    Positional(Vec<Value<'a>>),
-    Named(Vec<(&'a str, Value<'a>)>),
+pub enum Fields<'s> {
+    Positional(Vec<Value<'s>>),
+    Named(Vec<(&'s str, Value<'s>)>),
 }
 
 impl Value<'_> {
@@ -111,6 +111,38 @@ impl Value<'_> {
             // TODO(amnn): Detect transforms that can't be applied in this context (e.g. 'json' and
             // 'display').
             Some(transform) => Err(FormatError::TransformUnrecognized(transform.to_string())),
+        }
+    }
+
+    /// The Move type of this value.
+    pub(crate) fn type_(&self) -> TypeTag {
+        match self {
+            Value::Address(_) => TypeTag::Address,
+            Value::Bool(_) => TypeTag::Bool,
+            Value::Bytes(_) => TypeTag::Vector(Box::new(TypeTag::U8)),
+            Value::U8(_) => TypeTag::U8,
+            Value::U16(_) => TypeTag::U16,
+            Value::U32(_) => TypeTag::U32,
+            Value::U64(_) => TypeTag::U64,
+            Value::U128(_) => TypeTag::U128,
+            Value::U256(_) => TypeTag::U256,
+
+            Value::Enum(e) => e.type_.clone().into(),
+            Value::Struct(s) => s.type_.clone().into(),
+
+            Value::Slice(s) => s.layout.into(),
+
+            Value::String(_) => {
+                let (&address, module, name) = RESOLVED_UTF8_STR;
+                TypeTag::Struct(Box::new(StructTag {
+                    address,
+                    module: module.to_owned(),
+                    name: name.to_owned(),
+                    type_params: vec![],
+                }))
+            }
+
+            Value::Vector(v) => v.type_(),
         }
     }
 
@@ -161,7 +193,7 @@ impl Value<'_> {
     }
 }
 
-impl<'a> Accessor<'a> {
+impl<'s> Accessor<'s> {
     /// Coerce this accessor into a numeric index, if possible, and returns its value.
     ///
     /// Coercion works for all integer literals, as well as `Slice` literals with a numeric layout,
@@ -199,7 +231,7 @@ impl<'a> Accessor<'a> {
     }
 
     /// Coerce this accessor into a field name, if possible, and return its name.
-    pub(crate) fn as_field_name(&self) -> Option<Cow<'a, str>> {
+    pub(crate) fn as_field_name(&self) -> Option<Cow<'s, str>> {
         use Accessor as A;
         match self {
             A::Field(f) => Some(Cow::Borrowed(*f)),
@@ -209,17 +241,22 @@ impl<'a> Accessor<'a> {
     }
 }
 
-#[cfg(test)]
-impl<'a> Slice<'a> {
-    pub fn new_for_test(layout: &'a MoveTypeLayout, bytes: &'a [u8]) -> Self {
-        Self { layout, bytes }
+impl Vector<'_> {
+    fn type_(&self) -> TypeTag {
+        TypeTag::Vector(Box::new(if let Some(explicit) = self.type_ {
+            explicit.clone()
+        } else if let Some(first) = self.elements.first() {
+            first.type_()
+        } else {
+            unreachable!("SAFETY: vectors either have a type annotation or at least one element")
+        }))
     }
 }
 
-impl<'a> Fields<'a> {
+impl<'s> Fields<'s> {
     /// Attempt to fetch a particular field  from a struct or enum literal's fields based on the
     /// given accessor.
-    pub(crate) fn get(self, accessor: &Accessor<'a>) -> Option<Value<'a>> {
+    pub(crate) fn get(self, accessor: &Accessor<'s>) -> Option<Value<'s>> {
         match (self, accessor) {
             (Fields::Positional(mut fs), Accessor::Positional(i)) => {
                 let i = *i as usize;
@@ -361,21 +398,131 @@ impl Serialize for Enum<'_> {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::collections::BTreeMap;
+
     use move_core_types::annotated_value::{
-        MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout as T,
+        MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout as L,
     };
     use move_core_types::identifier::Identifier;
+    use sui_types::dynamic_field::{DynamicFieldInfo, Field, derive_dynamic_field_id};
+    use sui_types::id::{ID, UID};
 
     use super::*;
 
-    /// Mock Store implementation for testing (does not actually implement object loading, because
-    /// this is not required by the implementation yet).
-    pub struct MockStore;
+    /// Mock Store implementation for testing.
+    #[derive(Default)]
+    pub struct MockStore {
+        data: BTreeMap<AccountAddress, (Vec<u8>, MoveTypeLayout)>,
+    }
+
+    impl MockStore {
+        /// Add objects representing a dynamic field to the store.
+        ///
+        /// The dynamic field is owned by `parent` and has the given `name` and `value`, with their
+        /// respective layouts.
+        pub(crate) fn with_dynamic_field<N: Serialize, V: Serialize>(
+            mut self,
+            parent: AccountAddress,
+            name: N,
+            name_layout: MoveTypeLayout,
+            value: V,
+            value_layout: MoveTypeLayout,
+        ) -> Self {
+            use Identifier as I;
+            use MoveFieldLayout as F;
+            use MoveStructLayout as S;
+            use MoveTypeLayout as T;
+
+            let name_bytes = bcs::to_bytes(&name).unwrap();
+            let name_type = TypeTag::from(&name_layout);
+            let value_type = TypeTag::from(&value_layout);
+            let df_id = derive_dynamic_field_id(parent, &name_type, &name_bytes).unwrap();
+
+            let field_bytes = bcs::to_bytes(&Field {
+                id: UID::new(df_id),
+                name,
+                value,
+            })
+            .unwrap();
+
+            let field_layout = L::Struct(Box::new(S {
+                type_: DynamicFieldInfo::dynamic_field_type(name_type, value_type),
+                fields: vec![
+                    F::new(I::new("id").unwrap(), L::Struct(Box::new(UID::layout()))),
+                    F::new(I::new("name").unwrap(), name_layout),
+                    F::new(I::new("value").unwrap(), value_layout),
+                ],
+            }));
+
+            self.data.insert(df_id.into(), (field_bytes, field_layout));
+            self
+        }
+
+        /// Add objects representing a dynamic object field to the store.
+        ///
+        /// The dynamic object field is owned by `parent` and has the given `name` and `value`,
+        /// with their respective layouts. `value` is expected to start with a UID, as it must be
+        /// an object (its type must have `key`).
+        pub(crate) fn with_dynamic_object_field<N: Serialize, V: Serialize>(
+            mut self,
+            parent: AccountAddress,
+            name: N,
+            name_layout: MoveTypeLayout,
+            value: V,
+            value_layout: MoveTypeLayout,
+        ) -> Self {
+            use AccountAddress as A;
+            use Identifier as I;
+            use MoveFieldLayout as F;
+            use MoveStructLayout as S;
+            use MoveTypeLayout as T;
+
+            let name_bytes = bcs::to_bytes(&name).unwrap();
+            let value_bytes = bcs::to_bytes(&value).unwrap();
+            let name_type = TypeTag::from(&name_layout);
+            let wrap_type = DynamicFieldInfo::dynamic_object_field_wrapper(name_type);
+            let val_id = A::from_bytes(&value_bytes[0..AccountAddress::LENGTH]).unwrap();
+            let dof_id =
+                derive_dynamic_field_id(parent, &wrap_type.clone().into(), &name_bytes).unwrap();
+
+            let field_bytes = bcs::to_bytes(&Field {
+                id: UID::new(dof_id),
+                name,
+                value: val_id,
+            })
+            .unwrap();
+
+            let wrapper_layout = L::Struct(Box::new(S {
+                type_: wrap_type.clone(),
+                fields: vec![F::new(I::new("name").unwrap(), name_layout)],
+            }));
+
+            let field_layout = L::Struct(Box::new(S {
+                type_: DynamicFieldInfo::dynamic_field_type(wrap_type.into(), ID::type_().into()),
+                fields: vec![
+                    F::new(I::new("id").unwrap(), L::Struct(Box::new(UID::layout()))),
+                    F::new(I::new("name").unwrap(), wrapper_layout),
+                    F::new(I::new("value").unwrap(), L::Struct(Box::new(ID::layout()))),
+                ],
+            }));
+
+            self.data.insert(dof_id.into(), (field_bytes, field_layout));
+            self.data.insert(val_id, (value_bytes, value_layout));
+            self
+        }
+    }
 
     #[async_trait]
-    impl<'a> Store<'a> for MockStore {
-        async fn object(&self, _id: AccountAddress) -> anyhow::Result<Option<Slice<'a>>> {
-            unimplemented!()
+    impl<'s> Store<'s> for &'s MockStore {
+        async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<Slice<'s>>> {
+            let Some((bytes, layout)) = self.data.get(&id) else {
+                return Ok(None);
+            };
+
+            Ok(Some(Slice {
+                layout,
+                bytes: bytes.as_slice(),
+            }))
         }
     }
 
@@ -419,7 +566,10 @@ pub(crate) mod tests {
     #[test]
     fn test_slice_serialize_roundtrip() {
         let bytes = &[0x01, 0x02, 0x03, 0x04];
-        let slice = Slice::new_for_test(&T::U64, bytes);
+        let slice = Slice {
+            layout: &L::U64,
+            bytes,
+        };
 
         let serialized = bcs::to_bytes(&slice).unwrap();
         assert_eq!(serialized, bytes);
