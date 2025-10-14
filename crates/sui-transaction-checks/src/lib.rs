@@ -7,6 +7,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use fastcrypto_zkp::bn254::verifier;
     use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
     use sui_config::verifier_signing_config::VerifierSigningConfig;
@@ -597,7 +598,7 @@ mod checked {
         let mut verifier = sui_execution::verifier(
             protocol_config,
             signing_limits,
-            /* sanity_check_with_regex_reference_safety */ true,
+            verifier_signing_config.sanity_check_with_regex_reference_safety(),
             metrics,
         );
         let mut meter = verifier.meter(verifier_signing_config.meter_config_for_signing());
