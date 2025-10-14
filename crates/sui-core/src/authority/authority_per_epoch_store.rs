@@ -3361,10 +3361,10 @@ impl AuthorityPerEpochStore {
                 .expect("should only ever be called from the commit handler thread")
         });
         let mut dkg_failed = false;
-        let randomness_round = if self.randomness_state_enabled() {
-            let randomness_manager = randomness_manager
-                .as_mut()
-                .expect("randomness manager should exist if randomness is enabled");
+        // Observer nodes don't have a RandomnessManager, so they skip randomness generation.
+        // They will still process transactions that use randomness (consuming values from validators).
+        let randomness_round = if self.randomness_state_enabled() && randomness_manager.is_some() {
+            let randomness_manager = randomness_manager.as_mut().unwrap();
             match randomness_manager.dkg_status() {
                 DkgStatus::Pending => None,
                 DkgStatus::Failed => {

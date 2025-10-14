@@ -1694,8 +1694,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             return;
         }
 
-        let randomness_manager =
-            randomness_manager.expect("randomness manager should exist if randomness is enabled");
+        // Observer nodes don't have a RandomnessManager since they don't participate in DKG.
+        // They should also not receive DKG messages since they're not in consensus.
+        let Some(randomness_manager) = randomness_manager else {
+            if !randomness_dkg_messages.is_empty() || !randomness_dkg_confirmations.is_empty() {
+                debug_fatal!(
+                    "observer node received {} DKG messages and {} DKG confirmations",
+                    randomness_dkg_messages.len(),
+                    randomness_dkg_confirmations.len()
+                );
+            }
+            return;
+        };
 
         let randomness_dkg_updates =
             self.process_randomness_dkg_messages(randomness_manager, randomness_dkg_messages);
