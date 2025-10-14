@@ -409,7 +409,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let lhs = function_ref
                 .return_
                 .iter()
-                .map(|ty| push!(ty.clone().subst(&type_params).into()))
+                .map(|ty| push!(ty.clone().subst(type_params).into()))
                 .collect::<Vec<_>>();
 
             let target = (function_ref.module, function_ref.function);
@@ -440,7 +440,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .fields
                 .0
                 .iter()
-                .map(|(_, field)| push!(field.type_.clone().subst(&type_params).into()))
+                .map(|(_, field)| push!(field.type_.clone().subst(type_params).into()))
                 .collect::<Vec<_>>();
 
             Instruction::AssignReg { rhs, lhs }
@@ -708,11 +708,11 @@ pub(crate) fn bytecode<K: SourceKind>(
             let tys = match ib {
                 IB::UnpackVariantImmRef(_) => tys
                     .iter()
-                    .map(|ty| Type::Reference(false, ty.clone().into()).into())
+                    .map(|ty| Type::Reference(false, Box::new(ty.clone())))
                     .collect::<Vec<Type<Symbol>>>(),
                 IB::UnpackVariantMutRef(_) => tys
                     .iter()
-                    .map(|ty| Type::Reference(true, ty.clone().into()).into())
+                    .map(|ty| Type::Reference(true, Box::new(ty.clone())))
                     .collect::<Vec<Type<Symbol>>>(),
                 IB::UnpackVariant(_) => tys,
                 _ => unreachable!(),
@@ -720,7 +720,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
             let lhs = tys
                 .iter()
-                .map(|ty| push!(Rc::new(ty.clone().into())))
+                .map(|ty| push!(Rc::new(ty.clone())))
                 .collect::<Vec<_>>();
             Instruction::AssignReg { lhs, rhs }
         }
