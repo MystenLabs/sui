@@ -424,7 +424,7 @@ pub fn compute_symbols_typed_program(
                     |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
                 ),
                 use_defs: filter_computation_data!(computation_data, use_defs, |(fhash, _)| {
-                    cached_deps.dep_hashes.contains(&fhash)
+                    cached_deps.dep_hashes.contains(fhash)
                 }),
                 references: filter_computation_data!(computation_data, references, |(loc, _)| {
                     cached_deps.dep_hashes.contains(&loc.file_hash())
@@ -611,7 +611,7 @@ fn pre_process_typed_modules(
 
         use_defs
             .entry(module_def.loc.file_hash())
-            .or_insert_with(UseDefMap::new)
+            .or_default()
             .extend(symbols.elements());
     }
 }

@@ -157,7 +157,7 @@ fn add_member_use_def(
 
         use_defs
             .entry(use_loc.file_hash())
-            .or_insert_with(UseDefMap::new)
+            .or_default()
             .insert(name_start.line, ud.clone());
         return Some(ud);
     }
