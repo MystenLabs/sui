@@ -52,7 +52,9 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
             }
         }
         if *receiver.borrow() > withdraws.accumulator_version {
-            withdraws.notify_already_settled();
+            // This accumulator version is already settled.
+            // There is no need to schedule the withdraws.
+            withdraws.notify_skip_schedule();
             return;
         }
 
@@ -68,12 +70,18 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
             let balance = match self.balance_read.get_latest_account_balance(&account_id) {
                 Some((balance, cur_version)) => {
                     if cur_version > withdraws.accumulator_version {
+                        // This account object is already at the next version, indicating
+                        // that a settlement transaction touching this account object has already been executed.
+                        // It doesn't mean all settlement transactions from the same commit batch have been executed,
+                        // but we are at a minimum in the process of executing them.
+                        // This means that all withdraw transactions in this commit have already been executed.
+                        // Hence we can skip scheduling the withdraws.
                         debug!(
                             ?account_id,
                             "Accumulator account object is already at version {:?}, but the withdraws are at version {:?}",
                             cur_version, withdraws.accumulator_version
                         );
-                        withdraws.notify_already_settled();
+                        withdraws.notify_skip_schedule();
                         return;
                     }
                     balance

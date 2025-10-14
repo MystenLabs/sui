@@ -98,7 +98,9 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
         let mut inner_state = self.inner_state.lock();
         let cur_accumulator_version = inner_state.accumulator_version;
         if withdraws.accumulator_version < cur_accumulator_version {
-            withdraws.notify_already_settled();
+            // This accumulator version is already settled.
+            // There is no need to schedule the withdraws.
+            withdraws.notify_skip_schedule();
             return;
         }
 
@@ -112,12 +114,18 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                 {
                     Some((balance, version)) => {
                         if version > withdraws.accumulator_version {
+                            // This account object is already at the next version, indicating
+                            // that a settlement transaction touching this account object has already been executed.
+                            // It doesn't mean all settlement transactions from the same commit batch have been executed,
+                            // but we are at a minimum in the process of executing them.
+                            // This means that all withdraw transactions in this commit have already been executed.
+                            // Hence we can skip scheduling the withdraws.
                             debug!(
                                 ?account_id,
                                 "Accumulator account object is already at version {:?}, but the withdraws are at version {:?}",
                                 version, withdraws.accumulator_version
                             );
-                            withdraws.notify_already_settled();
+                            withdraws.notify_skip_schedule();
                             return;
                         }
                         (balance, Some(version))

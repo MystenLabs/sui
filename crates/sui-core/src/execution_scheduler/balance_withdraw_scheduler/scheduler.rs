@@ -58,7 +58,7 @@ impl WithdrawReservations {
         )
     }
 
-    pub fn notify_already_settled(self) {
+    pub fn notify_skip_schedule(self) {
         debug!(
             "Withdraws at accumulator version {:?} are already settled",
             self.accumulator_version
@@ -66,7 +66,7 @@ impl WithdrawReservations {
         for (withdraw, sender) in self.withdraws.into_iter().zip(self.senders) {
             let _ = sender.send(ScheduleResult {
                 tx_digest: withdraw.tx_digest,
-                status: ScheduleStatus::AlreadySettled,
+                status: ScheduleStatus::SkipSchedule,
             });
         }
     }
