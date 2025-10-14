@@ -59,11 +59,8 @@ pub struct U256CastError {
 }
 
 impl U256CastError {
-    pub fn new<T: std::convert::Into<U256>>(val: T, kind: U256CastErrorKind) -> Self {
-        Self {
-            kind,
-            val: val.into(),
-        }
+    pub fn new(val: U256, kind: U256CastErrorKind) -> Self {
+        Self { kind, val }
     }
 }
 
@@ -507,11 +504,10 @@ impl From<&U256> for EthnumU256 {
 impl TryFrom<U256> for u8 {
     type Error = U256CastError;
     fn try_from(n: U256) -> Result<Self, Self::Error> {
-        let n = n.0.low_u64();
-        if n > u8::MAX as u64 {
+        if n.0.bits() > 8 {
             Err(U256CastError::new(n, U256CastErrorKind::TooLargeForU8))
         } else {
-            Ok(n as u8)
+            Ok(n.unchecked_as_u8())
         }
     }
 }
@@ -520,11 +516,10 @@ impl TryFrom<U256> for u16 {
     type Error = U256CastError;
 
     fn try_from(n: U256) -> Result<Self, Self::Error> {
-        let n = n.0.low_u64();
-        if n > u16::MAX as u64 {
+        if n.0.bits() > 16 {
             Err(U256CastError::new(n, U256CastErrorKind::TooLargeForU16))
         } else {
-            Ok(n as u16)
+            Ok(n.unchecked_as_u16())
         }
     }
 }
@@ -533,11 +528,10 @@ impl TryFrom<U256> for u32 {
     type Error = U256CastError;
 
     fn try_from(n: U256) -> Result<Self, Self::Error> {
-        let n = n.0.low_u64();
-        if n > u32::MAX as u64 {
+        if n.0.bits() > 32 {
             Err(U256CastError::new(n, U256CastErrorKind::TooLargeForU32))
         } else {
-            Ok(n as u32)
+            Ok(n.unchecked_as_u32())
         }
     }
 }
@@ -546,11 +540,10 @@ impl TryFrom<U256> for u64 {
     type Error = U256CastError;
 
     fn try_from(n: U256) -> Result<Self, Self::Error> {
-        let n = n.0.low_u128();
-        if n > u64::MAX as u128 {
+        if n.0.bits() > 64 {
             Err(U256CastError::new(n, U256CastErrorKind::TooLargeForU64))
         } else {
-            Ok(n as u64)
+            Ok(n.unchecked_as_u64())
         }
     }
 }
@@ -559,10 +552,10 @@ impl TryFrom<U256> for u128 {
     type Error = U256CastError;
 
     fn try_from(n: U256) -> Result<Self, Self::Error> {
-        if n > U256::from(u128::MAX) {
+        if n.0.bits() > 128 {
             Err(U256CastError::new(n, U256CastErrorKind::TooLargeForU128))
         } else {
-            Ok(n.0.low_u128())
+            Ok(n.unchecked_as_u128())
         }
     }
 }
@@ -715,17 +708,175 @@ impl<'a> arbitrary::Arbitrary<'a> for U256 {
     }
 }
 
-#[test]
-fn wrapping_add() {
-    // a + b overflows U256::MAX by 100
-    // By definition in std::instrinsics, a.wrapping_add(b) = (a + b) % (2^N), where N is bit width
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::convert::TryFrom;
+    use core::fmt::LowerHex;
+    use proptest::prelude::*;
 
-    let a = U256::from(1234u32);
-    let b = U256::from_str_radix(
-        "115792089237316195423570985008687907853269984665640564039457584007913129638801",
-        10,
-    )
-    .unwrap();
+    fn hex(s: &str) -> U256 {
+        U256::from_str_radix(s, 16).unwrap()
+    }
 
-    assert!(a.wrapping_add(b) == U256::from(99u8));
+    fn u256_from_u128(v: u128) -> U256 {
+        hex(&format!("{v:x}"))
+    }
+
+    fn u256_with_high_bits_set<L: LowerHex>(low: L) -> U256 {
+        let low_hex = format!("{low:x}");
+        // Make a full 256-bit hex string: "1" + zeros + low_hex (total 64 hex chars)
+        //  - 1 char for the leading '1'
+        //  - `low_hex.len()` chars for the tail
+        //  - pad the middle with zeros
+        let zeros = 64usize.saturating_sub(1 + low_hex.len());
+        let s = format!("1{}{}", "0".repeat(zeros), low_hex);
+        hex(&s)
+    }
+
+    #[test]
+    fn wrapping_add() {
+        // a + b overflows U256::MAX by 100
+        // By definition in std::instrinsics, a.wrapping_add(b) = (a + b) % (2^N), where N is bit width
+
+        let a = U256::from(1234u32);
+        let b = U256::from_str_radix(
+            "115792089237316195423570985008687907853269984665640564039457584007913129638801",
+            10,
+        )
+        .unwrap();
+
+        assert!(a.wrapping_add(b) == U256::from(99u8));
+    }
+
+    #[test]
+    fn u8_conversion() {
+        assert!(u8::try_from(hex("1")).is_ok());
+        assert!(u8::try_from(hex("FF")).is_ok());
+        assert!(u8::try_from(hex("100")).is_err());
+        assert!(u8::try_from(hex("100000000")).is_err());
+        assert!(u8::try_from(hex("10000000000000000")).is_err());
+        assert!(u8::try_from(hex("100000000000000000000000000000000")).is_err());
+        assert!(u8::try_from(hex("1000000000000000000000000000000000000")).is_err());
+    }
+
+    #[test]
+    fn u16_conversion() {
+        assert!(u16::try_from(hex("1")).is_ok());
+        assert!(u16::try_from(hex("100")).is_ok());
+        assert!(u16::try_from(hex("FFFF")).is_ok());
+        assert!(u16::try_from(hex("10000")).is_err());
+        assert!(u16::try_from(hex("100000000")).is_err());
+        assert!(u16::try_from(hex("10000000000000000")).is_err());
+        assert!(u16::try_from(hex("100000000000000000000000000000000")).is_err());
+        assert!(u16::try_from(hex("1000000000000000000000000000000000000")).is_err());
+    }
+
+    #[test]
+    fn u32_conversion() {
+        assert!(u32::try_from(hex("1")).is_ok());
+        assert!(u32::try_from(hex("100")).is_ok());
+        assert!(u32::try_from(hex("10000")).is_ok());
+        assert!(u32::try_from(hex("FFFFFFFF")).is_ok());
+        assert!(u32::try_from(hex("100000000")).is_err());
+        assert!(u32::try_from(hex("10000000000000000")).is_err());
+        assert!(u32::try_from(hex("100000000000000000000000000000000")).is_err());
+        assert!(u32::try_from(hex("1000000000000000000000000000000000000")).is_err());
+    }
+
+    #[test]
+    fn u64_conversion() {
+        assert!(u64::try_from(hex("1")).is_ok());
+        assert!(u64::try_from(hex("100")).is_ok());
+        assert!(u64::try_from(hex("10000")).is_ok());
+        assert!(u64::try_from(hex("100000000")).is_ok());
+        assert!(u64::try_from(hex("FFFFFFFFFFFFFFFF")).is_ok());
+        assert!(u64::try_from(hex("10000000000000000")).is_err());
+        assert!(u64::try_from(hex("100000000000000000000000000000000")).is_err());
+        assert!(u64::try_from(hex("1000000000000000000000000000000000000")).is_err());
+    }
+
+    #[test]
+    fn u128_conversion() {
+        assert!(u128::try_from(hex("1")).is_ok());
+        assert!(u128::try_from(hex("100")).is_ok());
+        assert!(u128::try_from(hex("10000")).is_ok());
+        assert!(u128::try_from(hex("100000000")).is_ok());
+        assert!(u128::try_from(hex("10000000000000000")).is_ok());
+        assert!(u128::try_from(hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")).is_ok());
+        assert!(u128::try_from(hex("100000000000000000000000000000000")).is_err());
+        assert!(u128::try_from(hex("1000000000000000000000000000000000000")).is_err());
+    }
+
+    proptest! {
+        // u8
+        #[test]
+        fn try_from_u256_to_u8_succeeds_for_all_in_range(x in any::<u8>()) {
+            let big = u256_from_u128(x as u128);
+            let got = u8::try_from(big).expect("u8 in-range should convert");
+            prop_assert_eq!(got, x);
+        }
+
+        #[test]
+        fn try_from_u256_to_u8_fails_when_high_bits_set(x in any::<u8>()) {
+            let big = u256_with_high_bits_set(x);
+            prop_assert!(u8::try_from(big).is_err());
+        }
+
+        // u16
+        #[test]
+        fn try_from_u256_to_u16_succeeds_for_all_in_range(x in any::<u16>()) {
+            let big = u256_from_u128(x as u128);
+            let got = u16::try_from(big).expect("u16 in-range should convert");
+            prop_assert_eq!(got, x);
+        }
+
+        #[test]
+        fn try_from_u256_to_u16_fails_when_high_bits_set(x in any::<u16>()) {
+            let big = u256_with_high_bits_set(x);
+            prop_assert!(u16::try_from(big).is_err());
+        }
+
+        // u32
+        #[test]
+        fn try_from_u256_to_u32_succeeds_for_all_in_range(x in any::<u32>()) {
+            let big = u256_from_u128(x as u128);
+            let got = u32::try_from(big).expect("u32 in-range should convert");
+            prop_assert_eq!(got, x);
+        }
+
+        #[test]
+        fn try_from_u256_to_u32_fails_when_high_bits_set(x in any::<u32>()) {
+            let big = u256_with_high_bits_set(x);
+            prop_assert!(u32::try_from(big).is_err());
+        }
+
+        // u64
+        #[test]
+        fn try_from_u256_to_u64_succeeds_for_all_in_range(x in any::<u64>()) {
+            let big = u256_from_u128(x as u128);
+            let got = u64::try_from(big).expect("u64 in-range should convert");
+            prop_assert_eq!(got, x);
+        }
+
+        #[test]
+        fn try_from_u256_to_u64_fails_when_high_bits_set(x in any::<u64>()) {
+            let big = u256_with_high_bits_set(x);
+            prop_assert!(u64::try_from(big).is_err());
+        }
+
+        // u128
+        #[test]
+        fn try_from_u256_to_u128_succeeds_for_all_in_range(x in any::<u128>()) {
+            let big = u256_from_u128(x);
+            let got = u128::try_from(big).expect("u128 in-range should convert");
+            prop_assert_eq!(got, x);
+        }
+
+        #[test]
+        fn try_from_u256_to_u128_fails_when_high_bits_set(x in any::<u128>()) {
+            let big = u256_with_high_bits_set(x);
+            prop_assert!(u128::try_from(big).is_err());
+        }
+    }
 }
