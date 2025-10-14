@@ -19,13 +19,11 @@ mod response;
 mod service;
 pub mod subscription;
 
-pub use crate::grpc::v2beta2::protocol_config_to_proto;
 pub use client::Client;
 pub use config::Config;
 pub use error::{
     CheckpointNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError, Result, RpcError,
 };
-pub use grpc::v2beta2::ledger_service;
 pub use metrics::{RpcMetrics, RpcMetricsMakeCallbackHandler};
 pub use reader::TransactionNotFoundError;
 pub use sui_rpc::proto;
@@ -133,21 +131,10 @@ impl RpcService {
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
 
-            let ledger_service2 =
-                sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerServiceServer::new(
-                    self.clone(),
-                );
             let event_service_alpha =
                 crate::grpc::alpha::event_service_proto::event_service_server::EventServiceServer::new(
                     self.clone(),
                 );
-            let transaction_execution_service2 = sui_rpc::proto::sui::rpc::v2beta2::transaction_execution_service_server::TransactionExecutionServiceServer::new(self.clone());
-            let live_data_service2 =
-                sui_rpc::proto::sui::rpc::v2beta2::live_data_service_server::LiveDataServiceServer::new(
-                    self.clone(),
-                ).send_compressed(tonic::codec::CompressionEncoding::Zstd);
-            let signature_verification_service2 = sui_rpc::proto::sui::rpc::v2beta2::signature_verification_service_server::SignatureVerificationServiceServer::new(self.clone());
-            let move_package_service2 = sui_rpc::proto::sui::rpc::v2beta2::move_package_service_server::MovePackageServiceServer::new(self.clone());
 
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -160,9 +147,6 @@ impl RpcService {
                 )
                 .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1()
@@ -177,9 +161,6 @@ impl RpcService {
                 )
                 .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1alpha()
@@ -196,12 +177,7 @@ impl RpcService {
                 service_name(&signature_verification_service),
                 service_name(&move_package_service),
                 service_name(&name_service),
-                service_name(&ledger_service2),
                 service_name(&event_service_alpha),
-                service_name(&transaction_execution_service2),
-                service_name(&live_data_service2),
-                service_name(&signature_verification_service2),
-                service_name(&move_package_service2),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -218,18 +194,13 @@ impl RpcService {
                 .add_service(signature_verification_service)
                 .add_service(move_package_service)
                 .add_service(name_service)
-                // v2beta2
-                .add_service(ledger_service2)
+                // alpha
                 .add_service(event_service_alpha)
-                .add_service(transaction_execution_service2)
-                .add_service(live_data_service2)
-                .add_service(signature_verification_service2)
-                .add_service(move_package_service2)
                 // Reflection
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha);
 
-            if let Some(subscription_service_handle) = self.subscription_service_handle.clone() {
+            if self.subscription_service_handle.is_some() {
                 let subscription_service =
 sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceServer::new(self.clone());
                 health_reporter
@@ -239,18 +210,7 @@ sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceSe
                     )
                     .await;
 
-                let subscription_service2 =
-sui_rpc::proto::sui::rpc::v2beta2::subscription_service_server::SubscriptionServiceServer::new(subscription_service_handle);
-                health_reporter
-                    .set_service_status(
-                        service_name(&subscription_service2),
-                        tonic_health::ServingStatus::Serving,
-                    )
-                    .await;
-
-                services = services
-                    .add_service(subscription_service)
-                    .add_service(subscription_service2);
+                services = services.add_service(subscription_service);
             }
 
             services.add_service(health_service).into_router()

@@ -5,7 +5,7 @@ use sui_types::error::ErrorCategory;
 use tonic::Code;
 
 use crate::proto::google::rpc::{BadRequest, ErrorInfo, RetryInfo};
-pub use sui_rpc::proto::sui::rpc::v2beta2::ErrorReason;
+pub use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 
 pub type Result<T, E = RpcError> = std::result::Result<T, E>;
 

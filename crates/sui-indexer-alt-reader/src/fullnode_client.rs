@@ -7,9 +7,8 @@ use anyhow::{anyhow, Context};
 use prometheus::Registry;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2beta2 as proto;
-use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
-use sui_rpc::proto::sui::rpc::v2beta2::transaction_execution_service_client::TransactionExecutionServiceClient;
+use sui_rpc::proto::sui::rpc::v2 as proto;
+use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{Transaction, TransactionData};
 use tokio_util::sync::CancellationToken;
@@ -36,7 +35,6 @@ pub struct FullnodeArgs {
 #[derive(Clone)]
 pub struct FullnodeClient {
     execution_client: Option<TransactionExecutionServiceClient<Channel>>,
-    live_data_client: Option<LiveDataServiceClient<Channel>>,
     metrics: Arc<FullnodeClientMetrics>,
     cancel: CancellationToken,
 }
@@ -60,25 +58,22 @@ impl FullnodeClient {
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self, Error> {
-        let (execution_client, live_data_client) = if let Some(url) = &args.fullnode_rpc_url {
+        let execution_client = if let Some(url) = &args.fullnode_rpc_url {
             let channel = Channel::from_shared(url.clone())
                 .context("Failed to create channel for gRPC endpoint")?
                 .connect()
                 .await
                 .context("Failed to connect to gRPC endpoint")?;
 
-            let execution_client = Some(TransactionExecutionServiceClient::new(channel.clone()));
-            let live_data_client = Some(LiveDataServiceClient::new(channel));
-            (execution_client, live_data_client)
+            Some(TransactionExecutionServiceClient::new(channel))
         } else {
-            (None, None)
+            None
         };
 
         let metrics = FullnodeClientMetrics::new(prefix, registry);
 
         Ok(Self {
             execution_client,
-            live_data_client,
             metrics,
             cancel,
         })
@@ -114,12 +109,10 @@ impl FullnodeClient {
         })
         .with_signatures(signatures)
         .with_read_mask(FieldMask::from_paths([
-            "finality",
-            "transaction.effects.bcs",
-            "transaction.events.bcs",
-            "transaction.balance_changes",
-            "transaction.input_objects.bcs",
-            "transaction.output_objects.bcs",
+            "effects.bcs",
+            "events.bcs",
+            "balance_changes",
+            "objects.objects.bcs",
         ]));
 
         self.request(
@@ -144,15 +137,14 @@ impl FullnodeClient {
             "transaction.effects.bcs",
             "transaction.events.bcs",
             "transaction.balance_changes",
-            "transaction.input_objects.bcs",
-            "transaction.output_objects.bcs",
+            "transaction.objects.objects.bcs",
             "transaction.transaction.bcs",
-            "outputs",
+            "command_outputs",
         ]));
 
         self.request(
             "simulate_transaction",
-            self.live_data_client.clone(),
+            self.execution_client.clone(),
             |mut client| async move { client.simulate_transaction(request).await },
         )
         .await
