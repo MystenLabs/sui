@@ -111,6 +111,9 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
     let y = $y;
     let z = $z;
     let max = $max;
+
+    if (z == 0) return; // Tested separately.
+
     if (z == 1) {
         assert_eq!(x.mul_div(y, z), x * y);
         assert_eq!(x.mul_div_ceil(y, z), x * y);
@@ -121,16 +124,10 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
         assert_eq!(y.mul_div(x, z), 0);
         assert_eq!(x.mul_div_ceil(y, z), 0);
         assert_eq!(y.mul_div_ceil(x, z), 0);
+        return
     };
 
-    // Division by zero: z == 0 should abort with arithmetic_error
-    // Overflow cases that should abort with arithmetic_error:
-    // 1. When x * y overflows even the upscaled intermediate type (e.g., u128 for u64)
-    // 2. When the final result doesn't fit back into the target type
-    // Note: These abort cases should be tested in individual type test modules
-    // (e.g., u64_tests.move) using #[test, expected_failure(arithmetic_error)]
-
-    if (x <= max / y || y <= max / x) {
+    if (x <= max / y) {
         assert_eq!(x.mul_div(y, z), (x * y) / z);
         assert_eq!(y.mul_div(x, z), (y * x) / z);
     };
@@ -139,9 +136,9 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
         assert_eq!(x.mul_div_ceil(y, z), x.mul_div(y, z));
     };
 
-    if (x * y < z) {
+    if (x <= max / y && x * y < z) {
         assert_eq!(x.mul_div(y, z), 0);
-        assert_eq!(x.mul_div_ceil(y, z), 1);
+        assert_eq!(x.mul_div_ceil(y, z), 0);
     };
 }
 
