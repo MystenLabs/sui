@@ -522,7 +522,14 @@ impl MovePackage {
     /// user input. When the package's contents are fetched from the latest version of that object
     /// as of the current checkpoint.
     pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
-        // TODO: Look for the package in the scope (just-published packages).
+        // Check execution context first for freshly published packages
+        if let Some(native_obj) = scope.execution_output_object_latest(address.into()) {
+            if let Some(package_obj) = Self::from_native_object(scope.clone(), native_obj.clone()) {
+                return package_obj;
+            }
+        }
+
+        // Fallback to lazy loading from database
         let super_ = Object::with_address(scope, address);
         Self {
             super_,
