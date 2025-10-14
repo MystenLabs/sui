@@ -71,7 +71,10 @@ pub mod test_utils {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push(relative_path);
 
-        BuildConfig::new_for_testing().build_async(&path).await.unwrap()
+        BuildConfig::new_for_testing()
+            .build_async(&path)
+            .await
+            .unwrap()
     }
 }
 

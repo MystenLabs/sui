@@ -46,7 +46,10 @@ async fn test_indexing_with_tto() {
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "rpc", "data", "tto"]);
-    let compiled_package = BuildConfig::new_for_testing().build_async(&path).await.unwrap();
+    let compiled_package = BuildConfig::new_for_testing()
+        .build_async(&path)
+        .await
+        .unwrap();
     let compiled_modules_bytes =
         compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_storage_package_ids();
@@ -304,7 +307,10 @@ async fn test_filter_by_type() {
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "rpc", "data", "trusted_coin"]);
-    let compiled_package = BuildConfig::new_for_testing().build_async(&path).await.unwrap();
+    let compiled_package = BuildConfig::new_for_testing()
+        .build_async(&path)
+        .await
+        .unwrap();
     let compiled_modules_bytes =
         compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_storage_package_ids();

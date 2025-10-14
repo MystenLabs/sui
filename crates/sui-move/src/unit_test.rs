@@ -59,7 +59,8 @@ impl Test {
             Some(unit_test_config),
             compute_coverage,
             save_disassembly,
-        ).await
+        )
+        .await
     }
 }
 
@@ -108,7 +109,8 @@ pub async fn run_move_unit_tests(
         compute_coverage,
         save_disassembly,
         &mut writer,
-    ).await;
+    )
+    .await;
 
     result.map(|(test_result, warning_diags)| {
         if test_result == UnitTestResult::Success {

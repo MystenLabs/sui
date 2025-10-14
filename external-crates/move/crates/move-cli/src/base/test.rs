@@ -104,7 +104,8 @@ impl Test {
             compute_coverage,
             save_disassembly,
             &mut std::io::stdout(),
-        ).await?;
+        )
+        .await?;
 
         // Return a non-zero exit code if any test failed
         if let (UnitTestResult::Failure, _) = result {

@@ -116,7 +116,10 @@ async fn publish_package(
     address: SuiAddress,
     path: PathBuf,
 ) -> (ObjectID, ExecutedTransaction) {
-    let compiled_package = BuildConfig::new_for_testing().build_async(&path).await.unwrap();
+    let compiled_package = BuildConfig::new_for_testing()
+        .build_async(&path)
+        .await
+        .unwrap();
     let compiled_modules_bytes = compiled_package.get_package_bytes(false);
     let dependencies = compiled_package.get_dependency_storage_package_ids();
 
