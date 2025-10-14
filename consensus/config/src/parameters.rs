@@ -325,7 +325,7 @@ impl TonicParameters {
     }
 
     fn default_observer_port() -> Option<u16> {
-        None
+        Some(8082)
     }
 
     fn default_validator_stream_throttle_divisor() -> Option<f64> {
