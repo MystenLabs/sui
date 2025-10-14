@@ -1,6 +1,5 @@
 [package]
-name = "SuiSystemDeepUpgrade"
-version = "0.0.1"
+name = "SuiExtraBase"
 edition = "2024.beta"
 
 [dependencies]

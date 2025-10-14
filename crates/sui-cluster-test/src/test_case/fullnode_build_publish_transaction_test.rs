@@ -21,7 +21,7 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
     }
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
-        let compiled_package = compile_basics_package();
+        let compiled_package = compile_basics_package().await;
         let all_module_bytes =
             compiled_package.get_package_base64(/* with_unpublished_deps */ false);
         let dependencies = compiled_package.get_dependency_storage_package_ids();

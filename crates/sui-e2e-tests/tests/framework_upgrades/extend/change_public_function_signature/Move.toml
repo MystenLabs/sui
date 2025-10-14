@@ -1,6 +1,5 @@
 [package]
-name = "SuiSystemDeepUpgrade"
-version = "0.0.1"
+name = "SuiExtraChangePublicFunctionSignature"
 edition = "2024.beta"
 
 [dependencies]

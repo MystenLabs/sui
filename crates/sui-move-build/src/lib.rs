@@ -59,19 +59,19 @@ pub mod test_utils {
     use crate::{BuildConfig, CompiledPackage};
     use std::path::PathBuf;
 
-    pub fn compile_basics_package() -> CompiledPackage {
-        compile_example_package("../../examples/move/basics")
+    pub async fn compile_basics_package() -> CompiledPackage {
+        compile_example_package("../../examples/move/basics").await
     }
 
-    pub fn compile_managed_coin_package() -> CompiledPackage {
-        compile_example_package("../../crates/sui-core/src/unit_tests/data/managed_coin")
+    pub async fn compile_managed_coin_package() -> CompiledPackage {
+        compile_example_package("../../crates/sui-core/src/unit_tests/data/managed_coin").await
     }
 
-    pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
+    pub async fn compile_example_package(relative_path: &str) -> CompiledPackage {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push(relative_path);
 
-        BuildConfig::new_for_testing().build(&path).unwrap()
+        BuildConfig::new_for_testing().build_async(&path).await.unwrap()
     }
 }
 

@@ -16,7 +16,9 @@ pub(crate) const FRAMEWORK: &str = concat!(
 );
 
 /// Ensure packages build outside of test mode.
-pub(crate) fn build(path: &Path) -> datatest_stable::Result<()> {
+#[cfg_attr(not(msim), tokio::main)]
+#[cfg_attr(msim, msim::main)]
+pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
     let Some(path) = path.parent() else {
         panic!("No parent for Move.toml file at: {}", path.display());
     };
@@ -29,14 +31,17 @@ pub(crate) fn build(path: &Path) -> datatest_stable::Result<()> {
     config.config.lint_flag = LintFlag::LEVEL_DEFAULT;
 
     config
-        .build(path)
+        .build_async(path)
+        .await
         .unwrap_or_else(|e| panic!("Building package {}.\nWith error {e}", path.display()));
 
     Ok(())
 }
 
+#[cfg_attr(not(msim), tokio::main)]
+#[cfg_attr(msim, msim::main)]
 /// Ensure package sbuild under test mode and all the tests pass.
-pub(crate) fn tests(path: &Path) -> datatest_stable::Result<()> {
+pub(crate) async fn tests(path: &Path) -> datatest_stable::Result<()> {
     let Some(path) = path.parent() else {
         panic!("No parent for Move.toml file at: {}", path.display());
     };
@@ -56,7 +61,7 @@ pub(crate) fn tests(path: &Path) -> datatest_stable::Result<()> {
     testing_config.filter = std::env::var("FILTER").ok().map(|s| s.to_string());
 
     assert_eq!(
-        run_move_unit_tests(path, move_config, Some(testing_config), false, false).unwrap(),
+        run_move_unit_tests(path, move_config, Some(testing_config), false, false).await.unwrap(),
         UnitTestResult::Success
     );
 
