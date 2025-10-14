@@ -163,6 +163,17 @@ impl Scope {
         self.execution_objects.get(&(object_id, version))
     }
 
+    /// Get the latest version of an object from the execution context cache, if available.
+    pub(crate) fn execution_output_object_latest(
+        &self,
+        object_id: ObjectID,
+    ) -> Option<&NativeObject> {
+        self.execution_objects
+            .range((object_id, SequenceNumber::MIN)..=(object_id, SequenceNumber::MAX))
+            .last()
+            .map(|(_, object)| object)
+    }
+
     /// A package resolver with access to the packages known at this scope.
     pub(crate) fn package_resolver(&self) -> Resolver<Self> {
         Resolver::new_with_limits(self.clone(), self.resolver_limits.clone())

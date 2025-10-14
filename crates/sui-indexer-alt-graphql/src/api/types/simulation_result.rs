@@ -39,11 +39,14 @@ impl SimulationResult {
         response: proto::SimulateTransactionResponse,
         transaction_data: TransactionData,
     ) -> Result<Self, RpcError> {
-        let effects = Some(TransactionEffects::from_simulation_response(
+        let effects = TransactionEffects::from_simulation_response(
             scope.clone(),
             response.clone(),
             transaction_data.clone(),
-        )?);
+        )?;
+
+        // Extract the updated scope that contains execution output objects
+        let updated_scope = effects.contents.scope.clone();
 
         // Parse events - break into clear steps
         let executed_transaction = response
@@ -67,7 +70,7 @@ impl SimulationResult {
                 .into_iter()
                 .enumerate()
                 .map(|(sequence, native_event)| Event {
-                    scope: scope.clone(),
+                    scope: updated_scope.clone(),
                     native: native_event,
                     transaction_digest: transaction_data.digest(),
                     sequence_number: sequence as u64,
@@ -81,12 +84,12 @@ impl SimulationResult {
             response
                 .command_outputs
                 .into_iter()
-                .map(|output| CommandResult::from_proto(output, scope.clone()))
+                .map(|output| CommandResult::from_proto(output, updated_scope.clone()))
                 .collect(),
         );
 
         Ok(Self {
-            effects,
+            effects: Some(effects),
             events,
             outputs,
             error: None,
