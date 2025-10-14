@@ -36,12 +36,14 @@ pub fn save_trace_output(
         .unwrap();
 
     let TxnContextAndEffects {
+        txn_data: _,
         execution_effects: _,
         expected_effects: _,
         gas_status: _,
         object_cache,
         inner_store: tmp_store,
         checkpoint: _,
+        protocol_version: _,
     } = context_and_effects;
 
     // grab all packages from the transaction and save them locally for debug

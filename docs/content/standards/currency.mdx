@@ -18,9 +18,9 @@ Currency on Sui can offer specialized abilities while following the Currency Sta
 
 On Sui, the `Currency<T>` type represents open-loop fungible tokens (see `Token<T>` for closed-loop tokens). Currencies are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Currency<T>`. The `sui::coin_registry` module exposes an interface over `Currency<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Currency<T>` is interchangeable with any other unit of `T`, much like how traditional fiat currencies operate.
 
-## Currency creation 
+## Currency creation
 
-The Coin Registry is a centralized system that provides unified currency management through the `sui::coin_registry` module. 
+The Coin Registry is a centralized system that provides unified currency management through the `sui::coin_registry` module.
 
 :::info
 
@@ -74,7 +74,7 @@ The registry supports two different currency creation flows:
 
 - **One-Time Witness (OTW) creation:**
 
-    :::caution 
+    :::caution
 
     OTW creation of a new currency is a two-step process. The initialization process begins with package publication. Then, a call to `finalize_registration` is needed to place the currency into the registry.
 
@@ -100,7 +100,7 @@ A currency is not complete until after you call the `finalize` function. The fun
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize" signatureOnly />
 
-If you publish a package that uses an OTW to create a currency in the package `init` function, then a call must be made to `finalize_registration` after initialization. The function transforms the currency into a shared object. 
+If you publish a package that uses an OTW to create a currency in the package `init` function, then a call must be made to `finalize_registration` after initialization. The function transforms the currency into a shared object.
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize_registration" signatureOnly />
 
@@ -138,7 +138,7 @@ The `TreasuryCap` object is transferable, so a third party can take over the man
 Currency metadata is stored centrally within the `Currency<T>` object in the registry. Metadata updates are controlled by the `MetadataCap<T>` capability, which can be:
 
 - **Unclaimed:** `MetadataCap` has not yet been claimed.
-- **Claimed:** `MetadataCap` has been claimed and can be used for updates. 
+- **Claimed:** `MetadataCap` has been claimed and can be used for updates.
 - **Deleted:** `MetadataCap` has been permanently deleted, preventing future updates.
 
 ### Metadata fields
@@ -417,14 +417,14 @@ Some of the benefits to migrate to the Coin Registry include:
    - `migrate_regulated_state_by_metadata<T>()`: Migrate based on existing metadata.
 
         <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="migrate_regulated_state_by_metadata" noTitle signatureOnly noComments />
-   
+
    - `migrate_regulated_state_by_cap<T>()`: Migrate based on deny capability.
-    
+
         <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="migrate_regulated_state_by_cap" noTitle signatureOnly noComments />
 
 ### Migration function mappings
 
-Smart contracts should update logic that relies on the `coin` module to use the `coin_registry` module instead:  
+Smart contracts should update logic that relies on the `coin` module to use the `coin_registry` module instead:
 
 - `coin::create_currency` -> `coin_registry::new_currency_with_otw`
 - `coin::create_regulated_currency_v2` -> `coin_registry::new_currency_with_otw`
@@ -435,7 +435,6 @@ Smart contracts should update logic that relies on the `coin` module to use the 
 
 ### For currency creators
 
-- **Use OTW creation:** Prefer the OTW-based creation for better uniqueness guarantees.
 - **Set supply model early:** Decide on supply model during initialization (fixed, burn-only, or flexible).
 - **Consider regulation:** Evaluate whether deny list capabilities are needed.
 - **Manage metadata cap:** Decide whether to keep, transfer, or delete the metadata capability.
