@@ -12,10 +12,13 @@ use clap::ArgAction;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 
-use move_compiler::editions::{Edition, Flavor};
-use move_core_types::account_address::AccountAddress;
+use move_compiler::{
+    editions::{Edition, Flavor},
+    shared::NumericalAddress,
+};
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_model_2::source_model;
-use move_package_alt::schema::EnvironmentName;
+use move_package_alt::{graph::NamedAddress, schema::EnvironmentName};
 use move_symbol_pool::Symbol;
 
 use move_package_alt::{
@@ -23,7 +26,10 @@ use move_package_alt::{
 };
 
 use crate::{
-    build_plan::BuildPlan, compiled_package::CompiledPackage, migrate::migrate, model_builder,
+    build_plan::BuildPlan,
+    compiled_package::{BuildNamedAddresses, CompiledPackage},
+    migrate::migrate,
+    model_builder,
 };
 
 use super::lint_flag::LintFlag;
@@ -161,6 +167,31 @@ impl BuildConfig {
         writer: &mut W,
     ) -> PackageResult<source_model::Model> {
         model_builder::build(writer, root_pkg, self)
+    }
+
+    /// Build the addresse for the supplied config, so we can inject 0x0s etc.
+    pub fn addresses_for_config(
+        &self,
+        named_addresses: BTreeMap<Identifier, NamedAddress>,
+    ) -> BuildNamedAddresses {
+        let mut addresses: BuildNamedAddresses = if self.root_as_zero {
+            BuildNamedAddresses::root_as_zero(named_addresses)
+        } else {
+            named_addresses.into()
+        };
+
+        // Inject additional named addresses.
+        for (pkg, address) in self.additional_named_addresses.clone() {
+            addresses.inner.insert(
+                pkg.clone().into(),
+                NumericalAddress::new(
+                    address.into_bytes(),
+                    move_compiler::shared::NumberFormat::Hex,
+                ),
+            );
+        }
+
+        addresses
     }
 }
 

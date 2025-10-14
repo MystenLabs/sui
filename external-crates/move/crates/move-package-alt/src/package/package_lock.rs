@@ -1,6 +1,7 @@
 use fs4::fs_std::FileExt;
+use sha2::{Digest, Sha256};
 use std::fs::{File, OpenOptions};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::git::get_cache_path;
 
@@ -9,33 +10,54 @@ pub struct PackageSystemLock {
 }
 
 impl PackageSystemLock {
-    pub fn new() -> anyhow::Result<Self> {
-        // TODO: This should be fixed to always return a file, even for `cfg(test)` cases.
-        let file = global_git_cache_folder_lock().expect("failed to get git cache folder lock");
-        file.lock_exclusive()?;
-        Ok(Self { _file: file })
+    /// Acquire a lock for doing git operations sequentially
+    pub fn new_for_git() -> anyhow::Result<Self> {
+        let path = cache_path_for("git").expect("failed to get git cache folder lock");
+        Self::new_for_path(path)
     }
 
-    // drop the package system lokc.
+    /// We do sequential operations per package (we acquire lock per package path).
+    pub fn new_for_project(path: &Path) -> anyhow::Result<Self> {
+        let project_lock_path = cache_path_for(digest_path(path).as_str())
+            .expect("failed to get git cache folder lock");
+        Self::new_for_path(project_lock_path)
+    }
+
+    fn new_for_path(path: PathBuf) -> anyhow::Result<Self> {
+        let lock = OpenOptions::new()
+            .truncate(true)
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(&path)?;
+
+        lock.lock_exclusive()?;
+        Ok(Self { _file: lock })
+    }
+
+    // drop the package system lock.
     pub fn drop(self) -> anyhow::Result<()> {
         fs4::fs_std::FileExt::unlock(&self._file)?;
         Ok(())
     }
 }
 
-fn global_git_cache_folder_lock() -> anyhow::Result<File> {
+fn cache_path_for(name: &str) -> anyhow::Result<PathBuf> {
     let cache_path = get_cache_path();
     let cache_path = Path::new(cache_path);
-    // create dir if not exsits.
+    // create dir if not exists.
     std::fs::create_dir_all(cache_path)?;
-    let project_lock = cache_path.join("lock");
 
-    let git_cache_folder_lock_file = OpenOptions::new()
-        .truncate(true)
-        .write(true)
-        .read(true)
-        .create(true)
-        .open(&project_lock)?;
+    let project_lock_path = cache_path.join(format!(".{name}.lock"));
 
-    Ok(git_cache_folder_lock_file)
+    Ok(project_lock_path)
+}
+
+fn digest_path(path: &Path) -> String {
+    let mut hasher = Sha256::new();
+    // Convert the path to a string safely
+    hasher.update(path.to_string_lossy().as_bytes());
+    let result = hasher.finalize();
+    // Return hex representation
+    format!("{:x}", result)
 }

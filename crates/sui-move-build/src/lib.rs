@@ -121,20 +121,19 @@ impl BuildConfig {
         }
     }
 
-    pub fn new_for_testing_replace_addresses<I, S>(_dep_original_addresses: I) -> Self
+    pub fn new_for_testing_replace_addresses<I, S>(dep_original_addresses: I) -> Self
     where
         I: IntoIterator<Item = (S, ObjectID)>,
         S: Into<String>,
     {
-        todo!()
-        // let mut build_config = Self::new_for_testing();
-        // for (addr_name, obj_id) in dep_original_addresses {
-        //     build_config
-        //         .config
-        //         .additional_named_addresses
-        //         .insert(addr_name.into(), AccountAddress::from(obj_id));
-        // }
-        // build_config
+        let mut build_config = Self::new_for_testing();
+        for (addr_name, obj_id) in dep_original_addresses {
+            build_config
+                .config
+                .additional_named_addresses
+                .insert(addr_name.into(), AccountAddress::from(obj_id));
+        }
+        build_config
     }
 
     fn fn_info(units: &[AnnotatedCompiledModule]) -> FnInfoMap {

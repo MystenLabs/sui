@@ -120,7 +120,6 @@ mod sim_only_tests {
 
     impl From<&str> for BuildKind {
         fn from(value: &str) -> Self {
-            eprintln!("Building project at {:?}", value);
             // If we are dealing with `extends` folder,
             // we want to extend the sui system module with extra code
             if value.starts_with("extend/") {

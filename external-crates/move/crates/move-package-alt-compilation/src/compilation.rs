@@ -4,9 +4,7 @@
 use crate::{
     build_config::BuildConfig,
     build_plan::BuildPlan,
-    compiled_package::{
-        BuildNamedAddresses, CompiledPackage, CompiledPackageInfo, CompiledUnitWithSource,
-    },
+    compiled_package::{CompiledPackage, CompiledPackageInfo, CompiledUnitWithSource},
     documentation::build_docs,
     shared,
     source_discovery::get_sources,
@@ -382,11 +380,8 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             .collect();
         // if the root_as_zero flag is set, we want to ensure that the root package is always
         // mapped to `0x0`
-        let addresses: BuildNamedAddresses = if build_config.root_as_zero {
-            BuildNamedAddresses::root_as_zero(named_addresses)
-        } else {
-            named_addresses.into()
-        };
+
+        let addresses = build_config.addresses_for_config(named_addresses);
 
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {

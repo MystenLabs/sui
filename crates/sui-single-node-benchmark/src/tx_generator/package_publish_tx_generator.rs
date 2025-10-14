@@ -12,7 +12,6 @@ use std::fs;
 use std::path::PathBuf;
 use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
-use sui_types::base_types::ObjectID;
 use sui_types::transaction::{Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
 use tracing::info;
 
@@ -39,12 +38,10 @@ impl PackagePublishTxGenerator {
             info!("Publishing dependent package {}", name);
             let target_path = dir.join(&path);
             let module_bytes = if is_source_code {
-                let compiled_package = BuildConfig::new_for_testing_replace_addresses(vec![(
-                    name.clone(),
-                    ObjectID::ZERO,
-                )])
-                .build(&target_path)
-                .unwrap();
+                let compiled_package = BuildConfig::new_for_testing()
+                    .build_async(&target_path)
+                    .await
+                    .unwrap();
                 compiled_package.get_package_bytes(false)
             } else {
                 let toml = parse_move_manifest_from_file(&target_path.join("Move.toml")).unwrap();
@@ -88,11 +85,13 @@ impl PackagePublishTxGenerator {
         let target_path = dir.join(path);
         let published_deps = dep_map.clone();
 
-        dep_map.insert(Symbol::from(name), ObjectID::ZERO);
+        // dep_map.insert(Symbol::from(name), ObjectID::ZERO);
+        eprintln!("dep_map: {:?}", dep_map);
         let mut compiled_package = BuildConfig::new_for_testing_replace_addresses(
             dep_map.into_iter().map(|(k, v)| (k.to_string(), v)),
         )
-        .build(&target_path)
+        .build_async(&target_path)
+        .await
         .unwrap();
 
         compiled_package.dependency_ids.published = published_deps;

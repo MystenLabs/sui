@@ -340,6 +340,17 @@ impl TestTransactionBuilder {
         self.publish_async(path).await
     }
 
+    pub async fn publish_with_data_async(mut self, data: PublishData) -> Self {
+        assert!(matches!(self.test_data, TestTransactionData::Empty));
+
+        if let PublishData::Source(path, _) = &data {
+            return self.publish_async(path.clone()).await;
+        }
+
+        self.test_data = TestTransactionData::Publish(data);
+        self
+    }
+
     pub fn programmable(mut self, programmable: ProgrammableTransaction) -> Self {
         self.test_data = TestTransactionData::Programmable(programmable);
         self

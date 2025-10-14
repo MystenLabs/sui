@@ -100,7 +100,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         // hold a lock to the package system. All operations with Move package should be sequential
         // to avoid weird side-effects in our caches.
-        let _lock = PackageSystemLock::new()?;
+        let _lock = PackageSystemLock::new_for_project(package_path.path())?;
 
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
