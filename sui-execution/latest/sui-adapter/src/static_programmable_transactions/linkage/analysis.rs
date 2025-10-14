@@ -103,11 +103,7 @@ impl LinkageAnalyzer {
             .linkage_config
             .resolution_table_with_native_packages(store)?;
         for id in deps {
-            let pkg = get_package(id, store)?;
             add_and_unify(id, store, &mut resolution_table, VersionConstraint::exact)?;
-            resolution_table
-                .all_versions_resolution_table
-                .insert(pkg.id(), pkg.original_package_id());
         }
         Ok(resolution_table)
     }
