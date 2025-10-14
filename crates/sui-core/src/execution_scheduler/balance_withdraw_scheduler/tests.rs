@@ -245,8 +245,8 @@ async fn test_already_executed() {
     wait_for_results(
         receivers,
         BTreeMap::from([
-            (withdraw1.tx_digest, ScheduleStatus::AlreadySettled),
-            (withdraw2.tx_digest, ScheduleStatus::AlreadySettled),
+            (withdraw1.tx_digest, ScheduleStatus::SkipSchedule),
+            (withdraw2.tx_digest, ScheduleStatus::SkipSchedule),
         ]),
     )
     .await
@@ -355,7 +355,7 @@ async fn test_withdraw_already_settled_account_object() {
     let receivers = scheduler.schedule_withdraws(v0, vec![withdraw.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::AlreadySettled)]),
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SkipSchedule)]),
     )
     .await
     .unwrap();
@@ -368,7 +368,7 @@ async fn test_withdraw_already_settled_account_object() {
     let receivers = scheduler.schedule_withdraws(v1, vec![withdraw.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::AlreadySettled)]),
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SkipSchedule)]),
     )
     .await
     .unwrap();
