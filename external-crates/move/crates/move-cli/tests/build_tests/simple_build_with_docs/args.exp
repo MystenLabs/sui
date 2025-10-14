@@ -7,7 +7,7 @@ Generated "doc/template.md"
 Generated "doc/foo/foo.md"
 
 Documentation generation successful!
-External Command `grep documentation doc/Foo/foo.md`:
+External Command `grep documentation doc/foo/foo.md`:
 External Command `cat doc/template.md`:
 This is a test template
 
