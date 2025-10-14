@@ -4,10 +4,10 @@ BUILDING foo
 Command `docgen --template template.md --exclude-private-fun --no-collapsed-sections --output-directory doc --references-file template.md --section-level-start 3 --toc-depth 3`:
 BUILDING foo
 Generated "doc/template.md"
-Generated "doc/foo/Foo.md"
+Generated "doc/foo/foo.md"
 
 Documentation generation successful!
-External Command `grep documentation doc/Foo/Foo.md`:
+External Command `grep documentation doc/Foo/foo.md`:
 External Command `cat doc/template.md`:
 This is a test template
 
