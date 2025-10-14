@@ -741,7 +741,7 @@ impl<'a> ParsingAnalysisContext<'a> {
         };
         self.use_defs
             .entry(mod_name.loc().file_hash())
-            .or_insert_with(UseDefMap::new)
+            .or_default()
             .insert(
                 mod_name_start.line,
                 UseDef::new(
@@ -808,7 +808,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                 );
                 self.use_defs
                     .entry(alias.loc.file_hash())
-                    .or_insert_with(UseDefMap::new)
+                    .or_default()
                     .insert(alias_start.line, ud);
             }
             return;
@@ -839,7 +839,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                 );
                 self.use_defs
                     .entry(alias.loc.file_hash())
-                    .or_insert_with(UseDefMap::new)
+                    .or_default()
                     .insert(alias_start.line, ud);
             }
         }
