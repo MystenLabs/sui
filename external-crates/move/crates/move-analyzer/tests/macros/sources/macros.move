@@ -16,7 +16,7 @@ module Macros::macros {
         $body($i)
     }
 
-    macro fun for_each<$T>($v: &vector<$T>, $body: |&$T|) {
+    public macro fun for_each<$T>($v: &vector<$T>, $body: |&$T|) {
         let v = $v;
         let mut i = 0;
         let n = v.length();
