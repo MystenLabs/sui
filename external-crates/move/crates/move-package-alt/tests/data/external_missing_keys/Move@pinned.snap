@@ -1,4 +1,0 @@
----
-source: crates/move-package-alt/tests/test_runner.rs
----
-`mock-resolver` did not follow the external resolver protocol (received wrong set of responses)

@@ -1,4 +1,0 @@
----
-source: crates/move-package-alt/tests/pinning_tests.rs
----
-mock-resolver did not follow the external resolver protocol: TODO: couldn't deserialize something

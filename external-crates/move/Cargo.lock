@@ -2200,6 +2200,7 @@ dependencies = [
  "codespan-reporting",
  "colored",
  "datatest-stable",
+ "indoc",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
