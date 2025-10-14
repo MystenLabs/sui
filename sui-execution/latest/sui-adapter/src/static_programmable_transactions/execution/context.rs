@@ -407,46 +407,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             written_objects.insert(id, package_obj);
         }
 
-        // Before finishing, ensure that any shared object taken by value by the transaction is either:
-        // 1. Mutated (and still has a shared ownership); or
-        // 2. Deleted.
-        // Otherwise, the shared object operation is not allowed and we fail the transaction.
-        for id in &by_value_shared_objects {
-            // If it's been written it must have been reshared so must still have an ownership
-            // of `Shared`.
-            if let Some(obj) = written_objects.get(id) {
-                if !obj.is_shared() {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                        Some(
-                            format!(
-                                "Shared object operation on {} not allowed: \
-                                 cannot be frozen, transferred, or wrapped",
-                                id
-                            )
-                            .into(),
-                        ),
-                    ));
-                }
-            } else {
-                // If it's not in the written objects, the object must have been deleted. Otherwise
-                // it's an error.
-                if !deleted_object_ids.contains(id) {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                        Some(
-                            format!(
-                                "Shared object operation on {} not allowed: \
-                                     shared objects used by value must be re-shared if not deleted",
-                                id
-                            )
-                            .into(),
-                        ),
-                    ));
-                }
-            }
-        }
-
         legacy_ptb::context::finish(
             env.protocol_config,
             env.state_view,

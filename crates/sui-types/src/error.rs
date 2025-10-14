@@ -285,6 +285,15 @@ pub enum UserInputError {
 
     #[error("Invalid withdraw reservation: {error}")]
     InvalidWithdrawReservation { error: String },
+
+    #[error("Transaction with empty gas payment must specify an expiration.")]
+    MissingTransactionExpiration,
+
+    #[error("Invalid transaction expiration: {error}")]
+    InvalidExpiration { error: String },
+
+    #[error("Transaction chain ID {provided} does not match network chain ID {expected}.")]
+    InvalidChainId { provided: String, expected: String },
 }
 
 #[derive(

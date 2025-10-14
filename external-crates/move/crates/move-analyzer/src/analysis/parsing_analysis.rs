@@ -15,6 +15,7 @@ use crate::{
 };
 
 use lsp_types::Position;
+use move_command_line_common::files::FileHash;
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -35,9 +36,8 @@ pub struct ParsingAnalysisContext<'a> {
     pub references: &'a mut References,
     /// Additional information about definitions
     pub def_info: &'a mut DefMap,
-    /// A UseDefMap for a given module (needs to be appropriately set before the module
-    /// processing starts)
-    pub use_defs: UseDefMap,
+    /// A UseDefMap for a given file
+    pub use_defs: &'a mut BTreeMap<FileHash, UseDefMap>,
     /// Current module identifier string (needs to be appropriately set before the module
     /// processing starts)
     pub current_mod_ident_str: Option<String>,
@@ -73,25 +73,14 @@ impl<'a> ParsingAnalysisContext<'a> {
     pub fn prog_symbols(
         &mut self,
         prog: &'a ParsedDefinitions,
-        mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
         typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         prog.source_definitions.iter().for_each(|pkg_def| {
-            self.pkg_symbols(
-                pkg_def,
-                mod_use_defs,
-                mod_to_alias_lengths,
-                typed_mod_named_address_maps,
-            )
+            self.pkg_symbols(pkg_def, mod_to_alias_lengths, typed_mod_named_address_maps)
         });
         prog.lib_definitions.iter().for_each(|pkg_def| {
-            self.pkg_symbols(
-                pkg_def,
-                mod_use_defs,
-                mod_to_alias_lengths,
-                typed_mod_named_address_maps,
-            )
+            self.pkg_symbols(pkg_def, mod_to_alias_lengths, typed_mod_named_address_maps)
         });
     }
 
@@ -99,7 +88,6 @@ impl<'a> ParsingAnalysisContext<'a> {
     fn pkg_symbols(
         &mut self,
         pkg_def: &P::PackageDefinition,
-        mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
         typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
@@ -116,7 +104,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                 return;
             };
             let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses.clone());
-            self.mod_symbols(mod_def, mod_use_defs, mod_to_alias_lengths);
+            self.mod_symbols(mod_def, mod_to_alias_lengths);
             self.current_mod_ident_str = None;
             let _ = std::mem::replace(&mut self.pkg_addresses, old_addresses);
         }
@@ -183,7 +171,6 @@ impl<'a> ParsingAnalysisContext<'a> {
     fn mod_symbols(
         &mut self,
         mod_def: &P::ModuleDefinition,
-        mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
     ) {
         fn latest_loc(latest_loc: Loc, new_loc: Loc) -> Loc {
@@ -208,16 +195,6 @@ impl<'a> ParsingAnalysisContext<'a> {
         assert!(self.current_mod_ident_str.is_none());
         self.current_mod_ident_str = Some(mod_ident_str.clone());
 
-        if mod_use_defs.get(&mod_ident_str).is_none() {
-            // when doing full standalone compilation (vs. pre-compiling dependencies)
-            // we may have a module at parsing but no longer at typing
-            // in case there is a name conflict with a dependency
-            eprintln!("no typing-level module for {:?}", mod_ident_str);
-            return;
-        }
-
-        let use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
-        let old_defs = std::mem::replace(&mut self.use_defs, use_defs);
         let alias_lengths: BTreeMap<Position, usize> = BTreeMap::new();
         let old_alias_lengths = std::mem::replace(&mut self.alias_lengths, alias_lengths);
 
@@ -402,8 +379,6 @@ impl<'a> ParsingAnalysisContext<'a> {
         self.add_import_insert_info(latest_use_loc, earliest_member_loc);
 
         self.current_mod_ident_str = None;
-        let processed_defs = std::mem::replace(&mut self.use_defs, old_defs);
-        mod_use_defs.insert(mod_ident_str.clone(), processed_defs);
         let processed_alias_lengths = std::mem::replace(&mut self.alias_lengths, old_alias_lengths);
         mod_to_alias_lengths.insert(mod_ident_str, processed_alias_lengths);
     }
@@ -764,18 +739,21 @@ impl<'a> ParsingAnalysisContext<'a> {
             debug_assert!(false);
             return;
         };
-        self.use_defs.insert(
-            mod_name_start.line,
-            UseDef::new(
-                self.references,
-                &BTreeMap::new(),
-                mod_name.loc().file_hash(),
-                mod_name_start,
-                mod_defs.name_loc,
-                &mod_name.value(),
-                None,
-            ),
-        );
+        self.use_defs
+            .entry(mod_name.loc().file_hash())
+            .or_default()
+            .insert(
+                mod_name_start.line,
+                UseDef::new(
+                    self.references,
+                    &BTreeMap::new(),
+                    mod_name.loc().file_hash(),
+                    mod_name_start,
+                    mod_defs.name_loc,
+                    &mod_name.value(),
+                    None,
+                ),
+            );
     }
 
     /// Get symbols for a module use
@@ -812,7 +790,7 @@ impl<'a> ParsingAnalysisContext<'a> {
             &name.loc,
             self.references,
             self.def_info,
-            &mut self.use_defs,
+            self.use_defs,
             &BTreeMap::new(),
         ) {
             // it's a struct - add it for the alias as well
@@ -828,7 +806,10 @@ impl<'a> ParsingAnalysisContext<'a> {
                     alias_start,
                     alias.loc.file_hash(),
                 );
-                self.use_defs.insert(alias_start.line, ud);
+                self.use_defs
+                    .entry(alias.loc.file_hash())
+                    .or_default()
+                    .insert(alias_start.line, ud);
             }
             return;
         }
@@ -840,7 +821,7 @@ impl<'a> ParsingAnalysisContext<'a> {
             &name.loc,
             self.references,
             self.def_info,
-            &mut self.use_defs,
+            self.use_defs,
             &BTreeMap::new(),
         ) {
             // it's a function - add it for the alias as well
@@ -856,7 +837,10 @@ impl<'a> ParsingAnalysisContext<'a> {
                     alias_start,
                     alias.loc.file_hash(),
                 );
-                self.use_defs.insert(alias_start.line, ud);
+                self.use_defs
+                    .entry(alias.loc.file_hash())
+                    .or_default()
+                    .insert(alias_start.line, ud);
             }
         }
     }

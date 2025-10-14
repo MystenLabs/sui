@@ -252,6 +252,8 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         ..Default::default()
     };
     info!("Starting txns and effects pruning");
+    use sui_core::authority::authority_store_pruner::PrunerWatermarks;
+    let watermarks = std::sync::Arc::new(PrunerWatermarks::default());
     AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
@@ -260,6 +262,7 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         pruning_config,
         metrics,
         EPOCH_DURATION_MS_FOR_TESTING,
+        &watermarks,
     )
     .await?;
     Ok(())
