@@ -105,6 +105,8 @@ pub(crate) struct CommitSyncer<C: NetworkClient> {
     // The commit index that is the max of highest local commit index and commit index inflight to Core.
     // Used to determine if fetched blocks can be sent to Core without gaps.
     synced_commit_index: CommitIndex,
+    // For observer nodes, the target validator to fetch from. None means fetch from all validators.
+    target_validator_index: Option<AuthorityIndex>,
 }
 
 impl<C: NetworkClient> CommitSyncer<C> {
@@ -117,6 +119,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
         transaction_certifier: TransactionCertifier,
         network_client: Arc<C>,
         dag_state: Arc<RwLock<DagState>>,
+        // For observer nodes, specifies which validator to fetch from. None means fetch from all validators.
+        target_validator_index: Option<AuthorityIndex>,
     ) -> Self {
         let inner = Arc::new(Inner {
             context,
@@ -137,6 +141,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             highest_scheduled_index: None,
             highest_fetched_commit_index: 0,
             synced_commit_index,
+            target_validator_index,
         }
     }
 
@@ -399,8 +404,11 @@ impl<C: NetworkClient> CommitSyncer<C> {
             let Some(commit_range) = self.pending_fetches.pop_first() else {
                 break;
             };
-            self.inflight_fetches
-                .spawn(Self::fetch_loop(self.inner.clone(), commit_range));
+            self.inflight_fetches.spawn(Self::fetch_loop(
+                self.inner.clone(),
+                commit_range,
+                self.target_validator_index,
+            ));
         }
 
         let metrics = &self.inner.context.metrics.node_metrics;
@@ -421,6 +429,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
     async fn fetch_loop(
         inner: Arc<Inner<C>>,
         commit_range: CommitRange,
+        target_validator_index: Option<AuthorityIndex>,
     ) -> (CommitIndex, CertifiedCommits) {
         // Individual request base timeout.
         const TIMEOUT: Duration = Duration::from_secs(10);
@@ -440,20 +449,29 @@ impl<C: NetworkClient> CommitSyncer<C> {
         info!("Starting to fetch commits in {commit_range:?} ...",);
         loop {
             // Attempt to fetch commits and blocks through min(committee size, MAX_NUM_TARGETS) peers.
-            let mut target_authorities = inner
-                .context
-                .committee
-                .authorities()
-                .filter_map(|(i, _)| {
-                    if i != inner.context.own_index {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
-                .collect_vec();
-            target_authorities.shuffle(&mut ThreadRng::default());
-            target_authorities.truncate(MAX_NUM_TARGETS);
+            // For observers with a specified target validator, only fetch from that validator.
+            let mut target_authorities = if let Some(target) = target_validator_index {
+                // Observer with specified target validator - only fetch from that validator
+                vec![target]
+            } else {
+                // Validator or observer without specific target - fetch from all except self
+                inner
+                    .context
+                    .committee
+                    .authorities()
+                    .filter_map(|(i, _)| {
+                        if i != inner.context.own_index {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect_vec()
+            };
+            if target_validator_index.is_none() {
+                target_authorities.shuffle(&mut ThreadRng::default());
+                target_authorities.truncate(MAX_NUM_TARGETS);
+            }
             // Increase timeout multiplier for each loop until MAX_TIMEOUT_MULTIPLIER.
             timeout_multiplier = (timeout_multiplier + 1).min(MAX_TIMEOUT_MULTIPLIER);
             let request_timeout = TIMEOUT * timeout_multiplier;
@@ -944,6 +962,7 @@ mod tests {
             transaction_certifier,
             network_client,
             dag_state,
+            None, // No target validator for tests
         );
 
         // Check initial state.

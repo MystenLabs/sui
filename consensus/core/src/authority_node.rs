@@ -403,6 +403,7 @@ where
             transaction_certifier.clone(),
             network_client.clone(),
             dag_state.clone(),
+            target_validator_index,
         )
         .start();
 
