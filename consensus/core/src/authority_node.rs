@@ -445,9 +445,8 @@ where
             );
             if context.is_observer {
                 // Observers connect to the specified target validator or the first authority
-                let peer = target_validator_index.or_else(|| {
-                    context.committee.authorities().next().map(|(idx, _)| idx)
-                });
+                let peer = target_validator_index
+                    .or_else(|| context.committee.authorities().next().map(|(idx, _)| idx));
                 if let Some(peer) = peer {
                     let hostname = &context.committee.authority(peer).hostname;
                     info!("Observer subscribing to authority {peer} at {hostname}");

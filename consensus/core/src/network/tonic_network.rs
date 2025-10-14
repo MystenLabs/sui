@@ -170,7 +170,10 @@ impl NetworkClient for TonicClient {
         // Apply throttling based on configuration for validator-to-validator streams
         let final_stream: BlockStream = if let Some(throttle_duration) = calculate_throttle_duration(
             self.context.parameters.min_round_delay,
-            self.context.parameters.tonic.validator_stream_throttle_divisor,
+            self.context
+                .parameters
+                .tonic
+                .validator_stream_throttle_divisor,
         ) {
             tokio_stream::StreamExt::throttle(stream, throttle_duration).boxed()
         } else {
@@ -431,7 +434,10 @@ impl ObserverClient {
         // Apply throttling based on configuration for validator-to-observer streams
         let final_stream: BlockStream = if let Some(throttle_duration) = calculate_throttle_duration(
             self.context.parameters.min_round_delay,
-            self.context.parameters.tonic.observer_stream_throttle_divisor,
+            self.context
+                .parameters
+                .tonic
+                .observer_stream_throttle_divisor,
         ) {
             tokio_stream::StreamExt::throttle(stream, throttle_duration).boxed()
         } else {
@@ -741,23 +747,25 @@ impl ObserverChannelPool {
         }
 
         let authority = self.context.committee.authority(peer);
-        let mut address = to_host_port_str(&authority.address).map_err(|e| {
+        let address = to_host_port_str(&authority.address).map_err(|e| {
             ConsensusError::NetworkConfig(format!("Cannot convert address to host:port: {e:?}"))
         })?;
 
-        // Parse the address and add the observer port offset
+        // Use the configured observer port
         let config = &self.context.parameters.tonic;
-        let observer_port_offset = config.observer_port_offset.ok_or_else(|| {
-            ConsensusError::NetworkConfig("Observer port offset not configured".to_string())
+        let observer_port = config.observer_port.ok_or_else(|| {
+            ConsensusError::NetworkConfig("Observer port not configured".to_string())
         })?;
 
-        // Extract host and port, then add offset
-        if let Some((host, port_str)) = address.rsplit_once(':') {
-            if let Ok(port) = port_str.parse::<u16>() {
-                let observer_port = port + observer_port_offset;
-                address = format!("{}:{}", host, observer_port);
-            }
-        }
+        // Extract host and replace port with observer port
+        let address = if let Some((host, _port_str)) = address.rsplit_once(':') {
+            format!("{}:{}", host, observer_port)
+        } else {
+            return Err(ConsensusError::NetworkConfig(format!(
+                "Cannot parse host:port from address: {}",
+                address
+            )));
+        };
 
         let address = format!("https://{address}");
         let buffer_size = config.connection_buffer_size;
@@ -902,7 +910,10 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         // Apply throttling based on configuration for validator-to-validator streams
         let final_stream = if let Some(throttle_duration) = calculate_throttle_duration(
             self.context.parameters.min_round_delay,
-            self.context.parameters.tonic.validator_stream_throttle_divisor,
+            self.context
+                .parameters
+                .tonic
+                .validator_stream_throttle_divisor,
         ) {
             tokio_stream::StreamExt::throttle(stream, throttle_duration).boxed()
         } else {
@@ -1123,7 +1134,10 @@ impl<S: NetworkService> ObserverConsensusService for ObserverServiceProxy<S> {
         // Apply throttling based on configuration for validator-to-observer streams
         let final_stream = if let Some(throttle_duration) = calculate_throttle_duration(
             self.context.parameters.min_round_delay,
-            self.context.parameters.tonic.observer_stream_throttle_divisor,
+            self.context
+                .parameters
+                .tonic
+                .observer_stream_throttle_divisor,
         ) {
             tokio_stream::StreamExt::throttle(stream, throttle_duration).boxed()
         } else {
@@ -1427,15 +1441,13 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         self.validator_server = Some(server);
 
         // Start observer server if configured
-        if let Some(observer_port_offset) = config.observer_port_offset {
+        if let Some(observer_port) = config.observer_port {
             let observer_address = match own_address {
                 SocketAddr::V4(addr) => {
-                    let new_port = addr.port() + observer_port_offset;
-                    SocketAddr::V4(SocketAddrV4::new(*addr.ip(), new_port))
+                    SocketAddr::V4(SocketAddrV4::new(*addr.ip(), observer_port))
                 }
                 SocketAddr::V6(addr) => {
-                    let new_port = addr.port() + observer_port_offset;
-                    SocketAddr::V6(SocketAddrV6::new(*addr.ip(), new_port, 0, 0))
+                    SocketAddr::V6(SocketAddrV6::new(*addr.ip(), observer_port, 0, 0))
                 }
             };
 

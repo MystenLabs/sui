@@ -327,7 +327,10 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 info!("Invalid block from {}: {}", peer, e);
             })?;
         let block_ref = verified_block.reference();
-        debug!("Received block {} via handle_send_block_for_observer.", block_ref);
+        debug!(
+            "Received block {} via handle_send_block_for_observer.",
+            block_ref
+        );
 
         let now = self.context.clock.timestamp_utc_ms();
         let forward_time_drift =
@@ -476,14 +479,14 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     self.rx_accepted_blocks_broadcast.resubscribe(),
                     self.subscription_counter.clone(),
                 );
-                Box::pin(accepted_blocks_stream.map(|block| 
-                    {
+                Box::pin(accepted_blocks_stream.map(|block| {
                     let block_ref = block.reference();
                     info!("Broadcasting now accepted block {block_ref} to observer");
                     ExtendedSerializedBlock {
-                    block: block.serialized().clone(),
-                    excluded_ancestors: vec![],
-                }}))
+                        block: block.serialized().clone(),
+                        excluded_ancestors: vec![],
+                    }
+                }))
             } else {
                 // For validators: stream only own blocks
                 let own_blocks_stream = BroadcastedBlockStream::new(

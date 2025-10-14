@@ -283,13 +283,12 @@ pub struct TonicParameters {
     #[serde(default = "TonicParameters::default_message_size_limit")]
     pub message_size_limit: usize,
 
-    /// Observer network port offset from the validator port.
-    /// Observer nodes (full nodes) connect to this port to stream blocks.
-    /// The actual observer port = validator_port + observer_port_offset.
+    /// Observer network port for streaming blocks to observer nodes (full nodes).
+    /// This is the actual port number, not an offset.
     ///
     /// If unspecified or set to None, the observer network is disabled.
-    #[serde(default = "TonicParameters::default_observer_port_offset")]
-    pub observer_port_offset: Option<u16>,
+    #[serde(default = "TonicParameters::default_observer_port")]
+    pub observer_port: Option<u16>,
 
     /// Rate limit for block subscription streams sent to validators.
     /// Expressed as a fraction of min_round_delay (e.g., 0.5 = min_round_delay / 2).
@@ -325,8 +324,8 @@ impl TonicParameters {
         64 << 20
     }
 
-    fn default_observer_port_offset() -> Option<u16> {
-        Some(1000)
+    fn default_observer_port() -> Option<u16> {
+        None
     }
 
     fn default_validator_stream_throttle_divisor() -> Option<f64> {
@@ -345,7 +344,7 @@ impl Default for TonicParameters {
             connection_buffer_size: TonicParameters::default_connection_buffer_size(),
             excessive_message_size: TonicParameters::default_excessive_message_size(),
             message_size_limit: TonicParameters::default_message_size_limit(),
-            observer_port_offset: TonicParameters::default_observer_port_offset(),
+            observer_port: TonicParameters::default_observer_port(),
             validator_stream_throttle_divisor:
                 TonicParameters::default_validator_stream_throttle_divisor(),
             observer_stream_throttle_divisor:
