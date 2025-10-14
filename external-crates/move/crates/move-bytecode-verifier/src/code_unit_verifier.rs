@@ -161,7 +161,9 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             // The regular expression based reference safety check should be strictly more
             // permissive. So if it errors, the current one should also error.
             // As such, we assert: regex err ==> reference safety err
-            let is_consistent = !regex_res.is_err() || reference_safety_res.is_err();
+            // which is equivalent to: !regex_res.is_err() || reference_safety_res.is_err()
+            // which is equivalent to: regex_res.is_ok() || reference_safety_res.is_err()
+            let is_consistent = regex_res.is_ok() || reference_safety_res.is_err();
             if !is_consistent {
                 return Err(
                     PartialVMError::new(StatusCode::REFERENCE_SAFETY_INCONSISTENT).with_message(
