@@ -134,9 +134,9 @@ fn structure_loop(
     {
         result = D::Structured::Seq(vec![
             result,
-            structured_blocks.remove(&succ_node).expect(&format!(
-                "Expected successor node {succ_node:?} to be structured"
-            )),
+            structured_blocks.remove(&succ_node).unwrap_or_else(|| {
+                panic!("Expected successor node {succ_node:?} to be structured")
+            }),
         ]);
     }
     structured_blocks.insert(loop_head, result);
