@@ -7,8 +7,12 @@ use move_compiler::editions::Flavor;
 use sui_move_build::{implicit_deps, SuiPackageHooks};
 use sui_package_management::system_package_versions::latest_system_packages;
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 mod alloc_utils {
+    /// On Linux, mimalloc produces better results in terms of memory usage.
+    /// Standard allocator does not work too well for cases when a lot of memory
+    /// is allocated temporarily and then freed as tends to hold on to allocated
+    /// memory rather than returning it to the OS right away.
     use libmimalloc_sys;
     use mimalloc::MiMalloc;
 
@@ -22,8 +26,12 @@ mod alloc_utils {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(not(target_os = "linux"))]
 mod alloc_utils {
+    /// We could use mimalloc for Mac and Windows as well but standard allocators
+    /// on these platforms are better tuned, even for the specific workload
+    /// we are dealing with.
+
     pub fn print_custom_alloc_version() {
         eprintln!("using standard allocator");
     }
