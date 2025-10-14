@@ -618,7 +618,8 @@ pub async fn make_publish_transaction(context: &WalletContext, path: PathBuf) ->
     context
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .publish(path)
+                .publish_async(path)
+                .await
                 .build(),
         )
         .await
