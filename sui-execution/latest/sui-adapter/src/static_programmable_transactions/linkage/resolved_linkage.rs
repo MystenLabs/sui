@@ -3,8 +3,9 @@
 
 use crate::{
     data_store::PackageStore,
-    static_programmable_transactions::linkage::resolution::{
-        ResolutionTable, VersionConstraint, add_and_unify, get_package,
+    static_programmable_transactions::{
+        linkage::resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
+        transaction_meter::TransactionMeter,
     },
 };
 use move_core_types::account_address::AccountAddress;
@@ -69,10 +70,11 @@ impl ResolvedLinkage {
     pub fn type_linkage(
         ids: &[ObjectID],
         store: &dyn PackageStore,
+        gas: &TransactionMeter<'_, '_>,
     ) -> Result<Self, ExecutionError> {
         let mut resolution_table = ResolutionTable::empty();
         for id in ids {
-            let pkg = get_package(id, store)?;
+            let pkg = get_package(id, store, gas)?;
             let transitive_deps = pkg
                 .linkage_table()
                 .values()
@@ -84,6 +86,7 @@ impl ResolvedLinkage {
                 store,
                 &mut resolution_table,
                 VersionConstraint::at_least,
+                gas,
             )?;
             for object_id in transitive_deps.iter() {
                 add_and_unify(
@@ -91,6 +94,7 @@ impl ResolvedLinkage {
                     store,
                     &mut resolution_table,
                     VersionConstraint::at_least,
+                    gas,
                 )?;
             }
         }

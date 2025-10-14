@@ -3,7 +3,6 @@
 
 use crate::{
     execution_mode::ExecutionMode,
-    gas_charger::GasCharger,
     sp,
     static_programmable_transactions::{
         env::Env,
@@ -25,11 +24,10 @@ use sui_types::{
 };
 use tracing::instrument;
 
-pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
-    env: &'env mut Env<'pc, 'vm, 'state, 'linkage>,
+pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, 'gas, Mode: ExecutionMode>(
+    env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'gas>,
     metrics: Arc<LimitsMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
-    gas_charger: &mut GasCharger,
     ast: T::Transaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError>
@@ -43,7 +41,6 @@ where
         env,
         metrics,
         tx_context,
-        gas_charger,
         ast,
         trace_builder_opt,
     );
@@ -54,12 +51,11 @@ where
     }
 }
 
-pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
+pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, 'gas, Mode: ExecutionMode>(
     timings: &mut Vec<ExecutionTiming>,
-    env: &'env mut Env<'pc, 'vm, 'state, 'linkage>,
+    env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'gas>,
     metrics: Arc<LimitsMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
-    gas_charger: &mut GasCharger,
     ast: T::Transaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> Result<Mode::ExecutionResults, ExecutionError>
@@ -73,16 +69,7 @@ where
         receiving,
         commands,
     } = ast;
-    let mut context = Context::new(
-        env,
-        metrics,
-        tx_context,
-        gas_charger,
-        bytes,
-        objects,
-        pure,
-        receiving,
-    )?;
+    let mut context = Context::new(env, metrics, tx_context, bytes, objects, pure, receiving)?;
     let mut mode_results = Mode::empty_results();
     for sp!(idx, c) in commands {
         let start = Instant::now();

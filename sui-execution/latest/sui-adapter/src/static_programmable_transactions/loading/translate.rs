@@ -42,6 +42,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
+            env.meter.charge_num_type_nodes(ty.node_count())?;
             let arg = match obj.owner {
                 Owner::AddressOwner(_) => L::ObjectArg::OwnedObject(oref),
                 Owner::Immutable => L::ObjectArg::ImmObject(oref),
@@ -64,6 +65,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
+            env.meter.charge_num_type_nodes(ty.node_count())?;
             let kind = match obj.owner {
                 Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                     invariant_violation!("Unexpected owner for SharedObject: {:?}", obj.owner)
@@ -91,9 +93,9 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
 fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError> {
     Ok(match command {
         P::Command::MoveCall(pmc) => {
-            let resolved_linkage = env
-                .linkage_analysis
-                .compute_call_linkage(&pmc, env.linkable_store)?;
+            let resolved_linkage =
+                env.linkage_analysis
+                    .compute_call_linkage(&pmc, env.linkable_store, &env.meter)?;
             let P::ProgrammableMoveCall {
                 package,
                 module,
@@ -105,7 +107,10 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
             let type_arguments = ptype_arguments
                 .into_iter()
                 .enumerate()
-                .map(|(idx, ty)| env.load_type_input(idx, ty))
+                .map(|(idx, ty)| {
+                    env.load_type_input(idx, ty)
+                        .and_then(|ty| env.meter.charge_num_type_nodes(ty.node_count()).map(|_| ty))
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             let function = env.load_function(package, module, name, type_arguments, linkage)?;
             L::Command::MoveCall(Box::new(L::MoveCall {
@@ -115,7 +120,10 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
         }
         P::Command::MakeMoveVec(ptype_argument, arguments) => {
             let type_argument = ptype_argument
-                .map(|ty| env.load_type_input(0, ty))
+                .map(|ty| {
+                    env.load_type_input(0, ty)
+                        .and_then(|ty| env.meter.charge_num_type_nodes(ty.node_count()).map(|_| ty))
+                })
                 .transpose()?;
             L::Command::MakeMoveVec(type_argument, arguments)
         }
@@ -125,15 +133,19 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
         P::Command::SplitCoins(coin, amounts) => L::Command::SplitCoins(coin, amounts),
         P::Command::MergeCoins(target, coins) => L::Command::MergeCoins(target, coins),
         P::Command::Publish(items, object_ids) => {
-            let resolved_linkage = env
-                .linkage_analysis
-                .compute_publication_linkage(&object_ids, env.linkable_store)?;
+            let resolved_linkage = env.linkage_analysis.compute_publication_linkage(
+                &object_ids,
+                env.linkable_store,
+                &env.meter,
+            )?;
             L::Command::Publish(items, object_ids, resolved_linkage)
         }
         P::Command::Upgrade(items, object_ids, object_id, argument) => {
-            let resolved_linkage = env
-                .linkage_analysis
-                .compute_publication_linkage(&object_ids, env.linkable_store)?;
+            let resolved_linkage = env.linkage_analysis.compute_publication_linkage(
+                &object_ids,
+                env.linkable_store,
+                &env.meter,
+            )?;
             L::Command::Upgrade(items, object_ids, object_id, argument, resolved_linkage)
         }
     })

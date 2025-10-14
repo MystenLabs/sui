@@ -6,6 +6,7 @@ use crate::{
     data_store::linked_data_store::LinkedDataStore,
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
+    gas_charger_imm, gas_charger_mut,
     gas_meter::SuiGasMeter,
     programmable_transactions::{self as legacy_ptb},
     sp,
@@ -37,6 +38,7 @@ use move_vm_types::{
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
+    ops::DerefMut,
     rc::Rc,
     sync::Arc,
 };
@@ -78,15 +80,15 @@ macro_rules! object_runtime_mut {
 }
 
 macro_rules! charge_gas_ {
-    ($gas_charger:expr, $env:expr, $case:ident, $value_view:expr) => {{
-        SuiGasMeter($gas_charger.move_gas_status_mut())
+    ($env:expr, $case:ident, $value_view:expr) => {{
+        SuiGasMeter($crate::gas_charger_mut!($env.meter).move_gas_status_mut())
             .$case($value_view)
             .map_err(|e| $env.convert_vm_error(e.finish(Location::Undefined)))
     }};
 }
 
 macro_rules! charge_gas {
-    ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
+    ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.env, $case, $value_view) }};
 }
 
 /// Type wrapper around Value to ensure safe usage
@@ -144,15 +146,13 @@ enum ResolvedLocation<'a> {
 
 /// Maintains all runtime state specific to programmable transactions
 pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
-    pub env: &'env Env<'pc, 'vm, 'state, 'linkage>,
+    pub env: &'env Env<'pc, 'vm, 'state, 'linkage, 'gas>,
     /// Metrics for reporting exceeded limits
     pub metrics: Arc<LimitsMetrics>,
     pub native_extensions: NativeContextExtensions<'env>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
     pub tx_context: Rc<RefCell<TxContext>>,
-    /// The gas charger used for metering
-    pub gas_charger: &'gas mut GasCharger,
     /// User events are claimed after each Move call
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
@@ -204,10 +204,9 @@ impl Locations {
 impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     #[instrument(name = "Context::new", level = "trace", skip_all)]
     pub fn new(
-        env: &'env Env<'pc, 'vm, 'state, 'linkage>,
+        env: &'env Env<'pc, 'vm, 'state, 'linkage, 'gas>,
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
-        gas_charger: &'gas mut GasCharger,
         pure_input_bytes: IndexSet<Vec<u8>>,
         object_inputs: Vec<T::ObjectInput>,
         pure_input_metadata: Vec<T::PureInput>,
@@ -220,30 +219,31 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let mut input_object_metadata = Vec::with_capacity(object_inputs.len());
         let mut object_values = Vec::with_capacity(object_inputs.len());
         for object_input in object_inputs {
-            let (i, m, v) = load_object_arg(gas_charger, env, &mut input_object_map, object_input)?;
+            let (i, m, v) = load_object_arg(env, &mut input_object_map, object_input)?;
             input_object_metadata.push((i, m));
             object_values.push(Some(v));
         }
         let object_inputs = Locals::new(object_values)?;
         let pure_inputs = Locals::new_invalid(pure_input_metadata.len())?;
         let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
-        let gas = match gas_charger.gas_coin() {
+        let (gas_coin_opt, gas_budget, is_unmetered) = {
+            let gas_charger = gas_charger_imm!(env.meter);
+            (
+                gas_charger.gas_coin(),
+                gas_charger.gas_budget(),
+                gas_charger.is_unmetered(),
+            )
+        };
+        let gas = match gas_coin_opt {
             Some(gas_coin) => {
                 let ty = env.gas_coin_type()?;
-                let (gas_metadata, gas_value) = load_object_arg_impl(
-                    gas_charger,
-                    env,
-                    &mut input_object_map,
-                    gas_coin,
-                    true,
-                    ty,
-                )?;
+                let (gas_metadata, gas_value) =
+                    load_object_arg_impl(env, &mut input_object_map, gas_coin, true, ty)?;
                 let mut gas_locals = Locals::new([Some(gas_value)])?;
                 let gas_local = gas_locals.local(0)?;
                 let gas_ref = gas_local.borrow()?;
                 // We have already checked that the gas balance is enough to cover the gas budget
-                let max_gas_in_balance = gas_charger.gas_budget();
-                gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
+                gas_ref.coin_ref_subtract_balance(gas_budget)?;
                 Some((gas_metadata, gas_locals))
             }
             None => None,
@@ -251,7 +251,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let native_extensions = adapter::new_native_extensions(
             env.state_view.as_child_resolver(),
             input_object_map,
-            !gas_charger.is_unmetered(),
+            !is_unmetered,
             env.protocol_config,
             metrics.clone(),
             tx_context.clone(),
@@ -265,7 +265,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             metrics,
             native_extensions,
             tx_context,
-            gas_charger,
             user_events: vec![],
             locations: Locations {
                 tx_context_value,
@@ -343,7 +342,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             env,
             mut native_extensions,
             tx_context,
-            gas_charger,
             user_events,
             ..
         } = self;
@@ -371,7 +369,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         );
         // Refund unused gas
         if let Some(gas_id) = gas_id_opt {
-            refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
+            refund_max_gas_budget(&mut writes, gas_charger_mut!(env.meter).deref_mut(), gas_id)?;
         }
 
         loaded_runtime_objects.extend(loaded_child_objects);
@@ -410,7 +408,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         legacy_ptb::context::finish(
             env.protocol_config,
             env.state_view,
-            gas_charger,
+            gas_charger_mut!(env.meter).deref_mut(),
             tx_context,
             &by_value_shared_objects,
             &consensus_owner_objects,
@@ -478,7 +476,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 mut local,
             } => {
                 if local.is_invalid()? {
-                    let v = load_pure_value(self.gas_charger, self.env, bytes, metadata)?;
+                    let v = load_pure_value(self.env, bytes, metadata)?;
                     local.store(v)?;
                 }
                 local
@@ -488,7 +486,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 mut local,
             } => {
                 if local.is_invalid()? {
-                    let v = load_receiving_value(self.gas_charger, self.env, metadata)?;
+                    let v = load_receiving_value(self.env, metadata)?;
                     local.store(v)?;
                 }
                 local
@@ -498,7 +496,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             UsageKind::Move => local.move_()?,
             UsageKind::Copy => {
                 let value = local.copy()?;
-                charge_gas_!(self.gas_charger, self.env, charge_copy_loc, &value)?;
+                charge_gas_!(self.env, charge_copy_loc, &value)?;
                 value
             }
             UsageKind::Borrow => local.borrow()?,
@@ -550,7 +548,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     }
 
     pub fn copy_value(&mut self, value: &CtxValue) -> Result<CtxValue, ExecutionError> {
-        Ok(CtxValue(copy_value(self.gas_charger, self.env, &value.0)?))
+        Ok(CtxValue(copy_value(self.env, &value.0)?))
     }
 
     pub fn new_coin(&mut self, amount: u64) -> Result<CtxValue, ExecutionError> {
@@ -628,7 +626,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .enumerate()
             .map(|(idx, ty)| self.env.load_vm_type_argument_from_adapter_type(idx, ty))
             .collect::<Result<_, _>>()?;
-        let gas_status = self.gas_charger.move_gas_status_mut();
+        let mut gas_charger = gas_charger_mut!(self.env.meter);
         let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
         let values = self
             .env
@@ -640,7 +638,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 ty_args,
                 args.into_iter().map(|v| v.0.into()).collect(),
                 &mut data_store,
-                &mut SuiGasMeter(gas_status),
+                &mut SuiGasMeter(gas_charger.move_gas_status_mut()),
                 &mut self.native_extensions,
                 tracer,
             )
@@ -664,9 +662,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         );
         let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
         if is_upgrade {
-            self.gas_charger.charge_upgrade_package(total_bytes)?
+            gas_charger_mut!(self.env.meter).charge_upgrade_package(total_bytes)?
         } else {
-            self.gas_charger.charge_publish_package(total_bytes)?
+            gas_charger_mut!(self.env.meter).charge_publish_package(total_bytes)?
         }
 
         let binary_config = to_binary_config(self.env.protocol_config);
@@ -763,6 +761,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             })
             .collect();
         let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
+        let mut gas_charger = gas_charger_mut!(self.env.meter);
         self.env
             .vm
             .get_runtime()
@@ -770,7 +769,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 new_module_bytes,
                 AccountAddress::from(package_id),
                 &mut data_store,
-                &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
+                &mut SuiGasMeter(gas_charger.move_gas_status_mut()),
             )
             .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
 
@@ -1162,7 +1161,6 @@ impl CtxValue {
 }
 
 fn load_object_arg(
-    meter: &mut GasCharger,
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     input: T::ObjectInput,
@@ -1170,12 +1168,11 @@ fn load_object_arg(
     let id = input.arg.id();
     let is_mutable_input = input.arg.is_mutable();
     let (metadata, value) =
-        load_object_arg_impl(meter, env, input_object_map, id, is_mutable_input, input.ty)?;
+        load_object_arg_impl(env, input_object_map, id, is_mutable_input, input.ty)?;
     Ok((input.original_input_index, metadata, value))
 }
 
 fn load_object_arg_impl(
-    meter: &mut GasCharger,
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
@@ -1215,35 +1212,30 @@ fn load_object_arg_impl(
     );
 
     let v = Value::deserialize(env, move_obj.contents(), ty)?;
-    charge_gas_!(meter, env, charge_copy_loc, &v)?;
+    charge_gas_!(env, charge_copy_loc, &v)?;
     Ok((object_metadata, v))
 }
 
 fn load_pure_value(
-    meter: &mut GasCharger,
     env: &Env,
     bytes: &[u8],
     metadata: &T::PureInput,
 ) -> Result<Value, ExecutionError> {
     let loaded = Value::deserialize(env, bytes, metadata.ty.clone())?;
     // ByteValue::Receiving { id, version } => Value::receiving(*id, *version),
-    charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
+    charge_gas_!(env, charge_copy_loc, &loaded)?;
     Ok(loaded)
 }
 
-fn load_receiving_value(
-    meter: &mut GasCharger,
-    env: &Env,
-    metadata: &T::ReceivingInput,
-) -> Result<Value, ExecutionError> {
+fn load_receiving_value(env: &Env, metadata: &T::ReceivingInput) -> Result<Value, ExecutionError> {
     let (id, version, _) = metadata.object_ref;
     let loaded = Value::receiving(id, version);
-    charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
+    charge_gas_!(env, charge_copy_loc, &loaded)?;
     Ok(loaded)
 }
 
-fn copy_value(meter: &mut GasCharger, env: &Env, value: &Value) -> Result<Value, ExecutionError> {
-    charge_gas_!(meter, env, charge_copy_loc, value)?;
+fn copy_value(env: &Env, value: &Value) -> Result<Value, ExecutionError> {
+    charge_gas_!(env, charge_copy_loc, value)?;
     value.copy()
 }
 

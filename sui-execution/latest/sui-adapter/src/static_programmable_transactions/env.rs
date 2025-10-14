@@ -10,6 +10,7 @@ use crate::{
         PackageStore, cached_package_store::CachedPackageStore, linked_data_store::LinkedDataStore,
     },
     execution_value::ExecutionState,
+    gas_charger::GasCharger,
     programmable_transactions::execution::subst_signature,
     static_programmable_transactions::{
         linkage::{
@@ -19,6 +20,7 @@ use crate::{
         loading::ast::{
             self as L, Datatype, LoadedFunction, LoadedFunctionInstantiation, Type, Vector,
         },
+        transaction_meter::TransactionMeter,
     },
 };
 use move_binary_format::{
@@ -47,12 +49,13 @@ use sui_types::{
     type_input::{StructInput, TypeInput},
 };
 
-pub struct Env<'pc, 'vm, 'state, 'linkage> {
+pub struct Env<'pc, 'vm, 'state, 'linkage, 'gas> {
     pub protocol_config: &'pc ProtocolConfig,
     pub vm: &'vm MoveVM,
     pub state_view: &'state mut dyn ExecutionState,
     pub linkable_store: &'linkage CachedPackageStore<'state>,
     pub linkage_analysis: &'linkage LinkageAnalyzer,
+    pub meter: TransactionMeter<'gas, 'pc>,
     gas_coin_type: OnceCell<Type>,
     upgrade_ticket_type: OnceCell<Type>,
     upgrade_receipt_type: OnceCell<Type>,
@@ -72,20 +75,23 @@ macro_rules! get_or_init_ty {
     }};
 }
 
-impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
+impl<'pc, 'vm, 'state, 'linkage, 'gas> Env<'pc, 'vm, 'state, 'linkage, 'gas> {
     pub fn new(
         protocol_config: &'pc ProtocolConfig,
         vm: &'vm MoveVM,
         state_view: &'state mut dyn ExecutionState,
         linkable_store: &'linkage CachedPackageStore<'state>,
         linkage_analysis: &'linkage LinkageAnalyzer,
+        gas_charger: &'gas mut GasCharger,
     ) -> Self {
+        let meter = TransactionMeter::new(gas_charger, protocol_config);
         Self {
             protocol_config,
             vm,
             state_view,
             linkable_store,
             linkage_analysis,
+            meter,
             gas_coin_type: OnceCell::new(),
             upgrade_ticket_type: OnceCell::new(),
             upgrade_receipt_type: OnceCell::new(),
@@ -378,8 +384,11 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 type_params,
             } = struct_tag;
 
-            let tag_linkage =
-                ResolvedLinkage::type_linkage(&[(*address).into()], env.linkable_store)?;
+            let tag_linkage = ResolvedLinkage::type_linkage(
+                &[(*address).into()],
+                env.linkable_store,
+                &env.meter,
+            )?;
             let linkage = RootedLinkage::new(*address, tag_linkage);
             let linked_store = LinkedDataStore::new(&linkage, env.linkable_store);
 

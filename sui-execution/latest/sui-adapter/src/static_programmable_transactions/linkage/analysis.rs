@@ -4,10 +4,13 @@
 use crate::{
     data_store::PackageStore,
     execution_mode::ExecutionMode,
-    static_programmable_transactions::linkage::{
-        config::{LinkageConfig, ResolutionConfig},
-        resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
-        resolved_linkage::ResolvedLinkage,
+    static_programmable_transactions::{
+        linkage::{
+            config::{LinkageConfig, ResolutionConfig},
+            resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
+            resolved_linkage::ResolvedLinkage,
+        },
+        transaction_meter::TransactionMeter,
     },
 };
 use sui_protocol_config::ProtocolConfig;
@@ -40,9 +43,10 @@ impl LinkageAnalyzer {
         &self,
         move_call: &P::ProgrammableMoveCall,
         store: &dyn PackageStore,
+        gas: &TransactionMeter<'_, '_>,
     ) -> Result<ResolvedLinkage, ExecutionError> {
         Ok(ResolvedLinkage::from_resolution_table(
-            self.compute_call_linkage_(move_call, store)?,
+            self.compute_call_linkage_(move_call, store, gas)?,
         ))
     }
 
@@ -50,9 +54,10 @@ impl LinkageAnalyzer {
         &self,
         deps: &[ObjectID],
         store: &dyn PackageStore,
+        gas: &TransactionMeter<'_, '_>,
     ) -> Result<ResolvedLinkage, ExecutionError> {
         Ok(ResolvedLinkage::from_resolution_table(
-            self.compute_publication_linkage_(deps, store)?,
+            self.compute_publication_linkage_(deps, store, gas)?,
         ))
     }
 
@@ -64,12 +69,13 @@ impl LinkageAnalyzer {
         &self,
         move_call: &P::ProgrammableMoveCall,
         store: &dyn PackageStore,
+        gas: &TransactionMeter<'_, '_>,
     ) -> Result<ResolutionTable, ExecutionError> {
         let mut resolution_table = self
             .internal
             .linkage_config
-            .resolution_table_with_native_packages(store)?;
-        let pkg = get_package(&move_call.package, store)?;
+            .resolution_table_with_native_packages(store, gas)?;
+        let pkg = get_package(&move_call.package, store, gas)?;
         let transitive_deps = pkg
             .linkage_table()
             .values()
@@ -81,6 +87,7 @@ impl LinkageAnalyzer {
                 store,
                 &mut resolution_table,
                 VersionConstraint::exact,
+                gas,
             )?;
         }
         add_and_unify(
@@ -88,6 +95,7 @@ impl LinkageAnalyzer {
             store,
             &mut resolution_table,
             VersionConstraint::exact,
+            gas,
         )?;
         Ok(resolution_table)
     }
@@ -97,13 +105,20 @@ impl LinkageAnalyzer {
         &self,
         deps: &[ObjectID],
         store: &dyn PackageStore,
+        gas: &TransactionMeter<'_, '_>,
     ) -> Result<ResolutionTable, ExecutionError> {
         let mut resolution_table = self
             .internal
             .linkage_config
-            .resolution_table_with_native_packages(store)?;
+            .resolution_table_with_native_packages(store, gas)?;
         for id in deps {
-            add_and_unify(id, store, &mut resolution_table, VersionConstraint::exact)?;
+            add_and_unify(
+                id,
+                store,
+                &mut resolution_table,
+                VersionConstraint::exact,
+                gas,
+            )?;
         }
         Ok(resolution_table)
     }

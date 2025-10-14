@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data_store::PackageStore;
+use crate::{
+    data_store::PackageStore, static_programmable_transactions::transaction_meter::TransactionMeter,
+};
 use std::{
     collections::{BTreeMap, btree_map::Entry},
     rc::Rc,
@@ -117,13 +119,16 @@ impl VersionConstraint {
 pub(crate) fn get_package(
     object_id: &ObjectID,
     store: &dyn PackageStore,
+    gas: &TransactionMeter<'_, '_>,
 ) -> Result<Rc<MovePackage>, ExecutionError> {
-    store
+    let pkg = store
         .get_package(object_id)
         .map_err(|e| {
             ExecutionError::new_with_source(ExecutionErrorKind::PublishUpgradeMissingDependency, e)
         })?
-        .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvalidLinkage))
+        .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvalidLinkage))?;
+    gas.charge_package_load(&pkg)?;
+    Ok(pkg)
 }
 
 // Add a package to the unification table, unifying it with any existing package in the table.
@@ -133,8 +138,9 @@ pub(crate) fn add_and_unify(
     store: &dyn PackageStore,
     resolution_table: &mut ResolutionTable,
     resolution_fn: fn(&MovePackage) -> Option<VersionConstraint>,
+    gas: &TransactionMeter<'_, '_>,
 ) -> Result<(), ExecutionError> {
-    let package = get_package(object_id, store)?;
+    let package = get_package(object_id, store, gas)?;
 
     let Some(resolution) = resolution_fn(&package) else {
         // If the resolution function returns None, we do not need to add this package to the

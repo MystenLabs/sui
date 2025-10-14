@@ -25,6 +25,7 @@ pub mod execution;
 pub mod linkage;
 pub mod loading;
 pub mod spanned;
+pub mod transaction_meter;
 pub mod typing;
 
 pub fn execute<Mode: ExecutionMode>(
@@ -48,15 +49,9 @@ pub fn execute<Mode: ExecutionMode>(
         state_view,
         &package_store,
         &linkage_analysis,
+        gas_charger,
     );
     let txn = loading::translate::transaction(&env, txn).map_err(|e| (e, vec![]))?;
     let txn = typing::translate_and_verify::<Mode>(&env, txn).map_err(|e| (e, vec![]))?;
-    execution::interpreter::execute::<Mode>(
-        &mut env,
-        metrics,
-        tx_context,
-        gas_charger,
-        txn,
-        trace_builder_opt,
-    )
+    execution::interpreter::execute::<Mode>(&mut env, metrics, tx_context, txn, trace_builder_opt)
 }

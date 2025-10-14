@@ -3,8 +3,9 @@
 
 use crate::{
     data_store::PackageStore,
-    static_programmable_transactions::linkage::resolution::{
-        ResolutionTable, VersionConstraint, add_and_unify, get_package,
+    static_programmable_transactions::{
+        linkage::resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
+        transaction_meter::TransactionMeter,
     },
 };
 use move_binary_format::binary_config::BinaryConfig;
@@ -60,17 +61,24 @@ impl LinkageConfig {
     pub(crate) fn resolution_table_with_native_packages(
         &self,
         store: &dyn PackageStore,
+        gas: &TransactionMeter<'_, '_>,
     ) -> Result<ResolutionTable, ExecutionError> {
         let mut resolution_table = ResolutionTable::empty();
         if self.always_include_system_packages {
             for id in NATIVE_PACKAGE_IDS {
                 #[cfg(debug_assertions)]
                 {
-                    let package = get_package(id, store)?;
+                    let package = get_package(id, store, gas)?;
                     debug_assert_eq!(package.id(), *id);
                     debug_assert_eq!(package.original_package_id(), *id);
                 }
-                add_and_unify(id, store, &mut resolution_table, VersionConstraint::exact)?;
+                add_and_unify(
+                    id,
+                    store,
+                    &mut resolution_table,
+                    VersionConstraint::exact,
+                    gas,
+                )?;
             }
         }
 

@@ -849,6 +849,10 @@ struct FeatureFlags {
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
+
+    // Enable gas charging for PTB static compilation and execution.
+    #[serde(skip_serializing_if = "is_false")]
+    ptb_gas_charging: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2297,6 +2301,10 @@ impl ProtocolConfig {
 
     pub fn allow_references_in_ptbs(&self) -> bool {
         self.feature_flags.allow_references_in_ptbs
+    }
+
+    pub fn ptb_gas_charging(&self) -> bool {
+        self.feature_flags.ptb_gas_charging
     }
 }
 
