@@ -1,8 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base::reroot_path;
-
 use anyhow::anyhow;
 use move_package::BuildConfig;
 
@@ -73,8 +71,9 @@ impl Decompile {
         };
 
         // Ensure the output path exists
-        let output_path = Path::new(&output_path).canonicalize().expect("Invalid output path");
-        let output_path = PathBuf::from(output_path);
+        let output_path = Path::new(&output_path)
+            .canonicalize()
+            .expect("Invalid output path");
         std::fs::create_dir_all(&output_path).map_err(|_| anyhow!("Failed to create directory"))?;
         let _paths = move_decompiler::generate_from_files(&files_to_process, &output_path)?;
         Ok(())

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cell::OnceCell, collections::{BTreeMap, BTreeSet}, sync::Arc
+    cell::OnceCell,
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
 };
 
 use crate::{
