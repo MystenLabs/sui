@@ -964,6 +964,8 @@ impl Loader {
                 self.vm_config.binary_config.min_binary_format_version,
                 self.vm_config()
                     .check_no_extraneous_bytes_during_deserialization,
+                self.vm_config()
+                    .deprecate_global_storage_ops_during_deserialization,
             ),
         )
         .map_err(|err| {

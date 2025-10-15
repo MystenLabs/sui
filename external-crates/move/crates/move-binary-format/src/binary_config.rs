@@ -64,6 +64,7 @@ pub struct BinaryConfig {
     pub min_binary_format_version: u32,
     pub check_no_extraneous_bytes: bool,
     pub table_config: TableConfig,
+    pub deprecate_global_storage_ops: bool,
     allow_unpublishable: bool,
 }
 
@@ -72,6 +73,7 @@ impl BinaryConfig {
         max_binary_format_version: u32,
         min_binary_format_version: u32,
         check_no_extraneous_bytes: bool,
+        deprecate_global_storage_ops: bool,
         table_config: TableConfig,
     ) -> Self {
         Self {
@@ -79,6 +81,7 @@ impl BinaryConfig {
             min_binary_format_version,
             check_no_extraneous_bytes,
             table_config,
+            deprecate_global_storage_ops,
             allow_unpublishable: false,
         }
     }
@@ -88,24 +91,34 @@ impl BinaryConfig {
         max_binary_format_version: u32,
         min_binary_format_version: u32,
         check_no_extraneous_bytes: bool,
+        deprecate_global_storage_ops: bool,
     ) -> Self {
         Self::new(
             max_binary_format_version,
             min_binary_format_version,
             check_no_extraneous_bytes,
+            deprecate_global_storage_ops,
             TableConfig::legacy(),
         )
     }
 
     /// Creates a configuration with max version, legacy table config,
-    /// and controllable extraneous bytes check.
-    pub fn with_extraneous_bytes_check(check_no_extraneous_bytes: bool) -> Self {
-        Self::legacy(VERSION_MAX, VERSION_1, check_no_extraneous_bytes)
+    /// and controllable extraneous bytes check and deprecate_global_storage_ops flag.
+    pub fn legacy_with_flags(
+        check_no_extraneous_bytes: bool,
+        deprecate_global_storage_ops: bool,
+    ) -> Self {
+        Self::legacy(
+            VERSION_MAX,
+            VERSION_1,
+            check_no_extraneous_bytes,
+            deprecate_global_storage_ops,
+        )
     }
 
     /// Standard configuration: VERSION_MAX and check_no_extraneous_bytes = true
     pub fn standard() -> Self {
-        Self::with_extraneous_bytes_check(true)
+        Self::legacy_with_flags(true, true)
     }
 
     pub fn new_unpublishable() -> Self {
@@ -113,6 +126,7 @@ impl BinaryConfig {
             max_binary_format_version: VERSION_MAX,
             min_binary_format_version: VERSION_1,
             check_no_extraneous_bytes: true,
+            deprecate_global_storage_ops: true,
             table_config: TableConfig::legacy(),
             allow_unpublishable: true,
         }

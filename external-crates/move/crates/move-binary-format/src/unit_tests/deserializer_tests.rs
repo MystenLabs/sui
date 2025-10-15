@@ -221,7 +221,12 @@ fn max_version_lower_than_hardcoded() {
 
     let res = CompiledModule::deserialize_with_config(
         &binary,
-        &BinaryConfig::legacy(VERSION_MAX.checked_sub(1).unwrap(), VERSION_MIN, false),
+        &BinaryConfig::legacy(
+            VERSION_MAX.checked_sub(1).unwrap(),
+            VERSION_MIN,
+            false,
+            false,
+        ),
     );
     assert_eq!(
         res.expect_err("Expected unknown version").major_status(),
@@ -241,13 +246,13 @@ fn deserialize_trailing_bytes() {
         // ok with flag false
         CompiledModule::deserialize_with_config(
             bytes,
-            &BinaryConfig::with_extraneous_bytes_check(false),
+            &BinaryConfig::legacy_with_flags(false, false),
         )
         .unwrap();
         // error with flag true
         let status_code = CompiledModule::deserialize_with_config(
             bytes,
-            &BinaryConfig::with_extraneous_bytes_check(true),
+            &BinaryConfig::legacy_with_flags(true, false),
         )
         .unwrap_err()
         .major_status();
@@ -287,13 +292,13 @@ fn no_metadata() {
         // ok with flag false
         CompiledModule::deserialize_with_config(
             bytes,
-            &BinaryConfig::with_extraneous_bytes_check(false),
+            &BinaryConfig::legacy_with_flags(false, false),
         )
         .unwrap();
         // error with flag true
         let status_code = CompiledModule::deserialize_with_config(
             bytes,
-            &BinaryConfig::with_extraneous_bytes_check(true),
+            &BinaryConfig::legacy_with_flags(true, false),
         )
         .unwrap_err()
         .major_status();
@@ -350,7 +355,7 @@ fn deserialize_below_min_version() {
 
     let res = CompiledModule::deserialize_with_config(
         &bytes,
-        &BinaryConfig::legacy(VERSION_MAX, VERSION_MAX, true),
+        &BinaryConfig::legacy(VERSION_MAX, VERSION_MAX, true, false),
     )
     .unwrap_err()
     .major_status();
@@ -362,7 +367,7 @@ fn enum_version_lie() {
     let test = |bytes, expected_status| {
         let status_code = CompiledModule::deserialize_with_config(
             bytes,
-            &BinaryConfig::with_extraneous_bytes_check(true),
+            &BinaryConfig::legacy_with_flags(true, false),
         )
         .unwrap_err()
         .major_status();
@@ -409,7 +414,7 @@ fn deserialize_empty_enum_fails() {
     module.enum_defs[0].variants = vec![];
     let mut bin = vec![];
     module.serialize(&mut bin).unwrap();
-    CompiledModule::deserialize_with_config(&bin, &BinaryConfig::with_extraneous_bytes_check(true))
+    CompiledModule::deserialize_with_config(&bin, &BinaryConfig::legacy_with_flags(true, false))
         .unwrap_err();
 }
 
