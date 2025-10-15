@@ -28,7 +28,7 @@ use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
 use sui::dynamic_field as df;
 use sui::event;
-use sui::package::{Self, Publisher};
+use sui::package::{Self, Publisher, TypeOwnerCap};
 use sui::sui::SUI;
 use sui::vec_set::{Self, VecSet};
 
@@ -114,6 +114,25 @@ public fun new_request<T>(item: ID, paid: u64, from: ID): TransferRequest<T> {
 /// available for use, the type can not be traded in kiosks.
 public fun new<T>(pub: &Publisher, ctx: &mut TxContext): (TransferPolicy<T>, TransferPolicyCap<T>) {
     assert!(package::from_package<T>(pub), 0);
+    let id = object::new(ctx);
+    let policy_id = id.to_inner();
+
+    event::emit(TransferPolicyCreated<T> { id: policy_id });
+
+    (
+        TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
+        TransferPolicyCap { id: object::new(ctx), policy_id },
+    )
+}
+
+/// Register a type in the Kiosk system as the owner of `T` and receive a
+/// `TransferPolicy` and a `TransferPolicyCap` for the type. The `TransferPolicy`
+/// is required to confirm kiosk deals for the `T`. If there's no `TransferPolicy`
+/// available for use, the type can not be traded in kiosks.
+public fun new_as_owner<T>(
+    _: &TypeOwnerCap<T>,
+    ctx: &mut TxContext,
+): (TransferPolicy<T>, TransferPolicyCap<T>) {
     let id = object::new(ctx);
     let policy_id = id.to_inner();
 

@@ -2731,6 +2731,9 @@ create
 Publisher
 	public struct
 	0x2::package
+TypeOwnerCap
+	public struct
+	0x2::package
 UpgradeCap
 	public struct
 	0x2::package
@@ -2739,6 +2742,12 @@ UpgradeTicket
 	0x2::package
 UpgradeReceipt
 	public struct
+	0x2::package
+new_type_owner_cap
+	public fun
+	0x2::package
+new_type_owner_cap_from_publisher
+	public fun
 	0x2::package
 claim
 	public fun
@@ -2933,6 +2942,9 @@ new_request
 	public fun
 	0x2::transfer_policy
 new
+	public fun
+	0x2::transfer_policy
+new_as_owner
 	public fun
 	0x2::transfer_policy
 default

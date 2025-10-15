@@ -55,6 +55,9 @@ public use fun receipt_cap as UpgradeReceipt.cap;
 /// upgrade.
 public use fun receipt_package as UpgradeReceipt.package;
 
+/// Allows calling `.to_type_owner_cap` to create a `TypeOwnerCap` from a `Publisher`.
+public use fun new_type_owner_cap_from_publisher as Publisher.new_type_owner_cap;
+
 /// Tried to create a `Publisher` using a type that isn't a
 /// one-time witness.
 const ENotOneTimeWitness: u64 = 0;
@@ -66,6 +69,8 @@ const EAlreadyAuthorized: u64 = 2;
 const ENotAuthorized: u64 = 3;
 /// Trying to commit an upgrade to the wrong `UpgradeCap`.
 const EWrongUpgradeCap: u64 = 4;
+/// Attempt to create `TypeOwnerCap` from a `Publisher` that is not from the same module.
+const ENotInternal: u64 = 5;
 
 /// Update any part of the package (function implementations, add new
 /// functions or types, change dependencies)
@@ -85,6 +90,11 @@ public struct Publisher has key, store {
     package: String,
     module_name: String,
 }
+
+/// Capability representing ownership over a single type. Fine-grained version
+/// of `Publisher` and unlike `Publisher` it can be claimed after package was
+/// published.
+public struct TypeOwnerCap<phantom T> has key, store { id: UID }
 
 /// Capability controlling the ability to upgrade a package.
 public struct UpgradeCap has key, store {
@@ -130,6 +140,21 @@ public struct UpgradeReceipt {
     package: ID,
 }
 
+/// Claim `TypeOwnerCap` for type `T`. `T` must be *internal* to the module,
+/// hence this call is only possible from within the module defining `T`.
+public fun new_type_owner_cap<T /* internal */>(ctx: &mut TxContext): TypeOwnerCap<T> {
+    TypeOwnerCap { id: object::new(ctx) }
+}
+
+/// Create `TypeOwnerCap` from a `Publisher`.
+public fun new_type_owner_cap_from_publisher<T>(
+    p: &Publisher,
+    ctx: &mut TxContext,
+): TypeOwnerCap<T> {
+    assert!(p.from_module<T>(), ENotInternal);
+    TypeOwnerCap { id: object::new(ctx) }
+}
+
 /// Claim a Publisher object.
 /// Requires a One-Time-Witness to prove ownership. Due to this
 /// constraint there can be only one Publisher object per module
@@ -157,7 +182,7 @@ public fun claim_and_keep<OTW: drop>(otw: OTW, ctx: &mut TxContext) {
 /// Destroy a Publisher object effectively removing all privileges
 /// associated with it.
 public fun burn_publisher(self: Publisher) {
-    let Publisher { id, package: _, module_name: _ } = self;
+    let Publisher { id, .. } = self;
     id.delete();
 }
 

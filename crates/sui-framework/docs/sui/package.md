@@ -8,10 +8,13 @@ Functions for operating on Move packages from within Move:
 
 
 -  [Struct `Publisher`](#sui_package_Publisher)
+-  [Struct `TypeOwnerCap`](#sui_package_TypeOwnerCap)
 -  [Struct `UpgradeCap`](#sui_package_UpgradeCap)
 -  [Struct `UpgradeTicket`](#sui_package_UpgradeTicket)
 -  [Struct `UpgradeReceipt`](#sui_package_UpgradeReceipt)
 -  [Constants](#@Constants_0)
+-  [Function `new_type_owner_cap`](#sui_package_new_type_owner_cap)
+-  [Function `new_type_owner_cap_from_publisher`](#sui_package_new_type_owner_cap_from_publisher)
 -  [Function `claim`](#sui_package_claim)
 -  [Function `claim_and_keep`](#sui_package_claim_and_keep)
 -  [Function `burn_publisher`](#sui_package_burn_publisher)
@@ -89,6 +92,35 @@ a type originated from.
 </dd>
 <dt>
 <code>module_name: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_package_TypeOwnerCap"></a>
+
+## Struct `TypeOwnerCap`
+
+Capability representing ownership over a single type. Fine-grained version
+of <code><a href="../sui/package.md#sui_package_Publisher">Publisher</a></code> and unlike <code><a href="../sui/package.md#sui_package_Publisher">Publisher</a></code> it can be claimed after package was
+published.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/package.md#sui_package_TypeOwnerCap">TypeOwnerCap</a>&lt;<b>phantom</b> T&gt; <b>has</b> key, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
 </dt>
 <dd>
 </dd>
@@ -291,6 +323,16 @@ Trying to commit an upgrade to the wrong <code><a href="../sui/package.md#sui_pa
 
 
 
+<a name="sui_package_ENotInternal"></a>
+
+Attempt to create <code><a href="../sui/package.md#sui_package_TypeOwnerCap">TypeOwnerCap</a></code> from a <code><a href="../sui/package.md#sui_package_Publisher">Publisher</a></code> that is not from the same module.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ENotInternal">ENotInternal</a>: u64 = 5;
+</code></pre>
+
+
+
 <a name="sui_package_COMPATIBLE"></a>
 
 Update any part of the package (function implementations, add new
@@ -322,6 +364,61 @@ Only be able to change dependencies.
 </code></pre>
 
 
+
+<a name="sui_package_new_type_owner_cap"></a>
+
+## Function `new_type_owner_cap`
+
+Claim <code><a href="../sui/package.md#sui_package_TypeOwnerCap">TypeOwnerCap</a></code> for type <code>T</code>. <code>T</code> must be *internal* to the module,
+hence this call is only possible from within the module defining <code>T</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_new_type_owner_cap">new_type_owner_cap</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/package.md#sui_package_TypeOwnerCap">sui::package::TypeOwnerCap</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_new_type_owner_cap">new_type_owner_cap</a>&lt;T /* internal */&gt;(ctx: &<b>mut</b> TxContext): <a href="../sui/package.md#sui_package_TypeOwnerCap">TypeOwnerCap</a>&lt;T&gt; {
+    <a href="../sui/package.md#sui_package_TypeOwnerCap">TypeOwnerCap</a> { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx) }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_new_type_owner_cap_from_publisher"></a>
+
+## Function `new_type_owner_cap_from_publisher`
+
+Create <code><a href="../sui/package.md#sui_package_TypeOwnerCap">TypeOwnerCap</a></code> from a <code><a href="../sui/package.md#sui_package_Publisher">Publisher</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_new_type_owner_cap_from_publisher">new_type_owner_cap_from_publisher</a>&lt;T&gt;(p: &<a href="../sui/package.md#sui_package_Publisher">sui::package::Publisher</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/package.md#sui_package_TypeOwnerCap">sui::package::TypeOwnerCap</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_new_type_owner_cap_from_publisher">new_type_owner_cap_from_publisher</a>&lt;T&gt;(
+    p: &<a href="../sui/package.md#sui_package_Publisher">Publisher</a>,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui/package.md#sui_package_TypeOwnerCap">TypeOwnerCap</a>&lt;T&gt; {
+    <b>assert</b>!(p.<a href="../sui/package.md#sui_package_from_module">from_module</a>&lt;T&gt;(), <a href="../sui/package.md#sui_package_ENotInternal">ENotInternal</a>);
+    <a href="../sui/package.md#sui_package_TypeOwnerCap">TypeOwnerCap</a> { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx) }
+}
+</code></pre>
+
+
+
+</details>
 
 <a name="sui_package_claim"></a>
 
@@ -402,7 +499,7 @@ associated with it.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_burn_publisher">burn_publisher</a>(self: <a href="../sui/package.md#sui_package_Publisher">Publisher</a>) {
-    <b>let</b> <a href="../sui/package.md#sui_package_Publisher">Publisher</a> { id, <a href="../sui/package.md#sui_package">package</a>: _, module_name: _ } = self;
+    <b>let</b> <a href="../sui/package.md#sui_package_Publisher">Publisher</a> { id, .. } = self;
     id.delete();
 }
 </code></pre>

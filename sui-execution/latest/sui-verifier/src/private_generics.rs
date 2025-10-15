@@ -41,6 +41,9 @@ pub const PRIVATE_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("party_transfer"),
 ];
 
+pub const PACKAGE_MODULE: &IdentStr = ident_str!("package");
+pub const TYPE_OWNER_CLAIM_FUNCTION: &IdentStr = ident_str!("new_type_owner_cap");
+
 /// All transfer functions (the functions in `sui::transfer`) are "private" in that they are
 /// restricted to the module.
 /// For example, with `transfer::transfer<T>(...)`, either:
@@ -105,6 +108,8 @@ fn verify_function(
                 verify_private_event_emit(view, fhandle, type_arguments)?
             } else if ident == (SUI_FRAMEWORK_ADDRESS, COIN_REGISTRY_MODULE) {
                 verify_dynamic_coin_creation(view, fhandle, type_arguments)?
+            } else if ident == (SUI_FRAMEWORK_ADDRESS, PACKAGE_MODULE) {
+                verify_type_owner_claim(view, fhandle, type_arguments)?
             }
         }
     }
@@ -237,6 +242,45 @@ fn verify_dynamic_coin_creation(
         return Err(format!(
             "Invalid call to '{}::coin_registry::{}' with type '{}'. \
                 The coin's type must be defined in the current module",
+            SUI_FRAMEWORK_ADDRESS,
+            fident,
+            format_signature_token(view, type_arg),
+        ));
+    }
+
+    Ok(())
+}
+
+/// TypeOwnerCap `new_type_owner_cap` is only possible with internal `T`.
+fn verify_type_owner_claim(
+    view: &CompiledModule,
+    fhandle: &FunctionHandle,
+    type_arguments: &[SignatureToken],
+) -> Result<(), String> {
+    let fident = view.identifier_at(fhandle.name);
+
+    // Allow bypassing this check in the `sui::package` module itself.
+    if *view.address() == SUI_FRAMEWORK_ADDRESS && view.name() == PACKAGE_MODULE {
+        return Ok(());
+    }
+
+    // If we are calling anything besides `package::claim`,
+    // we don't need this check.
+    if fident != TYPE_OWNER_CLAIM_FUNCTION {
+        return Ok(());
+    }
+
+    // We expect a single type argument (`T: /* internal */ drop`)
+    if type_arguments.len() != 1 {
+        debug_assert!(false, "Expected 1 type argument for {}", fident);
+        return Err(format!("Expected 1 type argument for {}", fident));
+    }
+
+    let type_arg = &type_arguments[0];
+    if !is_defined_in_current_module(view, type_arg) {
+        return Err(format!(
+            "Invalid call to '{}::package::{}' with type '{}'. \
+            The type must be defined in the current module",
             SUI_FRAMEWORK_ADDRESS,
             fident,
             format_signature_token(view, type_arg),
