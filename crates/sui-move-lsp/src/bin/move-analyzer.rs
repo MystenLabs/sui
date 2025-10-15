@@ -17,7 +17,7 @@ mod alloc_utils {
     #[global_allocator]
     static GLOBAL: Jemalloc = Jemalloc;
 
-    pub fn print_custom_alloc_version() {
+    pub fn maybe_enable_jemalloc() {
         match tikv_jemalloc_ctl::version::read() {
             Ok(version) => eprintln!("jemalloc version = {}", version),
             Err(error) => eprintln!("cannot read jemalloc version: {}", error),
@@ -34,7 +34,7 @@ mod alloc_utils {
     /// on MacOS is better tuned even for the specific workload
     /// we are dealing with, and jemalloc on Windows is not well supported.
 
-    pub fn print_custom_alloc_version() {
+    pub fn maybe_enable_jemalloc() {
         eprintln!("using standard allocator");
     }
 }
@@ -54,7 +54,7 @@ struct App {}
 fn main() {
     App::parse();
 
-    alloc_utils::print_custom_alloc_version();
+    alloc_utils::maybe_enable_jemalloc();
 
     let sui_implicit_deps = implicit_deps(latest_system_packages());
     let flavor = Flavor::Sui;

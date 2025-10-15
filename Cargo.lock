@@ -7798,7 +7798,6 @@ dependencies = [
  "strum 0.27.1",
  "strum_macros 0.27.1",
  "tempfile",
- "tikv-jemalloc-ctl",
  "url",
  "vfs",
 ]
