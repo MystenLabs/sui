@@ -5,7 +5,7 @@ module sui::display_registry;
 
 use std::string::String;
 use sui::derived_object;
-use sui::display::Display;
+use sui::display::Display as LegacyDisplay;
 use sui::package::Publisher;
 use sui::vec_map::{Self, VecMap};
 
@@ -32,21 +32,15 @@ const ECapNotClaimed: vector<u8> =
 
 /// The root of display, to enable derivation of addresses.
 /// We'll most likely deploy this into `0xd`
-public struct DisplayRegistry has key {
-    id: UID,
-}
+public struct DisplayRegistry has key { id: UID }
 
 /// A singleton capability object to enable migrating all V1 displays into
 /// V2. We don't wanna support indexing for legacy display objects,
 /// so this will forcefully move all existing display instances to use the registry.
-public struct SystemMigrationCap has key {
-    id: UID,
-}
+public struct SystemMigrationCap has key { id: UID }
 
-/// TODO: Come up with a better name lol
-///
 /// This is the struct that holds the display values for a type T.
-public struct NewDisplay<phantom T> has key {
+public struct Display<phantom T> has key {
     id: UID,
     /// All the (key,value) entries for a given display object.
     fields: VecMap<String, String>,
@@ -59,24 +53,22 @@ public struct NewDisplay<phantom T> has key {
     cap_id: Option<ID>,
 }
 
-/// The key used for deriving the instance of `NewDisplay`.
-public struct DisplayKey<phantom T>() has copy, drop, store;
-
 /// The capability object that is used to manage the display.
-public struct DisplayCap<phantom T> has key, store {
-    id: UID,
-}
+public struct DisplayCap<phantom T> has key, store { id: UID }
+
+/// The key used for deriving the instance of `Display`.
+public struct DisplayKey<phantom T>() has copy, drop, store;
 
 /// Create a new display object using the `Publisher` object.
 public fun new_with_publisher<T>(
     registry: &mut DisplayRegistry,
     publisher: &Publisher,
     ctx: &mut TxContext,
-): (NewDisplay<T>, DisplayCap<T>) {
+): (Display<T>, DisplayCap<T>) {
     assert!(!derived_object::exists(&registry.id, DisplayKey<T>()), EDisplayAlreadyExists);
     assert!(publisher.from_package<T>(), ENotValidPublisher);
     let cap = DisplayCap<T> { id: object::new(ctx) };
-    let display = NewDisplay<T> {
+    let display = Display<T> {
         id: derived_object::claim(&mut registry.id, DisplayKey<T>()),
         fields: vec_map::empty(),
         language_version: LANGUAGE_VERSION,
@@ -86,13 +78,13 @@ public fun new_with_publisher<T>(
 }
 
 /// Unset a key from display.
-public fun unset<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: String) {
+public fun unset<T>(display: &mut Display<T>, _: &DisplayCap<T>, name: String) {
     assert!(display.fields.contains(&name), EFieldDoesNotExist);
     display.fields.remove(&name);
 }
 
 /// Replace an existing key with the supplied one.
-public fun set<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: String, value: String) {
+public fun set<T>(display: &mut Display<T>, _: &DisplayCap<T>, name: String, value: String) {
     if (display.fields.contains(&name)) {
         display.fields.remove(&name);
     };
@@ -100,19 +92,19 @@ public fun set<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>, name: String, 
 }
 
 /// Clear the display vec_map, allowing a fresh re-creation of fields
-public fun clear<T>(display: &mut NewDisplay<T>, _: &DisplayCap<T>) {
+public fun clear<T>(display: &mut Display<T>, _: &DisplayCap<T>) {
     display.fields = vec_map::empty();
 }
 
-/// Share the `NewDisplay` object to finalize the creation.
-public fun share<T>(display: NewDisplay<T>) {
+/// Share the `Display` object to finalize the creation.
+public fun share<T>(display: Display<T>) {
     transfer::share_object(display)
 }
 
 /// Allow a legacy Display holder to claim the capability object.
 public fun claim<T: key>(
-    display: &mut NewDisplay<T>,
-    legacy: Display<T>,
+    display: &mut Display<T>,
+    legacy: LegacyDisplay<T>,
     ctx: &mut TxContext,
 ): DisplayCap<T> {
     assert!(display.cap_id.is_none(), ECapAlreadyClaimed);
@@ -124,7 +116,7 @@ public fun claim<T: key>(
 
 /// Allow claiming a new display using `Publisher` as proof of ownership.
 public fun claim_with_publisher<T: key>(
-    display: &mut NewDisplay<T>,
+    display: &mut Display<T>,
     publisher: &mut Publisher,
     ctx: &mut TxContext,
 ): DisplayCap<T> {
@@ -144,7 +136,7 @@ public fun migrate<T: key>(
 ) {
     assert!(!derived_object::exists(&registry.id, DisplayKey<T>()), EDisplayAlreadyExists);
 
-    transfer::share_object(NewDisplay<T> {
+    transfer::share_object(Display<T> {
         id: derived_object::claim(&mut registry.id, DisplayKey<T>()),
         fields,
         language_version: LANGUAGE_VERSION,
@@ -159,13 +151,13 @@ entry fun destroy_cap(cap: SystemMigrationCap) {
 }
 
 /// Allow deleting legacy display objects, as long as the cap has been claimed first.
-public fun delete_legacy<T: key>(display: &NewDisplay<T>, legacy: Display<T>) {
+public fun delete_legacy<T: key>(display: &Display<T>, legacy: LegacyDisplay<T>) {
     assert!(display.cap_id.is_some(), ECapNotClaimed);
     legacy.destroy();
 }
 
 /// Get a reference to the fields of display.
-public fun fields<T>(display: &NewDisplay<T>): &VecMap<String, String> {
+public fun fields<T>(display: &Display<T>): &VecMap<String, String> {
     &display.fields
 }
 
