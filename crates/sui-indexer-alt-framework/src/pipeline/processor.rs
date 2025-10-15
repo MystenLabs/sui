@@ -45,9 +45,9 @@ pub trait Processor: Send + Sync + 'static {
     /// indefinitely with exponential backoff.
     ///
     /// If you encounter a permanent error that will never succeed on retry (e.g., invalid data
-    /// format, unsupported protocol version), you must handle it within this function and avoid
-    /// returning it as an error. Otherwise, the indexer will retry forever, causing checkpoint
-    /// lag and blocking the pipeline.
+    /// format, unsupported protocol version), you should panic! This stops the indexer and alerts
+    /// operators that manual intervention is required. Do not return permanent errors as they will
+    /// cause infinite retries and block the pipeline.
     ///
     /// For transient errors (e.g., network issues, rate limiting), simply return the error and
     /// let the framework retry automatically.
@@ -61,8 +61,7 @@ pub trait Processor: Send + Sync + 'static {
 /// Each worker processes a checkpoint into rows and sends them on to the committer using the `tx`
 /// channel.
 ///
-/// The task will shutdown if the `cancel` token is cancelled, or if any of the workers encounters
-/// an error.
+/// The task will shutdown if the `cancel` token is cancelled.
 pub(super) fn processor<P: Processor>(
     processor: Arc<P>,
     rx: mpsc::Receiver<Arc<CheckpointData>>,
@@ -110,15 +109,11 @@ pub(super) fn processor<P: Processor>(
                         ..Default::default()
                     };
 
-                    let values = backoff::future::retry(backoff, || {
-                        let processor = processor.clone();
-                        let checkpoint = checkpoint.clone();
-                        async move {
-                            processor
-                                .process(&checkpoint)
-                                .await
-                                .map_err(backoff::Error::transient)
-                        }
+                    let values = backoff::future::retry(backoff, || async {
+                        processor
+                            .process(&checkpoint)
+                            .await
+                            .map_err(backoff::Error::transient)
                     })
                     .await?;
 
@@ -182,6 +177,7 @@ pub(super) fn processor<P: Processor>(
 #[cfg(test)]
 mod tests {
     use crate::metrics::IndexerMetrics;
+    use anyhow::ensure;
     use std::{
         sync::{
             atomic::{AtomicU32, Ordering},
@@ -351,10 +347,8 @@ mod tests {
                 if checkpoint.checkpoint_summary.sequence_number == 1 {
                     Ok(vec![])
                 } else {
-                    let attempt = self.attempt_count.fetch_add(1, Ordering::Relaxed);
-                    if attempt < 2 {
-                        anyhow::bail!("Transient error - attempt {}", attempt + 1);
-                    }
+                    let attempt = self.attempt_count.fetch_add(1, Ordering::Relaxed) + 1;
+                    ensure!(attempt > 2, "Transient error - attempt {attempt}");
                     Ok(vec![])
                 }
             }

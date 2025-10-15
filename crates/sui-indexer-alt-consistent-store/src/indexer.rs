@@ -170,11 +170,12 @@ mod tests {
     struct TestHandler;
     struct TestSchema;
 
+    #[async_trait::async_trait]
     impl Processor for TestHandler {
         const NAME: &'static str = "test";
         type Value = ();
 
-        fn process(&self, _: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, _: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }
