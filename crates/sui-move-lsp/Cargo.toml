@@ -10,6 +10,8 @@ edition = "2021"
 clap = { version = "4.1.4", features = ["derive"] }
 libmimalloc-sys = { version = "0.1", features = ["extended"] }
 mimalloc = { version = "0.1", default-features = false, features = ["secure"] }
+tikv-jemalloc-ctl.workspace = true
+tikv-jemallocator.workspace = true
 bin-version.workspace = true
 move-analyzer.workspace = true
 move-compiler.workspace = true

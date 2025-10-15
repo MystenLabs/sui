@@ -110,13 +110,15 @@ pub mod use_def;
 
 #[cfg(not(target_os = "macos"))]
 mod alloc_utils {
-    use libmimalloc_sys;
+    // use libmimalloc_sys;
 
-    pub fn mem_collect() {
-        unsafe {
-            libmimalloc_sys::mi_collect(true);
-        }
-    }
+    // pub fn mem_collect() {
+    //     unsafe {
+    //         libmimalloc_sys::mi_collect(true);
+    //     }
+    // }
+
+    pub fn mem_collect() {}
 }
 
 #[cfg(target_os = "macos")]

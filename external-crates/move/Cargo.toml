@@ -131,6 +131,7 @@ tempfile = "3.2.0"
 tera = "1.16.0"
 test-log = { version = "0.2.17", features = ["trace"] }
 thiserror = "1.0.24"
+tikv-jemalloc-ctl = "^0.5"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 tokio = { version = "1.44.2", features = ["full"] }
 toml = "0.5.8"

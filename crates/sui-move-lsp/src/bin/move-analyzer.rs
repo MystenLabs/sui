@@ -7,26 +7,39 @@ use move_compiler::editions::Flavor;
 use sui_move_build::{implicit_deps, SuiPackageHooks};
 use sui_package_management::system_package_versions::latest_system_packages;
 
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "macos"))]
 mod alloc_utils {
     /// On Linux, mimalloc produces better results in terms of memory usage.
     /// Standard allocator does not work too well for cases when a lot of memory
     /// is allocated temporarily and then freed as tends to hold on to allocated
     /// memory rather than returning it to the OS right away.
-    use libmimalloc_sys;
-    use mimalloc::MiMalloc;
+    // use libmimalloc_sys;
+    // use mimalloc::MiMalloc;
 
+    // #[global_allocator]
+    // static GLOBAL: MiMalloc = MiMalloc;
+
+    // pub fn print_custom_alloc_version() {
+    //     unsafe {
+    //         eprintln!("mimalloc version = {}", libmimalloc_sys::mi_version());
+    //     }
+    // }
+    use tikv_jemallocator::Jemalloc;
     #[global_allocator]
-    static GLOBAL: MiMalloc = MiMalloc;
+    static GLOBAL: Jemalloc = Jemalloc;
 
     pub fn print_custom_alloc_version() {
-        unsafe {
-            eprintln!("mimalloc version = {}", libmimalloc_sys::mi_version());
+        match tikv_jemalloc_ctl::version::read() {
+            Ok(version) => eprintln!("jemalloc version = {}", version),
+            Err(error) => eprintln!("cannot read jemalloc version: {}", error),
         }
+        // enable background purge threads
+        let _ = tikv_jemalloc_ctl::background_thread::write(true);
+        let _ = tikv_jemalloc_ctl::epoch::advance();
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 mod alloc_utils {
     /// We could use mimalloc for Mac and Windows as well but standard allocators
     /// on these platforms are better tuned, even for the specific workload
