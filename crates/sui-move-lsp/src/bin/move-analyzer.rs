@@ -32,7 +32,9 @@ mod alloc_utils {
 mod alloc_utils {
     /// We could use a jemalloc here as well but standard allocator
     /// on MacOS is better tuned even for the specific workload
-    /// we are dealing with, and jemalloc on Windows is not well supported.
+    /// we are dealing with, and jemalloc on Windows is not well supported
+    /// so we are not going to use it there either, particularly
+    /// that the standard allocator on Windows is known to be well tuned as well.
 
     pub fn maybe_enable_jemalloc() {
         eprintln!("using standard allocator");

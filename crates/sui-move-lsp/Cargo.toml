@@ -14,8 +14,6 @@ move-compiler.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
 
-# do not attempt using on Windoes with msvc toolchain
-# as this would fail to build
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 tikv-jemalloc-ctl.workspace = true
 tikv-jemallocator.workspace = true
