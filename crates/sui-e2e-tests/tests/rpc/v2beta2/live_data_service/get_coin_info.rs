@@ -3,6 +3,7 @@
 
 use prost_types::FieldMask;
 use std::path::PathBuf;
+#[allow(unused_imports)]
 use std::str::FromStr;
 use sui_macros::sim_test;
 use sui_rpc::field::FieldMaskUtil;

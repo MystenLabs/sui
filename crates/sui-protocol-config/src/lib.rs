@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 97;
+const MAX_PROTOCOL_VERSION: u64 = 98;
 
 // Record history of protocol version allocations here:
 //
@@ -264,7 +264,9 @@ const MAX_PROTOCOL_VERSION: u64 = 97;
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
 //             Create Coin Registry object
 //             Enable checkpoint artifacts digest in devnet.
-// Version 97: Add authenticated event streams support via emit_authenticated function.
+// Version 97: Enable additional borrow checks
+// Version 98: Add authenticated event streams support via emit_authenticated function.
+//             Add better error messages to the loader.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -749,6 +751,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_authenticated_event_streams: bool,
 
+    // Enable address balance gas payments
+    #[serde(skip_serializing_if = "is_false")]
+    enable_address_balance_gas_payments: bool,
+
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
@@ -819,6 +825,30 @@ struct FeatureFlags {
     // If true charge for loads into the cache (i.e., fetches from storage) in the object runtime.
     #[serde(skip_serializing_if = "is_false")]
     object_runtime_charge_cache_load_gas: bool,
+
+    // If true, perform additional borrow checks
+    #[serde(skip_serializing_if = "is_false")]
+    additional_borrow_checks: bool,
+
+    // If true, use the new commit handler.
+    #[serde(skip_serializing_if = "is_false")]
+    use_new_commit_handler: bool,
+
+    // If true return a better error message when we encounter a loader error.
+    #[serde(skip_serializing_if = "is_false")]
+    better_loader_errors: bool,
+
+    // If true generate layouts for dynamic fields
+    #[serde(skip_serializing_if = "is_false")]
+    generate_df_type_layouts: bool,
+
+    // If true, allow Move functions called in PTBs to return references
+    #[serde(skip_serializing_if = "is_false")]
+    allow_references_in_ptbs: bool,
+
+    // Enable display registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_display_registry: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1923,12 +1953,20 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_address_balance_gas_payments(&self) -> bool {
+        self.feature_flags.enable_address_balance_gas_payments
+    }
+
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
     }
 
     pub fn enable_coin_registry(&self) -> bool {
         self.feature_flags.enable_coin_registry
+    }
+
+    pub fn enable_display_registry(&self) -> bool {
+        self.feature_flags.enable_display_registry
     }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {
@@ -2239,6 +2277,26 @@ impl ProtocolConfig {
 
     pub fn object_runtime_charge_cache_load_gas(&self) -> bool {
         self.feature_flags.object_runtime_charge_cache_load_gas
+    }
+
+    pub fn additional_borrow_checks(&self) -> bool {
+        self.feature_flags.additional_borrow_checks
+    }
+
+    pub fn use_new_commit_handler(&self) -> bool {
+        self.feature_flags.use_new_commit_handler
+    }
+
+    pub fn better_loader_errors(&self) -> bool {
+        self.feature_flags.better_loader_errors
+    }
+
+    pub fn generate_df_type_layouts(&self) -> bool {
+        self.feature_flags.generate_df_type_layouts
+    }
+
+    pub fn allow_references_in_ptbs(&self) -> bool {
+        self.feature_flags.allow_references_in_ptbs
     }
 }
 
@@ -4036,7 +4094,12 @@ impl ProtocolConfig {
                     cfg.feature_flags.mysticeti_fastpath = true;
                 }
                 97 => {
+                    cfg.feature_flags.additional_borrow_checks = true;
+                }
+                98 => {
                     cfg.event_emit_auth_stream_cost = Some(52);
+                    cfg.feature_flags.better_loader_errors = true;
+                    cfg.feature_flags.generate_df_type_layouts = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4082,6 +4145,13 @@ impl ProtocolConfig {
             (None, None)
         };
 
+        let additional_borrow_checks = if signing_limits.is_some() {
+            // always turn on additional borrow checks during signing
+            true
+        } else {
+            self.additional_borrow_checks()
+        };
+
         VerifierConfig {
             max_loop_depth: Some(self.max_loop_depth() as usize),
             max_generic_instantiation_length: Some(self.max_generic_instantiation_length() as usize),
@@ -4105,6 +4175,8 @@ impl ProtocolConfig {
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
+            additional_borrow_checks,
+            better_loader_errors: self.better_loader_errors(),
         }
     }
 
@@ -4251,14 +4323,60 @@ impl ProtocolConfig {
         self.feature_flags.record_time_estimate_processed = val;
     }
 
+    pub fn set_prepend_prologue_tx_in_consensus_commit_in_checkpoints_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .prepend_prologue_tx_in_consensus_commit_in_checkpoints = val;
+    }
+
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
     }
 
+    pub fn enable_address_balance_gas_payments_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = true;
+        self.feature_flags.allow_private_accumulator_entrypoints = true;
+        self.feature_flags.enable_address_balance_gas_payments = true;
+    }
+
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
+    }
+
+    pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .ignore_execution_time_observations_after_certs_closed = val;
+    }
+
+    pub fn set_consensus_checkpoint_signature_key_includes_digest_for_testing(
+        &mut self,
+        val: bool,
+    ) {
+        self.feature_flags
+            .consensus_checkpoint_signature_key_includes_digest = val;
+    }
+
+    pub fn set_cancel_for_failed_dkg_early_for_testing(&mut self, val: bool) {
+        self.feature_flags.cancel_for_failed_dkg_early = val;
+    }
+
+    pub fn set_use_mfp_txns_in_load_initial_object_debts_for_testing(&mut self, val: bool) {
+        self.feature_flags.use_mfp_txns_in_load_initial_object_debts = val;
+    }
+
+    pub fn set_authority_capabilities_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.authority_capabilities_v2 = val;
+    }
+
+    pub fn allow_references_in_ptbs_for_testing(&mut self) {
+        self.feature_flags.allow_references_in_ptbs = true;
     }
 }
 

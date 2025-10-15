@@ -72,7 +72,7 @@ async fn get_coin_info_sui() {
     let regulated_metadata = regulated_metadata.unwrap();
     assert_eq!(
         regulated_metadata.coin_regulated_state,
-        Some(CoinRegulatedState::Unknown as i32)
+        Some(CoinRegulatedState::Unregulated as i32)
     );
 }
 

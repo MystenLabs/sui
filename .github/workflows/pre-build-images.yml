@@ -27,7 +27,7 @@ jobs:
               "sui_commit": "${{ github.sha }}",
               "caller_name": "sui_repo_${{ github.ref_name }}",
               "push_to_dockerhub": true,
-              "build_arm64": false,
+              "build_arm64": ${{ github.ref_name != 'main' && (github.ref_name == 'devnet' || github.ref_name == 'testnet' || github.ref_name == 'mainnet' || (startsWith(github.ref_name, 'releases/sui-') && endsWith(github.ref_name, '-release'))) }},
               "graphql_rpc": true,
               "indexer_alt": true,
               "stress": true

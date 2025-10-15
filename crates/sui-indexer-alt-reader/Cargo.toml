@@ -20,6 +20,7 @@ diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connect
 futures.workspace = true
 prost-types.workspace = true
 prometheus.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

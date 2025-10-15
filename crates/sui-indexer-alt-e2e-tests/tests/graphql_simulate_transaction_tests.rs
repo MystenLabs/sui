@@ -7,6 +7,9 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
+use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
+use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_graphql::{
     config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
 };
@@ -15,8 +18,10 @@ use sui_indexer_alt_reader::{
     fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
 };
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_macros::sim_test;
-use sui_pg_db::{temp::get_available_port, DbArgs};
+use sui_pg_db::{
+    temp::{get_available_port, TempDb},
+    DbArgs,
+};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::gas_coin::GasCoin;
 
@@ -135,41 +140,70 @@ struct ObjectState {
     as_move_object: Option<Value>,
 }
 
+#[derive(Debug, Deserialize)]
+struct FieldLayout {
+    name: String,
+    layout: Value,
+}
+
 struct GraphQlTestCluster {
     url: Url,
     handle: JoinHandle<()>,
     cancel: CancellationToken,
+    indexer_handle: JoinHandle<()>,
+    /// Hold on to the database so it doesn't get dropped until the cluster is stopped.
+    #[allow(unused)]
+    database: TempDb,
 }
 
 impl GraphQlTestCluster {
     async fn new(validator_cluster: &TestCluster) -> Self {
         let graphql_port = get_available_port();
         let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
+        let cancel = CancellationToken::new();
 
-        let graphql_args = GraphQlArgs {
-            rpc_listen_address: graphql_listen_address,
-            no_ide: true,
-        };
+        let database = TempDb::new().expect("Failed to create temp database");
+        let database_url = database.database().url().clone();
 
         let fullnode_args = FullnodeArgs {
             fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
         };
+        let client_args = ClientArgs {
+            rpc_api_url: Some(Url::parse(validator_cluster.rpc_url()).expect("Invalid RPC URL")),
+            ..Default::default()
+        };
 
-        let cancel = CancellationToken::new();
+        let indexer = setup_indexer(
+            database_url.clone(),
+            DbArgs::default(),
+            IndexerArgs::default(),
+            client_args,
+            IndexerConfig::for_test(),
+            None,
+            &Registry::new(),
+            cancel.child_token(),
+        )
+        .await
+        .expect("Failed to setup indexer");
 
-        // Start GraphQL server that connects directly to TestCluster's RPC
+        let pipelines: Vec<String> = indexer.pipelines().map(|s| s.to_string()).collect();
+        let indexer_handle = indexer.run().await.expect("Failed to start indexer");
+
         let graphql_handle = start_graphql(
-            None, // No database - GraphQL will use fullnode RPC for simulateTransaction
-            None, // No bigtable
+            Some(database_url),
+            None,
             fullnode_args,
             DbArgs::default(),
             BigtableArgs::default(),
             ConsistentReaderArgs::default(),
-            graphql_args,
+            GraphQlArgs {
+                rpc_listen_address: graphql_listen_address,
+                no_ide: true,
+            },
             SystemPackageTaskArgs::default(),
             "0.0.0",
             GraphQlConfig::default(),
-            vec![], // No pipelines since we're not using database
+            pipelines,
             &Registry::new(),
             cancel.child_token(),
         )
@@ -183,6 +217,8 @@ impl GraphQlTestCluster {
             url,
             handle: graphql_handle,
             cancel,
+            indexer_handle,
+            database,
         }
     }
 
@@ -212,10 +248,11 @@ impl GraphQlTestCluster {
     async fn stopped(self) {
         self.cancel.cancel();
         let _ = self.handle.await;
+        let _ = self.indexer_handle.await;
     }
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_basic() {
     let validator_cluster = TestClusterBuilder::new().build().await;
 
@@ -231,8 +268,8 @@ async fn test_simulate_transaction_basic() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -249,7 +286,11 @@ async fn test_simulate_transaction_basic() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -278,7 +319,7 @@ async fn test_simulate_transaction_basic() {
     graphql_cluster.stopped().await;
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_with_events() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -296,8 +337,8 @@ async fn test_simulate_transaction_with_events() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -311,7 +352,11 @@ async fn test_simulate_transaction_with_events() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -334,7 +379,7 @@ async fn test_simulate_transaction_with_events() {
     graphql_cluster.stopped().await;
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_input_validation() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -343,15 +388,19 @@ async fn test_simulate_transaction_input_validation() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects { digest }
                     error
                 }
             }
         "#,
             json!({
-                "txData": "invalid_base64!"
+                "txData": {
+                    "bcs": {
+                        "value": "invalid_base64!"
+                    }
+                }
             }),
         )
         .await
@@ -363,7 +412,7 @@ async fn test_simulate_transaction_input_validation() {
     graphql_cluster.stopped().await;
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_object_changes() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -378,8 +427,8 @@ async fn test_simulate_transaction_object_changes() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects {
                         digest
                         status
@@ -415,7 +464,11 @@ async fn test_simulate_transaction_object_changes() {
             }
         "#,
             json!({
-                "txData": tx_bytes.encoded()
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
             }),
         )
         .await
@@ -488,7 +541,7 @@ async fn test_simulate_transaction_object_changes() {
     graphql_cluster.stopped().await;
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_simulate_transaction_command_results() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -589,8 +642,8 @@ async fn test_simulate_transaction_command_results() {
     let result = graphql_cluster
         .execute_graphql(
             r#"
-            query($txData: Base64!) {
-                simulateTransaction(transactionDataBcs: $txData) {
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
                     effects { status }
                     outputs {
                         returnValues {
@@ -619,7 +672,13 @@ async fn test_simulate_transaction_command_results() {
                 }
             }
         "#,
-            json!({ "txData": tx_bytes.encoded() }),
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
         )
         .await
         .unwrap();
@@ -688,6 +747,226 @@ async fn test_simulate_transaction_command_results() {
             _ => panic!("Unexpected command index: {}", i),
         }
     }
+
+    graphql_cluster.stopped().await;
+}
+
+#[tokio::test]
+async fn test_simulate_transaction_json_transfer() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    let sender = validator_cluster.get_address_0();
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Create a JSON Transaction following the proto schema for a simple transfer
+    let tx_json = json!({
+        "sender": sender.to_string(),
+         "gas_payment": {
+            "budget": 3000000,
+            "owner": sender.to_string()
+        },
+        "kind": {
+            "programmable_transaction": {
+                "inputs": [
+                    {
+                        "literal": 1000000  // Amount to transfer as a number literal
+                    },
+                    {
+                        "literal": recipient.to_string()  // Recipient address as string literal
+                    }
+                ],
+                "commands": [
+                    {
+                        "split_coins": {
+                            "coin": {
+                                "kind": "GAS"
+                            },
+                            "amounts": [
+                                {
+                                    "kind": "INPUT",
+                                    "input": 0
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "transfer_objects": {
+                            "objects": [
+                                {
+                                    "kind": "RESULT",
+                                    "result": 0,
+                                    "subresult": 0
+                                }
+                            ],
+                            "address": {
+                                "kind": "INPUT",
+                                "input": 1
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    });
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txJson: JSON!) {
+                simulateTransaction(transaction: $txJson) {
+                    effects {
+                        digest
+                        status
+                        transaction {
+                            sender { address }
+                            gasInput { gasBudget }
+                            signatures {
+                                signatureBytes
+                            }
+                        }
+                    }
+                    error
+                }
+            }
+        "#,
+            json!({
+                "txJson": tx_json
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    let simulation_result: SimulationResult =
+        serde_json::from_value(result.pointer("/data/simulateTransaction").unwrap().clone())
+            .unwrap();
+
+    // Verify simulation was successful
+    let effects = simulation_result.effects.unwrap();
+    assert_eq!(effects.status, "SUCCESS");
+    assert!(simulation_result.error.is_none());
+
+    // Verify transaction data matches original
+    let transaction = effects.transaction.unwrap();
+    assert_eq!(
+        transaction.sender.address,
+        validator_cluster.get_address_0().to_string()
+    );
+    assert_eq!(transaction.gas_input.gas_budget, "3000000");
+
+    // For simulation, signatures should be empty since we don't provide them
+    assert_eq!(transaction.signatures.len(), 0);
+
+    graphql_cluster.stopped().await;
+}
+
+#[tokio::test]
+async fn test_package_resolver_finds_newly_published_package() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    // Publish the test package
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["packages", "package_resolver_test"]);
+    let tx_data = validator_cluster
+        .test_transaction_builder()
+        .await
+        .publish(path)
+        .build();
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    // Execute the publish transaction and query for type LAYOUT
+    // The layout query will trigger PackageResolver::fetch() for the new package
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects {
+                        status
+                        objectChanges {
+                            nodes {
+                                outputState {
+                                    address
+                                    asMoveObject {
+                                        contents {
+                                            type {
+                                                repr
+                                                layout
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Find the SimpleObject created by the package's init function
+    let object_changes = result
+        .pointer("/data/simulateTransaction/effects/objectChanges/nodes")
+        .unwrap()
+        .as_array()
+        .unwrap();
+
+    // Look for the SimpleObject - its type resolution requires fetching the newly published package
+    let simple_object = object_changes
+        .iter()
+        .find(|node| {
+            node.pointer("/outputState/asMoveObject/contents/type/repr")
+                .and_then(|t| t.as_str())
+                .map(|type_str| type_str.contains("::resolver_test::SimpleObject"))
+                .unwrap_or(false)
+        })
+        .unwrap();
+    let fields: Vec<FieldLayout> = serde_json::from_value(
+        simple_object
+            .pointer("/outputState/asMoveObject/contents/type/layout/struct/fields")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        fields.len(),
+        2,
+        "SimpleObject should have 2 fields (id and value)"
+    );
+
+    // Verify the 'id' field is of type UID
+    assert_eq!(fields[0].name, "id");
+    assert_eq!(
+        fields[0]
+            .layout
+            .pointer("/struct/type")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+    );
+
+    // Verify the 'value' field is of type NestedObject
+    assert_eq!(fields[1].name, "value");
+    assert!(fields[1]
+        .layout
+        .pointer("/struct/type")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("::resolver_test::NestedObject"));
 
     graphql_cluster.stopped().await;
 }

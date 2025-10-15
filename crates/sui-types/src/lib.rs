@@ -45,6 +45,7 @@ pub mod deny_list_v2;
 pub mod derived_object;
 pub mod digests;
 pub mod display;
+pub mod display_registry;
 pub mod dynamic_field;
 pub mod effects;
 pub mod epoch_data;
@@ -55,6 +56,7 @@ pub mod execution_config_utils;
 pub mod execution_params;
 pub mod execution_status;
 pub mod full_checkpoint_content;
+pub mod funds_accumulator;
 pub mod gas;
 pub mod gas_coin;
 pub mod gas_model;
@@ -137,6 +139,7 @@ built_in_ids! {
     SUI_RANDOMNESS_STATE_ADDRESS / SUI_RANDOMNESS_STATE_OBJECT_ID = 0x8;
     SUI_BRIDGE_ADDRESS / SUI_BRIDGE_OBJECT_ID = 0x9;
     SUI_COIN_REGISTRY_ADDRESS / SUI_COIN_REGISTRY_OBJECT_ID = 0xc;
+    SUI_DISPLAY_REGISTRY_ADDRESS / SUI_DISPLAY_REGISTRY_OBJECT_ID = 0xd;
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
 }

@@ -3,7 +3,7 @@
 
 const standards = [
 	'standards',
-	'standards/coin',
+	'standards/currency',
 	{
 		type: 'category',
 		label: 'Closed-Loop Token',

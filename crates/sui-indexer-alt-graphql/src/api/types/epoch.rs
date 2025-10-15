@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::try_join;
@@ -237,17 +236,20 @@ impl Epoch {
             return Ok(None);
         };
 
-        let validator_set_v1 = match system_state {
-            SuiSystemState::V1(inner) => inner.validators,
-            SuiSystemState::V2(inner) => inner.validators,
+        let (validator_set_v1, report_records) = match system_state {
+            SuiSystemState::V1(inner) => (inner.validators, inner.validator_report_records),
+            SuiSystemState::V2(inner) => (inner.validators, inner.validator_report_records),
             #[cfg(msim)]
             SuiSystemState::SimTestV1(_)
             | SuiSystemState::SimTestShallowV2(_)
             | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
         };
 
-        let validator_set =
-            ValidatorSet::from_validator_set_v1(self.scope.clone(), validator_set_v1);
+        let validator_set = ValidatorSet::from_validator_set_v1(
+            self.scope.clone(),
+            validator_set_v1,
+            report_records,
+        );
 
         Ok(Some(validator_set))
     }
@@ -535,16 +537,10 @@ impl Epoch {
             return Ok(Some(Connection::new(false, false)));
         };
 
-        let cursors = page.paginate_indices(1 + latest_epoch.epoch_id as usize);
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-        for edge in cursors.edges {
-            let epoch = Epoch::with_id(scope.clone(), *edge.cursor as u64);
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), epoch));
-        }
-
-        Ok(Some(conn))
+        page.paginate_indices(1 + latest_epoch.epoch_id as usize, |id| {
+            Ok(Epoch::with_id(scope.clone(), id as u64))
+        })
+        .map(Some)
     }
 
     /// Get the epoch start information.

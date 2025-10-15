@@ -11,7 +11,10 @@ use arc_swap::ArcSwap;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
@@ -39,7 +42,7 @@ pub struct ValidatorClientMonitor<A: Clone> {
     metrics: Arc<ValidatorClientMetrics>,
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
-    cached_scores: RwLock<HashMap<TxType, HashMap<AuthorityName, f64>>>,
+    cached_latencies: RwLock<HashMap<TxType, HashMap<AuthorityName, Duration>>>,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -61,7 +64,7 @@ where
             metrics,
             client_stats: RwLock::new(ClientObservedStats::new(config)),
             authority_aggregator,
-            cached_scores: RwLock::new(HashMap::new()),
+            cached_latencies: RwLock::new(HashMap::new()),
         });
 
         let monitor_clone = monitor.clone();
@@ -125,6 +128,7 @@ where
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
+                                ping_type: None,
                                 result: Ok(latency),
                             });
                         }
@@ -134,6 +138,7 @@ where
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
+                                ping_type: None,
                                 result: Err(()),
                             });
                         }
@@ -142,6 +147,7 @@ where
                                 authority_name: name,
                                 display_name,
                                 operation: OperationType::HealthCheck,
+                                ping_type: None,
                                 result: Err(()),
                             });
                         }
@@ -155,41 +161,42 @@ where
                 }
             }
 
-            self.update_cached_scores(&authority_agg);
+            self.update_cached_latencies(&authority_agg);
         }
     }
 }
 
 impl<A: Clone> ValidatorClientMonitor<A> {
-    /// Calculate and cache scores for all validators.
+    /// Calculate and cache latencies for all validators.
     ///
     /// This method is called periodically after health checks complete to update
-    /// the cached validator scores.
-    fn update_cached_scores(&self, authority_agg: &AuthorityAggregator<A>) {
+    /// the cached validator latencies. Those are the end to end latencies as calculated for each validator
+    /// taking into account the reliability of the validator.
+    fn update_cached_latencies(&self, authority_agg: &AuthorityAggregator<A>) {
         let committee = &authority_agg.committee;
-        let mut cached_scores = self.cached_scores.write();
+        let mut cached_latencies = self.cached_latencies.write();
 
         for tx_type in TxType::iter() {
-            let score_map = self
+            let latencies_map = self
                 .client_stats
                 .read()
                 .get_all_validator_stats(committee, tx_type);
 
-            for (validator, score) in score_map.iter() {
+            for (validator, latency) in latencies_map.iter() {
                 debug!(
-                    "Validator {}, tx type {}: score {}",
+                    "Validator {}, tx type {}: latency {}",
                     validator,
                     tx_type.as_str(),
-                    score
+                    latency.as_secs_f64()
                 );
                 let display_name = authority_agg.get_display_name(validator);
                 self.metrics
-                    .performance_score
+                    .performance
                     .with_label_values(&[&display_name, tx_type.as_str()])
-                    .set(*score);
+                    .set(latency.as_secs_f64());
             }
 
-            cached_scores.insert(tx_type, score_map);
+            cached_latencies.insert(tx_type, latencies_map);
         }
     }
 
@@ -208,78 +215,106 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             OperationType::FastPath => "fast_path",
             OperationType::Consensus => "consensus",
         };
+        let ping_label = if feedback.ping_type.is_some() {
+            "true"
+        } else {
+            "false"
+        };
 
         match feedback.result {
             Ok(latency) => {
                 self.metrics
                     .observed_latency
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, ping_label])
                     .observe(latency.as_secs_f64());
                 self.metrics
                     .operation_success
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, ping_label])
                     .inc();
             }
             Err(()) => {
                 self.metrics
                     .operation_failure
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, ping_label])
                     .inc();
             }
         }
 
         let mut client_stats = self.client_stats.write();
-        client_stats.record_interaction_result(feedback, &self.metrics);
+        client_stats.record_interaction_result(feedback);
     }
 
-    /// Select validators based on client-observed performance with shuffled top k.
+    /// Select validators based on client-observed performance for the given transaction type.
     ///
-    /// We need to pass the current committee here because it is possible
-    /// that the fullnode is in the middle of a committee change when this
-    /// is called, and we need to maintain an invariant that the selected
-    /// validators are always in the committee passed in.
+    /// The current committee is passed in to ensure this function has the latest committee information.
     ///
-    /// Also the tx type is passed in so that we can select validators based on their respective scores
+    /// Also the tx type is passed in so that we can select validators based on their respective latencies
     /// for the transaction type.
     ///
-    /// We shuffle the top k validators to avoid the same validator being selected
-    /// too many times in a row and getting overloaded.
+    /// Validators with latencies within `delta` of the lowest latency in the given transaction type
+    /// are shuffled, to balance the load among the fastest validators.
     ///
-    /// Returns a vector containing:
-    /// 1. The top `k` validators by score (shuffled)
-    /// 2. The remaining validators ordered by score (not shuffled)
+    /// Returns a vector containing all validators, where
+    /// 1. Fast validators within `delta` of the lowest latency are shuffled.
+    /// 2. Remaining slow validators are sorted by latency in ascending order.
     pub fn select_shuffled_preferred_validators(
         &self,
         committee: &Committee,
-        k: usize,
         tx_type: TxType,
+        delta: f64,
     ) -> Vec<AuthorityName> {
         let mut rng = rand::thread_rng();
 
-        let cached_scores = self.cached_scores.read();
-        let Some(cached_scores) = cached_scores.get(&tx_type) else {
+        let cached_latencies = self.cached_latencies.read();
+        let Some(cached_latencies) = cached_latencies.get(&tx_type) else {
             let mut validators: Vec<_> = committee.names().cloned().collect();
             validators.shuffle(&mut rng);
             return validators;
         };
 
-        // Since the cached scores are updated periodically, it is possible that it was ran on
+        // Since the cached latencies are updated periodically, it is possible that it was ran on
         // an out-of-date committee.
-        let mut validator_with_scores: Vec<_> = committee
+        let mut validator_with_latencies: Vec<_> = committee
             .names()
-            .map(|v| (*v, cached_scores.get(v).cloned().unwrap_or(0.0)))
+            .map(|v| {
+                (
+                    *v,
+                    cached_latencies.get(v).cloned().unwrap_or(Duration::ZERO),
+                )
+            })
             .collect();
-        validator_with_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        if validator_with_latencies.is_empty() {
+            return vec![];
+        }
+        // Shuffle the validators to balance the load among validators with the same latency.
+        validator_with_latencies.shuffle(&mut rng);
+        // Sort by latency in ascending order. We want to select the validators with the lowest latencies.
+        validator_with_latencies.sort_by_key(|(_, latency)| *latency);
 
-        let k = k.min(validator_with_scores.len());
-        validator_with_scores[..k].shuffle(&mut rng);
+        // Shuffle the validators within delta of the lowest latency, for load balancing.
+        let lowest_latency = validator_with_latencies[0].1;
+        let threshold = lowest_latency.mul_f64(1.0 + delta);
+        let k = validator_with_latencies
+            .iter()
+            .enumerate()
+            .find(|(_, (_, latency))| *latency > threshold)
+            .map(|(i, _)| i)
+            .unwrap_or(validator_with_latencies.len());
+        validator_with_latencies[..k].shuffle(&mut rng);
+        self.metrics
+            .shuffled_validators
+            .with_label_values(&[tx_type.as_str()])
+            .observe(k as f64);
 
-        validator_with_scores.into_iter().map(|(v, _)| v).collect()
+        validator_with_latencies
+            .into_iter()
+            .map(|(v, _)| v)
+            .collect()
     }
 
     #[cfg(test)]
-    pub fn force_update_cached_scores(&self, authority_agg: &AuthorityAggregator<A>) {
-        self.update_cached_scores(authority_agg);
+    pub fn force_update_cached_latencies(&self, authority_agg: &AuthorityAggregator<A>) {
+        self.update_cached_latencies(authority_agg);
     }
 
     #[cfg(test)]

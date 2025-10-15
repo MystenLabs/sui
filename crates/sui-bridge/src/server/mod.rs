@@ -38,6 +38,10 @@ pub(crate) mod mock_handler;
 
 pub const APPLICATION_JSON: &str = "application/json";
 
+// Maximum number of items allowed in comma-separated lists in governance endpoints
+// This prevents DoS attacks where oversized lists cause panics during u8 conversion
+pub const MAX_LIST_SIZE: usize = 255;
+
 pub const PING_PATH: &str = "/ping";
 pub const METRICS_KEY_PATH: &str = "/metrics_pub_key";
 
@@ -157,6 +161,19 @@ async fn health_check() -> StatusCode {
     StatusCode::OK
 }
 
+/// Validates that a comma-separated list doesn't exceed the maximum allowed size
+/// to prevent DoS attacks during u8 conversion in encoding
+fn validate_list_size(list_str: &str, field_name: &str) -> Result<(), BridgeError> {
+    let count = list_str.split(',').count();
+    if count > MAX_LIST_SIZE {
+        return Err(BridgeError::InvalidBridgeClientRequest(format!(
+            "{} list size {} exceeds maximum allowed size of {}",
+            field_name, count, MAX_LIST_SIZE
+        )));
+    }
+    Ok(())
+}
+
 async fn ping(
     State((_handler, _metrics, metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
@@ -230,6 +247,8 @@ async fn handle_update_committee_blocklist_action(
                 err
             ))
         })?;
+        // Validate list size to prevent DoS
+        validate_list_size(&keys, "keys")?;
         let members_to_update = keys
             .split(',')
             .map(|s| {
@@ -453,6 +472,11 @@ async fn handle_add_tokens_on_sui(
                 )))
             }
         };
+        // Validate list sizes to prevent DoS
+        validate_list_size(&token_ids, "token_ids")?;
+        validate_list_size(&token_type_names, "token_type_names")?;
+        validate_list_size(&token_prices, "token_prices")?;
+
         let token_ids = token_ids
             .split(',')
             .map(|s| {
@@ -534,6 +558,12 @@ async fn handle_add_tokens_on_evm(
                 )))
             }
         };
+        // Validate list sizes to prevent DoS
+        validate_list_size(&token_ids, "token_ids")?;
+        validate_list_size(&token_addresses, "token_addresses")?;
+        validate_list_size(&token_sui_decimals, "token_sui_decimals")?;
+        validate_list_size(&token_prices, "token_prices")?;
+
         let token_ids = token_ids
             .split(',')
             .map(|s| {

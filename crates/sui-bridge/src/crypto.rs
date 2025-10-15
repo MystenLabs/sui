@@ -118,7 +118,9 @@ pub struct BridgeAuthoritySignInfo {
 
 impl BridgeAuthoritySignInfo {
     pub fn new(msg: &BridgeAction, secret: &BridgeAuthorityKeyPair) -> Self {
-        let msg_bytes = msg.to_bytes();
+        let msg_bytes = msg
+            .to_bytes()
+            .expect("Message encoding should not fail for valid actions");
         Self {
             authority_pub_key: secret.public().clone(),
             signature: secret.sign_recoverable_with_hash::<Keccak256>(&msg_bytes),
@@ -134,7 +136,9 @@ impl BridgeAuthoritySignInfo {
         }
 
         // 2. verify signature
-        let msg_bytes = msg.to_bytes();
+        let msg_bytes = msg.to_bytes().map_err(|e| {
+            BridgeError::Generic(format!("Failed to encode message for verification: {}", e))
+        })?;
 
         self.authority_pub_key
             .verify_recoverable_with_hash::<Keccak256>(&msg_bytes, &self.signature)

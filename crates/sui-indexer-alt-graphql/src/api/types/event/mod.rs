@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    Context, Object,
-};
+use async_graphql::{connection::Connection, Context, Object};
 use diesel::{prelude::QueryableByName, sql_types::BigInt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -125,15 +122,13 @@ impl Event {
         page: Page<CEvent>,
         filter: EventFilter,
     ) -> Result<Connection<String, Event>, RpcError> {
-        let mut c = Connection::new(false, false);
-
         let pg_reader: &PgReader = ctx.data()?;
 
         // TODO: (henry) Use watermarks once we have a strategy for kv pruning.
         let reader_lo = 0;
 
         let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(c);
+            return Ok(Connection::new(false, false));
         };
 
         #[derive(QueryableByName)]
@@ -171,18 +166,7 @@ impl Event {
         )
         .await?;
 
-        let (has_prev, has_next, edges) =
-            page.paginate_results(events, |(cursor, _)| JsonCursor::new(*cursor));
-
-        // Set pagination state
-        c.has_previous_page = has_prev;
-        c.has_next_page = has_next;
-
-        for (cursor, (_, event)) in edges {
-            c.edges.push(Edge::new(cursor.encode_cursor(), event));
-        }
-
-        Ok(c)
+        page.paginate_results(events, |(c, _)| JsonCursor::new(*c), |(_, e)| Ok(e))
     }
 }
 

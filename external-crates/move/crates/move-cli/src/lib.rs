@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use base::{
-    build::Build, coverage::Coverage, disassemble::Disassemble, docgen::Docgen, info::Info,
-    migrate::Migrate, new::New, summary::Summary, test::Test,
+    build::Build, coverage::Coverage, decompile::Decompile, disassemble::Disassemble,
+    docgen::Docgen, info::Info, migrate::Migrate, new::New, summary::Summary, test::Test,
 };
 use move_package::{BuildConfig, resolution::resolution_graph::ResolvedGraph};
 
@@ -61,6 +61,7 @@ pub enum Command {
     Build(Build),
     Coverage(Coverage),
     Disassemble(Disassemble),
+    Decompile(Decompile),
     Docgen(Docgen),
     Info(Info),
     Migrate(Migrate),
@@ -92,6 +93,9 @@ pub fn run_cli(
     match cmd {
         Command::Build(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
         Command::Coverage(c) => {
+            c.execute(move_args.package_path.as_deref(), move_args.build_config)
+        }
+        Command::Decompile(c) => {
             c.execute(move_args.package_path.as_deref(), move_args.build_config)
         }
         Command::Disassemble(c) => {

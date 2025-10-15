@@ -9,7 +9,7 @@ Using the Closed-Loop Token standard, you can limit the applications that can us
 
 ## Background and use cases
 
-The [Coin standard](./coin.mdx) on Sui is an example of an open-loop system. Coins are free-flowing, [wrappable](/concepts/object-ownership/wrapped.mdx), [freely transferable](/concepts/transfers/custom-rules.mdx#the-store-ability-and-transfer-rules) and you can store them in any application. The best real world analogy would be cash as it is hardly regulated and can be freely used and passed.
+The [Currency Standard](/standards/currency.mdx) on Sui is an example of an open-loop system. Coins are free-flowing, [wrappable](/concepts/object-ownership/wrapped.mdx), [freely transferable](/concepts/transfers/custom-rules.mdx#the-store-ability-and-transfer-rules) and you can store them in any application. 
 
 Some applications, however, require constraining the scope of the token to a specific purpose. For example, some applications might need a token that you can only use for a specific service, or that an authorized account can only use, or a token that you can block certain accounts from using. A real-world analogy would be a bank account that is regulated, bank-controlled, and compliant with certain rules and policies.
 
@@ -51,7 +51,7 @@ flowchart LR
     B-- from_coin -->C;
 ```
 
-Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, [it can be spent](./closed-loop-token/spending.mdx).
+Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, [it can be spent](/standards/closed-loop-token/spending.mdx).
 
 ```move
 // defined in `sui::coin`
@@ -63,7 +63,7 @@ struct Token<phantom T> has key { id: UID, balance: Balance<T> }
 
 ## Compliance and rules
 
-You can set up any rules for transfers, spends, and conversions for the tokens you create. You specify these rules per action in the [TokenPolicy](./closed-loop-token/token-policy.mdx). [Rules](./closed-loop-token/rules.mdx) are custom programmable restrictions that you can use to implement any request authorization or validation logic.
+You can set up any rules for transfers, spends, and conversions for the tokens you create. You specify these rules per action in the [TokenPolicy](/standards/closed-loop-token/token-policy.mdx). [Rules](/standards/closed-loop-token/rules.mdx) are custom programmable restrictions that you can use to implement any request authorization or validation logic.
 
 For example, a policy can set a limit on a transfer - `X` tokens per operation; or require user verification before spending tokens; or allow spending tokens only on a specific service.
 
@@ -79,11 +79,11 @@ Tokens have a set of public and protected actions that you can use to manage the
 - `token::zero`: Create an empty (zero balance) token
 - `token::destroy_zero`: Destroy a token with zero balance
 
-See [Coin Token Comparison](./closed-loop-token/coin-token-comparison.mdx) for coin and token methods comparison.
+See [Coin Token Comparison](/standards/closed-loop-token/coin-token-comparison.mdx) for coin and token methods comparison.
 
 ## Protected actions
 
-Protected actions are ones that issue an [`ActionRequest`](./closed-loop-token/action-request.mdx) - a hot-potato struct that must be resolved for the transaction to succeed. There are three main ways to resolve an `ActionRequest`, most common of which is via the [`TokenPolicy`](./closed-loop-token/token-policy.mdx).
+Protected actions are ones that issue an [`ActionRequest`](/standards/closed-loop-token/action-request.mdx) - a hot-potato struct that must be resolved for the transaction to succeed. There are three main ways to resolve an `ActionRequest`, most common of which is via the [`TokenPolicy`](/standards/closed-loop-token/token-policy.mdx).
 
 - `token::transfer`: Transfer a token to a specified address
 - `token::to_coin`: Convert a token to a coin
@@ -94,4 +94,4 @@ The previous methods are included in the base implementation, however it is poss
 
 ## Token policy and rules
 
-Protected actions are disabled by default but you can enable them in a [`TokenPolicy`](./closed-loop-token/token-policy.mdx). Additionally, you can set custom restrictions called [rules](./closed-loop-token/rules.mdx) that a specific action must satisfy for it to succeed.
+Protected actions are disabled by default but you can enable them in a [`TokenPolicy`](/standards/closed-loop-token/token-policy.mdx). Additionally, you can set custom restrictions called [rules](/standards/closed-loop-token/rules.mdx) that a specific action must satisfy for it to succeed.

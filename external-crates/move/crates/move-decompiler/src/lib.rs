@@ -2,137 +2,138 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod ast;
+mod refinement;
 mod structuring;
+
+pub mod config;
+pub mod pretty_printer;
+pub mod testing;
 pub mod translate;
 
-use move_stackless_bytecode_2::stackless::ast as S;
-use petgraph::graph::NodeIndex;
+use anyhow::anyhow;
+use move_model_2::{
+    compiled_model as CM,
+    model::{self as M, Model},
+    source_kind::SourceKind,
+};
 
 use std::{
     collections::BTreeMap,
-    fs::File,
-    io::{BufRead, BufReader},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
-use crate::translate::module;
+//--------------------------------------------------------------------------------------------------
+// Output Generation for Decompilation from Compiled Modules
+//--------------------------------------------------------------------------------------------------
 
-// -------------------------------------------------------------------------------------------------
-// Main Entry Points
-// -------------------------------------------------------------------------------------------------
-
-pub fn decompile_module(module_: S::Module) -> crate::ast::Module {
-    module(module_)
+/// Generate Move source code from a list of compiled Move module files (.mv)
+/// and write the output to the specified directory.
+/// The output directory will contain subdirectories for each package,
+/// with the decompiled Move source files.
+/// # Arguments
+/// * `input_files` - A slice of PathBufs representing the input .mv files.
+/// * `output` - A Path representing the output directory.
+/// # Returns
+/// * `anyhow::Result<Vec<Path>>` - A result containing a vector of paths to the generated files,
+pub fn generate_from_files(input_files: &[PathBuf], output: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let module_bytes = input_files
+        .iter()
+        .map(|path| {
+            let path = path.canonicalize().map_err(|e| {
+                let path = path.display();
+                anyhow!(format!("Failed to canonicalize path {path}: {e}"))
+            })?;
+            // read raw bytes from file
+            std::fs::read(&path)
+                .map_err(|e| anyhow!(format!("Failed to read file {}: {}", path.display(), e)))
+                .map(|bytes| (path.clone(), bytes))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let modules = module_bytes
+        .iter()
+        .map(|(path, bytes)| {
+            let path = path.display();
+            move_binary_format::file_format::CompiledModule::deserialize_with_defaults(bytes)
+                .map_err(|e| anyhow!(format!("Failed to deserialize module at {path}: {e}")))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let model_config = M::ModelConfig {
+        // During decompilation, we do not need to resolve all dependencies.
+        allow_missing_dependencies: true,
+    };
+    let model = CM::Model::from_compiled_with_config(model_config, &BTreeMap::new(), modules);
+    generate_from_model(model, output)
 }
 
-// -------------------------------------------------------------------------------------------------
-// Entry Points for Testing
-// -------------------------------------------------------------------------------------------------
+/// Generate Move source code from a model and write the output to the specified directory. The
+/// output directory will contain subdirectories for each package, with the decompiled Move source
+/// files.
+/// # Arguments
+/// * `input` - A Model representing the compiled Move modules.
+/// * `output` - A Path representing the output directory.
+/// # Returns
+/// * `anyhow::Result<Vec<PathBuf>>` - A result containing a vector of paths to the generated files
+pub fn generate_from_model<S: SourceKind>(
+    input: Model<S>,
+    output: &Path,
+) -> anyhow::Result<Vec<PathBuf>> {
+    let decompiled = crate::translate::model(input)?;
 
-pub fn structuring_unit_test(file_path: &Path) -> String {
-    use structuring::ast::Input as In;
+    let crate::ast::Decompiled { model, packages } = decompiled;
 
-    fn parse_input(path: &Path) -> Result<Vec<In>, Vec<String>> {
-        let file = match File::open(path) {
-            Ok(f) => f,
-            Err(e) => return Err(vec![format!("Failed to open file: {}", e)]),
+    println!("Packages\n----------------------------------");
+    println!(
+        "- {:#?}",
+        model
+            .packages()
+            .map(|p| (p.name(), p.address()))
+            .collect::<Vec<_>>()
+    );
+
+    let mut output_paths = vec![];
+
+    println!("Modules\n----------------------------------");
+    for pkg in packages {
+        let name = pkg
+            .name
+            .map(|name| name.as_str().to_owned())
+            .unwrap_or_else(|| format!("{}", pkg.address));
+
+        // Ensure the package directory exists and is empty: output/pkg_name
+        let pkg_dir = output.join(&name);
+        std::fs::create_dir_all(&pkg_dir)?;
+
+        let Some(model_pkg) = model.maybe_package(&pkg.address) else {
+            anyhow::bail!("Package with address {} not found in model", pkg.address);
         };
 
-        let reader = BufReader::new(file);
-        let mut nodes = Vec::new();
-        let mut errors = Vec::new();
-
-        for (line_num, line_result) in reader.lines().enumerate() {
-            let line_number = line_num + 1;
-            let orig = match line_result {
-                Ok(line) => line,
-                Err(e) => {
-                    errors.push(format!("Error reading line {}: {}", line_number, e));
-                    continue;
-                }
-            };
-
-            let line = orig.split("//").next().unwrap().trim();
-
-            if line.is_empty() {
-                continue;
-            }
-
-            let parts: Vec<_> = line.split(',').map(str::trim).collect();
-
-            match parts.as_slice() {
-                ["cond", a, b, c] => match (a.parse::<u32>(), b.parse::<u32>(), c.parse::<u32>()) {
-                    (Ok(a), Ok(b), Ok(c)) => nodes.push(In::Condition(
-                        a.into(),
-                        (a.into(), false),
-                        b.into(),
-                        c.into(),
-                    )),
-                    _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
-                },
-                ["code", a, b] => match (a.parse::<u32>(), b.parse::<u32>()) {
-                    (Ok(a), Ok(b)) => {
-                        nodes.push(In::Code(a.into(), (a.into(), false), Some(b.into())))
-                    }
-                    _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
-                },
-                ["code", a] => match a.parse::<u32>() {
-                    Ok(a) => nodes.push(In::Code(a.into(), (a.into(), false), None)),
-                    _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
-                },
-                [head, rest @ ..] if *head == "variants" => {
-                    if rest.len() < 2 {
-                        errors.push(format!("Malformed line {}: {}", line_number, orig));
-                        continue;
-                    }
-
-                    let mut iter = rest.iter();
-                    let first = match iter.next().unwrap().parse::<u32>() {
-                        Ok(n) => n,
-                        Err(_) => {
-                            errors.push(format!("Malformed line {}: {}", line_number, orig));
-                            continue;
-                        }
-                    };
-
-                    let mut others: Vec<NodeIndex> = Vec::new();
-                    let mut ok = true;
-                    for r in iter {
-                        match r.parse::<u32>() {
-                            Ok(n) => others.push(n.into()),
-                            Err(_) => {
-                                errors.push(format!("Malformed line {}: {}", line_number, orig));
-                                ok = false;
-                                break;
-                            }
-                        }
-                    }
-
-                    if ok {
-                        nodes.push(In::Variants(first.into(), (first.into(), false), others));
-                    }
-                }
-                _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
-            }
-        }
-
-        if errors.is_empty() {
-            Ok(nodes)
-        } else {
-            Err(errors)
+        // Iterate without moving the map/vec
+        for (module_name, module) in &pkg.modules {
+            let path = pkg_dir.join(format!("{module_name}.move"));
+            // If generate_output returns a Result, use `?`; otherwise drop it
+            output_paths.push(generate_module(&model, model_pkg, &path, &name, module)?);
         }
     }
 
-    let input = match parse_input(file_path) {
-        Ok(input) => input
-            .into_iter()
-            .map(|entry| (entry.label(), entry))
-            .collect::<BTreeMap<_, _>>(),
-        Err(errs) => return errs.join("\n"),
+    Ok(output_paths)
+}
+
+fn generate_module<S: SourceKind>(
+    model: &Model<S>,
+    pkg: M::Package<'_, S>,
+    path: &PathBuf,
+    pkg_name: &str,
+    module: &crate::ast::Module,
+) -> anyhow::Result<PathBuf> {
+    let Some(model_mod) = pkg.maybe_module(module.name) else {
+        anyhow::bail!("Module {} not found in package {}", module.name, pkg_name);
     };
-    if !input.contains_key(&0.into()) {
-        return "Expected an entry point `0`, but none was found".to_owned();
-    }
-    let structured = structuring::structure(input, 0.into());
-    structured.to_test_string()
+
+    let doc = pretty_printer::module(model, pkg_name, model_mod, module)?;
+
+    let output = doc.render(100);
+    println!("- {}", path.display());
+    let _ = std::fs::remove_file(path); // ignore error if file does not exist
+    std::fs::write(path, output)?;
+    Ok(path.into())
 }

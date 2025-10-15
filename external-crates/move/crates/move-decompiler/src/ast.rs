@@ -1,9 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::normalized::Constant;
+use move_binary_format::normalized::{Constant, ModuleId};
 
-use move_stackless_bytecode_2::stackless::ast::{DataOp, PrimitiveOp, Value};
+use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue as Value};
+use move_model_2::{model::Model, source_kind::SourceKind};
+use move_stackless_bytecode_2::ast::{DataOp, PrimitiveOp};
 use move_symbol_pool::Symbol;
 
 use std::collections::BTreeMap;
@@ -11,6 +13,17 @@ use std::collections::BTreeMap;
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
+
+pub struct Decompiled<S: SourceKind> {
+    pub model: Model<S>,
+    pub packages: Vec<Package>,
+}
+
+pub struct Package {
+    pub name: Option<Symbol>,
+    pub address: AccountAddress,
+    pub modules: BTreeMap<Symbol, Module>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Module {
@@ -26,6 +39,13 @@ pub struct Function {
 }
 
 #[derive(Debug, Clone)]
+pub enum UnpackKind {
+    Value,
+    ImmRef,
+    MutRef,
+}
+
+#[derive(Debug, Clone)]
 pub enum Exp {
     Break,
     Continue,
@@ -33,22 +53,110 @@ pub enum Exp {
     Seq(Vec<Exp>),
     While(Box<Exp>, Box<Exp>),
     IfElse(Box<Exp>, Box<Exp>, Box<Option<Exp>>),
-    Switch(Box<Exp>, Vec<Exp>),
+    Switch(
+        Box<Exp>,
+        /* enum */ (ModuleId<Symbol>, Symbol),
+        /* variant x rhs */ Vec<(Symbol, Exp)>,
+    ),
     Return(Vec<Exp>),
     // --------------------------------
     // non-control expressions
     Assign(Vec<String>, Box<Exp>),
     LetBind(Vec<String>, Box<Exp>),
-    Call(String, Vec<Exp>),
+    Call((ModuleId<Symbol>, Symbol), Vec<Exp>),
     Abort(Box<Exp>),
     // Do we need drop?
-    Primitive { op: PrimitiveOp, args: Vec<Exp> },
-    Data { op: DataOp, args: Vec<Exp> },
+    Primitive {
+        op: PrimitiveOp,
+        args: Vec<Exp>,
+    },
+    Data {
+        op: DataOp,
+        args: Vec<Exp>,
+    },
+    Unpack((ModuleId<Symbol>, Symbol), Vec<(Symbol, String)>, Box<Exp>),
+    UnpackVariant(
+        UnpackKind,
+        (ModuleId<Symbol>, Symbol, Symbol),
+        Vec<(Symbol, String)>,
+        Box<Exp>,
+    ),
     Borrow(/* mut*/ bool, Box<Exp>),
     Value(Value),
     Variable(String),
     Constant(std::rc::Rc<Constant<Symbol>>),
     // TODO should we add specific exps for unpacks?
+}
+
+// -------------------------------------------------------------------------------------------------
+// Impls
+// -------------------------------------------------------------------------------------------------
+
+impl Exp {
+    pub fn contains_break(&self) -> bool {
+        match self {
+            Exp::Continue => false,
+            Exp::Break => true,
+            Exp::Loop(_) | Exp::While(_, _) => false,
+            Exp::Seq(seq) => seq.iter().any(|e| e.contains_break()),
+            Exp::IfElse(_, conseq, alt) => {
+                conseq.contains_break()
+                    || if let Some(alt) = &**alt {
+                        alt.contains_break()
+                    } else {
+                        false
+                    }
+            }
+            Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_break()),
+            Exp::Assign(_, exp) => exp.contains_break(),
+            Exp::LetBind(_, exp) => exp.contains_break(),
+            Exp::Call(_, exps) => exps.iter().any(|e| e.contains_break()),
+            Exp::Abort(exp) => exp.contains_break(),
+            Exp::Primitive { op: _, args } => args.iter().any(|e| e.contains_break()),
+            Exp::Data { op: _, args } => args.iter().any(|e| e.contains_break()),
+            Exp::Borrow(_, exp) => exp.contains_break(),
+            Exp::Return(_) | Exp::Value(_) | Exp::Variable(_) | Exp::Constant(_) => false,
+            Exp::Unpack(_, _, exp) => exp.contains_break(),
+            Exp::UnpackVariant(_, _, _, exp) => exp.contains_break(),
+        }
+    }
+
+    pub fn contains_continue(&self) -> bool {
+        match self {
+            Exp::Continue => true,
+            Exp::Break => false,
+            // Ignore nested loops and whiles
+            Exp::Loop(_) | Exp::While(_, _) => false,
+            // Check sub-expressions
+            Exp::Seq(seq) => seq.iter().any(|e| e.contains_continue()),
+            Exp::IfElse(_, conseq, alt) => {
+                conseq.contains_continue()
+                    || if let Some(alt) = &**alt {
+                        alt.contains_continue()
+                    } else {
+                        false
+                    }
+            }
+            Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_break()),
+            Exp::Assign(_, exp) => exp.contains_continue(),
+            Exp::LetBind(_, exp) => exp.contains_continue(),
+            Exp::Call(_, exps) => exps.iter().any(|e| e.contains_continue()),
+            Exp::Abort(exp) => exp.contains_continue(),
+            Exp::Primitive { op: _, args } => args.iter().any(|e| e.contains_continue()),
+            Exp::Data { op: _, args } => args.iter().any(|e| e.contains_continue()),
+            Exp::Borrow(_, exp) => exp.contains_continue(),
+            Exp::Return(_) | Exp::Value(_) | Exp::Variable(_) | Exp::Constant(_) => false,
+            Exp::Unpack(_, _, exp) => exp.contains_continue(),
+            Exp::UnpackVariant(_, _, _, exp) => exp.contains_continue(),
+        }
+    }
+
+    pub fn map_mut<F>(&mut self, f: F)
+    where
+        F: FnOnce(Exp) -> Exp,
+    {
+        *self = f(std::mem::replace(self, Exp::Break));
+    }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -131,13 +239,13 @@ impl std::fmt::Display for Exp {
                     }
                     writeln!(f, "}}")
                 }
-                Exp::Switch(term, cases) => {
+                Exp::Switch(term, (mid, enum_), cases) => {
                     indent(f, level)?;
-                    writeln!(f, "match({}) {{", term)?;
-                    for case in cases {
+                    writeln!(f, "match({}: {mid}::{enum_}) {{", term)?;
+                    for (variant, case) in cases {
                         indent(f, level + 1)?;
                         // TODO fix variant name
-                        writeln!(f, "VARIANT NAME => {{")?;
+                        writeln!(f, "{mid}::{enum_}::{variant} => {{")?;
                         fmt_exp(f, case, level + 2)?;
                         indent(f, level + 1)?;
                         writeln!(f, "}},")?;
@@ -165,9 +273,9 @@ impl std::fmt::Display for Exp {
                     indent(f, level)?;
                     writeln!(f, "let {} = {};", items.join(", "), exp)
                 }
-                Exp::Call(fun_name, exps) => {
+                Exp::Call((module_name, fun_name), exps) => {
                     indent(f, level)?;
-                    write!(f, "{fun_name}(")?;
+                    write!(f, "{module_name}::{fun_name}(")?;
                     for exp in exps {
                         fmt_exp(f, exp, level)?;
                     }
@@ -182,6 +290,47 @@ impl std::fmt::Display for Exp {
                 Exp::Value(value) => write!(f, "{}", value),
                 Exp::Variable(name) => write!(f, "{}", name),
                 Exp::Constant(constant) => write!(f, "{:?}", constant),
+                Exp::Unpack((module, struct_), items, exp) => {
+                    indent(f, level)?;
+                    write!(f, "let {module}::{struct_} {{")?;
+                    if !items.is_empty() {
+                        write!(f, " ")?;
+                    }
+                    for (i, (sym, name)) in items.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{sym}: {name}")?;
+                    }
+                    if !items.is_empty() {
+                        write!(f, " ")?;
+                    }
+                    writeln!(f, "}} = {};", exp)?;
+                    Ok(())
+                }
+                Exp::UnpackVariant(unpack_kind, (module, enum_, variant), items, exp) => {
+                    indent(f, level)?;
+                    write!(f, "let {module}::{enum_}::{variant} {{")?;
+                    if !items.is_empty() {
+                        write!(f, " ")?;
+                    }
+                    for (i, (sym, name)) in items.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{sym}: {name}")?;
+                    }
+                    if !items.is_empty() {
+                        write!(f, " ")?;
+                    }
+                    let unpack_str = match unpack_kind {
+                        UnpackKind::Value => "",
+                        UnpackKind::ImmRef => "&",
+                        UnpackKind::MutRef => "&mut ",
+                    };
+                    writeln!(f, "}} = {unpack_str}{exp};",)?;
+                    Ok(())
+                }
             }
         }
 
@@ -243,12 +392,12 @@ fn write_primitive_op(
         PrimitiveOp::Multiply => write!(f, "{} * {}", args[0], args[1]),
         PrimitiveOp::Modulo => write!(f, "{} % {}", args[0], args[1]),
         PrimitiveOp::Divide => write!(f, "{} / {}", args[0], args[1]),
-        PrimitiveOp::BitOr => todo!(),
-        PrimitiveOp::BitAnd => todo!(),
-        PrimitiveOp::Xor => todo!(),
-        PrimitiveOp::Or => todo!(),
-        PrimitiveOp::And => todo!(),
-        PrimitiveOp::Not => todo!(),
+        PrimitiveOp::BitOr => write!(f, "{} | {}", args[0], args[1]),
+        PrimitiveOp::BitAnd => write!(f, "{} & {}", args[0], args[1]),
+        PrimitiveOp::Xor => write!(f, "{} ^ {}", args[0], args[1]),
+        PrimitiveOp::Or => write!(f, "{} || {}", args[0], args[1]),
+        PrimitiveOp::And => write!(f, "{} && {}", args[0], args[1]),
+        PrimitiveOp::Not => write!(f, "!({})", args[0]),
         PrimitiveOp::Equal => write!(f, "{} == {}", args[0], args[1]),
         PrimitiveOp::NotEqual => write!(f, "{} != {}", args[0], args[1]),
         PrimitiveOp::LessThan => write!(f, "{} < {}", args[0], args[1]),

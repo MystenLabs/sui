@@ -48,6 +48,7 @@ pub(crate) enum EndOfEpochTransactionKind {
     StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
     AccumulatorRootCreate(AccumulatorRootCreateTransaction),
     CoinRegistryCreate(CoinRegistryCreateTransaction),
+    DisplayRegistryCreate(DisplayRegistryCreateTransaction),
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -116,6 +117,13 @@ pub(crate) struct AccumulatorRootCreateTransaction {
 
 #[derive(SimpleObject, Clone, PartialEq, Eq)]
 pub(crate) struct CoinRegistryCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+#[derive(SimpleObject, Clone, PartialEq, Eq)]
+pub(crate) struct DisplayRegistryCreateTransaction {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
@@ -335,6 +343,9 @@ impl EndOfEpochTransactionKind {
             }
             N::CoinRegistryCreate => {
                 K::CoinRegistryCreate(CoinRegistryCreateTransaction { dummy: None })
+            }
+            N::DisplayRegistryCreate => {
+                K::DisplayRegistryCreate(DisplayRegistryCreateTransaction { dummy: None })
             }
         }
     }

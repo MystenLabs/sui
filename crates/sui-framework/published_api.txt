@@ -1736,7 +1736,7 @@ new_stream_head
 	fun
 	0x2::accumulator_settlement
 settle_events
-	entry fun
+	fun
 	0x2::accumulator_settlement
 AuthenticatorState
 	public struct

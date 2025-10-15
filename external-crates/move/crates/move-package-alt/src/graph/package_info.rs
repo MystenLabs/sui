@@ -13,6 +13,7 @@ use crate::{
 };
 
 use super::PackageGraph;
+use move_compiler::editions::Edition;
 
 /// A narrow interface for representing packages outside of `move-package-alt`
 #[derive(Copy)]
@@ -93,8 +94,8 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
     }
 
     /// The compiler edition for the package
-    pub fn edition(&self) -> &str {
-        self.package().metadata().edition.as_str()
+    pub fn edition(&self) -> Option<Edition> {
+        self.package().metadata().edition
     }
 
     /// The flavor for the package

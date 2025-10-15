@@ -102,7 +102,9 @@ static_symbols!(
     "claim",
     "coin_registry",
     "new_currency",
-    "test"
+    "test",
+    "utf8",
+    "display_registry",
 );
 
 /// The global, unique cache of strings.

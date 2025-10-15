@@ -41,7 +41,8 @@ use sui_types::{
     storage::ChildObjectResolver,
     TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID,
     SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID,
-    SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_DENY_LIST_OBJECT_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::error;
 
@@ -288,6 +289,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_BRIDGE_OBJECT_ID,
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
             SUI_COIN_REGISTRY_OBJECT_ID,
+            SUI_DISPLAY_REGISTRY_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {
@@ -640,7 +642,7 @@ impl ObjectRuntimeState {
             settlement_output_sui,
         } = self;
 
-        // The set of new ids is a a subset of the generated ids.
+        // The set of new ids is a subset of the generated ids.
         debug_assert!(new_ids.is_subset(&generated_ids));
 
         // Check new owners from transfers, reports an error on cycles.

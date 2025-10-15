@@ -1,28 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::{account_address::AccountAddress, identifier::Identifier, u256::U256};
-use serde::Deserialize;
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
 use sui_keys::keystore::AccountKeystore;
+use sui_light_client::mmr::apply_stream_updates;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::accumulator_root::EventCommitment;
 use sui_types::{
-    accumulator_root as ar,
+    accumulator_root::{self as ar, EventStreamHead},
     base_types::{ObjectID, SuiAddress},
     dynamic_field::Field,
+    effects::{AccumulatorValue, TransactionEffectsAPI},
+    messages_checkpoint::CheckpointSequenceNumber,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::TransactionData,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
-
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct MoveEventStreamHead {
-    mmr: Vec<U256>,
-    checkpoint_seq: u64,
-    num_events: u64,
-}
 
 async fn setup_test_cluster_with_auth_events() -> TestCluster {
     let _guard: sui_protocol_config::OverrideGuard =
@@ -84,11 +79,36 @@ async fn try_emit_authenticated_event(
 async fn load_event_stream_head_by_object_id(
     state: &sui_core::authority::AuthorityState,
     object_id: ObjectID,
-) -> Option<MoveEventStreamHead> {
+) -> Option<EventStreamHead> {
     let obj = state.get_object(&object_id).await?;
     let mo = obj.data.try_as_move()?;
-    let field = mo.to_rust::<Field<ar::AccumulatorKey, MoveEventStreamHead>>()?;
+    let field = mo.to_rust::<Field<ar::AccumulatorKey, EventStreamHead>>()?;
     Some(field.value)
+}
+
+fn build_event_commitments_from_checkpoint(
+    state: &sui_core::authority::AuthorityState,
+    checkpoint_seq: CheckpointSequenceNumber,
+) -> Result<Vec<EventCommitment>, Box<dyn std::error::Error>> {
+    let checkpoint_contents = state.get_checkpoint_contents_by_sequence_number(checkpoint_seq)?;
+    let mut event_commitments = Vec::new();
+
+    for (idx, digest) in checkpoint_contents.iter().enumerate() {
+        let effects = state
+            .get_transaction_cache_reader()
+            .get_executed_effects(&digest.transaction)
+            .ok_or_else(|| format!("Missing effects for transaction {}", digest.transaction))?;
+
+        let accumulator_events = effects.accumulator_events();
+        for acc_event in accumulator_events.iter() {
+            if let AccumulatorValue::EventDigest(event_idx, digest) = &acc_event.write.value {
+                let event_commitment = EventCommitment::new(0, idx as u64, *event_idx, *digest);
+                event_commitments.push(event_commitment);
+            }
+        }
+    }
+
+    Ok(event_commitments)
 }
 
 #[sim_test]
@@ -170,11 +190,8 @@ async fn authenticated_events_disabled_test() {
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    // This test verifies that when authenticated events are disabled,
-    // calling emit_authenticated will fail with abort code 0.
     let result = try_emit_authenticated_event(&mut test_cluster, package_id, sender, 42).await;
 
-    // The transaction should succeed in being executed but fail in the effects
     let response = result.expect("Transaction should execute to effects");
     let effects = response.effects.as_ref().unwrap();
 
@@ -195,5 +212,100 @@ async fn authenticated_events_disabled_test() {
         error_str.contains("0"),
         "Error should contain abort code 0 (NOT_SUPPORTED): {}",
         error_str
+    );
+}
+
+#[sim_test]
+async fn authenticated_events_mmr_validation_test() {
+    let mut test_cluster = setup_test_cluster_with_auth_events().await;
+    let package_id = publish_auth_event_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+    let state = test_cluster.fullnode_handle.sui_node.state();
+
+    let start_checkpoint = state.get_latest_checkpoint_sequence_number().unwrap();
+
+    let mut accumulator_obj_id = None;
+    for i in 0..3 {
+        let resp = try_emit_authenticated_event(&mut test_cluster, package_id, sender, 100 + i)
+            .await
+            .expect("Transaction should succeed");
+
+        let effects = resp.effects.as_ref().unwrap();
+        let acc_events = effects.accumulator_events();
+        if !acc_events.is_empty() {
+            accumulator_obj_id = Some(acc_events[0].accumulator_obj);
+        }
+    }
+
+    let checkpoint_x = state.get_latest_checkpoint_sequence_number().unwrap();
+    assert!(
+        checkpoint_x > start_checkpoint,
+        "Checkpoint should have advanced"
+    );
+
+    let accumulator_obj_id = accumulator_obj_id.expect("Should have accumulator object ID");
+    let sui_stream_head_x = load_event_stream_head_by_object_id(&state, accumulator_obj_id)
+        .await
+        .expect("Should be able to load event stream head at checkpoint X");
+
+    let mut events_up_to_x = Vec::new();
+    for cp_seq in (start_checkpoint + 1)..=checkpoint_x {
+        let cp_events = build_event_commitments_from_checkpoint(&state, cp_seq)
+            .expect("Should be able to build event commitments");
+        if !cp_events.is_empty() {
+            events_up_to_x.push(cp_events);
+        }
+    }
+
+    let calculated_stream_head_x = apply_stream_updates(&EventStreamHead::new(), events_up_to_x);
+
+    assert_eq!(
+        calculated_stream_head_x.num_events, sui_stream_head_x.num_events,
+        "Event count should match at checkpoint X"
+    );
+
+    assert_eq!(
+        calculated_stream_head_x.mmr, sui_stream_head_x.mmr,
+        "MMR should match at checkpoint X"
+    );
+
+    let stream_head_x = &sui_stream_head_x;
+
+    for i in 0..4 {
+        let _resp = try_emit_authenticated_event(&mut test_cluster, package_id, sender, 200 + i)
+            .await
+            .expect("Transaction should succeed");
+    }
+
+    let checkpoint_x_prime = state.get_latest_checkpoint_sequence_number().unwrap();
+    assert!(
+        checkpoint_x_prime > checkpoint_x,
+        "Checkpoint should have advanced further"
+    );
+
+    let mut events_between = Vec::new();
+    for cp_seq in (checkpoint_x + 1)..=checkpoint_x_prime {
+        let cp_events = build_event_commitments_from_checkpoint(&state, cp_seq)
+            .expect("Should be able to build event commitments");
+        if !cp_events.is_empty() {
+            events_between.push(cp_events);
+        }
+    }
+
+    let actual_stream_head_x_prime =
+        load_event_stream_head_by_object_id(&state, accumulator_obj_id)
+            .await
+            .expect("Should be able to load event stream head at checkpoint X'");
+
+    let calculated_stream_head_x_prime = apply_stream_updates(stream_head_x, events_between);
+
+    assert_eq!(
+        calculated_stream_head_x_prime.num_events, actual_stream_head_x_prime.num_events,
+        "Event count should match between calculated and actual stream heads"
+    );
+
+    assert_eq!(
+        calculated_stream_head_x_prime.mmr, actual_stream_head_x_prime.mmr,
+        "MMR should match between calculated and actual stream heads"
     );
 }

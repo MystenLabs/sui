@@ -149,7 +149,7 @@ impl<'state> CachedPackageStore<'state> {
     }
 
     /// Get a package by its package ID (i.e., not original ID). This will first look in the new
-    /// packages, then in the cache, and then finally try and fetch the pacakge from the underlying
+    /// packages, then in the cache, and then finally try and fetch the package from the underlying
     /// package store.
     ///
     /// Once the package is fetched it will be added to the type origin cache if it is not already
@@ -197,7 +197,7 @@ impl<'state> CachedPackageStore<'state> {
     }
 
     /// Get a package by its package ID (i.e., not original ID). This will first look in the new
-    /// packages, then in the cache, and then finally try and fetch the pacakge from the underlying
+    /// packages, then in the cache, and then finally try and fetch the package from the underlying
     /// package store. NB: this does not do any indexing of the package.
     fn fetch_package(&self, id: &ObjectID) -> SuiResult<Option<Rc<MovePackage>>> {
         // Look for package in new packages

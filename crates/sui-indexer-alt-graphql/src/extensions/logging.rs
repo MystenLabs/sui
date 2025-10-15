@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    future::Future,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    pin::Pin,
+    sync::{Arc, OnceLock},
+    task::{Context, Poll},
 };
 
 use async_graphql::{
@@ -15,6 +18,8 @@ use async_graphql::{
     Request, Response, ServerError, ServerResult, ValidationResult, Value, Variables,
 };
 use axum::http::HeaderName;
+use pin_project::{pin_project, pinned_drop};
+use prometheus::HistogramTimer;
 use serde_json::json;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -31,24 +36,56 @@ pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-req
 /// particular request.
 #[derive(Copy, Clone)]
 pub(crate) struct Session {
-    pub request_id: Uuid,
-    pub client_addr: SocketAddr,
+    pub uuid: Uuid,
+    pub addr: SocketAddr,
 }
 
 /// This extension is responsible for tracing and recording metrics for various GraphQL queries.
 pub(crate) struct Logging(pub Arc<RpcMetrics>);
 
+#[derive(Clone)]
 struct LoggingExt {
-    session: Mutex<Option<Session>>,
-    query: Mutex<Option<String>>,
+    session: Arc<OnceLock<Session>>,
+    query: Arc<OnceLock<String>>,
     metrics: Arc<RpcMetrics>,
+}
+
+struct RequestMetrics {
+    timer: HistogramTimer,
+    ext: LoggingExt,
+}
+
+#[pin_project(PinnedDrop)]
+struct MetricsFuture<F> {
+    metrics: Option<RequestMetrics>,
+    #[pin]
+    inner: F,
 }
 
 impl Session {
     pub(crate) fn new(addr: SocketAddr) -> Self {
         Self {
-            request_id: Uuid::new_v4(),
-            client_addr: addr,
+            uuid: Uuid::new_v4(),
+            addr,
+        }
+    }
+}
+
+impl<F> MetricsFuture<F> {
+    fn request(ext: &LoggingExt, inner: F) -> Self
+    where
+        F: Future<Output = Response>,
+    {
+        ext.metrics.queries_received.inc();
+        ext.metrics.queries_in_flight.inc();
+        let guard = ext.metrics.query_latency.start_timer();
+
+        MetricsFuture {
+            metrics: Some(RequestMetrics {
+                timer: guard,
+                ext: ext.clone(),
+            }),
+            inner,
         }
     }
 }
@@ -56,8 +93,8 @@ impl Session {
 impl ExtensionFactory for Logging {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(LoggingExt {
-            session: Mutex::new(None),
-            query: Mutex::new(None),
+            session: Arc::new(OnceLock::new()),
+            query: Arc::new(OnceLock::new()),
             metrics: self.0.clone(),
         })
     }
@@ -66,51 +103,7 @@ impl ExtensionFactory for Logging {
 #[async_trait::async_trait]
 impl Extension for LoggingExt {
     async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
-        self.metrics.queries_received.inc();
-        self.metrics.queries_in_flight.inc();
-        let guard = self.metrics.query_latency.start_timer();
-        let mut response = next.run(ctx).await;
-        let elapsed_ms = guard.stop_and_record() * 1000.0;
-        self.metrics.queries_in_flight.dec();
-
-        // SAFETY: This is set by `prepare_request`.
-        let Session {
-            request_id: uuid,
-            client_addr: addr,
-        } = self.session.lock().unwrap().unwrap();
-        let request_id = uuid.to_string().try_into().unwrap();
-        response.http_headers.insert(REQUEST_ID_HEADER, request_id);
-
-        if response.is_ok() {
-            info!(%uuid, %addr, elapsed_ms, "Request succeeded");
-            self.metrics.queries_succeeded.inc();
-        } else {
-            let codes = error_codes(&response);
-
-            // Log internal errors, timeouts, and unknown errors at a higher log level than other errors.
-            if is_loud_query(&codes) {
-                warn!(%uuid, %addr, query = self.query.lock().unwrap().as_ref().unwrap(), "Query");
-            } else {
-                debug!(%uuid, %addr, query = self.query.lock().unwrap().as_ref().unwrap(), "Query");
-            }
-
-            info!(%uuid, %addr, elapsed_ms, ?codes, "Request failed");
-
-            if codes.is_empty() {
-                self.metrics
-                    .queries_failed
-                    .with_label_values(&["<UNKNOWN>"])
-                    .inc();
-            }
-
-            for code in &codes {
-                self.metrics.queries_failed.with_label_values(&[code]).inc();
-            }
-        }
-
-        debug!(%uuid, %addr, response = %json!(response), "Response");
-
-        response
+        MetricsFuture::request(self, next.run(ctx)).await
     }
 
     /// Capture Session information from the Context so that the `request` handler can use it for
@@ -122,7 +115,7 @@ impl Extension for LoggingExt {
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
         let session = ctx.data_unchecked();
-        *self.session.lock().unwrap() = Some(*session);
+        let _ = self.session.set(*session);
         next.run(ctx, request).await
     }
 
@@ -140,7 +133,7 @@ impl Extension for LoggingExt {
         })?;
 
         let query = ctx.stringify_execute_doc(&doc, variables);
-        *self.query.lock().unwrap() = Some(query);
+        let _ = self.query.set(query);
         Ok(doc)
     }
 
@@ -176,6 +169,74 @@ impl Extension for LoggingExt {
         .inc();
 
         result
+    }
+}
+
+impl<F> Future for MetricsFuture<F>
+where
+    F: Future<Output = Response>,
+{
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+
+        let Poll::Ready(mut resp) = this.inner.poll(cx) else {
+            return Poll::Pending;
+        };
+
+        let Some(RequestMetrics { timer, ext }) = this.metrics.take() else {
+            return Poll::Ready(resp);
+        };
+
+        let elapsed_ms = timer.stop_and_record() * 1000.0;
+        ext.metrics.queries_in_flight.dec();
+
+        // SAFETY: This is set by `prepare_request`.
+        let Session { uuid, addr } = ext.session.get().unwrap();
+        let request_id = uuid.to_string().try_into().unwrap();
+        resp.http_headers.insert(REQUEST_ID_HEADER, request_id);
+
+        if resp.is_ok() {
+            info!(%uuid, %addr, elapsed_ms, "Request succeeded");
+            ext.metrics.queries_succeeded.inc();
+        } else {
+            let codes = error_codes(&resp);
+
+            // Log internal errors, timeouts, and unknown errors at a higher log level than other errors.
+            if is_loud_query(&codes) {
+                warn!(%uuid, %addr, query = ext.query.get().unwrap(), "Query");
+            } else {
+                debug!(%uuid, %addr, query = ext.query.get().unwrap(), "Query");
+            }
+
+            info!(%uuid, %addr, elapsed_ms, ?codes, "Request failed");
+
+            if codes.is_empty() {
+                ext.metrics
+                    .queries_failed
+                    .with_label_values(&["<UNKNOWN>"])
+                    .inc();
+            }
+
+            for code in &codes {
+                ext.metrics.queries_failed.with_label_values(&[code]).inc();
+            }
+        }
+
+        debug!(%uuid, %addr, response = %json!(resp), "Response");
+        Poll::Ready(resp)
+    }
+}
+
+#[pinned_drop]
+impl<F> PinnedDrop for MetricsFuture<F> {
+    fn drop(self: Pin<&mut Self>) {
+        if let Some(RequestMetrics { timer, ext }) = self.project().metrics.take() {
+            let elapsed_ms = timer.stop_and_record() * 1000.0;
+            ext.metrics.queries_cancelled.inc();
+            info!(elapsed_ms, "Request cancelled");
+        }
     }
 }
 

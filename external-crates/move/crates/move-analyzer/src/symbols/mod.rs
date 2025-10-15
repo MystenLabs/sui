@@ -84,14 +84,16 @@ use vfs::VfsPath;
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    editions::{Edition, FeatureGate},
+    editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_, Visibility},
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, Type_, TypeName_, VariantFields},
     parser::ast::{self as P, DocComment},
-    shared::{Identifier, NamedAddressMap, files::MappedFiles, unique_map::UniqueMap},
+    shared::{
+        Identifier, NamedAddressMap, files::MappedFiles,
+        stdlib_definitions::UNIT_TEST_POISON_INJECTION_NAME, unique_map::UniqueMap,
+    },
     typing::ast::ModuleDefinition,
-    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 use move_ir_types::location::*;
 use move_package::source_package::parsed_manifest::Dependencies;
@@ -154,6 +156,7 @@ pub fn get_symbols(
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     // helper function to avoid holding the lock for too long
     let has_pkg_entry = || {
@@ -183,6 +186,7 @@ pub fn get_symbols(
             pkg_path,
             lint,
             implicit_deps.clone(),
+            flavor,
         )?;
         eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
         let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
@@ -305,7 +309,7 @@ pub fn compute_symbols_pre_process(
         &fields_order_info,
         &compiled_pkg_info.mapped_files,
         &mut computation_data.mod_outer_defs,
-        &mut computation_data.mod_use_defs,
+        &mut computation_data.use_defs,
         &mut computation_data.references,
         &mut computation_data.def_info,
         &compiled_pkg_info.edition,
@@ -419,11 +423,9 @@ pub fn compute_symbols_typed_program(
                     mod_outer_defs,
                     |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
                 ),
-                mod_use_defs: filter_computation_data!(
-                    computation_data,
-                    mod_use_defs,
-                    |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
-                ),
+                use_defs: filter_computation_data!(computation_data, use_defs, |(fhash, _)| {
+                    cached_deps.dep_hashes.contains(fhash)
+                }),
                 references: filter_computation_data!(computation_data, references, |(loc, _)| {
                     cached_deps.dep_hashes.contains(&loc.file_hash())
                 }),
@@ -471,14 +473,8 @@ fn update_file_use_defs(
     mapped_files: &MappedFiles,
     file_use_defs: &mut FileUseDefs,
 ) {
-    for (module_ident_str, use_defs) in &computation_data.mod_use_defs {
-        // unwrap here is safe as all modules in a given program have the module_defs entry
-        // in the map
-        let module_defs = computation_data
-            .mod_outer_defs
-            .get(module_ident_str)
-            .unwrap();
-        let fpath = match mapped_files.file_name_mapping().get(&module_defs.fhash) {
+    for (fhash, use_defs) in &computation_data.use_defs {
+        let fpath = match mapped_files.file_name_mapping().get(fhash) {
             Some(p) => p.as_path().to_string_lossy().to_string(),
             None => return,
         };
@@ -585,7 +581,7 @@ fn pre_process_typed_modules(
     fields_order_info: &FieldOrderInfo,
     files: &MappedFiles,
     mod_outer_defs: &mut BTreeMap<String, ModuleDefs>,
-    mod_use_defs: &mut BTreeMap<String, UseDefMap>,
+    use_defs: &mut BTreeMap<FileHash, UseDefMap>,
     references: &mut References,
     def_info: &mut DefMap,
     edition: &Option<Edition>,
@@ -612,7 +608,11 @@ fn pre_process_typed_modules(
             edition,
         );
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
-        mod_use_defs.insert(mod_ident_str, symbols);
+
+        use_defs
+            .entry(module_def.loc.file_hash())
+            .or_default()
+            .extend(symbols.elements());
     }
 }
 
@@ -712,7 +712,7 @@ pub fn ignored_function(name: Symbol) -> bool {
     // function preventing publishing of modules compiled in test mode. We need to ignore its
     // definition to avoid spurious on-hover display of this function's info whe hovering close to
     // `module` keyword.
-    name == UNIT_TEST_POISON_FUN_NAME
+    name == UNIT_TEST_POISON_INJECTION_NAME
 }
 
 /// Get symbols for outer definitions in the module (functions, structs, and consts)

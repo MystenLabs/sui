@@ -72,6 +72,12 @@ impl TransactionSubmitter {
             tx_type,
             options.allowed_validators.clone(),
         );
+
+        let ping_label = if request.ping_type.is_some() {
+            "true"
+        } else {
+            "false"
+        };
         let mut retries = 0;
         let mut request_rpcs = FuturesUnordered::new();
 
@@ -85,7 +91,7 @@ impl TransactionSubmitter {
                         let display_name = authority_aggregator.get_display_name(&name);
                         self.metrics
                             .validator_selections
-                            .with_label_values(&[&display_name])
+                            .with_label_values(&[&display_name, tx_type.as_str(), ping_label])
                             .inc();
 
                         // Create a future that returns the name and display_name along with the result
@@ -132,13 +138,16 @@ impl TransactionSubmitter {
                 Some((name, display_name, Ok(result))) => {
                     self.metrics
                         .validator_submit_transaction_successes
-                        .with_label_values(&[&display_name])
+                        .with_label_values(&[&display_name, tx_type.as_str(), ping_label])
                         .inc();
                     self.metrics
                         .submit_transaction_retries
                         .observe(retries as f64);
                     let elapsed = start_time.elapsed().as_secs_f64();
-                    self.metrics.submit_transaction_latency.observe(elapsed);
+                    self.metrics
+                        .submit_transaction_latency
+                        .with_label_values(&[&display_name, tx_type.as_str(), ping_label])
+                        .observe(elapsed);
 
                     return Ok((name, result));
                 }
@@ -150,7 +159,12 @@ impl TransactionSubmitter {
                     };
                     self.metrics
                         .validator_submit_transaction_errors
-                        .with_label_values(&[&display_name, error_type])
+                        .with_label_values(&[
+                            &display_name,
+                            error_type,
+                            tx_type.as_str(),
+                            ping_label,
+                        ])
                         .inc();
 
                     retries += 1;
@@ -204,6 +218,7 @@ impl TransactionSubmitter {
                 authority_name: validator,
                 display_name: display_name.clone(),
                 operation: OperationType::Submit,
+                ping_type: request.ping_type,
                 result: Err(()),
             });
             TransactionRequestError::TimedOutSubmittingTransaction
@@ -214,6 +229,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name: display_name.clone(),
                     operation: OperationType::Submit,
+                    ping_type: request.ping_type,
                     result: Err(()),
                 });
             }
@@ -235,6 +251,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name,
                     operation: OperationType::Submit,
+                    ping_type: request.ping_type,
                     result: Err(()),
                 });
             }
@@ -246,6 +263,7 @@ impl TransactionSubmitter {
             authority_name: validator,
             display_name,
             operation: OperationType::Submit,
+            ping_type: request.ping_type,
             result: Ok(latency),
         });
         Ok(result)

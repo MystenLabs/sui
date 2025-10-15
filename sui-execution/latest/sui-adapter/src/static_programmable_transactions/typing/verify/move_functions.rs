@@ -7,6 +7,9 @@ use crate::sp;
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
 use move_binary_format::{CompiledModule, file_format::Visibility};
 use sui_types::{
+    balance::{
+        BALANCE_MODULE_NAME, SEND_TO_ACCOUNT_FUNCTION_NAME, WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME,
+    },
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
 };
@@ -80,6 +83,7 @@ impl Context {
 /// - private generics rules for move function calls
 /// - no references returned from move calls
 ///    - Can be disabled under certain execution modes
+///    - Can be disabled via a feature flag
 pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(txn);
     for c in &txn.commands {
@@ -161,7 +165,7 @@ fn move_call<Mode: ExecutionMode>(
         function,
         arguments: args,
     } = call;
-    check_signature::<Mode>(function)?;
+    check_signature::<Mode>(env, function)?;
     check_private_generics(&function.runtime_id, function.name.as_ident_str())?;
     let (vis, is_entry) = check_visibility::<Mode>(env, function)?;
     let arg_dirties = args
@@ -187,6 +191,7 @@ fn move_call<Mode: ExecutionMode>(
 }
 
 fn check_signature<Mode: ExecutionMode>(
+    env: &Env,
     function: &T::LoadedFunction,
 ) -> Result<(), ExecutionError> {
     fn check_return_type<Mode: ExecutionMode>(
@@ -202,6 +207,11 @@ fn check_signature<Mode: ExecutionMode>(
         }
         Ok(())
     }
+
+    if env.protocol_config.allow_references_in_ptbs() {
+        return Ok(());
+    }
+
     for (idx, ty) in function.signature.return_.iter().enumerate() {
         check_return_type::<Mode>(idx, ty)?;
     }
@@ -234,10 +244,20 @@ fn check_visibility<Mode: ExecutionMode>(
         // cannot call private or friend if not entry
         (Visibility::Private | Visibility::Friend, false) => {
             if !Mode::allow_arbitrary_function_calls() {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    "Can only call `entry` or `public` functions",
-                ));
+                // Special case: allow private accumulator entrypoints in test/simtest environments
+                // TODO: delete this as soon as the accumulator Move API is available
+                if env.protocol_config.allow_private_accumulator_entrypoints()
+                    && module.self_id().name() == BALANCE_MODULE_NAME
+                    && (function.name.as_ident_str() == SEND_TO_ACCOUNT_FUNCTION_NAME
+                        || function.name.as_ident_str() == WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME)
+                {
+                    // Allow these specific functions
+                } else {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::NonEntryFunctionInvoked,
+                        "Can only call `entry` or `public` functions",
+                    ));
+                }
             }
         }
     };

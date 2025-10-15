@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    *,
-};
+use async_graphql::{connection::Connection, *};
 use sui_types::{base_types::SuiAddress, transaction::GasData};
 
 use crate::{
@@ -69,16 +66,10 @@ impl GasInput {
         let limits = pagination.limits("GasInput", "gasPayment");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let cursors = page.paginate_indices(self.native.payment.len());
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-        for edge in cursors.edges {
-            let (id, version, digest) = self.native.payment[*edge.cursor];
-            let object = Object::with_ref(&self.scope, id.into(), version, digest);
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), object));
-        }
-
-        Ok(Some(conn))
+        page.paginate_indices(self.native.payment.len(), |i| {
+            let (id, version, digest) = self.native.payment[i];
+            Ok(Object::with_ref(&self.scope, id.into(), version, digest))
+        })
+        .map(Some)
     }
 }

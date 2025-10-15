@@ -193,6 +193,42 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
+impl ConsensusTransaction {
+    /// Displays a ConsensusTransaction created locally by the validator, for example during submission to consensus.
+    pub fn local_display(&self) -> String {
+        match &self.kind {
+            ConsensusTransactionKind::CertifiedTransaction(cert) => {
+                format!("Certified({})", cert.digest())
+            }
+            ConsensusTransactionKind::CheckpointSignature(data) => {
+                format!(
+                    "CkptSig({}, {})",
+                    data.summary.sequence_number,
+                    data.summary.digest()
+                )
+            }
+            ConsensusTransactionKind::CheckpointSignatureV2(data) => {
+                format!(
+                    "CkptSigV2({}, {})",
+                    data.summary.sequence_number,
+                    data.summary.digest()
+                )
+            }
+            ConsensusTransactionKind::EndOfPublish(..) => "EOP".to_string(),
+            ConsensusTransactionKind::CapabilityNotification(..) => "Cap".to_string(),
+            ConsensusTransactionKind::CapabilityNotificationV2(..) => "CapV2".to_string(),
+            ConsensusTransactionKind::NewJWKFetched(..) => "NewJWKFetched".to_string(),
+            ConsensusTransactionKind::RandomnessStateUpdate(..) => "RandStateUpdate".to_string(),
+            ConsensusTransactionKind::RandomnessDkgMessage(..) => "RandDkg".to_string(),
+            ConsensusTransactionKind::RandomnessDkgConfirmation(..) => "RandDkgConf".to_string(),
+            ConsensusTransactionKind::ExecutionTimeObservation(..) => "ExecTimeOb".to_string(),
+            ConsensusTransactionKind::UserTransaction(tx) => {
+                format!("User({})", tx.digest())
+            }
+        }
+    }
+}
+
 // Serialized ordinally - always append to end of enum
 #[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusTransactionKey {
@@ -433,19 +469,7 @@ pub enum ConsensusTransactionKind {
     CheckpointSignatureV2(Box<CheckpointSignatureMessage>),
 }
 
-impl ConsensusTransactionKind {
-    pub fn is_dkg(&self) -> bool {
-        matches!(
-            self,
-            ConsensusTransactionKind::RandomnessDkgMessage(_, _)
-                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
-        )
-    }
-
-    pub fn is_user_transaction(&self) -> bool {
-        matches!(self, ConsensusTransactionKind::UserTransaction(_))
-    }
-}
+impl ConsensusTransactionKind {}
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
@@ -740,13 +764,24 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn is_executable_transaction(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
-            || matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+    pub fn is_dkg(&self) -> bool {
+        matches!(
+            self.kind,
+            ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
+        )
+    }
+
+    pub fn is_mfp_transaction(&self) -> bool {
+        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
     }
 
     pub fn is_user_transaction(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+        matches!(
+            self.kind,
+            ConsensusTransactionKind::UserTransaction(_)
+                | ConsensusTransactionKind::CertifiedTransaction(_)
+        )
     }
 
     pub fn is_end_of_publish(&self) -> bool {

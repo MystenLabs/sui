@@ -1,0 +1,18 @@
+Command `build`:
+BUILDING A
+error[E04038]: invalid string after type inference
+  ┌─ ./sources/mod0.move:5:43
+  │
+5 │     public fun t0(): std::ascii::String { "hello" }
+  │                                           ^^^^^^^ Could not find constructor for type 'std::ascii::String'
+  │
+  = String literals must be linked against the standard library to be constructed
+
+error[E04038]: invalid string after type inference
+  ┌─ ./sources/mod0.move:6:44
+  │
+6 │     public fun t1(): std::string::String { "hello" }
+  │                                            ^^^^^^^ Could not find constructor for type 'std::string::String'
+  │
+  = String literals must be linked against the standard library to be constructed
+

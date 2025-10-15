@@ -63,8 +63,8 @@ pub struct SuiInitArgs {
     pub shared_object_deletion: Option<bool>,
     #[clap(long = "simulator")]
     pub simulator: bool,
-    #[clap(long = "custom-validator-account")]
-    pub custom_validator_account: bool,
+    #[clap(long = "num-custom-validator-accounts")]
+    pub num_custom_validator_accounts: Option<u64>,
     #[clap(long = "reference-gas-price")]
     pub reference_gas_price: Option<u64>,
     #[clap(long = "default-gas-price")]
@@ -90,6 +90,9 @@ pub struct SuiInitArgs {
     /// Enable authenticated event streams for testing
     #[clap(long = "enable-authenticated-event-streams")]
     pub enable_authenticated_event_streams: bool,
+    /// Enable references in PTBs
+    #[clap(long = "allow-references-in-ptbs")]
+    pub allow_references_in_ptbs: bool,
 }
 
 #[derive(Debug, clap::Parser)]

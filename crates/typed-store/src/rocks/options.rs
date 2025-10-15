@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rocksdb::{BlockBasedOptions, Cache, MergeOperands, ReadOptions};
+use rocksdb::{compaction_filter::Decision, BlockBasedOptions, Cache, MergeOperands, ReadOptions};
 use std::collections::BTreeMap;
 use std::env;
 use tap::TapFallible;
@@ -279,6 +279,14 @@ impl DBOptions {
             + 'static,
     {
         self.options.set_merge_operator_associative(name, merge_fn);
+        self
+    }
+
+    pub fn set_compaction_filter<F>(mut self, name: &str, filter_fn: F) -> DBOptions
+    where
+        F: FnMut(u32, &[u8], &[u8]) -> Decision + Send + 'static,
+    {
+        self.options.set_compaction_filter(name, filter_fn);
         self
     }
 }

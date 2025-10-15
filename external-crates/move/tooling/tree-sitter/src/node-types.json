@@ -5890,6 +5890,22 @@
     }
   },
   {
+    "type": "module_extension_definition",
+    "named": true,
+    "fields": {
+      "module": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "module_definition",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "module_identity",
     "named": true,
     "fields": {
@@ -6999,6 +7015,7 @@
   {
     "type": "source_file",
     "named": true,
+    "root": true,
     "fields": {},
     "children": {
       "multiple": true,
@@ -7006,6 +7023,10 @@
       "types": [
         {
           "type": "module_definition",
+          "named": true
+        },
+        {
+          "type": "module_extension_definition",
           "named": true
         }
       ]
@@ -9485,7 +9506,8 @@
   },
   {
     "type": "block_comment",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "bool",
@@ -9552,12 +9574,24 @@
     "named": false
   },
   {
+    "type": "exists",
+    "named": false
+  },
+  {
+    "type": "extend",
+    "named": false
+  },
+  {
     "type": "false",
     "named": false
   },
   {
     "type": "field_identifier",
     "named": true
+  },
+  {
+    "type": "forall",
+    "named": false
   },
   {
     "type": "friend",
@@ -9613,7 +9647,8 @@
   },
   {
     "type": "line_comment",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "local",
@@ -9653,7 +9688,8 @@
   },
   {
     "type": "newline",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "package",
@@ -9722,10 +9758,6 @@
   {
     "type": "true",
     "named": false
-  },
-  {
-    "type": "type_identifier",
-    "named": true
   },
   {
     "type": "type_parameter_identifier",

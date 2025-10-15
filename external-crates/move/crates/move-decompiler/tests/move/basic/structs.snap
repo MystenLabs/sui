@@ -1,0 +1,11 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module structs {
+    public fun unpack () {
+        let 0x0::structs::S1 { x: reg_1, y: reg_2, z: reg_3 } = l0;
+        let l1 = reg_3 : u32;
+        return reg_1 : u32 + reg_2 : u32 + l1
+    }
+
+}

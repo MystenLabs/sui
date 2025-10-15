@@ -1837,6 +1837,11 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 message.epoch = Some(epoch);
                 TransactionExpirationKind::Epoch
             }
+            E::ValidDuring { .. } => {
+                // TODO: Implement proper proto conversion for ValidDuring
+                // For now, treat as None to maintain compatibility
+                TransactionExpirationKind::None
+            }
         };
 
         message.set_kind(kind);
@@ -2160,6 +2165,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             }
             K::AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
             K::CoinRegistryCreate => Kind::CoinRegistryCreate(()),
+            K::DisplayRegistryCreate => Kind::DisplayRegistryCreate(()),
         };
 
         let mut message = Self::default();
