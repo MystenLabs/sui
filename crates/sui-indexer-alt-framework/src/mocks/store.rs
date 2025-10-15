@@ -529,6 +529,9 @@ impl MockStore {
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        panic!("Timeout waiting for watermark to reach {}", checkpoint);
+        panic!(
+            "Timeout waiting for watermark on pipeline {} to reach {}",
+            watermark_key, checkpoint
+        );
     }
 }
