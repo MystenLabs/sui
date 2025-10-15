@@ -27,10 +27,12 @@ pub(crate) enum ScheduleStatus {
     /// This transaction should result in an execution failure without actually executing it, similar to
     /// how transaction cancellation works.
     InsufficientBalance,
-    /// The accumulator version for this transaction has already been settled.
-    /// The caller should stop the scheduling of this transaction.
-    /// This happens when the transaction can be executed through checkpoint executor.
-    AlreadySettled,
+    /// We can skip scheduling this transaction, due to one of the following reasons:
+    /// 1. The accumulator version for this transaction has already been settled.
+    /// 2. We are observing some account objects bumping to the next version, indicating
+    ///    that the withdraw transactions in this commit have already been executed and are
+    ///    being settled.
+    SkipSchedule,
 }
 
 /// The result of scheduling the withdraw reservations for a transaction.
