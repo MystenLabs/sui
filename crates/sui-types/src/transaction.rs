@@ -432,6 +432,7 @@ pub enum EndOfEpochTransactionKind {
     StoreExecutionTimeObservations(StoredExecutionTimeObservations),
     AccumulatorRootCreate,
     CoinRegistryCreate,
+    DisplayRegistryCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -481,6 +482,10 @@ impl EndOfEpochTransactionKind {
 
     pub fn new_coin_registry_create() -> Self {
         Self::CoinRegistryCreate
+    }
+
+    pub fn new_display_registry_create() -> Self {
+        Self::DisplayRegistryCreate
     }
 
     pub fn new_deny_list_state_create() -> Self {
@@ -542,6 +547,7 @@ impl EndOfEpochTransactionKind {
             }
             Self::AccumulatorRootCreate => vec![],
             Self::CoinRegistryCreate => vec![],
+            Self::DisplayRegistryCreate => vec![],
         }
     }
 
@@ -578,6 +584,7 @@ impl EndOfEpochTransactionKind {
             }
             Self::AccumulatorRootCreate => Either::Right(iter::empty()),
             Self::CoinRegistryCreate => Either::Right(iter::empty()),
+            Self::DisplayRegistryCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -645,6 +652,13 @@ impl EndOfEpochTransactionKind {
                 if !config.enable_coin_registry() {
                     return Err(UserInputError::Unsupported(
                         "coin registry not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::DisplayRegistryCreate => {
+                if !config.enable_display_registry() {
+                    return Err(UserInputError::Unsupported(
+                        "display registry not enabled".to_string(),
                     ));
                 }
             }

@@ -6,6 +6,7 @@ use mysten_common::in_test_configuration;
 use serde::{Deserialize, Serialize};
 use sui_config::NodeConfig;
 use sui_types::accumulator_root::get_accumulator_root_obj_initial_shared_version;
+use sui_types::display_registry::get_display_registry_obj_initial_shared_version;
 
 use std::fmt;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
@@ -34,6 +35,7 @@ pub trait EpochStartConfigTrait {
     fn bridge_committee_initiated(&self) -> bool;
     fn accumulator_root_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
 
     fn is_data_quarantine_active_from_beginning_of_epoch(&self) -> bool {
         self.flags()
@@ -172,6 +174,7 @@ pub enum EpochStartConfiguration {
     V6(EpochStartConfigurationV6),
     V7(EpochStartConfigurationV7),
     V8(EpochStartConfigurationV8),
+    V9(EpochStartConfigurationV9),
 }
 
 impl EpochStartConfiguration {
@@ -193,8 +196,10 @@ impl EpochStartConfiguration {
             get_accumulator_root_obj_initial_shared_version(object_store)?;
         let coin_registry_obj_initial_shared_version =
             get_coin_registry_obj_initial_shared_version(object_store)?;
+        let display_registry_obj_initial_shared_version =
+            get_display_registry_obj_initial_shared_version(object_store)?;
         let bridge_committee_initiated = is_bridge_committee_initiated(object_store)?;
-        Ok(Self::V8(EpochStartConfigurationV8 {
+        Ok(Self::V9(EpochStartConfigurationV9 {
             system_state,
             epoch_digest,
             flags: initial_epoch_flags,
@@ -205,6 +210,7 @@ impl EpochStartConfiguration {
             bridge_committee_initiated,
             accumulator_root_obj_initial_shared_version,
             coin_registry_obj_initial_shared_version,
+            display_registry_obj_initial_shared_version,
         }))
     }
 
@@ -212,8 +218,8 @@ impl EpochStartConfiguration {
         // We only need to implement this function for the latest version.
         // When a new version is introduced, this function should be updated.
         match self {
-            Self::V8(config) => {
-                Self::V8(EpochStartConfigurationV8 {
+            Self::V9(config) => {
+                Self::V9(EpochStartConfigurationV9 {
                     system_state: config.system_state.new_at_next_epoch_for_testing(),
                     epoch_digest: config.epoch_digest,
                     flags: config.flags.clone(),
@@ -224,6 +230,7 @@ impl EpochStartConfiguration {
                     bridge_committee_initiated: config.bridge_committee_initiated,
                     accumulator_root_obj_initial_shared_version: config.accumulator_root_obj_initial_shared_version,
                     coin_registry_obj_initial_shared_version: config.coin_registry_obj_initial_shared_version,
+                    display_registry_obj_initial_shared_version: config.display_registry_obj_initial_shared_version,
                 })
             }
             _ => panic!("This function is only implemented for the latest version of EpochStartConfiguration"),
@@ -332,6 +339,22 @@ pub struct EpochStartConfigurationV8 {
     coin_registry_obj_initial_shared_version: Option<SequenceNumber>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct EpochStartConfigurationV9 {
+    system_state: EpochStartSystemState,
+    epoch_digest: CheckpointDigest,
+    flags: Vec<EpochFlag>,
+    /// Do the state objects exist at the beginning of the epoch?
+    authenticator_obj_initial_shared_version: Option<SequenceNumber>,
+    randomness_obj_initial_shared_version: Option<SequenceNumber>,
+    coin_deny_list_obj_initial_shared_version: Option<SequenceNumber>,
+    bridge_obj_initial_shared_version: Option<SequenceNumber>,
+    bridge_committee_initiated: bool,
+    accumulator_root_obj_initial_shared_version: Option<SequenceNumber>,
+    coin_registry_obj_initial_shared_version: Option<SequenceNumber>,
+    display_registry_obj_initial_shared_version: Option<SequenceNumber>,
+}
+
 impl EpochStartConfigurationV1 {
     pub fn new(system_state: EpochStartSystemState, epoch_digest: CheckpointDigest) -> Self {
         Self {
@@ -381,6 +404,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV1 {
     fn bridge_committee_initiated(&self) -> bool {
         false
     }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV2 {
@@ -423,6 +450,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV2 {
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV3 {
@@ -462,6 +493,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV3 {
     }
 
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -506,6 +541,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV4 {
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV5 {
@@ -545,6 +584,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV5 {
     }
 
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -589,6 +632,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV6 {
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV7 {
@@ -629,6 +676,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV7 {
     }
 
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -672,5 +723,55 @@ impl EpochStartConfigTrait for EpochStartConfigurationV8 {
 
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         self.coin_registry_obj_initial_shared_version
+    }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+}
+
+impl EpochStartConfigTrait for EpochStartConfigurationV9 {
+    fn epoch_digest(&self) -> CheckpointDigest {
+        self.epoch_digest
+    }
+
+    fn epoch_start_state(&self) -> &EpochStartSystemState {
+        &self.system_state
+    }
+
+    fn flags(&self) -> &[EpochFlag] {
+        &self.flags
+    }
+
+    fn authenticator_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.authenticator_obj_initial_shared_version
+    }
+
+    fn randomness_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.randomness_obj_initial_shared_version
+    }
+
+    fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.coin_deny_list_obj_initial_shared_version
+    }
+
+    fn bridge_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.bridge_obj_initial_shared_version
+    }
+
+    fn bridge_committee_initiated(&self) -> bool {
+        self.bridge_committee_initiated
+    }
+
+    fn accumulator_root_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.accumulator_root_obj_initial_shared_version
+    }
+
+    fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.coin_registry_obj_initial_shared_version
+    }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.display_registry_obj_initial_shared_version
     }
 }

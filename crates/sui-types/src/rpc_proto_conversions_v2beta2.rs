@@ -2165,6 +2165,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             }
             K::AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
             K::CoinRegistryCreate => Kind::CoinRegistryCreate(()),
+            K::DisplayRegistryCreate => Kind::DisplayRegistryCreate(()),
         };
 
         let mut message = Self::default();
