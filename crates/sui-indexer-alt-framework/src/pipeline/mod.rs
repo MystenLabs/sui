@@ -158,16 +158,21 @@ impl Default for CommitterConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use std::sync::Arc;
     use sui_types::full_checkpoint_content::CheckpointData;
 
     // Test implementation of Processor
     struct TestProcessor;
+    #[async_trait]
     impl Processor for TestProcessor {
         const NAME: &'static str = "test";
         type Value = i32;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(
+            &self,
+            _checkpoint: &Arc<CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![1, 2, 3])
         }
     }

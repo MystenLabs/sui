@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
+use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
@@ -17,11 +18,12 @@ use sui_protocol_config::ProtocolConfig;
 
 pub(crate) struct KvProtocolConfigs(pub(crate) StoredGenesis);
 
+#[async_trait]
 impl Processor for KvProtocolConfigs {
     const NAME: &'static str = "kv_protocol_configs";
     type Value = StoredProtocolConfig;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             checkpoint_summary, ..
         } = checkpoint.as_ref();
@@ -57,7 +59,7 @@ impl Processor for KvProtocolConfigs {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for KvProtocolConfigs {
     type Store = Db;
 
@@ -98,6 +100,7 @@ mod tests {
 
         let protocol_configs = KvProtocolConfigs(stored_genesis)
             .process(&checkpoint)
+            .await
             .unwrap();
 
         assert!(!protocol_configs.is_empty());
@@ -127,6 +130,7 @@ mod tests {
 
         KvProtocolConfigs(stored_genesis)
             .process(&checkpoint)
+            .await
             .unwrap_err();
     }
 }
