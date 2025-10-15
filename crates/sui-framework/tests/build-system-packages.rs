@@ -50,7 +50,8 @@ async fn build_system_packages() {
         &sui_framework_path,
         &move_stdlib_path,
         out_dir,
-    ).await;
+    )
+    .await;
     check_diff(Path::new(CRATE_ROOT), out_dir)
 }
 
@@ -109,7 +110,8 @@ async fn build_packages(
         "sui-framework",
         "move-stdlib",
         config,
-    ).await;
+    )
+    .await;
 }
 
 async fn build_packages_with_move_config(
