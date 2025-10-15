@@ -688,7 +688,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let [fetched_package] = self.fetch_packages(&[*dependency_id])?.try_into().map_err(
             |_| {
                 make_invariant_violation!(
-                    "We should always fetch a package for each object or return a dependency error."
+                    "We should always fetch a single package for each object or return a dependency error."
                 )
             },
         )?;
