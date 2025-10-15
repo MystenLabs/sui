@@ -12,7 +12,7 @@ mod abstract_state;
 use crate::absint::{FunctionContext, TransferFunctions, analyze_function};
 use crate::regex_reference_safety::abstract_state::STEP_BASE_COST;
 use abstract_state::{AbstractState, AbstractValue};
-use move_abstract_stack::AbstractStack;
+use move_abstract_stack::{AbsStackError, AbstractStack};
 use move_binary_format::{
     CompiledModule,
     errors::{PartialVMError, PartialVMResult},
@@ -73,12 +73,13 @@ fn call(
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let parameters = verifier.module.signature_at(function_handle.parameters);
-    let arguments = parameters
+    let arguments_opt = parameters
         .0
         .iter()
-        .map(|_| verifier.stack.pop().unwrap())
+        .map(|_| verifier.stack.pop())
         .rev()
-        .collect();
+        .collect::<Result<Vec<AbstractValue>, AbsStackError>>();
+    let arguments = safe_unwrap_err!(arguments_opt);
 
     let return_ = verifier.module.signature_at(function_handle.return_);
     let return_kinds = ValueKind::for_signature(return_);
@@ -247,15 +248,18 @@ fn execute_inner(
             state.ret(offset, return_values, meter)?
         }
 
-        Bytecode::Branch(_)
-        | Bytecode::Nop
-        | Bytecode::CastU8
+        Bytecode::Branch(_) | Bytecode::Nop => (),
+
+        Bytecode::CastU8
         | Bytecode::CastU16
         | Bytecode::CastU32
         | Bytecode::CastU64
         | Bytecode::CastU128
         | Bytecode::CastU256
-        | Bytecode::Not => (),
+        | Bytecode::Not => {
+            safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_non_ref());
+            verifier.push(AbstractValue::NonReference)?
+        }
 
         Bytecode::BrTrue(_) | Bytecode::BrFalse(_) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_non_ref());
