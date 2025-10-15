@@ -6,38 +6,46 @@ use std::path::{Path, PathBuf};
 use crate::git::get_cache_path;
 
 pub struct PackageSystemLock {
-    _file: File,
+    file: File,
 }
 
 impl PackageSystemLock {
+    pub fn new_for_file(path: PathBuf) -> anyhow::Result<Self> {
+        Self::new_for_path(path, false)
+    }
+
     /// Acquire a lock for doing git operations sequentially
     pub fn new_for_git() -> anyhow::Result<Self> {
         let path = cache_path_for("git").expect("failed to get git cache folder lock");
-        Self::new_for_path(path)
+        Self::new_for_path(path, true)
     }
 
     /// We do sequential operations per package (we acquire lock per package path).
     pub fn new_for_project(path: &Path) -> anyhow::Result<Self> {
         let project_lock_path = cache_path_for(digest_path(path).as_str())
             .expect("failed to get git cache folder lock");
-        Self::new_for_path(project_lock_path)
+        Self::new_for_path(project_lock_path, true)
     }
 
-    fn new_for_path(path: PathBuf) -> anyhow::Result<Self> {
+    pub fn file_mut(&mut self) -> &mut File {
+        &mut self.file
+    }
+
+    fn new_for_path(path: PathBuf, should_truncate: bool) -> anyhow::Result<Self> {
         let lock = OpenOptions::new()
-            .truncate(true)
+            .truncate(should_truncate)
             .write(true)
             .read(true)
             .create(true)
             .open(&path)?;
 
         lock.lock_exclusive()?;
-        Ok(Self { _file: lock })
+        Ok(Self { file: lock })
     }
 
     // drop the package system lock.
     pub fn drop(self) -> anyhow::Result<()> {
-        fs4::fs_std::FileExt::unlock(&self._file)?;
+        fs4::fs_std::FileExt::unlock(&self.file)?;
         Ok(())
     }
 }
