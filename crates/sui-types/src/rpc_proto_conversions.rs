@@ -2324,13 +2324,14 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 .with_bridge_chain_id(chain_id.to_string())
                 .with_kind(Kind::BridgeStateCreate),
             K::BridgeCommitteeInit(bridge_object_version) => message
-                .with_bridge_object_version(bridge_object_version)
+                .with_bridge_object_version(bridge_object_version.into())
                 .with_kind(Kind::BridgeCommitteeInit),
             K::StoreExecutionTimeObservations(observations) => message
                 .with_execution_time_observations(observations)
                 .with_kind(Kind::StoreExecutionTimeObservations),
             K::AccumulatorRootCreate => message.with_kind(Kind::AccumulatorRootCreate),
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
+            K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
         }
     }
 }

@@ -845,6 +845,10 @@ struct FeatureFlags {
     // If true, allow Move functions called in PTBs to return references
     #[serde(skip_serializing_if = "is_false")]
     allow_references_in_ptbs: bool,
+
+    // Enable display registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_display_registry: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1959,6 +1963,10 @@ impl ProtocolConfig {
 
     pub fn enable_coin_registry(&self) -> bool {
         self.feature_flags.enable_coin_registry
+    }
+
+    pub fn enable_display_registry(&self) -> bool {
+        self.feature_flags.enable_display_registry
     }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {

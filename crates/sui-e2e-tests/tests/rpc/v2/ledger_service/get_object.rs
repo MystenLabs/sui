@@ -162,9 +162,9 @@ async fn batch_get_objects() {
         .batch_get_objects({
             let mut message = BatchGetObjectsRequest::default();
             message.requests = vec![
-                GetObjectRequest::new(&Address::from_hex_unwrap("0x1")),
-                GetObjectRequest::new(&Address::from_hex_unwrap("0x2")),
-                GetObjectRequest::new(&Address::from_hex_unwrap("0x3")),
+                GetObjectRequest::new(&Address::from_hex("0x1").unwrap()),
+                GetObjectRequest::new(&Address::from_hex("0x2").unwrap()),
+                GetObjectRequest::new(&Address::from_hex("0x3").unwrap()),
             ];
             message
         })

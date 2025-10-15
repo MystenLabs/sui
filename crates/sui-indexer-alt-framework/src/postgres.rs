@@ -125,10 +125,11 @@ pub mod tests {
     macro_rules! define_test_concurrent_pipeline {
         ($name:ident) => {
             struct $name;
+            #[async_trait]
             impl Processor for $name {
                 const NAME: &'static str = stringify!($name);
                 type Value = V;
-                fn process(
+                async fn process(
                     &self,
                     _checkpoint: &Arc<CheckpointData>,
                 ) -> anyhow::Result<Vec<Self::Value>> {

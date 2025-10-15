@@ -29,11 +29,15 @@ impl Default for TokenTransferDataHandler {
     }
 }
 
+#[async_trait]
 impl Processor for TokenTransferDataHandler {
     const NAME: &'static str = "token_transfer_data";
     type Value = TokenTransferData;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>, anyhow::Error> {
+    async fn process(
+        &self,
+        checkpoint: &Arc<CheckpointData>,
+    ) -> Result<Vec<Self::Value>, anyhow::Error> {
         let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms as i64;
         let block_height = checkpoint.checkpoint_summary.sequence_number as i64;
 

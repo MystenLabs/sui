@@ -10616,7 +10616,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c1318b19085f08681016926435853bbf7858f9c082d0999b80550ff5d9abe15"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.13.0",
  "log",
  "multimap",
@@ -12551,7 +12551,7 @@ version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da03fa3b94cc19e3ebfc88c4229c49d8f08cdbd1228870a45f0ffdf84988e14b"
 dependencies = [
- "dirs 4.0.0",
+ "dirs 5.0.1",
 ]
 
 [[package]]
@@ -12755,7 +12755,7 @@ version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03c3c6b7927ffe7ecaa769ee0e3994da3b8cafc8f444578982c83ecb161af917"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.99",
@@ -13922,8 +13922,8 @@ dependencies = [
 
 [[package]]
 name = "sui-crypto"
-version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fe561f3089b3b4acbbd67ff48a278a6c448e488c#fe561f3089b3b4acbbd67ff48a278a6c448e488c"
+version = "0.0.8"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=5a8ac53819d0e6fb518f4e23879df19b832ff884#5a8ac53819d0e6fb518f4e23879df19b832ff884"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -15389,6 +15389,8 @@ dependencies = [
  "move-compiler",
  "sui-move-build",
  "sui-package-management",
+ "tikv-jemalloc-ctl",
+ "tikv-jemallocator",
 ]
 
 [[package]]
@@ -15976,8 +15978,8 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc"
-version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fe561f3089b3b4acbbd67ff48a278a6c448e488c#fe561f3089b3b4acbbd67ff48a278a6c448e488c"
+version = "0.0.8"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=5a8ac53819d0e6fb518f4e23879df19b832ff884#5a8ac53819d0e6fb518f4e23879df19b832ff884"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16135,8 +16137,8 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.0.7"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fe561f3089b3b4acbbd67ff48a278a6c448e488c#fe561f3089b3b4acbbd67ff48a278a6c448e488c"
+version = "0.0.8"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=5a8ac53819d0e6fb518f4e23879df19b832ff884#5a8ac53819d0e6fb518f4e23879df19b832ff884"
 dependencies = [
  "base64ct",
  "bcs",
@@ -18271,7 +18273,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

@@ -1290,6 +1290,12 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
+    pub fn display_registry_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .display_registry_obj_initial_shared_version()
+            .is_some()
+    }
+
     pub fn coin_deny_list_state_exists(&self) -> bool {
         self.epoch_start_configuration
             .coin_deny_list_obj_initial_shared_version()
