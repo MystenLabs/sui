@@ -101,24 +101,35 @@ impl Cliques {
     }
 
     /// Returns the root of the clique (resolving any merges/forwards)
-    fn root(&self, id: CliqueID) -> CliqueID {
-        match &self.0[id] {
-            Clique::Root(_) => id,
-            Clique::Merged(index) => self.root(*index),
+    fn root(&self, id: CliqueID) -> Result<CliqueID, ExecutionError> {
+        let mut visited = BTreeSet::from([id]);
+        let mut cur = id;
+        loop {
+            match &self.0[cur] {
+                Clique::Root(_) => return Ok(cur),
+                Clique::Merged(next) => {
+                    let newly_visited = visited.insert(*next);
+                    if !newly_visited {
+                        invariant_violation!("Clique merge cycle detected");
+                    }
+                    cur = *next
+                }
+            }
         }
     }
 
     /// Returns the temperature of the clique (at the root)
-    fn temp(&self, id: CliqueID) -> Temperature {
-        match self.0[id] {
-            Clique::Root(temp) => temp,
-            Clique::Merged(index) => self.temp(index),
-        }
+    fn temp(&self, id: CliqueID) -> Result<Temperature, ExecutionError> {
+        let root = self.root(id)?;
+        let Clique::Root(temp) = self.0[root] else {
+            invariant_violation!("Clique {root} should be a root");
+        };
+        Ok(temp)
     }
 
     /// Returns a mutable reference to the temperature of the clique (at the root)
     fn temp_mut(&mut self, id: CliqueID) -> Result<&mut Temperature, ExecutionError> {
-        let root = self.root(id);
+        let root = self.root(id)?;
         let Clique::Root(temp) = &mut self.0[root] else {
             invariant_violation!("Clique {root} should be a root");
         };
@@ -139,7 +150,10 @@ impl Cliques {
 
     /// Merges the given cliques into one clique
     fn merge(&mut self, clique_ids: BTreeSet<CliqueID>) -> Result<CliqueID, ExecutionError> {
-        let roots: BTreeSet<CliqueID> = clique_ids.iter().map(|&id| self.root(id)).collect();
+        let roots: BTreeSet<CliqueID> = clique_ids
+            .iter()
+            .map(|&id| self.root(id))
+            .collect::<Result<_, _>>()?;
         Ok(match roots.len() {
             0 => self.next(),
             1 => *roots.iter().next().unwrap(),
@@ -147,7 +161,7 @@ impl Cliques {
                 let merged = self.next();
                 let mut merged_temp = Temperature::Count(0);
                 for &root in &roots {
-                    let temp = self.temp(root);
+                    let temp = self.temp(root)?;
                     self.0[root] = Clique::Merged(merged);
                     merged_temp = merged_temp.add(temp)?;
                 }
@@ -192,8 +206,8 @@ impl Cliques {
     }
 
     /// Returns true if the clique is hot, always hot or a positive hot count
-    fn is_hot(&self, clique: CliqueID) -> bool {
-        self.temp(clique).is_hot()
+    fn is_hot(&self, clique: CliqueID) -> Result<bool, ExecutionError> {
+        Ok(self.temp(clique)?.is_hot())
     }
 
     /// Marks the given clique as always hot
@@ -257,7 +271,7 @@ impl Context {
             cliques.release_value(value)?;
         }
         for id in clique_ids {
-            match cliques.temp(id) {
+            match cliques.temp(id)? {
                 Temperature::AlwaysHot => (),
                 Temperature::Count(c) => {
                     assert_invariant!(c == 0, "All hot counts should be zero at end")
@@ -468,13 +482,17 @@ fn move_call<Mode: ExecutionMode>(
     let is_entry = fdef.is_entry;
     // check rules around hot arguments and entry functions
     if is_entry && matches!(visibility, Visibility::Private) && !Mode::allow_arbitrary_values() {
-        if let Some((idx, _)) = argument_cliques
-            .iter()
-            .find(|(_, c)| context.cliques.is_hot(*c))
-        {
+        let mut hot_argument: Option<u16> = None;
+        for (idx, clique) in argument_cliques {
+            if context.cliques.is_hot(*clique)? {
+                hot_argument = Some(*idx);
+                break;
+            }
+        }
+        if let Some(idx) = hot_argument {
             return Err(command_argument_error(
                 CommandArgumentError::InvalidArgumentToPrivateEntryFunction,
-                *idx as usize,
+                idx as usize,
             ));
         }
     }
