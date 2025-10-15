@@ -6,7 +6,7 @@ module sui::display_registry_tests;
 
 use std::unit_test::assert_eq;
 use sui::display::{Self, new};
-use sui::display_registry::{Self, DisplayRegistry, NewDisplay, SystemMigrationCap, DisplayCap};
+use sui::display_registry::{Self, DisplayRegistry, Display, SystemMigrationCap, DisplayCap};
 use sui::package::{Self, test_claim, Publisher};
 use sui::test_scenario::{Self, Scenario};
 use sui::vec_map;
@@ -23,25 +23,25 @@ fun test_modern_creation_and_operations() {
     test_tx!(|registry, scenario| {
         let cap = new_display<MyPotato>(registry, scenario);
         scenario.next_tx(@0x1);
-        let mut display = scenario.take_shared<NewDisplay<MyPotato>>();
+        let mut display = scenario.take_shared<Display<MyPotato>>();
         assert_eq!(display.fields().length(), 0);
 
         display.set(&cap, DEMO_NAME_KEY.to_string(), DEMO_NAME_VALUE.to_string());
         test_scenario::return_shared(display);
 
         scenario.next_tx(@0x1);
-        let display = scenario.take_shared<NewDisplay<MyPotato>>();
+        let display = scenario.take_shared<Display<MyPotato>>();
         assert_eq!(display.fields().length(), 1);
         assert_eq!(*display.fields().get(&DEMO_NAME_KEY.to_string()), DEMO_NAME_VALUE.to_string());
         test_scenario::return_shared(display);
 
         scenario.next_tx(@0x1);
-        let mut display = scenario.take_shared<NewDisplay<MyPotato>>();
+        let mut display = scenario.take_shared<Display<MyPotato>>();
         display.unset(&cap, DEMO_NAME_KEY.to_string());
         test_scenario::return_shared(display);
         scenario.next_tx(@0x1);
 
-        let mut display = scenario.take_shared<NewDisplay<MyPotato>>();
+        let mut display = scenario.take_shared<Display<MyPotato>>();
         assert_eq!(display.fields().length(), 0);
 
         display.set(&cap, DEMO_NAME_KEY.to_string(), DEMO_NAME_VALUE.to_string());
@@ -71,7 +71,7 @@ fun test_legacy_claim() {
         scenario.next_tx(@0x1);
 
         // Claim the display using our legacy display obj.
-        let mut display = scenario.take_shared<NewDisplay<MyKeyOnlyType>>();
+        let mut display = scenario.take_shared<Display<MyKeyOnlyType>>();
         let new_cap = display.claim(legacy_display, scenario.ctx());
 
         // use the cap to edit display!
@@ -95,7 +95,7 @@ fun test_legacy_claim_with_publisher() {
         registry.migrate<MyKeyOnlyType>(&cap, vec_map::empty(), scenario.ctx());
         scenario.next_tx(@0x1);
 
-        let mut display = scenario.take_shared<NewDisplay<MyKeyOnlyType>>();
+        let mut display = scenario.take_shared<Display<MyKeyOnlyType>>();
         let new_cap = display.claim_with_publisher(&mut publisher, scenario.ctx());
         display.set(&new_cap, DEMO_NAME_KEY.to_string(), DEMO_NAME_VALUE.to_string());
         test_scenario::return_shared(display);
@@ -112,7 +112,7 @@ fun test_update_field() {
         let cap = new_display<MyKeyOnlyType>(registry, scenario);
         scenario.next_tx(@0x1);
 
-        let mut display = scenario.take_shared<NewDisplay<MyKeyOnlyType>>();
+        let mut display = scenario.take_shared<Display<MyKeyOnlyType>>();
         // Add `field` to display.
         display.set(&cap, DEMO_NAME_KEY.to_string(), DEMO_NAME_VALUE.to_string());
         assert_eq!(*display.fields().get(&DEMO_NAME_KEY.to_string()), DEMO_NAME_VALUE.to_string());
@@ -164,7 +164,7 @@ fun test_claim_cap_twice() {
         registry.migrate<MyKeyOnlyType>(&cap, vec_map::empty(), scenario.ctx());
         scenario.next_tx(@0x1);
 
-        let mut display = scenario.take_shared<NewDisplay<MyKeyOnlyType>>();
+        let mut display = scenario.take_shared<Display<MyKeyOnlyType>>();
 
         let _first = display.claim_with_publisher(&mut publisher, scenario.ctx());
         let _second = display.claim_with_publisher(&mut publisher, scenario.ctx());
@@ -180,7 +180,7 @@ fun test_delete_legacy_before_migration() {
         registry.migrate<MyKeyOnlyType>(&cap, vec_map::empty(), scenario.ctx());
         scenario.next_tx(@0x1);
 
-        let display = scenario.take_shared<NewDisplay<MyKeyOnlyType>>();
+        let display = scenario.take_shared<Display<MyKeyOnlyType>>();
         let publisher = package::test_claim(MY_OTW {}, scenario.ctx());
         let legacy_display = display::new<MyKeyOnlyType>(&publisher, scenario.ctx());
         display.delete_legacy(legacy_display);
@@ -194,7 +194,7 @@ fun test_remove_non_existing_field() {
         let cap = new_display<MyKeyOnlyType>(registry, scenario);
         scenario.next_tx(@0x1);
 
-        let mut display = scenario.take_shared<NewDisplay<MyKeyOnlyType>>();
+        let mut display = scenario.take_shared<Display<MyKeyOnlyType>>();
         display.unset(&cap, DEMO_NAME_KEY.to_string());
         abort
     });
