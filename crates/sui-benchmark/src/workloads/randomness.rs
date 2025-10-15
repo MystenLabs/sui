@@ -17,7 +17,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::transaction::{CallArg, ObjectArg, TransactionDataAPI};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     transaction::Transaction,
@@ -63,19 +63,6 @@ impl Payload for RandomnessTestPayload {
         builder
             .move_call(
                 self.package_id,
-                Identifier::new("randomness").unwrap(),
-                Identifier::new("new").unwrap(),
-                vec![],
-                vec![CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
-                    initial_shared_version: self.randomness_initial_shared_version,
-                    mutable: false,
-                })],
-            )
-            .unwrap();
-        builder
-            .move_call(
-                self.package_id,
                 Identifier::new("counter").unwrap(),
                 Identifier::new("increment").unwrap(),
                 vec![],
@@ -83,6 +70,19 @@ impl Payload for RandomnessTestPayload {
                     id: self.counter_id,
                     initial_shared_version: self.counter_initial_shared_version,
                     mutable: true,
+                })],
+            )
+            .unwrap();
+        builder
+            .move_call(
+                self.package_id,
+                Identifier::new("random").unwrap(),
+                Identifier::new("new").unwrap(),
+                vec![],
+                vec![CallArg::Object(ObjectArg::SharedObject {
+                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    initial_shared_version: self.randomness_initial_shared_version,
+                    mutable: false,
                 })],
             )
             .unwrap();
