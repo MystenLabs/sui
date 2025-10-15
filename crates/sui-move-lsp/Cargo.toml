@@ -8,7 +8,6 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.1.4", features = ["derive"] }
-mimalloc = { version = "0.1", default-features = false, features = ["secure"] }
 bin-version.workspace = true
 move-analyzer.workspace = true
 move-compiler.workspace = true
