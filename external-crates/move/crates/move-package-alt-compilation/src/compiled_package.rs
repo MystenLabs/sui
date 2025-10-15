@@ -205,9 +205,9 @@ impl From<BTreeMap<PackageName, NamedAddress>> for BuildNamedAddresses {
     }
 }
 
-impl Into<BTreeMap<Symbol, AccountAddress>> for BuildNamedAddresses {
-    fn into(self) -> BTreeMap<Symbol, AccountAddress> {
-        self.inner
+impl From<BuildNamedAddresses> for BTreeMap<Symbol, AccountAddress> {
+    fn from(val: BuildNamedAddresses) -> Self {
+        val.inner
             .into_iter()
             .map(|(pkg, address)| (pkg, address.into_inner()))
             .collect()
