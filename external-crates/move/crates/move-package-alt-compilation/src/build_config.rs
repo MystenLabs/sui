@@ -18,7 +18,10 @@ use move_compiler::{
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_model_2::source_model;
-use move_package_alt::{graph::NamedAddress, schema::EnvironmentName};
+use move_package_alt::{
+    graph::NamedAddress,
+    schema::{EnvironmentName, OriginalID},
+};
 use move_symbol_pool::Symbol;
 
 use move_package_alt::{
@@ -174,10 +177,29 @@ impl BuildConfig {
         &self,
         named_addresses: BTreeMap<Identifier, NamedAddress>,
     ) -> BuildNamedAddresses {
+        // Make unpublished deps `0x0` if the config says so.
+        let fixed_named_addresses = named_addresses
+            .into_iter()
+            .map(|(id, addr)| {
+                (
+                    id,
+                    match addr {
+                        NamedAddress::Unpublished { dummy_addr: _ }
+                            if self.set_unpublished_deps_to_zero =>
+                        {
+                            NamedAddress::Defined(OriginalID(AccountAddress::ZERO))
+                        }
+                        addr => addr,
+                    },
+                )
+            })
+            .collect();
+
+        // Force root as zero for upgrade operations.
         let mut addresses: BuildNamedAddresses = if self.root_as_zero {
-            BuildNamedAddresses::root_as_zero(named_addresses)
+            BuildNamedAddresses::root_as_zero(fixed_named_addresses)
         } else {
-            named_addresses.into()
+            fixed_named_addresses.into()
         };
 
         // Inject additional named addresses.

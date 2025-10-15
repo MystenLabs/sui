@@ -14326,6 +14326,7 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "tempfile",
+ "tokio",
  "tracing",
 ]
 

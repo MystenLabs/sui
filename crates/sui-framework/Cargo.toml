@@ -29,3 +29,4 @@ move-compiler.workspace = true
 move-package-alt-compilation.workspace = true
 sui-move-build.workspace = true
 sui-config.workspace = true
+tokio.workspace = true
