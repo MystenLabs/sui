@@ -6,7 +6,7 @@ use crate::static_programmable_transactions::{
 };
 use indexmap::IndexSet;
 use move_vm_types::values::VectorSpecialization;
-use std::cell::OnceCell;
+use std::{cell::OnceCell, vec};
 use sui_types::base_types::{ObjectID, ObjectRef};
 
 //**************************************************************************************************
@@ -197,6 +197,26 @@ impl Argument__ {
             Self::Use(usage) | Self::Read(usage) => usage.location(),
             Self::Borrow(_, location) => *location,
             Self::Freeze(usage) => usage.location(),
+        }
+    }
+}
+
+impl Command__ {
+    pub fn arguments(&self) -> Vec<&Argument> {
+        match self {
+            Command__::MoveCall(mc) => mc.arguments.iter().collect(),
+            Command__::TransferObjects(objs, addr) => {
+                objs.iter().chain(std::iter::once(addr)).collect()
+            }
+            Command__::SplitCoins(_, coin, amounts) => {
+                std::iter::once(coin).chain(amounts).collect()
+            }
+            Command__::MergeCoins(_, target, sources) => {
+                std::iter::once(target).chain(sources).collect()
+            }
+            Command__::MakeMoveVec(_, elems) => elems.iter().collect(),
+            Command__::Publish(_, _, _) => vec![],
+            Command__::Upgrade(_, _, _, arg, _) => vec![arg],
         }
     }
 }
