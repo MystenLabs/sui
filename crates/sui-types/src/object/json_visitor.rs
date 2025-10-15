@@ -17,6 +17,29 @@ use move_core_types::{
 };
 use serde_json::{Map, Value};
 
+use crate::{
+    base_types::{move_ascii_str_layout, move_utf8_str_layout, RESOLVED_STD_OPTION},
+    id::{ID, UID},
+    object::option_visitor::{OptionVisitor, OptionVisitorError},
+    proto_value::{is_balance, url_layout},
+};
+
+/// Error type for JSON visitor operations
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error(transparent)]
+    Visitor(#[from] annotated_visitor::Error),
+
+    #[error("Unexpected type")]
+    UnexpectedType,
+}
+
+impl OptionVisitorError for Error {
+    fn unexpected_type() -> Self {
+        Error::UnexpectedType
+    }
+}
+
 /// A visitor that constructs JSON values from BCS bytes.
 ///
 /// Number representation:
@@ -57,7 +80,7 @@ impl Default for JsonVisitor {
 
 impl<'b, 'l> Visitor<'b, 'l> for JsonVisitor {
     type Value = Value;
-    type Error = annotated_visitor::Error;
+    type Error = Error;
 
     fn visit_u8(
         &mut self,
@@ -150,7 +173,7 @@ impl<'b, 'l> Visitor<'b, 'l> for JsonVisitor {
             {
                 Ok(Value::String(STANDARD.encode(bytes)))
             } else {
-                Err(annotated_visitor::Error::UnexpectedEof)
+                Err(annotated_visitor::Error::UnexpectedEof.into())
             }
         } else {
             // Regular vector - collect elements
@@ -166,14 +189,65 @@ impl<'b, 'l> Visitor<'b, 'l> for JsonVisitor {
         &mut self,
         driver: &mut StructDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
-        let mut fields = Map::new();
+        let ty = &driver.struct_layout().type_;
+        let layout = driver.struct_layout();
 
-        // Add all struct fields
-        while let Some((field, value)) = driver.next_field(self)? {
-            fields.insert(field.name.to_string(), value);
+        if layout == &move_ascii_str_layout()
+            || layout == &move_utf8_str_layout()
+            || layout == &url_layout()
+        {
+            // 0x1::ascii::String or 0x1::string::String or 0x2::url::Url
+
+            let lo = driver.position();
+            driver.skip_field()?;
+            let hi = driver.position();
+
+            // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
+            let bytes = &driver.bytes()[lo..hi];
+            let s: &str = bcs::from_bytes(bytes).map_err(|_| Error::UnexpectedType)?;
+            Ok(Value::String(s.to_string()))
+        } else if layout == &UID::layout() || layout == &ID::layout() {
+            // 0x2::object::UID or 0x2::object::ID
+
+            let lo = driver.position();
+            driver.skip_field()?;
+            let hi = driver.position();
+
+            // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
+            let bytes = &driver.bytes()[lo..hi];
+            let id = AccountAddress::from_bytes(bytes)
+                .map_err(|_| Error::UnexpectedType)?
+                .to_canonical_string(true);
+            Ok(Value::String(id))
+        } else if (&ty.address, ty.module.as_ref(), ty.name.as_ref()) == RESOLVED_STD_OPTION {
+            // 0x1::option::Option
+            match OptionVisitor(self).visit_struct(driver)? {
+                Some(value) => Ok(value),
+                None => Ok(Value::Null),
+            }
+        } else if is_balance(layout) {
+            // 0x2::balance::Balance
+
+            let lo = driver.position();
+            driver.skip_field()?;
+            let hi = driver.position();
+
+            // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
+            let bytes = &driver.bytes()[lo..hi];
+            let balance = bcs::from_bytes::<u64>(bytes)
+                .map_err(|_| Error::UnexpectedType)?
+                .to_string();
+            Ok(Value::String(balance))
+        } else {
+            // Arbitrary structs
+            let mut fields = Map::new();
+
+            while let Some((field, value)) = driver.next_field(self)? {
+                fields.insert(field.name.to_string(), value);
+            }
+
+            Ok(Value::Object(fields))
         }
-
-        Ok(Value::Object(fields))
     }
 
     fn visit_variant(
@@ -182,7 +256,6 @@ impl<'b, 'l> Visitor<'b, 'l> for JsonVisitor {
     ) -> Result<Self::Value, Self::Error> {
         let mut fields = Map::new();
 
-        // Follow GraphQL/gRPC format: only include @variant field
         fields.insert(
             "@variant".to_string(),
             Value::String(driver.variant_name().to_string()),
@@ -208,14 +281,14 @@ mod tests {
     use serde_json::json;
     use std::str::FromStr;
 
-    fn serialize_value(value: MoveValue) -> Vec<u8> {
-        value.undecorate().simple_serialize().unwrap()
-    }
+    // ===== Test Helper Functions =====
 
+    /// Parse a struct type string (e.g., "0x1::module::Struct<T>")
     fn struct_type(type_str: &str) -> StructTag {
         StructTag::from_str(type_str).unwrap()
     }
 
+    /// Create a Move struct layout from a type string and field specifications
     fn make_layout(type_str: &str, fields: Vec<(&str, MoveTypeLayout)>) -> MoveTypeLayout {
         MoveTypeLayout::Struct(Box::new(A::MoveStructLayout {
             type_: struct_type(type_str),
@@ -229,6 +302,7 @@ mod tests {
         }))
     }
 
+    /// Create a Move struct value from a type string and field values
     fn make_value(type_str: &str, fields: Vec<(&str, MoveValue)>) -> MoveValue {
         MoveValue::Struct(A::MoveStruct {
             type_: struct_type(type_str),
@@ -237,6 +311,264 @@ mod tests {
                 .map(|(name, value)| (Identifier::new(name).unwrap(), value))
                 .collect(),
         })
+    }
+
+    /// Deserialize BCS bytes to JSON using the JsonVisitor
+    /// For simple cases, you can pass a Rust value that serializes to the expected BCS format
+    fn to_json<T: serde::Serialize>(layout: MoveTypeLayout, data: T) -> serde_json::Value {
+        let bcs = bcs::to_bytes(&data).unwrap();
+        let mut visitor = JsonVisitor::new();
+        MoveValue::visit_deserialize(&bcs, &layout, &mut visitor).unwrap()
+    }
+
+    /// Parse an address string (e.g., "0x42") into an AccountAddress
+    fn address(a: &str) -> AccountAddress {
+        AccountAddress::from_str(a).unwrap()
+    }
+
+    use MoveTypeLayout as L;
+
+    #[test]
+    fn test_ascii_string() {
+        let l = make_layout(
+            "0x1::ascii::String",
+            vec![("bytes", L::Vector(Box::new(L::U8)))],
+        );
+        let actual = to_json(l, "The quick brown fox");
+        let expect = json!("The quick brown fox");
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_utf8_string() {
+        let l = make_layout(
+            "0x1::string::String",
+            vec![("bytes", L::Vector(Box::new(L::U8)))],
+        );
+        let actual = to_json(l, "The quick brown fox");
+        let expect = json!("The quick brown fox");
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_url() {
+        let l = make_layout(
+            "0x2::url::Url",
+            vec![(
+                "url",
+                make_layout(
+                    "0x1::ascii::String",
+                    vec![("bytes", L::Vector(Box::new(L::U8)))],
+                ),
+            )],
+        );
+        let actual = to_json(l, "https://example.com");
+        let expect = json!("https://example.com");
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_id() {
+        let l = make_layout("0x2::object::ID", vec![("bytes", L::Address)]);
+        let actual = to_json(l, address("0x42"));
+        let expect = json!("0x0000000000000000000000000000000000000000000000000000000000000042");
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_uid() {
+        let l = make_layout(
+            "0x2::object::UID",
+            vec![(
+                "id",
+                make_layout("0x2::object::ID", vec![("bytes", L::Address)]),
+            )],
+        );
+        let actual = to_json(l, address("0x42"));
+        let expect = json!("0x0000000000000000000000000000000000000000000000000000000000000042");
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_option() {
+        use MoveValue as V;
+
+        // Option is a struct with a "vec" field in Move
+        let l = make_layout(
+            "0x1::option::Option<u64>",
+            vec![("vec", L::Vector(Box::new(L::U64)))],
+        );
+
+        // None case: Option with empty vector
+        let none_value = make_value("0x1::option::Option<u64>", vec![("vec", V::Vector(vec![]))]);
+        let actual = to_json(l.clone(), none_value.undecorate());
+        let expect = json!(null);
+        assert_eq!(expect, actual);
+
+        // Some case: Option with single element vector
+        let some_value = make_value(
+            "0x1::option::Option<u64>",
+            vec![("vec", V::Vector(vec![V::U64(42)]))],
+        );
+        let actual = to_json(l, some_value.undecorate());
+        let expect = json!("42");
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_balance() {
+        let l = make_layout(
+            "0x2::balance::Balance<0x2::sui::SUI>",
+            vec![("value", L::U64)],
+        );
+
+        let actual = to_json(l, 100u64);
+        let expect = json!("100");
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_compound() {
+        use MoveTypeLayout as T;
+        use MoveValue as V;
+
+        // Test a struct containing multiple special types
+        let layout = make_layout(
+            "0x42::foo::Compound",
+            vec![
+                (
+                    "name",
+                    make_layout(
+                        "0x1::string::String",
+                        vec![("bytes", T::Vector(Box::new(T::U8)))],
+                    ),
+                ),
+                (
+                    "id",
+                    make_layout("0x2::object::ID", vec![("bytes", T::Address)]),
+                ),
+                (
+                    "balance",
+                    make_layout(
+                        "0x2::balance::Balance<0x2::sui::SUI>",
+                        vec![("value", T::U64)],
+                    ),
+                ),
+                (
+                    "url",
+                    make_layout(
+                        "0x2::url::Url",
+                        vec![(
+                            "url",
+                            make_layout(
+                                "0x1::ascii::String",
+                                vec![("bytes", T::Vector(Box::new(T::U8)))],
+                            ),
+                        )],
+                    ),
+                ),
+                (
+                    "opt_value",
+                    make_layout(
+                        "0x1::option::Option<u64>",
+                        vec![("vec", T::Vector(Box::new(T::U64)))],
+                    ),
+                ),
+            ],
+        );
+
+        // Create value with Some(999)
+        let value = make_value(
+            "0x42::foo::Compound",
+            vec![
+                (
+                    "name",
+                    make_value(
+                        "0x1::string::String",
+                        vec![(
+                            "bytes",
+                            V::Vector("Test Object".bytes().map(V::U8).collect()),
+                        )],
+                    ),
+                ),
+                (
+                    "id",
+                    make_value(
+                        "0x2::object::ID",
+                        vec![("bytes", V::Address(address("0x42")))],
+                    ),
+                ),
+                (
+                    "balance",
+                    make_value(
+                        "0x2::balance::Balance<0x2::sui::SUI>",
+                        vec![("value", V::U64(1000))],
+                    ),
+                ),
+                (
+                    "url",
+                    make_value(
+                        "0x2::url::Url",
+                        vec![(
+                            "url",
+                            make_value(
+                                "0x1::ascii::String",
+                                vec![(
+                                    "bytes",
+                                    V::Vector("https://example.com".bytes().map(V::U8).collect()),
+                                )],
+                            ),
+                        )],
+                    ),
+                ),
+                (
+                    "opt_value",
+                    make_value(
+                        "0x1::option::Option<u64>",
+                        vec![("vec", V::Vector(vec![V::U64(999)]))],
+                    ),
+                ),
+            ],
+        );
+
+        let actual = to_json(layout, value.undecorate());
+        let expected = json!({
+            "name": "Test Object",
+            "id": "0x0000000000000000000000000000000000000000000000000000000000000042",
+            "balance": "1000",
+            "url": "https://example.com",
+            "opt_value": "999",
+        });
+        assert_eq!(actual, expected);
+
+        // Test with None for optional
+        let layout2 = make_layout(
+            "0x42::foo::Compound2",
+            vec![(
+                "opt",
+                make_layout(
+                    "0x1::option::Option<u128>",
+                    vec![("vec", T::Vector(Box::new(T::U128)))],
+                ),
+            )],
+        );
+
+        let value2 = make_value(
+            "0x42::foo::Compound2",
+            vec![(
+                "opt",
+                make_value(
+                    "0x1::option::Option<u128>",
+                    vec![
+                        ("vec", V::Vector(vec![])), // Empty vector for None
+                    ],
+                ),
+            )],
+        );
+
+        let actual2 = to_json(layout2, value2.undecorate());
+        let expected2 = json!({ "opt": null });
+        assert_eq!(actual2, expected2);
     }
 
     #[test]
@@ -255,15 +587,13 @@ mod tests {
                 ("balance", V::U64(1000)),
             ],
         );
-        let bytes = serialize_value(value);
-        let mut visitor = JsonVisitor::new();
-        let json = MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
 
+        let actual = to_json(layout, value.undecorate());
         let expected = json!({
             "id": "0x0000000000000000000000000000000000000000000000000000000000000001",
             "balance": "1000"
         });
-        assert_eq!(json, expected);
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -288,10 +618,8 @@ mod tests {
                 ("count", V::U64(2)),
             ],
         );
-        let bytes = serialize_value(value);
-        let mut visitor = JsonVisitor::new();
-        let json = MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
 
+        let actual = to_json(layout, value.undecorate());
         let expected = json!({
             "items": [
                 {
@@ -303,7 +631,7 @@ mod tests {
             ],
             "count": "2"
         });
-        assert_eq!(json, expected);
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -338,15 +666,12 @@ mod tests {
             fields: vec![(Identifier::new("value").unwrap(), V::U64(42))],
         });
 
-        let bytes = serialize_value(some_value);
-        let mut visitor = JsonVisitor::new();
-        let json = MoveValue::visit_deserialize(&bytes, &enum_layout, &mut visitor).unwrap();
-
+        let actual = to_json(enum_layout.clone(), some_value.undecorate());
         let expected = json!({
             "@variant": "Some",
             "value": "42"  // u64 as string
         });
-        assert_eq!(json, expected);
+        assert_eq!(actual, expected);
 
         // Test "None" variant
         let none_value = V::Variant(A::MoveVariant {
@@ -356,13 +681,11 @@ mod tests {
             fields: vec![],
         });
 
-        let bytes = serialize_value(none_value);
-        let json = MoveValue::visit_deserialize(&bytes, &enum_layout, &mut visitor).unwrap();
-
-        let expected_none = json!({
+        let actual = to_json(enum_layout, none_value.undecorate());
+        let expected = json!({
             "@variant": "None"
         });
-        assert_eq!(json, expected_none);
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -391,15 +714,12 @@ mod tests {
             ],
         );
 
-        let bytes = serialize_value(value);
-        let mut visitor = JsonVisitor::new();
-        let json = MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
-
+        let actual = to_json(layout, value.undecorate());
         let expected = json!({
             "bytes": "SGVsbG8=",  // "Hello" Base64 encoded
             "numbers": [1, 2, 3]  // u32 values as JSON numbers
         });
-        assert_eq!(json, expected);
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -425,10 +745,8 @@ mod tests {
                 ("u256_value", V::U256(U256::from(123456789u128))),
             ],
         );
-        let bytes = serialize_value(value);
-        let mut visitor = JsonVisitor::new();
-        let json = MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
 
+        let json = to_json(layout, value.undecorate());
         assert_eq!(json["small_u64"], json!("1000"));
         assert_eq!(json["large_u64"], json!(u64::MAX.to_string()));
         assert_eq!(json["u128_value"], json!(u128::MAX.to_string()));
