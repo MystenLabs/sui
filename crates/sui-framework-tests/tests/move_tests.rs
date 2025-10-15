@@ -15,6 +15,12 @@ pub(crate) const FRAMEWORK: &str = concat!(
     "/../../crates/sui-framework/packages"
 );
 
+#[cfg(not(msim))]
+const DIRS_TO_EXCLUDE: &[&str] = &[];
+/// We cannot support packages that depend on git dependencies on simtests.
+#[cfg(msim)]
+const DIRS_TO_EXCLUDE: &[&str] = &["nft-rental", "usdc_usage"];
+
 /// Ensure packages build outside of test mode.
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
@@ -22,6 +28,9 @@ pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
     let Some(path) = path.parent() else {
         panic!("No parent for Move.toml file at: {}", path.display());
     };
+    if should_exclude_dir(path) {
+        return Ok(());
+    }
 
     let mut config = BuildConfig::new_for_testing();
     config.run_bytecode_verifier = true;
@@ -46,6 +55,10 @@ pub(crate) async fn tests(path: &Path) -> datatest_stable::Result<()> {
         panic!("No parent for Move.toml file at: {}", path.display());
     };
 
+    if should_exclude_dir(path) {
+        return Ok(());
+    }
+
     let mut config = BuildConfig::new_for_testing();
 
     config.config.test_mode = true;
@@ -68,6 +81,22 @@ pub(crate) async fn tests(path: &Path) -> datatest_stable::Result<()> {
     );
 
     Ok(())
+}
+
+/// On simtests, we exclude dirs that depend on external (git)
+/// dependencies.
+fn should_exclude_dir(path: &Path) -> bool {
+    for exclude_dir in DIRS_TO_EXCLUDE {
+        if path
+            .to_str()
+            .unwrap()
+            .ends_with(format!("/{}", exclude_dir).as_str())
+        {
+            return true;
+        }
+    }
+
+    false
 }
 
 datatest_stable::harness!(
