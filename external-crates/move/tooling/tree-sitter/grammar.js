@@ -986,7 +986,7 @@ module.exports = grammar({
     mut_ref: $ => seq('&', 'mut'),
     block_identifier: $ => seq($.label, ':'),
     label: $ => seq('\'', $.identifier),
-    address_literal: $ => /@(0x[a-fA-F0-9]+|[0-9]+)/,
+    address_literal: $ => /@(0x[a-fA-F0-9][a-fA-F0-9_]*|[0-9]+)/,
     bool_literal: $ => choice('true', 'false'),
     num_literal: $ => seq(
       choice(
