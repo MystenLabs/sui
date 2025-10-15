@@ -29,12 +29,28 @@ echo ""
 echo "Publishing package..."
 PUBLISH_OUTPUT=$(sui client publish --gas-budget 100000000 --json)
 
+# Save the output for debugging
+echo "$PUBLISH_OUTPUT" > publish_output.json
+
 # Extract package ID and treasury cap ID
 PACKAGE_ID=$(echo "$PUBLISH_OUTPUT" | jq -r '.objectChanges[] | select(.type == "published") | .packageId')
-TREASURY_ID=$(echo "$PUBLISH_OUTPUT" | jq -r '.objectChanges[] | select(.objectType | contains("TreasuryCap")) | .objectId')
+TREASURY_ID=$(echo "$PUBLISH_OUTPUT" | jq -r '.objectChanges[] | select((.objectType // "") | contains("TreasuryCap")) | .objectId')
 
 echo "Package ID: $PACKAGE_ID"
 echo "Treasury Cap ID: $TREASURY_ID"
+
+# Verify we got valid IDs
+if [ -z "$PACKAGE_ID" ] || [ "$PACKAGE_ID" = "null" ]; then
+    echo "Error: Failed to extract Package ID"
+    echo "Check publish_output.json for details"
+    exit 1
+fi
+
+if [ -z "$TREASURY_ID" ] || [ "$TREASURY_ID" = "null" ]; then
+    echo "Error: Failed to extract Treasury Cap ID"
+    echo "Check publish_output.json for details"
+    exit 1
+fi
 echo ""
 
 # Save to config file
