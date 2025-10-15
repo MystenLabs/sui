@@ -41,7 +41,7 @@ use sui_types::storage::EpochInfo;
 use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
 use typed_store::rocksdb::{compaction_filter::Decision, MergeOperands, WriteOptions};
 use typed_store::traits::Map;
@@ -236,7 +236,13 @@ fn events_table_options(
             "events_by_stream",
             move |_, key, value| match filter.filter(key, value) {
                 Ok(decision) => decision,
-                Err(_) => Decision::Keep,
+                Err(e) => {
+                    warn!(
+                        "Failed to parse event key during compaction: {}, key: {:?}",
+                        e, key
+                    );
+                    Decision::Remove
+                }
             },
         );
     }
