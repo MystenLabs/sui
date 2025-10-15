@@ -854,6 +854,10 @@ struct FeatureFlags {
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
+
+    // If true, deprecate global storage ops during Move module deserialization
+    #[serde(skip_serializing_if = "is_false")]
+    deprecate_global_storage_ops_during_deserialization: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2302,6 +2306,11 @@ impl ProtocolConfig {
 
     pub fn allow_references_in_ptbs(&self) -> bool {
         self.feature_flags.allow_references_in_ptbs
+    }
+
+    pub fn deprecate_global_storage_ops_during_deserialization(&self) -> bool {
+        self.feature_flags
+            .deprecate_global_storage_ops_during_deserialization
     }
 }
 
