@@ -64,6 +64,7 @@ pub struct LegacyPackageMetadata {
     pub edition: Option<Edition>,
     pub published_at: Option<String>,
     pub unrecognized_fields: BTreeMap<String, toml::Value>,
+    pub implicit_deps: bool,
 }
 
 /// If `path` contains a valid legacy manifest, convert it to a modern format and return it. By
@@ -198,11 +199,12 @@ fn parse_source_manifest(
 
             // IF we have one system package OR this package is a system package itself,
             // we disable implicit deps.
-            let system_dependencies = if has_system_package || is_system_package {
-                Some(vec![])
-            } else {
-                None
-            };
+            let system_dependencies =
+                if has_system_package || is_system_package || !metadata.implicit_deps {
+                    Some(vec![])
+                } else {
+                    None
+                };
 
             // We create a normalized legacy name, to make sure we can always use a package
             // as an Identifier.
@@ -268,6 +270,11 @@ pub fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
                 .remove("published-at")
                 .map(|v| v.as_str().unwrap_or_default().to_string());
 
+            let implicit_deps = table
+                .remove("implicit-deps")
+                .map(|v| v.as_bool().unwrap_or(true))
+                .unwrap_or(true);
+
             let name = name.to_string();
 
             // TODO: Decide if we want to add an author list in the new system!
@@ -308,6 +315,7 @@ pub fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
                 edition,
                 published_at,
                 unrecognized_fields: table.into_iter().collect(),
+                implicit_deps,
             })
         }
         x => bail!(
