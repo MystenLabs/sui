@@ -63,8 +63,8 @@ pub struct BinaryConfig {
     pub max_binary_format_version: u32,
     pub min_binary_format_version: u32,
     pub check_no_extraneous_bytes: bool,
-    pub table_config: TableConfig,
     pub deprecate_global_storage_ops: bool,
+    pub table_config: TableConfig,
     allow_unpublishable: bool,
 }
 
@@ -80,8 +80,8 @@ impl BinaryConfig {
             max_binary_format_version,
             min_binary_format_version,
             check_no_extraneous_bytes,
-            table_config,
             deprecate_global_storage_ops,
+            table_config,
             allow_unpublishable: false,
         }
     }

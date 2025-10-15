@@ -1537,11 +1537,10 @@ fn load_function_def(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Functio
         (vis, is_entry, extra_flags)
     };
 
-    let acquires_global_resources = if cursor.deprecate_global_storage_ops {
-        vec![]
-    } else {
-        load_struct_definition_indices(cursor)?
-    };
+    let acquires_global_resources = load_struct_definition_indices(cursor)?;
+    if !acquires_global_resources.is_empty() {
+        check_deprecate_global_storage_ops(cursor)?;
+    }
     let code_unit = if (extra_flags & FunctionDefinition::NATIVE) != 0 {
         extra_flags ^= FunctionDefinition::NATIVE;
         None
@@ -1851,6 +1850,7 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
                 Bytecode::ExistsDeprecated(load_struct_def_index(cursor)?)
             }
             Opcodes::EXISTS_GENERIC_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::ExistsGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }
             Opcodes::MUT_BORROW_GLOBAL_DEPRECATED => {
