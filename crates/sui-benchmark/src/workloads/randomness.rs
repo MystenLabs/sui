@@ -17,7 +17,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{CallArg, ObjectArg, TransactionDataAPI};
+use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     transaction::Transaction,

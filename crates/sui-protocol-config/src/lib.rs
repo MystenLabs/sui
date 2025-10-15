@@ -4052,7 +4052,7 @@ impl ProtocolConfig {
                             ExecutionTimeEstimateParams {
                                 target_utilization: 50,
                                 allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
-                                randomness_scalar: 20,
+                                randomness_scalar: 5,
                                 max_estimate_us: 1_500_000, // 1.5s
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 18,
