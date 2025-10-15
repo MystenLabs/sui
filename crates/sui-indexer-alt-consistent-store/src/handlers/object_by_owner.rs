@@ -29,7 +29,7 @@ impl Processor for ObjectByOwner {
     const NAME: &'static str = "object_by_owner";
     type Value = Value;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Value>> {
         let input_objects = checkpoint_input_objects(checkpoint)?;
         let output_objects = checkpoint_output_objects(checkpoint)?;
         let mut values = vec![];

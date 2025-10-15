@@ -257,7 +257,7 @@ impl DataStore {
             .connect_timeout(std::time::Duration::from_secs(3))
             .timeout(std::time::Duration::from_secs(5))
             .build()?;
-        let url = node.rpc_url();
+        let url = node.gql_url();
         let rpc =
             reqwest::Url::parse(url).context(format!("Failed to parse GQL RPC URL {}", url))?;
         let epoch_map = RwLock::new(BTreeMap::new());

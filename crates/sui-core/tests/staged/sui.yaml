@@ -472,6 +472,8 @@ EndOfEpochTransactionKind:
       AccumulatorRootCreate: UNIT
     9:
       CoinRegistryCreate: UNIT
+    10:
+      DisplayRegistryCreate: UNIT
 Event:
   STRUCT:
     - package_id:

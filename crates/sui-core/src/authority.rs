@@ -3429,7 +3429,7 @@ impl AuthorityState {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = Arc::new(ExecutionScheduler::new(
             execution_cache_trait_pointers.object_cache_reader.clone(),
-            execution_cache_trait_pointers.child_object_resolver.clone(),
+            execution_cache_trait_pointers.object_store.clone(),
             execution_cache_trait_pointers
                 .transaction_cache_reader
                 .clone(),
@@ -3582,6 +3582,8 @@ impl AuthorityState {
         config: NodeConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
+        use crate::authority::authority_store_pruner::PrunerWatermarks;
+        let watermarks = Arc::new(PrunerWatermarks::default());
         AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
@@ -3590,6 +3592,7 @@ impl AuthorityState {
             config.authority_store_pruning_config,
             metrics,
             EPOCH_DURATION_MS_FOR_TESTING,
+            &watermarks,
         )
         .await
     }
@@ -3771,8 +3774,7 @@ impl AuthorityState {
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
-        self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+        self.execution_scheduler.reconfigure(&new_epoch_store);
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
@@ -3805,8 +3807,7 @@ impl AuthorityState {
                 .map(|c| *c.sequence_number())
                 .unwrap_or_default(),
         );
-        self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+        self.execution_scheduler.reconfigure(&new_epoch_store);
         let new_epoch = new_epoch_store.epoch();
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;
@@ -5427,6 +5428,25 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
+    fn create_display_registry_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_display_registry() {
+            info!("display registry not enabled");
+            return None;
+        }
+
+        if epoch_store.display_registry_exists() {
+            return None;
+        }
+
+        let tx = EndOfEpochTransactionKind::new_display_registry_create();
+        info!("Creating DisplayRegistryCreate tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
     fn create_bridge_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -5658,6 +5678,10 @@ impl AuthorityState {
         }
 
         if let Some(tx) = self.create_coin_registry_tx(epoch_store) {
+            txns.push(tx);
+        }
+
+        if let Some(tx) = self.create_display_registry_tx(epoch_store) {
             txns.push(tx);
         }
 

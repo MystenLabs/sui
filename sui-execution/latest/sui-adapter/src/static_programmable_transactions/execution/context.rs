@@ -7,7 +7,8 @@ use crate::{
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
-    programmable_transactions as legacy_ptb, sp,
+    programmable_transactions::{self as legacy_ptb},
+    sp,
     static_programmable_transactions::{
         env::Env,
         execution::values::{Local, Locals, Value},
@@ -51,7 +52,6 @@ use sui_types::{
     metrics::LimitsMetrics,
     move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::{MoveObject, Object, Owner},
-    storage::PackageObject,
 };
 use sui_verifier::INIT_FN_NAME;
 use tracing::instrument;
@@ -681,15 +681,64 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(modules)
     }
 
-    fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<PackageObject, ExecutionError> {
-        legacy_ptb::execution::fetch_package(&self.env.state_view, dependency_id)
+    fn fetch_package(
+        &mut self,
+        dependency_id: &ObjectID,
+    ) -> Result<Rc<MovePackage>, ExecutionError> {
+        let [fetched_package] = self.fetch_packages(&[*dependency_id])?.try_into().map_err(
+            |_| {
+                make_invariant_violation!(
+                    "We should always fetch a single package for each object or return a dependency error."
+                )
+            },
+        )?;
+        Ok(fetched_package)
     }
 
     fn fetch_packages(
         &mut self,
         dependency_ids: &[ObjectID],
-    ) -> Result<Vec<PackageObject>, ExecutionError> {
-        legacy_ptb::execution::fetch_packages(&self.env.state_view, dependency_ids)
+    ) -> Result<Vec<Rc<MovePackage>>, ExecutionError> {
+        let mut fetched = vec![];
+        let mut missing = vec![];
+
+        for id in dependency_ids {
+            match self.env.linkable_store.get_package(id) {
+                Err(e) => {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::PublishUpgradeMissingDependency,
+                        e,
+                    ));
+                }
+                Ok(Some(inner)) => {
+                    fetched.push(inner);
+                }
+                Ok(None) => {
+                    missing.push(*id);
+                }
+            }
+        }
+
+        if missing.is_empty() {
+            assert_invariant!(
+                fetched.len() == dependency_ids.len(),
+                "all dependencies should be fetched"
+            );
+            Ok(fetched)
+        } else {
+            let msg = format!(
+                "Missing dependencies: {}",
+                missing
+                    .into_iter()
+                    .map(|dep| format!("{}", dep))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PublishUpgradeMissingDependency,
+                msg,
+            ))
+        }
     }
 
     fn publish_and_verify_modules(
@@ -819,7 +868,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let package = Rc::new(MovePackage::new_initial(
             &modules,
             self.env.protocol_config,
-            dependencies.iter().map(|p| p.move_package()),
+            dependencies.iter().map(|p| p.as_ref()),
         )?);
         let package_id = package.id();
 
@@ -852,9 +901,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         linkage: ResolvedLinkage,
     ) -> Result<ObjectID, ExecutionError> {
         // Check that this package ID points to a package and get the package we're upgrading.
-        let current_package = self.fetch_package(&current_package_id)?;
+        let current_move_package = self.fetch_package(&current_package_id)?;
 
-        let runtime_id = current_package.move_package().original_package_id();
+        let runtime_id = current_move_package.original_package_id();
         adapter::substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
@@ -864,12 +913,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let storage_id = self.tx_context.borrow_mut().fresh_id();
 
         let dependencies = self.fetch_packages(dep_ids)?;
-        let current_move_package = current_package.move_package();
         let package = current_move_package.new_upgraded(
             storage_id,
             &modules,
             self.env.protocol_config,
-            dependencies.iter().map(|p| p.move_package()),
+            dependencies.iter().map(|p| p.as_ref()),
         )?;
 
         let linkage = RootedLinkage::new_for_publication(storage_id, runtime_id, linkage);
@@ -877,7 +925,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
         legacy_ptb::execution::check_compatibility(
             self.env.protocol_config,
-            current_package.move_package(),
+            current_move_package.as_ref(),
             &modules,
             upgrade_ticket_policy,
         )?;
@@ -885,8 +933,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         if self.env.protocol_config.check_for_init_during_upgrade() {
             // find newly added modules to the package,
             // and error if they have init functions
-            let current_module_names: BTreeSet<&str> = current_package
-                .move_package()
+            let current_module_names: BTreeSet<&str> = current_move_package
                 .serialized_module_map()
                 .keys()
                 .map(|s| s.as_str())

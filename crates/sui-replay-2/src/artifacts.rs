@@ -1,35 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution::ReplayCacheSummary;
+use crate::execution::{MoveCallInfo, ReplayCacheSummary};
 use anyhow::bail;
+use move_trace_format::format::{MoveTrace, MoveTraceReader};
 use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-
-use move_trace_format::format::{MoveTrace, MoveTraceReader};
 use sui_types::{effects::TransactionEffects, gas::GasUsageReport};
 
 pub const ARTIFACTS_ENCODING_EXT: &str = "json";
 pub const ARTIFACTS_ENCODING_COMPRESSION_EXT: &str = "json.zst";
 
-pub const ARTIFACTS: [Artifact; 5] = [
+pub const ARTIFACTS: [Artifact; 7] = [
     Artifact::Trace,
+    Artifact::TransactionData,
     Artifact::TransactionEffects,
     Artifact::TransactionGasReport,
     Artifact::ForkedTransactionEffects,
     Artifact::ReplayCacheSummary,
+    Artifact::MoveCallInfo,
 ];
 
 /// The types of artifacts that the replay tool knows about and may output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Artifact {
     Trace,
+    TransactionData,
     TransactionEffects,
     TransactionGasReport,
     ForkedTransactionEffects,
     ReplayCacheSummary,
+    MoveCallInfo,
 }
 
 /// Encoding types for artifacts that may be output by the replay tool.
@@ -94,10 +97,12 @@ impl Artifact {
     pub const fn as_str(&self) -> &str {
         match self {
             Artifact::Trace => "trace",
+            Artifact::TransactionData => "transaction_data",
             Artifact::TransactionEffects => "transaction_effects",
             Artifact::ForkedTransactionEffects => "forked_transaction_effects",
             Artifact::TransactionGasReport => "transaction_gas_report",
             Artifact::ReplayCacheSummary => "replay_cache_summary",
+            Artifact::MoveCallInfo => "move_call_info",
         }
     }
 
@@ -106,9 +111,11 @@ impl Artifact {
         match self {
             Artifact::Trace => EncodingType::JsonCompressed,
             Artifact::ForkedTransactionEffects
+            | Artifact::TransactionData
             | Artifact::TransactionEffects
             | Artifact::TransactionGasReport
-            | Artifact::ReplayCacheSummary => EncodingType::Json,
+            | Artifact::ReplayCacheSummary
+            | Artifact::MoveCallInfo => EncodingType::Json,
         }
     }
 
@@ -204,6 +211,23 @@ impl ArtifactMember<'_, '_> {
                 serde_json::from_value::<ReplayCacheSummary>(json).map_err(|e| {
                     anyhow::anyhow!(
                         "Failed to deserialize replay cache summary from {}: {e}",
+                        self.artifact_path.display()
+                    )
+                })
+            }))
+        } else {
+            None
+        }
+    }
+
+    /// Try to get the MoveCallInfo if the artifact type is `MoveCallInfo`.
+    /// If the artifact type is not `MoveCallInfo` `None` is returned.
+    pub fn try_get_move_call_info(&self) -> Option<anyhow::Result<MoveCallInfo>> {
+        if self.artifact_type == Artifact::MoveCallInfo {
+            Some(self.get_json().and_then(|json| {
+                serde_json::from_value::<MoveCallInfo>(json).map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to deserialize move call info from {}: {e}",
                         self.artifact_path.display()
                     )
                 })

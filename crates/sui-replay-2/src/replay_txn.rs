@@ -13,7 +13,7 @@
 use crate::summary_metrics::{log_replay_metrics, tx_metrics_reset};
 use crate::{
     artifacts::{Artifact, ArtifactManager},
-    execution::{execute_transaction_to_effects, ReplayCacheSummary, ReplayExecutor},
+    execution::{execute_transaction_to_effects, MoveCallInfo, ReplayCacheSummary, ReplayExecutor},
     replay_interface::{
         EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
     },
@@ -66,6 +66,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     artifact_manager: &ArtifactManager<'_>,
     tx_digest: &str,
     data_store: &S,
+    network: String,
     trace: bool,
 ) -> anyhow::Result<()> {
     let _span = info_span!("replay_tx", tx_digest = %tx_digest).entered();
@@ -110,6 +111,18 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     log_replay_metrics(tx_digest, total_ms, exec_ms);
 
     artifact_manager
+        .member(Artifact::TransactionData)
+        .serialize_artifact(&context_and_effects.txn_data)
+        .transpose()?
+        .unwrap();
+
+    artifact_manager
+        .member(Artifact::TransactionEffects)
+        .serialize_artifact(&context_and_effects.execution_effects)
+        .transpose()?
+        .unwrap();
+
+    artifact_manager
         .member(Artifact::TransactionGasReport)
         .serialize_artifact(&context_and_effects.gas_status.gas_usage_report())
         .transpose()?
@@ -119,6 +132,8 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     let cache_summary = ReplayCacheSummary::from_cache(
         context_and_effects.expected_effects.executed_epoch(),
         context_and_effects.checkpoint,
+        network.clone(),
+        context_and_effects.protocol_version,
         &context_and_effects.object_cache,
     );
     artifact_manager
@@ -126,6 +141,33 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
         .serialize_artifact(&cache_summary)
         .transpose()?
         .unwrap();
+
+    // Save move call info if the transaction is a ProgrammableTransaction
+    if let sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb) =
+        context_and_effects.txn_data.kind()
+    {
+        info!(tx_digest = %tx_digest, "Extracting move call info for {} commands", ptb.commands.len());
+        match MoveCallInfo::from_transaction(ptb, &context_and_effects.object_cache) {
+            Ok(move_call_info) => {
+                let successful_extractions = move_call_info
+                    .command_signatures
+                    .iter()
+                    .filter(|s| s.is_some())
+                    .count();
+                info!(tx_digest = %tx_digest, "Successfully extracted {} function signatures out of {} commands",
+                    successful_extractions, move_call_info.command_signatures.len());
+
+                artifact_manager
+                    .member(Artifact::MoveCallInfo)
+                    .serialize_artifact(&move_call_info)
+                    .transpose()?
+                    .unwrap();
+            }
+            Err(e) => {
+                info!(tx_digest = %tx_digest, "Failed to extract move call info: {}", e);
+            }
+        }
+    }
 
     verify_txn_and_save_effects(
         artifact_manager,
