@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::checkpoint_fork::CheckpointStateLoader;
 use clap::Parser;
 use move_cli::base::{
     self,
@@ -34,6 +35,18 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
 pub struct Test {
     #[clap(flatten)]
     pub test: test::Test,
+
+    /// Fork from a checkpoint at the specified sequence number
+    #[clap(long)]
+    pub fork_checkpoint: Option<u64>,
+
+    /// RPC endpoint URL to fetch checkpoint data from
+    #[clap(long)]
+    pub fork_rpc_url: Option<String>,
+
+    /// File containing object IDs to load from the checkpoint (one per line)
+    #[clap(long)]
+    pub object_id_file: Option<String>,
 }
 
 impl Test {
@@ -60,6 +73,9 @@ impl Test {
             Some(unit_test_config),
             compute_coverage,
             save_disassembly,
+            self.fork_checkpoint,
+            self.fork_rpc_url,
+            self.object_id_file,
         )
     }
 }
@@ -82,9 +98,24 @@ pub fn run_move_unit_tests(
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
+    fork_checkpoint: Option<u64>,
+    fork_rpc_url: Option<String>,
+    object_id_file: Option<String>,
 ) -> anyhow::Result<UnitTestResult> {
     // bind the extension hook if it has not yet been done
     Lazy::force(&SET_EXTENSION_HOOK);
+
+    // Load checkpoint state if fork parameters are provided
+    if let (Some(checkpoint_seq), Some(rpc_url)) = (fork_checkpoint, fork_rpc_url) {
+        let runtime = tokio::runtime::Runtime::new()?;
+        let loader = CheckpointStateLoader::new(rpc_url);
+        let storage = runtime.block_on(loader.load_checkpoint_state(checkpoint_seq, object_id_file))?;
+
+        // Update the thread-local test store with the loaded state
+        TEST_STORE_INNER.with(|store| {
+            *store.borrow_mut() = storage;
+        });
+    }
 
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));

@@ -9,6 +9,7 @@ use sui_move_build::{implicit_deps, set_sui_flavor, SuiPackageHooks};
 use sui_package_management::system_package_versions::latest_system_packages;
 
 pub mod build;
+pub mod checkpoint_fork;
 pub mod coverage;
 pub mod disassemble;
 pub mod manage_package;

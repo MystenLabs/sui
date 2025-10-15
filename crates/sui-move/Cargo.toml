@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+bcs.workspace = true
 clap.workspace = true
 colored.workspace = true
 once_cell.workspace = true
@@ -37,6 +38,7 @@ sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 sui-package-management.workspace = true
+sui-sdk.workspace = true
 better_any = "0.1.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
