@@ -4,7 +4,6 @@
 use crate::benchmark_context::BenchmarkContext;
 use crate::mock_account::Account;
 use crate::tx_generator::TxGenerator;
-use move_package::source_package::manifest_parser::parse_move_manifest_from_file;
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -44,11 +43,9 @@ impl PackagePublishTxGenerator {
                     .unwrap();
                 compiled_package.get_package_bytes(false)
             } else {
-                let toml = parse_move_manifest_from_file(&target_path.join("Move.toml")).unwrap();
-                let package_name = toml.package.name.as_str();
                 let module_dir = target_path
                     .join("build")
-                    .join(package_name)
+                    .join(name.clone())
                     .join("bytecode_modules");
                 let mut all_bytes = Vec::new();
                 info!("Loading module bytes from {:?}", module_dir);
