@@ -20,7 +20,7 @@ use sui_types::{
     base_types::{RESOLVED_UTF8_STR, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME},
 };
 
-use super::{error::FormatError, format_visitor::FormatVisitor, writer::BoundedWriter};
+use super::{error::FormatError, visitor::formatter::Formatter, writer::BoundedWriter};
 
 /// Dynamically load objects by their ID. The output should be a `Slice` containing references to
 /// the raw BCS bytes and the corresponding `MoveTypeLayout` for the object. This implies the
@@ -186,7 +186,7 @@ impl Value<'_> {
             Value::U256(n) => write!(w, "{n}")?,
             Value::String(s) => write!(w, "{s}")?,
 
-            Value::Slice(s) => FormatVisitor::deserialize_slice(*s, w)?,
+            Value::Slice(s) => Formatter::deserialize_slice(*s, w)?,
         }
 
         Ok(())

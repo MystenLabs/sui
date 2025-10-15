@@ -6,9 +6,11 @@ use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
 use move_core_types::u256::U256;
 
-use super::address_visitor::AddressVisitor;
-use super::error::FormatError;
-use super::value::{Accessor, Slice, Value};
+use super::address::AddressExtractor;
+use crate::v2::error::FormatError;
+use crate::v2::value::{Accessor, Slice, Value};
+use crate::v2::visitor::vec_map::VecMapVisitor;
+use crate::v2::visitor::vec_map::is_vec_map;
 
 /// A visitor that follows a path of accessors, to slice out the BCS and layout for a sub-part of
 /// the value.
@@ -17,6 +19,10 @@ pub(crate) struct Extractor<'v, 'p> {
 }
 
 impl<'v, 'p> Extractor<'v, 'p> {
+    pub(crate) fn new(path: &'p mut Vec<Accessor<'v>>) -> Self {
+        Self { path }
+    }
+
     /// Attempt to extract a value from the given slice, following the provided path of accessors.
     ///
     /// Accessors are expected to be in reverse order, i.e. the last accessor in the vector is
@@ -142,14 +148,39 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
             })));
         };
 
+        // If the next accessor is for a dynamic field, try and find the parent ID within this
+        // struct, but don't consume the accessor (the dynamic field access will be handled by the
+        // interpreter).
         if matches!(accessor, Accessor::DFIndex(_) | Accessor::DOFIndex(_)) {
-            return AddressVisitor
+            return AddressExtractor
                 .visit_struct(driver)
                 .map(|a| a.map(Value::Address));
         }
 
-        // TODO(amnn): Support vec map access
+        // If the next accessor is an index, then try and treat this struct as a VecMap, and
+        // perform a VecMap look-up.
+        if let Accessor::Index(i) = accessor {
+            if !is_vec_map(&driver.struct_layout().type_) {
+                return Ok(None);
+            }
 
+            let key = bcs::to_bytes(i)?;
+            let contents = driver.peek_field();
+            if contents.is_none_or(|l| l.name.as_str() != "contents") {
+                return Ok(None);
+            }
+
+            self.path.pop();
+            let mut visitor = VecMapVisitor::new(key, self.path);
+            let Some((_, Some(v))) = driver.next_field(&mut visitor)? else {
+                return Ok(None);
+            };
+
+            return Ok(Some(v));
+        }
+
+        // Otherwise, expect a field name (positional or named field), and narrow down to that
+        // field.
         let Some(name) = accessor.as_field_name() else {
             return Ok(None);
         };

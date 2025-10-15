@@ -8,12 +8,12 @@ use move_core_types::u256::U256;
 use sui_types::id::ID;
 use sui_types::id::UID;
 
-use super::error::FormatError;
+use crate::v2::error::FormatError;
 
 /// Visitor to extract addresses from Objects, UIDs, IDs, or addresses.
-pub(crate) struct AddressVisitor;
+pub(crate) struct AddressExtractor;
 
-impl AV::Visitor<'_, '_> for AddressVisitor {
+impl AV::Visitor<'_, '_> for AddressExtractor {
     type Value = Option<AccountAddress>;
     type Error = FormatError;
 
@@ -39,7 +39,7 @@ impl AV::Visitor<'_, '_> for AddressVisitor {
         }
 
         // Otherwise assume the value is an Object and look for `id: UID` as its first field.
-        let Some(field) = layout.fields.first() else {
+        let Some(field) = driver.peek_field() else {
             return Ok(None);
         };
 
