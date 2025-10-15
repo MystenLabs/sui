@@ -75,7 +75,6 @@ itertools = "0.10.0"
 json_comments = "0.2.2"
 leb128 = "0.2.5"
 libfuzzer-sys = "0.4"
-libmimalloc-sys = { version = "0.1", features = ["extended"] }
 log = { version = "0.4.14", features = ["serde"] }
 lsp-server = "0.7.6"
 lsp-types = "0.95.1"
