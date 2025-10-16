@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::mem;
+use std::sync::Arc;
 use std::{collections::BTreeSet, fmt};
 
 use move_core_types::annotated_visitor;
@@ -40,6 +41,9 @@ pub enum Error {
 /// Errors related to a single format string.
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum FormatError {
+    #[error("BCS error: {0}")]
+    Bcs(#[from] bcs::Error),
+
     #[error("Invalid bytes for type")]
     InvalidBytes,
 
@@ -54,6 +58,9 @@ pub enum FormatError {
 
     #[error("Odd number of characters in hex {0}")]
     OddHexLiteral(OwnedLexeme),
+
+    #[error("Storage error: {0}")]
+    Store(Arc<anyhow::Error>),
 
     #[error("Display contains too many elements")]
     TooBig,
