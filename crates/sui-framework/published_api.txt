@@ -2539,9 +2539,6 @@ get_description
 get_icon_url
 	public fun
 	0x2::coin
-new_metadata
-	public(package) fun
-	0x2::coin
 destroy_metadata
 	public(package) fun
 	0x2::coin
