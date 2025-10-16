@@ -118,7 +118,9 @@ impl BinaryConfig {
 
     /// Standard configuration: VERSION_MAX and check_no_extraneous_bytes = true
     pub fn standard() -> Self {
-        Self::legacy_with_flags(true, true)
+        Self::legacy_with_flags(
+            /* check_no_extraneous_bytes */ true, /* deprecate_global_storage_ops */ true,
+        )
     }
 
     pub fn new_unpublishable() -> Self {

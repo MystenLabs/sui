@@ -63,8 +63,13 @@ fn enum_serialize_version_invalid() {
     assert!(module.serialize_with_version(VERSION_6, &mut v).is_ok());
 
     // Can be deserialized at version 6 and at max version as well.
-    CompiledModule::deserialize_with_config(&v, &BinaryConfig::legacy_with_flags(true, true))
-        .unwrap();
+    CompiledModule::deserialize_with_config(
+        &v,
+        &BinaryConfig::legacy_with_flags(
+            /* check_no_extraneous_bytes */ true, /* deprecate_global_storage_ops */ true,
+        ),
+    )
+    .unwrap();
 
     CompiledModule::deserialize_with_config(
         &v,

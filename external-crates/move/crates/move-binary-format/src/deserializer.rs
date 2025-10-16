@@ -22,7 +22,13 @@ use std::{
 impl CompiledModule {
     /// Deserialize a &[u8] slice into a `CompiledModule` instance.
     pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        Self::deserialize_with_config(binary, &BinaryConfig::legacy_with_flags(true, true))
+        Self::deserialize_with_config(
+            binary,
+            &BinaryConfig::legacy_with_flags(
+                /* check_no_extraneous_bytes */ true,
+                /* deprecate_global_storage_ops */ true,
+            ),
+        )
     }
 
     /// Deserialize a &[u8] slice into a `CompiledModule` instance with settings
@@ -40,7 +46,13 @@ impl CompiledModule {
     // exposed as a public function to enable testing the deserializer
     #[doc(hidden)]
     pub fn deserialize_no_check_bounds(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        deserialize_compiled_module(binary, &BinaryConfig::legacy_with_flags(false, false))
+        deserialize_compiled_module(
+            binary,
+            &BinaryConfig::legacy_with_flags(
+                /* check_no_extraneous_bytes */ false,
+                /* deprecate_global_storage_ops */ false,
+            ),
+        )
     }
 }
 

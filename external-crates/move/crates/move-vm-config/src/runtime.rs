@@ -43,7 +43,10 @@ impl Default for VMConfig {
             enable_invariant_violation_check_in_swap_loc: true,
             check_no_extraneous_bytes_during_deserialization: true,
             error_execution_state: true,
-            binary_config: BinaryConfig::legacy_with_flags(true, false),
+            binary_config: BinaryConfig::legacy_with_flags(
+                /* check_no_extraneous_bytes */ true,
+                /* deprecate_global_storage_ops */ false,
+            ),
             rethrow_serialization_type_layout_errors: false,
             max_type_to_layout_nodes: Some(512),
             variant_nodes: true,

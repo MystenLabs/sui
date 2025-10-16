@@ -12,7 +12,9 @@ proptest! {
         module.serialize(&mut serialized).expect("serialization should work");
 
         // Metadata may be generated as part of the proptest, so we need to allow extra bytes.
-        let config = BinaryConfig::legacy_with_flags(false, false);
+        let config = BinaryConfig::legacy_with_flags(
+            /* check_no_extraneous_bytes */ false, /* deprecate_global_storage_ops */ false,
+        );
 
         let deserialized_module = CompiledModule::deserialize_with_config(&serialized, &config)
             .expect("deserialization should work");
