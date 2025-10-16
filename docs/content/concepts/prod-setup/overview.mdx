@@ -1,0 +1,71 @@
+---
+title: Production Setup
+description: Setup instructions for running the indexer, consistent store, and graphql in production.
+keywords: [ indexer, consistent store, graphql, setup, dex ]
+---
+
+## Indexer setup
+
+The indexer consists of multiple pipelines that each read checkpoint data, transform it, and write it to a table. These
+pipelines are grouped together and configured in TOML files. Multiple instances of the indexer run in parallel, each
+configured by its own TOML file. The grouping is determined by pipeline speed because all pipelines in an instance are
+limited by the slowest pipeline in that instance.
+
+### Run command
+
+An indexer instance is run using this command for each of the configuration files listed below:
+```sh
+sui-indexer-alt indexer \
+    --database-url DATABASE_URL
+    --remote-store-url REMOTE_STORE_URL
+    --config CONFIG_TOML
+```
+
+* `DATABASE_URL` - database Postgres connection string
+* `REMOTE_STORE_URL` - location of the checkpoint data to be indexed
+* `CONFIG_TOML` - indexer pipeline configuration
+
+For example:
+```sh
+sui-indexer-alt indexer \
+    --database-url postgres://username:password@localhost:5432/database
+    --remote-store-url https://checkpoints.mainnet.sui.io
+    --config tx.toml
+```
+
+### Run config recommendations
+| Config TOML                                                             | Description                                                                                  | Pipelines                                                                                                                                                                     | Backfill time | CPU | Memory | Storage |
+|-------------------------------------------------------------------------|----------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|-----|--------|---------|
+| [events.toml](indexer-config/events.toml)                               | lightweight event tables                                                                     | ev_emit_mod<br/>ev_struct_inst                                                                                                                                                | 1-2 days      |     |        |         |
+| [obj_versions.toml](indexer-config/obj_versions.toml)                   | very heavy weight object versions table containing data since genesis<br/>currently unpruned | obj_versions                                                                                                                                                                  | 10-14 days    |     |        |         |
+| [tx.toml](indexer-config/tx.toml)                                       | lightweight transaction tables                                                               | cp_sequence_numbers<br/>tx_balance_changes<br/>tx_digests<br/>kv_epoch_ends<br/>kv_epoch_starts<br/>kv_feature_flags<br/>kv_packages<br/>kv_protocol_configs<br/>sum_displays | 2-4 days      |     |        |         |
+| [tx_affected_addresses.toml](indexer-config/tx_affected_addresses.toml) | heavier weight transaction table                                                             | tx_affected_addresses                                                                                                                                                         | 1-2 days      |     |        |         |
+| [tx_affected_objects.toml](indexer-config/tx_affected_objects.toml)     | heavier weight transaction table                                                             | tx_affected_objects                                                                                                                                                           | 1-2 days      |     |        |         |
+| [tx_calls.toml](indexer-config/tx_calls.toml)                           | heavier weight transaction table                                                             | tx_calls                                                                                                                                                                      | 1-2 days      |     |        |         |
+| [tx_kinds.toml](indexer-config/tx_kinds.toml)                           | heavier weight transaction table                                                             | tx_kinds                                                                                                                                                                      | 1-2 days      |     |        |         |
+
+### Storage requirements
+| Pipeline              | Table                 | Approximate size (with recommended config) |
+|-----------------------|-----------------------|--------------------------------------------|
+| **total**             |                       |                                            |
+| cp_sequence_numbers   | cp_sequence_numbers   |                                            |
+| ev_emit_mod           | ev_emit_mod           |                                            |
+| ev_struct_inst        | ev_struct_inst        |                                            |
+| obj_versions          | obj_versions          |                                            |
+| kv_epoch_ends         | kv_epoch_ends         |                                            |
+| kv_epoch_starts       | kv_epoch_starts       |                                            |
+| kv_feature_flags      | kv_feature_flags      |                                            |
+| kv_packages           | kv_packages           |                                            |
+| kv_protocol_configs   | kv_protocol_configs   |                                            |
+| sum_displays          | sum_displays          |                                            |
+| tx_affected_addresses | tx_affected_addresses |                                            |
+| tx_affected_objects   | tx_affected_objects   |                                            |
+| tx_balance_changes    | tx_balance_changes    |                                            |
+| tx_digests            | tx_digests            |                                            |
+| tx_calls              | tx_calls              |                                            |
+| tx_kinds              | tx_kinds              |                                            |
+
+## Consistent store setup
+
+## GraphQL setup
+

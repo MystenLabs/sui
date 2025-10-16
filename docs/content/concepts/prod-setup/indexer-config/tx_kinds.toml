@@ -1,0 +1,8 @@
+[ingestion]
+
+[committer]
+
+[pruner]
+retention = 10368000
+
+[pipeline.tx_kinds]
