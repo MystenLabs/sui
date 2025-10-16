@@ -329,16 +329,38 @@ async fn test_simulate_transaction_with_events() {
             query($txData: JSON!) {
                 simulateTransaction(transaction: $txData) {
                     effects {
-                        digest
                         status
+                        events {
+                            nodes {
+                                contents {
+                                    json
+                                }
+                                transactionModule {
+                                    package {
+                                        version
+                                        modules {
+                                            nodes {
+                                                name
+                                            }         
+                                        }
+                                    }
+                                    name
+                                }
+                            }
+                        }
                     }
                     events {
-                        eventBcs
-                        sender { address }
+                        contents {
+                            json
+                        }
                         transactionModule {
                             package {
                                 version
-                                digest
+                                modules {
+                                    nodes {
+                                        name
+                                    }         
+                                }
                             }
                             name
                         }
@@ -362,19 +384,51 @@ async fn test_simulate_transaction_with_events() {
     insta::assert_json_snapshot!(result.pointer("/data/simulateTransaction"), @r#"
     {
       "effects": {
-        "digest": "7LRJM44gQpCEBmsqYaQ2Peyz1G7qCUEQPFrnwLzeD3Dn",
-        "status": "SUCCESS"
+        "status": "SUCCESS",
+        "events": {
+          "nodes": [
+            {
+              "contents": {
+                "json": {
+                  "message": "Package published successfully!",
+                  "value": "42"
+                }
+              },
+              "transactionModule": {
+                "package": {
+                  "version": 1,
+                  "modules": {
+                    "nodes": [
+                      {
+                        "name": "emit_event"
+                      }
+                    ]
+                  }
+                },
+                "name": "emit_event"
+              }
+            }
+          ]
+        }
       },
       "events": [
         {
-          "eventBcs": "oJg9asStguEUpiJQcMJqQmA2TvegCT6ROMc5K1bxy/cKZW1pdF9ldmVudAS1xiT7DgLSgCv/2KkS/ygY4tpDIszev6waiUmJf/RqoJg9asStguEUpiJQcMJqQmA2TvegCT6ROMc5K1bxy/cKZW1pdF9ldmVudAlUZXN0RXZlbnQAKB9QYWNrYWdlIHB1Ymxpc2hlZCBzdWNjZXNzZnVsbHkhKgAAAAAAAAA=",
-          "sender": {
-            "address": "0x04b5c624fb0e02d2802bffd8a912ff2818e2da4322ccdebfac1a8949897ff46a"
+          "contents": {
+            "json": {
+              "message": "Package published successfully!",
+              "value": "42"
+            }
           },
           "transactionModule": {
             "package": {
               "version": 1,
-              "digest": "295r5uNo1dZVFhXUGMFfD11qnDE39sfCTEAfUf5Yff33"
+              "modules": {
+                "nodes": [
+                  {
+                    "name": "emit_event"
+                  }
+                ]
+              }
             },
             "name": "emit_event"
           }

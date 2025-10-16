@@ -174,10 +174,38 @@ impl Scope {
             .map(|(_, object)| object)
     }
 
+    /// Create a nested scope with execution objects extracted from an ExecutedTransaction.
+    pub(crate) fn with_executed_transaction(
+        &self,
+        executed_transaction: &sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction,
+    ) -> Self {
+        let objects = extract_objects_from_executed_transaction(executed_transaction);
+        self.with_execution_output(objects)
+    }
+
     /// A package resolver with access to the packages known at this scope.
     pub(crate) fn package_resolver(&self) -> Resolver<Self> {
         Resolver::new_with_limits(self.clone(), self.resolver_limits.clone())
     }
+}
+
+/// Extract input and output object contents from an ExecutedTransaction.
+fn extract_objects_from_executed_transaction(
+    executed_transaction: &sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction,
+) -> Vec<NativeObject> {
+    let input_objects = executed_transaction
+        .input_objects
+        .iter()
+        .filter_map(|obj| obj.bcs.as_ref())
+        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
+
+    let output_objects = executed_transaction
+        .output_objects
+        .iter()
+        .filter_map(|obj| obj.bcs.as_ref())
+        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
+
+    input_objects.chain(output_objects).collect()
 }
 
 impl Debug for Scope {
