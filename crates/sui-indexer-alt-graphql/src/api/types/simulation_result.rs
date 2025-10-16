@@ -39,21 +39,22 @@ impl SimulationResult {
         response: proto::SimulateTransactionResponse,
         transaction_data: TransactionData,
     ) -> Result<Self, RpcError> {
-        let effects = TransactionEffects::from_simulation_response(
-            scope.clone(),
-            response.clone(),
-            transaction_data.clone(),
-        )?;
-
-        // Extract the updated scope that contains execution output objects
-        let updated_scope = effects.contents.scope.clone();
-
-        // Parse events - break into clear steps
         let executed_transaction = response
             .transaction
             .as_ref()
-            .context("No transaction in simulation response")?;
+            .context("SimulateTransactionResponse should have transaction")?;
 
+        // Create scope with execution objects
+        let scope = scope.with_executed_transaction(executed_transaction);
+
+        let effects = TransactionEffects::from_executed_transaction(
+            scope.clone(),
+            executed_transaction,
+            transaction_data.clone(),
+            vec![], // No signatures for simulated transactions
+        )?;
+
+        // Parse events using the scope
         let events_bcs = executed_transaction
             .events
             .as_ref()
@@ -70,7 +71,7 @@ impl SimulationResult {
                 .into_iter()
                 .enumerate()
                 .map(|(sequence, native_event)| Event {
-                    scope: updated_scope.clone(),
+                    scope: scope.clone(),
                     native: native_event,
                     transaction_digest: transaction_data.digest(),
                     sequence_number: sequence as u64,
@@ -84,7 +85,7 @@ impl SimulationResult {
             response
                 .command_outputs
                 .into_iter()
-                .map(|output| CommandResult::from_proto(output, updated_scope.clone()))
+                .map(|output| CommandResult::from_proto(output, scope.clone()))
                 .collect(),
         );
 
