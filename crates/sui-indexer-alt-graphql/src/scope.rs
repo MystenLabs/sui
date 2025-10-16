@@ -169,7 +169,7 @@ impl Scope {
         object_id: ObjectID,
     ) -> Option<&NativeObject> {
         self.execution_objects
-            .range((object_id, SequenceNumber::MIN)..=(object_id, SequenceNumber::MAX))
+            .range(..=(object_id, SequenceNumber::MAX))
             .last()
             .map(|(_, object)| object)
     }
