@@ -58,7 +58,7 @@ impl<'v> AV::Visitor<'v, 'v> for VecMapVisitor<'v, '_> {
 
         // First field must be `key`.
         let key = driver.skip_field()?;
-        if !key.is_some_and(|f| f.name.as_str() == "key") {
+        if key.is_none_or(|f| f.name.as_str() != "key") {
             return Ok(None);
         }
 
@@ -70,7 +70,7 @@ impl<'v> AV::Visitor<'v, 'v> for VecMapVisitor<'v, '_> {
 
         // Second field must be `value`.
         let value = driver.peek_field();
-        if !value.is_some_and(|f| f.name.as_str() == "value") {
+        if value.is_none_or(|f| f.name.as_str() != "value") {
             return Ok(None);
         }
 

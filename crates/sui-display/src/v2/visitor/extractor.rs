@@ -166,7 +166,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
             let key = bcs::to_bytes(i)?;
             let contents = driver.peek_field();
-            if !contents.is_some_and(|l| l.name.as_str() == "contents") {
+            if contents.is_none_or(|l| l.name.as_str() != "contents") {
                 return Ok(None);
             }
 
