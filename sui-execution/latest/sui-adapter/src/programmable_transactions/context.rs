@@ -1306,7 +1306,7 @@ mod checked {
             &self,
             module_bytes: &[Vec<u8>],
         ) -> Result<Vec<CompiledModule>, ExecutionError> {
-            let binary_config = self.protocol_config.binary_config();
+            let binary_config = self.protocol_config.binary_config(None);
             let modules = module_bytes
                 .iter()
                 .map(|b| {

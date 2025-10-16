@@ -4197,13 +4197,19 @@ impl ProtocolConfig {
         }
     }
 
-    pub fn binary_config(&self) -> BinaryConfig {
+    pub fn binary_config(
+        &self,
+        override_deprecate_global_storage_ops_during_deserialization: Option<bool>,
+    ) -> BinaryConfig {
+        let deprecate_global_storage_ops_during_deserialization =
+            override_deprecate_global_storage_ops_during_deserialization
+                .unwrap_or_else(|| self.deprecate_global_storage_ops_during_deserialization());
         BinaryConfig::new(
             self.move_binary_format_version(),
             self.min_move_binary_format_version_as_option()
                 .unwrap_or(VERSION_1),
             self.no_extraneous_module_bytes(),
-            self.deprecate_global_storage_ops_during_deserialization(),
+            deprecate_global_storage_ops_during_deserialization,
             TableConfig {
                 module_handles: self.binary_module_handles_as_option().unwrap_or(u16::MAX),
                 datatype_handles: self.binary_struct_handles_as_option().unwrap_or(u16::MAX),

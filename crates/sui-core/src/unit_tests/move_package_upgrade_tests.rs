@@ -327,7 +327,7 @@ async fn test_upgrade_package_happy_path() {
         .unwrap()
         .unwrap();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let binary_config = config.binary_config();
+    let binary_config = config.binary_config(None);
     let pool = &mut move_binary_format::normalized::RcPool::new();
     let normalized_modules = package
         .move_package()

@@ -668,7 +668,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             self.gas_charger.charge_publish_package(total_bytes)?
         }
 
-        let binary_config = self.env.protocol_config.binary_config();
+        let binary_config = self.env.protocol_config.binary_config(None);
         let modules = module_bytes
             .iter()
             .map(|b| {

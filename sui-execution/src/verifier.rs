@@ -29,7 +29,7 @@ pub trait Verifier {
         module_bytes: &[Vec<u8>],
         meter: &mut dyn Meter,
     ) -> SuiResult<()> {
-        let binary_config = protocol_config.binary_config();
+        let binary_config = protocol_config.binary_config(None);
         let Ok(modules) = module_bytes
             .iter()
             .map(|b| CompiledModule::deserialize_with_config(b, &binary_config))

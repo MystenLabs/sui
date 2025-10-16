@@ -57,7 +57,7 @@ mod checked {
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
 
-                binary_config: protocol_config.binary_config(),
+                binary_config: protocol_config.binary_config(None),
                 rethrow_serialization_type_layout_errors: protocol_config
                     .rethrow_serialization_type_layout_errors(),
                 max_type_to_layout_nodes: protocol_config.max_type_to_layout_nodes_as_option(),
