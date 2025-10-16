@@ -1,13 +1,13 @@
-# Fork Demo - Checkpoint Fork Testing Example
+# Fork Demo - Fork Testing Example
 
-This example demonstrates how to use Sui's checkpoint fork testing feature, which allows you to run Move tests against real blockchain state at a specific checkpoint, similar to Foundry's fork testing in Ethereum.
+This example demonstrates how to use Sui's fork testing feature, which allows you to run Move tests against real blockchain state by loading objects from a live network, similar to Foundry's fork testing in Ethereum.
 
 ## Overview
 
 The fork demo shows a complete workflow:
 1. **Deploy** a demo coin contract to testnet
 2. **Mint** tokens to a specific user address
-3. **Extract** object IDs and checkpoint number
+3. **Extract** object IDs
 4. **Test** with fork to verify the user has the correct balance from on-chain state
 
 ## Quick Start
@@ -64,7 +64,6 @@ Configuration saved to config.json
 
 This will:
 - Mint 1,000,000 DEMO tokens to USER1 address
-- Record the checkpoint number
 - Extract the coin object ID
 - Save object IDs to `object_ids.txt`
 - Update `config.json` with test data
@@ -72,8 +71,8 @@ This will:
 **Output:**
 ```
 Minting 1,000,000 DEMO tokens to USER1...
+Transaction Digest: ABC123...
 Coin Object ID: 0x5678...
-Checkpoint: 252350700
 Object IDs saved to object_ids.txt
 ```
 
@@ -83,29 +82,26 @@ Object IDs saved to object_ids.txt
 ./scripts/3_run_tests.sh
 ```
 
-This will run tests twice:
-1. **Normal mode** - without checkpoint fork (uses test scenario)
-2. **Fork mode** - with checkpoint fork (uses real on-chain state)
+This will run tests with fork state loaded from the network.
 
 **Expected Output:**
 ```
-Test 1: Running tests WITHOUT checkpoint fork
+=== Running Fork Demo Tests ===
+Test: Running tests WITH fork state
+RPC URL: https://fullnode.testnet.sui.io:443
+Object IDs file: object_ids.txt
+
+Loading objects from object_ids.txt via https://fullnode.testnet.sui.io:443
+Found 1 object IDs to fetch
+Successfully loaded 1 objects
 BUILDING fork_demo
-RUNNING Move unit tests
+Running Move unit tests
 [ PASS    ] fork_demo::fork_tests::test_normal_mint_without_fork
 [ PASS    ] fork_demo::fork_tests::test_verify_balance_from_fork
 [ PASS    ] fork_demo::fork_tests::test_conditional_on_fork_state
 Test result: OK. Total tests: 3; passed: 3; failed: 0
 
-Test 2: Running tests WITH checkpoint fork
-Loading checkpoint state from checkpoint 252350700...
-Successfully loaded 1 objects from checkpoint 252350700
-BUILDING fork_demo
-RUNNING Move unit tests
-[ PASS    ] fork_demo::fork_tests::test_normal_mint_without_fork
-[ PASS    ] fork_demo::fork_tests::test_verify_balance_from_fork
-[ PASS    ] fork_demo::fork_tests::test_conditional_on_fork_state
-Test result: OK. Total tests: 3; passed: 3; failed: 0
+✓ Fork tests passed
 ```
 
 ## Manual Testing
@@ -117,21 +113,14 @@ You can also run tests manually with custom parameters:
 sui move test
 ```
 
-### Fork Tests with Specific Checkpoint
+### Fork Tests with Object Loading
 ```bash
 sui move test \
-    --fork-checkpoint 252350700 \
     --fork-rpc-url https://fullnode.testnet.sui.io:443 \
     --object-id-file object_ids.txt
 ```
 
-### Fork Tests with Automatic Object Scanning
-```bash
-# Scans last 1000 checkpoints for modified objects
-sui move test \
-    --fork-checkpoint 252350700 \
-    --fork-rpc-url https://fullnode.testnet.sui.io:443
-```
+The fork test will fetch the latest version of all objects listed in `object_ids.txt` from the network.
 
 ## Project Structure
 
@@ -179,10 +168,10 @@ let mut scenario = ts::begin(USER1);
 // must create all objects in test
 ```
 
-### Fork Mode (With --fork-checkpoint)
+### Fork Mode (With --fork-rpc-url and --object-id-file)
 ```move
 let mut scenario = ts::begin(USER1);
-// scenario starts with objects from checkpoint
+// scenario starts with objects loaded from the network
 // can access real on-chain objects
 if (ts::has_most_recent_for_sender<Coin<DEMO_COIN>>(&scenario)) {
     let coin = ts::take_from_sender<Coin<DEMO_COIN>>(&scenario);
@@ -198,7 +187,6 @@ if (ts::has_most_recent_for_sender<Coin<DEMO_COIN>>(&scenario)) {
   "packageId": "0xabcd...",
   "treasuryCapId": "0x1234...",
   "adminAddress": "0x...",
-  "checkpoint": "252350700",
   "user1CoinId": "0x5678...",
   "user1Address": "0x1111..."
 }
@@ -233,19 +221,19 @@ Add more object IDs to `object_ids.txt`:
 
 ```bash
 sui move test --filter test_verify_balance_from_fork \
-    --fork-checkpoint 252350700 \
-    --fork-rpc-url https://fullnode.testnet.sui.io:443
+    --fork-rpc-url https://fullnode.testnet.sui.io:443 \
+    --object-id-file object_ids.txt
 ```
 
 ## Comparison: Normal vs Fork Testing
 
 | Aspect | Normal Testing | Fork Testing |
 |--------|---------------|--------------|
-| **State** | Created in test | Loaded from checkpoint |
-| **Objects** | Test objects only | Real on-chain objects |
+| **State** | Created in test | Loaded from network |
+| **Objects** | Test objects only | Real on-chain objects (latest version) |
 | **Speed** | Fast (no RPC) | Slower (RPC loading) |
 | **Use Case** | Unit testing logic | Integration testing with real state |
-| **Reproducibility** | Always same | Depends on checkpoint |
+| **Reproducibility** | Always same | Depends on current network state |
 
 ## Troubleshooting
 
@@ -255,36 +243,41 @@ Run `scripts/1_deploy.sh` first to deploy the contract.
 ### "Error: Sui client not configured"
 Configure sui client with `sui client new-env` and get testnet tokens.
 
-### "Failed to fetch checkpoint"
+### "Failed to fetch object"
 - Ensure RPC URL is correct
 - Check network connectivity
-- Verify checkpoint number exists
+- Verify object IDs are valid and exist on the network
 
-### "Object not found in checkpoint"
-- The object may not exist at that checkpoint
-- Try a later checkpoint (after the mint transaction)
-- Check object_ids.txt has correct IDs
+### "Object not found"
+- The object may have been deleted or transferred
+- Check object_ids.txt has correct IDs with 0x prefix
+- Verify the object still exists on the network
 
 ### Tests pass without fork but fail with fork
 - Verify USER1 address in test matches the address used in minting
-- Check that the checkpoint is after the mint transaction
+- Ensure the minted transaction has been finalized
 - Ensure object IDs in object_ids.txt are correct
+
+### "BCS deserialization error"
+- Ensure your local build is up to date with the network's protocol version
+- Rebuild with `cargo build -p sui --release`
+- The network may be running a newer protocol version than your local build
 
 ## Benefits of Fork Testing
 
 1. **Real State Testing**: Test against actual on-chain data
-2. **Bug Reproduction**: Reproduce issues that occurred at specific checkpoints
+2. **Current State Verification**: Verify behavior with current network state
 3. **Upgrade Validation**: Test contract upgrades with production data
 4. **Integration Testing**: Verify interactions with deployed contracts
-5. **State Analysis**: Inspect and analyze historical blockchain states
+5. **Live Data Testing**: Test with real objects and their current state
 
 ## Next Steps
 
 - Modify `demo_coin.move` to add more functionality
 - Create more complex test scenarios in `fork_tests.move`
-- Test with mainnet checkpoints (use `https://fullnode.mainnet.sui.io:443`)
-- Experiment with different checkpoint numbers
+- Test with mainnet objects (use `https://fullnode.mainnet.sui.io:443`)
 - Load multiple object types for comprehensive testing
+- Test interactions between loaded objects and new test objects
 
 ## Learn More
 

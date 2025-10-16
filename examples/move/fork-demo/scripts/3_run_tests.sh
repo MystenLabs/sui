@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run tests with and without checkpoint forking
+# Run tests with fork testing
 
 set -e
 
@@ -30,36 +30,26 @@ else
 fi
 echo ""
 
-# Test with checkpoint fork (if config exists)
+# Test with fork (if config exists)
 if [ -f "config.json" ] && [ -f "object_ids.txt" ]; then
-    CHECKPOINT=$(jq -r '.checkpoint // empty' config.json)
+    echo -e "${GREEN}Test: Running tests WITH fork state${NC}"
+    echo "RPC URL: $RPC_URL"
+    echo "Object IDs file: object_ids.txt"
+    echo ""
+    echo "Command: $SUI_BIN move test --fork-rpc-url $RPC_URL --object-id-file object_ids.txt"
+    echo ""
 
-    if [ -n "$CHECKPOINT" ]; then
-        echo -e "${GREEN}Test: Running tests WITH checkpoint fork${NC}"
+    # Add a small delay to ensure the transaction is finalized
+    echo "Waiting 5 seconds to ensure transaction is finalized..."
+    sleep 5
+    echo ""
 
-        echo "Checkpoint: $CHECKPOINT"
-        echo "RPC URL: $RPC_URL"
-        echo "Object IDs file: object_ids.txt"
-        echo ""
-        echo "Command: $SUI_BIN move test --fork-checkpoint $CHECKPOINT --fork-rpc-url $RPC_URL --object-id-file object_ids.txt"
-        echo ""
+    "$SUI_BIN" move test \
+        --fork-rpc-url "$RPC_URL" \
+        --object-id-file object_ids.txt
 
-        # Add a small delay to ensure the transaction is in a checkpoint
-        echo "Waiting 5 seconds to ensure transaction is finalized in checkpoint..."
-        sleep 5
-        echo ""
-
-        "$SUI_BIN" move test \
-            --fork-checkpoint "$CHECKPOINT" \
-            --fork-rpc-url "$RPC_URL" \
-            --object-id-file object_ids.txt
-
-        echo ""
-        echo -e "${GREEN}✓ Fork tests passed${NC}"
-    else
-        echo -e "${YELLOW}Skipping fork test: No checkpoint found in config.json${NC}"
-        echo "Run scripts/2_mint_and_setup.sh to set up fork test data"
-    fi
+    echo ""
+    echo -e "${GREEN}✓ Fork tests passed${NC}"
 else
     echo -e "${YELLOW}Skipping fork test: config.json or object_ids.txt not found${NC}"
     echo "Run scripts/1_deploy.sh and scripts/2_mint_and_setup.sh first"
