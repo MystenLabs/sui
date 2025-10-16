@@ -33,6 +33,7 @@ of the type at once.
 -  [Constants](#@Constants_0)
 -  [Function `new_request`](#sui_transfer_policy_new_request)
 -  [Function `new`](#sui_transfer_policy_new)
+-  [Function `new_as_owner`](#sui_transfer_policy_new_as_owner)
 -  [Function `default`](#sui_transfer_policy_default)
 -  [Function `withdraw`](#sui_transfer_policy_withdraw)
 -  [Function `destroy_and_withdraw`](#sui_transfer_policy_destroy_and_withdraw)
@@ -414,6 +415,43 @@ available for use, the type can not be traded in kiosks.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_new">new</a>&lt;T&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext): (<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;) {
     <b>assert</b>!(<a href="../sui/package.md#sui_package_from_package">package::from_package</a>&lt;T&gt;(pub), 0);
+    <b>let</b> id = <a href="../sui/object.md#sui_object_new">object::new</a>(ctx);
+    <b>let</b> policy_id = id.to_inner();
+    <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; { id: policy_id });
+    (
+        <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a> { id, <a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>: <a href="../sui/vec_set.md#sui_vec_set_empty">vec_set::empty</a>(), <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_zero">balance::zero</a>() },
+        <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a> { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx), policy_id },
+    )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_transfer_policy_new_as_owner"></a>
+
+## Function `new_as_owner`
+
+Register a type in the Kiosk system as the owner of <code>T</code> and receive a
+<code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> and a <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code> for the type. The <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>
+is required to confirm kiosk deals for the <code>T</code>. If there's no <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>
+available for use, the type can not be traded in kiosks.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_new_as_owner">new_as_owner</a>&lt;T&gt;(_: &<a href="../sui/package.md#sui_package_TypeOwnerCap">sui::package::TypeOwnerCap</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">sui::transfer_policy::TransferPolicy</a>&lt;T&gt;, <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCap">sui::transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_new_as_owner">new_as_owner</a>&lt;T&gt;(
+    _: &TypeOwnerCap&lt;T&gt;,
+    ctx: &<b>mut</b> TxContext,
+): (<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;) {
     <b>let</b> id = <a href="../sui/object.md#sui_object_new">object::new</a>(ctx);
     <b>let</b> policy_id = id.to_inner();
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; { id: policy_id });
