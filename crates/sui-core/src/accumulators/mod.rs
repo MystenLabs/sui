@@ -69,11 +69,11 @@ impl MergedValue {
         split: Self,
         root: Argument,
         address: &AccumulatorAddress,
+        checkpoint_seq: u64,
         builder: &mut ProgrammableTransactionBuilder,
     ) {
         let ty = ClassifiedType::classify(&address.ty);
         let address_arg = builder.pure(address.address).unwrap();
-        let checkpoint_seq = 0u64; /* TODO: replace with actual checkpoint sequence number */
 
         match (ty, merge, split) {
             (
@@ -202,16 +202,16 @@ pub(crate) struct AccumulatorSettlementTxBuilder {
 
     total_input_sui: u64,
     total_output_sui: u64,
+    checkpoint_seq: u64,
 }
 
 impl AccumulatorSettlementTxBuilder {
     pub fn new(
         cache: Option<&dyn TransactionCacheRead>,
         ckpt_effects: &[TransactionEffects],
+        checkpoint_seq: u64,
         tx_index_offset: u64,
     ) -> Self {
-        let checkpoint_seq = 0u64; /* TODO: replace with actual checkpoint sequence number */
-
         let mut updates = HashMap::<_, _>::new();
 
         let mut addresses = HashMap::<_, _>::new();
@@ -283,6 +283,7 @@ impl AccumulatorSettlementTxBuilder {
             addresses,
             total_input_sui,
             total_output_sui,
+            checkpoint_seq,
         }
     }
 
@@ -357,7 +358,14 @@ impl AccumulatorSettlementTxBuilder {
             let address = self.addresses.get(&accumulator_obj).unwrap();
             let merged_value = MergedValue::from(merge);
             let split_value = MergedValue::from(split);
-            MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
+            MergedValue::add_move_call(
+                merged_value,
+                split_value,
+                root,
+                address,
+                self.checkpoint_seq,
+                &mut builder,
+            );
         }
 
         vec![TransactionKind::ProgrammableSystemTransaction(

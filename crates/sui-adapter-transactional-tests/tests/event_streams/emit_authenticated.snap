@@ -38,9 +38,9 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     },
     value: sui::accumulator_settlement::EventStreamHead {
         mmr: vector[
-            26148282681901441122055860392872086854716971884000021207581772423784829236359u256,
+            8365981873549491229425270548508284050929351105951908142434116510370917464093u256,
         ],
-        checkpoint_seq: 0u64,
+        checkpoint_seq: 1u64,
         num_events: 1u64,
     },
 }
@@ -72,9 +72,9 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     value: sui::accumulator_settlement::EventStreamHead {
         mmr: vector[
             0u256,
-            29163371833796342752486101839178556169636187361392932603697484826643565045676u256,
+            86543868356386718505560765541662903498061231585332071683834340386713309863161u256,
         ],
-        checkpoint_seq: 0u64,
+        checkpoint_seq: 2u64,
         num_events: 2u64,
     },
 }
@@ -105,10 +105,10 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     },
     value: sui::accumulator_settlement::EventStreamHead {
         mmr: vector[
-            86506769158543248351438583338191916320851435409777512093511822569377383152275u256,
-            29163371833796342752486101839178556169636187361392932603697484826643565045676u256,
+            19048288011324678003607945800057585586937440215509105850457020760446784585073u256,
+            86543868356386718505560765541662903498061231585332071683834340386713309863161u256,
         ],
-        checkpoint_seq: 0u64,
+        checkpoint_seq: 3u64,
         num_events: 3u64,
     },
 }
@@ -141,9 +141,9 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
         mmr: vector[
             0u256,
             0u256,
-            24532187308390398127458664490628998884599243248540457032050012972768076382275u256,
+            29588911756665437094134115004672010865993889395156598240583200160117771191282u256,
         ],
-        checkpoint_seq: 0u64,
+        checkpoint_seq: 4u64,
         num_events: 4u64,
     },
 }
