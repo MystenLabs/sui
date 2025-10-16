@@ -66,7 +66,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                         return Ok(serde_json::Value::Null);
                     };
 
-                    v.format(*transform, &mut writer)?;
+                    v.format(transform.unwrap_or_default(), &mut writer)?;
                 }
             }
         }
