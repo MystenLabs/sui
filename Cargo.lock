@@ -16016,6 +16016,7 @@ dependencies = [
  "prometheus",
  "prost",
  "prost-types",
+ "protox",
  "rand 0.8.5",
  "roaring",
  "serde",
@@ -16034,12 +16035,14 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.13.1",
+ "tonic-build 0.13.1",
  "tonic-health",
  "tonic-reflection",
  "tonic-web",
  "tower 0.5.2",
  "tracing",
  "url",
+ "walkdir",
 ]
 
 [[package]]

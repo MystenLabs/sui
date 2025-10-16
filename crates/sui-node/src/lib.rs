@@ -664,7 +664,8 @@ impl SuiNode {
                     &checkpoint_store,
                     &epoch_store,
                     &cache_traits.backing_package_store,
-                    config.rpc().and_then(|c| c.index_initialization_config()),
+                    pruner_watermarks.checkpoint_id.clone(),
+                    config.rpc().cloned().unwrap_or_default(),
                 )
                 .await,
             ))
