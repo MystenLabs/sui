@@ -5393,8 +5393,11 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !epoch_store.protocol_config().enable_accumulators() {
-            info!("accumulator root not enabled");
+        if !epoch_store
+            .protocol_config()
+            .create_root_accumulator_object()
+        {
+            info!("accumulator root creation not enabled");
             return None;
         }
 

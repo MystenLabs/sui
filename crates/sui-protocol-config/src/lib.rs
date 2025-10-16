@@ -752,6 +752,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
 
+    // If true, create the root accumulator object in the change epoch transaction.
+    // This must be enabled and shipped before `enable_accumulators` is set to true.
+    #[serde(skip_serializing_if = "is_false")]
+    create_root_accumulator_object: bool,
+
     // Enable authenticated event streams
     #[serde(skip_serializing_if = "is_false")]
     enable_authenticated_event_streams: bool,
@@ -1956,6 +1961,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn create_root_accumulator_object(&self) -> bool {
+        self.feature_flags.create_root_accumulator_object
     }
 
     pub fn enable_address_balance_gas_payments(&self) -> bool {
@@ -4108,6 +4117,7 @@ impl ProtocolConfig {
                 }
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
+                    cfg.feature_flags.create_root_accumulator_object = true;
                 }
                 // Use this template when making changes:
                 //
