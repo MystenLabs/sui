@@ -28,7 +28,7 @@ use move_compiler::{editions::Flavor, linters::LintLevel};
 use move_package::source_package::parsed_manifest::Dependencies;
 
 /// Interval for checking if the parent process is still alive (in seconds)
-const PARENT_LIVENESS_MONITORING_INTERVAL_SECS: u64 = 30;
+const PARENT_LIVENESS_MONITORING_INTERVAL_SECS: u64 = 10;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum RunnerState {
