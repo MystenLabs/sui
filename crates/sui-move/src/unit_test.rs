@@ -107,9 +107,21 @@ pub fn run_move_unit_tests(
 
     // Load checkpoint state if fork parameters are provided
     if let (Some(checkpoint_seq), Some(rpc_url)) = (fork_checkpoint, fork_rpc_url) {
-        let runtime = tokio::runtime::Runtime::new()?;
         let loader = CheckpointStateLoader::new(rpc_url);
-        let storage = runtime.block_on(loader.load_checkpoint_state(checkpoint_seq, object_id_file))?;
+
+        // Check if we're already in a Tokio runtime
+        let storage = if tokio::runtime::Handle::try_current().is_ok() {
+            // We're in a runtime, use block_in_place to avoid nested runtime error
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(
+                    loader.load_checkpoint_state(checkpoint_seq, object_id_file)
+                )
+            })?
+        } else {
+            // Not in a runtime, create a new one
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(loader.load_checkpoint_state(checkpoint_seq, object_id_file))?
+        };
 
         // Update the thread-local test store with the loaded state
         TEST_STORE_INNER.with(|store| {
