@@ -551,7 +551,7 @@ fn deserialize_deprecated_global_storage() {
         )
         .unwrap_err()
         .major_status();
-        assert_eq!(status_code, StatusCode::DEPRECATED_BYTE_FORMAT);
+        assert_eq!(status_code, StatusCode::DEPRECATED_BYTECODE_FORMAT);
     };
     let instructions = &[
         Bytecode::ExistsDeprecated(StructDefinitionIndex(0)),

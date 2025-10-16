@@ -1656,7 +1656,7 @@ fn check_cursor_version_enum_compatible(cursor_version: u32) -> BinaryLoaderResu
 
 fn check_deprecate_global_storage_ops(cursor: &VersionedCursor) -> BinaryLoaderResult<()> {
     if cursor.deprecate_global_storage_ops {
-        Err(PartialVMError::new(StatusCode::DEPRECATED_BYTE_FORMAT)
+        Err(PartialVMError::new(StatusCode::DEPRECATED_BYTECODE_FORMAT)
             .with_message("global storage operations are not supported".to_owned()))
     } else {
         Ok(())
