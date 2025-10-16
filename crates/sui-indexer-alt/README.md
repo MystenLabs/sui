@@ -24,11 +24,13 @@ system.
    ```sh
    brew install --cask docker
    ```
+
 2. Run docker (requires password)
    ```sh
    open -a Docker
    ```
-#### AlloyDB setup
+
+#### Option 1: AlloyDB setup for Docker
 1. Run AlloyDB Omni in docker
    ```sh
    docker run --detach --publish 5433:5432 --env POSTGRES_PASSWORD=postgres_pw google/alloydbomni
@@ -43,6 +45,131 @@ The indexer will try to connect to the following database URL by default:
 ```
 postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt
 ```
+
+#### Option 2: AlloyDB setup for Kubernetes
+
+1. Install Minikube
+   ```sh
+   brew install minikube
+   ```
+
+2. Create Kubernetes cluster
+   ```sh
+   minikube start --memory=16g
+   ```
+   Note: Cluster can be deleted with
+   ```sh
+   minikube delete
+   ```
+3. Install Helm
+   ```sh
+   brew install helm
+   ```
+
+4. Install cert-manager in the cluster
+   ```sh
+   helm install cert-manager oci://quay.io/jetstack/charts/cert-manager \
+   --create-namespace \
+   --namespace cert-manager \
+   --set crds.enabled=true
+   ```
+   Example expected output
+   ```
+   NAME: cert-manager
+   LAST DEPLOYED: Thu Oct 16 12:14:45 2025
+   NAMESPACE: cert-manager
+   STATUS: deployed
+   REVISION: 1
+   TEST SUITE: None
+   ```
+   Note: can be uninstalled with
+   ```sh
+   helm uninstall cert-manager -n cert-manager
+   ```
+
+5. Install Google Cloud CLI
+   ```sh
+   brew install --cask gcloud-cli
+   ```
+
+6. Login to Google Cloud
+   ```sh
+   gcloud auth login
+   ```
+
+7. Download AlloyDB Omni operator
+   ```sh
+   gcloud storage cp gs://alloydb-omni-operator/1.5.0/alloydbomni-operator-1.5.0.tgz ./ --recursive
+   ```
+
+8. Install AlloyDB Omni operator in the cluster
+   ```sh
+   helm install alloydbomni-operator alloydbomni-operator-1.5.0.tgz \
+   --create-namespace \
+   --namespace alloydb-omni-system
+   ```
+   Example expected output
+   ```
+   NAME: alloydbomni-operator
+   LAST DEPLOYED: Thu Oct 16 12:37:56 2025
+   NAMESPACE: alloydb-omni-system
+   STATUS: deployed
+   REVISION: 1
+   TEST SUITE: None
+   ```
+   Note: can be uninstalled with
+   ```sh
+   helm uninstall alloydbomni-operator -n alloydb-omni-system
+   ```
+
+9. Install kubectl
+   ```sh
+   brew install kubectl
+   ```
+
+10. Apply AlloyDB Omni manifest
+   ```sh
+   echo "
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sui-indexer-alt
+  labels:
+    name: sui-indexer-alt
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-pw-sui-indexer-alt
+  namespace: sui-indexer-alt
+type: Opaque
+data:
+  sui-indexer-alt: $(echo password | base64)
+---
+apiVersion: alloydbomni.dbadmin.goog/v1
+kind: DBCluster
+metadata:
+  name: sui-indexer-alt
+  namespace: sui-indexer-alt
+spec:
+  databaseVersion: 16.8.0
+  primarySpec:
+    adminUser:
+      passwordRef:
+        name: db-pw-sui-indexer-alt
+    resources:
+      cpu: 1
+      memory: 2Gi
+      disks:
+      - name: DataDisk
+        size: 20Gi
+" | kubectl apply -f -
+   ```
+   Expected output
+   ```
+   secret/db-pw-sui-indexer-alt created
+   dbcluster.alloydbomni.dbadmin.goog/sui-indexer-alt created
+   ```
 
 This database can be created with the following commands (run from this directory):
 
