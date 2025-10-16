@@ -8,7 +8,7 @@ module fork_demo::fork_tests {
     use fork_demo::demo_coin::{Self, DEMO_COIN};
 
     const ADMIN: address = @0xAD;
-    const USER1: address = @0x1;
+    const USER1: address = @0x1111111111111111111111111111111111111111111111111111111111111111;
     const MINT_AMOUNT: u64 = 1_000_000;
 
     #[test]
