@@ -66,7 +66,6 @@ mod checked {
         error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
-        execution_config_utils::to_binary_config,
         execution_status::CommandArgumentError,
         funds_accumulator::Withdrawal,
         metrics::LimitsMetrics,
@@ -1307,7 +1306,7 @@ mod checked {
             &self,
             module_bytes: &[Vec<u8>],
         ) -> Result<Vec<CompiledModule>, ExecutionError> {
-            let binary_config = to_binary_config(self.protocol_config);
+            let binary_config = self.protocol_config.binary_config();
             let modules = module_bytes
                 .iter()
                 .map(|b| {

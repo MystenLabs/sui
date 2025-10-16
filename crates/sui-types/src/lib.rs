@@ -52,7 +52,6 @@ pub mod epoch_data;
 pub mod event;
 pub mod executable_transaction;
 pub mod execution;
-pub mod execution_config_utils;
 pub mod execution_params;
 pub mod execution_status;
 pub mod full_checkpoint_content;
