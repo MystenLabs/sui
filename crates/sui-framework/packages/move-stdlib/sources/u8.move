@@ -27,12 +27,13 @@ public fun diff(x: u8, y: u8): u8 {
     std::macros::num_diff!(x, y)
 }
 
-/// Calculate x * y / z, upscaling the intermediate values to avoid overflow.
+/// Calculate x * y / z, upcasting the intermediate values to avoid overflow.
+/// Note: A downcast error is possible e.g., with args (u8::MAX, u8::MAX, 1).
 public fun mul_div(x: u8, y: u8, z: u8): u8 {
     std::macros::num_mul_div!<_, u16>(x, y, z)
 }
 
-/// Calculate x * y / z, upscaling the intermediate values to avoid overflow.
+/// Calculate x * y / z, upcasting the intermediate values to avoid overflow.
 /// Round up the result.
 public fun mul_div_ceil(x: u8, y: u8, z: u8): u8 {
     std::macros::num_mul_div_ceil!<_, u16>(x, y, z)
