@@ -46,8 +46,8 @@ use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::apis::ReadApi;
-use sui_types::move_package::UpgradePolicy;
 use sui_types::base_types::ObjectID;
+use sui_types::move_package::UpgradePolicy;
 
 type Enum = normalized::Enum<normalized::RcIdentifier>;
 type Field = normalized::Field<normalized::RcIdentifier>;
