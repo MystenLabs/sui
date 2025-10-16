@@ -20,11 +20,12 @@ use sui_move_natives::{
 use sui_package_management::system_package_versions::latest_system_packages;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::{SuiAddress, TxContext},
+    base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
     digests::TransactionDigest,
     gas_model::tables::initial_cost_schedule_for_unit_tests,
     in_memory_storage::InMemoryStorage,
     metrics::LimitsMetrics,
+    object::Owner,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -78,6 +79,7 @@ impl Test {
 // Create a separate test store per-thread.
 thread_local! {
     static TEST_STORE_INNER: RefCell<InMemoryStorage> = RefCell::new(InMemoryStorage::default());
+    static FORK_LOADED_OBJECTS: RefCell<Vec<(ObjectID, MoveObjectType, Owner, Vec<u8>)>> = RefCell::new(Vec::new());
 }
 
 static TEST_STORE: Lazy<InMemoryTestStore> = Lazy::new(|| InMemoryTestStore(&TEST_STORE_INNER));
@@ -123,7 +125,26 @@ pub fn run_move_unit_tests(
             println!("  Object: {} (owner: {:?})", obj_id, obj.owner);
         }
 
+        // Store the fork-loaded objects for later inventory population
+        FORK_LOADED_OBJECTS.with(|objects| {
+            let mut objects_ref = objects.borrow_mut();
+            objects_ref.clear();
+            for (obj_id, obj) in storage.objects() {
+                if let Some(move_obj) = obj.data.try_as_move() {
+                    // Store object metadata including BCS bytes for later deserialization
+                    objects_ref.push((
+                        *obj_id,
+                        move_obj.type_().clone(),
+                        obj.owner.clone(),
+                        move_obj.contents().to_vec(),
+                    ));
+                }
+            }
+            println!("Stored {} fork-loaded objects for inventory population", objects_ref.len());
+        });
+
         TEST_STORE_INNER.with(|store| {
+            println!("Before assignment, store has {} objects", store.borrow().objects().len());
             *store.borrow_mut() = storage;
 
             // Debug: verify objects are in the store
@@ -134,6 +155,12 @@ pub fn run_move_unit_tests(
                 println!("  - Object ID: {}, Owner: {:?}, Type: {:?}", obj_id, obj.owner, obj.type_());
             }
             println!("=== End verification ===\n");
+        });
+
+        // Verify again after the borrow is released
+        TEST_STORE_INNER.with(|store| {
+            let store_ref = store.borrow();
+            println!("After verification block, store still has {} objects", store_ref.objects().len());
         });
     }
 

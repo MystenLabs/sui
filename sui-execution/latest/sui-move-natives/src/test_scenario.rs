@@ -383,6 +383,10 @@ pub fn take_from_address_by_id(
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+
+    // Populate fork inventories if this is the first call
+    populate_fork_inventories_once(context)?;
+
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
@@ -438,6 +442,10 @@ pub fn most_recent_id_for_address(
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+
+    // Populate fork inventories if this is the first call
+    populate_fork_inventories_once(context)?;
+
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = match inventories.address_inventories.get(&account) {
@@ -758,6 +766,145 @@ pub fn deallocate_receiving_ticket_for_object(
 }
 
 // impls
+
+// Populate test inventories from fork-loaded objects
+fn populate_fork_inventories_once(
+    context: &mut NativeContext,
+) -> PartialVMResult<()> {
+    // Check if we've already populated inventories by looking at whether there are any objects
+    // in the address_inventories. If there are, we've already populated.
+    {
+        let object_runtime: &ObjectRuntime = get_extension!(context)?;
+        if !object_runtime.test_inventories.address_inventories.is_empty()
+            || !object_runtime.test_inventories.shared_inventory.is_empty()
+            || !object_runtime.test_inventories.immutable_inventory.is_empty() {
+            println!("  Inventories already populated, skipping");
+            return Ok(());
+        }
+    }
+
+    // Try to read fork-loaded objects from the thread-local storage
+    // This is populated in unit_test.rs before tests run
+    thread_local! {
+        static FORK_LOADED_OBJECTS: std::cell::RefCell<Vec<(ObjectID, MoveObjectType, Owner, Vec<u8>)>> = std::cell::RefCell::new(Vec::new());
+    }
+
+    let fork_objects: Vec<(ObjectID, MoveObjectType, Owner, Vec<u8>)> = FORK_LOADED_OBJECTS.with(|objects| {
+        let objects_ref = objects.borrow();
+        println!("  Checking FORK_LOADED_OBJECTS: {} objects", objects_ref.len());
+        objects_ref.clone()
+    });
+
+    // If FORK_LOADED_OBJECTS is empty, try reading from storage as fallback
+    let fork_objects = if fork_objects.is_empty() {
+        let store: &&InMemoryTestStore = get_extension!(context)?;
+        store.0.with_borrow(|storage| {
+            let mut objects = Vec::new();
+            println!("  FORK_LOADED_OBJECTS was empty, checking storage: {} total objects in storage", storage.objects().len());
+            for (obj_id, obj) in storage.objects() {
+                if let Some(move_obj) = obj.data.try_as_move() {
+                    println!("  Found move object in storage: {} (type: {:?}, owner: {:?})", obj_id, move_obj.type_(), obj.owner);
+                    objects.push((
+                        *obj_id,
+                        move_obj.type_().clone(),
+                        obj.owner.clone(),
+                        move_obj.contents().to_vec(),
+                    ));
+                }
+            }
+            objects
+        })
+    } else {
+        fork_objects
+    };
+
+    println!("  Found {} fork objects to populate", fork_objects.len());
+
+    if fork_objects.is_empty() {
+        println!("  No fork objects to populate, returning");
+        return Ok(());
+    }
+
+    println!("Populating fork inventories with {} objects", fork_objects.len());
+
+    // First, deserialize all objects (need immutable borrow of context for layouts)
+    let mut deserialized_objects: Vec<(ObjectID, MoveObjectType, Owner, Value)> = Vec::new();
+    for (obj_id, obj_type, owner, bcs_bytes) in fork_objects {
+        let type_tag = TypeTag::from(obj_type.clone());
+
+        // Get the layout for deserialization
+        let Ok(Some(layout)) = context.type_tag_to_layout_for_test_scenario_only(&type_tag) else {
+            eprintln!("Warning: Could not get layout for object {} of type {:?}", obj_id, obj_type);
+            continue;
+        };
+
+        // Deserialize BCS bytes to Move Value
+        let value = match Value::simple_deserialize(&bcs_bytes, &layout) {
+            Some(v) => v,
+            None => {
+                eprintln!("Warning: Could not deserialize object {} of type {:?}", obj_id, obj_type);
+                continue;
+            }
+        };
+
+        deserialized_objects.push((obj_id, obj_type, owner, value));
+    }
+
+    // Now add to inventories (needs mutable borrow)
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    let inventories = &mut object_runtime.test_inventories;
+
+    for (obj_id, obj_type, owner, value) in deserialized_objects {
+        // Add value to objects map
+        inventories.objects.insert(obj_id, value);
+
+        // Add to appropriate inventory based on owner
+        match owner {
+            Owner::AddressOwner(addr) => {
+                inventories
+                    .address_inventories
+                    .entry(addr)
+                    .or_default()
+                    .entry(obj_type)
+                    .or_default()
+                    .insert(obj_id);
+                println!("  Added object {} to address {} inventory", obj_id, addr);
+            }
+            Owner::ConsensusAddressOwner { owner, .. } => {
+                inventories
+                    .address_inventories
+                    .entry(owner)
+                    .or_default()
+                    .entry(obj_type)
+                    .or_default()
+                    .insert(obj_id);
+                println!("  Added object {} to address {} inventory (consensus)", obj_id, owner);
+            }
+            Owner::Shared { .. } => {
+                inventories
+                    .shared_inventory
+                    .entry(obj_type)
+                    .or_default()
+                    .insert(obj_id);
+                println!("  Added object {} to shared inventory", obj_id);
+            }
+            Owner::Immutable => {
+                inventories
+                    .immutable_inventory
+                    .entry(obj_type)
+                    .or_default()
+                    .insert(obj_id);
+                println!("  Added object {} to immutable inventory", obj_id);
+            }
+            Owner::ObjectOwner(_) => {
+                // Object-owned objects are not directly accessible via test_scenario
+                println!("  Skipping object-owned object {}", obj_id);
+            }
+        }
+    }
+
+    Ok(())
+}
 
 fn take_from_inventory(
     is_in_inventory: impl FnOnce(&ObjectID) -> bool,
