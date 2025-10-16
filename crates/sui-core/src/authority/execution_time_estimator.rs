@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
     num::NonZeroUsize,
-    sync::{Arc, OnceLock, Weak},
+    sync::{Arc, Weak},
     time::{Duration, SystemTime},
 };
 
@@ -52,6 +52,7 @@ const OBJECT_UTILIZATION_METRIC_HASH_MODULUS: u8 = 32;
 ///    (enabled by default)
 #[cfg(not(msim))]
 fn antithesis_enable_injecting_synthetic_execution_time() -> bool {
+    use std::sync::OnceLock;
     static ENABLE_INJECTION: OnceLock<bool> = OnceLock::new();
     *ENABLE_INJECTION.get_or_init(|| {
         if !in_antithesis() {
