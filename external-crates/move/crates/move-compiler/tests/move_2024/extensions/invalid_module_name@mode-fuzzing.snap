@@ -9,6 +9,6 @@ error[E02003]: invalid 'address' declaration
    ┌─ tests/move_2024/extensions/invalid_module_name.move:11:15
    │
 11 │ extend module m {
-   │               ^ Coud not determine the address for this module extension
+   │               ^ Could not determine the address for this module extension
    │
-   = Module extensions must be defined for a concrete address and module, as '<address>::<module>'
+   = Module extensions must be defined for a previously-defined address and module, as '<address>::<module>'

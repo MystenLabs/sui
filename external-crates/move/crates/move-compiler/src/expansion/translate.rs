@@ -385,10 +385,13 @@ impl<'env> Context<'env> {
                     Declarations::InvalidAddress,
                     (
                         module.def.name.loc(),
-                        "Coud not determine the address for this module extension"
+                        "Could not determine the address for this module extension"
                     )
                 );
-                diag.add_note("Module extensions must be defined for a concrete address and module, as '<address>::<module>'");
+                diag.add_note(
+                    "Module extensions must be defined for a previously-defined \
+                    address and module, as '<address>::<module>'",
+                );
                 self.add_diag(diag);
                 continue;
             };
