@@ -57,7 +57,7 @@ const EInvariantViolation: vector<u8> = b"Code invariant violation.";
 #[error(code = 12)]
 const ELegacyMetadataDoesNotExist: vector<u8> = b"Legacy metadata does not exist.";
 #[error(code = 13)]
-const EWrongBorrow: vector<u8> = b"The `Borrow` does not match the `CoinMetadata`.";
+const EWrongBorrow: vector<u8> = b"The `BorrowLegacyMetadata` does not match the `CoinMetadata`.";
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
@@ -313,19 +313,20 @@ public fun make_supply_burn_only<T>(currency: &mut Currency<T>, cap: TreasuryCap
 }
 
 #[allow(lint(share_owned))]
-/// Finalize the coin initialization, returning `MetadataCap`
+/// Finalize the coin initialization, returning `MetadataCap`.
 public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): MetadataCap<T> {
     let CurrencyInitializer { mut currency, is_otw, extra_fields } = builder;
     extra_fields.destroy_empty();
+
+    // Attach the legacy metadata at the end of initialization.
+    let legacy_metadata = currency.to_legacy_metadata(ctx);
+    dof::add(&mut currency.id, LegacyMetadataKey<T>(), legacy_metadata);
+
     let id = object::new(ctx);
     currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
 
     if (is_otw) transfer::transfer(currency, object::sui_coin_registry_address())
-    else {
-        let legacy_metadata = currency.to_legacy_metadata(ctx);
-        dof::add(&mut currency.id, LegacyMetadataKey<T>(), legacy_metadata);
-        transfer::share_object(currency);
-    };
+    else transfer::share_object(currency);
 
     MetadataCap<T> { id }
 }
@@ -338,12 +339,12 @@ public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): Me
 public fun finalize_registration<T>(
     registry: &mut CoinRegistry,
     currency: Receiving<Currency<T>>,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ) {
     // 1. Consume Currency
     // 2. Re-create it with a "derived" address.
     let Currency {
-        id,
+        mut id,
         decimals,
         name,
         symbol,
@@ -355,6 +356,9 @@ public fun finalize_registration<T>(
         metadata_cap_id,
         extra_fields,
     } = transfer::receive(&mut registry.id, currency);
+
+    // In case of OTW -> promotion, we need to remove and reattach the legacy metadata.
+    let legacy_metadata: CoinMetadata<T> = dof::remove(&mut id, LegacyMetadataKey<T>());
     id.delete();
 
     let mut currency = Currency {
@@ -371,7 +375,7 @@ public fun finalize_registration<T>(
         extra_fields,
     };
 
-    let legacy_metadata = currency.to_legacy_metadata(ctx);
+    // Reattach the legacy metadata.
     dof::add(&mut currency.id, LegacyMetadataKey<T>(), legacy_metadata);
 
     // Now, create the derived version of the coin currency.
