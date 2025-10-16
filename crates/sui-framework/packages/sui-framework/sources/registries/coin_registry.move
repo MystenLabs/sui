@@ -9,9 +9,10 @@ module sui::coin_registry;
 
 use std::ascii;
 use std::string::String;
-use std::type_name::TypeName;
+use std::type_name::{Self, TypeName};
 use sui::bag::{Self, Bag};
 use sui::balance::{Supply, Balance};
+use sui::bcs;
 use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata, Coin};
 use sui::derived_object;
 use sui::dynamic_object_field as dof;
@@ -62,6 +63,10 @@ const EWrongBorrow: vector<u8> = b"The `BorrowLegacyMetadata` does not match the
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
 const REGULATED_COIN_VERSION: u8 = 0;
+
+/// Extra field key for the legacy `CoinMetadata` object ID. Exists for currencies
+/// migrated from legacy `CoinMetadata` after Sui v1.59
+const LEGACY_METADATA_ID: vector<u8> = b"legacy_metadata_id";
 
 /// System object found at address `0xc` that stores coin data for all
 /// registered coin types. This is a shared object that acts as a central
@@ -448,6 +453,12 @@ public fun migrate_legacy_metadata<T>(
     assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
     assert!(is_ascii_printable!(&legacy.get_symbol().to_string()), EInvalidSymbol);
 
+    let mut extra_fields = vec_map::empty();
+    extra_fields.insert(
+        LEGACY_METADATA_ID.to_string(),
+        ExtraField(type_name::with_original_ids<ID>(), bcs::to_bytes(&object::id(legacy))),
+    );
+
     transfer::share_object(Currency<T> {
         id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
         decimals: legacy.get_decimals(),
@@ -482,8 +493,12 @@ public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &C
 /// Remove the legacy `CoinMetadata` object from public access if it exists and
 /// place it as a dynamic object field of the `Currency`, so it can still be
 /// accessed through `borrow_as_legacy_metadata` call.
-public fun delete_migrated_legacy_metadata<T>(currency: &mut Currency<T>, legacy: CoinMetadata<T>) {
+public fun delete_migrated_legacy_metadata<T>(
+    currency: &mut Currency<T>,
+    mut legacy: CoinMetadata<T>,
+) {
     assert!(currency.is_metadata_cap_claimed(), EMetadataCapNotClaimed);
+    currency.refresh_legacy_metadata(&mut legacy);
     dof::add(&mut currency.id, LegacyMetadataKey<T>(), legacy);
 }
 
@@ -607,6 +622,14 @@ public fun total_supply<T>(currency: &Currency<T>): Option<u64> {
 /// Check if coin data exists for the given type T in the registry.
 public fun exists<T>(registry: &CoinRegistry): bool {
     derived_object::exists(&registry.id, CurrencyKey<T>())
+}
+
+/// Get the ID of the `Currency<T>` object for the given type `T`.
+public fun currency_id<T>(): ID {
+    derived_object::derive_address(
+        object::sui_coin_registry_address().to_id(),
+        CurrencyKey<T>(),
+    ).to_id()
 }
 
 // === Compatibility: Borrow Legacy Metadata ===

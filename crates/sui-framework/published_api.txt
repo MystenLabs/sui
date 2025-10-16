@@ -2737,6 +2737,9 @@ total_supply
 exists
 	public fun
 	0x2::coin_registry
+currency_id
+	public fun
+	0x2::coin_registry
 borrow_as_legacy_metadata
 	public fun
 	0x2::coin_registry
