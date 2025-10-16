@@ -581,7 +581,7 @@ mod tests {
         }
 
         // Wait for all data to be processed
-        let _watermark = setup
+        setup
             .store
             .wait_for_watermark(DataPipeline::NAME, 4, Duration::from_secs(5))
             .await;
@@ -799,7 +799,7 @@ mod tests {
             .unwrap();
 
         // Should eventually succeed despite initial commit failures
-        let _watermark = setup
+        setup
             .store
             .wait_for_watermark(DataPipeline::NAME, 0, TEST_TIMEOUT)
             .await;
@@ -904,7 +904,7 @@ mod tests {
         }
 
         // Wait for processing to complete
-        let _watermark = setup
+        setup
             .store
             .wait_for_watermark(DataPipeline::NAME, 5, TEST_TIMEOUT)
             .await;
@@ -932,7 +932,7 @@ mod tests {
             .unwrap();
 
         // Should eventually succeed despite initial failures
-        let _watermark = setup
+        setup
             .store
             .wait_for_watermark(DataPipeline::NAME, 0, TEST_TIMEOUT)
             .await;

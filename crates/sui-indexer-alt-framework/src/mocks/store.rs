@@ -51,7 +51,7 @@ pub struct Failures {
     pub attempts: AtomicUsize,
 }
 
-/// Mock store for testing concurrent pipelines driven by one or more indexers.
+/// Mock store for testing pipelines driven by one or more indexers.
 #[derive(Clone, Default)]
 pub struct MockStore {
     /// Maps each pipeline name to its watermark.
@@ -150,7 +150,7 @@ impl Connection for MockConnection<'_> {
             .0
             .watermarks
             .entry(pipeline.to_string())
-            .or_insert_with(|| MockWatermark::default());
+            .or_insert_with(MockWatermark::default);
 
         wm.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
         wm.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;
@@ -441,10 +441,8 @@ impl MockStore {
         watermark_key: &str,
         data: std::collections::HashMap<u64, Vec<u64>>,
     ) -> Self {
-        self.data.insert(
-            watermark_key.to_string(),
-            DashMap::from_iter(data.into_iter()),
-        );
+        self.data
+            .insert(watermark_key.to_string(), DashMap::from_iter(data));
         self
     }
 
