@@ -14,6 +14,7 @@ supply information, regulatory status, and metadata capabilities.
 -  [Struct `MetadataCap`](#sui_coin_registry_MetadataCap)
 -  [Struct `Currency`](#sui_coin_registry_Currency)
 -  [Struct `CurrencyInitializer`](#sui_coin_registry_CurrencyInitializer)
+-  [Struct `BorrowedCoinMetadata`](#sui_coin_registry_BorrowedCoinMetadata)
 -  [Enum `SupplyState`](#sui_coin_registry_SupplyState)
 -  [Enum `RegulatedState`](#sui_coin_registry_RegulatedState)
 -  [Enum `MetadataCapState`](#sui_coin_registry_MetadataCapState)
@@ -40,6 +41,8 @@ supply information, regulatory status, and metadata capabilities.
 -  [Function `delete_migrated_legacy_metadata`](#sui_coin_registry_delete_migrated_legacy_metadata)
 -  [Function `migrate_regulated_state_by_metadata`](#sui_coin_registry_migrate_regulated_state_by_metadata)
 -  [Function `migrate_regulated_state_by_cap`](#sui_coin_registry_migrate_regulated_state_by_cap)
+-  [Function `borrow_as_legacy_metadata`](#sui_coin_registry_borrow_as_legacy_metadata)
+-  [Function `destroy_borrowed_legacy_metadata`](#sui_coin_registry_destroy_borrowed_legacy_metadata)
 -  [Function `decimals`](#sui_coin_registry_decimals)
 -  [Function `name`](#sui_coin_registry_name)
 -  [Function `symbol`](#sui_coin_registry_symbol)
@@ -332,6 +335,33 @@ currencies).
 </dd>
 <dt>
 <code>is_otw: bool</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_coin_registry_BorrowedCoinMetadata"></a>
+
+## Struct `BorrowedCoinMetadata`
+
+Hot Potato to ensure the <code>CoinMetadata</code> is destroyed after use.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin_registry.md#sui_coin_registry_BorrowedCoinMetadata">BorrowedCoinMetadata</a>
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>0: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
 </dd>
@@ -652,6 +682,16 @@ Attempt to migrate legacy metadata for a <code><a href="../sui/coin_registry.md#
 
 <pre><code>#[error]
 <b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EInvariantViolation">EInvariantViolation</a>: vector&lt;u8&gt; = b"Code <b>invariant</b> violation.";
+</code></pre>
+
+
+
+<a name="sui_coin_registry_EWrongBorrow"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EWrongBorrow">EWrongBorrow</a>: vector&lt;u8&gt; = b"The `Borrow` does not match the `CoinMetadata`.";
 </code></pre>
 
 
@@ -1410,6 +1450,75 @@ Mark regulated state by showing the <code>DenyCapV2</code> object for the <code>
             allow_global_pause: option::some(cap.allow_global_pause()),
             variant: <a href="../sui/coin_registry.md#sui_coin_registry_REGULATED_COIN_VERSION">REGULATED_COIN_VERSION</a>,
         };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_borrow_as_legacy_metadata"></a>
+
+## Function `borrow_as_legacy_metadata`
+
+Construct a temporary instance of the legacy <code>CoinMetadata</code> object from
+<code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> to use in legacy APIs. The <code><a href="../sui/coin_registry.md#sui_coin_registry_BorrowedCoinMetadata">BorrowedCoinMetadata</a></code> potato ensures
+that the <code>destroy_borrowed_coin_metadata</code> function is called after use.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_borrow_as_legacy_metadata">borrow_as_legacy_metadata</a>&lt;T&gt;(currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_BorrowedCoinMetadata">sui::coin_registry::BorrowedCoinMetadata</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_borrow_as_legacy_metadata">borrow_as_legacy_metadata</a>&lt;T&gt;(
+    currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;,
+    ctx: &<b>mut</b> TxContext,
+): (CoinMetadata&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_BorrowedCoinMetadata">BorrowedCoinMetadata</a>) {
+    <b>let</b> cm = <a href="../sui/coin.md#sui_coin_new_metadata">coin::new_metadata</a>&lt;T&gt;(
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>,
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>,
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>.to_ascii(),
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>,
+        option::some(<a href="../sui/url.md#sui_url_new_unsafe">sui::url::new_unsafe</a>(currency.<a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>.to_ascii())),
+        ctx,
+    );
+    <b>let</b> <a href="../sui/borrow.md#sui_borrow">borrow</a> = <a href="../sui/coin_registry.md#sui_coin_registry_BorrowedCoinMetadata">BorrowedCoinMetadata</a>(<a href="../sui/object.md#sui_object_id">object::id</a>(&cm));
+    (cm, <a href="../sui/borrow.md#sui_borrow">borrow</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_destroy_borrowed_legacy_metadata"></a>
+
+## Function `destroy_borrowed_legacy_metadata`
+
+Destroy the temporary <code>CoinMetadata</code> instance returned by
+<code><a href="../sui/coin_registry.md#sui_coin_registry_borrow_as_legacy_metadata">borrow_as_legacy_metadata</a></code>.
+
+Together with the <code><a href="../sui/coin_registry.md#sui_coin_registry_BorrowedCoinMetadata">BorrowedCoinMetadata</a></code> potato which enforces this action.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_destroy_borrowed_legacy_metadata">destroy_borrowed_legacy_metadata</a>&lt;T&gt;(cm: <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, borrowed: <a href="../sui/coin_registry.md#sui_coin_registry_BorrowedCoinMetadata">sui::coin_registry::BorrowedCoinMetadata</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_destroy_borrowed_legacy_metadata">destroy_borrowed_legacy_metadata</a>&lt;T&gt;(cm: CoinMetadata&lt;T&gt;, borrowed: <a href="../sui/coin_registry.md#sui_coin_registry_BorrowedCoinMetadata">BorrowedCoinMetadata</a>) {
+    <b>let</b> <a href="../sui/coin_registry.md#sui_coin_registry_BorrowedCoinMetadata">BorrowedCoinMetadata</a>(id) = borrowed;
+    <b>assert</b>!(id == <a href="../sui/object.md#sui_object_id">object::id</a>(&cm), <a href="../sui/coin_registry.md#sui_coin_registry_EWrongBorrow">EWrongBorrow</a>);
+    cm.destroy_metadata();
 }
 </code></pre>
 

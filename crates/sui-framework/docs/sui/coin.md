@@ -55,6 +55,7 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `get_symbol`](#sui_coin_get_symbol)
 -  [Function `get_description`](#sui_coin_get_description)
 -  [Function `get_icon_url`](#sui_coin_get_icon_url)
+-  [Function `new_metadata`](#sui_coin_new_metadata)
 -  [Function `destroy_metadata`](#sui_coin_destroy_metadata)
 -  [Function `deny_cap_id`](#sui_coin_deny_cap_id)
 -  [Function `new_deny_cap_v2`](#sui_coin_new_deny_cap_v2)
@@ -1571,6 +1572,46 @@ Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadat
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_get_icon_url">get_icon_url</a>&lt;T&gt;(metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;): Option&lt;Url&gt; {
     metadata.icon_url
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_new_metadata"></a>
+
+## Function `new_metadata`
+
+Create a new <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> object to support legacy compatibility APIs in
+the <code><a href="../sui/coin_registry.md#sui_coin_registry">coin_registry</a></code> module.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_metadata">new_metadata</a>&lt;T&gt;(decimals: u8, name: <a href="../std/string.md#std_string_String">std::string::String</a>, symbol: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, description: <a href="../std/string.md#std_string_String">std::string::String</a>, icon_url: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/url.md#sui_url_Url">sui::url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_metadata">new_metadata</a>&lt;T&gt;(
+    decimals: u8,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: Option&lt;Url&gt;,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt; {
+    <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+    }
 }
 </code></pre>
 

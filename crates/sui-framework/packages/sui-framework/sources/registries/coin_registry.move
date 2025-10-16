@@ -53,6 +53,8 @@ const EEmptySupply: vector<u8> = b"Supply cannot be empty.";
 const ESupplyNotBurnOnly: vector<u8> = b"Cannot burn on a non burn-only supply.";
 #[error(code = 11)]
 const EInvariantViolation: vector<u8> = b"Code invariant violation.";
+#[error(code = 12)]
+const EWrongBorrow: vector<u8> = b"The `Borrow` does not match the `CoinMetadata`.";
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
@@ -491,6 +493,42 @@ public fun migrate_regulated_state_by_cap<T>(currency: &mut Currency<T>, cap: &D
             allow_global_pause: option::some(cap.allow_global_pause()),
             variant: REGULATED_COIN_VERSION,
         };
+}
+
+// === Legacy Support ===
+
+/// Hot Potato to ensure the `CoinMetadata` is destroyed after use.
+public struct BorrowedCoinMetadata(ID)
+
+/// Construct a temporary instance of the legacy `CoinMetadata` object from
+/// `Currency` to use in legacy APIs. The `BorrowedCoinMetadata` potato ensures
+/// that the `destroy_borrowed_coin_metadata` function is called after use.
+public fun borrow_as_legacy_metadata<T>(
+    currency: &Currency<T>,
+    ctx: &mut TxContext,
+): (CoinMetadata<T>, BorrowedCoinMetadata) {
+    let cm = coin::new_metadata<T>(
+        currency.decimals,
+        currency.name,
+        currency.symbol.to_ascii(),
+        currency.description,
+        option::some(sui::url::new_unsafe(currency.icon_url.to_ascii())),
+        ctx,
+    );
+
+    let borrow = BorrowedCoinMetadata(object::id(&cm));
+
+    (cm, borrow)
+}
+
+/// Destroy the temporary `CoinMetadata` instance returned by
+/// `borrow_as_legacy_metadata`.
+///
+/// Together with the `BorrowedCoinMetadata` potato which enforces this action.
+public fun destroy_borrowed_legacy_metadata<T>(cm: CoinMetadata<T>, borrowed: BorrowedCoinMetadata) {
+    let BorrowedCoinMetadata(id) = borrowed;
+    assert!(id == object::id(&cm), EWrongBorrow);
+    cm.destroy_metadata();
 }
 
 // === Public getters  ===

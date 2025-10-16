@@ -440,6 +440,53 @@ fun delete_legacy_fail() {
     abort
 }
 
+#[test]
+fun borrow_as_legacy_metadata() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+    currency.delete_metadata_cap(metadata_cap);
+
+    let (cm, borrow) = coin_registry::borrow_as_legacy_metadata(&currency, ctx);
+
+    assert_eq!(cm.get_decimals(), DECIMALS);
+    assert_eq!(cm.get_symbol(), SYMBOL.to_ascii_string());
+    assert_eq!(cm.get_name(), NAME.to_string());
+
+    coin_registry::destroy_borrowed_legacy_metadata(cm, borrow);
+    destroy(currency);
+    destroy(t_cap);
+}
+
+#[test, expected_failure(abort_code = coin_registry::EWrongBorrow)]
+fun destroy_incorrect_metadata_fail() {
+    let ctx = &mut tx_context::dummy();
+
+    let currency_1 = {
+        let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+        let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+        currency.delete_metadata_cap(metadata_cap);
+        destroy(t_cap);
+        currency
+    };
+
+    let currency_2 = {
+        let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+        let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+        currency.delete_metadata_cap(metadata_cap);
+        destroy(t_cap);
+        currency
+    };
+
+    let (cm1, borrow1) = coin_registry::borrow_as_legacy_metadata(&currency_1, ctx);
+    let (cm2, borrow2) = coin_registry::borrow_as_legacy_metadata(&currency_2, ctx);
+
+    coin_registry::destroy_borrowed_legacy_metadata(cm1, borrow2);
+    coin_registry::destroy_borrowed_legacy_metadata(cm2, borrow1);
+
+    abort
+}
+
 // === Test Scenario + Receiving ===
 
 #[test, expected_failure] // TODO: Once system address is defined, change the test
