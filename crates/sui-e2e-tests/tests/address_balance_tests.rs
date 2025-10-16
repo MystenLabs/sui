@@ -5,7 +5,7 @@ use move_core_types::{identifier::Identifier, u256::U256};
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     accumulator_metadata::AccumulatorOwner,
@@ -17,6 +17,7 @@ use sui_types::{
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ChildObjectResolver,
+    supported_protocol_versions::SupportedProtocolVersions,
     transaction::{Argument, Command, TransactionData, TransactionKind},
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -80,6 +81,132 @@ fn create_transaction_with_expiration(
             nonce,
         },
     })
+}
+
+// Test protocol gating of address balances. This test can be deleted after the feature
+// is released.
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_accumulators_disabled() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
+        if version == ProtocolVersion::MAX_ALLOWED {
+            cfg.enable_accumulators_for_testing();
+        }
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+            ProtocolVersion::MAX.as_u64(),
+            ProtocolVersion::MAX_ALLOWED.as_u64(),
+        ))
+        .build()
+        .await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    let (sender, gas) = get_sender_and_gas(&mut test_cluster.wallet).await;
+
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Withdraw must be rejected at signing.
+    let withdraw_tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
+    let withdraw_tx = test_cluster.wallet.sign_transaction(&withdraw_tx).await;
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(withdraw_tx)
+        .await
+        .unwrap_err();
+
+    // Transfer fails at execution time
+    let tx = make_send_to_account_tx(1000, recipient, sender, gas, rgp);
+
+    let signed = test_cluster.wallet.sign_transaction(&tx).await;
+    let effects = test_cluster
+        .wallet
+        .execute_transaction_may_fail(signed)
+        .await
+        .unwrap()
+        .effects
+        .unwrap();
+    let gas = effects.gas_object().reference.to_object_ref();
+    let status = effects.status().clone();
+    assert!(status.is_err());
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        dbg!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .protocol_config()
+                .version
+        );
+    });
+
+    // after reconfig, transaction still fails because the accumulator root is not created yet.
+    test_cluster.trigger_reconfiguration().await;
+
+    // Withdraw must still be rejected at signing.
+    let withdraw_tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
+    let withdraw_tx = test_cluster.wallet.sign_transaction(&withdraw_tx).await;
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(withdraw_tx)
+        .await
+        .unwrap_err();
+
+    let tx = make_send_to_account_tx(1000, recipient, sender, gas, rgp);
+
+    let signed = test_cluster.wallet.sign_transaction(&tx).await;
+    let effects = test_cluster
+        .wallet
+        .execute_transaction_may_fail(signed)
+        .await
+        .unwrap()
+        .effects
+        .unwrap();
+    let gas = effects.gas_object().reference.to_object_ref();
+    let status = effects.status().clone();
+    assert!(status.is_err());
+
+    // after one more reconfig, address balances can be used successfully.
+    test_cluster.trigger_reconfiguration().await;
+
+    let tx = make_send_to_account_tx(1000, sender, sender, gas, rgp);
+
+    let gas = test_cluster
+        .sign_and_execute_transaction(&tx)
+        .await
+        .effects
+        .unwrap()
+        .gas_object()
+        .reference
+        .to_object_ref();
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, sender, 1000);
+    });
+
+    // Withdraw can succeed now
+    let withdraw_tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
+    test_cluster
+        .sign_and_execute_transaction(&withdraw_tx)
+        .await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+
+        let sui_coin_type = Balance::type_tag(GAS::type_tag());
+        assert!(
+            !AccumulatorValue::exists(child_object_resolver, None, sender, &sui_coin_type).unwrap(),
+            "Accumulator value should have been removed"
+        );
+    });
+
+    // ensure that no conservation failures are detected during reconfig.
+    test_cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]

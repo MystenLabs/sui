@@ -169,12 +169,12 @@ public fun redeem_funds<T>(
     withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
     ctx: &mut TxContext,
 ): Coin<T> {
-    from_balance(withdrawal.redeem(), ctx)
+    balance::redeem_funds(withdrawal).into_coin(ctx)
 }
 
 /// Send a coin to an address balance
 public fun send_funds<T>(coin: Coin<T>, recipient: address) {
-    balance::send_funds(into_balance(coin), recipient);
+    balance::send_funds(coin.into_balance(), recipient);
 }
 
 // === Base Coin functionality ===
