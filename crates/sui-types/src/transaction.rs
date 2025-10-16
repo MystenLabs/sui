@@ -57,6 +57,10 @@ use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use tap::Pipe;
 use tracing::trace;
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_serialization_tests.rs"]
+mod transaction_serialization_tests;
+
 pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 70_000;
@@ -3377,15 +3381,6 @@ pub enum SharedObjectMutability {
     Mutable,
 }
 
-impl std::fmt::Display for SharedObjectMutability {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SharedObjectMutability::Mutable => write!(f, "Mutable"),
-            SharedObjectMutability::Immutable => write!(f, "Immutable"),
-        }
-    }
-}
-
 impl SharedObjectMutability {
     pub fn is_mutable(&self) -> bool {
         match self {
@@ -3975,83 +3970,6 @@ impl TransactionKey {
         match self {
             TransactionKey::Digest(d) => Some(d),
             _ => None,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_shared_object_backward_compatibility() {
-        use bcs;
-
-        // Old version of SharedObject with bool field
-        #[derive(serde::Serialize, serde::Deserialize)]
-        struct OldSharedObject {
-            id: ObjectID,
-            initial_shared_version: SequenceNumber,
-            mutable: bool,
-        }
-
-        // Old version of ObjectArg enum
-        #[derive(serde::Serialize, serde::Deserialize)]
-        enum OldObjectArg {
-            ImmOrOwnedObject(ObjectRef),
-            SharedObject {
-                id: ObjectID,
-                initial_shared_version: SequenceNumber,
-                mutable: bool,
-            },
-            Receiving(ObjectRef),
-        }
-
-        let test_id = ObjectID::ZERO;
-        let test_version = SequenceNumber::from_u64(1);
-
-        // Test immutable (false -> Immutable)
-        let old_immutable = OldObjectArg::SharedObject {
-            id: test_id,
-            initial_shared_version: test_version,
-            mutable: false,
-        };
-        let encoded_immutable = bcs::to_bytes(&old_immutable).unwrap();
-        let decoded: ObjectArg = bcs::from_bytes(&encoded_immutable).unwrap();
-
-        match decoded {
-            ObjectArg::SharedObject {
-                id,
-                initial_shared_version,
-                mutability,
-            } => {
-                assert_eq!(id, test_id);
-                assert_eq!(initial_shared_version, test_version);
-                assert_eq!(mutability, SharedObjectMutability::Immutable);
-            }
-            _ => panic!("Expected SharedObject variant"),
-        }
-
-        // Test mutable (true -> Mutable)
-        let old_mutable = OldObjectArg::SharedObject {
-            id: test_id,
-            initial_shared_version: test_version,
-            mutable: true,
-        };
-        let encoded_mutable = bcs::to_bytes(&old_mutable).unwrap();
-        let decoded: ObjectArg = bcs::from_bytes(&encoded_mutable).unwrap();
-
-        match decoded {
-            ObjectArg::SharedObject {
-                id,
-                initial_shared_version,
-                mutability,
-            } => {
-                assert_eq!(id, test_id);
-                assert_eq!(initial_shared_version, test_version);
-                assert_eq!(mutability, SharedObjectMutability::Mutable);
-            }
-            _ => panic!("Expected SharedObject variant"),
         }
     }
 }
