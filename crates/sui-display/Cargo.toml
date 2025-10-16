@@ -10,6 +10,7 @@ edition = "2024"
 anyhow.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
+chrono.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 serde.workspace = true

@@ -126,6 +126,7 @@ pub enum Fields<'s> {
 pub enum Transform {
     #[default]
     Str,
+    Timestamp,
 }
 
 pub(crate) struct Parser<'s> {
@@ -908,7 +909,12 @@ impl<'s> Parser<'s> {
             Lit(_, T::Ident, _, "str") => {
                 self.lexer.next();
                 Transform::Str
-            }
+            },
+
+            Lit(_, T::Ident, _, "ts") => {
+                self.lexer.next();
+                Transform::Timestamp
+            },
         })
     }
 }
@@ -1076,6 +1082,7 @@ impl fmt::Debug for Transform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Transform::Str => write!(f, "str"),
+            Transform::Timestamp => write!(f, "ts"),
         }
     }
 }

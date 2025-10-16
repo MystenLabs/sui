@@ -12,7 +12,6 @@ use sui_types::id::ID;
 use sui_types::id::UID;
 
 use crate::v2::error::FormatError;
-use crate::v2::parser::Transform;
 use crate::v2::value::Slice;
 use crate::v2::writer::BoundedWriter;
 
@@ -82,7 +81,9 @@ impl<'v> AV::Visitor<'v, 'v> for Formatter<'_, '_> {
     }
 
     fn visit_vector(&mut self, _: &mut AV::VecDriver<'_, 'v, 'v>) -> Result<(), FormatError> {
-        Err(FormatError::TransformInvalid(Transform::Str, "vectors"))
+        Err(FormatError::TransformInvalid(
+            "vectors cannot be formatted as strings",
+        ))
     }
 
     fn visit_struct(
@@ -113,11 +114,15 @@ impl<'v> AV::Visitor<'v, 'v> for Formatter<'_, '_> {
             write!(self.0, "{}", id.to_canonical_display(true))?;
             Ok(())
         } else {
-            Err(FormatError::TransformInvalid(Transform::Str, "structs"))
+            Err(FormatError::TransformInvalid(
+                "structs cannot be formatted as strings",
+            ))
         }
     }
 
     fn visit_variant(&mut self, _: &mut AV::VariantDriver<'_, 'v, 'v>) -> Result<(), FormatError> {
-        Err(FormatError::TransformInvalid(Transform::Str, "enums"))
+        Err(FormatError::TransformInvalid(
+            "enums cannot be formatted as strings",
+        ))
     }
 }

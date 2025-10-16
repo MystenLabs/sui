@@ -8,7 +8,6 @@ use std::{collections::BTreeSet, fmt};
 use move_core_types::annotated_visitor;
 
 use super::lexer::{Lexeme, OwnedLexeme, Token};
-use super::parser::Transform;
 use super::peek::Peekable2Ext;
 
 /// Errors related to the display format as a whole.
@@ -75,8 +74,8 @@ pub enum FormatError {
     #[error("Display produces too much output")]
     TooMuchOutput,
 
-    #[error("'{0:?}' format is invalid for {1}")]
-    TransformInvalid(Transform, &'static str),
+    #[error("Invalid transform: {0}")]
+    TransformInvalid(&'static str),
 
     #[error("Unexpected end-of-string, expected {expect}")]
     UnexpectedEos { expect: ExpectedSet },
