@@ -623,8 +623,11 @@ public fun borrow_as_legacy_metadata<T>(
 ): (CoinMetadata<T>, BorrowLegacyMetadata) {
     assert!(dof::exists_(&currency.id, LegacyMetadataKey<T>()), ELegacyMetadataDoesNotExist);
 
-    let legacy = dof::remove(&mut currency.id, LegacyMetadataKey<T>());
+    let mut legacy = dof::remove(&mut currency.id, LegacyMetadataKey<T>());
     let borrow = BorrowLegacyMetadata(object::id(&legacy));
+
+    // Make sure the legacy metadata is up to date.
+    currency.refresh_legacy_metadata(&mut legacy);
 
     (legacy, borrow)
 }
@@ -662,6 +665,12 @@ fun to_legacy_metadata<T>(currency: &Currency<T>, ctx: &mut TxContext): CoinMeta
         currency.icon_url,
         ctx,
     )
+}
+
+/// Update the legacy `CoinMetadata` in place from the `Currency`. Required to
+/// maintain the state of the `CoinMetadata` in case of updates to the `Currency`.
+fun refresh_legacy_metadata<T>(currency: &Currency<T>, legacy: &mut CoinMetadata<T>) {
+    legacy.update_metadata(currency.name, currency.description, currency.icon_url);
 }
 
 /// Nit: consider adding this function to `std::string` in the future.

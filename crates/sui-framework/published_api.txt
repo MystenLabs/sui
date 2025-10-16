@@ -2542,6 +2542,9 @@ get_icon_url
 new_metadata
 	public(package) fun
 	0x2::coin
+update_metadata
+	public(package) fun
+	0x2::coin
 destroy_metadata
 	public(package) fun
 	0x2::coin
@@ -2744,6 +2747,9 @@ create
 	fun
 	0x2::coin_registry
 to_legacy_metadata
+	fun
+	0x2::coin_registry
+refresh_legacy_metadata
 	fun
 	0x2::coin_registry
 Publisher

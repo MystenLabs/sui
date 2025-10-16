@@ -56,6 +56,7 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `get_description`](#sui_coin_get_description)
 -  [Function `get_icon_url`](#sui_coin_get_icon_url)
 -  [Function `new_metadata`](#sui_coin_new_metadata)
+-  [Function `update_metadata`](#sui_coin_update_metadata)
 -  [Function `destroy_metadata`](#sui_coin_destroy_metadata)
 -  [Function `deny_cap_id`](#sui_coin_deny_cap_id)
 -  [Function `new_deny_cap_v2`](#sui_coin_new_deny_cap_v2)
@@ -1612,6 +1613,39 @@ the <code><a href="../sui/coin_registry.md#sui_coin_registry">coin_registry</a><
         description,
         icon_url: option::some(<a href="../sui/url.md#sui_url_new_unsafe">url::new_unsafe</a>(icon_url.to_ascii())),
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_update_metadata"></a>
+
+## Function `update_metadata`
+
+Update the <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> in place. Required to maintain integrity of the
+legacy <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> in <code>CoinRegistry</code> calls.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_update_metadata">update_metadata</a>&lt;T&gt;(metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>, description: <a href="../std/string.md#std_string_String">std::string::String</a>, icon_url: <a href="../std/string.md#std_string_String">std::string::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_update_metadata">update_metadata</a>&lt;T&gt;(
+    metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;,
+    name: string::String,
+    description: string::String,
+    icon_url: string::String,
+) {
+    metadata.name = name;
+    metadata.description = description;
+    metadata.icon_url = option::some(<a href="../sui/url.md#sui_url_new_unsafe">url::new_unsafe</a>(icon_url.to_ascii()));
 }
 </code></pre>
 
