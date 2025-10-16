@@ -177,6 +177,7 @@ members = [
   "crates/sui-rpc-api",
   "crates/sui-rpc-benchmark",
   "crates/sui-rpc-loadgen",
+  "crates/sui-rpc-resolver",
   "crates/sui-sdk",
   "crates/sui-security-watchdog",
   "crates/sui-simulator",
@@ -763,6 +764,7 @@ sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
 sui-rpc-api = { path = "crates/sui-rpc-api" }
+sui-rpc-resolver = { path = "crates/sui-rpc-resolver" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }
