@@ -1,0 +1,31 @@
+[package]
+name = "sui-rpc-resolver"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+bcs.workspace = true
+futures.workspace = true
+lru.workspace = true
+move-core-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sui-json-rpc-api.workspace = true
+sui-json-rpc-types.workspace = true
+sui-package-resolver.workspace = true
+sui-rpc-api.workspace = true
+sui-sdk.workspace = true
+sui-types.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true
