@@ -824,6 +824,11 @@ impl DagState {
         self.threshold_clock.get_quorum_ts()
     }
 
+    #[cfg(test)]
+    pub(crate) fn add_to_threshold_clock_in_test(&mut self, block_ref: BlockRef) {
+        self.threshold_clock.add_block(block_ref);
+    }
+
     pub(crate) fn highest_accepted_round(&self) -> Round {
         self.highest_accepted_round
     }
