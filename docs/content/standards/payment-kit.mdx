@@ -129,17 +129,7 @@ A `PaymentRecord` cannot be deleted before its expiration epoch, ensuring a mini
 
 ### Creating a registry
 
-To create a new payment registry, you need to provide a `name` which is simply an ACSII-based string that is used to derive an address for the registry. In addition to a `name`, the package `Namespace` object must also be provided. `Namespace`s provide a higher-order organizational structure for managing multiple payment registries.
-
-#### Namespace objects
-
-```
-mainnet: 0xccd3e4c7802921991cd9ce488c4ca0b51334ba75483702744242284ccf3ae7c2
-```
-
-```
-testnet: 0xa5016862fdccba7cc576b56cc5a391eda6775200aaa03a6b3c97d512312878db
-```
+To create a new payment registry, you need to provide a `name` which is simply an ACSII-based string that is used to derive an address for the registry. In addition to a `name`, the package `Namespace` object must also be provided. `Namespace` provides a higher-order organizational structure for managing multiple payment registries.
 
 ```move
 module sui::payment_kit;
@@ -152,6 +142,16 @@ public fun create_registry(
 ```
 
 This function creates a `PaymentRegistry` and a `RegistryAdminCap` for administrative control. The `RegistryAdminCap` is initially owned by the creator and can be shared or transferred as needed.
+
+#### Namespace objects
+
+```
+mainnet: 0xccd3e4c7802921991cd9ce488c4ca0b51334ba75483702744242284ccf3ae7c2
+```
+
+```
+testnet: 0xa5016862fdccba7cc576b56cc5a391eda6775200aaa03a6b3c97d512312878db
+```
 
 ### Processing registry payments
 
