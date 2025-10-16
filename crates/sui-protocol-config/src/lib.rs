@@ -4203,6 +4203,7 @@ impl ProtocolConfig {
             self.min_move_binary_format_version_as_option()
                 .unwrap_or(VERSION_1),
             self.no_extraneous_module_bytes(),
+            self.deprecate_global_storage_ops_during_deserialization(),
             TableConfig {
                 module_handles: self.binary_module_handles_as_option().unwrap_or(u16::MAX),
                 datatype_handles: self.binary_struct_handles_as_option().unwrap_or(u16::MAX),
