@@ -2539,6 +2539,9 @@ get_description
 get_icon_url
 	public fun
 	0x2::coin
+new_metadata
+	public(package) fun
+	0x2::coin
 destroy_metadata
 	public(package) fun
 	0x2::coin
@@ -2596,6 +2599,9 @@ ExtraField
 CurrencyKey
 	public struct
 	0x2::coin_registry
+LegacyMetadataKey
+	public struct
+	0x2::coin_registry
 MetadataCap
 	public struct
 	0x2::coin_registry
@@ -2603,6 +2609,9 @@ Currency
 	public struct
 	0x2::coin_registry
 CurrencyInitializer
+	public struct
+	0x2::coin_registry
+BorrowLegacyMetadata
 	public struct
 	0x2::coin_registry
 SupplyState
@@ -2725,13 +2734,16 @@ total_supply
 exists
 	public fun
 	0x2::coin_registry
-legacy_metadata_id
+borrow_as_legacy_metadata
 	public fun
 	0x2::coin_registry
-currency_id
+return_borrowed_legacy_metadata
 	public fun
 	0x2::coin_registry
 create
+	fun
+	0x2::coin_registry
+to_legacy_metadata
 	fun
 	0x2::coin_registry
 Publisher

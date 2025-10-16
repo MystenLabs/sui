@@ -485,6 +485,26 @@ public fun get_icon_url<T>(metadata: &CoinMetadata<T>): Option<Url> {
     metadata.icon_url
 }
 
+/// Create a new `CoinMetadata` object to support legacy compatibility APIs in
+/// the `coin_registry` module.
+public(package) fun new_metadata<T>(
+    decimals: u8,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: string::String,
+    ctx: &mut TxContext,
+): CoinMetadata<T> {
+    CoinMetadata {
+        id: object::new(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url: option::some(url::new_unsafe(icon_url.to_ascii())),
+    }
+}
+
 /// Destroy legacy `CoinMetadata` object
 public(package) fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
     let CoinMetadata { id, .. } = metadata;

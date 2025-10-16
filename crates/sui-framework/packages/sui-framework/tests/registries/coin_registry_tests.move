@@ -42,9 +42,6 @@ fun default_scenario() {
     assert!(!currency.is_supply_burn_only());
     assert!(!currency.is_regulated());
 
-    // Check utility function to derive the currency ID.
-    assert_eq!(object::id(&currency), coin_registry::currency_id<COIN_REGISTRY_TESTS>());
-
     destroy(metadata_cap);
     destroy(currency);
     destroy(t_cap);
