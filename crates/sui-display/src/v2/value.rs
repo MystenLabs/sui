@@ -5,6 +5,7 @@
 use std::{borrow::Cow, fmt::Write as _};
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value::MoveTypeLayout,
@@ -112,6 +113,7 @@ impl Value<'_> {
         // 'display').
         match transform {
             Transform::Str => self.format_as_str(w),
+            Transform::Timestamp => self.format_as_timestamp(w),
         }
     }
 
@@ -147,6 +149,46 @@ impl Value<'_> {
         }
     }
 
+    /// Attempt to coerce this value into a `u64` if that's possible. This works for any numeric
+    /// value that can be represented within 64 bits.
+    pub(crate) fn as_u64(&self) -> Option<u64> {
+        use MoveTypeLayout as L;
+        use Value as V;
+
+        match self {
+            // Numeric literals in Display
+            V::U8(i) => Some(*i as u64),
+            V::U16(i) => Some(*i as u64),
+            V::U32(i) => Some(*i as u64),
+            V::U64(i) => Some(*i),
+            V::U128(i) => u64::try_from(*i).ok(),
+            V::U256(i) => u64::try_from(*i).ok(),
+
+            // Numeric values sliced out of Move values
+            V::Slice(Slice {
+                layout,
+                bytes: data,
+            }) => match layout {
+                L::U8 => Some(bcs::from_bytes::<u8>(data).ok()?.into()),
+                L::U16 => Some(bcs::from_bytes::<u16>(data).ok()?.into()),
+                L::U32 => Some(bcs::from_bytes::<u32>(data).ok()?.into()),
+                L::U64 => bcs::from_bytes::<u64>(data).ok(),
+                L::U128 => bcs::from_bytes::<u128>(data).ok()?.try_into().ok(),
+                L::U256 => bcs::from_bytes::<U256>(data).ok()?.try_into().ok(),
+                L::Address | L::Bool | L::Enum(_) | L::Signer | L::Struct(_) | L::Vector(_) => None,
+            },
+
+            // Everything else cannot be coerced to u64
+            V::Address(_)
+            | V::Bool(_)
+            | V::Bytes(_)
+            | V::Enum(_)
+            | V::String(_)
+            | V::Struct(_)
+            | V::Vector(_) => None,
+        }
+    }
+
     /// Predicate to check whether this value represents a `None: std::option::Option<T>` value.
     /// Only values sliced out of real Move values are detected as `None`. Literals that are
     /// constructed to look like `None` are not detected as such.
@@ -167,17 +209,7 @@ impl Value<'_> {
 
     /// Implementation of 'string' transform, which is the transform used if
     fn format_as_str(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
-        const XFORM: Transform = Transform::Str;
         match self {
-            Value::Bytes(_) => return Err(FormatError::TransformInvalid(XFORM, "raw bytes")),
-            Value::Enum(_) => return Err(FormatError::TransformInvalid(XFORM, "enum literals")),
-            Value::Struct(_) => {
-                return Err(FormatError::TransformInvalid(XFORM, "struct literals"));
-            }
-            Value::Vector(_) => {
-                return Err(FormatError::TransformInvalid(XFORM, "vector literals"));
-            }
-
             Value::Address(a) => write!(w, "{}", a.to_canonical_display(true))?,
             Value::Bool(b) => write!(w, "{b}")?,
             Value::U8(n) => write!(w, "{n}")?,
@@ -189,8 +221,45 @@ impl Value<'_> {
             Value::String(s) => write!(w, "{s}")?,
 
             Value::Slice(s) => Formatter::deserialize_slice(*s, w)?,
+
+            Value::Bytes(_) => {
+                return Err(FormatError::TransformInvalid(
+                    "bytes cannot be formatted as a string",
+                ));
+            }
+
+            Value::Enum(_) => {
+                return Err(FormatError::TransformInvalid(
+                    "enums cannot be formatted as a string",
+                ));
+            }
+
+            Value::Struct(_) => {
+                return Err(FormatError::TransformInvalid(
+                    "struct literals cannot be formatted as a string",
+                ));
+            }
+
+            Value::Vector(_) => {
+                return Err(FormatError::TransformInvalid(
+                    "vector literals cannot be formatted as a string",
+                ));
+            }
         }
 
+        Ok(())
+    }
+
+    /// Coerce the value into a number, interpreted as an offset in milliseconds since the Unix
+    /// epoch, and format it as an ISO8601 timestamp.
+    fn format_as_timestamp(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
+        let ts = self
+            .as_u64()
+            .and_then(|ts| ts.try_into().ok())
+            .and_then(DateTime::from_timestamp_millis)
+            .ok_or_else(|| FormatError::TransformInvalid("not a timestamp"))?;
+
+        write!(w, "{ts:?}")?;
         Ok(())
     }
 }
@@ -205,30 +274,9 @@ impl<'s> Accessor<'s> {
         use MoveTypeLayout as L;
 
         match self {
-            // Numeric literals in Display
-            A::Index(Value::U8(i)) => Some(*i as u64),
-            A::Index(Value::U16(i)) => Some(*i as u64),
-            A::Index(Value::U32(i)) => Some(*i as u64),
-            A::Index(Value::U64(i)) => Some(*i),
-            A::Index(Value::U128(i)) => u64::try_from(*i).ok(),
-            A::Index(Value::U256(i)) => u64::try_from(*i).ok(),
-
-            // Numeric values sliced out of Move values
-            A::Index(Value::Slice(Slice {
-                layout,
-                bytes: data,
-            })) => match layout {
-                L::U8 => Some(bcs::from_bytes::<u8>(data).ok()? as u64),
-                L::U16 => Some(bcs::from_bytes::<u16>(data).ok()? as u64),
-                L::U32 => Some(bcs::from_bytes::<u32>(data).ok()? as u64),
-                L::U64 => Some(bcs::from_bytes::<u64>(data).ok()?),
-                L::U128 => bcs::from_bytes::<u128>(data).ok()?.try_into().ok(),
-                L::U256 => bcs::from_bytes::<U256>(data).ok()?.try_into().ok(),
-                _ => None,
-            },
-
-            // Everything else
-            A::Index(_) | A::DFIndex(_) | A::DOFIndex(_) | A::Field(_) | A::Positional(_) => None,
+            A::Index(value) => value.as_u64(),
+            // All other index types don't represent a numeric index.
+            A::DFIndex(_) | A::DOFIndex(_) | A::Field(_) | A::Positional(_) => None,
         }
     }
 
