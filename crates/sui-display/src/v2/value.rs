@@ -20,7 +20,9 @@ use sui_types::{
     base_types::{RESOLVED_UTF8_STR, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME},
 };
 
-use super::{error::FormatError, visitor::formatter::Formatter, writer::BoundedWriter};
+use super::{
+    error::FormatError, parser::Transform, visitor::formatter::Formatter, writer::BoundedWriter,
+};
 
 /// Dynamically load objects by their ID. The output should be a `Slice` containing references to
 /// the raw BCS bytes and the corresponding `MoveTypeLayout` for the object. This implies the
@@ -96,21 +98,20 @@ pub enum Fields<'s> {
 }
 
 impl Value<'_> {
-    /// Write out a formatted representation of this value, optionally transformed by `transform`,
-    /// to the provided writer.
+    /// Write out a formatted representation of this value, transformed by `transform`, to the
+    /// provided writer.
     ///
     /// This operation can fail if the transform is not supported for this value, or if the output
     /// is too large. If it succeds, `w` will be modified to include the newly written data.
     pub(crate) fn format(
         &self,
-        transform: Option<&str>,
+        transform: Transform,
         w: &mut BoundedWriter<'_>,
     ) -> Result<(), FormatError> {
+        // TODO(amnn): Detect transforms that can't be applied in this context (e.g. 'json' and
+        // 'display').
         match transform {
-            None => self.format_as_str(w),
-            // TODO(amnn): Detect transforms that can't be applied in this context (e.g. 'json' and
-            // 'display').
-            Some(transform) => Err(FormatError::TransformUnrecognized(transform.to_string())),
+            Transform::Str => self.format_as_str(w),
         }
     }
 
@@ -166,14 +167,15 @@ impl Value<'_> {
 
     /// Implementation of 'string' transform, which is the transform used if
     fn format_as_str(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
+        const XFORM: Transform = Transform::Str;
         match self {
-            Value::Bytes(_) => return Err(FormatError::TransformInvalid("str", "raw bytes")),
-            Value::Enum(_) => return Err(FormatError::TransformInvalid("str", "enum literals")),
+            Value::Bytes(_) => return Err(FormatError::TransformInvalid(XFORM, "raw bytes")),
+            Value::Enum(_) => return Err(FormatError::TransformInvalid(XFORM, "enum literals")),
             Value::Struct(_) => {
-                return Err(FormatError::TransformInvalid("str", "struct literals"));
+                return Err(FormatError::TransformInvalid(XFORM, "struct literals"));
             }
             Value::Vector(_) => {
-                return Err(FormatError::TransformInvalid("str", "vector literals"));
+                return Err(FormatError::TransformInvalid(XFORM, "vector literals"));
             }
 
             Value::Address(a) => write!(w, "{}", a.to_canonical_display(true))?,
