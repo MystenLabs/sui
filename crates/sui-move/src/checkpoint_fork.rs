@@ -2,22 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Result};
-use std::collections::HashSet;
+use move_core_types::language_storage::StructTag;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use sui_sdk::rpc_types::{
-    SuiData, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponseOptions,
-};
+use std::str::FromStr;
+use sui_protocol_config::ProtocolConfig;
+use sui_sdk::rpc_types::SuiObjectDataOptions;
 use sui_sdk::SuiClientBuilder;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{MoveObjectType, ObjectID},
     in_memory_storage::InMemoryStorage,
-    object::Object,
+    object::{Data, MoveObject, Object},
 };
-
-const BATCH_SIZE: usize = 50;
-const MAX_CHECKPOINTS_TO_SCAN: u64 = 1000;
 
 pub struct CheckpointStateLoader {
     rpc_url: String,
@@ -28,59 +24,34 @@ impl CheckpointStateLoader {
         Self { rpc_url }
     }
 
-    pub async fn load_checkpoint_state(
+    pub async fn load_objects_from_file(
         &self,
-        checkpoint_seq: u64,
-        object_id_file: Option<String>,
+        object_id_file: String,
     ) -> Result<InMemoryStorage> {
-        println!(
-            "Loading checkpoint state from checkpoint {} at {}",
-            checkpoint_seq, self.rpc_url
-        );
+        println!("Loading objects from {} via {}", object_id_file, self.rpc_url);
 
         let client = SuiClientBuilder::default()
             .build(&self.rpc_url)
             .await
             .map_err(|e| anyhow!("Failed to create Sui client: {}", e))?;
 
-        let checkpoint = client
-            .read_api()
-            .get_checkpoint(checkpoint_seq.into())
-            .await
-            .map_err(|e| anyhow!("Failed to fetch checkpoint {}: {}", checkpoint_seq, e))?;
-
-        println!(
-            "Checkpoint {} found at epoch {} with {} transactions",
-            checkpoint_seq,
-            checkpoint.epoch,
-            checkpoint.transactions.len()
-        );
-
-        let object_ids_to_load = if let Some(file_path) = object_id_file {
-            self.load_object_ids_from_file(&file_path)?
-        } else {
-            self.scan_checkpoints_for_objects(&client, checkpoint_seq).await?
-        };
+        let object_ids_to_load = self.load_object_ids_from_file(&object_id_file)?;
 
         if object_ids_to_load.is_empty() {
-            println!("No objects found to load from checkpoint {}", checkpoint_seq);
+            println!("No objects found in file");
             return Ok(InMemoryStorage::default());
         }
 
-        println!("Found {} unique objects to fetch", object_ids_to_load.len());
+        println!("Found {} object IDs to fetch", object_ids_to_load.len());
 
-        let objects = self.fetch_objects_batch(&client, object_ids_to_load).await?;
+        let objects = self.fetch_objects(&client, object_ids_to_load).await?;
 
         let mut storage = InMemoryStorage::default();
         for obj in objects {
             storage.insert_object(obj);
         }
 
-        println!(
-            "Successfully loaded {} objects from checkpoint {}",
-            storage.objects().len(),
-            checkpoint_seq
-        );
+        println!("Successfully loaded {} objects", storage.objects().len());
 
         Ok(storage)
     }
@@ -107,118 +78,79 @@ impl CheckpointStateLoader {
         Ok(object_ids)
     }
 
-    async fn scan_checkpoints_for_objects(
-        &self,
-        client: &sui_sdk::SuiClient,
-        target_checkpoint: u64,
-    ) -> Result<Vec<ObjectID>> {
-        let start_checkpoint = target_checkpoint.saturating_sub(MAX_CHECKPOINTS_TO_SCAN);
-        println!(
-            "Scanning checkpoints {} to {} for modified objects",
-            start_checkpoint, target_checkpoint
-        );
-
-        let mut object_ids = HashSet::new();
-        let mut checkpoint_num = start_checkpoint;
-
-        while checkpoint_num <= target_checkpoint {
-            let checkpoint = match client
-                .read_api()
-                .get_checkpoint(checkpoint_num.into())
-                .await
-            {
-                Ok(cp) => cp,
-                Err(_) => {
-                    checkpoint_num += 1;
-                    continue;
-                }
-            };
-
-            for tx_digest in &checkpoint.transactions {
-                if let Ok(effects) = client
-                    .read_api()
-                    .get_transaction_with_options(
-                        *tx_digest,
-                        SuiTransactionBlockResponseOptions::new()
-                            .with_effects(),
-                    )
-                    .await
-                {
-                    if let Some(effects_data) = effects.effects {
-                        for created in effects_data.created() {
-                            object_ids.insert(created.object_id());
-                        }
-                        for mutated in effects_data.mutated() {
-                            object_ids.insert(mutated.object_id());
-                        }
-                        for unwrapped in effects_data.unwrapped() {
-                            object_ids.insert(unwrapped.object_id());
-                        }
-                    }
-                }
-            }
-
-            if (checkpoint_num - start_checkpoint) % 100 == 0 {
-                println!(
-                    "Processed {} checkpoints, found {} unique objects",
-                    checkpoint_num - start_checkpoint + 1,
-                    object_ids.len()
-                );
-            }
-
-            checkpoint_num += 1;
-        }
-
-        println!(
-            "Found {} unique objects from {} checkpoints",
-            object_ids.len(),
-            target_checkpoint - start_checkpoint + 1
-        );
-
-        Ok(object_ids.into_iter().collect())
-    }
-
-    async fn fetch_objects_batch(
+    async fn fetch_objects(
         &self,
         client: &sui_sdk::SuiClient,
         object_ids: Vec<ObjectID>,
     ) -> Result<Vec<Object>> {
-        let total_batches = object_ids.len().div_ceil(BATCH_SIZE);
         let mut objects = Vec::new();
 
-        for (batch_idx, chunk) in object_ids.chunks(BATCH_SIZE).enumerate() {
-            println!(
-                "Fetching batch {}/{} ({} objects)",
-                batch_idx + 1,
-                total_batches,
-                chunk.len()
-            );
+        for object_id in object_ids.iter() {
+                match client
+                    .read_api()
+                    .get_object_with_options(
+                        *object_id,
+                        SuiObjectDataOptions::new()
+                            .with_bcs()
+                            .with_owner()
+                            .with_type()
+                            .with_previous_transaction(),
+                    )
+                    .await
+                {
+                    Ok(response) => {
+                        if let Some(obj_data) = response.data {
+                            // Try to convert via bcs deserialization
+                            if let Some(bcs_data) = obj_data.bcs {
+                                if let sui_sdk::rpc_types::SuiRawData::MoveObject(move_obj_rpc) = bcs_data {
+                                    // Parse the type string into a StructTag
+                                    let type_str = move_obj_rpc.type_.to_string();
 
-            let responses = client
-                .read_api()
-                .multi_get_object_with_options(
-                    chunk.to_vec(),
-                    SuiObjectDataOptions::new()
-                        .with_bcs()
-                        .with_owner()
-                        .with_type()
-                        .with_previous_transaction(),
-                )
-                .await
-                .map_err(|e| anyhow!("Failed to fetch objects batch {}: {}", batch_idx + 1, e))?;
+                                    match StructTag::from_str(&type_str) {
+                                        Ok(struct_tag) => {
+                                            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
 
-            for obj_response in responses {
-                if let Some(obj_data) = obj_response.data {
-                    if let Some(bcs_bytes) = obj_data.bcs {
-                        if let Some(move_obj) = bcs_bytes.try_as_move() {
-                            match bcs::from_bytes::<Object>(&move_obj.bcs_bytes) {
-                                Ok(obj) => objects.push(obj),
-                                Err(e) => {
-                                    eprintln!("Failed to deserialize object: {}", e);
+                                            // Construct MoveObject from the RPC data
+                                            // The bcs_bytes contain just the Move struct contents, not the full MoveObject
+                                            let move_obj = unsafe {
+                                                MoveObject::new_from_execution(
+                                                    MoveObjectType::from(struct_tag),
+                                                    move_obj_rpc.has_public_transfer,
+                                                    move_obj_rpc.version.into(),
+                                                    move_obj_rpc.bcs_bytes,
+                                                    &protocol_config,
+                                                    false, // not a system mutation
+                                                )
+                                            };
+
+                                            match move_obj {
+                                                Ok(move_obj) => {
+                                                    // Now wrap it in Data and create the full Object
+                                                    let obj = Object::new_from_genesis(
+                                                        Data::Move(move_obj),
+                                                        obj_data.owner.expect("Object should have owner"),
+                                                        obj_data.previous_transaction.expect("Object should have previous_transaction"),
+                                                    );
+                                                    println!("  Successfully loaded object: {} (owner: {:?})", object_id, obj.owner);
+                                                    objects.push(obj);
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("  Failed to create MoveObject for {}: {}", object_id, e);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("  Failed to parse type tag for {}: {}", object_id, e);
+                                        }
+                                    }
                                 }
                             }
+                        } else {
+                            eprintln!("  Object {} not found or deleted", object_id);
                         }
                     }
+                Err(e) => {
+                    eprintln!("  Failed to fetch object {}: {}", object_id, e);
                 }
             }
         }

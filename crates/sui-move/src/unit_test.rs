@@ -36,15 +36,11 @@ pub struct Test {
     #[clap(flatten)]
     pub test: test::Test,
 
-    /// Fork from a checkpoint at the specified sequence number
-    #[clap(long)]
-    pub fork_checkpoint: Option<u64>,
-
-    /// RPC endpoint URL to fetch checkpoint data from
+    /// RPC endpoint URL to fetch object data from
     #[clap(long)]
     pub fork_rpc_url: Option<String>,
 
-    /// File containing object IDs to load from the checkpoint (one per line)
+    /// File containing object IDs to load (one per line)
     #[clap(long)]
     pub object_id_file: Option<String>,
 }
@@ -73,7 +69,6 @@ impl Test {
             Some(unit_test_config),
             compute_coverage,
             save_disassembly,
-            self.fork_checkpoint,
             self.fork_rpc_url,
             self.object_id_file,
         )
@@ -98,15 +93,14 @@ pub fn run_move_unit_tests(
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
-    fork_checkpoint: Option<u64>,
     fork_rpc_url: Option<String>,
     object_id_file: Option<String>,
 ) -> anyhow::Result<UnitTestResult> {
     // bind the extension hook if it has not yet been done
     Lazy::force(&SET_EXTENSION_HOOK);
 
-    // Load checkpoint state if fork parameters are provided
-    if let (Some(checkpoint_seq), Some(rpc_url)) = (fork_checkpoint, fork_rpc_url) {
+    // Load fork state if parameters are provided
+    if let (Some(rpc_url), Some(id_file)) = (fork_rpc_url, object_id_file) {
         let loader = CheckpointStateLoader::new(rpc_url);
 
         // Check if we're already in a Tokio runtime
@@ -114,18 +108,32 @@ pub fn run_move_unit_tests(
             // We're in a runtime, use block_in_place to avoid nested runtime error
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(
-                    loader.load_checkpoint_state(checkpoint_seq, object_id_file)
+                    loader.load_objects_from_file(id_file)
                 )
             })?
         } else {
             // Not in a runtime, create a new one
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(loader.load_checkpoint_state(checkpoint_seq, object_id_file))?
+            runtime.block_on(loader.load_objects_from_file(id_file))?
         };
 
         // Update the thread-local test store with the loaded state
+        println!("Loaded {} objects into test environment", storage.objects().len());
+        for (obj_id, obj) in storage.objects() {
+            println!("  Object: {} (owner: {:?})", obj_id, obj.owner);
+        }
+
         TEST_STORE_INNER.with(|store| {
             *store.borrow_mut() = storage;
+
+            // Debug: verify objects are in the store
+            let store_ref = store.borrow();
+            println!("\n=== Verifying objects in TEST_STORE ===");
+            println!("Total objects in store: {}", store_ref.objects().len());
+            for (obj_id, obj) in store_ref.objects() {
+                println!("  - Object ID: {}, Owner: {:?}, Type: {:?}", obj_id, obj.owner, obj.type_());
+            }
+            println!("=== End verification ===\n");
         });
     }
 
