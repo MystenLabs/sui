@@ -50,6 +50,7 @@ pub mod dynamic_field;
 pub mod effects;
 pub mod epoch_data;
 pub mod event;
+pub mod fork_test_support;
 pub mod executable_transaction;
 pub mod execution;
 pub mod execution_params;
