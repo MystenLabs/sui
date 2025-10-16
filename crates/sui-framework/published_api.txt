@@ -2608,9 +2608,6 @@ Currency
 CurrencyInitializer
 	public struct
 	0x2::coin_registry
-BorrowedCoinMetadata
-	public struct
-	0x2::coin_registry
 SupplyState
 	public enum
 	0x2::coin_registry
@@ -2686,12 +2683,6 @@ migrate_regulated_state_by_metadata
 migrate_regulated_state_by_cap
 	public fun
 	0x2::coin_registry
-borrow_as_legacy_metadata
-	public fun
-	0x2::coin_registry
-destroy_borrowed_legacy_metadata
-	public fun
-	0x2::coin_registry
 decimals
 	public fun
 	0x2::coin_registry
@@ -2735,6 +2726,12 @@ total_supply
 	public fun
 	0x2::coin_registry
 exists
+	public fun
+	0x2::coin_registry
+legacy_metadata_id
+	public fun
+	0x2::coin_registry
+currency_id
 	public fun
 	0x2::coin_registry
 create

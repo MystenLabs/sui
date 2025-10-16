@@ -42,6 +42,9 @@ fun default_scenario() {
     assert!(!currency.is_supply_burn_only());
     assert!(!currency.is_regulated());
 
+    // Check utility function to derive the currency ID.
+    assert_eq!(object::id(&currency), coin_registry::currency_id<COIN_REGISTRY_TESTS>());
+
     destroy(metadata_cap);
     destroy(currency);
     destroy(t_cap);
@@ -294,12 +297,15 @@ fun perfect_migration_regulated() {
         ctx,
     );
 
+    let metadata_id = object::id(&metadata);
+
     // Ensure migration correctness.
     assert_eq!(currency.decimals(), DECIMALS);
     assert_eq!(currency.symbol(), SYMBOL.to_string());
     assert_eq!(currency.name(), NAME.to_string());
     assert_eq!(currency.description(), DESCRIPTION.to_string());
     assert_eq!(currency.icon_url(), ICON_URL.to_string());
+    assert_eq!(currency.legacy_metadata_id().destroy_or!(abort), metadata_id);
 
     assert!(!currency.is_metadata_cap_claimed());
     assert!(!currency.is_regulated());
@@ -436,53 +442,6 @@ fun delete_legacy_fail() {
     );
 
     currency.delete_migrated_legacy_metadata(metadata);
-
-    abort
-}
-
-#[test]
-fun borrow_as_legacy_metadata() {
-    let ctx = &mut tx_context::dummy();
-    let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
-    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
-    currency.delete_metadata_cap(metadata_cap);
-
-    let (cm, borrow) = coin_registry::borrow_as_legacy_metadata(&currency, ctx);
-
-    assert_eq!(cm.get_decimals(), DECIMALS);
-    assert_eq!(cm.get_symbol(), SYMBOL.to_ascii_string());
-    assert_eq!(cm.get_name(), NAME.to_string());
-
-    coin_registry::destroy_borrowed_legacy_metadata(cm, borrow);
-    destroy(currency);
-    destroy(t_cap);
-}
-
-#[test, expected_failure(abort_code = coin_registry::EWrongBorrow)]
-fun destroy_incorrect_metadata_fail() {
-    let ctx = &mut tx_context::dummy();
-
-    let currency_1 = {
-        let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
-        let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
-        currency.delete_metadata_cap(metadata_cap);
-        destroy(t_cap);
-        currency
-    };
-
-    let currency_2 = {
-        let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
-        let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
-        currency.delete_metadata_cap(metadata_cap);
-        destroy(t_cap);
-        currency
-    };
-
-    let (cm1, borrow1) = coin_registry::borrow_as_legacy_metadata(&currency_1, ctx);
-    let (cm2, borrow2) = coin_registry::borrow_as_legacy_metadata(&currency_2, ctx);
-
-    coin_registry::destroy_borrowed_legacy_metadata(cm1, borrow2);
-    coin_registry::destroy_borrowed_legacy_metadata(cm2, borrow1);
 
     abort
 }
