@@ -1421,6 +1421,8 @@ WithdrawFrom:
   ENUM:
     0:
       Sender: UNIT
+    1:
+      Sponsor: UNIT
 WithdrawalTypeArg:
   ENUM:
     0:

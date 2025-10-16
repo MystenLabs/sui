@@ -338,37 +338,49 @@ pub mod checked {
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
             // for storage, however they track storage values to check for conservation rules
             if let Some(payer_address) = self.address_balance_payer {
-                let cost_summary = self.gas_status.summary();
-                let gas_used = cost_summary.net_gas_usage();
+                let is_insufficient_balance_error = execution_result
+                    .as_ref()
+                    .err()
+                    .map(|err| matches!(err.kind(), sui_types::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw))
+                    .unwrap_or(false);
 
-                if gas_used != 0 {
-                    let accumulator_address = AccumulatorAddress::new(
-                        payer_address,
-                        sui_types::balance::Balance::type_tag(GAS::type_tag()),
-                    );
+                // If we don't have enough balance to withdraw, don't charge for gas
+                // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
+                if is_insufficient_balance_error {
+                    GasCostSummary::default()
+                } else {
+                    let cost_summary = self.gas_status.summary();
+                    let gas_used = cost_summary.net_gas_usage();
 
-                    let (operation, amount) = if gas_used > 0 {
-                        // Net gas usage positive: withdraw from address balance
-                        (AccumulatorOperation::Split, gas_used as u64)
-                    } else {
-                        // Net gas usage negative: credit back to address balance (storage rebate exceeds costs)
-                        (AccumulatorOperation::Merge, (-gas_used) as u64)
-                    };
+                    if gas_used != 0 {
+                        let accumulator_address = AccumulatorAddress::new(
+                            payer_address,
+                            sui_types::balance::Balance::type_tag(GAS::type_tag()),
+                        );
 
-                    let accumulator_write = AccumulatorWriteV1 {
-                        address: accumulator_address,
-                        operation,
-                        value: AccumulatorValue::Integer(amount),
-                    };
-                    let accumulator_event = AccumulatorEvent::new(
-                        AccumulatorObjId::new_unchecked(SUI_ACCUMULATOR_ROOT_OBJECT_ID),
-                        accumulator_write,
-                    );
+                        let (operation, amount) = if gas_used > 0 {
+                            // Net gas usage positive: withdraw from address balance
+                            (AccumulatorOperation::Split, gas_used as u64)
+                        } else {
+                            // Net gas usage negative: credit back to address balance (storage rebate exceeds costs)
+                            (AccumulatorOperation::Merge, (-gas_used) as u64)
+                        };
 
-                    temporary_store.add_accumulator_event(accumulator_event);
+                        let accumulator_write = AccumulatorWriteV1 {
+                            address: accumulator_address,
+                            operation,
+                            value: AccumulatorValue::Integer(amount),
+                        };
+                        let accumulator_event = AccumulatorEvent::new(
+                            AccumulatorObjId::new_unchecked(SUI_ACCUMULATOR_ROOT_OBJECT_ID),
+                            accumulator_write,
+                        );
+
+                        temporary_store.add_accumulator_event(accumulator_event);
+                    }
+
+                    cost_summary
                 }
-
-                cost_summary
             } else if let Some(gas_object_id) = self.smashed_gas_coin {
                 if dont_charge_budget_on_storage_oog(self.gas_model_version) {
                     self.handle_storage_and_rebate_v2(temporary_store, execution_result)
