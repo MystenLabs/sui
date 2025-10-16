@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
-use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
@@ -14,36 +12,28 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, SuiError, SuiResult},
+    error::{ExecutionError, SuiError},
     execution::{ExecutionResult, TypeLayoutStore},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
-    metrics::{BytecodeVerifierMetrics, LimitsMetrics},
+    metrics::LimitsMetrics,
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
-use move_bytecode_verifier_meter::Meter;
 use move_vm_runtime_latest::move_vm::MoveVM;
-use sui_adapter_latest::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
+use sui_adapter_latest::adapter::new_move_vm;
 use sui_adapter_latest::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
 };
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
 use sui_types::storage::BackingStore;
-use sui_verifier_latest::meter::SuiVerifierMeter;
 
 use crate::executor;
-use crate::verifier;
 use sui_adapter_latest::execution_mode;
 
 pub(crate) struct Executor(Arc<MoveVM>);
-
-pub(crate) struct Verifier<'m> {
-    config: VerifierConfig,
-    metrics: &'m Arc<BytecodeVerifierMetrics>,
-}
 
 impl Executor {
     pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
@@ -51,12 +41,6 @@ impl Executor {
             all_natives(silent, protocol_config),
             protocol_config,
         )?)))
-    }
-}
-
-impl<'m> Verifier<'m> {
-    pub(crate) fn new(config: VerifierConfig, metrics: &'m Arc<BytecodeVerifierMetrics>) -> Self {
-        Verifier { config, metrics }
     }
 }
 
@@ -205,20 +189,5 @@ impl executor::Executor for Executor {
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r> {
         Box::new(TypeLayoutResolver::new(&self.0, store))
-    }
-}
-
-impl verifier::Verifier for Verifier<'_> {
-    fn meter(&self, config: MeterConfig) -> Box<dyn Meter> {
-        Box::new(SuiVerifierMeter::new(config))
-    }
-
-    fn meter_compiled_modules(
-        &mut self,
-        _protocol_config: &ProtocolConfig,
-        modules: &[CompiledModule],
-        meter: &mut dyn Meter,
-    ) -> SuiResult<()> {
-        run_metered_move_bytecode_verifier(modules, &self.config, meter, self.metrics)
     }
 }

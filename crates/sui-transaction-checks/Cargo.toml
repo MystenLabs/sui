@@ -15,3 +15,8 @@ sui-types.workspace = true
 tracing.workspace = true
 sui-execution.workspace = true
 fastcrypto-zkp.workspace = true
+move-binary-format.workspace = true
+move-bytecode-verifier-meter.workspace = true
+move-vm-config.workspace = true
+move-bytecode-verifier-latest = { path = "../../external-crates/move/crates/move-bytecode-verifier", package = "move-bytecode-verifier" }
+sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }

@@ -13265,6 +13265,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-transaction-builder",
+ "sui-transaction-checks",
  "sui-types",
  "tabled",
  "tap",
@@ -14308,6 +14309,7 @@ dependencies = [
  "sui-move",
  "sui-move-build",
  "sui-protocol-config",
+ "sui-transaction-checks",
  "sui-types",
  "sui-verifier-latest",
 ]
@@ -16578,12 +16580,17 @@ name = "sui-transaction-checks"
 version = "0.1.0"
 dependencies = [
  "fastcrypto-zkp",
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
+ "move-vm-config",
  "once_cell",
  "sui-config",
  "sui-execution",
  "sui-macros",
  "sui-protocol-config",
  "sui-types",
+ "sui-verifier-latest",
  "tracing",
 ]
 

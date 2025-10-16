@@ -23,6 +23,7 @@ sui-move.workspace = true
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
+sui-transaction-checks.workspace = true
 
 move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }

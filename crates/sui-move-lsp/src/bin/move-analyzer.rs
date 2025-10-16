@@ -9,10 +9,10 @@ use sui_package_management::system_package_versions::latest_system_packages;
 
 #[cfg(target_os = "linux")]
 mod alloc_utils {
-    /// On Linux, jemaclloc produces better results in terms of memory usage.
-    /// Standard allocator does not work too well for cases when a lot of memory
-    /// is allocated temporarily and then freed as tends to hold on to allocated
-    /// memory rather than returning it to the OS right away.
+    // On Linux, jemaclloc produces better results in terms of memory usage.
+    // Standard allocator does not work too well for cases when a lot of memory
+    // is allocated temporarily and then freed as tends to hold on to allocated
+    // memory rather than returning it to the OS right away.
     use tikv_jemallocator::Jemalloc;
     #[global_allocator]
     static GLOBAL: Jemalloc = Jemalloc;
@@ -30,11 +30,11 @@ mod alloc_utils {
 
 #[cfg(not(target_os = "linux"))]
 mod alloc_utils {
-    /// We could use a jemalloc here as well but standard allocator
-    /// on MacOS is better tuned even for the specific workload
-    /// we are dealing with, and jemalloc on Windows is not well supported
-    /// so we are not going to use it there either, particularly
-    /// that the standard allocator on Windows is known to be well tuned as well.
+    // We could use a jemalloc here as well but standard allocator
+    // on MacOS is better tuned even for the specific workload
+    // we are dealing with, and jemalloc on Windows is not well supported
+    // so we are not going to use it there either, particularly
+    // that the standard allocator on Windows is known to be well tuned as well.
 
     pub fn maybe_enable_jemalloc() {
         eprintln!("using standard allocator");

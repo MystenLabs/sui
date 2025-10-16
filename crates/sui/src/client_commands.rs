@@ -68,6 +68,7 @@ use sui_sdk::{
     SuiClient, SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0,
     SUI_TESTNET_URL,
 };
+use sui_transaction_checks::metered_verify_compiled_modules;
 use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
@@ -1160,21 +1161,21 @@ impl SuiClientCommands {
                     }
                 };
 
-                let signing_limits = Some(VerifierSigningConfig::default().limits_for_signing());
-                let mut verifier = sui_execution::verifier(
-                    &protocol_config,
-                    signing_limits,
-                    &bytecode_verifier_metrics,
-                );
-
                 println!(
                     "Running bytecode verifier for {} module{}",
                     modules.len(),
                     if modules.len() != 1 { "s" } else { "" },
                 );
 
+                let signing_limits = Some(VerifierSigningConfig::default().limits_for_signing());
+                let verifier_config = protocol_config.verifier_config(signing_limits);
                 let mut meter = AccumulatingMeter::new();
-                verifier.meter_compiled_modules(&protocol_config, &modules, &mut meter)?;
+                metered_verify_compiled_modules(
+                    &verifier_config,
+                    &modules,
+                    &mut meter,
+                    &bytecode_verifier_metrics,
+                )?;
 
                 let mut used_ticks = meter.accumulator(Scope::Package).clone();
                 used_ticks.name = pkg_name;

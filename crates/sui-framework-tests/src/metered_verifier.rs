@@ -8,11 +8,11 @@ use std::{
     sync::Arc,
     time::Instant,
 };
-use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_framework::BuiltInFramework;
 use sui_move_build::{CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
+use sui_transaction_checks::metered_verify_compiled_modules;
 use sui_types::{
     error::{SuiError, SuiResult},
     metrics::BytecodeVerifierMetrics,
@@ -44,9 +44,9 @@ fn test_metered_move_bytecode_verifier() {
     let mut meter = SuiVerifierMeter::new(meter_config.clone());
     let timer_start = Instant::now();
     // Default case should pass
-    let r = run_metered_move_bytecode_verifier(
-        &compiled_modules,
+    let r = metered_verify_compiled_modules(
         &verifier_config,
+        &compiled_modules,
         &mut meter,
         &bytecode_verifier_metrics,
     );
@@ -123,9 +123,9 @@ fn test_metered_move_bytecode_verifier() {
 
     let mut meter = SuiVerifierMeter::new(meter_config);
     let timer_start = Instant::now();
-    let r = run_metered_move_bytecode_verifier(
-        &compiled_modules,
+    let r = metered_verify_compiled_modules(
         &verifier_config,
+        &compiled_modules,
         &mut meter,
         &bytecode_verifier_metrics,
     );
@@ -214,9 +214,9 @@ fn test_metered_move_bytecode_verifier() {
     for modules in &packages {
         let prev_meter = meter.get_usage(Scope::Package);
 
-        run_metered_move_bytecode_verifier(
-            modules,
+        metered_verify_compiled_modules(
             &verifier_config,
+            modules,
             &mut meter,
             &bytecode_verifier_metrics,
         )
@@ -241,9 +241,9 @@ fn test_meter_system_packages() {
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let mut meter = SuiVerifierMeter::new(meter_config);
     for system_package in BuiltInFramework::iter_system_packages() {
-        run_metered_move_bytecode_verifier(
-            &system_package.modules(),
+        metered_verify_compiled_modules(
             &verifier_config,
+            &system_package.modules(),
             &mut meter,
             &bytecode_verifier_metrics,
         )
@@ -313,9 +313,9 @@ fn test_build_and_verify_programmability_examples() {
         let modules = build(&path).unwrap().into_modules();
 
         let mut meter = SuiVerifierMeter::new(meter_config.clone());
-        run_metered_move_bytecode_verifier(
-            &modules,
+        metered_verify_compiled_modules(
             &verifier_config,
+            &modules,
             &mut meter,
             &bytecode_verifier_metrics,
         )
