@@ -648,7 +648,7 @@ impl EndOfEpochTransactionKind {
                 }
             }
             Self::AccumulatorRootCreate => {
-                if !config.enable_accumulators() {
+                if !config.create_root_accumulator_object() {
                     return Err(UserInputError::Unsupported(
                         "accumulators not enabled".to_string(),
                     ));

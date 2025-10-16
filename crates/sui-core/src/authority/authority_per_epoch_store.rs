@@ -1281,7 +1281,11 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn accumulators_enabled(&self) -> bool {
-        self.protocol_config().enable_accumulators() && self.accumulator_root_exists()
+        if !self.protocol_config().enable_accumulators() {
+            return false;
+        }
+        assert!(self.accumulator_root_exists());
+        true
     }
 
     pub fn coin_registry_exists(&self) -> bool {

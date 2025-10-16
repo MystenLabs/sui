@@ -1788,17 +1788,39 @@ impl SuiNode {
                 tokio::time::sleep(Duration::from_millis(1)).await;
 
                 let config = cur_epoch_store.protocol_config();
+                let mut supported_protocol_versions = self
+                    .config
+                    .supported_protocol_versions
+                    .expect("Supported versions should be populated")
+                    // no need to send digests of versions less than the current version
+                    .truncate_below(config.version);
+
+                while supported_protocol_versions.max > config.version {
+                    let proposed_protocol_config = ProtocolConfig::get_for_version(
+                        supported_protocol_versions.max,
+                        cur_epoch_store.get_chain(),
+                    );
+
+                    if proposed_protocol_config.enable_accumulators()
+                        && !epoch_store.accumulator_root_exists()
+                    {
+                        error!(
+                            "cannot upgrade to protocol version {:?} because accumulator root does not exist",
+                            supported_protocol_versions.max
+                        );
+                        supported_protocol_versions.max = supported_protocol_versions.max.prev();
+                    } else {
+                        break;
+                    }
+                }
+
                 let binary_config = config.binary_config(None);
                 let transaction = if config.authority_capabilities_v2() {
                     ConsensusTransaction::new_capability_notification_v2(
                         AuthorityCapabilitiesV2::new(
                             self.state.name,
                             cur_epoch_store.get_chain_identifier().chain(),
-                            self.config
-                                .supported_protocol_versions
-                                .expect("Supported versions should be populated")
-                                // no need to send digests of versions less than the current version
-                                .truncate_below(config.version),
+                            supported_protocol_versions,
                             self.state
                                 .get_available_system_packages(&binary_config)
                                 .await,
