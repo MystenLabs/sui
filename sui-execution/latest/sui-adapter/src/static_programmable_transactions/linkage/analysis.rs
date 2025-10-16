@@ -11,10 +11,7 @@ use crate::{
     },
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{
-    base_types::ObjectID, error::ExecutionError, execution_config_utils::to_binary_config,
-    transaction as P,
-};
+use sui_types::{base_types::ObjectID, error::ExecutionError, transaction as P};
 
 #[derive(Debug)]
 pub struct LinkageAnalyzer {
@@ -27,7 +24,7 @@ impl LinkageAnalyzer {
     ) -> Result<Self, ExecutionError> {
         let always_include_system_packages = !Mode::packages_are_predefined();
         let linkage_config = LinkageConfig::legacy_linkage_settings(always_include_system_packages);
-        let binary_config = to_binary_config(protocol_config);
+        let binary_config = protocol_config.binary_config();
         Ok(Self {
             internal: ResolutionConfig {
                 linkage_config,

@@ -15,7 +15,6 @@ use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsA
 use sui_move_build::BuildConfig;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::base_types::{ConsensusObjectSequenceKey, ObjectID, ObjectRef, SuiAddress};
-use sui_types::execution_config_utils::to_binary_config;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
 use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH};
@@ -279,7 +278,7 @@ impl SurferState {
         let move_package = package.into_inner().data.try_into_package().unwrap();
         let proto_version = self.cluster.highest_protocol_version();
         let config = ProtocolConfig::get_for_version(proto_version, Chain::Unknown);
-        let binary_config = to_binary_config(&config);
+        let binary_config = config.binary_config();
         let pool: &mut normalized::ArcPool = &mut *self.pool.write().await;
         let entry_functions: Vec<_> = move_package
             .normalize(pool, &binary_config, /* include code */ false)

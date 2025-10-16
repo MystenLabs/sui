@@ -48,7 +48,6 @@ use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution::ExecutionResults,
-    execution_config_utils::to_binary_config,
     metrics::LimitsMetrics,
     move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::{MoveObject, Object, Owner},
@@ -669,7 +668,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             self.gas_charger.charge_publish_package(total_bytes)?
         }
 
-        let binary_config = to_binary_config(self.env.protocol_config);
+        let binary_config = self.env.protocol_config.binary_config();
         let modules = module_bytes
             .iter()
             .map(|b| {
