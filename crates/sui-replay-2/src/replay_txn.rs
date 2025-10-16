@@ -12,8 +12,8 @@
 
 use crate::summary_metrics::tx_metrics_reset;
 use crate::{
-    artifacts::{Artifact, ArtifactManager},
-    execution::{execute_transaction_to_effects, MoveCallInfo, ReplayCacheSummary, ReplayExecutor},
+    artifacts::{Artifact, ArtifactManager, MoveCallInfo, ReplayCacheSummary},
+    execution::{execute_transaction_to_effects, ReplayExecutor},
     replay_interface::{
         EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
     },
