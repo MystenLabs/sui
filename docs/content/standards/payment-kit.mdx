@@ -392,7 +392,6 @@ Represents the higher-order namespace for organizing payment registries:
 ```move
 public struct Namespace has key, store {
     id: UID,
-    // Internal fields for registry management
 }
 ```
 
@@ -403,7 +402,9 @@ Tracks payments and receipts with duplicate prevention:
 ```move
 public struct PaymentRegistry has key {
     id: UID,
-    // Configuration and payment records
+    cap_id: ID,
+    config: VecMap<String, Value>,
+    version: u16,
 }
 ```
 
@@ -414,7 +415,18 @@ Provides administrative capabilities for a specific registry:
 ```move
 public struct RegistryAdminCap has key, store {
     id: UID,
-    // Registry reference
+    registry_id: ID,
+}
+```
+
+### `PaymentType`
+
+Enum representing the type of payment: Ephemeral (one-time) or Registry (tracked in a registry).
+
+```move
+public enum PaymentType has copy, drop, store {
+    Ephemeral,
+    Registry(ID),
 }
 ```
 
@@ -424,12 +436,12 @@ Contains details of a processed payment:
 
 ```move
 public struct PaymentReceipt has key, store {
-    id: UID,
+    payment_type: PaymentType,
     nonce: String,
-    amount: u64,
+    payment_amount: u64,
     receiver: address,
-    timestamp: u64,
-    // Additional receipt information
+    coin_type: String,
+    timestamp_ms: u64,
 }
 ```
 
@@ -439,20 +451,10 @@ Unique key for identifying payment records:
 
 ```move
 public struct PaymentKey<phantom T> has copy, drop, store {
-    // Composite key components
-}
-```
-
-Create payment keys using:
-
-```move
-module sui::payment_kit;
-
-public fun create_payment_key<T>(
     nonce: String,
     payment_amount: u64,
-    receiver: address
-): PaymentKey<T>
+    receiver: address,
+}
 ```
 
 ### `PaymentRecord`
@@ -461,7 +463,7 @@ Internal structure storing payment record information:
 
 ```move
 public struct PaymentRecord has store {
-    // Payment metadata and expiration
+    epoch_at_time_of_record: u64,
 }
 ```
 
