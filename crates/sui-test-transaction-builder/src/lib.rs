@@ -19,8 +19,8 @@ use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
-    DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+    CallArg, ObjectArg, ProgrammableTransaction, SharedObjectMutability, Transaction,
+    TransactionData, DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
@@ -104,7 +104,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })],
         )
     }
@@ -122,7 +122,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })],
         )
     }
@@ -140,7 +140,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })],
         )
     }
@@ -194,7 +194,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                 initial_shared_version: randomness_initial_shared_version,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })],
         )
     }
@@ -761,7 +761,7 @@ pub async fn emit_new_random_u128(
     let random_call_arg = CallArg::Object(ObjectArg::SharedObject {
         id: SUI_RANDOMNESS_STATE_OBJECT_ID,
         initial_shared_version,
-        mutable: false,
+        mutability: SharedObjectMutability::Immutable,
     });
 
     let txn = context

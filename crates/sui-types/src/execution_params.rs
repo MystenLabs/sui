@@ -114,7 +114,7 @@ mod tests {
         base_types::ObjectID,
         transaction::{
             CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult,
-            ObjectReadResultKind,
+            ObjectReadResultKind, SharedObjectMutability,
         },
     };
 
@@ -174,7 +174,7 @@ mod tests {
                 input_object_kind: InputObjectKind::SharedMoveObject {
                     id: ObjectID::random(),
                     initial_shared_version: SequenceNumber::MIN,
-                    mutable: false,
+                    mutability: SharedObjectMutability::Immutable,
                 },
                 object: ObjectReadResultKind::ObjectConsensusStreamEnded(
                     SequenceNumber::MIN, // doesn't matter
@@ -198,7 +198,7 @@ mod tests {
                 input_object_kind: InputObjectKind::SharedMoveObject {
                     id: ObjectID::random(),
                     initial_shared_version: SequenceNumber::MIN,
-                    mutable: false,
+                    mutability: SharedObjectMutability::Immutable,
                 },
                 object: ObjectReadResultKind::CancelledTransactionSharedObject(
                     SequenceNumber::CONGESTED,

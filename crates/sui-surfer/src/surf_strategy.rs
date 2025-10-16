@@ -8,7 +8,7 @@ use move_core_types::language_storage::StructTag;
 use rand::{seq::SliceRandom, Rng};
 use sui_types::{
     base_types::ObjectRef,
-    transaction::{CallArg, ObjectArg},
+    transaction::{CallArg, ObjectArg, SharedObjectMutability},
 };
 use tokio::time::Instant;
 use tracing::debug;
@@ -168,7 +168,11 @@ impl SurfStrategy {
             return Some(CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable: matches!(kind, InputObjectPassKind::MutRef),
+                mutability: if matches!(kind, InputObjectPassKind::MutRef) {
+                    SharedObjectMutability::Mutable
+                } else {
+                    SharedObjectMutability::Immutable
+                },
             }));
         }
         n -= shared;

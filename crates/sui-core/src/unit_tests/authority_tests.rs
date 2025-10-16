@@ -123,7 +123,7 @@ impl TestCallArg {
             } => ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: *initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
         }
     }
@@ -200,7 +200,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
             CallArg::Object(ObjectArg::SharedObject {
                 id: shared_object_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             }),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
         ],
@@ -3039,7 +3039,7 @@ async fn test_invalid_authenticator_state_parameter() {
         vec![CallArg::Object(ObjectArg::SharedObject {
             id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
             initial_shared_version: SequenceNumber::from(1),
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })],
         TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
         rgp,
@@ -3081,7 +3081,7 @@ async fn test_invalid_randomness_parameter() {
     let random_mut = CallArg::Object(ObjectArg::SharedObject {
         id: SUI_RANDOMNESS_STATE_OBJECT_ID,
         initial_shared_version: init_random_version,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     });
 
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
@@ -4848,7 +4848,11 @@ async fn make_test_transaction(
                 CallArg::Object(ObjectArg::SharedObject {
                     id: *shared_object_id,
                     initial_shared_version: *initial_shared_version,
-                    mutable: *mutable,
+                    mutability: if *mutable {
+                        SharedObjectMutability::Mutable
+                    } else {
+                        SharedObjectMutability::Immutable
+                    },
                 })
             })
             .chain(owned_objects.iter().map(|object| {

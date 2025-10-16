@@ -325,7 +325,7 @@ impl ExecutionTimeObserver {
         // used in this transaction, and determine the max overage.
         let max_excess_per_object_execution_time = tx
             .shared_input_objects()
-            .filter_map(|obj| obj.mutable.then_some(obj.id))
+            .filter_map(|obj| obj.mutability.is_mutable().then_some(obj.id))
             .map(|id| {
                 // Mark if any object used in the tx is indebted.
                 if !uses_indebted_object && self.indebted_objects.binary_search(&id).is_ok() {
@@ -886,7 +886,9 @@ mod tests {
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-    use sui_types::transaction::{Argument, CallArg, ObjectArg, ProgrammableMoveCall};
+    use sui_types::transaction::{
+        Argument, CallArg, ObjectArg, ProgrammableMoveCall, SharedObjectMutability,
+    };
     use {
         rand::{Rng, SeedableRng},
         sui_protocol_config::ProtocolVersion,
@@ -1277,7 +1279,7 @@ mod tests {
             inputs: vec![CallArg::Object(ObjectArg::SharedObject {
                 id: shared_object_id,
                 initial_shared_version: SequenceNumber::new(),
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })],
             commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
                 package,
@@ -1420,7 +1422,7 @@ mod tests {
             inputs: vec![CallArg::Object(ObjectArg::SharedObject {
                 id: shared_object_id,
                 initial_shared_version: SequenceNumber::new(),
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })],
             commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
                 package,

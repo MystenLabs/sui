@@ -12,7 +12,10 @@ use sui_types::{
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::FullObjectKey,
-    transaction::{ProgrammableTransaction, Transaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
+    transaction::{
+        ProgrammableTransaction, SharedObjectMutability, Transaction,
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+    },
 };
 
 use crate::authority::{
@@ -175,7 +178,7 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
         move_call! {
@@ -198,7 +201,7 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })
             .unwrap();
         move_call! {
@@ -225,7 +228,7 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
 
@@ -251,14 +254,14 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
         // this one gets deleted
         let arg_2 = object_transaction_builder
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id_2,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
                 initial_shared_version: initial_shared_version_2,
             })
             .unwrap();
@@ -287,7 +290,7 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
         move_call! {
@@ -312,13 +315,13 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
         let arg_2 = object_transaction_builder
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id_2,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
                 initial_shared_version: initial_shared_version_2,
             })
             .unwrap();
@@ -343,7 +346,7 @@ impl TestRunner {
             .make_obj_vec(vec![ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             }])
             .unwrap();
         move_call! {
@@ -366,14 +369,22 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: so1.0,
                 initial_shared_version: so1.1,
-                mutable: so1.2,
+                mutability: if so1.2 {
+                    SharedObjectMutability::Mutable
+                } else {
+                    SharedObjectMutability::Immutable
+                },
             })
             .unwrap();
         let arg2 = delete_object_transaction_builder
             .obj(ObjectArg::SharedObject {
                 id: so2.0,
                 initial_shared_version: so2.1,
-                mutable: so2.2,
+                mutability: if so2.2 {
+                    SharedObjectMutability::Mutable
+                } else {
+                    SharedObjectMutability::Immutable
+                },
             })
             .unwrap();
         // If both mutable
@@ -414,7 +425,7 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
         move_call! {
@@ -437,7 +448,7 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })
             .unwrap();
         move_call! {
@@ -460,7 +471,7 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
         move_call! {
@@ -483,7 +494,7 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
         move_call! {
@@ -506,7 +517,7 @@ impl TestRunner {
             .obj(ObjectArg::SharedObject {
                 id: shared_obj_id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
         move_call! {

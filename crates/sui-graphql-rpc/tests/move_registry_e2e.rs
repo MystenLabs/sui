@@ -16,6 +16,7 @@ use sui_json_rpc_types::ObjectChange;
 use sui_move_build::BuildConfig;
 use sui_name_service::{Domain, DomainFormat};
 use sui_pg_db::temp::get_available_port;
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::ObjectDigest,
@@ -279,7 +280,7 @@ async fn register_pkg(
         CallArg::Object(ObjectArg::SharedObject {
             id: registry_id.0,
             initial_shared_version: registry_id.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         }),
         CallArg::from(&app.as_bytes().to_vec()),
         CallArg::from(&org.as_bytes().to_vec()),

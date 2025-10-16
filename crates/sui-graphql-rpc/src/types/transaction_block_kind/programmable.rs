@@ -21,7 +21,7 @@ use sui_json_rpc_types::SuiArgument;
 use sui_types::transaction::{
     Argument as NativeArgument, CallArg as NativeCallArg, Command as NativeProgrammableTransaction,
     ObjectArg as NativeObjectArg, ProgrammableMoveCall as NativeMoveCallTransaction,
-    ProgrammableTransaction as NativeProgrammableTransactionBlock,
+    ProgrammableTransaction as NativeProgrammableTransactionBlock, SharedObjectMutability,
 };
 
 #[derive(Clone, Eq, PartialEq)]
@@ -435,11 +435,14 @@ impl TransactionInput {
             N::Object(O::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             }) => I::SharedInput(SharedInput {
                 address: id.into(),
                 initial_shared_version: initial_shared_version.value().into(),
-                mutable,
+                mutable: match mutability {
+                    SharedObjectMutability::Mutable => true,
+                    SharedObjectMutability::Immutable => false,
+                },
             }),
 
             N::Object(O::Receiving(oref)) => I::Receiving(Receiving {

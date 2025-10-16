@@ -29,8 +29,8 @@ use crate::{
     object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        EndOfEpochTransactionKind, ObjectArg, SenderSignedData, Transaction, TransactionData,
-        TransactionKind,
+        EndOfEpochTransactionKind, ObjectArg, SenderSignedData, SharedObjectMutability,
+        Transaction, TransactionData, TransactionKind,
     },
     SUI_SYSTEM_ADDRESS,
 };
@@ -476,7 +476,11 @@ impl TestCheckpointDataBuilder {
                 .obj(ObjectArg::SharedObject {
                     id: *id,
                     initial_shared_version,
-                    mutable: input.mutable,
+                    mutability: if input.mutable {
+                        SharedObjectMutability::Mutable
+                    } else {
+                        SharedObjectMutability::Immutable
+                    },
                 })
                 .expect("Failed to add shared object input");
         }
@@ -732,7 +736,7 @@ impl TestCheckpointDataBuilder {
 
     /// Add a shared input to the transaction, being accessed from the currently recorded live
     /// version.
-    fn access_shared_object(mut self, object_idx: u64, mutable: bool) -> Self {
+    fn access_shared_object(mut self, object_idx: u64, mutability: bool) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
         let object_id = Self::derive_object_id(object_idx);
         let object = self
@@ -740,9 +744,13 @@ impl TestCheckpointDataBuilder {
             .get(&object_id)
             .cloned()
             .expect("Accessing a shared object that doesn't exist");
-        tx_builder
-            .shared_inputs
-            .insert(object_id, Shared { mutable, object });
+        tx_builder.shared_inputs.insert(
+            object_id,
+            Shared {
+                mutable: mutability,
+                object,
+            },
+        );
         self
     }
 }

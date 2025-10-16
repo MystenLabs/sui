@@ -106,8 +106,8 @@ fn stable_call_arg_display(ca: &CallArg) -> String {
         CallArg::Pure(v) => format!("Pure({:?})", v),
         CallArg::Object(oa) => match oa {
             ObjectArg::ImmOrOwnedObject(_) => "ImmutableOrOwnedObject".to_string(),
-            ObjectArg::SharedObject { mutable, .. } => {
-                format!("SharedObject(mutable: {})", mutable)
+            ObjectArg::SharedObject { mutability, .. } => {
+                format!("SharedObject(mutability: {:?})", mutability)
             }
             ObjectArg::Receiving(_) => "Receiving".to_string(),
         },
