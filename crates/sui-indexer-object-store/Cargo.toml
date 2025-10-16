@@ -6,10 +6,11 @@ version.workspace = true
 [dependencies]
 object_store.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
-sui-pg-db.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 zstd.workspace = true
 tokio.workspace = true
 tracing.workspace = true
