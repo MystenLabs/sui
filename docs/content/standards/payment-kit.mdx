@@ -18,11 +18,9 @@ keywords:
 pagination_prev: null
 ---
 
-The Sui Payment Kit is a Move smart contract framework that provides secure, flexible payment processing capabilities on the Sui blockchain. The kit offers both persistent and ephemeral payment options, event-driven architecture and comprehensive duplicate prevention mechanisms.
+The Sui Payment Kit is a set of standards, that when combine, create a framework that provides secure, flexible payment processing capabilities on the Sui blockchain. The kit offers both persistent and ephemeral payment options, event-driven architecture and comprehensive duplicate prevention mechanisms.
 
 The Payment Kit standardizes payment processing on Sui, enabling developers to build robust payment flows without reimplementing common payment verification and receipt management logic. Applications using the Payment Kit benefit from battle-tested security patterns and consistent payment handling across the ecosystem.
-
-Source code: [github.com/MystenLabs/sui-payment-kit](https://github.com/MystenLabs/sui-payment-kit)
 
 ## Key features
 
@@ -33,6 +31,7 @@ The Payment Kit provides the following core capabilities:
 - **Flexible receipt management**: Generates receipts for payment tracking and verification.
 - **Event-driven architecture**: Emits events for off-chain tracking and integration.
 - **Multi-coin support**: Works with any Sui coin type.
+- **Transaction URIs**: Standardized URI format in order to create QR codes for easy payment flows
 
 ## Architecture components
 
@@ -97,6 +96,33 @@ Every processed payment generates a `PaymentReceipt` object containing:
 
 Receipts serve as proof of payment and can be used for off-chain verification, accounting, or integration with other systems.
 
+### Payment records
+
+When payments are processed through a `PaymentRegistry`, the system creates and stores `PaymentRecord` objects internally to track payment history and enable duplicate prevention. Payment records differ from payment receipts in key ways:
+
+**PaymentRecords vs PaymentReceipts:**
+
+- **PaymentRecords**: Internal registry storage structures that persist payment metadata for duplicate detection. These are stored within the registry's internal tables and are not directly accessible as objects.
+- **PaymentReceipts**: User-facing objects returned after payment processing that serve as proof of payment. These can be stored, transferred, or used for off-chain verification.
+
+**Payment record lifecycle:**
+
+1. **Creation**: When `process_registry_payment` is called, a `PaymentRecord` is created and stored in the registry using the composite `PaymentKey`.
+2. **Storage**: Records persist in the registry's internal table, indexed by their unique payment key.
+3. **Expiration**: Records become eligible for deletion after the registry's configured `epoch_expiration_duration` has passed.
+4. **Deletion**: Expired records can be removed using `delete_payment_record` to reclaim storage and reduce gas costs.
+
+**Record expiration:**
+
+Payment records include an expiration epoch calculated at the time of payment creation. This expiration mechanism:
+
+- Prevents indefinite storage growth in registries
+- Allows for eventual cleanup of historical payment data
+- Balances duplicate prevention needs with storage efficiency
+- Can be configured per-registry via `set_config_epoch_expiration_duration`
+
+Records cannot be deleted before their expiration epoch, ensuring a minimum retention period for duplicate detection. After expiration, administrators or users can delete records to free storage, though deletion is optional.
+
 ## Working with payment registries
 
 ### Creating a registry
@@ -120,18 +146,6 @@ public fun create_registry(
 ```
 
 This function creates a `PaymentRegistry` and a `RegistryAdminCap` for administrative control. The `RegistryAdminCap` is initially owned by the creator and can be shared or transferred as needed.
-
-### Sharing a registry
-
-After creating a registry, you can make it a shared object for public use:
-
-```move
-module sui::payment_kit;
-
-public fun share(registry: PaymentRegistry)
-```
-
-Shared registries allow any address to process payments through them, while administrative functions remain protected by the `RegistryAdminCap`.
 
 ### Processing registry payments
 
@@ -270,53 +284,85 @@ This mode is ideal for:
 - Duplicate prevention is not required
 - Applications with external payment tracking systems
 
-## Configuration system
+## Transaction URIs
 
-The Payment Kit uses a type-safe configuration system supporting multiple value types:
+The Payment Kit defines a standard URI format for encoding payment requests. Transaction URIs allow applications to generate payment links that wallets and other clients can parse and execute.
 
-### Supported value types
+### URI format
 
-The `Value` enum supports the following types:
+Payment Kit Transaction URIs use the following format:
 
-- `U64(u64)`: Unsigned 64-bit integers
-- `Address(address)`: Sui addresses
-- `String(string::String)`: UTF-8 strings
-- `AsciiString(ascii::String)`: ASCII strings
-- `Bool(bool)`: Boolean values
-- `Bytes(vector<u8>)`: Arbitrary byte vectors
-- `Type(TypeName)`: Move type names
-
-### Creating configuration values
-
-```move
-module sui::config;
-
-// Create typed values
-public(package) fun new_u64(value: u64): Value
-public(package) fun new_address(value: address): Value
-public(package) fun new_string(value: string::String): Value
-public(package) fun new_ascii_string(value: ascii::String): Value
-public(package) fun new_bool(value: bool): Value
-public(package) fun new_bytes(value: vector<u8>): Value
-public(package) fun new_type(value: TypeName): Value
+```
+sui:<address>
+    ?amount=<amount>
+    &coin_type=<coin_type>
+    &nonce=<nonce>
+    &label=<label>
+    &icon=<icon>
+    &message=<message>
+    &registry=<registry>
 ```
 
-### Converting configuration values
+### URI parameters
 
-```move
-module sui::config;
+**Required parameters:**
 
-// Convert to typed values
-public(package) fun as_u64(value: Value): u64
-public(package) fun as_address(value: Value): address
-public(package) fun as_string(value: Value): string::String
-public(package) fun as_ascii_string(value: Value): ascii::String
-public(package) fun as_bool(value: Value): bool
-public(package) fun as_bytes(value: Value): vector<u8>
-public(package) fun as_type(value: Value): TypeName
+- **address**: The destination address that will receive the payment funds. Must be a valid Sui address.
+- **amount**: The payment amount in the base unit of the coin type (for example, MIST for SUI). Must be a valid `u64` value.
+- **nonce**: A unique identifier for this payment. Must be unique within the registry to prevent duplicate payments. Recommended format is UUIDv4.
+- **coin_type**: The full type identifier of the coin to be transferred (for example, `0x2::sui::SUI`).
+
+**Optional parameters:**
+
+- **label**: A human-readable name for the merchant or application receiving payment. Displayed to users during payment confirmation.
+- **icon**: A URL pointing to an icon image for the merchant or application. Displayed to users during payment confirmation.
+- **message**: A description or context for the payment. Displayed to users to explain the purpose of the payment.
+- **registry**: The object ID of the `PaymentRegistry` to use for processing the payment. If provided, the payment will be processed through the registry with duplicate prevention. If omitted, the payment will be processed as an ephemeral payment.
+
+### Example URIs
+
+**Basic SUI payment:**
+
+```
+sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef?amount=1000000000&nonce=550e8400-e29b-41d4-a716-446655440000
 ```
 
-Configuration functions are package-level access only, ensuring type safety and preventing external modification.
+**Payment with custom coin type:**
+
+```
+sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef?amount=5000000&coin_type=0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN&nonce=550e8400-e29b-41d4-a716-446655440000
+```
+
+**Payment with display metadata:**
+
+```
+sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef?amount=1000000000&nonce=550e8400-e29b-41d4-a716-446655440000&label=Coffee%20Shop&icon=https://example.com/icon.png&message=Espresso%20and%20croissant
+```
+
+**Registry-based payment:**
+
+```
+sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef?amount=1000000000&nonce=550e8400-e29b-41d4-a716-446655440000&registry=0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
+```
+
+### URI encoding
+
+All parameter values must be properly URL-encoded according to RFC 3986. Special characters in parameter values (such as spaces, colons, slashes) must be percent-encoded:
+
+- Space: `%20`
+- Colon: `%3A`
+- Slash: `%2F`
+- Double colon (`::`): `%3A%3A`
+
+### Implementation notes
+
+When implementing Transaction URI support:
+
+1. **Validate all parameters**: Ensure addresses are valid Sui addresses, amounts are valid `u64` values, and coin types follow the correct format.
+2. **Generate unique nonces**: Use UUIDv4 or another cryptographically secure random identifier to prevent accidental duplicates.
+3. **Handle missing optional parameters**: Provide sensible defaults (such as `0x2::sui::SUI` for coin_type) when optional parameters are omitted.
+4. **Display metadata to users**: Show the `label`, `icon`, and `message` parameters to users during payment confirmation to provide context.
+5. **Route to correct payment function**: Use `process_registry_payment` when `registry` is provided, otherwise use `process_ephemeral_payment`.
 
 ## Key structures
 
@@ -430,6 +476,11 @@ The Payment Kit defines the following error conditions:
 - **Unauthorized admin**: Operation requires `RegistryAdminCap`
 - **Registry already exists**: Attempted to create duplicate registry in namespace
 - **Invalid registry name**: Registry name doesn't meet requirements
+
+## Source Code
+
+- [Move Package](https://github.com/MystenLabs/sui-payment-kit)
+- [SDK](https://github.com/MystenLabs/ts-sdks/tree/main/packages/payment-kit)
 
 ## Related links
 
