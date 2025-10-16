@@ -3,11 +3,20 @@
 
 set -e
 
+RPC_URL="https://fullnode.testnet.sui.io:443"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
+# Determine sui binary to use
+SUI_BIN="../../../target/debug/sui"
+if [ ! -x "$SUI_BIN" ]; then
+    SUI_BIN="sui"
+    echo "Warning: Using system sui binary (debug build not found)"
+fi
+
 echo "=== Minting Demo Coins and Setting Up Fork Test Data ==="
+echo "Using sui binary: $SUI_BIN"
 echo ""
 
 # Check for config file
@@ -30,7 +39,7 @@ echo ""
 
 # Mint 1,000,000 tokens to USER1
 echo "Minting 1,000,000 DEMO tokens to USER1..."
-MINT_OUTPUT=$(sui client call \
+MINT_OUTPUT=$($SUI_BIN client call \
     --package "$PACKAGE_ID" \
     --module demo_coin \
     --function mint \
@@ -38,21 +47,55 @@ MINT_OUTPUT=$(sui client call \
     --gas-budget 10000000 \
     --json)
 
-# Get the current checkpoint
-CHECKPOINT=$(sui client execute-signed-transaction --help 2>&1 | grep -o "checkpoint: [0-9]*" | awk '{print $2}' || echo "0")
-if [ "$CHECKPOINT" = "0" ]; then
-    # Fallback: get latest checkpoint from RPC
-    RPC_URL=$(sui client active-env --json | jq -r '.rpc')
+# Save the output for debugging
+echo "$MINT_OUTPUT" > mint_output.json
+
+# Extract the transaction digest from the mint output
+TX_DIGEST=$(echo "$MINT_OUTPUT" | jq -r '.digest // .transactionBlockDigest // empty')
+
+
+echo "Transaction Digest: $TX_DIGEST"
+echo "RPC URL: $RPC_URL"
+
+# Query the transaction to get its checkpoint
+if [ -n "$TX_DIGEST" ]; then
+    CHECKPOINT=$(curl -s -X POST "$RPC_URL" \
+        -H 'Content-Type: application/json' \
+        -d '{
+            "jsonrpc":"2.0",
+            "id":1,
+            "method":"sui_getTransactionBlock",
+            "params":["'"$TX_DIGEST"'", {"showEffects": true}]
+        }' | jq -r '.result.checkpoint // empty')
+fi
+
+# Fallback: get latest checkpoint if transaction query failed
+if [ -z "$CHECKPOINT" ] || [ "$CHECKPOINT" = "null" ]; then
+    echo "Warning: Could not get checkpoint from transaction, using latest checkpoint..."
     CHECKPOINT=$(curl -s -X POST "$RPC_URL" \
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","id":1,"method":"sui_getLatestCheckpointSequenceNumber","params":[]}' \
-        | jq -r '.result')
+        | jq -r '.result // empty')
 fi
 
 # Extract created coin object ID
-COIN_OBJECT_ID=$(echo "$MINT_OUTPUT" | jq -r '.objectChanges[] | select(.objectType | contains("Coin<")) | select(.owner.AddressOwner == "'$USER1_ADDRESS'") | .objectId')
+COIN_OBJECT_ID=$(echo "$MINT_OUTPUT" | jq -r '.objectChanges[] | select((.objectType // "") | contains("Coin<")) | select(.owner.AddressOwner == "'$USER1_ADDRESS'") | .objectId')
 
 echo ""
+
+# Validate we got the necessary data
+if [ -z "$COIN_OBJECT_ID" ] || [ "$COIN_OBJECT_ID" = "null" ]; then
+    echo "Error: Failed to extract coin object ID"
+    echo "Check mint_output.json for details"
+    exit 1
+fi
+
+if [ -z "$CHECKPOINT" ] || [ "$CHECKPOINT" = "null" ]; then
+    echo "Error: Failed to get checkpoint number"
+    echo "Check mint_output.json for details"
+    exit 1
+fi
+
 echo "Mint successful!"
 echo "Coin Object ID: $COIN_OBJECT_ID"
 echo "Checkpoint: $CHECKPOINT"
