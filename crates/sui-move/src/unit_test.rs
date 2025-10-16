@@ -20,12 +20,12 @@ use sui_move_natives::{
 use sui_package_management::system_package_versions::latest_system_packages;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
+    base_types::{SuiAddress, TxContext},
     digests::TransactionDigest,
+    fork_test_support::set_fork_loaded_objects,
     gas_model::tables::initial_cost_schedule_for_unit_tests,
     in_memory_storage::InMemoryStorage,
     metrics::LimitsMetrics,
-    object::Owner,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -79,7 +79,6 @@ impl Test {
 // Create a separate test store per-thread.
 thread_local! {
     static TEST_STORE_INNER: RefCell<InMemoryStorage> = RefCell::new(InMemoryStorage::default());
-    static FORK_LOADED_OBJECTS: RefCell<Vec<(ObjectID, MoveObjectType, Owner, Vec<u8>)>> = RefCell::new(Vec::new());
 }
 
 static TEST_STORE: Lazy<InMemoryTestStore> = Lazy::new(|| InMemoryTestStore(&TEST_STORE_INNER));
@@ -109,9 +108,7 @@ pub fn run_move_unit_tests(
         let storage = if tokio::runtime::Handle::try_current().is_ok() {
             // We're in a runtime, use block_in_place to avoid nested runtime error
             tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(
-                    loader.load_objects_from_file(id_file)
-                )
+                tokio::runtime::Handle::current().block_on(loader.load_objects_from_file(id_file))
             })?
         } else {
             // Not in a runtime, create a new one
@@ -119,20 +116,13 @@ pub fn run_move_unit_tests(
             runtime.block_on(loader.load_objects_from_file(id_file))?
         };
 
-        // Update the thread-local test store with the loaded state
-        println!("Loaded {} objects into test environment", storage.objects().len());
-        for (obj_id, obj) in storage.objects() {
-            println!("  Object: {} (owner: {:?})", obj_id, obj.owner);
-        }
-
-        // Store the fork-loaded objects for later inventory population
-        FORK_LOADED_OBJECTS.with(|objects| {
-            let mut objects_ref = objects.borrow_mut();
-            objects_ref.clear();
+        // Store the fork-loaded objects for later inventory population (thread-safe)
+        {
+            let mut fork_objects = Vec::new();
             for (obj_id, obj) in storage.objects() {
                 if let Some(move_obj) = obj.data.try_as_move() {
                     // Store object metadata including BCS bytes for later deserialization
-                    objects_ref.push((
+                    fork_objects.push((
                         *obj_id,
                         move_obj.type_().clone(),
                         obj.owner.clone(),
@@ -140,27 +130,15 @@ pub fn run_move_unit_tests(
                     ));
                 }
             }
-            println!("Stored {} fork-loaded objects for inventory population", objects_ref.len());
-        });
+            set_fork_loaded_objects(fork_objects);
+        }
 
+        // Insert objects into the test store (thread-local storage)
         TEST_STORE_INNER.with(|store| {
-            println!("Before assignment, store has {} objects", store.borrow().objects().len());
-            *store.borrow_mut() = storage;
-
-            // Debug: verify objects are in the store
-            let store_ref = store.borrow();
-            println!("\n=== Verifying objects in TEST_STORE ===");
-            println!("Total objects in store: {}", store_ref.objects().len());
-            for (obj_id, obj) in store_ref.objects() {
-                println!("  - Object ID: {}, Owner: {:?}, Type: {:?}", obj_id, obj.owner, obj.type_());
+            let mut store_mut = store.borrow_mut();
+            for (obj_id, obj) in storage.objects() {
+                store_mut.insert_object(obj.clone());
             }
-            println!("=== End verification ===\n");
-        });
-
-        // Verify again after the borrow is released
-        TEST_STORE_INNER.with(|store| {
-            let store_ref = store.borrow();
-            println!("After verification block, store still has {} objects", store_ref.objects().len());
         });
     }
 
