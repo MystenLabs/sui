@@ -748,7 +748,13 @@ impl CallArg {
                     }
                 }
             },
-            CallArg::FundsWithdrawal(_) => {}
+            CallArg::FundsWithdrawal(withdraw) => {
+                if matches!(withdraw.withdraw_from, WithdrawFrom::Sponsor) {
+                    return Err(UserInputError::InvalidWithdrawReservation {
+                        error: "Explicit sponsor withdrawals are not yet supported".to_string(),
+                    });
+                }
+            }
         }
         Ok(())
     }
@@ -1784,6 +1790,12 @@ impl GasData {
     pub fn is_paid_from_address_balance(&self) -> bool {
         self.payment.is_empty()
     }
+
+    pub fn is_address_balance_transaction(&self, config: &ProtocolConfig) -> bool {
+        config.enable_accumulators()
+            && config.enable_address_balance_gas_payments()
+            && self.is_paid_from_address_balance()
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
@@ -2430,6 +2442,14 @@ impl TransactionDataAPI for TransactionDataV1 {
             });
         }
 
+        for withdraw in &withdraws {
+            if matches!(withdraw.withdraw_from, WithdrawFrom::Sponsor) {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: "Explicit sponsor withdrawals are not yet supported".to_string(),
+                });
+            }
+        }
+
         if self.gas_data().is_paid_from_address_balance() {
             let gas_withdraw = if self.sender() != self.gas_owner() {
                 FundsWithdrawalArg::balance_from_sponsor(
@@ -2501,6 +2521,9 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn has_funds_withdrawals(&self) -> bool {
+        if self.gas_data().is_paid_from_address_balance() {
+            return true;
+        }
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
             for input in &pt.inputs {
                 if matches!(input, CallArg::FundsWithdrawal(_)) {
@@ -2948,6 +2971,12 @@ impl SenderSignedData {
         }
 
         if tx_data.has_funds_withdrawals() {
+            fp_ensure!(
+                !tx_data.gas().is_empty() || context.config.enable_address_balance_gas_payments(),
+                SuiError::UserInputError {
+                    error: UserInputError::MissingGasPayment
+                }
+            );
             fp_ensure!(
                 context.config.enable_accumulators()
                     && context.accumulator_object_init_shared_version.is_some(),
