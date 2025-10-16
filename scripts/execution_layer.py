@@ -434,7 +434,7 @@ def update_toml(feature, toml_path):
 
 
 def generate_impls(feature, copy):
-    """Create the implementations of the `Executor` and `Verifier`.
+    """Create the implementations of the `Executor`.
 
     Copies the implementation for the `latest` cut and updates its imports."""
     orig = Path() / "sui-execution" / "src" / "latest.rs"
@@ -445,7 +445,7 @@ def generate_impls(feature, copy):
 
 
 def generate_lib(output_file: TextIO):
-    """Expose all `Executor` and `Verifier` impls via lib.rs
+    """Expose all `Executor` impls via lib.rs
 
     Generates the contents of sui-execution/src/lib.rs to assign a numeric
     execution version for every module that implements an execution version.
@@ -492,12 +492,6 @@ def generate_lib(output_file: TextIO):
             )
             return "\n".join(
                 executor.format(spc=spc, version=feature or version, cut=cut)
-                for (version, feature, cut) in cuts
-            )
-        elif var == "VERIFIER_CUTS":
-            call = "Verifier::new(config, metrics)"
-            return "\n".join(
-                f"{spc}{feature or version} => Box::new({cut}::{call}),"
                 for (version, feature, cut) in cuts
             )
         else:

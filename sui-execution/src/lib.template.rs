@@ -6,13 +6,11 @@
 use std::sync::Arc;
 
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{error::SuiResult, metrics::BytecodeVerifierMetrics};
+use sui_types::error::SuiResult;
 
 pub use executor::Executor;
-pub use verifier::Verifier;
 
 pub mod executor;
-pub mod verifier;
 
 // $MOD_CUTS
 
@@ -29,17 +27,4 @@ pub fn executor(
         // $EXECUTOR_CUTS
         v => panic!("Unsupported execution version {v}"),
     })
-}
-
-pub fn verifier<'m>(
-    protocol_config: &ProtocolConfig,
-    signing_limits: Option<(usize, usize)>,
-    metrics: &'m Arc<BytecodeVerifierMetrics>,
-) -> Box<dyn Verifier + 'm> {
-    let version = protocol_config.execution_version_as_option().unwrap_or(0);
-    let config = protocol_config.verifier_config(signing_limits);
-    match version {
-        // $VERIFIER_CUTS
-        v => panic!("Unsupported execution version {v}"),
-    }
 }

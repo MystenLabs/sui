@@ -8,7 +8,6 @@ for state sync (which would cause a fork).
 
 The Execution Layer include:
 
-- The metered verifier, used during signing.
 - The VM, for executing transactions to effects.
 - The adapter, that integrates Move into Sui.
 - Access to the state as seen by the VM, such as type layout
