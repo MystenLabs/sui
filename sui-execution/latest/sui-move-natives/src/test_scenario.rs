@@ -389,7 +389,6 @@ pub fn take_from_address_by_id(
     try_load_object_from_storage(
         context,
         id,
-        &specified_ty,
         specified_obj_ty.clone(),
         Owner::AddressOwner(account),
     )?;
@@ -817,7 +816,6 @@ fn types_match_recursive(tag1: &TypeTag, tag2: &TypeTag) -> bool {
 fn try_load_object_from_storage(
     context: &mut NativeContext,
     obj_id: ObjectID,
-    specified_ty: &Type,
     specified_obj_ty: MoveObjectType,
     expected_owner: Owner,
 ) -> PartialVMResult<()> {

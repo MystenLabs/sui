@@ -136,7 +136,7 @@ pub fn run_move_unit_tests(
         // Insert objects into the test store (thread-local storage)
         TEST_STORE_INNER.with(|store| {
             let mut store_mut = store.borrow_mut();
-            for (obj_id, obj) in storage.objects() {
+            for (_obj_id, obj) in storage.objects() {
                 store_mut.insert_object(obj.clone());
             }
         });
