@@ -134,7 +134,6 @@
       { "source": "/references/framework/sui/:path*", "destination": "/references/framework/sui_sui/:path*"},
       { "source": "/references/framework/sui_system/:path*", "destination": "/references/framework/sui_sui_system/:path*"},
       { "source": "/guides/developer/stablecoins", "destination": "/guides/developer/coin/regulated"},
-      { "source": "/standards/coin", "destination": "/standards/currency"},
       { "source": "/standards/deepbookv3", "destination": "/standards/deepbook"}
     ]
   }
