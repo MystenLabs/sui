@@ -168,6 +168,7 @@ pub fn run(
         lint,
         implicit_deps.clone(),
         flavor,
+        initialize_params.process_id,
     );
 
     // If initialization information from the client contains a path to the directory being
@@ -300,7 +301,12 @@ pub fn run(
                             _ => on_notification(ide_files_root.clone(), &symbolicator_runner, &notification),
                         }
                     }
-                    Err(error) => eprintln!("IDE message error: {:?}", error),
+                    Err(error) => {
+                        eprintln!("IDE message error: {:?}", error);
+                        // `error` is of type `RecvError`, which hasonly one meaning: the channel is empty
+                        // and disconnected. We should exit the process in such case.
+                        std::process::exit(-1);
+                    }
                 }
             }
         };
@@ -309,6 +315,8 @@ pub fn run(
     io_threads.join().expect("I/O threads could not finish");
     symbolicator_runner.quit();
     eprintln!("Shut down language server '{}'.", exe);
+    // quit process just in case
+    std::process::exit(0);
 }
 
 /// This function returns `true` if shutdown request has been received, and `false` otherwise.
