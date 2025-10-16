@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 98;
+const MAX_PROTOCOL_VERSION: u64 = 99;
 
 // Record history of protocol version allocations here:
 //
@@ -271,6 +271,7 @@ const MAX_PROTOCOL_VERSION: u64 = 98;
 // Version 97: Enable additional borrow checks
 // Version 98: Add authenticated event streams support via emit_authenticated function.
 //             Add better error messages to the loader.
+// Version 99: Enable new commit handler.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4104,6 +4105,9 @@ impl ProtocolConfig {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
+                }
+                99 => {
+                    cfg.feature_flags.use_new_commit_handler = true;
                 }
                 // Use this template when making changes:
                 //
