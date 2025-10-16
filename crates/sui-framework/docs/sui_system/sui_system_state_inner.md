@@ -4,6 +4,7 @@ title: Module `sui_system::sui_system_state_inner`
 
 
 
+-  [Struct `ExecutionTimeObservationChunkKey`](#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey)
 -  [Struct `SystemParameters`](#sui_system_sui_system_state_inner_SystemParameters)
 -  [Struct `SystemParametersV2`](#sui_system_sui_system_state_inner_SystemParametersV2)
 -  [Struct `SuiSystemStateInner`](#sui_system_sui_system_state_inner_SuiSystemStateInner)
@@ -67,6 +68,7 @@ title: Module `sui_system::sui_system_state_inner`
 -  [Function `active_validator_addresses`](#sui_system_sui_system_state_inner_active_validator_addresses)
 -  [Function `extract_coin_balance`](#sui_system_sui_system_state_inner_extract_coin_balance)
 -  [Function `store_execution_time_estimates`](#sui_system_sui_system_state_inner_store_execution_time_estimates)
+-  [Function `store_execution_time_estimates_v2`](#sui_system_sui_system_state_inner_store_execution_time_estimates_v2)
 -  [Function `validators`](#sui_system_sui_system_state_inner_validators)
 -  [Function `validators_mut`](#sui_system_sui_system_state_inner_validators_mut)
 -  [Macro function `mul_div`](#sui_system_sui_system_state_inner_mul_div)
@@ -120,6 +122,32 @@ title: Module `sui_system::sui_system_state_inner`
 </code></pre>
 
 
+
+<a name="sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey"></a>
+
+## Struct `ExecutionTimeObservationChunkKey`
+
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>chunk_index: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
 
 <a name="sui_system_sui_system_state_inner_SystemParameters"></a>
 
@@ -749,6 +777,15 @@ the epoch advancement transaction.
 
 
 <pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>: u64 = 1;
 </code></pre>
 
 
@@ -2748,11 +2785,63 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     estimates: vector&lt;u8&gt;,
 ) {
-    <b>let</b> key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>;
-    <b>if</b> (self.extra_fields.contains(key)) {
-        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(key);
+    <b>if</b> (self.extra_fields.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
+        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
     };
-    self.extra_fields.add(key, estimates);
+    self.extra_fields.add(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>, estimates);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_state_inner_store_execution_time_estimates_v2"></a>
+
+## Function `store_execution_time_estimates_v2`
+
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_store_execution_time_estimates_v2">store_execution_time_estimates_v2</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, estimate_chunks: vector&lt;vector&lt;u8&gt;&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_store_execution_time_estimates_v2">store_execution_time_estimates_v2</a>(
+    self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
+    estimate_chunks: vector&lt;vector&lt;u8&gt;&gt;,
+) {
+    <b>if</b> (self.extra_fields.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
+        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
+    };
+    <b>if</b> (self.extra_fields.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>)) {
+        <b>let</b> existing_chunk_count: u64 = self
+            .extra_fields
+            .remove&lt;_, u64&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>);
+        <b>let</b> <b>mut</b> chunk_idx = 0;
+        <b>while</b> (chunk_idx &lt; existing_chunk_count) {
+            <b>let</b> chunk_key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a> { chunk_index: chunk_idx };
+            <b>if</b> (self.extra_fields.contains(chunk_key)) {
+                self.extra_fields.remove&lt;<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a>, vector&lt;u8&gt;&gt;(chunk_key);
+            };
+            chunk_idx = chunk_idx + 1;
+        };
+    };
+    <b>let</b> total_chunks = estimate_chunks.length();
+    <b>if</b> (total_chunks &gt; 0) {
+        self.extra_fields.add(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>, total_chunks);
+        <b>let</b> <b>mut</b> i = 0;
+        <b>while</b> (i &lt; total_chunks) {
+            <b>let</b> chunk_key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a> { chunk_index: i };
+            <b>let</b> chunk_data = estimate_chunks[i];
+            self.extra_fields.add(chunk_key, chunk_data);
+            i = i + 1;
+        };
+    };
 }
 </code></pre>
 

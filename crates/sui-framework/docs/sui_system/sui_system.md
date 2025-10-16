@@ -92,6 +92,7 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `load_inner_maybe_upgrade`](#sui_system_sui_system_load_inner_maybe_upgrade)
 -  [Function `validator_voting_powers`](#sui_system_sui_system_validator_voting_powers)
 -  [Function `store_execution_time_estimates`](#sui_system_sui_system_store_execution_time_estimates)
+-  [Function `store_execution_time_estimates_v2`](#sui_system_sui_system_store_execution_time_estimates_v2)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -1736,6 +1737,35 @@ at the start of the next epoch.
 
 <pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates">store_execution_time_estimates</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>, estimates_bytes: vector&lt;u8&gt;) {
     wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates">store_execution_time_estimates</a>(estimates_bytes)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_store_execution_time_estimates_v2"></a>
+
+## Function `store_execution_time_estimates_v2`
+
+Saves the given execution time estimate chunks to the SuiSystemState object, for system use
+at the start of the next epoch.
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates_v2">store_execution_time_estimates_v2</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>, estimate_chunks: vector&lt;vector&lt;u8&gt;&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates_v2">store_execution_time_estimates_v2</a>(
+    wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>,
+    estimate_chunks: vector&lt;vector&lt;u8&gt;&gt;,
+) {
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates_v2">store_execution_time_estimates_v2</a>(estimate_chunks)
 }
 </code></pre>
 
