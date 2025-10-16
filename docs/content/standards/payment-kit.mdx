@@ -324,25 +324,38 @@ sui:<address>
 **Basic SUI payment:**
 
 ```
-sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef?amount=1000000000&nonce=550e8400-e29b-41d4-a716-446655440000
+sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    ?amount=1000000000
+    &nonce=550e8400-e29b-41d4-a716-446655440000
 ```
 
 **Payment with custom coin type:**
 
 ```
-sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef?amount=5000000&coin_type=0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN&nonce=550e8400-e29b-41d4-a716-446655440000
+sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    ?amount=5000000
+    &coin_type=0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN
+    &nonce=550e8400-e29b-41d4-a716-446655440000
 ```
 
 **Payment with display metadata:**
 
 ```
-sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef?amount=1000000000&nonce=550e8400-e29b-41d4-a716-446655440000&label=Coffee%20Shop&icon=https://example.com/icon.png&message=Espresso%20and%20croissant
+sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    ?amount=1000000000
+    &nonce=550e8400-e29b-41d4-a716-446655440000
+    &label=Coffee%20Shop
+    &icon=https://example.com/icon.png
+    &message=Espresso%20and%20croissant
 ```
 
 **Registry-based payment:**
 
 ```
-sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef?amount=1000000000&nonce=550e8400-e29b-41d4-a716-446655440000&registry=0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
+sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    ?amount=1000000000
+    &nonce=550e8400-e29b-41d4-a716-446655440000
+    &registry=0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
 ```
 
 ### URI encoding
