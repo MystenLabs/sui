@@ -1,8 +1,10 @@
 use std::sync::{Arc, LazyLock};
 
 use anyhow::Context;
+use bytes::Bytes;
+use object_store::path::Path as StorePath;
 use prost::Message;
-use sui_indexer_alt_framework::pipeline::concurrent::Handler;
+use sui_indexer_alt_framework::pipeline::concurrent;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework::{FieldCount, Indexer, IndexerArgs, pipeline::Processor};
 use sui_indexer_object_store::ObjectStore;
@@ -28,6 +30,11 @@ async fn signal_terminate() {
 pub struct CheckpointBlob {
     pub sequence_number: u64,
     pub proto_bytes: Vec<u8>,
+}
+
+#[derive(FieldCount)]
+pub struct EpochBoundary {
+    pub checkpoint: u64,
 }
 
 pub struct CheckpointBlobIndexer;
@@ -85,7 +92,7 @@ impl Processor for CheckpointBlobIndexer {
 }
 
 #[async_trait::async_trait]
-impl Handler for CheckpointBlobIndexer {
+impl concurrent::Handler for CheckpointBlobIndexer {
     type Store = ObjectStore;
 
     async fn commit<'a>(
@@ -100,14 +107,77 @@ impl Handler for CheckpointBlobIndexer {
     }
 }
 
+pub struct EpochBoundaryIndexer;
+
+#[async_trait::async_trait]
+impl Processor for EpochBoundaryIndexer {
+    const NAME: &'static str = "epoch_boundary";
+    type Value = EpochBoundary;
+
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+        if checkpoint.summary.end_of_epoch_data.is_some() {
+            Ok(vec![EpochBoundary {
+                checkpoint: checkpoint.summary.sequence_number,
+            }])
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl concurrent::Handler for EpochBoundaryIndexer {
+    type Store = ObjectStore;
+
+    async fn commit<'a>(
+        values: &[EpochBoundary],
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> anyhow::Result<usize> {
+        if values.is_empty() {
+            return Ok(0);
+        }
+
+        let path = StorePath::from("epochs.json");
+
+        // Read existing epochs.json
+        let mut epochs: Vec<u64> = match conn.object_store().get(&path).await {
+            Ok(result) => {
+                let bytes = result.bytes().await?;
+                serde_json::from_slice(&bytes)?
+            }
+            Err(object_store::Error::NotFound { .. }) => vec![],
+            Err(e) => return Err(e.into()),
+        };
+
+        // Add new epoch boundaries
+        for boundary in values {
+            if !epochs.contains(&boundary.checkpoint) {
+                epochs.push(boundary.checkpoint);
+            }
+        }
+
+        epochs.sort_unstable();
+        epochs.dedup();
+
+        // Write back
+        let json = serde_json::to_vec(&epochs)?;
+        conn.object_store()
+            .put(&path, Bytes::from(json).into())
+            .await?;
+
+        tracing::info!(
+            boundaries = values.len(),
+            "Updated epochs.json with epoch boundaries"
+        );
+
+        Ok(values.len())
+    }
+}
+
 #[derive(clap::Parser)]
 #[command(name = "sui-checkpoint-object-store-indexer")]
 #[command(about = "Indexer that writes checkpoints as compressed proto blobs to object storage")]
 struct Args {
-    /// PostgreSQL database URL for watermark tracking
-    #[arg(long, env = "DATABASE_URL")]
-    database_url: url::Url,
-
     /// Object store URL for checkpoint storage
     /// Supports: file://, gs://, s3://, azure://
     /// Examples:
@@ -177,23 +247,15 @@ async fn main() -> anyhow::Result<()> {
         ingestion::{ClientArgs, IngestionConfig},
         pipeline::concurrent::ConcurrentConfig,
     };
-    use sui_pg_db::DbArgs;
 
     let args = Args::parse();
 
     tracing_subscriber::fmt::init();
 
-    let db = sui_pg_db::Db::for_write(args.database_url.clone(), DbArgs::default()).await?;
-
-    // Run framework migrations (creates watermarks table, etc.)
-    db.run_migrations(None)
-        .await
-        .context("Failed to run database migrations")?;
-
     let object_store =
         create_object_store(&args.object_store_url).context("Failed to create object store")?;
 
-    let store = ObjectStore::new(db, object_store, args.compression_level);
+    let store = ObjectStore::new(object_store, args.compression_level);
 
     let client_args = ClientArgs {
         rpc_api_url: Some(args.rpc_api_url),
@@ -219,6 +281,20 @@ async fn main() -> anyhow::Result<()> {
 
     indexer
         .concurrent_pipeline(CheckpointBlobIndexer, ConcurrentConfig::default())
+        .await?;
+
+    // Use write_concurrency=1 to ensure serial writes (no read-modify-write races)
+    indexer
+        .concurrent_pipeline(
+            EpochBoundaryIndexer,
+            ConcurrentConfig {
+                committer: sui_indexer_alt_framework::pipeline::CommitterConfig {
+                    write_concurrency: 1,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
         .await?;
 
     let handle = indexer.run().await?;

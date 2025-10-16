@@ -30,25 +30,12 @@ struct StoredCommitterWatermark {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StoredReaderWatermark {
-    checkpoint_hi_inclusive: u64,
     reader_lo: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StoredPrunerWatermark {
-    reader_lo: u64,
     pruner_hi: u64,
-}
-
-impl From<CommitterWatermark> for StoredCommitterWatermark {
-    fn from(w: CommitterWatermark) -> Self {
-        Self {
-            epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
-            tx_hi: w.tx_hi,
-            timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
-        }
-    }
 }
 
 fn watermark_path(pipeline: &str, watermark_type: &str) -> StorePath {
@@ -123,20 +110,34 @@ impl Connection for ObjectStoreConnection<'_> {
         &mut self,
         pipeline: &'static str,
     ) -> Result<Option<ReaderWatermark>> {
-        let path = watermark_path(pipeline, "reader");
+        let reader_path = watermark_path(pipeline, "reader");
 
-        match self.store.object_store.get(&path).await {
+        let reader_lo = match self.store.object_store.get(&reader_path).await {
             Ok(result) => {
                 let bytes = result.bytes().await?;
                 let stored: StoredReaderWatermark = serde_json::from_slice(&bytes)?;
-                Ok(Some(ReaderWatermark {
-                    checkpoint_hi_inclusive: stored.checkpoint_hi_inclusive,
-                    reader_lo: stored.reader_lo,
-                }))
+                stored.reader_lo
             }
-            Err(object_store::Error::NotFound { .. }) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
+            Err(object_store::Error::NotFound { .. }) => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+
+        // Get checkpoint_hi_inclusive from committer watermark
+        let committer_path = watermark_path(pipeline, "committer");
+        let checkpoint_hi_inclusive = match self.store.object_store.get(&committer_path).await {
+            Ok(result) => {
+                let bytes = result.bytes().await?;
+                let stored: StoredCommitterWatermark = serde_json::from_slice(&bytes)?;
+                stored.checkpoint_hi_inclusive
+            }
+            Err(object_store::Error::NotFound { .. }) => 0,
+            Err(e) => return Err(e.into()),
+        };
+
+        Ok(Some(ReaderWatermark {
+            checkpoint_hi_inclusive,
+            reader_lo,
+        }))
     }
 
     async fn pruner_watermark(
@@ -144,21 +145,35 @@ impl Connection for ObjectStoreConnection<'_> {
         pipeline: &'static str,
         _delay: Duration,
     ) -> Result<Option<PrunerWatermark>> {
-        let path = watermark_path(pipeline, "pruner");
+        let pruner_path = watermark_path(pipeline, "pruner");
 
-        match self.store.object_store.get(&path).await {
+        let pruner_hi = match self.store.object_store.get(&pruner_path).await {
             Ok(result) => {
                 let bytes = result.bytes().await?;
                 let stored: StoredPrunerWatermark = serde_json::from_slice(&bytes)?;
-                Ok(Some(PrunerWatermark {
-                    wait_for_ms: 0,
-                    reader_lo: stored.reader_lo,
-                    pruner_hi: stored.pruner_hi,
-                }))
+                stored.pruner_hi
             }
-            Err(object_store::Error::NotFound { .. }) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
+            Err(object_store::Error::NotFound { .. }) => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+
+        // Get reader_lo from reader watermark
+        let reader_path = watermark_path(pipeline, "reader");
+        let reader_lo = match self.store.object_store.get(&reader_path).await {
+            Ok(result) => {
+                let bytes = result.bytes().await?;
+                let stored: StoredReaderWatermark = serde_json::from_slice(&bytes)?;
+                stored.reader_lo
+            }
+            Err(object_store::Error::NotFound { .. }) => 0,
+            Err(e) => return Err(e.into()),
+        };
+
+        Ok(Some(PrunerWatermark {
+            wait_for_ms: 0,
+            reader_lo,
+            pruner_hi,
+        }))
     }
 
     async fn set_committer_watermark(
@@ -167,7 +182,12 @@ impl Connection for ObjectStoreConnection<'_> {
         watermark: CommitterWatermark,
     ) -> Result<bool> {
         let path = watermark_path(pipeline, "committer");
-        let stored = StoredCommitterWatermark::from(watermark);
+        let stored = StoredCommitterWatermark {
+            epoch_hi_inclusive: watermark.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+            tx_hi: watermark.tx_hi,
+            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+        };
         let json = serde_json::to_vec_pretty(&stored)?;
 
         self.store
@@ -184,22 +204,7 @@ impl Connection for ObjectStoreConnection<'_> {
         reader_lo: u64,
     ) -> Result<bool> {
         let path = watermark_path(pipeline, "reader");
-
-        // Need to read to get checkpoint_hi_inclusive which is set separately
-        let checkpoint_hi_inclusive = match self.store.object_store.get(&path).await {
-            Ok(result) => {
-                let bytes = result.bytes().await?;
-                let existing: StoredReaderWatermark = serde_json::from_slice(&bytes)?;
-                existing.checkpoint_hi_inclusive
-            }
-            Err(object_store::Error::NotFound { .. }) => 0,
-            Err(e) => return Err(e.into()),
-        };
-
-        let stored = StoredReaderWatermark {
-            checkpoint_hi_inclusive,
-            reader_lo,
-        };
+        let stored = StoredReaderWatermark { reader_lo };
         let json = serde_json::to_vec_pretty(&stored)?;
 
         self.store
@@ -216,27 +221,14 @@ impl Connection for ObjectStoreConnection<'_> {
         pruner_hi: u64,
     ) -> Result<bool> {
         let path = watermark_path(pipeline, "pruner");
-
-        // Read existing to get reader_lo
-        let reader_lo = match self.store.object_store.get(&path).await {
-            Ok(result) => {
-                let bytes = result.bytes().await?;
-                let existing: StoredPrunerWatermark = serde_json::from_slice(&bytes)?;
-                existing.reader_lo
-            }
-            Err(object_store::Error::NotFound { .. }) => 0,
-            Err(e) => return Err(e.into()),
-        };
-
-        let stored = StoredPrunerWatermark {
-            reader_lo,
-            pruner_hi,
-        };
+        let stored = StoredPrunerWatermark { pruner_hi };
         let json = serde_json::to_vec_pretty(&stored)?;
+
         self.store
             .object_store
             .put(&path, Bytes::from(json).into())
             .await?;
+
         Ok(true)
     }
 }
