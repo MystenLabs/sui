@@ -63,7 +63,7 @@ use crate::{
     },
     Node,
 };
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, Context, Error, Result};
 use std::{
     collections::BTreeMap,
     fs,
@@ -167,7 +167,7 @@ pub struct FileSystemStore {
 }
 
 impl FileSystemStore {
-    pub fn new(node: Node) -> Result<Self, anyhow::Error> {
+    pub fn new(node: Node) -> Result<Self, Error> {
         let base_path = Self::base_path()?;
         Ok(Self {
             node,
@@ -178,7 +178,7 @@ impl FileSystemStore {
         })
     }
 
-    pub fn base_path() -> Result<PathBuf, anyhow::Error> {
+    pub fn base_path() -> Result<PathBuf, Error> {
         let home_dir = std::env::var("REPLAY_STORE")
             .or_else(|_| std::env::var("SUI_CONFIG_DIR"))
             .or_else(|_| std::env::var("HOME"))
@@ -191,17 +191,17 @@ impl FileSystemStore {
         Ok(PathBuf::from(home_dir).join(REPLAY_STORE_DIR))
     }
 
-    fn node_dir(&self) -> Result<PathBuf, anyhow::Error> {
+    fn node_dir(&self) -> Result<PathBuf, Error> {
         // Read the chain identifier mapping to determine the directory name
         let chain_id = self.get_chain_id_for_node()?;
         Ok(self.base_path.join(chain_id))
     }
 
-    fn get_chain_id_for_node(&self) -> Result<String, anyhow::Error> {
+    fn get_chain_id_for_node(&self) -> Result<String, Error> {
         let mapping_file = self.base_path.join(NODE_MAPPING_FILE);
 
         if !mapping_file.exists() {
-            return Err(anyhow::anyhow!(
+            return Err(anyhow!(
                 "Node mapping file not found at {}. File must exist with format: node,chain_id",
                 mapping_file.display()
             ));
@@ -231,7 +231,7 @@ impl FileSystemStore {
             })?;
 
             if record.len() != 2 {
-                return Err(anyhow::anyhow!(
+                return Err(anyhow!(
                     "Invalid format in node mapping file {}: expected 2 columns, got {}",
                     mapping_file.display(),
                     record.len()
@@ -246,54 +246,47 @@ impl FileSystemStore {
             }
         }
 
-        Err(anyhow::anyhow!(
+        Err(anyhow!(
             "No mapping found for node '{}' in mapping file {}",
             node_key,
             mapping_file.display()
         ))
     }
 
-    fn transaction_dir(&self) -> Result<PathBuf, anyhow::Error> {
+    fn transaction_dir(&self) -> Result<PathBuf, Error> {
         Ok(self.node_dir()?.join(TRANSACTION_DIR))
     }
 
-    fn epoch_dir(&self) -> Result<PathBuf, anyhow::Error> {
+    fn epoch_dir(&self) -> Result<PathBuf, Error> {
         Ok(self.node_dir()?.join(EPOCH_DIR))
     }
 
-    fn objects_dir(&self) -> Result<PathBuf, anyhow::Error> {
+    fn objects_dir(&self) -> Result<PathBuf, Error> {
         Ok(self.node_dir()?.join(OBJECTS_DIR))
     }
 
-    fn root_versions_path(&self, object_id: &ObjectID) -> Result<PathBuf, anyhow::Error> {
+    fn root_versions_path(&self, object_id: &ObjectID) -> Result<PathBuf, Error> {
         Ok(self
             .objects_dir()?
             .join(object_id.to_string())
             .join(ROOT_VERSIONS_FILE))
     }
 
-    fn checkpoint_versions_path(&self, object_id: &ObjectID) -> Result<PathBuf, anyhow::Error> {
+    fn checkpoint_versions_path(&self, object_id: &ObjectID) -> Result<PathBuf, Error> {
         Ok(self
             .objects_dir()?
             .join(object_id.to_string())
             .join(CHECKPOINT_VERSIONS_FILE))
     }
 
-    fn read_bcs_file<T: serde::de::DeserializeOwned>(
-        &self,
-        path: &Path,
-    ) -> Result<T, anyhow::Error> {
+    fn read_bcs_file<T: serde::de::DeserializeOwned>(&self, path: &Path) -> Result<T, Error> {
         let bytes =
             fs::read(path).with_context(|| format!("Failed to read file: {}", path.display()))?;
         bcs::from_bytes(&bytes)
             .with_context(|| format!("Failed to deserialize BCS data from: {}", path.display()))
     }
 
-    fn write_bcs_file<T: serde::Serialize>(
-        &self,
-        path: &Path,
-        data: &T,
-    ) -> Result<(), anyhow::Error> {
+    fn write_bcs_file<T: serde::Serialize>(&self, path: &Path, data: &T) -> Result<(), Error> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
@@ -305,7 +298,7 @@ impl FileSystemStore {
         Ok(())
     }
 
-    fn read_version_mapping(&self, path: &Path) -> Result<BTreeMap<u64, u64>, anyhow::Error> {
+    fn read_version_mapping(&self, path: &Path) -> Result<BTreeMap<u64, u64>, Error> {
         if !path.exists() {
             return Ok(BTreeMap::new());
         }
@@ -352,7 +345,7 @@ impl FileSystemStore {
         &self,
         path: &Path,
         mapping: &BTreeMap<u64, u64>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
@@ -366,7 +359,7 @@ impl FileSystemStore {
         Ok(())
     }
 
-    fn load_root_mapping(&self, object_id: &ObjectID) -> Result<(), anyhow::Error> {
+    fn load_root_mapping(&self, object_id: &ObjectID) -> Result<(), Error> {
         if self
             .root_versions_map
             .read()
@@ -384,7 +377,7 @@ impl FileSystemStore {
         Ok(())
     }
 
-    fn load_checkpoint_mapping(&self, object_id: &ObjectID) -> Result<(), anyhow::Error> {
+    fn load_checkpoint_mapping(&self, object_id: &ObjectID) -> Result<(), Error> {
         if self
             .checkpoint_versions_map
             .read()
@@ -407,7 +400,7 @@ impl FileSystemStore {
         object_id: &ObjectID,
         key: u64,
         version: u64,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         self.load_root_mapping(object_id)?;
         {
             let mut maps = self.root_versions_map.write().unwrap();
@@ -424,7 +417,7 @@ impl FileSystemStore {
         object_id: &ObjectID,
         key: u64,
         version: u64,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         self.load_checkpoint_mapping(object_id)?;
         {
             let mut maps = self.checkpoint_versions_map.write().unwrap();
@@ -440,7 +433,7 @@ impl FileSystemStore {
         &self,
         object_id: &ObjectID,
         version: u64,
-    ) -> Result<Option<(Object, u64)>, anyhow::Error> {
+    ) -> Result<Option<(Object, u64)>, Error> {
         let object_dir = self.objects_dir()?.join(object_id.to_string());
         let version_file = object_dir.join(version.to_string());
         if !version_file.exists() {
@@ -454,7 +447,7 @@ impl FileSystemStore {
         &self,
         object_id: &ObjectID,
         max_version: u64,
-    ) -> Result<Option<(Object, u64)>, anyhow::Error> {
+    ) -> Result<Option<(Object, u64)>, Error> {
         self.load_root_mapping(object_id)?;
         let maps = self.root_versions_map.read().unwrap();
         if let Some(map) = maps.get(object_id) {
@@ -469,7 +462,7 @@ impl FileSystemStore {
         &self,
         object_id: &ObjectID,
         checkpoint: u64,
-    ) -> Result<Option<(Object, u64)>, anyhow::Error> {
+    ) -> Result<Option<(Object, u64)>, Error> {
         self.load_checkpoint_mapping(object_id)?;
         let maps = self.checkpoint_versions_map.read().unwrap();
         if let Some(map) = maps.get(object_id) {
@@ -492,7 +485,7 @@ impl TransactionStore for FileSystemStore {
     fn transaction_data_and_effects(
         &self,
         tx_digest: &str,
-    ) -> Result<Option<TransactionInfo>, anyhow::Error> {
+    ) -> Result<Option<TransactionInfo>, Error> {
         let file_path = self.transaction_dir()?.join(tx_digest);
         if !file_path.exists() {
             self.metrics.txn_miss.fetch_add(1, Ordering::Relaxed);
@@ -518,7 +511,7 @@ impl TransactionStore for FileSystemStore {
 }
 
 impl EpochStore for FileSystemStore {
-    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, anyhow::Error> {
+    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error> {
         let file_path = self.epoch_dir()?.join(epoch.to_string());
         if !file_path.exists() {
             self.metrics.epoch_miss.fetch_add(1, Ordering::Relaxed);
@@ -538,7 +531,7 @@ impl EpochStore for FileSystemStore {
         Ok(Some(epoch_file_data.into()))
     }
 
-    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, anyhow::Error> {
+    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
         match self.epoch_info(epoch) {
             Ok(Some(epoch_data)) => {
                 self.metrics.proto_hit.fetch_add(1, Ordering::Relaxed);
@@ -560,7 +553,7 @@ impl EpochStore for FileSystemStore {
 }
 
 impl ObjectStore for FileSystemStore {
-    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let mut results = Vec::with_capacity(keys.len());
         for key in keys {
             let (object_and_version_res, hit_ctr, miss_ctr, err_ctr) = match &key.version_query {
@@ -608,7 +601,7 @@ impl TransactionStoreWriter for FileSystemStore {
         &self,
         tx_digest: &str,
         transaction_info: TransactionInfo,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         let file_path = self.transaction_dir()?.join(tx_digest);
         let txn_file_data = TransactionFileData {
             data: transaction_info.data,
@@ -620,7 +613,7 @@ impl TransactionStoreWriter for FileSystemStore {
 }
 
 impl EpochStoreWriter for FileSystemStore {
-    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), anyhow::Error> {
+    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error> {
         let file_path = self.epoch_dir()?.join(epoch.to_string());
         let epoch_file_data = EpochFileData::from(epoch_data);
         self.write_bcs_file(&file_path, &epoch_file_data)
@@ -633,7 +626,7 @@ impl ObjectStoreWriter for FileSystemStore {
         key: &ObjectKey,
         object: Object,
         actual_version: u64,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         let object_dir = self.objects_dir()?.join(key.object_id.to_string());
         let object_file = object_dir.join(actual_version.to_string());
         self.write_bcs_file(&object_file, &object)?;
@@ -651,7 +644,7 @@ impl ObjectStoreWriter for FileSystemStore {
 }
 
 impl StoreSummary for FileSystemStore {
-    fn summary<W: std::io::Write>(&self, w: &mut W) -> anyhow::Result<()> {
+    fn summary<W: std::io::Write>(&self, w: &mut W) -> Result<()> {
         let m = &self.metrics;
         let txn_hit = m.txn_hit.load(Ordering::Relaxed);
         let txn_miss = m.txn_miss.load(Ordering::Relaxed);
@@ -726,7 +719,7 @@ impl StoreSummary for FileSystemStore {
 }
 
 impl SetupStore for FileSystemStore {
-    fn setup(&self, chain_id: Option<String>) -> Result<Option<String>, anyhow::Error> {
+    fn setup(&self, chain_id: Option<String>) -> Result<Option<String>, Error> {
         if let Some(chain_id) = chain_id {
             // Override the mapping of network -> chain_id in node_mapping.csv
             self.write_chain_identifier(chain_id)?;
@@ -738,7 +731,7 @@ impl SetupStore for FileSystemStore {
 }
 
 impl FileSystemStore {
-    fn write_chain_identifier(&self, chain_id: String) -> Result<(), anyhow::Error> {
+    fn write_chain_identifier(&self, chain_id: String) -> Result<(), Error> {
         let mapping_file = self.base_path.join(NODE_MAPPING_FILE);
 
         // Create the base directory if it doesn't exist

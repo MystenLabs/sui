@@ -12,7 +12,7 @@ use crate::{
     replay_txn::replay_transaction,
     summary_metrics::TotalMetrics,
 };
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Result};
 use clap::{Parser, ValueEnum};
 use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
@@ -306,7 +306,7 @@ impl FromStr for Node {
 
 /// Load replay configuration from ~/.sui/sui_config/replay.toml file.
 /// Returns default config (all fields set to None) if file cannot be found or read.
-pub fn load_config_file() -> anyhow::Result<ReplayConfigStable> {
+pub fn load_config_file() -> Result<ReplayConfigStable> {
     let config_dir = match sui_config_dir() {
         Ok(dir) => dir,
         Err(e) => {
@@ -384,7 +384,7 @@ pub async fn handle_replay_config(
     stable_config: &ReplayConfigStableInternal,
     experimental_config: &ReplayConfigExperimental,
     version: &str,
-) -> anyhow::Result<PathBuf> {
+) -> Result<PathBuf> {
     let ReplayConfigStableInternal {
         digest,
         digests_path,
@@ -552,7 +552,7 @@ async fn run_replay<S>(
     verbose: bool,
     terminate_early: bool,
     track_time: bool,
-) -> anyhow::Result<()>
+) -> Result<()>
 where
     S: ReadDataStore + StoreSummary + SetupStore,
 {
@@ -635,7 +635,7 @@ pub fn print_effects_or_fork<W: Write>(
     output_root: &Path,
     show_effects: bool,
     w: &mut W,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     let output_dir = output_root.join(digest);
     let manager = ArtifactManager::new(&output_dir, false)?;
     if manager.member(Artifact::ForkedTransactionEffects).exists() {
@@ -665,7 +665,7 @@ pub fn print_effects_or_fork<W: Write>(
             w,
             "{}",
             SuiTransactionBlockEffects::try_from(tx_effects.clone())
-                .map_err(|e| anyhow::anyhow!("Failed to convert effects: {e}"))?
+                .map_err(|e| anyhow!("Failed to convert effects: {e}"))?
         )?;
         manager
             .member(Artifact::TransactionGasReport)
