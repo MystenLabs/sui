@@ -27,6 +27,7 @@ const guides = [
 				items: [
 					'guides/developer/getting-started/install-source',
 					'guides/developer/getting-started/install-binaries',
+          'guides/developer/getting-started/sui-for-ethereum',
 				],
 			},
 			'guides/developer/getting-started/configure-sui-client',
