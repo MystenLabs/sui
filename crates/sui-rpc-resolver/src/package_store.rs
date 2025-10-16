@@ -3,13 +3,13 @@
 
 //! Package store implementation that fetches packages from a Sui fullnode via RPC.
 //!
-//! This provides a convenient way for the indexer to resolve package types
+//! This provides a convenient way to resolve package types
 //! by fetching package data directly from the network.
 
 use async_trait::async_trait;
-use std::sync::Arc;
 use move_core_types::account_address::AccountAddress;
-use sui_package_resolver::{Package, PackageStore, PackageStoreWithLruCache};
+use std::sync::Arc;
+use sui_package_resolver::{error::Error, Package, PackageStore, PackageStoreWithLruCache};
 use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
 
@@ -27,8 +27,7 @@ impl RpcPackageStore {
     /// let store = RpcPackageStore::new("https://fullnode.testnet.sui.io:443");
     /// ```
     pub fn new(rpc_url: &str) -> Self {
-        let client = Client::new(rpc_url)
-            .expect("Failed to create RPC client - invalid URL");
+        let client = Client::new(rpc_url).expect("Failed to create RPC client - invalid URL");
         Self { client }
     }
 
@@ -39,7 +38,7 @@ impl RpcPackageStore {
     ///
     /// # Example
     /// ```ignore
-    /// use sui_indexer_alt_framework::utils::package_store::RpcPackageStore;
+    /// use sui_rpc_resolver::package_store::RpcPackageStore;
     /// use sui_package_resolver::Resolver;
     ///
     /// let store = RpcPackageStore::new("https://fullnode.testnet.sui.io:443");
@@ -53,13 +52,14 @@ impl RpcPackageStore {
 
 #[async_trait]
 impl PackageStore for RpcPackageStore {
-    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>, sui_package_resolver::error::Error> {
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>, Error> {
         // Fetch the object from the RPC client (client needs to be cloned because get_object takes ownership)
-        let object = self.client
+        let object = self
+            .client
             .clone()
             .get_object(ObjectID::from(id))
             .await
-            .map_err(|_| sui_package_resolver::error::Error::PackageNotFound(id))?;
+            .map_err(|_| Error::PackageNotFound(id))?;
 
         // Convert the object to a Package
         Ok(Arc::new(Package::read_from_object(&object)?))

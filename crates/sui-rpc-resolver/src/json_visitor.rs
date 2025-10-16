@@ -13,12 +13,14 @@ use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveStruct, MoveTypeLayout, MoveValue},
     annotated_visitor::{self, StructDriver, ValueDriver, VariantDriver, VecDriver, Visitor},
+    language_storage::TypeTag,
     u256::U256,
 };
 use serde_json::{Map, Value};
-
-use crate::{
+use sui_package_resolver::{error::Error as ResolverError, PackageStore, Resolver};
+use sui_types::{
     base_types::{move_ascii_str_layout, move_utf8_str_layout, RESOLVED_STD_OPTION},
+    event::Event,
     id::{ID, UID},
     object::option_visitor::{OptionVisitor, OptionVisitorError},
     proto_value::{is_balance, url_layout},
@@ -38,6 +40,18 @@ impl OptionVisitorError for Error {
     fn unexpected_type() -> Self {
         Error::UnexpectedType
     }
+}
+
+/// Error type for deserialization operations that involve both type resolution and BCS deserialization.
+#[derive(thiserror::Error, Debug)]
+pub enum DeserializationError {
+    /// Failed to fetch type layout from the package resolver.
+    #[error("Failed to fetch type layout: {0}")]
+    LayoutFetch(#[from] ResolverError),
+
+    /// Failed to deserialize BCS data to JSON.
+    #[error("Failed to deserialize BCS data: {0}")]
+    Deserialization(#[from] anyhow::Error),
 }
 
 /// A visitor that constructs JSON values from BCS bytes.
@@ -69,6 +83,55 @@ impl JsonVisitor {
     ) -> anyhow::Result<Value> {
         let mut visitor = Self::new();
         MoveStruct::visit_deserialize(bytes, layout, &mut visitor)
+    }
+
+    /// Deserialize a single event to JSON using type resolution.
+    ///
+    /// This function:
+    /// 1. Resolves the type layout for the event's type
+    /// 2. Deserializes the BCS-encoded event contents to JSON
+    ///
+    /// # Arguments
+    /// * `event` - The event to deserialize
+    /// * `resolver` - Package resolver for fetching type layouts
+    ///
+    /// # Returns
+    /// A JSON value representing the deserialized event contents
+    pub async fn deserialize_event<S>(
+        event: &Event,
+        resolver: &Resolver<S>,
+    ) -> Result<Value, DeserializationError>
+    where
+        S: PackageStore,
+    {
+        let type_tag = TypeTag::Struct(Box::new(event.type_.clone()));
+        let layout = resolver.type_layout(type_tag).await?;
+        Ok(Self::deserialize_value(&event.contents, &layout)?)
+    }
+
+    /// Deserialize multiple events to JSON concurrently.
+    ///
+    /// This function processes all events in parallel for better performance.
+    ///
+    /// # Arguments
+    /// * `events` - Slice of events to deserialize
+    /// * `resolver` - Package resolver for fetching type layouts
+    ///
+    /// # Returns
+    /// A vector of JSON values representing the deserialized event contents
+    pub async fn deserialize_events<S>(
+        events: &[Event],
+        resolver: &Resolver<S>,
+    ) -> Result<Vec<Value>, DeserializationError>
+    where
+        S: PackageStore,
+    {
+        use futures::future::try_join_all;
+
+        let futures = events
+            .iter()
+            .map(|event| Self::deserialize_event(event, resolver));
+        try_join_all(futures).await
     }
 }
 
