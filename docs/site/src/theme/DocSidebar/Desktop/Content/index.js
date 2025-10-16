@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import React from 'react';
 import Content from '@theme-original/DocSidebar/Desktop/Content';
 import SidebarIframe from '@site/src/components/SidebarIframe';
