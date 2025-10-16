@@ -1004,9 +1004,22 @@ mod tests {
                 },
             ),
             "bad_transform": Err(
-                TransformUnrecognized(
-                    "invalid",
-                ),
+                UnexpectedToken {
+                    actual: OwnedLexeme(
+                        false,
+                        Ident,
+                        6,
+                        "invalid",
+                    ),
+                    expect: ExpectedSet {
+                        prev: [],
+                        tried: [
+                            Literal(
+                                "str",
+                            ),
+                        ],
+                    },
+                },
             ),
             "too_deep": Err(
                 TooDeep,
