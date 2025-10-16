@@ -36,7 +36,7 @@ pub enum Strand<'s> {
 #[derive(PartialEq, Eq)]
 pub struct Expr<'s> {
     pub(crate) alternates: Vec<Chain<'s>>,
-    pub(crate) transform: Option<&'s str>,
+    pub(crate) transform: Option<Transform>,
 }
 
 /// Chains are a sequence of nested field accesses.
@@ -121,6 +121,13 @@ pub enum Fields<'s> {
     Named(Vec<(&'s str, Chain<'s>)>),
 }
 
+/// Ways to modify a value before displaying it.
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+pub enum Transform {
+    #[default]
+    Str,
+}
+
 pub(crate) struct Parser<'s> {
     lexer: Peekable2<Lexer<'s>>,
 }
@@ -202,7 +209,7 @@ macro_rules! match_token_opt {
 ///
 ///   part     ::= TEXT | '{{' | '}}'
 ///
-///   expr     ::= '{' chain ('|' chain)* (':' IDENT)? '}'
+///   expr     ::= '{' chain ('|' chain)* (':' xform)? '}'
 ///
 ///   chain    ::= (literal | IDENT) accessor*
 ///
@@ -240,6 +247,8 @@ macro_rules! match_token_opt {
 ///   datatype ::= NUM_HEX '::' IDENT ('<' type (',' type)* ','? '>')?
 ///
 ///   numeric  ::= 'u8' | 'u16' | 'u32' | 'u64' | 'u128' | 'u256'
+///
+///   xform    ::= 'str'
 ///
 impl<'s> Parser<'s> {
     /// Construct a new parser, consuming input from the `src` string.
@@ -306,10 +315,7 @@ impl<'s> Parser<'s> {
 
                 Tok(_, T::Colon, _, _) => {
                     self.lexer.next();
-                    match_token! { self.lexer; Tok(_, T::Ident, _, t) => {
-                        self.lexer.next();
-                        transform = Some(t);
-                    }};
+                    transform = Some(self.parse_xform()?);
                     match_token! { self.lexer; Tok(_, T::RBrace, _, _) => {
                         self.lexer.next()
                     }};
@@ -896,6 +902,15 @@ impl<'s> Parser<'s> {
             },
         })
     }
+
+    fn parse_xform(&mut self) -> Result<Transform, FormatError> {
+        Ok(match_token! { self.lexer;
+            Lit(_, T::Ident, _, "str") => {
+                self.lexer.next();
+                Transform::Str
+            }
+        })
+    }
 }
 
 impl fmt::Debug for Strand<'_> {
@@ -928,7 +943,7 @@ impl fmt::Debug for Expr<'_> {
         }
 
         if let Some(transform) = self.transform {
-            write!(f, ": {transform}")?;
+            write!(f, ": {transform:?}")?;
         }
 
         write!(f, "}}")
@@ -1053,6 +1068,14 @@ impl fmt::Debug for Enum<'_> {
 
                 builder.finish()
             }
+        }
+    }
+}
+
+impl fmt::Debug for Transform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Transform::Str => write!(f, "str"),
         }
     }
 }
@@ -1229,7 +1252,7 @@ mod tests {
 
     #[test]
     fn test_metering_expression_with_transform() {
-        let (nodes, loads, strands) = nodes_and_loads("{foo:hex}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo:str}");
         assert_eq!(nodes, 3);
         assert_eq!(loads, 0);
         assert_eq!(
@@ -1239,7 +1262,7 @@ mod tests {
                     root: None,
                     accessors: vec![A::Field(ident_str!("foo"))],
                 }],
-                transform: Some("hex"),
+                transform: Some(Transform::Str),
             })]
         );
     }
@@ -1653,12 +1676,12 @@ mod tests {
 
     #[test]
     fn test_alternates_with_transform() {
-        assert_snapshot!(strands(r#"{foo | bar | baz :base64}"#));
+        assert_snapshot!(strands(r#"{foo | bar | baz :str}"#));
     }
 
     #[test]
     fn test_expr_with_transform() {
-        assert_snapshot!(strands(r#"{foo.bar.baz:url}"#));
+        assert_snapshot!(strands(r#"{foo.bar.baz:str}"#));
     }
 
     #[test]
