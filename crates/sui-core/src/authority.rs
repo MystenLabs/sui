@@ -195,7 +195,6 @@ use crate::validator_tx_finalizer::ValidatorTxFinalizer;
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
-use sui_types::execution_config_utils::to_binary_config;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -3429,7 +3428,7 @@ impl AuthorityState {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = Arc::new(ExecutionScheduler::new(
             execution_cache_trait_pointers.object_cache_reader.clone(),
-            execution_cache_trait_pointers.child_object_resolver.clone(),
+            execution_cache_trait_pointers.object_store.clone(),
             execution_cache_trait_pointers
                 .transaction_cache_reader
                 .clone(),
@@ -3582,6 +3581,8 @@ impl AuthorityState {
         config: NodeConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
+        use crate::authority::authority_store_pruner::PrunerWatermarks;
+        let watermarks = Arc::new(PrunerWatermarks::default());
         AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
@@ -3590,6 +3591,7 @@ impl AuthorityState {
             config.authority_store_pruning_config,
             metrics,
             EPOCH_DURATION_MS_FOR_TESTING,
+            &watermarks,
         )
         .await
     }
@@ -3771,8 +3773,7 @@ impl AuthorityState {
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
-        self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+        self.execution_scheduler.reconfigure(&new_epoch_store);
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
@@ -3805,8 +3806,7 @@ impl AuthorityState {
                 .map(|c| *c.sequence_number())
                 .unwrap_or_default(),
         );
-        self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+        self.execution_scheduler.reconfigure(&new_epoch_store);
         let new_epoch = new_epoch_store.epoch();
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;
@@ -5087,9 +5087,16 @@ impl AuthorityState {
 
             let new_ref = new_object.compute_object_reference();
             if new_ref != system_package_ref {
-                debug_fatal!(
-                    "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
-                );
+                if cfg!(msim) {
+                    // debug_fatal required here for test_framework_upgrade_conflicting_versions to pass
+                    debug_fatal!(
+                        "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
+                    );
+                } else {
+                    error!(
+                        "Framework mismatch -- binary: {new_ref:?}\n  upgrade: {system_package_ref:?}"
+                    );
+                }
                 return None;
             }
 
@@ -5420,6 +5427,25 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
+    fn create_display_registry_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_display_registry() {
+            info!("display registry not enabled");
+            return None;
+        }
+
+        if epoch_store.display_registry_exists() {
+            return None;
+        }
+
+        let tx = EndOfEpochTransactionKind::new_display_registry_create();
+        info!("Creating DisplayRegistryCreate tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
     fn create_bridge_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -5654,6 +5680,10 @@ impl AuthorityState {
             txns.push(tx);
         }
 
+        if let Some(tx) = self.create_display_registry_tx(epoch_store) {
+            txns.push(tx);
+        }
+
         let next_epoch = epoch_store.epoch() + 1;
 
         let buffer_stake_bps = epoch_store.get_effective_buffer_stake_bps();
@@ -5684,16 +5714,26 @@ impl AuthorityState {
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version
         let config = epoch_store.protocol_config();
-        let binary_config = to_binary_config(config);
+        let binary_config = config.binary_config();
         let Some(next_epoch_system_package_bytes) = self
             .get_system_package_bytes(next_epoch_system_packages.clone(), &binary_config)
             .await
         else {
-            debug_fatal!(
-                "upgraded system packages {:?} are not locally available, cannot create \
-                ChangeEpochTx. validator binary must be upgraded to the correct version!",
-                next_epoch_system_packages
-            );
+            if next_epoch_protocol_version <= ProtocolVersion::MAX {
+                // This case should only be hit if the validator supports the new protocol version,
+                // but carries a different framework. The validator should still be able to
+                // reconfigure, as the correct framework will be installed by the change epoch txn.
+                debug_fatal!(
+                    "upgraded system packages {:?} are not locally available, cannot create \
+                    ChangeEpochTx. validator binary must be upgraded to the correct version!",
+                    next_epoch_system_packages
+                );
+            } else {
+                error!(
+                    "validator does not support next_epoch_protocol_version {:?} - will shut down after reconfig unless upgraded",
+                    next_epoch_protocol_version
+                );
+            }
             // the checkpoint builder will keep retrying forever when it hits this error.
             // Eventually, one of two things will happen:
             // - The operator will upgrade this binary to one that has the new packages locally,

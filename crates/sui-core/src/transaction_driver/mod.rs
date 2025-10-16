@@ -24,7 +24,6 @@ use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
 use rand::Rng;
 use sui_types::{
-    base_types::AuthorityName,
     committee::EpochId,
     error::{ErrorCategory, UserInputError},
     messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
@@ -55,7 +54,7 @@ pub struct SubmitTransactionOptions {
 
     /// When submitting a transaction, only the validators in the allowed validator list can be used to submit the transaction to.
     /// When the allowed validator list is empty, any validator can be used.
-    pub allowed_validators: Vec<AuthorityName>,
+    pub allowed_validators: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -189,7 +188,7 @@ where
                     .drive_transaction(
                         SubmitTxRequest::new_ping(ping_type),
                         SubmitTransactionOptions {
-                            allowed_validators: vec![name],
+                            allowed_validators: vec![display_name.clone()],
                             ..Default::default()
                         },
                         Some(ping_timeout),
@@ -360,6 +359,7 @@ where
         let start_time = Instant::now();
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();
+        let ping_type = request.ping_type;
 
         let (name, submit_txn_result) = self
             .submitter
@@ -402,6 +402,7 @@ where
                     } else {
                         OperationType::Consensus
                     },
+                    ping_type,
                     result: Ok(start_time.elapsed()),
                 });
         }

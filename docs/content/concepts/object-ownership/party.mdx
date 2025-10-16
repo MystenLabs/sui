@@ -25,7 +25,7 @@ public fun public_party_transfer<T: key + store>(obj: T, party: sui::party::Part
 
 Use the `sui::transfer::party_transfer` function if you are defining a [custom transfer policy](../transfers/custom-rules.mdx) for the object. Use the `sui::transfer::public_party_transfer` function if the object has the `store` capability.
 
-A party object's ownership can change over its lifetime. For example, by adding it as a dynamic object field, transferring it to a different address or owner type, or making it immutable. One exception: after you create an object and set its ownership, you cannot later share it.
+A party object's ownership can change over its lifetime. For example, by adding it as a dynamic object field, transferring it to a different address or ownership type, or making it immutable. One exception: after you create an object and set its ownership, you cannot later share it.
 
 ## Accessing party objects
 

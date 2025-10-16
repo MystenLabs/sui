@@ -51,3 +51,9 @@ bytes.workspace = true
 tonic-health.workspace = true
 tonic-reflection.workspace = true
 tonic-web.workspace = true
+
+[build-dependencies]
+tonic-build = "0.13"
+protox = "0.7"
+walkdir.workspace = true
+serde_json.workspace = true

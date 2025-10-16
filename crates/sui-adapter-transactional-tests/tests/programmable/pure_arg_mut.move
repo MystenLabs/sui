@@ -3,7 +3,7 @@
 
 // tests that pure arguments have distinct values/locals per type usage
 
-//# init --addresses test=0x0 --accounts A
+//# init --addresses test=0x0 --accounts A --allow-references-in-ptbs
 
 //# publish
 module test::m1 {
@@ -56,13 +56,13 @@ module test::m1 {
 //> test::m1::assert_string(Input(1));
 
 // In statically checked PTBs, tests that each type can be borrowed mutably separately
-//# programmable --inputs 0u8 --dev-inspect
+//# programmable --inputs 0u8
 //> 0: test::m1::borrow_mut<u8>(Input(0));
 //> 1: test::m1::borrow_mut<std::ascii::String>(Input(0));
 //> test::m1::modify_ascii(Result(1));
 //> test::m1::modify_u8(Result(0));
 
-//# programmable --inputs 0u8 --dev-inspect
+//# programmable --inputs 0u8
 //> 0: test::m1::borrow_mut<u8>(Input(0));
 //> 1: test::m1::borrow_mut<std::ascii::String>(Input(0));
 //> test::m1::modify_u8(Result(0));

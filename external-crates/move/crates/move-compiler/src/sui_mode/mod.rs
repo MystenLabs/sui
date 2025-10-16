@@ -75,7 +75,9 @@ pub const EVENT_AUTHENTICATED_FUNCTION_NAME: Symbol = symbol!("emit_authenticate
 
 pub const COIN_REGISTRY_MODULE_NAME: Symbol = symbol!("coin_registry");
 pub const DYNAMIC_COIN_CREATION_FUNCTION_NAME: Symbol = symbol!("new_currency");
-pub const COIN_REGISTRY_CREATE: Symbol = symbol!("create");
+pub const REGISTRY_CREATE_FUNCTION_NAME: Symbol = symbol!("create");
+
+pub const DISPLAY_REGISTRY_MODULE_NAME: Symbol = symbol!("display_registry");
 
 pub const TRANSFER_MODULE_NAME: Symbol = symbol!("transfer");
 pub const TRANSFER_FUNCTION_NAME: Symbol = symbol!("transfer");

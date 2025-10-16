@@ -108,6 +108,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
     use sui_pg_db::FieldCount;
     use sui_types::full_checkpoint_content::CheckpointData;
@@ -128,16 +129,20 @@ mod tests {
 
     pub struct DataPipeline;
 
+    #[async_trait]
     impl Processor for DataPipeline {
         const NAME: &'static str = "data";
         type Value = StoredData;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(
+            &self,
+            _checkpoint: &Arc<CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
 

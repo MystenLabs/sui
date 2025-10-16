@@ -642,6 +642,11 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
         match value {
             crate::transaction::TransactionExpiration::None => Self::None,
             crate::transaction::TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
+            crate::transaction::TransactionExpiration::ValidDuring { .. } => {
+                // TODO: Implement proper SDK conversion for ValidDuring
+                // For now, treat as None to maintain compatibility
+                Self::None
+            }
         }
     }
 }
@@ -1466,6 +1471,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             }
             crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
                 Self::CoinRegistryCreate
+            }
+            crate::transaction::EndOfEpochTransactionKind::DisplayRegistryCreate => {
+                Self::DisplayRegistryCreate
             }
         }
     }

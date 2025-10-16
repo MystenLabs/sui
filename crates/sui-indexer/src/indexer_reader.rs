@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use anyhow::Context as _;
 use anyhow::Result;
 use diesel::{
     dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
@@ -1184,14 +1185,16 @@ impl IndexerReader {
             })?;
 
         let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)
-            .tap_err(|e| warn!("{e}"))?;
+            .tap_err(|e| warn!("{e}"))
+            .context("Failed to deserialize dynamic field")?;
 
         let type_ = field.kind;
         let name_type: TypeTag = field.name_layout.into();
         let bcs_name = field.name_bytes.to_owned();
 
         let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
-            .tap_err(|e| warn!("{e}"))?;
+            .tap_err(|e| warn!("{e}"))
+            .context("Failed to deserialize dynamic field name")?;
 
         let name = DynamicFieldName {
             type_: name_type,

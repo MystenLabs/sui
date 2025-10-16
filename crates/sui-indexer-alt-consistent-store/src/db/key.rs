@@ -12,7 +12,7 @@
 //! - Collections are first ordered by size, then by their elements in lexicographic order.
 use bincode::{error::DecodeError, Decode, Encode};
 
-pub(crate) fn encode<T: Encode>(x: &T) -> Vec<u8> {
+pub(crate) fn encode<T: Encode + ?Sized>(x: &T) -> Vec<u8> {
     let config = bincode::config::standard()
         .with_big_endian()
         .with_fixed_int_encoding();

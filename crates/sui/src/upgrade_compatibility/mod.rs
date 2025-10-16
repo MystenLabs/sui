@@ -46,8 +46,8 @@ use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::apis::ReadApi;
+use sui_types::base_types::ObjectID;
 use sui_types::move_package::UpgradePolicy;
-use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 
 type Enum = normalized::Enum<normalized::RcIdentifier>;
 type Field = normalized::Field<normalized::RcIdentifier>;
@@ -708,7 +708,7 @@ pub(crate) async fn check_compatibility(
     let existing_modules = existing_package
         .module_map
         .iter()
-        .map(|m| CompiledModule::deserialize_with_config(m.1, &to_binary_config(&protocol_config)))
+        .map(|m| CompiledModule::deserialize_with_config(m.1, &protocol_config.binary_config()))
         .collect::<Result<Vec<_>, _>>()
         .context("Unable to get existing package")?;
 

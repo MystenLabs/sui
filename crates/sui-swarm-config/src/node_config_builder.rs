@@ -14,7 +14,7 @@ use sui_config::node::{
     ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
     StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
-use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
+use sui_config::node::{default_zklogin_oauth_providers, RunWithRange, TransactionDriverConfig};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{
@@ -255,6 +255,7 @@ impl ValidatorConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
+            transaction_driver_config: None,
         }
     }
 
@@ -292,6 +293,8 @@ pub struct FullnodeConfigBuilder {
     data_ingestion_dir: Option<PathBuf>,
     disable_pruning: bool,
     chain_override: Option<Chain>,
+    transaction_driver_config: Option<TransactionDriverConfig>,
+    rpc_config: Option<sui_config::RpcConfig>,
 }
 
 impl FullnodeConfigBuilder {
@@ -319,6 +322,11 @@ impl FullnodeConfigBuilder {
     pub fn with_rpc_addr(mut self, addr: SocketAddr) -> Self {
         assert!(self.rpc_addr.is_none() && self.rpc_port.is_none());
         self.rpc_addr = Some(addr);
+        self
+    }
+
+    pub fn with_rpc_config(mut self, rpc_config: sui_config::RpcConfig) -> Self {
+        self.rpc_config = Some(rpc_config);
         self
     }
 
@@ -412,6 +420,14 @@ impl FullnodeConfigBuilder {
 
     pub fn with_data_ingestion_dir(mut self, path: Option<PathBuf>) -> Self {
         self.data_ingestion_dir = path;
+        self
+    }
+
+    pub fn with_transaction_driver_config(
+        mut self,
+        config: Option<TransactionDriverConfig>,
+    ) -> Self {
+        self.transaction_driver_config = config;
         self
     }
 
@@ -541,9 +557,11 @@ impl FullnodeConfigBuilder {
             indexer_max_subscriptions: Default::default(),
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: Default::default(),
-            rpc: Some(sui_rpc_api::Config {
-                enable_indexing: Some(true),
-                ..Default::default()
+            rpc: self.rpc_config.or_else(|| {
+                Some(sui_rpc_api::Config {
+                    enable_indexing: Some(true),
+                    ..Default::default()
+                })
             }),
             // note: not used by fullnodes.
             jwk_fetch_interval_seconds: 3600,
@@ -564,6 +582,7 @@ impl FullnodeConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
+            transaction_driver_config: self.transaction_driver_config,
         }
     }
 }

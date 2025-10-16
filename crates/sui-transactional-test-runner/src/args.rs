@@ -90,6 +90,9 @@ pub struct SuiInitArgs {
     /// Enable authenticated event streams for testing
     #[clap(long = "enable-authenticated-event-streams")]
     pub enable_authenticated_event_streams: bool,
+    /// Enable references in PTBs
+    #[clap(long = "allow-references-in-ptbs")]
+    pub allow_references_in_ptbs: bool,
 }
 
 #[derive(Debug, clap::Parser)]

@@ -36,6 +36,7 @@ sui-execution.workspace = true
 sui-framework.workspace = true
 sui-types.workspace = true
 sui-config.workspace = true
+sui-move.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
 telemetry-subscribers.workspace = true

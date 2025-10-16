@@ -32,7 +32,6 @@ mod checked {
         base_types::*,
         error::ExecutionError,
         error::{ExecutionErrorKind, SuiError},
-        execution_config_utils::to_binary_config,
         metrics::LimitsMetrics,
         storage::ChildObjectResolver,
     };
@@ -58,7 +57,7 @@ mod checked {
                     .no_extraneous_module_bytes(),
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
-                binary_config: to_binary_config(protocol_config),
+                binary_config: protocol_config.binary_config(),
                 rethrow_serialization_type_layout_errors: protocol_config
                     .rethrow_serialization_type_layout_errors(),
                 max_type_to_layout_nodes: protocol_config.max_type_to_layout_nodes_as_option(),

@@ -34,7 +34,6 @@ mod checked {
     use sui_types::committee::EpochId;
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
-    use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -645,6 +644,9 @@ mod checked {
                         EndOfEpochTransactionKind::CoinRegistryCreate => {
                             panic!("EndOfEpochTransactionKind::CoinRegistryCreate should not exist in v1");
                         }
+                        EndOfEpochTransactionKind::DisplayRegistryCreate => {
+                            panic!("EndOfEpochTransactionKind::DisplayRegistryCreate should not exist in v1");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -871,7 +873,7 @@ mod checked {
             }
         }
 
-        let binary_config = to_binary_config(protocol_config);
+        let binary_config = protocol_config.binary_config();
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
                 .iter()

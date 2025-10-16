@@ -44,6 +44,27 @@ use tracing::{debug, info, trace, warn};
 const SMA_LOCAL_OBSERVATION_WINDOW_SIZE: usize = 20;
 const OBJECT_UTILIZATION_METRIC_HASH_MODULUS: u8 = 32;
 
+/// Determines whether to inject synthetic execution time in Antithesis environments.
+///
+/// This function checks two conditions:
+/// 1. Whether the code is running in an Antithesis environment
+/// 2. Whether injection is enabled via the `ANTITHESIS_ENABLE_EXECUTION_TIME_INJECTION` env var
+///    (enabled by default)
+#[cfg(not(msim))]
+fn antithesis_enable_injecting_synthetic_execution_time() -> bool {
+    use std::sync::OnceLock;
+    static ENABLE_INJECTION: OnceLock<bool> = OnceLock::new();
+    *ENABLE_INJECTION.get_or_init(|| {
+        if !in_antithesis() {
+            return false;
+        }
+
+        std::env::var("ANTITHESIS_ENABLE_EXECUTION_TIME_INJECTION")
+            .map(|v| v.to_lowercase() == "true" || v == "1")
+            .unwrap_or(true)
+    })
+}
+
 // Collects local execution time estimates to share via consensus.
 pub struct ExecutionTimeObserver {
     epoch_store: Weak<AuthorityPerEpochStore>,
@@ -269,7 +290,7 @@ impl ExecutionTimeObserver {
         #[cfg(msim)]
         let should_inject = self.config.inject_synthetic_execution_time();
         #[cfg(not(msim))]
-        let should_inject = in_antithesis();
+        let should_inject = antithesis_enable_injecting_synthetic_execution_time();
 
         if should_inject {
             let (generated_timings, generated_duration) = self.generate_test_timings(tx, timings);

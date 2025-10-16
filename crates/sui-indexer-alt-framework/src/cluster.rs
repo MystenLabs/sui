@@ -242,6 +242,7 @@ impl DerefMut for IndexerCluster {
 mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+    use async_trait::async_trait;
     use diesel::{Insertable, QueryDsl, Queryable};
     use diesel_async::RunQueryDsl;
     use sui_synthetic_ingestion::synthetic_ingestion;
@@ -277,11 +278,15 @@ mod tests {
     /// Test concurrent pipeline for populating [tx_counts].
     struct TxCounts;
 
+    #[async_trait]
     impl Processor for TxCounts {
         const NAME: &'static str = "tx_counts";
         type Value = StoredTxCount;
 
-        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(
+            &self,
+            checkpoint: &Arc<CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![StoredTxCount {
                 cp_sequence_number: checkpoint.checkpoint_summary.sequence_number as i64,
                 count: checkpoint.transactions.len() as i64,
@@ -289,7 +294,7 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl concurrent::Handler for TxCounts {
         type Store = Db;
 

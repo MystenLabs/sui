@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulator_event::AccumulatorEvent,
     balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::{Digest, TransactionDigest},
     dynamic_field::{
-        serialize_dynamic_field, BoundedDynamicFieldID, DynamicFieldKey, DynamicFieldObject, Field,
-        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
+        serialize_dynamic_field, DynamicFieldKey, DynamicFieldObject, Field,
+        UnboundedDynamicFieldID, DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
     },
     error::{SuiError, SuiResult},
     object::{MoveObject, Object, Owner},
@@ -142,22 +143,20 @@ impl AccumulatorValue {
         .exists(child_object_resolver)
     }
 
-    pub fn load_by_id<T>(
-        child_object_resolver: &dyn ChildObjectResolver,
-        version_bound: Option<SequenceNumber>,
+    pub fn load_latest_by_id<T>(
+        object_store: &dyn ObjectStore,
         id: AccumulatorObjId,
-    ) -> SuiResult<Option<T>>
+    ) -> SuiResult<Option<(T, SequenceNumber)>>
     where
         T: Serialize + DeserializeOwned,
     {
-        BoundedDynamicFieldID::<AccumulatorKey>::new(
-            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            id.0,
-            version_bound.unwrap_or(SequenceNumber::MAX),
-        )
-        .load_object(child_object_resolver)?
-        .map(|o| o.load_value::<T>())
-        .transpose()
+        UnboundedDynamicFieldID::<AccumulatorKey>::new(SUI_ACCUMULATOR_ROOT_OBJECT_ID, id.0)
+            .load_object(object_store)
+            .map(|o| {
+                let version = o.0.version();
+                o.load_value::<T>().map(|v| (v, version))
+            })
+            .transpose()
     }
 
     pub fn load(
@@ -226,6 +225,19 @@ impl AccumulatorValue {
             TransactionDigest::genesis_marker(),
         )
     }
+}
+
+/// Extract stream id from an accumulator event if it targets sui::accumulator_settlement::EventStreamHead
+pub fn stream_id_from_accumulator_event(ev: &AccumulatorEvent) -> Option<SuiAddress> {
+    if let TypeTag::Struct(tag) = &ev.write.address.ty {
+        if tag.address == SUI_FRAMEWORK_ADDRESS
+            && tag.module.as_ident_str() == ACCUMULATOR_SETTLEMENT_MODULE
+            && tag.name.as_ident_str() == ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD
+        {
+            return Some(ev.write.address.address);
+        }
+    }
+    None
 }
 
 impl TryFrom<&MoveObject> for AccumulatorValue {

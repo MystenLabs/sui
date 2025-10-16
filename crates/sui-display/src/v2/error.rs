@@ -21,11 +21,14 @@ pub enum Error {
     #[error("Odd number of characters in hex {0}")]
     OddHexLiteral(OwnedLexeme),
 
+    #[error("Display format contains too many elements")]
+    TooBig,
+
     #[error("Display format is nested too deeply")]
     TooDeep,
 
-    #[error("Display format contains too many elements")]
-    TooBig,
+    #[error("Display format tries to load too many objects")]
+    TooManyLoads,
 
     #[error("Unexpected end-of-string, expected {expect}")]
     UnexpectedEos { expect: ExpectedSet },

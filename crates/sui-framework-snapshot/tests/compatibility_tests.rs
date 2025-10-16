@@ -11,7 +11,6 @@ mod compatibility_tests {
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
     use sui_move_build::published_at_property;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-    use sui_types::execution_config_utils::to_binary_config;
 
     /// The number of bytecode snapshots to backtest against the current framework.
     /// This should be set to a reasonable number to ensure that we are testing against any
@@ -30,7 +29,7 @@ mod compatibility_tests {
         {
             let config =
                 ProtocolConfig::get_for_version(ProtocolVersion::new(*version), Chain::Unknown);
-            let binary_config = to_binary_config(&config);
+            let binary_config = config.binary_config();
             let framework = load_bytecode_snapshot(*version).unwrap();
             let old_framework_store: BTreeMap<_, _> = framework
                 .into_iter()
