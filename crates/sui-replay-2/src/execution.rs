@@ -15,7 +15,11 @@ use crate::{
     replay_interface::{EpochStore, ObjectKey, ObjectStore, VersionQuery},
     replay_txn::{get_input_objects_for_replay, ReplayTransaction},
 };
+<<<<<<< HEAD
 use anyhow::{anyhow, Context, Error};
+=======
+use anyhow::Context;
+>>>>>>> 08c0c02966 (Refactored code to break up artifacts from execution)
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_trace_format::format::MoveTraceBuilder;
 use std::{
