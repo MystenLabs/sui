@@ -5,7 +5,8 @@ use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use serde::{Deserialize, Serialize};
 
-use crate::base_types::SequenceNumber;
+use crate::base_types::{SequenceNumber, SuiAddress};
+use crate::collection_types::VecSet;
 use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::{SuiError, SuiResult};
 use crate::object::Owner;
@@ -47,6 +48,13 @@ pub struct ActiveJwk {
     pub jwk: JWK,
     // the most recent epoch in which the jwk was validated
     pub epoch: u64,
+}
+
+// Rust version of the Move sui::authenticator_state::AddressAliases type
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AddressAliases {
+    pub id: UID,
+    pub aliases: VecSet<SuiAddress>,
 }
 
 fn string_bytes_ord(a: &str, b: &str) -> std::cmp::Ordering {

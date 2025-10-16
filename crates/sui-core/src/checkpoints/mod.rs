@@ -34,7 +34,7 @@ use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use sui_macros::fail_point_arg;
 use sui_network::default_mysten_network_config;
-use sui_types::base_types::ConciseableName;
+use sui_types::base_types::{ConciseableName, SequenceNumber};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment};
@@ -1824,8 +1824,15 @@ impl CheckpointBuilder {
     fn split_checkpoint_chunks(
         &self,
         effects_and_transaction_sizes: Vec<(TransactionEffects, usize)>,
-        signatures: Vec<Vec<GenericSignature>>,
-    ) -> CheckpointBuilderResult<Vec<Vec<(TransactionEffects, Vec<GenericSignature>)>>> {
+        signatures: Vec<Vec<(GenericSignature, Option<SequenceNumber>)>>,
+    ) -> CheckpointBuilderResult<
+        Vec<
+            Vec<(
+                TransactionEffects,
+                Vec<(GenericSignature, Option<SequenceNumber>)>,
+            )>,
+        >,
+    > {
         let _guard = monitored_scope("CheckpointBuilder::split_checkpoint_chunks");
         let mut chunks = Vec::new();
         let mut chunk = Vec::new();
@@ -1838,9 +1845,14 @@ impl CheckpointBuilder {
             // The size calculation here is intended to estimate the size of the
             // FullCheckpointContents struct. If this code is modified, that struct
             // should also be updated accordingly.
-            let size = transaction_size
-                + bcs::serialized_size(&effects)?
-                + bcs::serialized_size(&signatures)?;
+            let signatures_size = if self.epoch_store.protocol_config().account_aliases() {
+                bcs::serialized_size(&signatures)?
+            } else {
+                let signatures: Vec<&GenericSignature> =
+                    signatures.iter().map(|(s, _)| s).collect();
+                bcs::serialized_size(&signatures)?
+            };
+            let size = transaction_size + bcs::serialized_size(&effects)? + signatures_size;
             if chunk.len() == self.max_transactions_per_checkpoint
                 || (chunk_size + size) > self.max_checkpoint_size_bytes
             {
@@ -2137,10 +2149,17 @@ impl CheckpointBuilder {
 
                 None
             };
-            let contents = CheckpointContents::new_with_digests_and_signatures(
-                effects.iter().map(TransactionEffects::execution_digests),
-                signatures,
-            );
+            let contents = if self.epoch_store.protocol_config().account_aliases() {
+                CheckpointContents::new_v2(&effects, signatures)
+            } else {
+                CheckpointContents::new_with_digests_and_signatures(
+                    effects.iter().map(TransactionEffects::execution_digests),
+                    signatures
+                        .into_iter()
+                        .map(|sigs| sigs.into_iter().map(|(s, _)| s).collect())
+                        .collect(),
+                )
+            };
 
             let num_txns = contents.size() as u64;
 
@@ -2232,7 +2251,7 @@ impl CheckpointBuilder {
         epoch_total_gas_cost: &GasCostSummary,
         epoch_start_timestamp_ms: CheckpointTimestamp,
         checkpoint_effects: &mut Vec<TransactionEffects>,
-        signatures: &mut Vec<Vec<GenericSignature>>,
+        signatures: &mut Vec<Vec<(GenericSignature, Option<SequenceNumber>)>>,
         checkpoint: CheckpointSequenceNumber,
         end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
         // This may be less than `checkpoint - 1` if the end-of-epoch PendingCheckpoint produced
@@ -3521,7 +3540,7 @@ mod tests {
             let signature = Signature::Ed25519SuiSignature(Default::default()).into();
             state
                 .epoch_store_for_testing()
-                .test_insert_user_signature(digest, vec![signature]);
+                .test_insert_user_signature(digest, vec![(signature, None)]);
         }
 
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);

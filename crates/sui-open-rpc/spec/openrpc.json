@@ -1294,12 +1294,13 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "98",
+              "maxSupportedProtocolVersion": "99",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
+                "account_aliases": false,
                 "additional_borrow_checks": false,
                 "additional_consensus_digest_indirect_state": false,
                 "additional_multisig_checks": false,
@@ -5878,7 +5879,6 @@
         "$ref": "#/components/schemas/Digest"
       },
       "ConsensusDeterminedVersionAssignments": {
-        "description": "Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.",
         "oneOf": [
           {
             "type": "object",
