@@ -6,7 +6,7 @@ keywords: [ address-owned objects, address-owned, owned objects, objects owned b
 
 An address-owned object is owned by a specific 32-byte address that is either an account address (derived from a particular signature scheme) or an object ID. An address-owned object is accessible only to its owner and no others.
 
-As the owner (of the address that owns) an address-owned objects, you can transfer it to different addresses. Because only a single owner can access these objects, you can execute transactions that use only owned objects in parallel with other transactions that don't have any objects in common without needing to go through consensus.
+As the owner of the address that holds an address-owned object, you can transfer that object to different addresses. Because only one owner can access an object, transactions must use different owned objects to run in parallel without having to go through consensus.
 
 ## Creating address-owned objects
 
