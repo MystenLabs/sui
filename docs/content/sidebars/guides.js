@@ -31,6 +31,7 @@ const guides = [
 					'guides/developer/getting-started/get-address',
 					'guides/developer/getting-started/get-coins',
 					'guides/developer/getting-started/data-serving',
+          'guides/developer/getting-started/sui-for-ethereum',
 				],
 			},
 			{
