@@ -1,0 +1,219 @@
+---
+title: GraphQL and General-purpose Indexer
+description: Setup instructions for running the indexer, consistent store, and GraphQL in production.
+keywords: [ indexer, consistent store, graphql, setup, dex ]
+---
+
+## Indexer setup
+
+The indexer consists of multiple pipelines that each read checkpoint data, transform it, and write it to a table. These
+pipelines are grouped together and configured in TOML files. Multiple instances of the indexer run in parallel, each
+configured by its own TOML file. The grouping is determined by pipeline speed because all pipelines in an instance are
+limited by the slowest pipeline in that instance.
+
+### Run command
+
+An indexer instance is run using this command for each of the configuration files listed below:
+```sh
+sui-indexer-alt indexer \
+    --config CONFIG_FILE
+    --database-url DATABASE_URL
+    --remote-store-url REMOTE_STORE_URL
+```
+
+| CLI param          | Description                                                                                                        |
+|--------------------|--------------------------------------------------------------------------------------------------------------------|
+| `CONFIG_FILE`      | Path to indexer configuration file                                                                                 |
+| `DATABASE_URL`     | Postgres database connection string                                                                                |
+| `REMOTE_STORE_URL` | Location of the checkpoint data to be indexed<br/>[Data sources](/concepts/custom-indexing-framework#data-sources) |
+
+Example:
+```sh
+sui-indexer-alt indexer \
+    --config misc.toml
+    --database-url postgres://username:password@localhost:5432/database
+    --remote-store-url https://checkpoints.mainnet.sui.io
+```
+
+### <span id="indexer-run-config">Run config recommendations</span>
+
+| Config TOML                                                                                                               | Description                                                     | Pipelines                                                                                                                                                                     | Backfill time | Data retention |
+|---------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|----------------|
+| [events.toml](https://github.com/MystenLabs/sui/tree/main/examples/prod-config/events.toml)                               | lightweight event tables                                        | ev_emit_mod<br/>ev_struct_inst                                                                                                                                                | 1-2 days      | 90 days        |
+| [misc.toml](https://github.com/MystenLabs/sui/tree/main/examples/prod-config/misc.toml)                                   | lightweight miscellaneous tables                                | cp_sequence_numbers<br/>tx_balance_changes<br/>tx_digests<br/>kv_epoch_ends<br/>kv_epoch_starts<br/>kv_feature_flags<br/>kv_packages<br/>kv_protocol_configs<br/>sum_displays | 2-4 days      | 90 days        |
+| [obj_versions.toml](https://github.com/MystenLabs/sui/tree/main/examples/prod-config/obj_versions.toml)                   | heavyweight object versions table containing data since genesis | obj_versions                                                                                                                                                                  | 10-14 days    | unpruned       |
+| [tx_affected_addresses.toml](https://github.com/MystenLabs/sui/tree/main/examples/prod-config/tx_affected_addresses.toml) | midweight transaction table                                     | tx_affected_addresses                                                                                                                                                         | 1-2 days      | 90 days        |
+| [tx_affected_objects.toml](https://github.com/MystenLabs/sui/tree/main/examples/prod-config/tx_affected_objects.toml)     | midweight transaction table                                     | tx_affected_objects                                                                                                                                                           | 1-2 days      | 90 days        |
+| [tx_calls.toml](https://github.com/MystenLabs/sui/tree/main/examples/prod-config/tx_calls.toml)                           | midweight transaction table                                     | tx_calls                                                                                                                                                                      | 1-2 days      | 90 days        |
+| [tx_kinds.toml](https://github.com/MystenLabs/sui/tree/main/examples/prod-config/tx_kinds.toml)                           | midweight transaction table                                     | tx_kinds                                                                                                                                                                      | 1-2 days      | 90 days        |
+
+### Hardware requirements
+
+- CPU: 8 cores
+- Memory 16GB
+
+### Storage requirements
+
+**total:** TBD
+
+| Pipeline              | Table                 | Approximate size (with recommended config) |
+|-----------------------|-----------------------|--------------------------------------------|
+| cp_sequence_numbers   | cp_sequence_numbers   | TBD                                        |
+| ev_emit_mod           | ev_emit_mod           | TBD                                        |
+| ev_struct_inst        | ev_struct_inst        | TBD                                        |
+| obj_versions          | obj_versions          | TBD                                        |
+| kv_epoch_ends         | kv_epoch_ends         | TBD                                        |
+| kv_epoch_starts       | kv_epoch_starts       | TBD                                        |
+| kv_feature_flags      | kv_feature_flags      | TBD                                        |
+| kv_packages           | kv_packages           | TBD                                        |
+| kv_protocol_configs   | kv_protocol_configs   | TBD                                        |
+| sum_displays          | sum_displays          | TBD                                        |
+| tx_affected_addresses | tx_affected_addresses | TBD                                        |
+| tx_affected_objects   | tx_affected_objects   | TBD                                        |
+| tx_balance_changes    | tx_balance_changes    | TBD                                        |
+| tx_digests            | tx_digests            | TBD                                        |
+| tx_calls              | tx_calls              | TBD                                        |
+| tx_kinds              | tx_kinds              | TBD                                        |
+
+## Consistent store setup
+
+All consistent store pipelines are run in the same instance based on a single configuration file. Like the indexer, the
+pipelines run in parallel and throughput is limited by the slowest pipeline.
+
+### Restore command
+
+Restores one or more pipelines from checkpoint data in a GCS bucket.
+
+```sh
+sui-indexer-alt-consistent-store restore \
+    --database-path DATABASE_PATH \
+    --gcs GCS \
+    --object-file-concurrency OBJECT_FILE_CONCURRENCY \
+    --pipeline PIPELINE_NAME
+    --remote-store-url REMOTE_STORE_URL \
+```
+
+| CLI param                 | Description                                                                                                        |
+|---------------------------|--------------------------------------------------------------------------------------------------------------------|
+| `DATABASE_PATH`           | Path to RocksDB database                                                                                           |
+| `GCS`                     | TBD                                                                                                                |
+| `OBJECT_FILE_CONCURRENCY` | Path to indexer configuration file                                                                                 |
+| `PIPELINE_NAME`           | Name of pipeline to restore<br/>Can be set multiple times; once per pipeline                                       |
+| `REMOTE_STORE_URL`        | Location of the checkpoint data to be indexed<br/>[Data sources](/concepts/custom-indexing-framework#data-sources) |
+
+
+Example:
+```sh
+sui-indexer-alt-consistent-store restore \
+    --database-path /path/to/rocksdb \
+    --gcs mysten-testnet-formal \
+    --object-file-concurrency 5 \
+    --pipeline balances \
+    --pipeline object_by_owner \
+    --pipeline object_by_type \
+    --remote-store-url https://checkpoints.mainnet.sui.io
+```
+
+### Run command
+
+A consistent store instance is run using this command for the configuration file below:
+```sh
+sui-indexer-alt-consistent-store run \
+    --config CONFIG_FILE \
+    --database-path DATABASE_PATH
+    --remote-store-url REMOTE_STORE_URL \
+```
+
+| CLI param          | Description                                                                                                        |
+|--------------------|--------------------------------------------------------------------------------------------------------------------|
+| `CONFIG_FILE`      | Path to consistent store configuration file                                                                        |
+| `DATABASE_PATH`    | Path to RocksDB database                                                                                           |
+| `REMOTE_STORE_URL` | Location of the checkpoint data to be indexed<br/>[Data sources](/concepts/custom-indexing-framework#data-sources) |
+
+Example:
+```sh
+sui-indexer-alt-consistent-store run \
+    --config consistent_store.toml \
+    --database-path /path/to/rocksdb
+    --remote-store-url https://checkpoints.mainnet.sui.io \
+```
+
+### Run config recommendations
+
+| Config TOML                                                                                                     | Description                                         | Pipelines                                       | Backfill time | Data retention |
+|-----------------------------------------------------------------------------------------------------------------|-----------------------------------------------------|-------------------------------------------------|---------------|----------------|
+| [consistent_store.toml](https://github.com/MystenLabs/sui/tree/main/examples/prod-config/consistent_store.toml) | consistent store API configuration and event tables | balances<br/>object-by-owner<br/>object-by-type | TBD           | unpruned       |
+
+### Hardware requirements
+
+- CPU: 8 cores
+- Memory 32GB
+
+### Storage requirements
+
+**total:** TBD
+
+| Pipeline        | Table           | Approximate size (with recommended config) |
+|-----------------|-----------------|--------------------------------------------|
+| balances        | balances        | TBD                                        |
+| object-by-owner | object-by-owner | TBD                                        |
+| object-by-type  | object-by-type  | TBD                                        |
+
+## GraphQL setup
+
+GraphQL instances read data from the indexer and the consistent store. The number of instances is determined by the
+required read throughput.
+
+### Run command
+
+Each GraphQL instance is run using the same command below:
+```sh
+sui-indexer-alt-graphql rpc \
+    --config CONFIG_FILE \
+    --indexer-config INDEXER_CONFIG_FILE \
+    --bigtable-instance BIGTABLE_INSTANCE \
+    --consistent-store-url CONSISTENT_STORE_URL \
+    --database-url DATABASE_URL \
+    --fullnode-rpc-url FULLNODE_RPC_URL
+```
+
+| CLI param              | Description                                                                        |
+|------------------------|------------------------------------------------------------------------------------|
+| `CONFIG_FILE`          | Path to GraphQL configuration file                                                 |
+| `INDEXER_CONFIG_FILE`  | Path to indexer configuration file<br/>Can be set multiple times; once per indexer |
+| `BIGTABLE_INSTANCE`    | GCP Bigtable instance                                                              |
+| `CONSISTENT_STORE_URL` | URL to [consistent store](#consistent-store-setup) API                             |
+| `DATABASE_URL`         | Postgres database connection string                                                |
+| `FULLNODE_RPC_URL`     | URL to fullnode RPC API                                                            |
+
+
+Example:
+```sh
+sui-indexer-alt-graphql rpc \
+    --config graphql.toml \
+    --indexer-config events.toml \
+    --indexer-config misc.toml \
+    --indexer-config obj_versions.toml \
+    --indexer-config tx_affected_addresses.toml \
+    --indexer-config tx_affected_objects.toml \
+    --indexer-config tx_calls.toml \
+    --indexer-config tx_kinds.toml \
+    --bigtable-instance kv-store-mainnet \
+    --consistent-store-url https://localhost:7001 \
+    --database-url postgres://username:password@localhost:5432/database \
+    --fullnode-rpc-url https://localhost:9000
+```
+
+### Run config recommendations
+
+| Config TOML                                                                                   | Description                       |
+|-----------------------------------------------------------------------------------------------|-----------------------------------|
+| [graphql.toml](https://github.com/MystenLabs/sui/tree/main/examples/prod-config/graphql.toml) | default GraphQL API configuration |
+
+[Indexer Config](#indexer-run-config)
+
+### Hardware requirements
+
+- CPU: 8 cores
+- Memory 32GB
+
