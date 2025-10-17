@@ -19,10 +19,10 @@ use sui_types::dynamic_field::{
 };
 
 use super::{
-    visitor::extractor::Extractor,
     error::FormatError,
     parser as P,
     value::{Accessor, Enum, Fields, Slice, Store, Struct, Value, Vector},
+    visitor::extractor::Extractor,
     writer::BoundedWriter,
 };
 
