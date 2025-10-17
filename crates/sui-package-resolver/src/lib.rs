@@ -41,7 +41,7 @@ pub mod error;
 
 // TODO Move to ServiceConfig
 
-const PACKAGE_CACHE_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1024) };
+const PACKAGE_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1024).unwrap();
 
 pub type Result<T> = std::result::Result<T, Error>;
 

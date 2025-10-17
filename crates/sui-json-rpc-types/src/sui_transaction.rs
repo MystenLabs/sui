@@ -1401,7 +1401,7 @@ impl Display for SuiExecutionStatus {
 
 impl SuiExecutionStatus {
     pub fn is_ok(&self) -> bool {
-        matches!(self, SuiExecutionStatus::Success { .. })
+        matches!(self, SuiExecutionStatus::Success)
     }
     pub fn is_err(&self) -> bool {
         matches!(self, SuiExecutionStatus::Failure { .. })

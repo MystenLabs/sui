@@ -175,15 +175,13 @@ pub fn simulate_transaction(
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
 
-        message.balance_changes = submask
-            .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-            .then(|| {
+        message.balance_changes = if submask
+            .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) { {
                 derive_balance_changes_2(&effects, &objects)
                     .into_iter()
                     .map(Into::into)
                     .collect()
-            })
-            .unwrap_or_default();
+            } } else { Default::default() };
 
         message.effects = {
             let effects = sui_sdk_types::TransactionEffects::try_from(effects)?;

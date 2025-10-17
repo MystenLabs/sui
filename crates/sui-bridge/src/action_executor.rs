@@ -766,7 +766,9 @@ mod tests {
             true,
         );
 
-        store.insert_pending_actions(&[action.clone()]).unwrap();
+        store
+            .insert_pending_actions(std::slice::from_ref(&action))
+            .unwrap();
         assert_eq!(
             store.get_all_pending_actions()[&action.digest()],
             action.clone()
@@ -816,7 +818,9 @@ mod tests {
             true,
         );
 
-        store.insert_pending_actions(&[action.clone()]).unwrap();
+        store
+            .insert_pending_actions(std::slice::from_ref(&action))
+            .unwrap();
         assert_eq!(
             store.get_all_pending_actions()[&action.digest()],
             action.clone()
@@ -865,7 +869,9 @@ mod tests {
             true,
         );
 
-        store.insert_pending_actions(&[action.clone()]).unwrap();
+        store
+            .insert_pending_actions(std::slice::from_ref(&action))
+            .unwrap();
         assert_eq!(
             store.get_all_pending_actions()[&action.digest()],
             action.clone()
@@ -953,7 +959,9 @@ mod tests {
             gas_object_ref,
             Owner::AddressOwner(sui_address),
         );
-        store.insert_pending_actions(&[action.clone()]).unwrap();
+        store
+            .insert_pending_actions(std::slice::from_ref(&action))
+            .unwrap();
         assert_eq!(
             store.get_all_pending_actions()[&action.digest()],
             action.clone()
@@ -1065,7 +1073,9 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
         );
-        store.insert_pending_actions(&[action.clone()]).unwrap();
+        store
+            .insert_pending_actions(std::slice::from_ref(&action))
+            .unwrap();
         assert_eq!(
             store.get_all_pending_actions()[&action.digest()],
             action.clone()
@@ -1152,7 +1162,9 @@ mod tests {
 
         sui_client_mock.set_action_onchain_status(&action, BridgeActionStatus::Pending);
 
-        store.insert_pending_actions(&[action.clone()]).unwrap();
+        store
+            .insert_pending_actions(std::slice::from_ref(&action))
+            .unwrap();
         assert_eq!(
             store.get_all_pending_actions()[&action.digest()],
             action.clone()
@@ -1240,7 +1252,9 @@ mod tests {
         // assert bridge is unpaused now
         assert!(!*bridge_pause_tx.borrow());
 
-        store.insert_pending_actions(&[action.clone()]).unwrap();
+        store
+            .insert_pending_actions(std::slice::from_ref(&action))
+            .unwrap();
         assert_eq!(
             store.get_all_pending_actions()[&action.digest()],
             action.clone()

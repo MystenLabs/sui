@@ -16,6 +16,7 @@ use rand::distributions::Distribution;
 
 const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 
+#[allow(clippy::doc_overindented_list_items)]
 /// The source that should be used to identify the client's
 /// IP address. To be used to configure cases where a node has
 /// infra running in front of the node that is separate from the

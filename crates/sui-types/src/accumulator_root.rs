@@ -114,7 +114,7 @@ impl AccumulatorValue {
             DynamicFieldKey(
                 SUI_ACCUMULATOR_ROOT_OBJECT_ID,
                 key,
-                AccumulatorKey::get_type_tag(&[type_.clone()]),
+                AccumulatorKey::get_type_tag(std::slice::from_ref(type_)),
             )
             .into_unbounded_id()?
             .as_object_id(),
@@ -137,7 +137,7 @@ impl AccumulatorValue {
         DynamicFieldKey(
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
             key,
-            AccumulatorKey::get_type_tag(&[type_.clone()]),
+            AccumulatorKey::get_type_tag(std::slice::from_ref(type_)),
         )
         .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .exists(child_object_resolver)
@@ -172,7 +172,7 @@ impl AccumulatorValue {
         }
 
         let key = AccumulatorKey { owner };
-        let key_type_tag = AccumulatorKey::get_type_tag(&[type_.clone()]);
+        let key_type_tag = AccumulatorKey::get_type_tag(std::slice::from_ref(type_));
 
         let Some(value) = DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
             .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
@@ -193,7 +193,7 @@ impl AccumulatorValue {
         type_: &TypeTag,
     ) -> SuiResult<Option<Object>> {
         let key = AccumulatorKey { owner };
-        let key_type_tag = AccumulatorKey::get_type_tag(&[type_.clone()]);
+        let key_type_tag = AccumulatorKey::get_type_tag(std::slice::from_ref(type_));
 
         Ok(
             DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
@@ -212,7 +212,7 @@ impl AccumulatorValue {
         let field_key = DynamicFieldKey(
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
             key,
-            AccumulatorKey::get_type_tag(&[type_tag.clone()]),
+            AccumulatorKey::get_type_tag(std::slice::from_ref(&type_tag)),
         );
         let field = field_key.into_field(value).unwrap();
         let move_object = field

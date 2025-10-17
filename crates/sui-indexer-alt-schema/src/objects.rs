@@ -112,7 +112,7 @@ impl StoredObjInfo {
             owner_id: match object.owner() {
                 Owner::AddressOwner(a) => Some(a.to_vec()),
                 Owner::ObjectOwner(o) => Some(o.to_vec()),
-                Owner::Shared { .. } | Owner::Immutable { .. } => None,
+                Owner::Shared { .. } | Owner::Immutable => None,
                 Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_vec()),
             },
 

@@ -1119,7 +1119,7 @@ fn read_string_literal(slice: &str) -> Cow<'_, str> {
 }
 
 fn read_hex_literal(lexeme: &Lex<'_>, slice: &str) -> Result<Vec<u8>, Error> {
-    if slice.len() % 2 != 0 {
+    if !slice.len().is_multiple_of(2) {
         return Err(Error::OddHexLiteral(lexeme.detach()));
     }
 

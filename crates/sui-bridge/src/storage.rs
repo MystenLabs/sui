@@ -189,7 +189,9 @@ mod tests {
         );
 
         // insert an existing action is ok
-        store.insert_pending_actions(&[action1.clone()]).unwrap();
+        store
+            .insert_pending_actions(std::slice::from_ref(&action1))
+            .unwrap();
         let actions = store.get_all_pending_actions();
         assert_eq!(
             actions,
@@ -236,12 +238,18 @@ mod tests {
             tx_digest: TransactionDigest::random(),
             event_seq: 1,
         };
-        assert!(store.get_sui_event_cursors(&[sui_module.clone()]).unwrap()[0].is_none());
+        assert!(store
+            .get_sui_event_cursors(std::slice::from_ref(&sui_module))
+            .unwrap()[0]
+            .is_none());
         store
             .update_sui_event_cursor(sui_module.clone(), sui_cursor)
             .unwrap();
         assert_eq!(
-            store.get_sui_event_cursors(&[sui_module.clone()]).unwrap()[0].unwrap(),
+            store
+                .get_sui_event_cursors(std::slice::from_ref(&sui_module))
+                .unwrap()[0]
+                .unwrap(),
             sui_cursor
         );
     }

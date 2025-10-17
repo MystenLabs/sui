@@ -948,7 +948,7 @@ impl SuiError {
             | SuiError::GrpcMessageSerializeError { .. }
             | SuiError::GrpcMessageDeserializeError { .. }
             | SuiError::ByzantineAuthoritySuspicion { .. }
-            | SuiError::InvalidTxKindInSoftBundle { .. }
+            | SuiError::InvalidTxKindInSoftBundle
             | SuiError::UnsupportedFeatureError { .. }
             | SuiError::InvalidRequest { .. } => ErrorCategory::Internal,
 
@@ -958,7 +958,7 @@ impl SuiError {
             | SuiError::TooManyTransactionsPendingConsensus
             | SuiError::ValidatorOverloadedRetryAfter { .. } => ErrorCategory::ValidatorOverloaded,
 
-            SuiError::TimeoutError { .. } => ErrorCategory::Unavailable,
+            SuiError::TimeoutError => ErrorCategory::Unavailable,
 
             // Other variants are assumed to be retriable with new transaction submissions.
             _ => ErrorCategory::Aborted,

@@ -1,4 +1,5 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
+#[allow(dead_code)]
 pub struct Http {
     /// A list of HTTP configuration rules that apply to individual API methods.
     ///
@@ -356,6 +357,7 @@ pub mod http_rule {
 }
 /// A custom pattern is used for defining custom HTTP verb.
 #[derive(Clone, PartialEq, ::prost::Message)]
+#[allow(dead_code)]
 pub struct CustomHttpPattern {
     /// The name of this custom HTTP verb.
     #[prost(string, tag = "1")]
@@ -1111,6 +1113,7 @@ pub mod resource_descriptor {
 /// Defines a proto annotation that describes a string field that refers to
 /// an API resource.
 #[derive(Clone, PartialEq, ::prost::Message)]
+#[allow(dead_code)]
 pub struct ResourceReference {
     /// ```ignore
     /// The resource type that the annotated field references.
@@ -1514,6 +1517,7 @@ pub struct ResourceReference {
 ///      table_location=instances/instance_bar&routing_id=prof_qux
 /// ```
 #[derive(Clone, PartialEq, ::prost::Message)]
+#[allow(dead_code)]
 pub struct RoutingRule {
     /// A collection of Routing Parameter specifications.
     /// **NOTE:** If multiple Routing Parameters describe the same key

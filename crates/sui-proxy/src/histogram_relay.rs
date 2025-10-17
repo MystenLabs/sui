@@ -171,7 +171,7 @@ fn extract_histograms(data: Vec<MetricFamily>) -> impl Iterator<Item = MetricFam
         });
 
         let only_histograms = protobuf::RepeatedField::from_iter(metrics);
-        if only_histograms.len() == 0 {
+        if only_histograms.is_empty() {
             return None;
         }
 

@@ -296,7 +296,7 @@ impl MultiSigPublicKeyLegacy {
             || threshold == 0
             || pks.len() != weights.len()
             || pks.len() > MAX_SIGNER_IN_MULTISIG
-            || weights.iter().any(|w| *w == 0)
+            || weights.contains(&0)
             || weights
                 .iter()
                 .map(|w| *w as ThresholdUnit)
