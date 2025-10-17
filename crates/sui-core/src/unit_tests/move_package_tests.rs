@@ -573,13 +573,6 @@ async fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_
         .get_package_digest(with_unpublished_deps);
 
     let hash_modules = true;
-    eprintln!(
-        "b_pkg.digest(hash_modules): {:?}",
-        b_pkg.digest(hash_modules)
-    );
-    eprintln!("b_v2.digest(hash_modules): {:?}", b_v2.digest(hash_modules));
-    eprintln!("local_v1: {:?}", local_v1);
-    eprintln!("local_v2: {:?}", local_v2);
     assert_ne!(b_pkg.digest(hash_modules), b_v2.digest(hash_modules));
     assert_eq!(b_pkg.digest(hash_modules), local_v1);
     assert_eq!(b_v2.digest(hash_modules), local_v2);

@@ -197,8 +197,8 @@ fn parse_source_manifest(
             let is_system_package =
                 LEGACY_SYSTEM_DEPS_NAMES.contains(&metadata.legacy_name.as_str());
 
-            // IF we have one system package OR this package is a system package itself,
-            // we disable implicit deps.
+            // IF we have one system package OR this package is a system package itself (OR
+            // implicit deps are explicitly disabled), we disable implicit deps.
             let system_dependencies =
                 if has_system_package || is_system_package || !metadata.implicit_deps {
                     Some(vec![])

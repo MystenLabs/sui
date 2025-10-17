@@ -18,6 +18,8 @@ pub(crate) const FRAMEWORK: &str = concat!(
 #[cfg(not(msim))]
 const DIRS_TO_EXCLUDE: &[&str] = &[];
 /// We cannot support packages that depend on git dependencies on simtests.
+/// TODO: we probably also shouldn't be doing these in normal CI, since generally having CI depend
+/// on other git repos is frowned upon
 #[cfg(msim)]
 const DIRS_TO_EXCLUDE: &[&str] = &["nft-rental", "usdc_usage"];
 

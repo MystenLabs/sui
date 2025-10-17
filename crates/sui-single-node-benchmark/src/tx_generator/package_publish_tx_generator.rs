@@ -82,8 +82,6 @@ impl PackagePublishTxGenerator {
         let target_path = dir.join(path);
         let published_deps = dep_map.clone();
 
-        // dep_map.insert(Symbol::from(name), ObjectID::ZERO);
-        eprintln!("dep_map: {:?}", dep_map);
         let mut compiled_package = BuildConfig::new_for_testing_replace_addresses(
             dep_map.into_iter().map(|(k, v)| (k.to_string(), v)),
         )

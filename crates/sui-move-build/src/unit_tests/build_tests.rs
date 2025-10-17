@@ -7,8 +7,6 @@ use std::path::Path;
 
 use crate::BuildConfig;
 
-/// We are making those tokio tests as we do not need them in simtests
-/// Trying to build a package
 #[tokio::test]
 async fn generate_struct_layouts() {
     // build the Sui framework and generate struct layouts to make sure nothing crashes
