@@ -2,7 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::Write;
 use std::path::PathBuf;
 use std::{collections::BTreeMap, fmt, path::Path};
 
@@ -13,7 +12,7 @@ use super::paths::{EphemeralPubfilePath, OutputPath, PackagePath};
 use super::{EnvironmentID, manifest::Manifest};
 use crate::graph::PackageInfo;
 use crate::package::block_on;
-use crate::package::package_lock::PackageLock;
+use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
     Environment, ModeName, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
     Publication, RenderToml,
@@ -78,7 +77,6 @@ pub enum LoadType {
 ///
 /// This is a special package that contains the project manifest and dependencies' graphs,
 /// and associated functions to operate with this data.
-#[derive(Debug)]
 pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     /// The path to the files containing the root package
     input_path: PackagePath,
@@ -100,6 +98,8 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     /// overrides applied.
     /// TODO: we should apply overrides here as well
     filtered_graph: PackageGraph<F>,
+
+    mutex: PackageSystemLock,
 }
 
 impl PackageConfig {
@@ -141,8 +141,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     async fn async_environments(
         path: impl AsRef<Path>,
     ) -> PackageResult<IndexMap<EnvironmentName, EnvironmentID>> {
-        let mtx = PackageLock::new()?;
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let mtx = package_path.lock()?;
         let mut environments = F::default_environments();
 
         if let Ok(modern_manifest) = Manifest::read_from_file(&package_path, &mtx) {
@@ -165,10 +165,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
         let config = PackageConfig::persistent(path, env, modes);
-
-        // hold a lock to the package system. All operations with Move package should be sequential
-        // to avoid weird side-effects in our caches.
-        let _lock = PackageSystemLock::new_for_project(package_path.path())?;
 
         Self::validate_and_construct(config).await
     }
@@ -259,8 +255,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// This helps validate:
     /// 1. TODO: Fill this in! (deduplicate nodes etc)
     async fn validate_and_construct(config: PackageConfig) -> PackageResult<Self> {
-        let mtx = PackageLock::new()?; // held until function returns
         let input_path = PackagePath::new(config.input_path.clone())?;
+        let mutex = input_path.lock()?;
+
         let ephemeral_file = config.load_type.ephemeral_file()?;
         let output_path = OutputPath::new(config.output_path.clone())?;
 
@@ -274,13 +271,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         debug!("loading unfiltered graph");
         let unfiltered_graph = if config.force_repin {
-            PackageGraph::<F>::load_from_manifests(&input_path, &env, &mtx).await?
+            PackageGraph::<F>::load_from_manifests(&input_path, &env, &mutex).await?
         } else if config.ignore_digests {
-            PackageGraph::<F>::load_from_lockfile_ignore_digests(&input_path, &env, &mtx)
+            PackageGraph::<F>::load_from_lockfile_ignore_digests(&input_path, &env, &mutex)
                 .await?
                 .unwrap()
         } else {
-            PackageGraph::<F>::load(&input_path, &env, &mtx).await?
+            PackageGraph::<F>::load(&input_path, &env, &mutex).await?
         };
 
         debug!("filtering graph");
@@ -309,6 +306,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             output_path,
             ephemeral_file,
             input_path,
+            mutex,
         })
     }
 
@@ -372,22 +370,20 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Before overwriting the lockfile, this function also extracts any publication information
     /// from the legacy lockfile and writes it into the pubfile
     pub async fn save_lockfile_to_disk(&mut self) -> PackageResult<()> {
-        let mtx = PackageLock::new()?;
-
         // migrate any pubs from the legacy lockfile to the modern pubfile before we clobber the
         // legacy lockfile.
-        let legacy_pubs = self.input_path.read_legacy_lockfile(&mtx)?;
+        let legacy_pubs = self.input_path.read_legacy_lockfile(&self.mutex)?;
         if let Some(pubs) = &legacy_pubs {
             if !pubs.is_empty() {
                 let old_pubfile = self
                     .input_path
-                    .read_pubfile(&mtx)?
+                    .read_pubfile(&self.mutex)?
                     .map(|(_, p)| p)
                     .unwrap_or_default();
                 let mut legacy_pubs: ParsedPublishedFile<F> = pubs.clone().into();
                 // if the same publication exists in both, we keep the modern one
                 legacy_pubs.published.extend(old_pubfile.published);
-                self.output_path.write_pubfile(&legacy_pubs, &mtx)?;
+                self.output_path.write_pubfile(&legacy_pubs, &self.mutex)?;
             }
         }
 
@@ -395,7 +391,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             ParsedLockfile::default()
         } else {
             self.input_path
-                .read_lockfile(&mtx)?
+                .read_lockfile(&self.mutex)?
                 .map(|(_, l)| l)
                 .unwrap_or_default()
         };
@@ -405,7 +401,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             self.environment.name.clone(),
             self.unfiltered_graph.to_pins()?,
         );
-        self.output_path.write_lockfile(&lockfile, &mtx)?;
+        self.output_path.write_lockfile(&lockfile, &self.mutex)?;
 
         Ok(())
     }
@@ -413,26 +409,25 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Record metadata for a publication for the root package in either its `Published.toml` or
     /// its ephemeral pubfile (depending on how it was loaded)
     pub async fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
-        let mtx = PackageLock::new()?;
         let package_id = self.name().to_string();
 
         if let Some(ephemeral_file) = &mut self.ephemeral_file {
             let mut pubs = ephemeral_file
-                .read_pubfile(&mtx)?
+                .read_pubfile(&self.mutex)?
                 .map(|(_, pubs)| pubs)
                 .unwrap_or_default();
 
             // TODO: should we check build-env and chain-id again?
             pubs.published.insert(package_id, publish_data.into());
-            ephemeral_file.write_pubfile(&pubs, &mtx)?;
+            ephemeral_file.write_pubfile(&pubs, &self.mutex)?;
         } else {
             let mut pubfile = self
                 .input_path
-                .read_pubfile(&mtx)?
+                .read_pubfile(&self.mutex)?
                 .map(|(_, p)| p)
                 .unwrap_or_default();
             pubfile.published.insert(package_id, publish_data);
-            self.output_path.write_pubfile(&pubfile, &mtx)?;
+            self.output_path.write_pubfile(&pubfile, &self.mutex)?;
         }
 
         Ok(())

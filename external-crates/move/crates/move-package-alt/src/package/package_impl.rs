@@ -12,7 +12,7 @@ use tracing::debug;
 
 use super::manifest::Manifest;
 use super::paths::PackagePath;
-use super::{compute_digest, package_lock::PackageLock};
+use super::{compute_digest, package_lock::PackageSystemLock};
 use crate::compatibility::legacy::LegacyData;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
@@ -76,7 +76,7 @@ impl<F: MoveFlavor> Package<F> {
     pub async fn load_root(
         path: PackagePath,
         env: &Environment,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Self> {
         let source = Pinned::Root(path);
 
@@ -85,7 +85,11 @@ impl<F: MoveFlavor> Package<F> {
 
     /// Fetch [dep] (relative to [self]) and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
-    pub async fn load(dep: Pinned, env: &Environment, mtx: &PackageLock) -> PackageResult<Self> {
+    pub async fn load(
+        dep: Pinned,
+        env: &Environment,
+        mtx: &PackageSystemLock,
+    ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
         let path = FetchedDependency::fetch(&dep).await?;
 
@@ -227,7 +231,7 @@ impl<F: MoveFlavor> Package<F> {
     fn load_publication(
         path: &PackagePath,
         env: &EnvironmentName,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<Publication<F>>> {
         let Some((file, parsed)) = path.read_pubfile(mtx)? else {
             return Ok(None);

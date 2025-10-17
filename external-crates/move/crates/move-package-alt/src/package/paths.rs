@@ -27,7 +27,10 @@ use crate::{
     },
 };
 
-use super::{EnvironmentName, package_lock::PackageLock};
+use super::{
+    EnvironmentName,
+    package_lock::{LockError, PackageSystemLock},
+};
 
 /// A path to a directory containing a loaded Move package (in particular, the directory must have
 /// a Move.toml)
@@ -77,6 +80,9 @@ pub enum FileError {
         file: PathBuf,
         source: anyhow::Error,
     },
+
+    #[error(transparent)]
+    LockError(#[from] LockError),
 }
 
 pub type PackagePathResult<T> = Result<T, PackagePathError>;
@@ -119,11 +125,16 @@ impl PackagePath {
         Ok(result)
     }
 
+    /// Acquire an exclusive lock for the files in this package
+    pub(crate) fn lock(&self) -> FileResult<PackageSystemLock> {
+        Ok(PackageSystemLock::new_for_project(self.path())?)
+    }
+
     /// Parse and return the manifest file, failing if it doesn't exist or isn't correctly
     /// formatted
     pub(crate) fn read_manifest(
         &self,
-        _mtx: &PackageLock,
+        _mtx: &PackageSystemLock,
     ) -> FileResult<(FileHandle, ParsedManifest)> {
         let path = self.manifest_path();
         parse_file(&path)?.ok_or(FileError::InvalidFile { path })
@@ -134,7 +145,7 @@ impl PackagePath {
     /// isn't correctly formatted
     pub(crate) fn read_lockfile(
         &self,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> FileResult<Option<(FileHandle, ParsedLockfile)>> {
         // TODO: this could maybe a little cleaner - don't really need to do a full parse just to
         // see if it's a legacy file...
@@ -149,7 +160,7 @@ impl PackagePath {
     /// but it cannot be parsed
     pub(crate) fn read_legacy_lockfile(
         &self,
-        _mtx: &PackageLock,
+        _mtx: &PackageSystemLock,
     ) -> FileResult<Option<BTreeMap<EnvironmentName, LegacyEnvironment>>> {
         let path = self.lockfile_path().to_path_buf();
         let pubs = load_legacy_lockfile(&path).map_err(|err| FileError::LegacyError {
@@ -164,7 +175,7 @@ impl PackagePath {
     pub(crate) fn read_legacy_manifest(
         &self,
         default_env: &Environment,
-        _mtx: &PackageLock,
+        _mtx: &PackageSystemLock,
     ) -> FileResult<Option<(FileHandle, ParsedManifest)>> {
         let path = self.manifest_path().to_path_buf();
         try_load_legacy_manifest(self, default_env).map_err(|err| FileError::LegacyError {
@@ -177,11 +188,12 @@ impl PackagePath {
     /// Fails if the file exists and isn't correctly formatted
     pub(crate) fn read_pubfile<F: MoveFlavor>(
         &self,
-        _mtx: &PackageLock,
+        _mtx: &PackageSystemLock,
     ) -> FileResult<Option<(FileHandle, ParsedPublishedFile<F>)>> {
         parse_file(&self.pubfile_path())
     }
 
+    /// The path to the directory containing the package
     pub fn path(&self) -> &Path {
         self.0.path()
     }
@@ -219,7 +231,7 @@ impl OutputPath {
     pub(crate) fn write_lockfile(
         &mut self,
         file: &ParsedLockfile,
-        _mtx: &PackageLock,
+        _mtx: &PackageSystemLock,
     ) -> FileResult<()> {
         render_file(&self.lockfile_path(), file)
     }
@@ -228,7 +240,7 @@ impl OutputPath {
     pub(crate) fn write_pubfile<F: MoveFlavor>(
         &mut self,
         file: &ParsedPublishedFile<F>,
-        _mtx: &PackageLock,
+        _mtx: &PackageSystemLock,
     ) -> FileResult<()> {
         render_file(&self.pubfile_path(), file)
     }
@@ -236,7 +248,7 @@ impl OutputPath {
     /// Read the contents of the lockfile from the output directory
     #[cfg(test)]
     pub async fn dump_lockfile(&self) -> ParsedLockfile {
-        let mtx = PackageLock::new().unwrap();
+        let mtx = PackageSystemLock::new().unwrap();
         PackagePath(self.clone())
             .read_lockfile(&mtx)
             .unwrap()
@@ -247,7 +259,7 @@ impl OutputPath {
     /// Read the contents of the pubfile from the output directory
     #[cfg(test)]
     pub async fn dump_pubfile<F: MoveFlavor>(&self) -> ParsedPublishedFile<F> {
-        let mtx = PackageLock::new().unwrap();
+        let mtx = PackageSystemLock::new().unwrap();
         PackagePath(self.clone())
             .read_pubfile(&mtx)
             .unwrap()
@@ -292,7 +304,7 @@ impl EphemeralPubfilePath {
     pub fn write_pubfile<F: MoveFlavor>(
         &mut self,
         file: &ParsedEphemeralPubs<F>,
-        _mtx: &PackageLock,
+        _mtx: &PackageSystemLock,
     ) -> FileResult<()> {
         render_file(self.path(), file)
     }
@@ -301,7 +313,7 @@ impl EphemeralPubfilePath {
     /// file exists and can't be read or parsed
     pub fn read_pubfile<F: MoveFlavor>(
         &self,
-        _mtx: &PackageLock,
+        _mtx: &PackageSystemLock,
     ) -> FileResult<Option<(FileHandle, ParsedEphemeralPubs<F>)>> {
         parse_file(self.path())
     }
@@ -394,7 +406,7 @@ mod tests {
         )
         .unwrap();
 
-        let mtx = PackageLock::new().unwrap();
+        let mtx = PackageSystemLock::new().unwrap();
         let path = PackagePath::new(tempdir.path().to_path_buf()).unwrap();
         let error = path.read_manifest(&mtx).unwrap_err().to_string();
         assert_snapshot!(error.replace(tempdir.path().to_string_lossy().as_ref(), "<TEMPDIR>"),

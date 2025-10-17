@@ -7,7 +7,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{
-        EnvironmentName, Package, lockfile::Lockfiles, package_lock::PackageLock,
+        EnvironmentName, Package, lockfile::Lockfiles, package_lock::PackageSystemLock,
         paths::PackagePath,
     },
     schema::{Environment, PackageID, PackageName},
@@ -53,7 +53,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &Environment,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
         self.load_from_lockfile_impl(path, env, true, mtx).await
     }
@@ -63,7 +63,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &Environment,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
         self.load_from_lockfile_impl(path, env, false, mtx).await
     }
@@ -75,7 +75,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         path: &PackagePath,
         env: &Environment,
         check_digests: bool,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
         let Some(lockfile) = Lockfiles::read_from_dir::<F>(path, mtx)? else {
             return Ok(None);
@@ -154,7 +154,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &Environment,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<PackageGraph<F>> {
         let graph = Arc::new(Mutex::new(DiGraph::new()));
         let root = Arc::new(Package::<F>::load_root(path.clone(), env, mtx).await?);
@@ -235,7 +235,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         env: &Environment,
         graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PinnedDependencyInfo>>>,
         visited: Arc<Mutex<BTreeMap<(EnvironmentName, PackagePath), NodeIndex>>>,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<NodeIndex> {
         // return early if node is cached; add empty node to graph and visited list otherwise
         let index = match visited
@@ -294,7 +294,7 @@ impl<F: MoveFlavor> PackageCache<F> {
         &self,
         dep: &Pinned,
         env: &Environment,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache

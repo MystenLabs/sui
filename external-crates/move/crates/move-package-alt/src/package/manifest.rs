@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    package_lock::PackageLock,
+    package_lock::PackageSystemLock,
     paths::{FileResult, PackagePath},
     *,
 };
@@ -62,7 +62,7 @@ pub type ManifestResult<T> = Result<T, ManifestError>;
 
 impl Manifest {
     /// Read the manifest file from the file handle, returning a [`Manifest`].
-    pub(crate) fn read_from_file(path: &PackagePath, mtx: &PackageLock) -> FileResult<Self> {
+    pub(crate) fn read_from_file(path: &PackagePath, mtx: &PackageSystemLock) -> FileResult<Self> {
         let (file_handle, inner) = path.read_manifest(mtx)?;
 
         Ok(Self { inner, file_handle })
@@ -134,7 +134,7 @@ mod tests {
 
     use crate::{
         flavor::vanilla::default_environment,
-        package::{package_lock::PackageLock, paths::PackagePath},
+        package::{package_lock::PackageSystemLock, paths::PackagePath},
         schema::PackageName,
     };
 
@@ -151,7 +151,7 @@ mod tests {
 
         Ok(Manifest::read_from_file(
             &package_path,
-            &PackageLock::new()?,
+            &PackageSystemLock::new()?,
         )?)
     }
 

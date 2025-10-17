@@ -10,7 +10,7 @@ use crate::{
     schema::{PackageID, ParsedLockfile, Pin},
 };
 
-use super::{EnvironmentName, package_lock::PackageLock, paths::PackagePath};
+use super::{EnvironmentName, package_lock::PackageSystemLock, paths::PackagePath};
 
 #[derive(Debug)]
 pub struct Lockfiles {
@@ -25,7 +25,7 @@ impl Lockfiles {
     /// Read `Move.lock` from `path`; returning [None] if it doesn't exist
     pub fn read_from_dir<F: MoveFlavor>(
         path: &PackagePath,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<Self>> {
         Ok(path
             .read_lockfile(mtx)?

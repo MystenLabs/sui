@@ -7,6 +7,8 @@ use std::{path::PathBuf, process::ExitStatus};
 use thiserror::Error;
 use tokio::process::Command;
 
+use crate::package::package_lock::LockError;
+
 pub type GitResult<T> = std::result::Result<T, GitError>;
 
 #[derive(Error, Debug)]
@@ -34,7 +36,7 @@ pub enum GitError {
     BadPath { path: PathBuf },
 
     #[error(transparent)]
-    LockingError(#[from] anyhow::Error),
+    LockingError(#[from] LockError),
 }
 
 #[derive(Error, Debug)]

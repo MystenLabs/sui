@@ -57,7 +57,8 @@ use crate::{
         vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
     },
     package::{
-        EnvironmentID, EnvironmentName, RootPackage, package_lock::PackageLock, paths::PackagePath,
+        EnvironmentID, EnvironmentName, RootPackage, package_lock::PackageSystemLock,
+        paths::PackagePath,
     },
     schema::{ModeName, OriginalID, PackageName, PublishAddresses, PublishedID},
     test_utils::{Project, project},
@@ -660,7 +661,7 @@ impl Scenario {
 
     pub(crate) async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
         let path = PackagePath::new(self.path_for(package)).unwrap();
-        let mtx = PackageLock::new().unwrap();
+        let mtx = path.lock().unwrap();
 
         PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment(), &mtx)
             .await
@@ -679,12 +680,12 @@ impl Scenario {
     /// Loads the root package for `package` and expects an error; returns the (redacted) contents
     /// of the error
     pub async fn root_package_err(&self, package: impl AsRef<str>) -> String {
-        let err = self
-            .try_root_package(package)
-            .await
-            .unwrap_err()
-            .to_string();
-        err.replace(self.root_path.to_string_lossy().as_ref(), "<ROOT>")
+        match self.try_root_package(package).await {
+            Ok(_) => panic!("expected root package to fail to load"),
+            Err(err) => err
+                .to_string()
+                .replace(self.root_path.to_string_lossy().as_ref(), "<ROOT>"),
+        }
     }
 
     /// Loads the root package for `package` in the default environment and with no modes

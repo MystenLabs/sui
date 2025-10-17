@@ -18,7 +18,7 @@ use tracing::{debug, warn};
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::package::package_lock::PackageLock;
+use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{ModeName, Publication};
 use crate::{
     dependency::PinnedDependencyInfo,
@@ -59,7 +59,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     pub async fn load(
         path: &PackagePath,
         env: &Environment,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Self> {
         let builder = PackageGraphBuilder::<F>::new();
 
@@ -77,7 +77,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     pub async fn load_from_manifests(
         path: &PackagePath,
         env: &Environment,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Self> {
         PackageGraphBuilder::new()
             .load_from_manifests(path, env, mtx)
@@ -90,7 +90,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     pub async fn load_from_lockfile_ignore_digests(
         path: &PackagePath,
         env: &Environment,
-        mtx: &PackageLock,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<Self>> {
         PackageGraphBuilder::new()
             .load_from_lockfile_ignore_digests(path, env, mtx)
