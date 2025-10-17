@@ -7,7 +7,7 @@ keywords: [ object ownership, how objects are owned, address-owned, address-owne
 Every object has an owner field that dictates how you can use it in transactions. Objects can have the following types of ownership:
 
 
-<div className="card-container">
+<Cards>
 <Card title="Address-Owned" href="/concepts/object-ownership/address-owned">
 An address-owned object is owned by a specific 32-byte address that is either an account address (derived from a particular signature scheme) or an object ID. An address-owned object is accessible only to its owner and no others. 
 </Card>
@@ -23,4 +23,4 @@ A shared object is an object that is shared using the `0x2::transfer::share_obje
 <Card title="Wrapped" href="/concepts/object-ownership/wrapped">
 In Move, you can organize data structures by putting a field of `struct` type in another.
 </Card>
-</div>
+</Cards>
