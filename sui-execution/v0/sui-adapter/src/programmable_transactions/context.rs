@@ -1241,7 +1241,7 @@ mod checked {
                 state_view,
                 session,
                 input_object_map,
-                /* imm override */ !mutability.is_mutable(),
+                /* imm override */ !mutability.is_exclusive(),
                 id,
             ),
             ObjectArg::Receiving(_) => unreachable!("Impossible to hit Receiving in v0"),

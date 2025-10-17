@@ -594,6 +594,12 @@ impl TransactionEffectsV2 {
                             id,
                             UnchangedConsensusKind::ReadConsensusStreamEnded(version),
                         )),
+                        // This is current unreachable, because non exclusive writes are not exposed to
+                        // user transactions yet, and so there is no way for their inputs to be deleted.
+                        SharedObjectMutability::NonExclusiveWrite => Some((
+                            id,
+                            UnchangedConsensusKind::MutateConsensusStreamEnded(version),
+                        )),
                     }
                 }
                 SharedInput::Cancelled((id, version)) => {

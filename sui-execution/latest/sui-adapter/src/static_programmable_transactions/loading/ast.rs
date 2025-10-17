@@ -15,6 +15,7 @@ use std::rc::Rc;
 use sui_types::{
     Identifier, TypeTag,
     base_types::{ObjectID, ObjectRef, RESOLVED_TX_CONTEXT, SequenceNumber, TxContextKind},
+    transaction::SharedObjectMutability,
 };
 
 //**************************************************************************************************
@@ -53,9 +54,26 @@ pub enum ObjectArg {
     SharedObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
-        mutable: bool,
+        mutability: ObjectMutability,
         kind: SharedObjectKind,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectMutability {
+    Mutable,
+    Immutable,
+    NonExclusiveWrite,
+}
+
+impl From<SharedObjectMutability> for ObjectMutability {
+    fn from(mutability: SharedObjectMutability) -> Self {
+        match mutability {
+            SharedObjectMutability::Mutable => ObjectMutability::Mutable,
+            SharedObjectMutability::NonExclusiveWrite => ObjectMutability::NonExclusiveWrite,
+            SharedObjectMutability::Immutable => ObjectMutability::Immutable,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -149,11 +167,11 @@ impl ObjectArg {
         }
     }
 
-    pub fn is_mutable(&self) -> bool {
+    pub fn mutability(&self) -> ObjectMutability {
         match self {
-            ObjectArg::ImmObject(_) => false,
-            ObjectArg::OwnedObject(_) => true,
-            ObjectArg::SharedObject { mutable, .. } => *mutable,
+            ObjectArg::ImmObject(_) => ObjectMutability::Immutable,
+            ObjectArg::OwnedObject(_) => ObjectMutability::Mutable,
+            ObjectArg::SharedObject { mutability, .. } => *mutability,
         }
     }
 }

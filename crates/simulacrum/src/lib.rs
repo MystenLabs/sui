@@ -263,11 +263,18 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     /// created.
     pub fn create_checkpoint(&mut self) -> VerifiedCheckpoint {
         if self.epoch_state.protocol_config().enable_accumulators() {
-            let settlement_txns = self.checkpoint_builder.get_settlement_txns();
+            let settlement_txns = self
+                .checkpoint_builder
+                .get_settlement_txns(self.epoch_state.protocol_config());
 
+            // The final transaction (the barrier transaction) must be executed after
+            // all the settlement transactions.
             for txn in settlement_txns {
                 self.execute_system_transaction(txn)
-                    .expect("settlement txn cannot fail");
+                    .expect("settlement txn cannot fail")
+                    .0
+                    .status()
+                    .unwrap();
             }
         }
 

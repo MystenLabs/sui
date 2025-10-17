@@ -364,7 +364,7 @@ impl SharedObjVerManager {
 
         let mut input_object_keys = assignable.non_shared_input_object_keys();
         let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
-        let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
+        let mut is_exclusively_accessed_input = Vec::with_capacity(shared_input_objects.len());
         // Record receiving object versions towards the shared version computation.
         let receiving_object_keys = assignable.receiving_object_keys();
         input_object_keys.extend(receiving_object_keys);
@@ -399,7 +399,7 @@ impl SharedObjVerManager {
                     None => unreachable!("cancelled transaction should have cancellation info"),
                 };
                 assigned_versions.push(((*id, *initial_shared_version), assigned_version));
-                is_mutable_input.push(false);
+                is_exclusively_accessed_input.push(false);
             }
         } else {
             for (
@@ -419,7 +419,7 @@ impl SharedObjVerManager {
             }) {
                 assigned_versions.push(((*id, *initial_shared_version), assigned_version));
                 input_object_keys.push(ObjectKey(*id, assigned_version));
-                is_mutable_input.push(mutability.is_mutable());
+                is_exclusively_accessed_input.push(mutability.is_exclusive());
             }
         }
 
@@ -435,7 +435,7 @@ impl SharedObjVerManager {
             // Update the next version for the shared objects.
             assigned_versions
                 .iter()
-                .zip(is_mutable_input)
+                .zip(is_exclusively_accessed_input)
                 .filter_map(|((id, _), mutable)| {
                     if mutable {
                         Some((*id, next_version))
@@ -505,9 +505,7 @@ mod tests {
 
     use sui_types::object::Object;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{
-        ObjectArg, SenderSignedData, SharedObjectMutability, VerifiedTransaction,
-    };
+    use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
 
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
