@@ -54,9 +54,9 @@ pub struct Failures {
 /// Mock store for testing pipelines driven by one or more indexers.
 #[derive(Clone, Default)]
 pub struct MockStore {
-    /// Maps each pipeline name to its watermark.
+    /// Maps each pipeline's name to its watermark.
     pub watermarks: Arc<DashMap<String, MockWatermark>>,
-    /// Maps each pipeline name to a map of checkpoint sequence numbers to a vector of numbers.
+    /// Maps each pipeline's name to a map of checkpoint sequence numbers to a vector of numbers.
     pub data: Arc<DashMap<String, DashMap<u64, Vec<u64>>>>,
     /// Tracks the order of checkpoint processing for testing sequential processing
     /// Each entry is the checkpoint number that was processed
@@ -146,11 +146,7 @@ impl Connection for MockConnection<'_> {
             self.0.commit_watermark_failures.failures - prev
         );
 
-        let mut wm = self
-            .0
-            .watermarks
-            .entry(pipeline.to_string())
-            .or_insert_with(MockWatermark::default);
+        let mut wm = self.0.watermarks.entry(pipeline.to_string()).or_default();
 
         wm.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
         wm.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;
@@ -284,21 +280,11 @@ impl MockStore {
 
         let key = pipeline.to_string();
         let mut total = 0;
-        if let Some(inner) = self.data.get(&key) {
-            for (cp, v) in values {
-                total += v.len();
-                inner.entry(cp).or_insert_with(Vec::new).extend(v);
-            }
-            return Ok(total);
-        }
-
-        // create once, then insert
-        let inner = DashMap::new();
+        let inner = self.data.entry(key).or_insert_with(DashMap::new);
         for (cp, v) in values {
             total += v.len();
             inner.entry(cp).or_insert_with(Vec::new).extend(v);
         }
-        self.data.insert(key, inner);
         Ok(total)
     }
 
@@ -326,20 +312,9 @@ impl MockStore {
 
         let key = pipeline.to_string();
         let mut total = 0;
-        if let Some(inner) = self.data.get(&key) {
-            total += values.len();
-            inner
-                .entry(checkpoint)
-                .or_insert_with(Vec::new)
-                .extend(values);
-            return Ok(total);
-        }
-
-        // create once, then insert
-        let inner = DashMap::new();
+        let inner = self.data.entry(key).or_insert_with(DashMap::new);
         total += values.len();
         inner.insert(checkpoint, values);
-        self.data.insert(key, inner);
         Ok(total)
     }
 
@@ -512,7 +487,7 @@ impl MockStore {
                     return;
                 }
             }
-            tokio::time::sleep(Duration::from_millis(1000)).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
         }
         panic!("Timeout waiting for any data to be processed - pipeline may be stuck");
     }
@@ -555,11 +530,5 @@ impl MockStore {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         panic!("Timeout waiting for watermark to reach {}", checkpoint);
-    }
-
-    pub fn checkpoint_data(&self, watermark_key: &str, checkpoint: u64) -> Option<Vec<u64>> {
-        self.data
-            .get(watermark_key)
-            .and_then(|data| data.get(&checkpoint).map(|v| v.clone()))
     }
 }
