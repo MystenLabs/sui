@@ -109,7 +109,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use sui_pg_db::FieldCount;
     use sui_types::full_checkpoint_content::CheckpointData;
     use tokio::time::Duration;
@@ -166,17 +166,10 @@ mod tests {
         connection_failure_attempts: usize,
         set_reader_watermark_failure_attempts: usize,
     ) -> TestSetup {
-        let store = MockStore {
-            watermark: Arc::new(Mutex::new(Some(watermark))),
-            set_reader_watermark_failure_attempts: Arc::new(Mutex::new(
-                set_reader_watermark_failure_attempts,
-            )),
-            connection_failure: Arc::new(Mutex::new(ConnectionFailure {
-                connection_failure_attempts,
-                ..Default::default()
-            })),
-            ..Default::default()
-        };
+        let store = MockStore::new()
+            .with_watermark(DataPipeline::NAME, watermark)
+            .with_reader_watermark_failures(set_reader_watermark_failure_attempts)
+            .with_connection_failures(connection_failure_attempts);
 
         let config = PrunerConfig {
             interval_ms,
@@ -228,7 +221,7 @@ mod tests {
 
         // new reader_lo = checkpoint_hi_inclusive (10) - retention (5) + 1 = 6
         {
-            let watermarks = setup.store.watermark().unwrap();
+            let watermarks = setup.store.watermark(DataPipeline::NAME).unwrap();
             assert_eq!(watermarks.reader_lo, 6);
         }
 
@@ -265,7 +258,7 @@ mod tests {
         // new reader_lo = checkpoint_hi_inclusive (10) - retention (5) + 1 = 6,
         // which is smaller than current reader_lo (7). Therefore, the reader_lo was not updated.
         {
-            let watermarks = setup.store.watermark().unwrap();
+            let watermarks = setup.store.watermark(DataPipeline::NAME).unwrap();
             assert_eq!(
                 watermarks.reader_lo, 7,
                 "Reader watermark should not be updated when new value is smaller"
@@ -306,7 +299,7 @@ mod tests {
             .await;
 
         // Verify state before retry succeeds
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(
             watermark.reader_lo, 0,
             "Reader watermark should not be updated due to DB connection failure"
@@ -322,7 +315,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Verify state after retry succeeds
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(
             watermark.reader_lo, 6,
             "Reader watermark should be updated after retry succeeds"
@@ -360,7 +353,7 @@ mod tests {
 
         // Verify state before retry succeeds
         {
-            let watermarks = setup.store.watermark().unwrap();
+            let watermarks = setup.store.watermark(DataPipeline::NAME).unwrap();
             assert_eq!(
                 watermarks.reader_lo, 0,
                 "Reader watermark should not be updated due to set_reader_watermark failure"
@@ -372,7 +365,7 @@ mod tests {
 
         // Verify state after retry succeeds
         {
-            let watermarks = setup.store.watermark().unwrap();
+            let watermarks = setup.store.watermark(DataPipeline::NAME).unwrap();
             assert_eq!(watermarks.reader_lo, 6);
         }
 
