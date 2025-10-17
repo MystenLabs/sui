@@ -1784,10 +1784,20 @@ impl SuiTestAdapter {
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
 
-        let mut accumulators_written: Vec<_> = effects
-            .accumulator_events()
+        let accumulator_events = effects.accumulator_events();
+        let mut accumulators_written: Vec<_> = accumulator_events
             .iter()
             .map(|event| *event.accumulator_obj.inner())
+            .collect();
+
+        let accumulator_types: std::collections::HashMap<_, _> = accumulator_events
+            .iter()
+            .map(|event| {
+                (
+                    *event.accumulator_obj.inner(),
+                    event.write.address.ty.clone(),
+                )
+            })
             .collect();
 
         let gas_summary = effects.gas_cost_summary();
@@ -1801,7 +1811,7 @@ impl SuiTestAdapter {
             .collect();
 
         // Use a stable sort before assigning fake ids, so test output remains stable.
-        might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+        might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id, &accumulator_types));
         for id in might_need_fake_id {
             self.enumerate_fake(id);
         }
@@ -1922,11 +1932,27 @@ impl SuiTestAdapter {
             .map(|o| o.object_id)
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|o| o.object_id).collect();
-        let mut accumulators_written: Vec<_> = effects
-            .accumulator_events()
+        let accumulator_events = effects.accumulator_events();
+        let mut accumulators_written: Vec<_> = accumulator_events
             .iter()
             .map(|event| event.accumulator_obj)
             .collect();
+
+        // Build a map from accumulator object ID to type for sorting
+        let accumulator_types: std::collections::HashMap<_, _> = accumulator_events
+            .iter()
+            .map(|event| {
+                (
+                    event.accumulator_obj,
+                    event
+                        .ty
+                        .clone()
+                        .try_into()
+                        .expect("Failed to parse accumulator type tag"),
+                )
+            })
+            .collect();
+
         let gas_summary = effects.gas_cost_summary();
 
         // make sure objects that have previously not been in storage get assigned a fake id.
@@ -1938,7 +1964,7 @@ impl SuiTestAdapter {
             .collect();
 
         // Use a stable sort before assigning fake ids, so test output remains stable.
-        might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+        might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id, &accumulator_types));
         for id in might_need_fake_id {
             self.enumerate_fake(id);
         }
@@ -1990,8 +2016,23 @@ impl SuiTestAdapter {
 
     // stable way of sorting objects by type. Does not however, produce a stable sorting
     // between objects of the same type
-    fn get_object_sorting_key(&self, id: &ObjectID) -> String {
-        match &self.get_object(id, None).unwrap().data {
+    fn get_object_sorting_key(
+        &self,
+        id: &ObjectID,
+        accumulator_types: &std::collections::HashMap<
+            ObjectID,
+            move_core_types::language_storage::TypeTag,
+        >,
+    ) -> String {
+        // Check if this is an accumulator object (expected to not exist in storage yet)
+        if let Some(ty) = accumulator_types.get(id) {
+            return format!("{}~{}", self.stabilize_str(format!("{}", ty)), id);
+        }
+
+        let obj = self
+            .get_object(id, None)
+            .unwrap_or_else(|e| panic!("INVALID TEST! Unable to find object {id}: {e}"));
+        match &obj.data {
             object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
             object::Data::Package(pkg) => pkg
                 .serialized_module_map()
