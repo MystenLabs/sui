@@ -904,7 +904,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_xform<'b>(&mut self) -> Result<Transform, FormatError> {
+    fn parse_xform(&mut self) -> Result<Transform, FormatError> {
         Ok(match_token! { self.lexer;
             Lit(_, T::Ident, _, "str") => {
                 self.lexer.next();
