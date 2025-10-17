@@ -75,7 +75,7 @@ impl SimulationResult {
                     native: native_event,
                     transaction_digest: transaction_data.digest(),
                     sequence_number: sequence as u64,
-                    timestamp_ms: 0, // No timestamp for simulation
+                    timestamp_ms: None, // Simulated transactions are not included in a checkpoint
                 })
                 .collect()
         });

@@ -333,11 +333,11 @@ impl TransactionContents {
         }
     }
 
-    pub fn timestamp_ms(&self) -> u64 {
+    pub fn timestamp_ms(&self) -> Option<u64> {
         match self {
-            Self::Pg(stored) => stored.timestamp_ms as u64,
-            Self::Bigtable(kv) => kv.timestamp,
-            Self::ExecutedTransaction { .. } => 0, // No timestamp until checkpointed
+            Self::Pg(stored) => Some(stored.timestamp_ms as u64),
+            Self::Bigtable(kv) => Some(kv.timestamp),
+            Self::ExecutedTransaction { .. } => None, // No timestamp until checkpointed
         }
     }
 
@@ -360,10 +360,10 @@ impl TransactionEventsContents {
         }
     }
 
-    pub fn timestamp_ms(&self) -> u64 {
+    pub fn timestamp_ms(&self) -> Option<u64> {
         match self {
-            Self::Pg(stored) => stored.timestamp_ms as u64,
-            Self::Bigtable(kv) => kv.timestamp_ms,
+            Self::Pg(stored) => Some(stored.timestamp_ms as u64),
+            Self::Bigtable(kv) => Some(kv.timestamp_ms),
         }
     }
 }
