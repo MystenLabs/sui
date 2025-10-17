@@ -536,12 +536,7 @@ mod tests {
     use crate::store::CommitterWatermark;
     use crate::FieldCount;
     use crate::{
-        mocks::{
-            multi_pipeline_store::{
-                MockConnection as MockMultiPipelineConnection, MockMultiPipelineStore,
-            },
-            store::MockStore,
-        },
+        mocks::store::{MockConnection, MockStore},
         pipeline::concurrent::PrunerConfig,
     };
 
@@ -551,14 +546,9 @@ mod tests {
 
     struct MockHandler;
 
-    #[allow(dead_code)]
-    #[derive(Clone, FieldCount)]
-    struct MockMultiPipelineValue(u64);
-
-    struct MockMultiPipelineHandler;
+    struct MockCheckpointSequenceNumberHandler;
 
     #[async_trait]
-
     impl Processor for MockHandler {
         const NAME: &'static str = "test_processor";
         type Value = MockValue;
@@ -576,7 +566,7 @@ mod tests {
 
         async fn commit<'a>(
             _values: &[Self::Value],
-            _conn: &mut <Self::Store as Store>::Connection<'a>,
+            _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(1)
         }
@@ -593,14 +583,14 @@ mod tests {
 
         async fn commit<'a>(
             _batch: &Self::Batch,
-            _conn: &mut <Self::Store as Store>::Connection<'a>,
+            _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(1)
         }
     }
 
     #[async_trait]
-    impl Processor for MockMultiPipelineHandler {
+    impl Processor for MockCheckpointSequenceNumberHandler {
         const NAME: &'static str = "test";
         type Value = MockValue;
         async fn process(
@@ -614,17 +604,19 @@ mod tests {
     }
 
     #[async_trait]
-    impl crate::pipeline::concurrent::Handler for MockMultiPipelineHandler {
-        type Store = MockMultiPipelineStore;
+    impl crate::pipeline::concurrent::Handler for MockCheckpointSequenceNumberHandler {
+        type Store = MockStore;
 
         async fn commit<'a>(
             values: &[Self::Value],
-            conn: &mut MockMultiPipelineConnection<'a>,
+            conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            conn.0
-                .commit_data("test", values.iter().map(|v| (v.0, vec![v.0])).collect())
-                .await?;
-            Ok(1)
+            for value in values {
+                conn.0
+                    .commit_data(Self::NAME, value.0, vec![value.0])
+                    .await?;
+            }
+            Ok(values.len())
         }
     }
 
@@ -1000,7 +992,7 @@ mod tests {
     async fn test_tasked_pipelines_ignore_below_main_reader_lo() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
-        let store = MockMultiPipelineStore::default();
+        let store = MockStore::default();
 
         // Mock the store as if we have a main pipeline with a committer watermark at `10` and a
         // reader watermark at `7`.
@@ -1053,7 +1045,10 @@ mod tests {
         .unwrap();
 
         let _ = tasked_indexer
-            .concurrent_pipeline(MockMultiPipelineHandler, ConcurrentConfig::default())
+            .concurrent_pipeline(
+                MockCheckpointSequenceNumberHandler,
+                ConcurrentConfig::default(),
+            )
             .await;
 
         let metrics = tasked_indexer.metrics().clone();
@@ -1086,7 +1081,7 @@ mod tests {
     async fn test_tasked_pipelines_surpass_main_pipeline_committer_hi() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
-        let store = MockMultiPipelineStore::default();
+        let store = MockStore::default();
 
         let mut conn = store.connect().await.unwrap();
         conn.set_committer_watermark(
@@ -1137,7 +1132,10 @@ mod tests {
         .unwrap();
 
         let _ = tasked_indexer
-            .concurrent_pipeline(MockMultiPipelineHandler, ConcurrentConfig::default())
+            .concurrent_pipeline(
+                MockCheckpointSequenceNumberHandler,
+                ConcurrentConfig::default(),
+            )
             .await;
 
         let metrics = tasked_indexer.metrics().clone();
@@ -1176,11 +1174,11 @@ mod tests {
     async fn test_tasked_pipelines_stop_when_trailing_main_reader_lo() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
-        let store = MockMultiPipelineStore::default();
+        let store = MockStore::default();
 
         let mut conn = store.connect().await.unwrap();
         conn.set_committer_watermark(
-            "test",
+            MockCheckpointSequenceNumberHandler::NAME,
             CommitterWatermark {
                 checkpoint_hi_inclusive: 10,
                 ..Default::default()
@@ -1226,7 +1224,7 @@ mod tests {
 
         let _ = tasked_indexer
             .concurrent_pipeline(
-                MockMultiPipelineHandler,
+                MockCheckpointSequenceNumberHandler,
                 ConcurrentConfig {
                     pruner: Some(PrunerConfig {
                         interval_ms: 10,
@@ -1247,7 +1245,10 @@ mod tests {
         });
 
         store
-            .wait_for_any_data("test", std::time::Duration::from_millis(5000))
+            .wait_for_any_data(
+                MockCheckpointSequenceNumberHandler::NAME,
+                std::time::Duration::from_millis(5000),
+            )
             .await;
 
         // Artificially bump the main pipeline's watermarks.
@@ -1260,12 +1261,19 @@ mod tests {
         )
         .await
         .unwrap();
-        conn.set_reader_watermark("test", 26).await.unwrap();
+        conn.set_reader_watermark(MockCheckpointSequenceNumberHandler::NAME, 26)
+            .await
+            .unwrap();
         // And prune data
-        store.prune_data("test", 0, 26).unwrap();
+        store
+            .prune_data(MockCheckpointSequenceNumberHandler::NAME, 0, 26)
+            .unwrap();
 
         indexer_handle.await.unwrap();
-        let data = store.data.get("test").unwrap();
+        let data = store
+            .data
+            .get(MockCheckpointSequenceNumberHandler::NAME)
+            .unwrap();
         assert_eq!(metrics.total_ingested_checkpoints.get(), 32);
         for i in 0..26 {
             assert!(

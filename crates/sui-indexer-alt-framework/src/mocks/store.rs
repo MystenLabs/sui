@@ -86,7 +86,7 @@ pub struct MockConnection<'c>(pub &'c MockStore);
 impl Connection for MockConnection<'_> {
     async fn committer_watermark(
         &mut self,
-        _pipeline: &str,
+        pipeline: &str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
         let watermark = self.0.watermarks.get(pipeline);
         Ok(watermark.map(|w| CommitterWatermark {
@@ -131,7 +131,7 @@ impl Connection for MockConnection<'_> {
 
     async fn set_committer_watermark(
         &mut self,
-        _pipeline: &str,
+        pipeline: &str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Check if we should simulate a commit failure
