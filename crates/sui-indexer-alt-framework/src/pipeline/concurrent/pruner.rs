@@ -347,7 +347,6 @@ mod tests {
     use std::sync::Arc;
     use std::{
         collections::HashMap,
-        sync::Mutex,
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -397,7 +396,7 @@ mod tests {
             to_exclusive: u64,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            conn.0.prune_data(from, to_exclusive)
+            conn.0.prune_data(DataPipeline::NAME, from, to_exclusive)
         }
     }
 
@@ -552,11 +551,9 @@ mod tests {
             pruner_timestamp: timestamp,
             pruner_hi: 0,
         };
-        let store = MockStore {
-            watermark: Arc::new(Mutex::new(Some(watermark))),
-            data: Arc::new(Mutex::new(test_data.clone())),
-            ..Default::default()
-        };
+        let store = MockStore::new()
+            .with_watermark(DataPipeline::NAME, watermark)
+            .with_data(DataPipeline::NAME, test_data);
 
         // Start the pruner
         let store_clone = store.clone();
@@ -575,7 +572,7 @@ mod tests {
         // Wait a short time within delay_ms
         tokio::time::sleep(Duration::from_millis(200)).await;
         {
-            let data = store.data.lock().unwrap();
+            let data = store.data.get(DataPipeline::NAME).unwrap();
             assert!(
                 data.contains_key(&1),
                 "Checkpoint 1 shouldn't be pruned before delay"
@@ -595,7 +592,7 @@ mod tests {
 
         // Now checkpoint 1 should be pruned
         {
-            let data = store.data.lock().unwrap();
+            let data = store.data.get(DataPipeline::NAME).unwrap();
             assert!(
                 !data.contains_key(&1),
                 "Checkpoint 1 should be pruned after delay"
@@ -605,7 +602,7 @@ mod tests {
             assert!(data.contains_key(&3), "Checkpoint 3 should be preserved");
 
             // Check that the pruner_hi was updated past 1
-            let watermark = store.watermark().unwrap();
+            let watermark = store.watermark(DataPipeline::NAME).unwrap();
             assert!(
                 watermark.pruner_hi > 1,
                 "Pruner watermark should be updated"
@@ -648,11 +645,9 @@ mod tests {
             pruner_timestamp: 0,
             pruner_hi: 0,
         };
-        let store = MockStore {
-            watermark: Arc::new(Mutex::new(Some(watermark))),
-            data: Arc::new(Mutex::new(test_data.clone())),
-            ..Default::default()
-        };
+        let store = MockStore::new()
+            .with_watermark(DataPipeline::NAME, watermark)
+            .with_data(DataPipeline::NAME, test_data);
 
         // Start the pruner
         let store_clone = store.clone();
@@ -674,7 +669,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         {
-            let data = store.data.lock().unwrap();
+            let data = store.data.get(DataPipeline::NAME).unwrap();
             assert!(!data.contains_key(&1), "Checkpoint 1 should be pruned");
 
             assert!(!data.contains_key(&2), "Checkpoint 2 should be pruned");
@@ -683,7 +678,7 @@ mod tests {
             assert!(data.contains_key(&3), "Checkpoint 3 should be preserved");
 
             // Check that the pruner_hi was updated past 1
-            let watermark = store.watermark().unwrap();
+            let watermark = store.watermark(DataPipeline::NAME).unwrap();
             assert!(
                 watermark.pruner_hi > 1,
                 "Pruner watermark should be updated"
@@ -733,12 +728,10 @@ mod tests {
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
-        let store = MockStore {
-            watermark: Arc::new(Mutex::new(Some(watermark))),
-            data: Arc::new(Mutex::new(test_data.clone())),
-            ..Default::default()
-        }
-        .with_prune_failures(1, 2, 1);
+        let store = MockStore::new()
+            .with_watermark(DataPipeline::NAME, watermark)
+            .with_data(DataPipeline::NAME, test_data.clone())
+            .with_prune_failures(1, 2, 1);
 
         // Start the pruner
         let store_clone = store.clone();
@@ -757,8 +750,8 @@ mod tests {
         // Wait for first pruning cycle - ranges [2,3) and [3,4) should succeed, [1,2) should fail
         tokio::time::sleep(Duration::from_millis(500)).await;
         {
-            let data = store.data.lock().unwrap();
-            let watermarks = store.watermark().unwrap();
+            let data = store.data.get(DataPipeline::NAME).unwrap();
+            let watermarks = store.watermark(DataPipeline::NAME).unwrap();
 
             // Verify watermark doesn't advance past the failed range [1,2)
             assert_eq!(
@@ -774,8 +767,8 @@ mod tests {
         // Wait for second pruning cycle - range [1,2) should succeed on retry
         tokio::time::sleep(Duration::from_millis(3000)).await;
         {
-            let data = store.data.lock().unwrap();
-            let watermarks = store.watermark().unwrap();
+            let data = store.data.get(DataPipeline::NAME).unwrap();
+            let watermarks = store.watermark(DataPipeline::NAME).unwrap();
 
             // Verify watermark advances after all ranges complete successfully
             assert_eq!(

@@ -874,7 +874,7 @@ mod checked {
         };
 
         let pool = &mut normalized::RcPool::new();
-        let binary_config = protocol_config.binary_config();
+        let binary_config = protocol_config.binary_config(None);
         let Ok(current_normalized) =
             existing_package.normalize(pool, &binary_config, /* include code */ true)
         else {

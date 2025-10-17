@@ -11,6 +11,10 @@ pub trait Verifier {
     /// Create a new bytecode verifier meter.
     fn meter(&self, config: MeterConfig) -> Box<dyn Meter>;
 
+    /// Specifies whether or not deprecate_global_storage_ops_during_deserialization should
+    /// be overridden for the `BinaryConfig`
+    fn override_deprecate_global_storage_ops_during_deserialization(&self) -> Option<bool>;
+
     /// Run the bytecode verifier with a meter limit
     ///
     /// This function only fails if the verification does not complete within the limit.  If the
@@ -29,7 +33,8 @@ pub trait Verifier {
         module_bytes: &[Vec<u8>],
         meter: &mut dyn Meter,
     ) -> SuiResult<()> {
-        let binary_config = protocol_config.binary_config();
+        let binary_config = protocol_config
+            .binary_config(self.override_deprecate_global_storage_ops_during_deserialization());
         let Ok(modules) = module_bytes
             .iter()
             .map(|b| CompiledModule::deserialize_with_config(b, &binary_config))

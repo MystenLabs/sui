@@ -280,3 +280,41 @@ impl From<Checkpoint> for CheckpointData {
         }
     }
 }
+
+// Lossy conversion
+impl From<CheckpointData> for Checkpoint {
+    fn from(value: CheckpointData) -> Self {
+        let mut object_set = ObjectSet::default();
+        let transactions = value
+            .transactions
+            .into_iter()
+            .map(|tx| {
+                for o in tx
+                    .input_objects
+                    .into_iter()
+                    .chain(tx.output_objects.into_iter())
+                {
+                    object_set.insert(o);
+                }
+
+                let sender_signed = tx.transaction.into_data().into_inner();
+
+                ExecutedTransaction {
+                    transaction: sender_signed.intent_message.value,
+                    signatures: sender_signed.tx_signatures,
+                    effects: tx.effects,
+                    events: tx.events,
+
+                    // lossy
+                    unchanged_loaded_runtime_objects: Vec::new(),
+                }
+            })
+            .collect();
+        Self {
+            summary: value.checkpoint_summary,
+            contents: value.checkpoint_contents,
+            transactions,
+            object_set,
+        }
+    }
+}

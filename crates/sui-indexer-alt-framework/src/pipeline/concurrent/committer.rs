@@ -216,12 +216,9 @@ pub(super) fn committer<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashMap,
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc, Mutex,
-        },
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
     };
 
     use anyhow::ensure;
@@ -296,11 +293,13 @@ mod tests {
                     );
                 }
 
-                // Lock, insert, and immediately drop the lock
-                {
-                    let mut data = conn.0.data.lock().unwrap();
-                    data.insert(value.cp_sequence_number, value.tx_sequence_numbers.clone());
-                }
+                conn.0
+                    .commit_data(
+                        DataPipeline::NAME,
+                        value.cp_sequence_number,
+                        value.tx_sequence_numbers.clone(),
+                    )
+                    .await?;
             }
             Ok(values.len())
         }
@@ -421,12 +420,11 @@ mod tests {
 
         // Verify data was committed
         {
-            let data: std::sync::MutexGuard<'_, HashMap<u64, Vec<u64>>> =
-                setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
             assert_eq!(data.len(), 3);
-            assert_eq!(data.get(&1).unwrap(), &vec![1, 2, 3]);
-            assert_eq!(data.get(&2).unwrap(), &vec![4, 5, 6]);
-            assert_eq!(data.get(&3).unwrap(), &vec![7, 8, 9]);
+            assert_eq!(data.get(&1).unwrap().value(), &vec![1, 2, 3]);
+            assert_eq!(data.get(&2).unwrap().value(), &vec![4, 5, 6]);
+            assert_eq!(data.get(&3).unwrap().value(), &vec![7, 8, 9]);
         }
 
         // Clean up
@@ -466,9 +464,9 @@ mod tests {
 
         // Verify state before retry succeeds
         {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME);
             assert!(
-                data.is_empty(),
+                data.is_none(),
                 "Data should not be committed before retry succeeds"
             );
         }
@@ -482,8 +480,9 @@ mod tests {
 
         // Verify state after retry succeeds
         {
-            let data = setup.store.data.lock().unwrap();
-            assert_eq!(data.get(&1).unwrap(), &vec![1, 2, 3]);
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
+
+            assert_eq!(data.get(&1).unwrap().value(), &vec![1, 2, 3]);
         }
         let watermark = setup.watermark_rx.recv().await.unwrap();
         assert_eq!(watermark.len(), 1);
@@ -532,9 +531,9 @@ mod tests {
 
         // Verify state before retry succeeds
         {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME);
             assert!(
-                data.is_empty(),
+                data.is_none(),
                 "Data should not be committed before retry succeeds"
             );
         }
@@ -548,8 +547,8 @@ mod tests {
 
         // Verify state after retry succeeds
         {
-            let data = setup.store.data.lock().unwrap();
-            assert_eq!(data.get(&1).unwrap(), &vec![1, 2, 3]);
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
+            assert_eq!(data.get(&1).unwrap().value(), &vec![1, 2, 3]);
         }
         let watermark = setup.watermark_rx.recv().await.unwrap();
         assert_eq!(watermark.len(), 1);
@@ -588,9 +587,9 @@ mod tests {
 
         // Verify no data was committed (since batch was empty)
         {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME);
             assert!(
-                data.is_empty(),
+                data.is_none(),
                 "No data should be committed for empty batch"
             );
         }
@@ -630,8 +629,8 @@ mod tests {
 
         // Verify data was committed
         {
-            let data = setup.store.data.lock().unwrap();
-            assert_eq!(data.get(&1).unwrap(), &vec![1, 2, 3]);
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
+            assert_eq!(data.get(&1).unwrap().value(), &vec![1, 2, 3]);
         }
 
         // Verify no watermark was sent (skip_watermark mode)
@@ -681,8 +680,8 @@ mod tests {
 
         // Verify data was still committed despite watermark channel closure
         {
-            let data = setup.store.data.lock().unwrap();
-            assert_eq!(data.get(&1).unwrap(), &vec![1, 2, 3]);
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
+            assert_eq!(data.get(&1).unwrap().value(), &vec![1, 2, 3]);
         }
 
         // Close the batch channel to allow the committer to terminate

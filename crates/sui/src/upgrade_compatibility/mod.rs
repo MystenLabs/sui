@@ -708,7 +708,7 @@ pub(crate) async fn check_compatibility(
     let existing_modules = existing_package
         .module_map
         .iter()
-        .map(|m| CompiledModule::deserialize_with_config(m.1, &protocol_config.binary_config()))
+        .map(|m| CompiledModule::deserialize_with_config(m.1, &protocol_config.binary_config(None)))
         .collect::<Result<Vec<_>, _>>()
         .context("Unable to get existing package")?;
 

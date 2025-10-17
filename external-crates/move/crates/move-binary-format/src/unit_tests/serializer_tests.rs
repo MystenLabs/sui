@@ -63,12 +63,17 @@ fn enum_serialize_version_invalid() {
     assert!(module.serialize_with_version(VERSION_6, &mut v).is_ok());
 
     // Can be deserialized at version 6 and at max version as well.
-    CompiledModule::deserialize_with_config(&v, &BinaryConfig::with_extraneous_bytes_check(true))
-        .unwrap();
+    CompiledModule::deserialize_with_config(
+        &v,
+        &BinaryConfig::legacy_with_flags(
+            /* check_no_extraneous_bytes */ true, /* deprecate_global_storage_ops */ true,
+        ),
+    )
+    .unwrap();
 
     CompiledModule::deserialize_with_config(
         &v,
-        &BinaryConfig::new(VERSION_6, VERSION_6, true, TableConfig::legacy()),
+        &BinaryConfig::new(VERSION_6, VERSION_6, true, false, TableConfig::legacy()),
     )
     .unwrap();
 }
@@ -125,14 +130,14 @@ fn versions_serialization_round_trip() {
         // Can deserialize at version 6
         let module6 = CompiledModule::deserialize_with_config(
             &v,
-            &BinaryConfig::new(VERSION_6, VERSION_6, true, TableConfig::legacy()),
+            &BinaryConfig::new(VERSION_6, VERSION_6, true, true, TableConfig::legacy()),
         )
         .unwrap();
 
         // Can deserialize at version max
         let module7 = CompiledModule::deserialize_with_config(
             &v,
-            &BinaryConfig::new(VERSION_MAX, VERSION_6, true, TableConfig::legacy()),
+            &BinaryConfig::new(VERSION_MAX, VERSION_6, true, true, TableConfig::legacy()),
         )
         .unwrap();
 

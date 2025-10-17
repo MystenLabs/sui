@@ -3,7 +3,7 @@
 
 use anyhow::Context;
 use async_graphql::SimpleObject;
-use sui_rpc::proto::sui::rpc::v2beta2 as proto;
+use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::transaction::TransactionData;
 
 use crate::{error::RpcError, scope::Scope};
@@ -79,7 +79,7 @@ impl SimulationResult {
         // Extract command results from the response
         let outputs = Some(
             response
-                .outputs
+                .command_outputs
                 .into_iter()
                 .map(|output| CommandResult::from_proto(output, scope.clone()))
                 .collect(),

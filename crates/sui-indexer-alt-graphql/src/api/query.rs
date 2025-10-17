@@ -5,7 +5,7 @@ use anyhow::{anyhow, Context as _};
 use async_graphql::{connection::Connection, Context, Object, Result};
 use futures::future::try_join_all;
 use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
-use sui_rpc::proto::sui::rpc::v2beta2 as proto;
+use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::digests::ChainIdentifier;
 
 use crate::{

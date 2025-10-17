@@ -7,14 +7,17 @@
 //! cases which we want to continue to succeed.
 
 use crate::unit_tests::production_config;
-use move_binary_format::{CompiledModule, errors::VMResult};
+use move_binary_format::{CompiledModule, binary_config::BinaryConfig, errors::VMResult};
 use move_bytecode_verifier::verifier;
 use move_bytecode_verifier_meter::bound::BoundMeter;
 
 #[allow(unused)]
 fn run_binary_test(name: &str, bytes: &str) -> VMResult<()> {
     let bytes = hex::decode(bytes).expect("invalid hex string");
-    let m = CompiledModule::deserialize_with_defaults(&bytes).expect("invalid module");
+    let config = BinaryConfig::legacy_with_flags(
+        /* check_no_extraneous_bytes */ true, /* deprecate_global_storage_ops */ false,
+    );
+    let m = CompiledModule::deserialize_with_config(&bytes, &config).expect("invalid module");
     let (verifier_config, meter_config) = production_config();
     let mut meter = BoundMeter::new(meter_config);
     verifier::verify_module_with_config_for_test(name, &verifier_config, &m, &mut meter)

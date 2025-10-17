@@ -1331,6 +1331,7 @@
                 "correct_gas_payment_limit_check": false,
                 "debug_fatal_on_move_invariant_violation": false,
                 "dependency_linkage_error": false,
+                "deprecate_global_storage_ops_during_deserialization": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,

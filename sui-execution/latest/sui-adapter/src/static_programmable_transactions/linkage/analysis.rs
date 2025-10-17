@@ -24,7 +24,7 @@ impl LinkageAnalyzer {
     ) -> Result<Self, ExecutionError> {
         let always_include_system_packages = !Mode::packages_are_predefined();
         let linkage_config = LinkageConfig::legacy_linkage_settings(always_include_system_packages);
-        let binary_config = protocol_config.binary_config();
+        let binary_config = protocol_config.binary_config(None);
         Ok(Self {
             internal: ResolutionConfig {
                 linkage_config,
