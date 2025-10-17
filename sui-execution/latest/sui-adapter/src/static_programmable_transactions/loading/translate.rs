@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::{
-    env::Env, linkage::resolved_linkage::RootedLinkage, loading::ast as L,
+    env::Env,
+    linkage::resolved_linkage::RootedLinkage,
+    loading::ast as L,
+    metering::{self, translation_meter::TranslationMeter},
 };
 use move_core_types::language_storage::StructTag;
 use sui_types::{
@@ -12,9 +15,11 @@ use sui_types::{
 };
 
 pub fn transaction(
+    meter: &mut TranslationMeter<'_, '_>,
     env: &Env,
     pt: P::ProgrammableTransaction,
 ) -> Result<L::Transaction, ExecutionError> {
+    metering::pre_translation::meter(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
     let inputs = inputs
         .into_iter()
@@ -25,7 +30,9 @@ pub fn transaction(
         .enumerate()
         .map(|(idx, cmd)| command(env, cmd).map_err(|e| e.with_command_index(idx)))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(L::Transaction { inputs, commands })
+    let loaded_tx = L::Transaction { inputs, commands };
+    metering::loading::meter(meter, &loaded_tx)?;
+    Ok(loaded_tx)
 }
 
 fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), ExecutionError> {

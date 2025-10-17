@@ -210,6 +210,46 @@ impl Type {
             Type::Datatype(dt) => dt.all_addresses(),
         }
     }
+
+    pub fn node_count(&self) -> u64 {
+        match self {
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer => 1,
+            Type::Vector(v) => 1 + v.element_type.node_count(),
+            Type::Reference(_, inner) => 1 + inner.node_count(),
+            Type::Datatype(dt) => {
+                1 + dt
+                    .type_arguments
+                    .iter()
+                    .map(|t| t.node_count())
+                    .sum::<u64>()
+            }
+        }
+    }
+
+    pub fn is_reference(&self) -> bool {
+        match self {
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer
+            | Type::Vector(_)
+            | Type::Datatype(_) => false,
+            Type::Reference(_, _) => true,
+        }
+    }
 }
 
 impl Datatype {
