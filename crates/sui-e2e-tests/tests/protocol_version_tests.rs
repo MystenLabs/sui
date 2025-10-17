@@ -97,8 +97,8 @@ mod sim_only_tests {
         SUI_SYSTEM_PACKAGE_ID,
     };
     use sui_types::{
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
-        SUI_SYSTEM_STATE_OBJECT_ID,
+        SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+        SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     };
     use test_cluster::TestCluster;
     use tokio::time::{sleep, Duration};
@@ -444,6 +444,7 @@ mod sim_only_tests {
                         SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                         SUI_RANDOMNESS_STATE_OBJECT_ID,
                         SUI_BRIDGE_OBJECT_ID,
+                        SUI_ACCUMULATOR_ROOT_OBJECT_ID,
                     ]
                     .contains(&obj.0);
                     (!is_framework_obj).then_some(obj.0)
