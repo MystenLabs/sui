@@ -1,52 +1,213 @@
 ---
-title: Get Sui Address
-description: You need an address on the Sui network before you can start trading NFTs, purchase SUI tokens, or perform other transactions.
-keywords: [ get an address, sui address, how to get sui address, sui wallets, slush, suiet, glass wallet, martian extension, surf wallet, private keys ]
+title: Create a Sui Address
+description: You need an address on the Sui network before you can build packages and own objects.
+keywords: [ create an address, sui address, how to get sui address, sui wallets, slush, suiet, glass wallet, martian extension, surf wallet, private keys ]
+pagination_prev: null
+pagination_next: null
 ---
 
-An address is a way to uniquely and anonymously identify an account that exists on the Sui blockchain network. In other words, an address is a way for a user to store and use tokens on the Sui network, without providing any personally identifying information (such as email address, phone number, and so on). For example, if you want to purchase a number of SUI tokens to play a game, you must specify an address where these tokens are to be deposited.
+An _address_ is a unique, anonymous identity on a blockchain network. On Sui, an address specifically represents a location on-chain that can:
 
-The Sui address is unique, similarly to the way a social security number or a personal identification number is unique to one person. However, in Sui you can create and own multiple addresses, all of which are unique. 
+- Hold and send tokens 
 
-In Sui, an address is 32 bytes and is often encoded in hexadecimal with a `0x` prefix. For example, this is a valid Sui address: `0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331`. You can use a Sui network explorer to find more information about this address and the objects it owns.
+- Own objects like NFTs and Move packages
 
-If you'd like to understand how a Sui address is derived from private keys and other cryptography related topics, see the [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) topic.
+- Submit transactions and interact with smart contracts
 
-## How to obtain a Sui address
+You do not need to provide any personally identifying information to create an address. A single individual can create and own multiple addresses. 
 
-Sui provides multiple ways to obtain a Sui address. The following are the two most common. 
+Every Sui address is a unique 32-byte identifier and appears in hexadecimal encoding with a `0x` prefix, unless referred to by an [alias](#address-aliases). For example:
 
-### Command line interface
+```
+0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331
+```
 
-If you are using the Sui command line interface (CLI) to interact with the Sui network, you can use the `sui client` command to generate a new address. By default, when the Sui CLI runs for the first time it will prompt you to set up your local wallet, and then it generates one Sui address and the associated secret recovery phrase. Make sure you write down the secret recovery phrase and store it in a safe place. 
+A cryptographic hash function generates a public key from which every address derives. Each public key has a corresponding private key that accesses the address and the objects that it owns. An address and its associated key pair together is an _account_. 
 
-To generate a new Sui address use `sui client new-address ed25519`, which specifies the key pair scheme flag to be of type `ed25519`.
+[Learn more](/concepts/cryptography/transaction-auth/keys-addresses.mdx) about how a Sui address is derived and other cryptography related topics.
 
-For more information, see the [Sui Client CLI](../../../references/cli/client.mdx) documentation.
+## Obtain a Sui address 
 
-To see all the generated addresses in the local wallet on your machine, run `sui keytool list`. For more information about the keytool options, see the [Sui Keytool CLI](../../../references/cli/keytool.mdx) documentation.
+:::caution 
+
+If you already have an address or created a new address in [Configure a Sui Client](/guides/developer/getting-started/configure-sui-client.mdx), you can skip to [Get SUI from Faucet](/guides/developer/getting-started/get-coins.mdx) to continue the onboarding steps.
+
+:::
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] [Download and install Sui](/guides/developer/getting-started/sui-install.mdx).
+
+- [x] [Configure your Sui client](/guides/developer/getting-started/configure-sui-client.mdx).
+
+</TabItem>
+</Tabs>
+
+By default, when the Sui client runs for the first time, it prompts you to [configure the client](/guides/developer/getting-started/configure-sui-client.mdx). This initial configuration generates a new Sui address, its key pair, and its associated secret recovery phrase. 
+
+To create a new Sui address outside of the initial client configuration, run:
+
+```
+$ sui client new-address ed25519
+```
+
+This command specifies the key pair scheme to be of type `ed25519`.
+
+<ImportContent source="crypto-schemes.mdx" mode="snippet" />
+
+### Recovery phrases
+
+Every Sui address has a _recovery phrase_. Recovery phrases are a series of 12 randomly generated words that you use to recover the address if you lose access to the address's key pair. 
+
+:::caution
+
+Store recovery phrases securely and do not share them with anyone, as they provide access to any objects and tokens that an address owns.
+
+:::
+
+To recover an address using the recovery phrase, use the command:
+
+```
+sui client import-address
+```
+
+Then, enter the 12-word recovery phrase. You must enter the words in the correct order. If successful, the CLI restores your address and prints it in the CLI output.
+
+## `sui.keystore`
+
+Sui stores a private key for every address in either the  `~/.sui/sui_config/sui.keystore` or `%USERPROFILE/.sui/sui_config/sui.keystore` file on macOS/Linux or Windows systems, respectively.
+
+This file contains content similar to the following:
+
+```
+[
+  "AK6q1/Yzz5qmTfHGLot4wkbRP5lP5NUQVDlf3FggLrKZ",
+  "ADAWAFS+J9KcDjFmAiVI/e9ZluG0id9AnI6a7Bk5tH+G",
+  "AJ42rQfCrPIfrQvzCgeHVDCcQZ4R1qAzKtob61VTw5k5",
+  "AHoKrY7DDnUOq2RgP7gXLPa86bFfzqEMvmOs7TmHtST+"
+]
+```
+
+When you create a new address on your system, a new line is added to this file that consists of the address's private key. Make sure you do not expose this to anyone, as they can use it to get access to your account.
+
+## Address aliases 
+
+An _alias_ is a human-readable name that can be used in place of a Sui address's full 32-byte hexadecimal string. They can be used anywhere an address would be used to make referencing the address easier in scripts and CLI commands. 
+
+When an address is created, it is given a random alias by default. You can view an address's current alias with the command:
+
+```
+$ sui client addresses
+```
+
+The output will include the address, its alias, and an indication of which address is active if there are multiple local addresses available:
+
+```
+╭───────────────────────┬────────────────────────────────────────────────────────────────────┬────────────────╮
+│ alias                 │ address                                                            │ active address │
+├───────────────────────┼────────────────────────────────────────────────────────────────────┼────────────────┤
+│ vigorous-spinel       │ 0x6ebb36a3c1ab2124c082d93f60f518f70494b82d8d13c5aabb3abad6ec8cd82d │ *              │
+╰───────────────────────┴────────────────────────────────────────────────────────────────────┴────────────────╯
+```
+
+Then, to update the alias to something else, use the command:
+
+```
+$ sui keytool update-alias <OLD-ALIAS> <NEW-ALIAS>
+```
+
+You can now use the alias in place of the address in commands, such as:
+
+```
+$ sui client objects <NEW-ALIAS>
+```
+
+## View all local Sui addresses
+
+The _active address_ is the address that the Sui client is currently using. This address owns any objects you create and transactions you submit, unless you specify otherwise with the `--address` flag in a command. 
+
+To view the current active address, use the command:
+
+```
+$ sui client active-address
+```
+
+To view all addresses on your local machine, run:
+
+```
+$ sui keytool list
+```
+
+This returns all addresses, along with their alias, public key, key scheme, and peer ID. 
+
+```
+╭────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ╭─────────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ alias           │  vigorous-spinel                                                     │ │
+│ │ suiAddress      │  0x6ebb36a3c1ab2124c082d93f60f518f70494b82d8d13c5aabb3abad6ec8cd82d  │ │
+│ │ publicBase64Key │  AKDCajKN877Uc7o8NP2cQVJkSewhq1ZbWgw5LgpWVqbj                        │ │
+│ │ keyScheme       │  ed25519                                                             │ │
+│ │ flag            │  0                                                                   │ │
+│ │ peerId          │  a0c26a328df3bed473ba3c34fd9c41526449ec21ab565b5a0c392e0a5656a6e3    │ │
+│ ╰─────────────────┴──────────────────────────────────────────────────────────────────────╯ │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+For more information about the `keytool` command, see the [Sui Keytool CLI](/references/cli/keytool.mdx) documentation.
+
+### Change the active address 
+
+If you want to switch to another address, first confirm which address is the active address and which addresses are available for you to switch to:
+
+```
+$ sui client addresses
+```
+
+Then, to switch to another address, use the command:
+
+```
+$ sui client switch --address <ADDRESS>
+```
+
+## Query information about an address 
+
+You can use a Sui network explorer to find more information about an address, its token balances, and the objects it owns. Popular Sui explorers include:
+
+- [SuiVision](https://suivision.xyz/)
+
+- [SuiScan](https://suiscan.xyz/mainnet/accounts)
 
 :::danger
 
-The private keys associated with the Sui addresses are stored locally on the machine where the CLI is installed, in the `~/.sui/sui_config/sui.keystore` file. Make sure you do not expose this to anyone, as they can use it to get access to your account.
+Data displayed on an explorer differs depending on which network you created your address on. If you've followed the [Configure a Sui Client](/guides/developer/getting-started/configure-sui-client.mdx) page previously, you are most likely using Testnet. Be sure to select Testnet on the Sui explorer or use the dedicated URL, such as https://**testnet**.suivision.xyz/.
 
 :::
 
-### Sui wallets
+From the CLI, you can view all objects an address owns with the command:
 
-One of the most straightforward ways to obtain a Sui address for first-time users is through wallets that access the Sui network. Unlike the CLI option, wallets connected to the Sui network provide visual workflows that might be preferable to some users. The Sui Foundation does not offer this type of wallet, but there are several options available from builders on the Sui network. 
+```
+$ sui client objects <ADDRESS>
+```
 
-The following Chrome extension wallets integrate with your browser and have a UI workflow that walks you through the process of creating an address. Consult documentation for your chosen extension for the exact process of obtaining an address.
+If an address is not provided, this command returns all objects owned by the active address.
 
-:::info
-
-Links to these extensions are provided for your convenience. Their inclusion is not an endorsement, recommendation, or approval of any kind. Perform your own due diligence before making a decision on what extension to use.
-
-:::
-
-- [Slush — A Sui wallet](https://chromewebstore.google.com/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil): Formerly known as Sui Wallet, Slush is a wallet from the same team that built Sui - Mysten Labs.
-- [Suiet | Sui Wallet](https://chromewebstore.google.com/detail/suiet-sui-wallet/khpkpbbcccdmmclmpigdgddabeilkdpd): The Suiet wallet for everyone, built on the Sui blockchain. 
-- [Glass wallet](https://chromewebstore.google.com/detail/glass-wallet-sui-wallet/loinekcabhlmhjjbocijdoimmejangoa): Glass Wallet is a non-custodial wallet that allows you to control your coins, keys, and NFT securely.
-- [Martian Aptos & Sui Wallet Extension](https://chromewebstore.google.com/detail/martian-aptos-sui-wallet/efbglgofoippbgcjepnhiblaibcnclgk): Martian is a self-custodial crypto wallet for Aptos and Sui.
-- [Surf Wallet](https://chromewebstore.google.com/detail/surf-wallet/emeeapjkbcbpbpgaagfchmcgglmebnen): Surf Wallet is a platform that allows for convenient and secure transfer of tokens and collection of NFTs on the blockchain.
-- Visit the [chrome web store](https://chromewebstore.google.com/search/sui%20wallet) for a complete list of available Sui wallet extensions.
+<div className="next-steps-module">
+  <div className="next-steps-header">
+    <h3>Next steps</h3>
+  </div>
+  <div className="next-steps-grid">
+    <Card 
+      title="Get SUI from Faucet" 
+      href="/guides/developer/getting-started/get-coins"
+    >
+      Obtain SUI from a faucet to deploy packages on Testnet.
+    </Card>
+        <Card 
+      title="Hello, World!" 
+      href="/guides/developer/getting-started/hello-world"
+    >
+      Clone and build the "Hello, World!" project.
+    </Card>
+  </div>
+</div>

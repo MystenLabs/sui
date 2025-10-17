@@ -6,7 +6,7 @@ keywords: [ fullnode configuration, full node configuration, sui full nodes, sta
 
 :::info
 
-These instructions are for advanced users. If you just need a local development environment, you should instead follow the instructions in [Create a Local Sui Network](../developer/getting-started/local-network.mdx) to create a local full node, validators, and faucet.
+These instructions are for advanced users. If you just need a local development environment, you should instead follow the instructions in [Create a Local Sui Network](/guides/developer/sui-101/local-network.mdx) to create a local full node, validators, and faucet.
 
 :::
 
@@ -82,7 +82,7 @@ cmake
 
 ### Considerations to enable gRPC
 
-You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. Refer to [Sui's data serving roadmap](/guides/developer/getting-started/data-serving.mdx#grpc-api) for guidance on the overall transition plan.
+You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. Refer to [Sui's data serving roadmap](/guides/developer/sui-101/data-serving.mdx#grpc-api) for guidance on the overall transition plan.
 
 To serve the [gRPC API](/concepts/grpc-overview.mdx), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node may not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api.mdx) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
 
@@ -117,10 +117,10 @@ Adjust the gRPC data retention period based on your full node’s resource profi
 
 ## Running a full node {#running-a-full-node}
 
-Instructions for building, installing, or downloading the `sui-node` binary are available at [Sui Install](../developer/getting-started/sui-install.mdx). 
+Instructions for building, installing, or downloading the `sui-node` binary are available at [Sui Install](/guides/developer/getting-started/sui-install.mdx). 
 These install instructions are specific to the `sui` CLI, but apply to the `sui-node` binary as well.
 
-There are many ways to run a Sui full node (bare metal, virtual machine, Kubernetes statefulset, and so on), and the solution that you choose depends on your specific needs as well as the infrastructure that you have available.
+There are many ways to run a Sui full node (bare metal, virtual machine, Kubernetes StatefulSet, and so on), and the solution that you choose depends on your specific needs as well as the infrastructure that you have available.
 
 There are some specific considerations to keep in mind when running a Sui full node that apply to all environments:
 
