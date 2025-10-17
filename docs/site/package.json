@@ -58,6 +58,7 @@
     "pushfeedback-react": "^0.1.73",
     "raw-loader": "^4.0.2",
     "react": "^18.0.0",
+    "react-country-flag": "^3.1.0",
     "react-dom": "^18.0.0",
     "react-instantsearch": "^7.15.8",
     "react-lite-youtube-embed": "^2.4.0",
@@ -74,7 +75,7 @@
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.23.4",
     "@docusaurus/core": "3.8.1",
-    "@docusaurus/module-type-aliases": "^3.1.1",
+    "@docusaurus/module-type-aliases": "3.8.1",
     "@docusaurus/preset-classic": "3.8.1",
     "@docusaurus/remark-plugin-npm2yarn": "3.8.1",
     "@docusaurus/theme-classic": "3.8.1",
@@ -109,11 +110,6 @@
   "engines": {
     "node": ">=18.12",
     "pnpm": ">=8.6.5"
-  },
-  "pnpm": {
-    "overrides": {
-      "@docusaurus/types": "3.1.1"
-    }
   },
   "overrides": {
     "@docusaurus/*": "3.8.1"

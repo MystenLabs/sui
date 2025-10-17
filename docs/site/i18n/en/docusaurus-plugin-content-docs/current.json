@@ -1,0 +1,270 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.guidesSidebar.category.Developer Guides": {
+    "message": "Developer Guides",
+    "description": "The label for category Developer Guides in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Getting Started": {
+    "message": "Getting Started",
+    "description": "The label for category Getting Started in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Your First Sui dApp": {
+    "message": "Your First Sui dApp",
+    "description": "The label for category Your First Sui dApp in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Sui 101": {
+    "message": "Sui 101",
+    "description": "The label for category Sui 101 in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Working with PTBs": {
+    "message": "Working with PTBs",
+    "description": "The label for category Working with PTBs in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Coins and Tokens": {
+    "message": "Coins and Tokens",
+    "description": "The label for category Coins and Tokens in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.NFTs": {
+    "message": "NFTs",
+    "description": "The label for category NFTs in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Cryptography": {
+    "message": "Cryptography",
+    "description": "The label for category Cryptography in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.zkLogin Integration Guide": {
+    "message": "zkLogin Integration Guide",
+    "description": "The label for category zkLogin Integration Guide in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Advanced Topics": {
+    "message": "Advanced Topics",
+    "description": "The label for category Advanced Topics in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.App Examples": {
+    "message": "App Examples",
+    "description": "The label for category App Examples in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Oracles": {
+    "message": "Oracles",
+    "description": "The label for category Oracles in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Operator Guides": {
+    "message": "Operator Guides",
+    "description": "The label for category Operator Guides in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.Sui Validator Nodes": {
+    "message": "Sui Validator Nodes",
+    "description": "The label for category Sui Validator Nodes in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.category.SuiPlay0X1": {
+    "message": "SuiPlay0X1",
+    "description": "The label for category SuiPlay0X1 in sidebar guidesSidebar"
+  },
+  "sidebar.guidesSidebar.doc.Guides": {
+    "message": "Guides",
+    "description": "The label for the doc item Guides in sidebar guidesSidebar, linking to the doc guides"
+  },
+  "sidebar.conceptsSidebar.category.App Developers": {
+    "message": "App Developers",
+    "description": "The label for category App Developers in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Object Model": {
+    "message": "Object Model",
+    "description": "The label for category Object Model in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Object Ownership": {
+    "message": "Object Ownership",
+    "description": "The label for category Object Ownership in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Transfers": {
+    "message": "Transfers",
+    "description": "The label for category Transfers in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Move Overview": {
+    "message": "Move Overview",
+    "description": "The label for category Move Overview in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Packages": {
+    "message": "Packages",
+    "description": "The label for category Packages in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Dynamic Fields": {
+    "message": "Dynamic Fields",
+    "description": "The label for category Dynamic Fields in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Transactions": {
+    "message": "Transactions",
+    "description": "The label for category Transactions in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.GraphQL and Indexer Framework": {
+    "message": "GraphQL and Indexer Framework",
+    "description": "The label for category GraphQL and Indexer Framework in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Cryptography": {
+    "message": "Cryptography",
+    "description": "The label for category Cryptography in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Transaction Authentication": {
+    "message": "Transaction Authentication",
+    "description": "The label for category Transaction Authentication in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Nautilus": {
+    "message": "Nautilus",
+    "description": "The label for category Nautilus in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Sui Architecture": {
+    "message": "Sui Architecture",
+    "description": "The label for category Sui Architecture in sidebar conceptsSidebar"
+  },
+  "sidebar.conceptsSidebar.category.Tokenomics": {
+    "message": "Tokenomics",
+    "description": "The label for category Tokenomics in sidebar conceptsSidebar"
+  },
+  "sidebar.standardsSidebar.category.Closed-Loop Token": {
+    "message": "Closed-Loop Token",
+    "description": "The label for category Closed-Loop Token in sidebar standardsSidebar"
+  },
+  "sidebar.standardsSidebar.category.DeepBookV3": {
+    "message": "DeepBookV3",
+    "description": "The label for category DeepBookV3 in sidebar standardsSidebar"
+  },
+  "sidebar.standardsSidebar.category.SDK": {
+    "message": "SDK",
+    "description": "The label for category SDK in sidebar standardsSidebar"
+  },
+  "sidebar.referencesSidebar.category.Sui RPC": {
+    "message": "Sui RPC",
+    "description": "The label for category Sui RPC in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.GraphQL": {
+    "message": "GraphQL",
+    "description": "The label for category GraphQL in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Beta": {
+    "message": "Beta",
+    "description": "The label for category Beta in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Operations": {
+    "message": "Operations",
+    "description": "The label for category Operations in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Directives": {
+    "message": "Directives",
+    "description": "The label for category Directives in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Mutations": {
+    "message": "Mutations",
+    "description": "The label for category Mutations in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Queries": {
+    "message": "Queries",
+    "description": "The label for category Queries in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Types": {
+    "message": "Types",
+    "description": "The label for category Types in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Enums": {
+    "message": "Enums",
+    "description": "The label for category Enums in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Inputs": {
+    "message": "Inputs",
+    "description": "The label for category Inputs in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Interfaces": {
+    "message": "Interfaces",
+    "description": "The label for category Interfaces in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Objects": {
+    "message": "Objects",
+    "description": "The label for category Objects in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Scalars": {
+    "message": "Scalars",
+    "description": "The label for category Scalars in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Unions": {
+    "message": "Unions",
+    "description": "The label for category Unions in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Alpha": {
+    "message": "Alpha",
+    "description": "The label for category Alpha in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Sui CLI": {
+    "message": "Sui CLI",
+    "description": "The label for category Sui CLI in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Sui IDE Support": {
+    "message": "Sui IDE Support",
+    "description": "The label for category Sui IDE Support in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Sui SDKs": {
+    "message": "Sui SDKs",
+    "description": "The label for category Sui SDKs in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Move": {
+    "message": "Move",
+    "description": "The label for category Move in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Framework": {
+    "message": "Framework",
+    "description": "The label for category Framework in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.sui:bridge": {
+    "message": "sui:bridge",
+    "description": "The label for category sui:bridge in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.sui:std": {
+    "message": "sui:std",
+    "description": "The label for category sui:std in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.sui:sui": {
+    "message": "sui:sui",
+    "description": "The label for category sui:sui in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.sui:system": {
+    "message": "sui:system",
+    "description": "The label for category sui:system in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.category.Contribute": {
+    "message": "Contribute",
+    "description": "The label for category Contribute in sidebar referencesSidebar"
+  },
+  "sidebar.referencesSidebar.link.JSON-RPC": {
+    "message": "JSON-RPC",
+    "description": "The label for link JSON-RPC in sidebar referencesSidebar, linking to /sui-api-ref"
+  },
+  "sidebar.referencesSidebar.link.dApp Kit": {
+    "message": "dApp Kit",
+    "description": "The label for link dApp Kit in sidebar referencesSidebar, linking to https://sdk.mystenlabs.com/dapp-kit"
+  },
+  "sidebar.referencesSidebar.link.TypeScript SDK": {
+    "message": "TypeScript SDK",
+    "description": "The label for link TypeScript SDK in sidebar referencesSidebar, linking to https://sdk.mystenlabs.com/typescript"
+  },
+  "sidebar.referencesSidebar.link.zkSend SDK": {
+    "message": "zkSend SDK",
+    "description": "The label for link zkSend SDK in sidebar referencesSidebar, linking to https://sdk.mystenlabs.com/zksend"
+  },
+  "sidebar.referencesSidebar.link.The Move Book": {
+    "message": "The Move Book",
+    "description": "The label for link The Move Book in sidebar referencesSidebar, linking to https://move-book.com/"
+  },
+  "sidebar.referencesSidebar.link.The Move Reference": {
+    "message": "The Move Reference",
+    "description": "The label for link The Move Reference in sidebar referencesSidebar, linking to https://move-book.com/reference/"
+  },
+  "sidebar.referencesSidebar.link.Submit a SIP": {
+    "message": "Submit a SIP",
+    "description": "The label for link Submit a SIP in sidebar referencesSidebar, linking to https://sips.sui.io"
+  },
+  "sidebar.referencesSidebar.doc.References": {
+    "message": "References",
+    "description": "The label for the doc item References in sidebar referencesSidebar, linking to the doc references"
+  }
+}

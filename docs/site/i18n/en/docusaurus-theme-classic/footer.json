@@ -1,0 +1,10 @@
+{
+  "copyright": {
+    "message": "© 2025 Sui Foundation | Documentation distributed under <a href=\"https://github.com/MystenLabs/sui/blob/main/docs/site/LICENSE\">CC BY 4.0</a>",
+    "description": "The footer copyright"
+  },
+  "logo.alt": {
+    "message": "Sui Logo",
+    "description": "The alt text of footer logo"
+  }
+}
