@@ -79,18 +79,7 @@ In this project, there are two important files that define the package's logic, 
 
 <summary>`move/hello-world/Move.toml`</summary>
 
-```toml
-[package]
-name = "hello_world"
-version = "0.0.1"
-edition = "2024.beta"
-
-[dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
-
-[addresses]
-hello_world = "0x0"
-```
+<ImportContent source="/move/hello-world/Move.toml" mode="code" org="MystenLabs" repo="sui-stack-hello-world" />
 
 </details>
 
@@ -98,38 +87,7 @@ hello_world = "0x0"
 
 Open the `greeting.move` file in your IDE of choice. You can see the following Move code:
 
-```move
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
-/// This example demonstrates a basic use of a shared greeting.
-/// Rules:
-/// - anyone can create and share a Greeting object
-/// - everyone can update the text of the Greeting object
-module hello_world::greeting {
-  use std::string;
-
-  /// A shared greeting
-  public struct Greeting has key {
-    id: UID,
-    text: string::String,
-  }
- 
-  /// API call that creates a globally shared Greeting object initialized with "Hello world!"
-  public fun new(ctx: &mut TxContext) { 
-    let new_greeting = Greeting { 
-      id: object::new(ctx),
-      text: b"Hello world!".to_string()
-    };
-    transfer::share_object(new_greeting);
-  }
-
-  /// API call that updates text of Greeting object
-  public fun update_text(greeting: &mut Greeting, new_text: string::String) {
-    greeting.text = new_text;
-  }
-}
-```
+<ImportContent source="/move/hello-world/sources/greeting.move" mode="code" org="MystenLabs" repo="sui-stack-hello-world" />
 
 ### Code explanation 
 
@@ -144,32 +102,15 @@ module hello_world::greeting {
 
 Then, it defines a public struct called `Greeting` that contains a unique object ID and text. A struct is a type of _resource_:
 
-```move 
-  public struct Greeting has key {
-    id: UID,
-    text: string::String,
-  }
-```
+<ImportContent source="/move/hello-world/sources/greeting.move" mode="code" struct="Greeting" org="MystenLabs" repo="sui-stack-hello-world" />
 
 Then, it defines the function `new` that makes an API call to the `Greeting` struct and initializes it with the text `"Hello world!"`, storing it in a new shared object:
 
-```move 
-  public fun new(ctx: &mut TxContext) { 
-    let new_greeting = Greeting { 
-      id: object::new(ctx),
-      text: b"Hello world!".to_string()
-    };
-    transfer::share_object(new_greeting);
-  }
-```
+<ImportContent source="/move/hello-world/sources/greeting.move" mode="code" fun="new" org="MystenLabs" repo="sui-stack-hello-world" />
 
 Lastly, the package defines a function called `update_text` that can be called to update the text stored in `Greeting`:
 
-```move
-  public fun update_text(greeting: &mut Greeting, new_text: string::String) {
-    greeting.text = new_text;
-  }
-```
+<ImportContent source="/move/hello-world/sources/greeting.move" mode="code" fun="update_text" org="MystenLabs" repo="sui-stack-hello-world" />
 
 ### Resource safety 
 
@@ -492,15 +433,3 @@ Transactions also have limitations regarding total size, number of objects, and 
     </Card>
   </div>
 </div>
-
-<form
-  action="https://buttondown.com/api/emails/embed-subscribe/suidevnewsletter"
-  method="post"
-  target="popupwindow"
-  onsubmit="window.open('https://buttondown.com/suidevnewsletter', 'popupwindow')"
-  class="embeddable-buttondown-form"
->
-  <label for="bd-email">Enter your email</label>
-  <input type="email" name="email" id="bd-email" />
-  <input type="submit" value="Subscribe" />
-</form>
