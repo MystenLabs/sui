@@ -10,7 +10,8 @@ use clap::{Args, Parser};
 use move_compiler::editions::Flavor;
 use move_core_types::parsing::{
     parser::Parser as MoveCLParser,
-    parser::{parse_u256, parse_u64},
+    parser::{parse_u256, parse_u64, Token},
+    types::{ParsedType, TypeToken},
     values::ValueToken,
     values::{ParsableValue, ParsedValue},
 };
@@ -23,7 +24,10 @@ use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, CallArg, ObjectArg, SharedObjectMutability};
+use sui_types::transaction::{
+    Argument, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
+};
+use sui_types::type_input::TypeInput;
 
 pub const SUI_ARGS_LONG: &str = "sui-args";
 
@@ -407,6 +411,7 @@ pub enum SuiExtraValueArgs {
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
     ImmShared(FakeID, Option<SequenceNumber>),
+    Withdraw(u64, ParsedType),
 }
 
 #[derive(Clone)]
@@ -417,6 +422,7 @@ pub enum SuiValue {
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
     ImmShared(FakeID, Option<SequenceNumber>),
+    Withdraw(u64, TypeInput),
 }
 
 impl SuiExtraValueArgs {
@@ -450,6 +456,61 @@ impl SuiExtraValueArgs {
         let package = parser.advance(ValueToken::Ident)?;
         parser.advance(ValueToken::RParen)?;
         Ok(SuiExtraValueArgs::Digest(package.to_owned()))
+    }
+
+    fn parse_withdraw_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
+        let contents = parser.advance(ValueToken::Ident)?;
+        ensure!(contents == "withdraw");
+
+        // Format: withdraw(amount, type::path::Type)
+        parser.advance(ValueToken::LParen)?;
+
+        // Parse amount
+        let amount_str = parser.advance(ValueToken::Number)?;
+        let (amount, _) = parse_u64(amount_str)?;
+
+        parser.advance(ValueToken::Comma)?;
+
+        // Parse type as a path of identifiers separated by ::
+        // Collect all tokens until we hit RParen to build the type string
+        let mut type_parts = Vec::new();
+        loop {
+            let (tok, s) = match parser.peek() {
+                Some(v) => v,
+                None => bail!("Unexpected end of input while parsing withdraw type"),
+            };
+            match tok {
+                ValueToken::Whitespace => {
+                    parser.advance(ValueToken::Whitespace)?;
+                    // Skip whitespace
+                }
+                ValueToken::Ident => {
+                    parser.advance(ValueToken::Ident)?;
+                    type_parts.push(s.to_string());
+                }
+                ValueToken::ColonColon => {
+                    parser.advance(ValueToken::ColonColon)?;
+                    type_parts.push("::".to_string());
+                }
+                ValueToken::RParen => {
+                    break;
+                }
+                _ => bail!("Unexpected token {:?} while parsing withdraw type", tok),
+            }
+        }
+
+        let type_str = type_parts.join("");
+
+        // Parse the type from the type string
+        let type_tokens: Vec<_> = TypeToken::tokenize(&type_str)?.into_iter().collect();
+        let mut type_parser = move_core_types::parsing::parser::Parser::new(type_tokens);
+        let parsed_type = type_parser.parse_type()?;
+
+        parser.advance(ValueToken::RParen)?;
+
+        Ok(SuiExtraValueArgs::Withdraw(amount, parsed_type))
     }
 
     fn parse_receiving_or_object_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
@@ -497,6 +558,9 @@ impl SuiValue {
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
             SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::Withdraw(_, _) => {
+                panic!("unexpected nested Sui withdraw reservation in args")
+            }
         }
     }
 
@@ -508,6 +572,9 @@ impl SuiValue {
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
             SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::Withdraw(_, _) => {
+                panic!("unexpected nested Sui withdraw reservation in args")
+            }
         }
     }
 
@@ -608,6 +675,9 @@ impl SuiValue {
                 };
                 CallArg::Pure(bcs::to_bytes(&staged.digest).unwrap())
             }
+            SuiValue::Withdraw(amount, type_input) => CallArg::FundsWithdrawal(
+                FundsWithdrawalArg::balance_from_sender(amount, type_input),
+            ),
         })
     }
 
@@ -641,6 +711,7 @@ impl ParsableValue for SuiExtraValueArgs {
             (ValueToken::Ident, "digest") => Some(Self::parse_digest_value(parser)),
             (ValueToken::Ident, "receiving") => Some(Self::parse_receiving_value(parser)),
             (ValueToken::Ident, "immshared") => Some(Self::parse_read_shared_value(parser)),
+            (ValueToken::Ident, "withdraw") => Some(Self::parse_withdraw_value(parser)),
             _ => None,
         }
     }
@@ -669,13 +740,18 @@ impl ParsableValue for SuiExtraValueArgs {
 
     fn into_concrete_value(
         self,
-        _mapping: &impl Fn(&str) -> Option<move_core_types::account_address::AccountAddress>,
+        mapping: &impl Fn(&str) -> Option<move_core_types::account_address::AccountAddress>,
     ) -> anyhow::Result<Self::ConcreteValue> {
         match self {
             SuiExtraValueArgs::Object(id, version) => Ok(SuiValue::Object(id, version)),
             SuiExtraValueArgs::Digest(pkg) => Ok(SuiValue::Digest(pkg)),
             SuiExtraValueArgs::Receiving(id, version) => Ok(SuiValue::Receiving(id, version)),
             SuiExtraValueArgs::ImmShared(id, version) => Ok(SuiValue::ImmShared(id, version)),
+            SuiExtraValueArgs::Withdraw(amount, parsed_type) => {
+                let type_tag = parsed_type.into_type_tag(mapping)?;
+                let type_input = TypeInput::from(type_tag);
+                Ok(SuiValue::Withdraw(amount, type_input))
+            }
         }
     }
 }
