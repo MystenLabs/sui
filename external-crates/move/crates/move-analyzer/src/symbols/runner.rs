@@ -98,7 +98,7 @@ impl SymbolicatorRunner {
                             }
                             RunnerState::Wait => {
                                 // wait for next request, with timeout for parent process monitoring
-                                if parent_process_id.is_some() {
+                                if let Some(parent_pid) = parent_process_id {
                                     let (guard, timeout_result) = cvar.wait_timeout(symbolicate, parent_check_interval).unwrap();
                                     // guard is the re-acquired MutexGuard<RunnerState>
                                     // timeout_result indicates whether we woke due to timeout (true) or notification (false)
@@ -106,10 +106,9 @@ impl SymbolicatorRunner {
 
                                     // Check if we woke up due to timeout (for parent process check)
                                     if timeout_result.timed_out() {
-                                        // Safe to unwrap: we only enter this branch when parent_process_id.is_some()
-                                        // which guarantees both system and parent_process_id are Some
+                                        // Safe to unwrap: we only enter this branch when `parent_process_id` is `Some`
+                                        // which guarantees that `system` is `Some`
                                         let sys = system.as_mut().unwrap();
-                                        let parent_pid = parent_process_id.unwrap();
 
                                         // Refresh the specific parent process
                                         let parent_pid_obj = Pid::from_u32(parent_pid);
