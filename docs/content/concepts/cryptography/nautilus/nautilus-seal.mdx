@@ -1,15 +1,16 @@
 ---
-title: Seal integration with Nautilus
-description: Details on how to use Seal for secure secret loading in Nautilus enclaves
+title: Seal Integration with Nautilus
+description: Learn about using Seal for secure secret use within Nautilus enclaves.
+keywords: [ seal, seal secret management, seal secrets, nautilus, enclaves ]
 ---
 
 The Nautilus and [Seal](https://seal-docs.wal.app) integration pattern allows Nautilus enclaves to securely fetch public keys and identity-based decryption keys from Seal key servers. These keys can be used to encrypt or decrypt sensitive data directly inside the enclaves, ensuring that data is protected end-to-end, both at rest and in use.
 
-This pattern is ideal for workloads that require confidential data handling, secure AI workflows, or fine-grained access control policies enforced cryptographically.
+This pattern is ideal for use cases that require confidential data handling, secure AI workflows, or fine-grained access control policies enforced cryptographically.
 
 ## What this enables
 
-You can use this pattern to:
+Use this pattern to:
 
 * Decrypt sensitive data inside an enclave, without exposing secrets to the host.
 * Encrypt new data with public keys from Seal key servers, ensuring only authorized enclaves can later decrypt it.
@@ -27,4 +28,4 @@ The encrypted data can arrive at the enclave from any source, as long as it was 
 
 See the full [Seal and Nautilus example app](https://github.com/MystenLabs/nautilus/tree/main/src/nautilus-server/src/apps/seal-example) for a reference implementation of this pattern.
 
-You can also explore [seal-kms](https://github.com/lockin-bot/seal-kms), a minimal open-source key management service for Nautilus, built using Seal and contributed by the community.
+You can also explore [seal-kms](https://github.com/lockin-bot/seal-kms), a minimal, community built, open-source key management service for Nautilus using Seal.
