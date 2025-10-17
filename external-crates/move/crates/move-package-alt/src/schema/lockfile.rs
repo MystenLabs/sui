@@ -35,13 +35,22 @@ pub struct Constant4;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename = "kabob-case")]
 pub struct Pin {
-    /// Metadata about the package's source
+    /// The information needed to locate and identify the package.
     pub source: LockfileDependencyInfo,
 
-    /// The stored `published-at` and `original-id` overrides (from the `published-at` and
-    /// `original-id` fields in the manifest
-    pub address_override: Option<PublishAddresses>,
+    /// Contains the package's manifest digest. This is used to verify if a manifest has changed
+    /// and re-pinning is required.
+    pub manifest_digest: String,
 
+    /// The package's dependencies, a map from the package name to the package id.
+    pub deps: BTreeMap<PackageName, PackageID>,
+}
+
+/// The information used to locate and identify a package. Two pinned packages are considered to be
+/// the same if they have the same source code, the same environment, and the same overridden
+/// addresses.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd, Eq, Ord)]
+pub struct LockfileDependencyInfo {
     /// The environment that should be used for the dependency (as defined in the dependency's
     /// manifest but specified in the depender's manifest).
     ///
@@ -54,32 +63,31 @@ pub struct Pin {
     /// then use_environment for the `b` dependency would be `foo`
     pub use_environment: Option<EnvironmentName>,
 
-    /// Contains the package's manifest digest. This is used to verify if a manifest has changed
-    /// and re-pinning is required.
-    pub manifest_digest: String,
+    /// The stored `published-at` and `original-id` overrides (from the `published-at` and
+    /// `original-id` fields in the manifest
+    pub address_override: Option<PublishAddresses>,
 
-    /// The package's dependencies, a map from the package name to the package id.
-    pub deps: BTreeMap<PackageName, PackageID>,
+    #[serde(flatten)]
+    pub kind: LockfileDepKind,
 }
 
-/// A serialized pinned dependency in a lockfile
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd, Eq, Ord)]
 #[serde(untagged)]
-pub enum LockfileDependencyInfo {
+pub enum LockfileDepKind {
     Local(LocalDepInfo),
     OnChain(OnChainDepInfo),
     Git(LockfileGitDepInfo),
     Root(RootDepInfo),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RootDepInfo {
     pub root: bool,
 }
 
 /// A serialized lockfile dependency of the form `{git = "...", rev = "...", subdir = "..."}`
 /// Note in particular that `rev` must exist and must be a `GitSha`
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LockfileGitDepInfo {
     /// The repository containing the dependency
     #[serde(rename = "git")]

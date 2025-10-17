@@ -44,7 +44,7 @@ pub struct PublishedID(pub AccountAddress);
 pub struct OriginalID(pub AccountAddress);
 
 /// A pair of published-at and original-id; appears in various places
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub struct PublishAddresses {
     pub published_at: PublishedID,
@@ -52,21 +52,21 @@ pub struct PublishAddresses {
 }
 
 /// A serialized dependency of the form `{ local = <path> }`
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalDepInfo {
     /// The path on the filesystem, relative to the location of the containing file
     pub local: PathBuf,
 }
 
 /// An on-chain dependency `{on-chain = true}`
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OnChainDepInfo {
     #[serde(rename = "on-chain")]
     pub on_chain: ConstTrue,
 }
 
 /// The constant `true`
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(try_from = "bool", into = "bool")]
 pub struct ConstTrue;
 

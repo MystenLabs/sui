@@ -15,8 +15,8 @@ use crate::graph::{LinkageTable, PackageInfo};
 use crate::package::block_on;
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
-    Environment, OriginalID, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
-    Publication, RenderToml,
+    Environment, LocalPub, LockfileDependencyInfo, OriginalID, PackageID, PackageName,
+    ParsedEphemeralPubs, ParsedPublishedFile, Publication, RenderToml,
 };
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
@@ -149,7 +149,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         // update the packages to use the ephemeral addresses
         result
             .graph
-            .add_publish_overrides(localpubs_to_publications(&pubfile));
+            .add_publish_overrides(localpubs_to_publications(&pubfile)?);
         result.pubs = PublicationSource::Ephemeral {
             file: pubfile_path.as_ref().to_path_buf(),
             pubs: pubfile,
@@ -279,7 +279,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Record metadata for a publication for the root package in either its `Published.toml` or
     /// its ephemeral pubfile (depending on how it was loaded)
     pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
-        let package_id = self.name().to_string();
+        let dep = self
+            .package_graph()
+            .root_package()
+            .dep_for_self()
+            .clone()
+            .into();
 
         match &mut self.pubs {
             PublicationSource::Published(pubfile) => {
@@ -292,7 +297,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 )?;
             }
             PublicationSource::Ephemeral { file, pubs } => {
-                pubs.published.insert(package_id, publish_data.into());
+                pubs.published.push(LocalPub {
+                    source: dep,
+                    addresses: publish_data.addresses,
+                    version: publish_data.version,
+                    metadata: publish_data.metadata,
+                });
                 std::fs::write(&file, pubs.render_as_toml())?;
             }
         }
@@ -361,7 +371,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             let pubs = ParsedEphemeralPubs {
                 build_env,
                 chain_id,
-                published: BTreeMap::new(),
+                published: Vec::new(),
             };
             debug!("writing empty file {file:?}");
             std::fs::write(&file, pubs.render_as_toml())?;
@@ -409,22 +419,32 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
 fn localpubs_to_publications<F: MoveFlavor>(
     pubfile: &ParsedEphemeralPubs<F>,
-) -> BTreeMap<PackageID, Publication<F>> {
-    pubfile
-        .published
-        .iter()
-        .map(|(id, local_pub)| {
-            (
-                id.clone(),
-                Publication::<F> {
-                    chain_id: pubfile.chain_id.clone(),
-                    addresses: local_pub.addresses.clone(),
-                    version: local_pub.version,
-                    metadata: local_pub.metadata.clone(),
-                },
-            )
-        })
-        .collect()
+) -> PackageResult<BTreeMap<LockfileDependencyInfo, Publication<F>>> {
+    let mut result = BTreeMap::new();
+    for entry in pubfile.published.clone() {
+        let LocalPub {
+            source,
+            addresses,
+            version,
+            metadata,
+        } = entry;
+
+        let old = result.insert(
+            source,
+            Publication {
+                chain_id: pubfile.chain_id.clone(),
+                addresses,
+                version,
+                metadata,
+            },
+        );
+
+        if old.is_some() {
+            return Err(PackageError::EphemeralDuplicateDep);
+        }
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]

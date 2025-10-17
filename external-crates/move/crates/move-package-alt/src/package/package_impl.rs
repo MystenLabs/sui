@@ -14,10 +14,10 @@ use tracing::debug;
 use super::compute_digest;
 use super::manifest::Manifest;
 use super::paths::PackagePath;
-use crate::compatibility::legacy::LegacyData;
 use crate::compatibility::legacy_parser::try_load_legacy_manifest;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
+use crate::{compatibility::legacy::LegacyData, schema::LockfileDependencyInfo};
 use crate::{
     dependency::Pinned,
     schema::{ParsedManifest, ParsedPublishedFile, Publication, ReplacementDependency},
@@ -58,7 +58,7 @@ pub struct Package<F: MoveFlavor> {
     publication: Option<Publication<F>>,
 
     /// The way this package should be serialized to the lockfile.
-    dep_for_self: Pinned,
+    dep_for_self: LockfileDependencyInfo,
 
     /// Optional legacy information for a supplied package.
     pub legacy_data: Option<LegacyData>,
@@ -86,7 +86,10 @@ impl<F: MoveFlavor> Package<F> {
 
     /// Fetch [dep] (relative to [self]) and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
-    pub async fn load(dep_for_self: Pinned, env: &Environment) -> PackageResult<Self> {
+    pub async fn load(
+        dep_for_self: LockfileDependencyInfo,
+        env: &Environment,
+    ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep_for_self);
         let path = FetchedDependency::fetch(&dep_for_self).await?;
         // try to load a legacy manifest (with an `[addresses]` section)

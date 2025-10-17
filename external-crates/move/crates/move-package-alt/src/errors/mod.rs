@@ -27,6 +27,7 @@ use crate::package::EnvironmentID;
 use crate::package::EnvironmentName;
 use crate::package::manifest::ManifestError;
 use crate::package::paths::PackagePathError;
+use crate::schema::LockfileDependencyInfo;
 
 /// Result type for package operations
 pub type PackageResult<T> = Result<T, PackageError>;
@@ -103,6 +104,9 @@ pub enum PackageError {
         "Ephemeral publication file does not have a `build-env` so you must pass `--build-env <env>`"
     )]
     EphemeralNoBuildEnv,
+
+    #[error("Ephemeral publication file has multiple entries for dependency `<TODO>`")]
+    EphemeralDuplicateDep,
 
     #[error("Cannot build with build-env `{build_env}`: the recognized environments are <TODO>")]
     UnknownBuildEnv { build_env: EnvironmentName },

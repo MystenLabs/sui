@@ -16,7 +16,7 @@ use tracing::{debug, warn};
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::schema::Publication;
+use crate::schema::{LockfileDependencyInfo, Publication};
 use crate::{
     dependency::PinnedDependencyInfo,
     errors::PackageResult,
@@ -110,13 +110,15 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
     /// For each entry in `overrides`, override the package publication in `self` for the
     /// corresponding package ID. Warns if the package ID is unrecognized.
-    pub(crate) fn add_publish_overrides(&mut self, overrides: BTreeMap<PackageID, Publication<F>>) {
-        for (id, publish) in overrides {
-            let Some(index) = self.package_ids.get_by_left(&id) else {
-                warn!("Ignoring unrecognized package identifier `{id}`");
-                continue;
-            };
-            self.inner[*index] = Arc::new(self.inner[*index].override_publish(publish));
+    pub(crate) fn add_publish_overrides(
+        &mut self,
+        overrides: BTreeMap<LockfileDependencyInfo, Publication<F>>,
+    ) {
+        for index in self.inner.node_indices() {
+            let package = self.inner[index].clone();
+            if let Some(replacement) = overrides.get(&package.dep_for_self().clone().into()) {
+                self.inner[index] = Arc::new(package.override_publish(replacement.clone()));
+            }
         }
     }
 }

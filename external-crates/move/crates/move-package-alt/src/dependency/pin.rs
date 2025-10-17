@@ -13,8 +13,8 @@ use crate::{
     git::{GitCache, GitError, GitTree},
     package::paths::PackagePath,
     schema::{
-        EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestGitDependency, OnChainDepInfo, PackageName, Pin, RootDepInfo,
+        EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDepKind, LockfileDependencyInfo,
+        LockfileGitDepInfo, ManifestGitDependency, OnChainDepInfo, PackageName, Pin, RootDepInfo,
     },
 };
 
@@ -106,6 +106,22 @@ impl PinnedDependencyInfo {
     pub fn is_root(&self) -> bool {
         self.0.dep_info.is_root()
     }
+
+    /// Convert `self` to a lockfile dependency info. Elides the `use-environment` field if the
+    /// it has the same value as `context`
+    pub fn to_lockfile(&self, context: &EnvironmentName) -> LockfileDependencyInfo {
+        let use_environment = if &self.0.use_environment == context {
+            None
+        } else {
+            Some(self.0.use_environment.clone())
+        };
+
+        LockfileDependencyInfo {
+            use_environment,
+            address_override: self.0.addresses.clone(),
+            kind: self.0.dep_info.clone().into(),
+        }
+    }
 }
 
 impl AsRef<Pinned> for PinnedDependencyInfo {
@@ -142,8 +158,8 @@ impl Pinned {
     /// don't yet know what the rename-from field  should be. The caller is responsible for calling
     /// [Self::with_rename_from] if they need to establish the rename-from check invariant.
     pub fn from_lockfile(containing_file: FileHandle, pin: &Pin) -> PackageResult<Self> {
-        match &pin.source {
-            LockfileDependencyInfo::Local(loc) => Ok(Pinned::Local(PinnedLocalDependency {
+        match &pin.source.kind {
+            LockfileDepKind::Local(loc) => Ok(Pinned::Local(PinnedLocalDependency {
                 absolute_path_to_package: containing_file
                     .path()
                     .parent()
@@ -153,9 +169,9 @@ impl Pinned {
                     .clean(),
                 relative_path_from_root_package: loc.local.to_path_buf().clean(),
             })),
-            LockfileDependencyInfo::OnChain(chain) => Ok(Pinned::OnChain(chain.clone())),
-            LockfileDependencyInfo::Git(git) => Ok(Pinned::Git(git.clone().try_into()?)),
-            LockfileDependencyInfo::Root(_) => Ok(Pinned::Root(PackagePath::new(
+            LockfileDepKind::OnChain(chain) => Ok(Pinned::OnChain(chain.clone())),
+            LockfileDepKind::Git(git) => Ok(Pinned::Git(git.clone().try_into()?)),
+            LockfileDepKind::Root(_) => Ok(Pinned::Root(PackagePath::new(
                 containing_file
                     .as_ref()
                     .parent()
@@ -216,13 +232,7 @@ impl LocalDepInfo {
     }
 }
 
-impl From<PinnedDependencyInfo> for LockfileDependencyInfo {
-    fn from(value: PinnedDependencyInfo) -> Self {
-        value.0.dep_info.into()
-    }
-}
-
-impl From<Pinned> for LockfileDependencyInfo {
+impl From<Pinned> for LockfileDepKind {
     fn from(value: Pinned) -> Self {
         match value {
             Pinned::Local(loc) => Self::Local(LocalDepInfo {
