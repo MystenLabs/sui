@@ -29,7 +29,6 @@ use move_package_alt::{
 };
 use move_symbol_pool::Symbol;
 
-#[derive(Debug)]
 pub struct BuildPlan<'a, F: MoveFlavor> {
     root_pkg: &'a RootPackage<F>,
     compiler_vfs_root: Option<VfsPath>,

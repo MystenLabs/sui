@@ -32,11 +32,8 @@ use move_compiler::{
 };
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult,
-    flavor::MoveFlavor,
-    graph::{NamedAddress, PackageInfo},
-    package::RootPackage,
-    schema::{Environment, OriginalID},
+    errors::PackageResult, flavor::MoveFlavor, graph::PackageInfo, package::RootPackage,
+    schema::Environment,
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -136,10 +133,7 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
     // compilation
     if build_config.generate_docs {
         // TODO: fix this root_name_address_map
-        let named_addresses = root_pkg
-            .package_graph()
-            .root_package_info()
-            .named_addresses()?;
+        let named_addresses = root_pkg.package_info().named_addresses()?;
 
         // TODO: pkg-alt verify this is producing the correct map.
         let root_named_address_map = build_config.addresses_for_config(named_addresses).into();
