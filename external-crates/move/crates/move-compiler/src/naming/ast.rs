@@ -504,7 +504,9 @@ pub enum Exp_ {
 pub type Exp = Spanned<Exp_>;
 
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
+
 #[derive(Debug, PartialEq, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum SequenceItem_ {
     Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),

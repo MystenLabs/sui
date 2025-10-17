@@ -316,17 +316,17 @@ pub fn compute_symbols_pre_process(
         cursor_context.as_mut(),
     );
 
-    if let Some(cached_deps) = compiled_pkg_info.cached_deps.clone() {
-        if let Some(cached_symbols_data) = cached_deps.symbols_data {
-            // We need to update definitions for the code being currently processed
-            // so that these definitions are available when ASTs for this code are visited
-            computation_data
-                .mod_outer_defs
-                .extend(cached_symbols_data.mod_outer_defs.clone());
-            computation_data
-                .def_info
-                .extend(cached_symbols_data.def_info.clone());
-        }
+    if let Some(cached_deps) = compiled_pkg_info.cached_deps.clone()
+        && let Some(cached_symbols_data) = cached_deps.symbols_data
+    {
+        // We need to update definitions for the code being currently processed
+        // so that these definitions are available when ASTs for this code are visited
+        computation_data
+            .mod_outer_defs
+            .extend(cached_symbols_data.mod_outer_defs.clone());
+        computation_data
+            .def_info
+            .extend(cached_symbols_data.def_info.clone());
     }
 
     cursor_context
@@ -536,21 +536,21 @@ fn pre_process_parsed_pkg(
             return;
         };
         for member in &mod_def.members {
-            if let P::ModuleMember::Struct(sdef) = member {
-                if let P::StructFields::Named(fields) = &sdef.fields {
-                    let indexed_fields = fields
-                        .iter()
-                        .enumerate()
-                        .map(|(i, (_, f, _))| (f.value(), i))
-                        .collect::<BTreeMap<_, _>>();
-                    fields_order_info
-                        .structs
-                        .entry(mod_ident_str.clone())
-                        .or_default()
-                        .entry(sdef.name.value())
-                        .or_default()
-                        .extend(indexed_fields);
-                }
+            if let P::ModuleMember::Struct(sdef) = member
+                && let P::StructFields::Named(fields) = &sdef.fields
+            {
+                let indexed_fields = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (_, f, _))| (f.value(), i))
+                    .collect::<BTreeMap<_, _>>();
+                fields_order_info
+                    .structs
+                    .entry(mod_ident_str.clone())
+                    .or_default()
+                    .entry(sdef.name.value())
+                    .or_default()
+                    .extend(indexed_fields);
             }
             if let P::ModuleMember::Enum(edef) = member {
                 for vdef in &edef.variants {
@@ -589,10 +589,10 @@ fn pre_process_typed_modules(
 ) {
     for (pos, module_ident, module_def) in typed_modules {
         // If the cursor is in this module, mark that down.
-        if let Some(cursor) = &mut cursor_context {
-            if module_def.loc.contains(&cursor.loc) {
-                cursor.module = Some(sp(pos, *module_ident));
-            }
+        if let Some(cursor) = &mut cursor_context
+            && module_def.loc.contains(&cursor.loc)
+        {
+            cursor.module = Some(sp(pos, *module_ident));
         };
 
         let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
@@ -889,7 +889,7 @@ fn get_mod_outer_defs(
             fun.signature
                 .type_parameters
                 .iter()
-                .map(|t| (sp(t.user_specified_name.loc, Type_::Param(t.clone()))))
+                .map(|t| sp(t.user_specified_name.loc, Type_::Param(t.clone())))
                 .collect(),
             fun.signature
                 .parameters

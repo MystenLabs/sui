@@ -163,10 +163,10 @@ impl PackageRecordKeeper {
                         .and_modify(|e| *e += 1)
                         .or_insert(1);
 
-                    if let Some(from) = coming_from {
-                        if let Some(info) = record.branches.get_mut(&(*current_fn_index, from)) {
-                            info.hit_branch(pc)
-                        }
+                    if let Some(from) = coming_from
+                        && let Some(info) = record.branches.get_mut(&(*current_fn_index, from))
+                    {
+                        info.hit_branch(pc)
                     }
 
                     coming_from = None;

@@ -2641,6 +2641,7 @@ fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 enum BinopEntry {
     Op {
         exp_loc: Loc,

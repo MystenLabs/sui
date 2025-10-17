@@ -243,25 +243,24 @@ impl UseDefMap {
 }
 
 fn use_ident(use_file_content: &str, use_line: u32, col_start: u32, col_end: u32) -> String {
-    if let Some(line) = use_file_content.lines().nth(use_line as usize) {
-        if let Some((start, _)) = line.char_indices().nth(col_start as usize) {
-            if let Some((end, _)) = line.char_indices().nth(col_end as usize) {
-                return line[start..end].into();
-            }
-        }
+    if let Some(line) = use_file_content.lines().nth(use_line as usize)
+        && let Some((start, _)) = line.char_indices().nth(col_start as usize)
+        && let Some((end, _)) = line.char_indices().nth(col_end as usize)
+    {
+        return line[start..end].into();
     }
     "INVALID USE IDENT".to_string()
 }
 
 fn def_ident(def_file_content: &str, def_line: u32, col_start: u32) -> String {
-    if let Some(line) = def_file_content.lines().nth(def_line as usize) {
-        if let Some((start, _)) = line.char_indices().nth(col_start as usize) {
-            let end = line[start..]
-                .char_indices()
-                .find(|(_, c)| !c.is_alphanumeric() && *c != '_' && *c != '$')
-                .map_or(line.len(), |(i, _)| start + i);
-            return line[start..end].into();
-        }
+    if let Some(line) = def_file_content.lines().nth(def_line as usize)
+        && let Some((start, _)) = line.char_indices().nth(col_start as usize)
+    {
+        let end = line[start..]
+            .char_indices()
+            .find(|(_, c)| !c.is_alphanumeric() && *c != '_' && *c != '$')
+            .map_or(line.len(), |(i, _)| start + i);
+        return line[start..end].into();
     }
     "INVALID DEF IDENT".to_string()
 }
