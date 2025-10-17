@@ -16100,7 +16100,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-resolver"
-version = "1.59.0"
+version = "1.60.0"
 dependencies = [
  "anyhow",
  "async-trait",

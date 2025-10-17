@@ -91,12 +91,9 @@ impl JsonVisitor {
     /// 1. Resolves the type layout for the event's type
     /// 2. Deserializes the BCS-encoded event contents to JSON
     ///
-    /// # Arguments
-    /// * `event` - The event to deserialize
-    /// * `resolver` - Package resolver for fetching type layouts
-    ///
-    /// # Returns
-    /// A JSON value representing the deserialized event contents
+    /// If you need to deserialize multiple events, use
+    /// [`deserialize_events`](Self::deserialize_events) instead, which processes
+    /// events concurrently for better performance.
     pub async fn deserialize_event<S>(
         event: &Event,
         resolver: &Resolver<S>,
@@ -113,12 +110,9 @@ impl JsonVisitor {
     ///
     /// This function processes all events in parallel for better performance.
     ///
-    /// # Arguments
-    /// * `events` - Slice of events to deserialize
-    /// * `resolver` - Package resolver for fetching type layouts
-    ///
-    /// # Returns
-    /// A vector of JSON values representing the deserialized event contents
+    /// If multiple events are from the same package, use
+    /// a `Resolver` with a cached `PackageStore` (e.g., `RpcPackageStore::with_cache()`)
+    /// to avoid fetching the same package multiple times.
     pub async fn deserialize_events<S>(
         events: &[Event],
         resolver: &Resolver<S>,

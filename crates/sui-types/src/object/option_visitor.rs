@@ -19,46 +19,6 @@ pub trait OptionVisitorError: Sized {
     fn unexpected_type() -> Self;
 }
 
-/// Check if a struct layout represents a Move Option type.
-fn is_option(struct_layout: &move_core_types::annotated_value::MoveStructLayout) -> bool {
-    let ty = &struct_layout.type_;
-
-    if (&ty.address, ty.module.as_ref(), ty.name.as_ref()) != RESOLVED_STD_OPTION {
-        return false;
-    }
-
-    if ty.type_params.len() != 1 {
-        return false;
-    }
-
-    let Some(type_param) = ty.type_params.first() else {
-        return false;
-    };
-
-    if struct_layout.fields.len() != 1 {
-        return false;
-    }
-
-    let Some(field) = struct_layout.fields.first() else {
-        return false;
-    };
-
-    if field.name.as_str() != "vec" {
-        return false;
-    }
-
-    match &field.layout {
-        MoveTypeLayout::Vector(elem) => {
-            if !elem.is_type(type_param) {
-                return false;
-            }
-        }
-        _ => return false,
-    }
-
-    true
-}
-
 /// A visitor that deserializes an `Option<T>` by interpreting an empty vector as `None` and a
 /// single-element vector as `Some(T)`.
 pub struct OptionVisitor<'a, T>(pub &'a mut T);
@@ -172,4 +132,44 @@ where
     ) -> Result<Self::Value, Self::Error> {
         Err(E::unexpected_type())
     }
+}
+
+/// Check if a struct layout represents a Move Option type.
+fn is_option(struct_layout: &move_core_types::annotated_value::MoveStructLayout) -> bool {
+    let ty = &struct_layout.type_;
+
+    if (&ty.address, ty.module.as_ref(), ty.name.as_ref()) != RESOLVED_STD_OPTION {
+        return false;
+    }
+
+    if ty.type_params.len() != 1 {
+        return false;
+    }
+
+    let Some(type_param) = ty.type_params.first() else {
+        return false;
+    };
+
+    if struct_layout.fields.len() != 1 {
+        return false;
+    }
+
+    let Some(field) = struct_layout.fields.first() else {
+        return false;
+    };
+
+    if field.name.as_str() != "vec" {
+        return false;
+    }
+
+    match &field.layout {
+        MoveTypeLayout::Vector(elem) => {
+            if !elem.is_type(type_param) {
+                return false;
+            }
+        }
+        _ => return false,
+    }
+
+    true
 }
