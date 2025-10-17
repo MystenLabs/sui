@@ -102,7 +102,8 @@ fn build_event_commitments_from_checkpoint(
         let accumulator_events = effects.accumulator_events();
         for acc_event in accumulator_events.iter() {
             if let AccumulatorValue::EventDigest(event_idx, digest) = &acc_event.write.value {
-                let event_commitment = EventCommitment::new(0, idx as u64, *event_idx, *digest);
+                let event_commitment =
+                    EventCommitment::new(checkpoint_seq, idx as u64, *event_idx, *digest);
                 event_commitments.push(event_commitment);
             }
         }

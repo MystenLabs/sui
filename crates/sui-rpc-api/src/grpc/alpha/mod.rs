@@ -3,7 +3,12 @@
 
 pub mod event_service;
 pub mod list_authenticated_events;
+pub mod state_service;
 
 pub mod event_service_proto {
+    include!("../../proto/generated/sui.rpc.alpha.rs");
+}
+
+pub mod state_service_proto {
     include!("../../proto/generated/sui.rpc.alpha.rs");
 }
