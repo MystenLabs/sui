@@ -5,7 +5,6 @@ use clap::*;
 use move_analyzer::analyzer;
 use move_compiler::editions::Flavor;
 use sui_package_alt::SuiFlavor;
-use sui_package_management::system_package_versions::latest_system_packages;
 
 #[cfg(target_os = "linux")]
 mod alloc_utils {

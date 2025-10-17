@@ -10,13 +10,11 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Result};
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
-use sui_move::manage_package::resolve_lock_file_path;
-use sui_move_build::{implicit_deps, BuildConfig, SuiPackageHooks};
-use sui_package_management::system_package_versions::latest_system_packages;
+use sui_move_build::BuildConfig;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
@@ -287,19 +285,8 @@ impl PackageRebuilder {
 
     /// Compile the source package with the original package ID
     fn compile_package_with_id(&self) -> Result<Vec<CompiledModule>> {
-        // Register SuiPackageHooks to recognize Sui-specific manifest fields (matching sui move build)
-        // This prevents warnings about "published-at" and "version" fields in dependency Move.toml files
-        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-
         // Create build config (following build.rs pattern)
-        let build_config = MoveBuildConfig::default();
-
-        // Resolve lock file path to respect Move.lock
-        let mut config = resolve_lock_file_path(build_config, Some(&self.source_path))
-            .context("Failed to resolve lock file path")?;
-
-        // Set implicit dependencies after resolving lock file (matching build.rs)
-        config.implicit_dependencies = implicit_deps(latest_system_packages());
+        let config = MoveBuildConfig::default();
 
         // Create BuildConfig - simplified like in build.rs
         // We use chain_id from node for better dependency resolution
