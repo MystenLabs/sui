@@ -305,6 +305,10 @@ impl ProtocolVersion {
     pub fn max() -> Self {
         Self::MAX
     }
+
+    pub fn prev(self) -> Self {
+        Self(self.0.checked_sub(1).unwrap())
+    }
 }
 
 impl From<u64> for ProtocolVersion {
@@ -4392,6 +4396,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
+    }
+
+    pub fn create_root_accumulator_object_for_testing(&mut self) {
+        self.feature_flags.create_root_accumulator_object = true;
     }
 
     pub fn enable_address_balance_gas_payments_for_testing(&mut self) {

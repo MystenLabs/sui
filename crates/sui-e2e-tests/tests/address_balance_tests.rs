@@ -87,6 +87,103 @@ fn create_transaction_with_expiration(
 // is released.
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
+async fn test_accumulators_root_not_created() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
+        if version == ProtocolVersion::MAX_ALLOWED {
+            cfg.enable_accumulators_for_testing();
+        }
+        cfg
+    });
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+            ProtocolVersion::MAX.as_u64(),
+            ProtocolVersion::MAX_ALLOWED.as_u64(),
+        ))
+        .build()
+        .await;
+
+    test_cluster.trigger_reconfiguration().await;
+
+    // cluster does not advance to the next protocol version because the accumulator root is not created yet.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        assert_eq!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .protocol_config()
+                .version,
+            ProtocolVersion::MAX
+        );
+    });
+}
+
+// Test protocol gating of address balances. This test can be deleted after the feature
+// is released.
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_accumulators_root_created() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
+        if version >= ProtocolVersion::MAX {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+        }
+        if version == ProtocolVersion::MAX_ALLOWED {
+            cfg.enable_accumulators_for_testing();
+        }
+        cfg
+    });
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+            ProtocolVersion::MAX.as_u64() - 1,
+            ProtocolVersion::MAX_ALLOWED.as_u64(),
+        ))
+        .build()
+        .await;
+
+    // can't upgrade yet because the accumulator root is not created yet.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        assert!(!state
+            .load_epoch_store_one_call_per_task()
+            .accumulator_root_exists())
+    });
+
+    test_cluster.trigger_reconfiguration().await;
+
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    // can't upgrade yet because the accumulator root is not created yet.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        assert_eq!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .protocol_config()
+                .version,
+            ProtocolVersion::MAX
+        );
+    });
+
+    test_cluster.trigger_reconfiguration().await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        assert_eq!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .protocol_config()
+                .version,
+            ProtocolVersion::MAX_ALLOWED
+        );
+    });
+}
+
+// Test protocol gating of address balances. This test can be deleted after the feature
+// is released.
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
 async fn test_accumulators_disabled() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
         if version == ProtocolVersion::MAX_ALLOWED {
