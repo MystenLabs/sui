@@ -635,7 +635,8 @@ impl Object {
     ///
     /// This does not verify that the object exists in the database (for the lazy-loading case),
     /// so should not be used to "fetch" an address provided as user input. Contents from the
-    /// database are fetched from the latest version of that object as of the current checkpoint.
+    /// database are fetched from the latest version of that object available in the database,
+    /// which may not be as current as the checkpoint specified in scope.
     pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
         // Check execution context first for freshly created/modified objects
         if let Some(native_obj) = scope.execution_output_object_latest(address.into()) {
