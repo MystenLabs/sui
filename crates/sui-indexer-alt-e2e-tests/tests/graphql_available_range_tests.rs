@@ -160,7 +160,7 @@ async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
             },
             graphql_config: GraphQlConfig {
                 watermark: WatermarkConfig {
-                    watermark_polling_interval: Duration::from_millis(100),
+                    watermark_polling_interval: Duration::from_millis(50),
                 },
                 ..Default::default()
             },
