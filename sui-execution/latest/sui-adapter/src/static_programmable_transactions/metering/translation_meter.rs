@@ -71,6 +71,16 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         self.charge(amount)
     }
 
+    pub fn charge_num_linkage_entries(
+        &mut self,
+        num_linkage_entries: usize,
+    ) -> Result<(), ExecutionError> {
+        let amount = (num_linkage_entries as u64)
+            .saturating_mul(self.protocol_config.translation_per_linkage_entry_charge())
+            .max(1);
+        self.charge(amount)
+    }
+
     // We use a non-linear cost function for type references to account for the increased
     // complexity they introduce. The cost is calculated as:
     // cost = (num_type_references * (num_type_references + 1)) / 2
