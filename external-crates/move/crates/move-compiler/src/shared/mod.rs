@@ -820,7 +820,7 @@ impl Flags {
     }
 
     pub fn set_modes(self, value: Vec<Symbol>) -> Self {
-        let test = self.test || value.iter().any(|mode| *mode == symbol!("test"));
+        let test = self.test || value.contains(&symbol!("test"));
         Self {
             test,
             modes: value,
@@ -869,7 +869,7 @@ impl Flags {
     }
 
     pub fn mode(&self, mode: Symbol) -> bool {
-        self.modes.iter().any(|m| *m == mode)
+        self.modes.contains(&mode)
     }
 
     pub fn publishable(&self) -> bool {

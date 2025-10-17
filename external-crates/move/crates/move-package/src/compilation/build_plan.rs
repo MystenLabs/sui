@@ -162,10 +162,10 @@ impl<'a> BuildPlan<'a> {
                 }
             }
         });
-        if let Some(diags) = diags {
-            if let Err(err) = std::io::stdout().write_all(&diags) {
-                anyhow::bail!("Cannot output compiler diagnostics: {}", err);
-            }
+        if let Some(diags) = diags
+            && let Err(err) = std::io::stdout().write_all(&diags)
+        {
+            anyhow::bail!("Cannot output compiler diagnostics: {}", err);
         }
         res
     }
