@@ -13730,6 +13730,7 @@ dependencies = [
  "prometheus",
  "prost",
  "serde_json",
+ "sui-config",
  "sui-indexer-alt-framework",
  "sui-indexer-object-store",
  "sui-rpc",

@@ -4,6 +4,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use object_store::path::Path as StorePath;
 use prost::Message;
+use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_indexer_alt_framework::pipeline::concurrent;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework::{FieldCount, Indexer, IndexerArgs, pipeline::Processor};
@@ -178,14 +179,8 @@ impl concurrent::Handler for EpochBoundaryIndexer {
 #[command(name = "sui-checkpoint-object-store-indexer")]
 #[command(about = "Indexer that writes checkpoints as compressed proto blobs to object storage")]
 struct Args {
-    /// Object store URL for checkpoint storage
-    /// Supports: file://, gs://, s3://, azure://
-    /// Examples:
-    ///   file:///tmp/checkpoints
-    ///   gs://bucket-name/path
-    ///   s3://bucket-name/path
-    #[arg(long, env = "OBJECT_STORE_URL")]
-    object_store_url: url::Url,
+    #[command(flatten)]
+    object_store_config: ObjectStoreConfig,
 
     /// gRPC API URL to fetch checkpoints from
     #[arg(long, env = "RPC_API_URL")]
@@ -207,39 +202,6 @@ struct Args {
     indexer_args: IndexerArgs,
 }
 
-fn create_object_store(url: &url::Url) -> anyhow::Result<Box<dyn object_store::ObjectStore>> {
-    match url.scheme() {
-        "file" => {
-            let path = url.path();
-            Ok(Box::new(
-                object_store::local::LocalFileSystem::new_with_prefix(path)?,
-            ))
-        }
-        "gs" => {
-            let store = object_store::gcp::GoogleCloudStorageBuilder::from_env()
-                .with_url(url.as_str())
-                .build()
-                .context("Failed to create GCS object store")?;
-            Ok(Box::new(store))
-        }
-        "s3" => {
-            let store = object_store::aws::AmazonS3Builder::from_env()
-                .with_url(url.as_str())
-                .build()
-                .context("Failed to create S3 object store")?;
-            Ok(Box::new(store))
-        }
-        "azure" | "az" => {
-            let store = object_store::azure::MicrosoftAzureBuilder::from_env()
-                .with_url(url.as_str())
-                .build()
-                .context("Failed to create Azure object store")?;
-            Ok(Box::new(store))
-        }
-        scheme => anyhow::bail!("Unsupported object store scheme: {}", scheme),
-    }
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     use clap::Parser;
@@ -252,8 +214,10 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    let object_store =
-        create_object_store(&args.object_store_url).context("Failed to create object store")?;
+    let object_store = args
+        .object_store_config
+        .make()
+        .context("Failed to create object store")?;
 
     let store = ObjectStore::new(object_store, args.compression_level);
 

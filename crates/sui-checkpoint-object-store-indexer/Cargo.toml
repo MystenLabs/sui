@@ -8,6 +8,7 @@ name = "sui-checkpoint-object-store-indexer"
 path = "src/main.rs"
 
 [dependencies]
+sui-config.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-object-store.workspace = true
 sui-rpc.workspace = true

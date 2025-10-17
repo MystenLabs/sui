@@ -12,7 +12,7 @@ use sui_indexer_alt_framework_store_traits::{
 
 #[derive(Clone)]
 pub struct ObjectStore {
-    object_store: Arc<Box<dyn object_store::ObjectStore>>,
+    object_store: Arc<dyn object_store::ObjectStore>,
     compression_level: Option<i32>,
 }
 
@@ -44,18 +44,18 @@ fn watermark_path(pipeline: &str, watermark_type: &str) -> StorePath {
 
 impl ObjectStore {
     pub fn new(
-        object_store: Box<dyn object_store::ObjectStore>,
+        object_store: Arc<dyn object_store::ObjectStore>,
         compression_level: Option<i32>,
     ) -> Self {
         Self {
-            object_store: Arc::new(object_store),
+            object_store,
             compression_level,
         }
     }
 }
 
 impl ObjectStoreConnection<'_> {
-    pub fn object_store(&self) -> &Arc<Box<dyn object_store::ObjectStore>> {
+    pub fn object_store(&self) -> &Arc<dyn object_store::ObjectStore> {
         &self.store.object_store
     }
 
