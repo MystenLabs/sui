@@ -141,7 +141,7 @@ pub async fn transfer(
     coin: ObjectRef,
     to_address: SuiAddress,
 ) -> Result<SuiTransactionBlockResponse> {
-    info!("TRANSFERING COIN {} TO ADDRESS {to_address}", coin.0);
+    info!("TRANSFERRING COIN {} TO ADDRESS {to_address}", coin.0);
     let signer_addr = SuiAddress::from(&signer.public());
     let gas_data = select_gas(client, signer_addr, None, None, vec![], None).await?;
 
