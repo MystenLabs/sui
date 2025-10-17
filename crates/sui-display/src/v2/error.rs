@@ -74,11 +74,8 @@ pub enum FormatError {
     #[error("Display produces too much output")]
     TooMuchOutput,
 
-    #[error("'{0}' format is invalid for {1}")]
-    TransformInvalid(&'static str, &'static str),
-
-    #[error("Transform {0} is not recognized")]
-    TransformUnrecognized(String),
+    #[error("Invalid format: {0}")]
+    TransformInvalid(&'static str),
 
     #[error("Unexpected end-of-string, expected {expect}")]
     UnexpectedEos { expect: ExpectedSet },

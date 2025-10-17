@@ -947,9 +947,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_timestamp() {
+        let bytes = bcs::to_bytes(&1681318800000u64).unwrap();
+        let layout = struct_("0x1::m::S", vec![("timestamp", T::U64)]);
+
+        let formats = [
+            ("epoch", "{0u64:ts}"),
+            ("field", "{timestamp:ts}"),
+            ("lit64", "{1683730800000u64:ts}"),
+            ("lit128", "{1681318800000u128:ts}"),
+            ("toobig", "{1681318800000000000u128:ts}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "epoch": Ok(
+                String("1970-01-01T00:00:00Z"),
+            ),
+            "field": Ok(
+                String("2023-04-12T17:00:00Z"),
+            ),
+            "lit64": Ok(
+                String("2023-05-10T15:00:00Z"),
+            ),
+            "lit128": Ok(
+                String("2023-04-12T17:00:00Z"),
+            ),
+            "toobig": Err(
+                TransformInvalid(
+                    "not a timestamp",
+                ),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_field_errors() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
-
         let layout = struct_("0x1::m::S", vec![("byte", T::U8)]);
 
         let formats = [
@@ -1004,9 +1050,25 @@ mod tests {
                 },
             ),
             "bad_transform": Err(
-                TransformUnrecognized(
-                    "invalid",
-                ),
+                UnexpectedToken {
+                    actual: OwnedLexeme(
+                        false,
+                        Ident,
+                        6,
+                        "invalid",
+                    ),
+                    expect: ExpectedSet {
+                        prev: [],
+                        tried: [
+                            Literal(
+                                "str",
+                            ),
+                            Literal(
+                                "ts",
+                            ),
+                        ],
+                    },
+                },
             ),
             "too_deep": Err(
                 TooDeep,
