@@ -14911,6 +14911,7 @@ dependencies = [
  "sui-pg-db",
  "sui-rpc",
  "sui-rpc-api",
+ "sui-sdk-types",
  "sui-sql-macro",
  "sui-types",
  "thiserror 1.0.69",

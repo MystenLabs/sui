@@ -34,6 +34,7 @@ use sui_indexer_alt_reader::{
     bigtable_reader::{BigtableArgs, BigtableReader},
     consistent_reader::{ConsistentReader, ConsistentReaderArgs},
     fullnode_client::{FullnodeArgs, FullnodeClient},
+    kv_grpc_reader::{KvGrpcArgs, KvGrpcReader},
     kv_loader::KvLoader,
     package_resolver::{DbPackageStore, PackageCache},
     pg_reader::PgReader,
@@ -273,6 +274,7 @@ pub async fn start_rpc(
     fullnode_args: FullnodeArgs,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
+    kv_grpc_args: KvGrpcArgs,
     consistent_reader_args: ConsistentReaderArgs,
     args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -317,6 +319,15 @@ pub async fn start_rpc(
         None
     };
 
+    let kv_grpc_reader = if let Some(kv_grpc_url) = kv_grpc_args.kv_grpc_url {
+        let reader = KvGrpcReader::new(kv_grpc_url)
+            .await
+            .context("Failed to create KV gRPC reader")?;
+        Some(reader)
+    } else {
+        None
+    };
+
     let consistent_reader = ConsistentReader::new(
         Some("graphql_consistent"),
         consistent_reader_args,
@@ -328,6 +339,8 @@ pub async fn start_rpc(
     let pg_loader = Arc::new(pg_reader.as_data_loader());
     let kv_loader = if let Some(reader) = bigtable_reader.as_ref() {
         KvLoader::new_with_bigtable(Arc::new(reader.as_data_loader()))
+    } else if let Some(reader) = kv_grpc_reader.as_ref() {
+        KvLoader::new_with_kv_grpc(Arc::new(reader.as_data_loader()))
     } else {
         KvLoader::new_with_pg(pg_loader.clone())
     };
