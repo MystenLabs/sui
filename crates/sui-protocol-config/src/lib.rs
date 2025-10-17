@@ -1721,6 +1721,10 @@ pub struct ProtocolConfig {
     /// The metering step resolution for translation costs. This is the granularity at which we
     /// step up the metering for translation costs.
     translation_metering_step_resolution: Option<u64>,
+
+    /// The multiplier for each linkage entry when charging for linkage tables that we have
+    /// created.
+    translation_per_linkage_entry_charge: Option<u64>,
 }
 
 /// An aliased address.
@@ -2919,6 +2923,7 @@ impl ProtocolConfig {
             translation_per_type_node_charge: None,
             translation_per_reference_node_charge: None,
             translation_metering_step_resolution: None,
+            translation_per_linkage_entry_charge: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4442,6 +4447,7 @@ impl ProtocolConfig {
             self.translation_per_type_node_charge = Some(1);
             self.translation_per_reference_node_charge = Some(1);
             self.translation_metering_step_resolution = Some(1000);
+            self.translation_per_linkage_entry_charge = Some(10);
         }
     }
 
