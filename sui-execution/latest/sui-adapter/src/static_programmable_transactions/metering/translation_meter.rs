@@ -11,19 +11,17 @@ use sui_types::error::{ExecutionError, ExecutionErrorKind};
 ///
 /// It holds a reference to the `ProtocolConfig` to access protocol-specific configuration
 /// parameters that may influence gas costs and limits.
-pub struct TranslationMeter<'gas, 'pc> {
-    // Unused for now, but kept for future use.
-    #[allow(dead_code)]
+pub struct TranslationMeter<'pc, 'gas> {
     protocol_config: &'pc ProtocolConfig,
-    pub charger: &'gas mut GasCharger,
+    charger: &'gas mut GasCharger,
     charged: u64,
 }
 
-impl<'gas, 'pc> TranslationMeter<'gas, 'pc> {
+impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
     pub fn new(
-        gas_charger: &'gas mut GasCharger,
         protocol_config: &'pc ProtocolConfig,
-    ) -> TranslationMeter<'gas, 'pc> {
+        gas_charger: &'gas mut GasCharger,
+    ) -> TranslationMeter<'pc, 'gas> {
         TranslationMeter {
             protocol_config,
             charger: gas_charger,
@@ -79,7 +77,7 @@ impl<'gas, 'pc> TranslationMeter<'gas, 'pc> {
 
     // We use a non-linear cost function for type references to account for the increased
     // complexity they introduce. The cost is calculated as:
-    // cost = (num_type_references^2 + num_type_references) / 2
+    // cost = (num_type_references * (num_type_references + 1)) / 2
     //
     // Take &self to access protocol config if needed in the future.
     fn reference_cost_formula(&self, n: u64) -> u64 {

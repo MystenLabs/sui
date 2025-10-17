@@ -225,11 +225,11 @@ impl Type {
             Type::Vector(v) => 1 + v.element_type.node_count(),
             Type::Reference(_, inner) => 1 + inner.node_count(),
             Type::Datatype(dt) => {
-                1 + dt
-                    .type_arguments
-                    .iter()
-                    .map(|t| t.node_count())
-                    .sum::<u64>()
+                let mut sum: u64 = 0;
+                for arg in &dt.type_arguments {
+                    sum = sum.saturating_add(arg.node_count());
+                }
+                sum.saturating_add(1)
             }
         }
     }

@@ -53,7 +53,7 @@ pub fn execute<Mode: ExecutionMode>(
         &linkage_analysis,
     );
     let mut translation_meter =
-        translation_meter::TranslationMeter::new(gas_charger, protocol_config);
+        translation_meter::TranslationMeter::new(protocol_config, gas_charger);
 
     let txn = loading::translate::transaction(&mut translation_meter, &env, txn)
         .map_err(|e| (e, vec![]))?;
