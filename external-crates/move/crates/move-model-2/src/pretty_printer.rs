@@ -361,6 +361,15 @@ impl ToDoc for Fields {
 impl ToDoc for ModuleId {
     fn to_doc(&self) -> Doc {
         let ModuleId { address, name } = self;
+        let address = if let Some(stripped) = address.strip_prefix("0x") {
+            if stripped.is_empty() {
+                "0x0".to_string()
+            } else {
+                format!("0x{stripped}")
+            }
+        } else {
+            format!("{address}")
+        };
         Doc::text(format!("{address}::{name}"))
     }
 }

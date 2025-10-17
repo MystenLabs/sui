@@ -23,6 +23,6 @@ public fun unpack(l0: misc::unpack::Foo): u64 {
 public fun unpack_bar(l0: misc::unpack::Bar): ( u64, u64) {
     {
         0x0::unpack::Bar { val: reg_1, other: reg_2 } = l0;
-        return (reg_2 : u64, reg_1 : u64)
+        return (reg_1 : u64, reg_2 : u64)
     }
 }
