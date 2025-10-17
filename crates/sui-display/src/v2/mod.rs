@@ -16,16 +16,14 @@ use self::meter::{Limits, Meter};
 use self::parser::{Parser, Strand};
 use self::value::{Slice, Store};
 
-pub(crate) mod address_visitor;
 pub mod error;
-pub(crate) mod extractor;
-pub(crate) mod format_visitor;
 pub(crate) mod interpreter;
 pub mod lexer;
 pub mod meter;
 pub(crate) mod parser;
 pub(crate) mod peek;
 pub mod value;
+pub(crate) mod visitor;
 
 pub(crate) mod writer;
 
@@ -857,6 +855,92 @@ mod tests {
             ),
             "1_2_y": Ok(
                 String("20"),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_vec_map() {
+        let key = struct_(
+            "0x42::m::Key",
+            vec![
+                ("id", T::U64),
+                ("name", T::Struct(Box::new(move_ascii_str_layout()))),
+            ],
+        );
+
+        let val = struct_("0x42::m::Value", vec![("data", T::U32)]);
+
+        let map = struct_(
+            "0x2::vec_map::VecMap<0x42::m::Key, 0x42::m::Value>",
+            vec![(
+                "contents",
+                vector_(struct_(
+                    "0x2::vec_map::Entry<0x42::m::Key, 0x42::m::Value>",
+                    vec![("key", key), ("value", val)],
+                )),
+            )],
+        );
+
+        // Create test data: VecMap with 3 entries
+        let bytes = bcs::to_bytes(&VecMap {
+            contents: vec![
+                Entry {
+                    key: (1u64, "first"),
+                    value: 100u32,
+                },
+                Entry {
+                    key: (2u64, "second"),
+                    value: 200u32,
+                },
+                Entry {
+                    key: (3u64, "third"),
+                    value: 300u32,
+                },
+            ],
+        })
+        .unwrap();
+
+        let layout = struct_("0x1::m::Root", vec![("map", map)]);
+
+        let formats = [
+            ("1st", "{map[0x42::m::Key(1u64, 'first')].data}"),
+            ("2nd", "{map[0x42::m::Key(2u64, 'second')].data}"),
+            ("3rd", "{map[0x42::m::Key(3u64, 'third')].data}"),
+            // Doesn't exist
+            ("4th", "{map[0x42::m::Key(4u64, 'fourth')].data}"),
+            // Indexing a struct that is not a VecMap
+            ("err", "{map[0x42::m::Key(1u64, 'first')].data['empty']}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "1st": Ok(
+                String("100"),
+            ),
+            "2nd": Ok(
+                String("200"),
+            ),
+            "3rd": Ok(
+                String("300"),
+            ),
+            "4th": Ok(
+                Null,
+            ),
+            "err": Ok(
+                Null,
             ),
         }
         "###);

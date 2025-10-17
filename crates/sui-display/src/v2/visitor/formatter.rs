@@ -11,15 +11,15 @@ use sui_types::base_types::{move_ascii_str_layout, move_utf8_str_layout, url_lay
 use sui_types::id::ID;
 use sui_types::id::UID;
 
-use super::error::FormatError;
-use super::value::Slice;
-use super::writer::BoundedWriter;
+use crate::v2::error::FormatError;
+use crate::v2::value::Slice;
+use crate::v2::writer::BoundedWriter;
 
 /// A visitor that writes a formatted string representation of a Move value into a bounded string
 /// buffer.
-pub(crate) struct FormatVisitor<'w, 'u>(&'w mut BoundedWriter<'u>);
+pub(crate) struct Formatter<'w, 'u>(&'w mut BoundedWriter<'u>);
 
-impl<'w, 'u> FormatVisitor<'w, 'u> {
+impl<'w, 'u> Formatter<'w, 'u> {
     /// Attempt to extract a value from the given slice, following the provided path of accessors.
     ///
     /// Accessors are expected to be in reverse order, i.e. the last accessor in the vector is
@@ -32,7 +32,7 @@ impl<'w, 'u> FormatVisitor<'w, 'u> {
     }
 }
 
-impl<'v> AV::Visitor<'v, 'v> for FormatVisitor<'_, '_> {
+impl<'v> AV::Visitor<'v, 'v> for Formatter<'_, '_> {
     type Value = ();
     type Error = FormatError;
 
