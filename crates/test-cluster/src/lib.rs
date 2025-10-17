@@ -77,7 +77,23 @@ impl FullNodeHandle {
         let rpc_url = format!("http://{}", json_rpc_address);
         let rpc_client = HttpClientBuilder::default().build(&rpc_url).unwrap();
 
-        let sui_client = SuiClientBuilder::default().build(&rpc_url).await.unwrap();
+        let sui_client = {
+            let mut retry_count = 0;
+            let max_retries = 30;
+            loop {
+                match SuiClientBuilder::default().build(&rpc_url).await {
+                    Ok(client) => break client,
+                    Err(e) if retry_count < max_retries => {
+                        retry_count += 1;
+                        tracing::debug!("Failed to connect to RPC at {}, attempt {}/{}: {}. Retrying...",
+                            rpc_url, retry_count, max_retries, e);
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                    }
+                    Err(e) => panic!("Failed to connect to RPC at {} after {} attempts: {}",
+                        rpc_url, max_retries, e),
+                }
+            }
+        };
 
         Self {
             sui_node,
@@ -1187,6 +1203,7 @@ impl TestClusterBuilder {
         let working_dir = swarm.dir();
 
         let fullnode = swarm.fullnodes().next().unwrap();
+        println!("fullnode: {:?}", fullnode.config());
         let json_rpc_address = fullnode.config().json_rpc_address;
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;

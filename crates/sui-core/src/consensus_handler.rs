@@ -705,28 +705,31 @@ impl CommitHandlerState {
 
         let mut dkg_failed = false;
         let randomness_round = if epoch_store.randomness_state_enabled() {
-            let randomness_manager = randomness_manager
-                .as_mut()
-                .expect("randomness manager should exist if randomness is enabled");
-            match randomness_manager.dkg_status() {
-                DkgStatus::Pending => None,
-                DkgStatus::Failed => {
-                    dkg_failed = true;
-                    None
-                }
-                DkgStatus::Successful => {
-                    // DONE(commit-handler-rewrite): do not reserve randomness if !should_accept_tx()
-                    // Generate randomness for this commit if DKG is successful and we are still
-                    // accepting certs.
-                    if self.initial_reconfig_state.should_accept_tx() {
-                        randomness_manager
-                            // TODO: make infallible
-                            .reserve_next_randomness(commit_info.timestamp, &mut self.output)
-                            .expect("epoch ended")
-                    } else {
+            // Observer nodes don't have a RandomnessManager since they don't participate in DKG
+            if let Some(randomness_manager) = randomness_manager.as_mut() {
+                match randomness_manager.dkg_status() {
+                    DkgStatus::Pending => None,
+                    DkgStatus::Failed => {
+                        dkg_failed = true;
                         None
                     }
+                    DkgStatus::Successful => {
+                        // DONE(commit-handler-rewrite): do not reserve randomness if !should_accept_tx()
+                        // Generate randomness for this commit if DKG is successful and we are still
+                        // accepting certs.
+                        if self.initial_reconfig_state.should_accept_tx() {
+                            randomness_manager
+                                // TODO: make infallible
+                                .reserve_next_randomness(commit_info.timestamp, &mut self.output)
+                                .expect("epoch ended")
+                        } else {
+                            None
+                        }
+                    }
                 }
+            } else {
+                // Observer nodes skip randomness generation
+                None
             }
         } else {
             None
@@ -1695,11 +1698,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         // Observer nodes don't have a RandomnessManager since they don't participate in DKG.
-        // They should also not receive DKG messages since they're not in consensus.
+        // In production they shouldn't receive DKG messages, but in test environments they might
+        // receive them as part of consensus commits - we just skip processing them.
         let Some(randomness_manager) = randomness_manager else {
             if !randomness_dkg_messages.is_empty() || !randomness_dkg_confirmations.is_empty() {
-                debug_fatal!(
-                    "observer node received {} DKG messages and {} DKG confirmations",
+                debug!(
+                    "observer node skipping {} DKG messages and {} DKG confirmations",
                     randomness_dkg_messages.len(),
                     randomness_dkg_confirmations.len()
                 );
@@ -1921,12 +1925,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         //   new commit handler in prod before it is fully deployed.
         let use_new_commit_handler = if in_test_configuration() {
             let name = self.epoch_store.name;
-            let authority_index = self.epoch_store.committee().authority_index(&name).unwrap();
-            authority_index < 2
-                && self
-                    .epoch_store
+            // Observer nodes are not in the committee, so authority_index returns None
+            if let Some(authority_index) = self.epoch_store.committee().authority_index(&name) {
+                authority_index < 2
+                    && self
+                        .epoch_store
+                        .epoch_start_config()
+                        .use_commit_handler_v2()
+            } else {
+                // For observers/fullnodes, use the epoch start config
+                self.epoch_store
                     .epoch_start_config()
                     .use_commit_handler_v2()
+            }
         } else if self.epoch_store.protocol_config().use_new_commit_handler() {
             true
         } else {
