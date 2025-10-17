@@ -24,7 +24,7 @@ use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{InputConsensusObject, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::transaction::{ObjectArg, Transaction};
+use sui_types::transaction::{ObjectArg, SharedObjectMutability, Transaction};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
@@ -211,14 +211,14 @@ async fn update_objects(
         .obj(ObjectArg::SharedObject {
             id: shared_object_1.0,
             initial_shared_version: shared_object_1.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
     let arg2 = txn_builder
         .obj(ObjectArg::SharedObject {
             id: shared_object_2.0,
             initial_shared_version: shared_object_2.1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
     let arg3 = txn_builder

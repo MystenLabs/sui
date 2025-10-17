@@ -17,7 +17,7 @@ use async_trait::async_trait;
 use move_core_types::identifier::Identifier;
 use std::{sync::Arc, time::Duration};
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::transaction::ObjectArg;
+use sui_types::transaction::{ObjectArg, SharedObjectMutability};
 use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, transaction::Transaction};
 use sui_types::{
@@ -75,7 +75,7 @@ impl SlowTestPayload {
             .obj(ObjectArg::SharedObject {
                 id: SUI_CLOCK_OBJECT_ID,
                 initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })
             .unwrap()];
         builder.programmable_move_call(
@@ -91,7 +91,7 @@ impl SlowTestPayload {
             .obj(ObjectArg::SharedObject {
                 id: self.shared_object_ref.0,
                 initial_shared_version: self.shared_object_ref.1,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
 

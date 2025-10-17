@@ -1,71 +1,112 @@
 ---
-title: Guides Overview
+title: Guides and Tutorials
 sidebar_label: Overview
 description: Start developing on Sui through example projects and developer guides.
 keywords: [ developer guides, get started, operator guides, suiplayx01 guides, sui 101, coins, tokens, nfts ]
 ---
 
-Often, the best way to learn a new technology is through experience. The content in this section contains concrete examples to guide your development on Sui. Whether you're a Web3 novice or a seasoned Sui pro, the guides in this section help you get the most out of your Sui development experience.
+This section provides practical, implementation-focused examples designed to accelerate your journey developing on Sui. 
 
-## Guides by role
-
-Instructions for common tasks, based on your role in the Sui ecosystem.
-<Cards>
-<Card title="Developer guides" href="/guides/developer">
-Guides for developers of all levels.
-</Card>
-<Card title="Operator guides" href="/guides/operator">
-Guides for validators and node operators.
-</Card>
-<Card title="SuiPlay0X1 guide" href="/guides/suiplay0x1">
-Builder guide for development on the SuiPlay0X1 device.
-</Card>
-</Cards>
+Whether you are new to blockchain development or an experienced Sui developer, these resources offer structured guidance for building applications, creating assets, and leveraging Sui's unique technical features effectively.
 
 ## Get started developing on Sui
 
-You must crawl before you can run. Start your Sui journey here.
+Install tooling, setup your environment, and deploy a "Hello, World!" Move package to start your Sui developer experience. 
+
 <Cards>
-<Card title="Install Sui" href="/guides/developer/getting-started/sui-install">
-Install Sui on your Windows, MacOS, or Linux system.
-</Card>
-<Card title="Your first Sui dApp" href="/guides/developer/first-app">
-With Sui installed, you're ready to start developing.
-</Card>
+<Card title="1. Install Sui" href="/guides/developer/getting-started/sui-install" />
+<Card title="2. Configure a Sui Client" href="/guides/developer/getting-started/configure-sui-client" />
+<Card title="3. Create a Sui Address" href="/guides/developer/getting-started/get-address" />
+<Card title="4. Get SUI from Faucet" href="/guides/developer/getting-started/get-coins" />
+<Card title="5. Hello, World!" href="/guides/developer/getting-started/hello-world" />
+<Card title="6. Next Steps" href="/guides/developer/getting-started/next-steps" />
 </Cards>
 
-## Sui 101 for developers
+## Sui essentials
 
-Learn the basics of Sui and how they might differ from other blockchains.
+Follow these guides to learn about essential Sui concepts.
+
 <Cards>
-<Card title="Transactions on Sui" href="/guides/developer/sui-101/building-ptb">
-Transactions on Sui are more powerful than other blockchains. Learn why and how to use them.
-</Card>
-<Card title="Access time on chain" href="/guides/developer/sui-101/access-time" />
-<Card title="Using events" href="/guides/developer/sui-101/using-events">
-Monitor the Sui network and programmatically react to on-chain events.
-</Card>
+<Card title="Object Ownership" href="/guides/developer/sui-101/object-ownership" />
+<Card title="Using Events" href="/guides/developer/sui-101/using-events" />
+<Card title="Access Sui Data" href="/guides/developer/sui-101/data-serving" />
+<Card title="Access On-Chain Time" href="/guides/developer/sui-101/access-time" />
+</Cards>
+
+## Signing and sending transactions 
+
+Learn about signing and sending transactions.
+
+<Cards>
+<Card title="Sponsored Transactions" href="/guides/developer/sui-101/sponsor-txn" />
+<Card title="Avoid Equivocation" href="/guides/developer/sui-101/avoid-equivocation" />
+<Card title="Building PTBs" href="/guides/developer/sui-101/building-ptb" />
+<Card title="Coin Management" href="/guides/developer/sui-101/coin-mgt" />
+<Card title="Simulating References" href="/guides/developer/sui-101/simulating-refs" />
 </Cards>
 
 ## Coins, tokens, and NFTs
 
-Learn how to mint various tokens on the Sui blockchain.
+Learn how to mint coins and tokens on Sui.
+
 <Cards>
-<Card title="Currencies and tokens" href="/guides/developer/currency" />
-<Card title="NFTs" href="/guides/developer/nft" />
+<Card title="Create Currencies and Tokens" href="/guides/developer/currency" />
+<Card title="Regulated Currency and Deny List" href="/guides/developer/coin/regulated" />
+<Card title="In-Game Currency" href="/guides/developer/coin/in-game-token" />
+<Card title="Loyalty Token" href="/guides/developer/coin/loyalty" />
+<Card title="Create an NFT" href="/guides/developer/nft" />
+<Card title="Soulbound NFT" href="/guides/developer/nft/nft-soulbound" />
+<Card title="NFT Rental Example" href="/guides/developer/nft/nft-rental" />
+<Card title="Asset Tokenization" href="/guides/developer/nft/asset-tokenization" />
+</Cards>
+
+## Cryptography 
+
+Learn about on-chain signatures, multisig authentication, and zkLogin.
+
+<Cards>
+<Card title="Sui On-Chain Signatures Verification in Move" href="/guides/developer/cryptography/signing" />
+<Card title="Groth16" href="/guides/developer/cryptography/groth16" />
+<Card title="Hashing" href="/guides/developer/cryptography/hashing" />
+<Card title="ECVRF" href="/guides/developer/cryptography/ecvrf" />
+<Card title="Multisig Authentication" href="/guides/developer/cryptography/multisig" />
+<Card title="Configure OpenID Providers" href="/guides/developer/cryptography/zklogin-integration/developer-account" />
+<Card title="zkLogin Example" href="/guides/developer/cryptography/zklogin-integration/zklogin-example" />
+</Cards>
+
+## Indexers 
+
+Build your own custom indexer, integrate it with your application, and benchmark its performance.
+
+<Cards>
+<Card title="Build Your First Custom Indexer" href="/guides/developer/advanced/custom-indexer/build" />
+<Card title="Custom Indexer and Walrus" href="/guides/developer/advanced/custom-indexer/indexer-walrus" />
+<Card title="Indexer Data and Integration" href="/guides/developer/advanced/custom-indexer/indexer-data-integration" />
+<Card title="Indexer Runtime and Performance" href="/guides/developer/advanced/custom-indexer/indexer-runtime-perf" />
+</Cards>
+
+## Example applications 
+
+Try out these example applications to learn more about Sui.
+
+<Cards>
+<Card title="End-to-End Counter" href="/guides/developer/app-examples/e2e-counter" />
+<Card title="Trustless Swap" href="/guides/developer/app-examples/trustless-swap" />
+<Card title="Coin Flip" href="/guides/developer/app-examples/coin-flip" />
+<Card title="Review Rating" href="/guides/developer/app-examples/reviews-rating" />
+<Card title="Blackjack" href="/guides/developer/app-examples/blackjack" />
+<Card title="Plinko" href="/guides/developer/app-examples/plinko" />
+<Card title="Tic-Tac-Toe" href="/guides/developer/app-examples/tic-tac-toe" />
+<Card title="Weather oracle" href="/guides/developer/app-examples/weather-oracle" />
 </Cards>
 
 ## Validating and operating nodes on Sui
 
 Processes and guides for validators and node operators on the Sui network.
+
 <Cards>
-<Card title="Validator configuration" href="/guides/operator/validator/validator-config" />
-<Card title="Run a Sui full node" href="/guides/operator/sui-full-node">
-Learn how to operate a full node on Sui.
-</Card>
-<Card title="Full node data management" href="/guides/operator/data-management">
-Optimize your full node configuration for efficient node operation.
-</Card>
-<Card title="Sui bridge node configuration" href="/guides/operator/bridge-node-configuration">
-</Card>
+<Card title="Validator Configuration" href="/guides/operator/validator/validator-config" />
+<Card title="Run a Sui Full Node" href="/guides/operator/sui-full-node" />
+<Card title="Full Node Data Management" href="/guides/operator/data-management"/>
+<Card title="Sui Bridge Node Configuration" href="/guides/operator/bridge-node-configuration" />
 </Cards>

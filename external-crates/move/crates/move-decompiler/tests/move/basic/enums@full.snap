@@ -5,8 +5,6 @@ source: crates/move-decompiler/tests/tests.rs
 
 module basic::enums;
 
-// -- structs -- 
-
 // -- enums -- 
 
 public enum E {
@@ -32,5 +30,3 @@ public enum E2 {
     X {},
     Y { pos0: u32 },
 }
-
-// -- functions --

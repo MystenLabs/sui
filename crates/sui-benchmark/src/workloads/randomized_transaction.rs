@@ -20,7 +20,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{CallArg, ObjectArg, Transaction};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, Transaction};
 use sui_types::{Identifier, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tracing::{error, info};
 
@@ -124,7 +124,7 @@ impl RandomizedTransactionPayload {
                         vec![CallArg::Object(ObjectArg::SharedObject {
                             id: self.shared_objects[next_shared_input_index].0,
                             initial_shared_version: self.shared_objects[next_shared_input_index].1,
-                            mutable: true,
+                            mutability: SharedObjectMutability::Mutable,
                         })],
                     )
                     .unwrap();
@@ -142,7 +142,7 @@ impl RandomizedTransactionPayload {
                                 initial_shared_version: self.shared_objects
                                     [next_shared_input_index]
                                     .1,
-                                mutable: true,
+                                mutability: SharedObjectMutability::Mutable,
                             }),
                             CallArg::Pure((10_u64).to_le_bytes().to_vec()),
                         ],
@@ -159,7 +159,7 @@ impl RandomizedTransactionPayload {
                         vec![CallArg::Object(ObjectArg::SharedObject {
                             id: self.shared_objects[next_shared_input_index].0,
                             initial_shared_version: self.shared_objects[next_shared_input_index].1,
-                            mutable: false,
+                            mutability: SharedObjectMutability::Immutable,
                         })],
                     )
                     .unwrap();
@@ -177,7 +177,7 @@ impl RandomizedTransactionPayload {
                 vec![CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                     initial_shared_version: self.randomness_initial_shared_version,
-                    mutable: false,
+                    mutability: SharedObjectMutability::Immutable,
                 })],
             )
             .unwrap();
@@ -238,7 +238,11 @@ impl Payload for RandomizedTransactionPayload {
                 .obj(ObjectArg::SharedObject {
                     id: self.shared_objects[i as usize].0,
                     initial_shared_version: self.shared_objects[i as usize].1,
-                    mutable: rand::thread_rng().gen_bool(0.5),
+                    mutability: if rand::thread_rng().gen_bool(0.5) {
+                        SharedObjectMutability::Mutable
+                    } else {
+                        SharedObjectMutability::Immutable
+                    },
                 })
                 .unwrap();
         }

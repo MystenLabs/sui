@@ -258,10 +258,9 @@ impl<'a> TestAuthorityBuilder<'a> {
         .unwrap();
         let expensive_safety_checks = self.expensive_safety_checks.unwrap_or_default();
 
-        let checkpoint_store = CheckpointStore::new(
-            &path.join("checkpoints"),
-            Arc::new(PrunerWatermarks::default()),
-        );
+        let pruner_watermarks = Arc::new(PrunerWatermarks::default());
+        let checkpoint_store =
+            CheckpointStore::new(&path.join("checkpoints"), pruner_watermarks.clone());
         let backpressure_manager =
             BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
 
@@ -333,7 +332,8 @@ impl<'a> TestAuthorityBuilder<'a> {
                     &checkpoint_store,
                     &epoch_store,
                     &cache_traits.backing_package_store,
-                    None,
+                    pruner_watermarks.checkpoint_id.clone(),
+                    sui_config::RpcConfig::default(),
                 )
                 .await,
             ))

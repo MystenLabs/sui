@@ -5,12 +5,18 @@ beta: devnet, testnet, mainnet
 keywords: [ indexer, archival store, graphql, custom indexer ]
 ---
 
-The GraphQL and `sui-indexer-alt` (Indexer) stack are part of the [Sui data access infrastructure](../guides/developer/getting-started/data-serving.mdx). The stack provides access to on-chain data through a high-performance GraphQL service backed by a scalable and general-purpose indexer. This stack is optimized for developers who need flexible queries, structured output, and historical access to data (with configurable retention) across the Sui network.
+The GraphQL and `sui-indexer-alt` (Indexer) stack are part of the [Sui data access infrastructure](../guides/developer/sui-101/data-serving.mdx). The stack provides access to on-chain data through a high-performance GraphQL service backed by a scalable and general-purpose indexer. This stack is optimized for developers who need flexible queries, structured output, and historical access to data (with configurable retention) across the Sui network.
 
 GraphQL is ideal for applications that require rich query patterns over structured data, such as fetching owned objects, transaction history, specific onchain attributes, and more. The GraphQL service runs on top of a Postgres-compatible database that is updated by different Indexer pipelines in parallel.
 
 The general-purpose indexer includes configurable checkpoint-based pipelines that extract data from the Sui remote checkpoint store and full nodes. The pipelines write processed data to a database optimized for GraphQL query access.
 Together, the GraphQL service and Indexer offer a modular and production-ready data stack for builders, wallet developers, explorers, and indexer/data providers.
+
+:::info
+
+<ImportContent source="json-rpc-deprecation.mdx" mode="snippet" />
+
+:::
 
 :::info
 
@@ -24,7 +30,7 @@ The key components of the stack include the following:
 
 - **General-purpose Indexer:** Ingests and transforms Sui checkpoint data using configurable and parallel pipelines, and writes it into a Postgres-compatible database. Can be configured to use the Sui remote checkpoint store and a full node as its sources.
 - **Postgres-compatible database:** Stores indexed data for GraphQL queries. Tested using [GCP AlloyDB](https://cloud.google.com/products/alloydb), but you can run any Postgres-compatible database. You're encouraged to test alternative databases and share feedback on performance, cost, and operational characteristics.
-- **GraphQL service:** Serves structured queries over indexed data. Follows the [GraphQL specification](https://graphql.org/) and the supported schema is documented in the [GraphQL API reference](/references/sui-graphql). Also take a look at the [getting started guide](/guides/developer/getting-started/graphql-rpc).
+- **GraphQL service:** Serves structured queries over indexed data. Follows the [GraphQL specification](https://graphql.org/) and the supported schema is documented in the [GraphQL API reference](/references/sui-graphql). Also take a look at the [getting started guide](/guides/developer/advanced/graphql-rpc).
 - **Archival Service:** Enables point lookups for historical data from a key-value store. If unavailable, the GraphQL service falls back to the Postgres-compatible database for lookups, which might be limited by that database's retention policy. See [Archival Store and Service](./archival-store.mdx) for more information.
 - **Consistent Store:** Answers questions about the latest state of the network within the last hour (objects owned by addresses, objects by type, balances by address and type). Consistency is guaranteed by pinning queries to a specific (recent) checkpoint.
 - **Full node:** Enables transaction execution and simulation. Currently, JSON-RPC is used but there will be a switch to [gRPC](/concepts/grpc-overview) soon as the long-term full node API in the future.
@@ -342,7 +348,7 @@ watermark-interval-ms = 500
 
 ### When to build a custom indexer
 
-This document focuses on the general-purpose Indexer that powers GraphQL. If you want to build your own pipelines for application-specific data (for example, Deepbook order books, Walrus blob metadata, Seal access events, and so on), refer to the [Build Your First Custom Indexer](/guides/developer/advanced/custom-indexer).
+This document focuses on the general-purpose Indexer that powers GraphQL. If you want to build your own pipelines for application-specific data (for example, Deepbook order books, Walrus blob metadata, Seal access events, and so on), refer to the [Build Your First Custom Indexer](/guides/developer/advanced/custom-indexer/build).
 
 You can run custom indexers separately to populate an app-specific database. You can then build your own lightweight RPC server with your choice of query mechanism (GraphQL, gRPC, or JSON-RPC) to serve app-specific data from that database.
 

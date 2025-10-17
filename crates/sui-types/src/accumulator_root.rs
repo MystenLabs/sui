@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulator_event::AccumulatorEvent,
     balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
-    digests::TransactionDigest,
+    digests::{Digest, TransactionDigest},
     dynamic_field::{
-        serialize_dynamic_field, BoundedDynamicFieldID, DynamicFieldKey, DynamicFieldObject, Field,
-        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
+        serialize_dynamic_field, DynamicFieldKey, DynamicFieldObject, Field,
+        UnboundedDynamicFieldID, DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
     },
     error::{SuiError, SuiResult},
     object::{MoveObject, Object, Owner},
@@ -19,6 +20,7 @@ use move_core_types::{
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
+    u256::U256,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
@@ -141,22 +143,20 @@ impl AccumulatorValue {
         .exists(child_object_resolver)
     }
 
-    pub fn load_by_id<T>(
-        child_object_resolver: &dyn ChildObjectResolver,
-        version_bound: Option<SequenceNumber>,
+    pub fn load_latest_by_id<T>(
+        object_store: &dyn ObjectStore,
         id: AccumulatorObjId,
-    ) -> SuiResult<Option<T>>
+    ) -> SuiResult<Option<(T, SequenceNumber)>>
     where
         T: Serialize + DeserializeOwned,
     {
-        BoundedDynamicFieldID::<AccumulatorKey>::new(
-            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            id.0,
-            version_bound.unwrap_or(SequenceNumber::MAX),
-        )
-        .load_object(child_object_resolver)?
-        .map(|o| o.load_value::<T>())
-        .transpose()
+        UnboundedDynamicFieldID::<AccumulatorKey>::new(SUI_ACCUMULATOR_ROOT_OBJECT_ID, id.0)
+            .load_object(object_store)
+            .map(|o| {
+                let version = o.0.version();
+                o.load_value::<T>().map(|v| (v, version))
+            })
+            .transpose()
     }
 
     pub fn load(
@@ -225,6 +225,19 @@ impl AccumulatorValue {
             TransactionDigest::genesis_marker(),
         )
     }
+}
+
+/// Extract stream id from an accumulator event if it targets sui::accumulator_settlement::EventStreamHead
+pub fn stream_id_from_accumulator_event(ev: &AccumulatorEvent) -> Option<SuiAddress> {
+    if let TypeTag::Struct(tag) = &ev.write.address.ty {
+        if tag.address == SUI_FRAMEWORK_ADDRESS
+            && tag.module.as_ident_str() == ACCUMULATOR_SETTLEMENT_MODULE
+            && tag.name.as_ident_str() == ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD
+        {
+            return Some(ev.write.address.address);
+        }
+    }
+    None
 }
 
 impl TryFrom<&MoveObject> for AccumulatorValue {
@@ -325,4 +338,95 @@ pub(crate) fn extract_balance_type_from_field(s: &StructTag) -> Option<TypeTag> 
         }
     }
     None
+}
+
+/// Rust representation of the Move EventStreamHead struct from accumulator_settlement module.
+/// This represents the state of an authenticated event stream head stored on-chain.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct EventStreamHead {
+    /// The MMR (Merkle Mountain Range) digest representing the accumulated events
+    pub mmr: Vec<U256>,
+    /// The checkpoint sequence number when this stream head was last updated
+    pub checkpoint_seq: u64,
+    /// The total number of events accumulated in this stream
+    pub num_events: u64,
+}
+
+impl Default for EventStreamHead {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EventStreamHead {
+    pub fn new() -> Self {
+        Self {
+            mmr: vec![],
+            checkpoint_seq: 0,
+            num_events: 0,
+        }
+    }
+
+    pub fn num_events(&self) -> u64 {
+        self.num_events
+    }
+
+    pub fn checkpoint_seq(&self) -> u64 {
+        self.checkpoint_seq
+    }
+
+    pub fn mmr(&self) -> &Vec<U256> {
+        &self.mmr
+    }
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+pub struct EventCommitment {
+    pub checkpoint_seq: u64,
+    pub transaction_idx: u64,
+    pub event_idx: u64,
+    pub digest: Digest,
+}
+
+impl EventCommitment {
+    pub fn new(checkpoint_seq: u64, transaction_idx: u64, event_idx: u64, digest: Digest) -> Self {
+        Self {
+            checkpoint_seq,
+            transaction_idx,
+            event_idx,
+            digest,
+        }
+    }
+}
+
+impl PartialOrd for EventCommitment {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for EventCommitment {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.checkpoint_seq, self.transaction_idx, self.event_idx).cmp(&(
+            other.checkpoint_seq,
+            other.transaction_idx,
+            other.event_idx,
+        ))
+    }
+}
+
+pub fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
+    use fastcrypto::hash::Blake2b256;
+    use fastcrypto::merkle::MerkleTree;
+
+    debug_assert!(
+        events.windows(2).all(|w| w[0] <= w[1]),
+        "Events must be ordered by (checkpoint_seq, transaction_idx, event_idx)"
+    );
+
+    let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
+        .expect("failed to serialize event commitments for merkle root");
+    let root_node = merkle_tree.root();
+    let root_digest = root_node.bytes();
+    Digest::new(root_digest)
 }

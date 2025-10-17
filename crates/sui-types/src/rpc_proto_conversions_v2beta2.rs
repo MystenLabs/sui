@@ -1837,6 +1837,11 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 message.epoch = Some(epoch);
                 TransactionExpirationKind::Epoch
             }
+            E::ValidDuring { .. } => {
+                // TODO: Implement proper proto conversion for ValidDuring
+                // For now, treat as None to maintain compatibility
+                TransactionExpirationKind::None
+            }
         };
 
         message.set_kind(kind);
@@ -2160,6 +2165,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             }
             K::AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
             K::CoinRegistryCreate => Kind::CoinRegistryCreate(()),
+            K::DisplayRegistryCreate => Kind::DisplayRegistryCreate(()),
         };
 
         let mut message = Self::default();
@@ -2290,11 +2296,12 @@ impl From<crate::transaction::CallArg> for Input {
                 O::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutability,
                 } => {
                     message.object_id = Some(id.to_canonical_string(true));
                     message.version = Some(initial_shared_version.value());
-                    message.mutable = Some(mutable);
+                    // TODO(address-balances): add enum to schema
+                    message.mutable = Some(mutability.is_mutable());
                     InputKind::Shared
                 }
                 O::Receiving((id, version, digest)) => {

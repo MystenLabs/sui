@@ -400,6 +400,7 @@ mod tests {
     };
 
     use super::*;
+    use async_trait::async_trait;
     use prometheus::Registry;
     use std::{sync::Arc, time::Duration};
     use sui_types::full_checkpoint_content::CheckpointData;
@@ -410,16 +411,20 @@ mod tests {
     #[derive(Default)]
     struct TestHandler;
 
+    #[async_trait]
     impl Processor for TestHandler {
         const NAME: &'static str = "test";
         type Value = u64;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(
+            &self,
+            _checkpoint: &Arc<CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl super::Handler for TestHandler {
         type Store = MockStore;
         type Batch = Vec<u64>;

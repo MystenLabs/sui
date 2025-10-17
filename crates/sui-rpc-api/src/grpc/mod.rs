@@ -5,6 +5,7 @@ use std::convert::Infallible;
 use tonic::server::NamedService;
 use tower::Service;
 
+pub mod alpha;
 pub mod v2;
 pub(crate) mod v2beta2;
 

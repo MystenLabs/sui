@@ -16,10 +16,16 @@ This requires you installing the tree-sitter CLI
 cargo install tree-sitter-cli
 ```
 
-You can then run this on all the tests with
+You can then run the tests with
 
+```sh
+./run-tests.sh
 ```
-tree-sitter parse -q -t tests/*.move
+
+Alternatively, to run a single test
+
+```sh
+tree-sitter parse -q -t path/to/file.move
 ```
 
 An example of what the output CST would look like would be the following (NB: this is using tree sitter to highlight the Move code as well).

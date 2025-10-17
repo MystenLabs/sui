@@ -104,6 +104,7 @@ static_symbols!(
     "new_currency",
     "test",
     "utf8",
+    "display_registry",
 );
 
 /// The global, unique cache of strings.

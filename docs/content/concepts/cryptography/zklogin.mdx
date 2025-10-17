@@ -63,7 +63,7 @@ At a high level, the zkLogin protocol works as follows:
 
 1. Application frontend: This describes the wallet or frontend application that supports zkLogin. This frontend is responsible for storing the ephemeral private key, directing users to complete the OAuth login flow, creating and signing a zkLogin transaction.
 
-2. Salt Backup Service: This is a backend service responsible for returning a salt per unique user. See [zkLogin Integration Guide](../../guides/developer/cryptography/zklogin-integration.mdx) for other strategies to maintain salt.
+2. Salt Backup Service: This is a backend service responsible for returning a salt per unique user. See [zkLogin Integration Guide](/guides/developer/cryptography/zklogin-integration.mdx) for other strategies to maintain salt.
 
 3. ZK Proving Service: This is a backend service responsible for generating ZK proofs based on JWT, JWT randomness, user salt and max epoch. This proof is submitted on-chain along with the ephemeral signature for a zkLogin transaction.
 
@@ -312,7 +312,7 @@ The following options support a zkLogin signature over either transaction data o
 
 1. Use Sui TypeScript SDK. This initializes a GraphQL client and calls the endpoint under the hood.
 
-1. Use the GraphQL endpoint directly: `https://sui-[network].mystenlabs.com/graphql`, changing `[network]` to the appropriate value. See the <UnsafeLink href="/references/sui-api/sui-graphql/reference/api/queries/verify-zklogin-signature">GraphQL documentation</UnsafeLink> for more details. This is recommended if you do not plan to run any servers or handle any JWK rotations. 
+1. Use the GraphQL endpoint directly: `https://sui-[network].mystenlabs.com/graphql`, changing `[network]` to the appropriate value. See the <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/operations/queries/verify-zk-login-signature.mdx">GraphQL documentation</UnsafeLink> for more details. This is recommended if you do not plan to run any servers or handle any JWK rotations. 
 
 1. Use the [Sui Keytool CLI](../../references/cli/keytool.mdx). This is recommended for debug usage. 
 

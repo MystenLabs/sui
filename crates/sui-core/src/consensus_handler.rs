@@ -1687,10 +1687,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         randomness_dkg_confirmations: Vec<(AuthorityName, Vec<u8>)>,
     ) {
         if !self.epoch_store.randomness_state_enabled() {
-            debug_fatal!(
-                "received {} RandomnessDkgConfirmation messages when randomness is not enabled",
-                randomness_dkg_confirmations.len()
-            );
+            let num_dkg_messages = randomness_dkg_messages.len();
+            let num_dkg_confirmations = randomness_dkg_confirmations.len();
+            if num_dkg_messages + num_dkg_confirmations > 0 {
+                debug_fatal!(
+                    "received {} RandomnessDkgMessage and {} RandomnessDkgConfirmation messages when randomness is not enabled",
+                    num_dkg_messages,
+                    num_dkg_confirmations
+                );
+            }
             return;
         }
 
@@ -2221,11 +2226,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             self.metrics
                 .consensus_finalized_user_transactions
                 .with_label_values(&[hostname])
-                .set(num_finalized_user_transactions[i.value()] as i64);
+                .add(num_finalized_user_transactions[i.value()] as i64);
             self.metrics
                 .consensus_rejected_user_transactions
                 .with_label_values(&[hostname])
-                .set(num_rejected_user_transactions[i.value()] as i64);
+                .add(num_rejected_user_transactions[i.value()] as i64);
         }
 
         // TODO(commit-handler-rewrite): de-duplicate transactions
@@ -2599,11 +2604,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             self.metrics
                 .consensus_finalized_user_transactions
                 .with_label_values(&[hostname])
-                .set(num_finalized_user_transactions[i.value()] as i64);
+                .add(num_finalized_user_transactions[i.value()] as i64);
             self.metrics
                 .consensus_rejected_user_transactions
                 .with_label_values(&[hostname])
-                .set(num_rejected_user_transactions[i.value()] as i64);
+                .add(num_rejected_user_transactions[i.value()] as i64);
         }
 
         transactions

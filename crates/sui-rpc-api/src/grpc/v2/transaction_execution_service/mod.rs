@@ -106,22 +106,16 @@ pub async fn execute_transaction(
         FieldMaskTree::from(read_mask)
     };
 
-    let request = {
-        let mask = read_mask
-            .subtree(ExecuteTransactionResponse::TRANSACTION_FIELD.name)
-            .unwrap_or_default();
-
-        sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
-            transaction: signed_transaction.try_into()?,
-            include_events: mask.contains(ExecutedTransaction::EVENTS_FIELD.name),
-            include_input_objects: mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-                || mask.contains(ExecutedTransaction::OBJECTS_FIELD.name)
-                || mask.contains(ExecutedTransaction::EFFECTS_FIELD.name),
-            include_output_objects: mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-                || mask.contains(ExecutedTransaction::OBJECTS_FIELD.name)
-                || mask.contains(ExecutedTransaction::EFFECTS_FIELD.name),
-            include_auxiliary_data: false,
-        }
+    let request = sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
+        transaction: signed_transaction.try_into()?,
+        include_events: read_mask.contains(ExecutedTransaction::EVENTS_FIELD.name),
+        include_input_objects: read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
+            || read_mask.contains(ExecutedTransaction::OBJECTS_FIELD.name)
+            || read_mask.contains(ExecutedTransaction::EFFECTS_FIELD.name),
+        include_output_objects: read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
+            || read_mask.contains(ExecutedTransaction::OBJECTS_FIELD.name)
+            || read_mask.contains(ExecutedTransaction::EFFECTS_FIELD.name),
+        include_auxiliary_data: false,
     };
 
     let sui_types::quorum_driver_types::ExecuteTransactionResponseV3 {
@@ -136,17 +130,15 @@ pub async fn execute_transaction(
         auxiliary_data: _,
     } = executor.execute_transaction(request, None).await?;
 
-    let executed_transaction = if let Some(mask) =
-        read_mask.subtree(ExecuteTransactionResponse::TRANSACTION_FIELD.name)
-    {
-        let events = mask
+    let executed_transaction = {
+        let events = read_mask
             .subtree(ExecutedTransaction::EVENTS_FIELD)
             .and_then(|mask| events.map(|e| TransactionEvents::merge_from(&e, &mask)));
 
         let input_objects = input_objects.unwrap_or_default();
         let output_objects = output_objects.unwrap_or_default();
 
-        let balance_changes = mask
+        let balance_changes = read_mask
             .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
             .then(|| {
                 derive_balance_changes(&effects, &input_objects, &output_objects)
@@ -166,7 +158,7 @@ pub async fn execute_transaction(
             .collect::<Result<Vec<_>, _>>()?;
 
         let effects = sui_sdk_types::TransactionEffects::try_from(effects)?;
-        let effects = mask
+        let effects = read_mask
             .subtree(ExecutedTransaction::EFFECTS_FIELD.name)
             .map(|mask| {
                 let mut effects = TransactionEffects::merge_from(&effects, &mask);
@@ -222,13 +214,13 @@ pub async fn execute_transaction(
             });
 
         let mut message = ExecutedTransaction::default();
-        message.digest = mask
+        message.digest = read_mask
             .contains(ExecutedTransaction::DIGEST_FIELD.name)
             .then(|| transaction.digest().to_string());
-        message.transaction = mask
+        message.transaction = read_mask
             .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
             .map(|mask| Transaction::merge_from(transaction, &mask));
-        message.signatures = mask
+        message.signatures = read_mask
             .subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
             .map(|mask| {
                 signatures
@@ -240,7 +232,7 @@ pub async fn execute_transaction(
         message.effects = effects;
         message.events = events;
         message.balance_changes = balance_changes;
-        message.objects = mask
+        message.objects = read_mask
             .subtree(
                 ExecutedTransaction::path_builder()
                     .objects()
@@ -259,12 +251,8 @@ pub async fn execute_transaction(
                         .collect(),
                 )
             });
-        Some(message)
-    } else {
-        None
+        message
     };
 
-    let mut message = ExecuteTransactionResponse::default();
-    message.transaction = executed_transaction;
-    Ok(message)
+    Ok(ExecuteTransactionResponse::default().with_transaction(executed_transaction))
 }

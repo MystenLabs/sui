@@ -1,0 +1,160 @@
+---
+title: Coin Standard
+description: The Sui Coin standard is now deprecated in favor of the Currency standard. The Coin standard enables you to create a broad range of fungible tokens on the Sui network to satisfy a number of use cases. The Coin standard on Sui is equivalent to the ERC-20 technical standard on Ethereum.
+sidebar_label: Coin
+keywords: [ sui coin standard, erc-20, erc-20 equivalent, creating coins, coin standard, fungible tokens, fungible token standard, treasury capability, regulated coins, denylist object, coin metadata, create coin with SDK, use SDK to create coin, mint coin, minting coins ]
+pagination_prev: null
+---
+
+:::danger
+
+The Coin standard has been deprecated in favor of the [Currency standard](/standards/currency.mdx).
+
+:::
+
+The Coin standard is a technical standard used for smart contracts on Sui for creating coins on the Sui blockchain. See [Sui Tokenomics](/concepts/tokenomics.mdx) to learn more about the SUI native coin and its use on the Sui network.
+
+See the [coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md) documentation for all available options when creating a coin-type token on Sui.
+
+:::info
+
+The documentation refers to fungible tokens created on Sui using the Coin standard as _coins_. For fungible tokens created on Sui using the [Closed-Loop Token standard](/standards/closed-loop-token.mdx), the documentation uses the term _tokens_. In practice, the terms for both these objects are often interchangeable.
+
+:::
+
+## Treasury capability
+
+When you create a coin using the `coin::create_currency` function, the publisher of the smart contract that creates the coin receives a `TreasuryCap` object. The `TreasuryCap` object is required to mint new coins or to burn current ones. Consequently, only addresses that have access to this object are able to maintain the coin supply on the Sui network.
+
+The `TreasuryCap` object is transferable, so a third party can take over the management of a coin that you create if you transfer the `TreasuryCap`. After transferring the capability, however, you are no longer able to mint and burn tokens yourself.
+
+## Regulated coins
+
+The Coin standard includes the ability to create regulated coins. To create a regulated coin, you use the `coin::create_regulated_currency_v2` function (which uses the `coin::create_currency` function itself), but which also returns a `DenyCap` capability. The `DenyCap` capability allows the bearer to maintain a list of addresses that aren't allowed to use the token.
+
+:::tip
+
+The [regulated-coin-sample repository](https://github.com/MystenLabs/regulated-coin-sample) provides an example of regulated coin creation.
+
+:::
+
+### DenyList object
+
+The list of addresses that aren't able to use a particular regulated coin is held within a system-created `DenyList` shared object. If you have access to the `DenyCap`, then you can use the `coin::deny_list_v2_add` and `coin::deny_list_v2_remove` functions to add and remove addresses.
+
+### Global pause switch
+
+Regulated coin objects include an `allow_global_pause` Boolean field. When set to `true`, the bearer of the `DenyCapV2` object for the coin type can use the `coin::deny_list_v2_enable_global_pause` function to pause coin activity indefinitely. Immediately upon the bearer initiating the pause, the network disallows the coin type as input for any transactions. At the start of the next epoch (epochs last ~24 hours), the network additionally disallows all addresses from receiving the coin type.
+
+When the bearer of the `DenyCapV2` object for the coin type removes the pause using `coin::deny_list_v2_disable_global_pause`, the coins are immediately available to use again as transaction inputs. Addresses cannot receive the coin type, however, until the following epoch.
+
+The global pause functionality does not affect the deny list for the coin. After clearing the pause for the coin, any addresses included in the deny list are still unable to interact with the coin.
+
+## Coin metadata
+
+Each coin you create includes metadata that describes it. Typically, smart contracts freeze this object upon creation using the `transfer::public_freeze_object` function because the metadata for coins should almost never change. Regulated coins freeze the metadata they create automatically.
+
+Regular coins using the Coin standard include a `CoinMetadata` object. As mentioned previously, regulated coins build on top of the same procedure that creates regular coins, so they receive the same metadata object in addition to a `RegulatedCoinMetadata` object that includes deny list information.
+
+The fields of the metadata objects include the following:
+
+#### CoinMetadata
+
+| Name          | Description                                                                                                                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | The object ID of the metadata for the token.                                                                                                                                                             |
+| `decimals`    | The number of decimals the token uses. If you set this field to `3`, then a token of value `1000` would display as `1.000`.                                                                              |
+| `name`        | Name of the coin.                                                                                                                                                                                        |
+| `symbol`      | Symbol for the coin. This might be the same as `name`, but is typically fewer than five all capital letters. For example, `SUI` is the `symbol` for the native coin on Sui but its `name` is also `SUI`. |
+| `description` | A short description to describe the token.                                                                                                                                                               |
+| `icon_url`    | The URL for the token's icon, used for display in wallets, explorers, and other apps.                                                                                                                    |
+
+#### RegulatedCoinMetadata
+
+| Name                   | Description                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | The ID of the metadata object for the regulated token.                                                                                         |
+| `coin_metadata_object` | The ID of the underlying metadata object (`CoinMetadata`) for the regulated token.                                                             |
+| `deny_cap_object`      | The ID of the token's `DenyCapV2` object, which is necessary to maintain the deny list entries that controls who can and cannot use the token. |
+
+## Minting and burning coins
+
+The `coin` module provides the logic for creating and destroying coins on the Sui network (as long as you own the associated `TreasuryCap`). These functions are the same for all coins and each requires the `TreasuryCap` as an input.
+
+### Mint
+
+Use the `coin::mint` function to create new tokens.
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint" noComments />
+
+The signature shows that a `Coin<T>` results from calling the function with a `TreasuryCap`, value for the coin created, and the transaction context. The function updates the total supply in `TreasuryCap` automatically. Upon display, the coin `value` respects the `decimals` value in the metadata. So, if you supply 1000000 as the coin `value` that has a `decimal` value of `6`, the coin's value displays as `1.000000`.
+
+### Burn
+
+Use the `coin::burn` function to destroy current tokens.
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="burn" noComments />
+
+The signature shows that only the `TreasuryCap` and coin object you want to burn are necessary inputs, returning the amount by which the supply was decreased (value of the coin). The function does not allow you to burn more coins than are available in the supply.
+
+## Adding and removing addresses to and from the deny list
+
+The deny list is only applicable to regulated coins. As mentioned previously, when you create a regulated coin you receive a `DenyCapV2` that authorizes the bearer to add and remove addresses from the system-created `DenyList` object. Any address on the list for your coin is unable to use the coin as an input to transactions starting immediately upon being added. At the epoch that follows address addition to the deny list, the addresses additionally cannot receive the coin type. In other words, an address that gets added to the deny list for a coin type is immediately unable to send the coin. At the start of the following epoch, the address is still unable to send the coin but is also unable to receive it. From that point, the address cannot interact with the coin until expressly removed from the deny list by the `DenyCapV2` bearer.
+
+<ImportContent source="coin-standards.mdx" mode="snippet" />
+
+## Query coin data
+
+You can use the following functions to retrieve data from coins.
+
+### Metadata
+
+Use the following functions to get the values for the respective fields on the metadata object for coins.
+
+| Function          | Signature                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| `get_decimals`    | `public fun get_decimals<T>(metadata: &coin::CoinMetadata<T>): u8`                       |
+| `get_name`        | `public fun get_name<T>(metadata: &coin::CoinMetadata<T>): string::String`               |
+| `get_symbol`      | `public fun get_symbol<T>(metadata: &coin::CoinMetadata<T>): ascii::String`              |
+| `get_description` | `public fun get_description<T>(metadata: &coin::CoinMetadata<T>): string::String`        |
+| `get_icon_url`    | `public fun get_icon_url<T>(metadata: &coin::CoinMetadata<T>): option::Option<url::Url>` |
+
+### Supply
+
+Use the `coin::supply` function to get the current supply of a given coin.
+
+## Update coin metadata
+
+If the `CoinMetadata` object was not frozen upon creation, you can use the following functions to update its values.
+
+Each function signature is similar. Replace `<FUNCTION-NAME>` and `<ATTRIBUTE-TYPE>` with the values defined in the table to get the signature of each function:
+
+```move
+public entry fun <FUNCTION-NAME><T>(
+  _treasury: &coin::TreasuryCap<T>,
+  metadata: &mut coin::CoinMetadata<T>,
+  <ATTRIBUTE-TYPE>
+)
+```
+
+| `<FUNCTION-NAME>`    | `<ATTRIBUTE-TYPE>`            |
+| -------------------- | ----------------------------- |
+| `update_name`        | `name: string::String`        |
+| `update_symbol`      | `symbol: ascii::String`       |
+| `update_description` | `description: string::String` |
+| `update_icon_url`    | `url: ascii::String`          |
+
+:::info
+
+`RegulatedCoinMetadata` is frozen upon creation, so there are no functions to update its data.
+
+:::
+
+## Related links
+
+Check out the following content for more information about coins and tokens on Sui:
+
+<RelatedLink to="/standards/closed-loop-token.mdx" />
+<RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md" label="`coin` module rustdoc documentation" desc="Automated documentation output for the Sui framework `coin` module." />
+<RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/token.md" label="`token` module rustdoc documentation" desc="Automated documentation output for the Sui framework `token` module." />
+<RelatedLink to="/concepts/tokenomics.mdx" />

@@ -25,6 +25,7 @@ use sui_indexer_alt_schema::{
 };
 
 use super::checkpoint_input_objects;
+use async_trait::async_trait;
 
 /// This handler is used to track the balance buckets of address-owned coins.
 /// The balance bucket is calculated using log10 of the coin balance.
@@ -53,11 +54,12 @@ pub(crate) enum CoinBalanceBucketChangeKind {
     Delete,
 }
 
+#[async_trait]
 impl Processor for CoinBalanceBuckets {
     const NAME: &'static str = "coin_balance_buckets";
     type Value = ProcessedCoinBalanceBucket;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let checkpoint_input_objects = checkpoint_input_objects(checkpoint)?;
         let latest_live_output_objects: BTreeMap<_, _> = checkpoint
@@ -148,7 +150,7 @@ impl Processor for CoinBalanceBuckets {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for CoinBalanceBuckets {
     type Store = Db;
 
@@ -470,7 +472,10 @@ mod tests {
             .create_sui_object(1, 100)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 2);
         assert!(values.iter().any(|v| matches!(
             v.change,
@@ -511,7 +516,10 @@ mod tests {
             .create_coin_object(0, 0, 10, coin_type.clone())
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             &values[0].change,
@@ -543,7 +551,10 @@ mod tests {
             .create_sui_object(0, 10010)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 1);
         // Checkpoint 0 creates coin object 0.
         assert_eq!(
@@ -571,7 +582,10 @@ mod tests {
             .transfer_coin_balance(0, 1, 1, 10)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 1);
         // Checkpoint 1 creates coin object 1.
         assert_eq!(
@@ -602,7 +616,10 @@ mod tests {
             .transfer_coin_balance(0, 2, 1, 1)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 2);
         // Checkpoint 2 creates coin object 2, and mutates coin object 0.
         assert!(values.iter().any(|v| v.change
@@ -679,7 +696,10 @@ mod tests {
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
             .await
             .unwrap();
@@ -690,7 +710,10 @@ mod tests {
             .delete_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
@@ -729,7 +752,10 @@ mod tests {
             .create_sui_object(0, 100)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
             .await
             .unwrap();
@@ -740,7 +766,10 @@ mod tests {
             .transfer_object(0, 1)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
@@ -784,7 +813,10 @@ mod tests {
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
             .await
             .unwrap();
@@ -796,7 +828,10 @@ mod tests {
             .change_object_owner(0, Owner::ObjectOwner(dbg_addr(1)))
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
@@ -823,7 +858,10 @@ mod tests {
             .create_sui_object(0, 100)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
             .await
             .unwrap();
@@ -835,7 +873,10 @@ mod tests {
             .wrap_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
         // 1 insertion to main table, 2 to ref table because of wrap.
@@ -850,7 +891,10 @@ mod tests {
             .unwrap_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let values = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
@@ -893,7 +937,10 @@ mod tests {
             .create_sui_object(2, 10000)
             .finish_transaction();
         let checkpoint0 = builder.build_checkpoint();
-        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint0)).unwrap();
+        let result = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint0))
+            .await
+            .unwrap();
         assert_eq!(result.len(), 3);
         let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
             .await
@@ -908,7 +955,10 @@ mod tests {
             .transfer_object(2, 1)
             .finish_transaction();
         let checkpoint1 = builder.build_checkpoint();
-        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint1)).unwrap();
+        let result = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint1))
+            .await
+            .unwrap();
         assert_eq!(result.len(), 3);
         let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
             .await
@@ -923,7 +973,10 @@ mod tests {
             .transfer_object(2, 0)
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint();
-        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint2)).unwrap();
+        let result = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint2))
+            .await
+            .unwrap();
         assert_eq!(result.len(), 3);
         let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
             .await
@@ -996,7 +1049,10 @@ mod tests {
             .create_sui_object(2, 10000)
             .finish_transaction();
         let checkpoint0 = builder.build_checkpoint();
-        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint0)).unwrap();
+        let result = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint0))
+            .await
+            .unwrap();
         CoinBalanceBuckets::commit(&result, &mut conn)
             .await
             .unwrap();
@@ -1008,7 +1064,10 @@ mod tests {
             .transfer_object(2, 1)
             .finish_transaction();
         let checkpoint1 = builder.build_checkpoint();
-        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint1)).unwrap();
+        let result = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint1))
+            .await
+            .unwrap();
         CoinBalanceBuckets::commit(&result, &mut conn)
             .await
             .unwrap();
@@ -1020,7 +1079,10 @@ mod tests {
             .transfer_object(2, 0)
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint();
-        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint2)).unwrap();
+        let result = CoinBalanceBuckets
+            .process(&Arc::new(checkpoint2))
+            .await
+            .unwrap();
         CoinBalanceBuckets::commit(&result, &mut conn)
             .await
             .unwrap();

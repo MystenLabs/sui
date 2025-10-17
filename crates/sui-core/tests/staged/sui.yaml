@@ -472,6 +472,8 @@ EndOfEpochTransactionKind:
       AccumulatorRootCreate: UNIT
     9:
       CoinRegistryCreate: UNIT
+    10:
+      DisplayRegistryCreate: UNIT
 Event:
   STRUCT:
     - package_id:
@@ -853,7 +855,8 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
-          - mutable: BOOL
+          - mutability:
+              TYPENAME: SharedObjectMutability
     2:
       Receiving:
         NEWTYPE:
@@ -1038,6 +1041,12 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+SharedObjectMutability:
+  ENUM:
+    0:
+      Immutable: UNIT
+    1:
+      Mutable: UNIT
 StoredExecutionTimeObservations:
   ENUM:
     0:
@@ -1227,6 +1236,20 @@ TransactionExpiration:
     1:
       Epoch:
         NEWTYPE: U64
+    2:
+      ValidDuring:
+        STRUCT:
+          - min_epoch:
+              OPTION: U64
+          - max_epoch:
+              OPTION: U64
+          - min_timestamp_seconds:
+              OPTION: U64
+          - max_timestamp_seconds:
+              OPTION: U64
+          - chain:
+              TYPENAME: ChainIdentifier
+          - nonce: U32
 TransactionKind:
   ENUM:
     0:

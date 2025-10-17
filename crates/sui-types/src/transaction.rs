@@ -57,6 +57,10 @@ use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use tap::Pipe;
 use tracing::trace;
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_serialization_tests.rs"]
+mod transaction_serialization_tests;
+
 pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 70_000;
@@ -83,6 +87,10 @@ mod messages_tests;
 #[path = "unit_tests/balance_withdraw_tests.rs"]
 mod balance_withdraw_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/address_balance_gas_tests.rs"]
+mod address_balance_gas_tests;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum CallArg {
     // contains no structs or objects
@@ -100,12 +108,12 @@ impl CallArg {
     pub const CLOCK_IMM: Self = Self::Object(ObjectArg::SharedObject {
         id: SUI_CLOCK_OBJECT_ID,
         initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        mutable: false,
+        mutability: SharedObjectMutability::Immutable,
     });
     pub const CLOCK_MUT: Self = Self::Object(ObjectArg::SharedObject {
         id: SUI_CLOCK_OBJECT_ID,
         initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     });
 }
 
@@ -118,7 +126,9 @@ pub enum ObjectArg {
     SharedObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
-        mutable: bool,
+        // Note: this used to be a bool, but because true/false encode to 0x00/0x01, we are able to
+        // be backward compatible.
+        mutability: SharedObjectMutability,
     },
     // A Move object that can be received in this transaction.
     Receiving(ObjectRef),
@@ -428,6 +438,7 @@ pub enum EndOfEpochTransactionKind {
     StoreExecutionTimeObservations(StoredExecutionTimeObservations),
     AccumulatorRootCreate,
     CoinRegistryCreate,
+    DisplayRegistryCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -479,6 +490,10 @@ impl EndOfEpochTransactionKind {
         Self::CoinRegistryCreate
     }
 
+    pub fn new_display_registry_create() -> Self {
+        Self::DisplayRegistryCreate
+    }
+
     pub fn new_deny_list_state_create() -> Self {
         Self::DenyListStateCreate
     }
@@ -503,7 +518,7 @@ impl EndOfEpochTransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::AuthenticatorStateCreate => vec![],
@@ -511,7 +526,7 @@ impl EndOfEpochTransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: expire.authenticator_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::RandomnessStateCreate => vec![],
@@ -521,23 +536,24 @@ impl EndOfEpochTransactionKind {
                 InputObjectKind::SharedMoveObject {
                     id: SUI_BRIDGE_OBJECT_ID,
                     initial_shared_version: *bridge_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
                 InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
             ],
             Self::StoreExecutionTimeObservations(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::AccumulatorRootCreate => vec![],
             Self::CoinRegistryCreate => vec![],
+            Self::DisplayRegistryCreate => vec![],
         }
     }
 
@@ -550,7 +566,7 @@ impl EndOfEpochTransactionKind {
                 vec![SharedInputObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: expire.authenticator_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
                 .into_iter(),
             ),
@@ -563,7 +579,7 @@ impl EndOfEpochTransactionKind {
                     SharedInputObject {
                         id: SUI_BRIDGE_OBJECT_ID,
                         initial_shared_version: *bridge_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     },
                     SharedInputObject::SUI_SYSTEM_OBJ,
                 ]
@@ -574,6 +590,7 @@ impl EndOfEpochTransactionKind {
             }
             Self::AccumulatorRootCreate => Either::Right(iter::empty()),
             Self::CoinRegistryCreate => Either::Right(iter::empty()),
+            Self::DisplayRegistryCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -644,6 +661,13 @@ impl EndOfEpochTransactionKind {
                     ));
                 }
             }
+            Self::DisplayRegistryCreate => {
+                if !config.enable_display_registry() {
+                    return Err(UserInputError::Unsupported(
+                        "display registry not enabled".to_string(),
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -659,17 +683,12 @@ impl CallArg {
             CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
-            }) => {
-                let id = *id;
-                let initial_shared_version = *initial_shared_version;
-                let mutable = *mutable;
-                vec![InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version,
-                    mutable,
-                }]
-            }
+                mutability,
+            }) => vec![InputObjectKind::SharedMoveObject {
+                id: *id,
+                initial_shared_version: *initial_shared_version,
+                mutability: *mutability,
+            }],
             // Receiving objects are not part of the input objects.
             CallArg::Object(ObjectArg::Receiving(_)) => vec![],
             // While we do read accumulator state when processing withdraws,
@@ -703,7 +722,11 @@ impl CallArg {
                 );
             }
             CallArg::Object(o) => match o {
-                ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. } => (),
+                ObjectArg::ImmOrOwnedObject(_) => (),
+                ObjectArg::SharedObject { mutability, .. } => match mutability {
+                    SharedObjectMutability::Mutable | SharedObjectMutability::Immutable => (),
+                },
+
                 ObjectArg::Receiving(_) => {
                     if !config.receiving_objects_supported() {
                         return Err(UserInputError::Unsupported(format!(
@@ -778,7 +801,7 @@ impl ObjectArg {
     pub const SUI_SYSTEM_MUT: Self = Self::SharedObject {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     };
 
     pub fn id(&self) -> ObjectID {
@@ -822,6 +845,14 @@ pub struct ProgrammableTransaction {
     /// The commands to be executed sequentially. A failure in any command will
     /// result in the failure of the entire transaction.
     pub commands: Vec<Command>,
+}
+
+impl ProgrammableTransaction {
+    pub fn has_shared_inputs(&self) -> bool {
+        self.inputs
+            .iter()
+            .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
+    }
 }
 
 /// A single command in a programmable transaction.
@@ -1178,7 +1209,10 @@ impl ProgrammableTransaction {
         // If randomness is used, it must be enabled by protocol config.
         // A command that uses Random can only be followed by TransferObjects or MergeCoins.
         if let Some(random_index) = inputs.iter().position(|obj| {
-            matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+            matches!(
+                obj,
+                CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID
+            )
         }) {
             fp_ensure!(
                 config.random_beacon(),
@@ -1215,11 +1249,11 @@ impl ProgrammableTransaction {
             CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             }) => Some(SharedInputObject {
                 id: *id,
                 initial_shared_version: *initial_shared_version,
-                mutable: *mutable,
+                mutability: *mutability,
             }),
         })
     }
@@ -1337,14 +1371,14 @@ impl Display for ProgrammableTransaction {
 pub struct SharedInputObject {
     pub id: ObjectID,
     pub initial_shared_version: SequenceNumber,
-    pub mutable: bool,
+    pub mutability: SharedObjectMutability,
 }
 
 impl SharedInputObject {
     pub const SUI_SYSTEM_OBJ: Self = Self {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     };
 
     pub fn id(&self) -> ObjectID {
@@ -1427,21 +1461,21 @@ impl TransactionKind {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })))
             }
             Self::AuthenticatorStateUpdate(update) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_obj_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })))
             }
             Self::RandomnessStateUpdate(update) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                     initial_shared_version: update.randomness_obj_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })))
             }
             Self::EndOfEpochTransaction(txns) => Either::Left(Either::Right(
@@ -1487,7 +1521,7 @@ impl TransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::Genesis(_) => {
@@ -1500,21 +1534,21 @@ impl TransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::AuthenticatorStateUpdate(update) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::RandomnessStateUpdate(update) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                     initial_shared_version: update.randomness_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::EndOfEpochTransaction(txns) => {
@@ -1734,6 +1768,12 @@ pub struct GasData {
     pub budget: u64,
 }
 
+impl GasData {
+    pub fn is_paid_from_address_balance(&self) -> bool {
+        self.payment.is_empty()
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum TransactionExpiration {
     /// The transaction has no expiration
@@ -1741,6 +1781,29 @@ pub enum TransactionExpiration {
     /// Validators wont sign a transaction unless the expiration Epoch
     /// is greater than or equal to the current epoch
     Epoch(EpochId),
+    /// ValidDuring enables gas payments from address balances.
+    ///  
+    /// When transactions use address balances for gas payment instead of explicit gas coins,
+    /// we lose the natural transaction uniqueness and replay prevention that comes from
+    /// mutation of gas coin objects.
+    ///
+    /// By bounding expiration and providing a nonce, validators must only retain
+    /// executed digests for the maximum possible expiry range to differentiate
+    /// retries from unique transactions with otherwise identical inputs.
+    ValidDuring {
+        /// Transaction invalid before this epoch. Must equal current epoch.
+        min_epoch: Option<EpochId>,
+        /// Transaction expires after this epoch. Must equal current epoch
+        max_epoch: Option<EpochId>,
+        /// Future support for sub-epoch timing (not yet implemented)
+        min_timestamp_seconds: Option<u64>,
+        /// Future support for sub-epoch timing (not yet implemented)
+        max_timestamp_seconds: Option<u64>,
+        /// Network identifier to prevent cross-chain replay
+        chain: ChainIdentifier,
+        /// User-provided uniqueness identifier to differentiate otherwise identical transactions
+        nonce: u32,
+    },
 }
 
 #[enum_dispatch(TransactionDataAPI)]
@@ -2070,7 +2133,7 @@ impl TransactionData {
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
                 Owner::Immutable => {
                     return Err(anyhow::anyhow!(
@@ -2429,7 +2492,57 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        fp_ensure!(!self.gas().is_empty(), UserInputError::MissingGasPayment);
+        if let TransactionExpiration::ValidDuring {
+            min_epoch,
+            max_epoch,
+            min_timestamp_seconds,
+            max_timestamp_seconds,
+            ..
+        } = self.expiration()
+        {
+            if min_timestamp_seconds.is_some() || max_timestamp_seconds.is_some() {
+                return Err(UserInputError::Unsupported(
+                    "Timestamp-based transaction expiration is not yet supported".to_string(),
+                ));
+            }
+
+            /* Initially, we validate that (current_epoch == min_epoch == max_epoch) for simplicity.
+            This is intentionally overly strict, we intend to relax these rules as needed. */
+            match (min_epoch, max_epoch) {
+                (Some(min), Some(max)) => {
+                    if min != max {
+                        return Err(UserInputError::Unsupported(
+                            "Multi-epoch transaction expiration is not yet supported. min_epoch must equal max_epoch".to_string()
+                        ));
+                    }
+                }
+                _ => {
+                    return Err(UserInputError::Unsupported(
+                        "Both min_epoch and max_epoch must be specified and equal".to_string(),
+                    ));
+                }
+            }
+        }
+
+        if config.enable_accumulators()
+            && config.enable_address_balance_gas_payments()
+            && self.gas_data().is_paid_from_address_balance()
+        {
+            match self.expiration() {
+                TransactionExpiration::None => {
+                    return Err(UserInputError::MissingTransactionExpiration);
+                }
+                TransactionExpiration::Epoch(_) => {
+                    return Err(UserInputError::InvalidExpiration {
+                        error: "Address balance gas payments require ValidDuring expiration"
+                            .to_string(),
+                    });
+                }
+                TransactionExpiration::ValidDuring { .. } => {}
+            }
+        } else {
+            fp_ensure!(!self.gas().is_empty(), UserInputError::MissingGasPayment);
+        }
 
         let gas_len = self.gas().len();
         let max_gas_objects = config.max_gas_payment_objects() as usize;
@@ -2447,6 +2560,7 @@ impl TransactionDataAPI for TransactionDataV1 {
                 value: config.max_gas_payment_objects().to_string()
             }
         );
+
         self.validity_check_no_gas_check(config)
     }
 
@@ -2525,6 +2639,7 @@ pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
     pub epoch: EpochId,
     pub accumulator_object_init_shared_version: Option<SequenceNumber>,
+    pub chain_identifier: ChainIdentifier,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -2759,11 +2874,41 @@ impl SenderSignedData {
         );
 
         // Checks to see if the transaction has expired
-        if match &tx_data.expiration() {
-            TransactionExpiration::None => false,
-            TransactionExpiration::Epoch(exp_poch) => *exp_poch < context.epoch,
-        } {
-            return Err(SuiError::TransactionExpired);
+        match tx_data.expiration() {
+            TransactionExpiration::None => {
+                // No expiration, always valid
+            }
+            TransactionExpiration::Epoch(exp_epoch) => {
+                if *exp_epoch < context.epoch {
+                    return Err(SuiError::TransactionExpired);
+                }
+            }
+            TransactionExpiration::ValidDuring {
+                min_epoch,
+                max_epoch,
+                chain,
+                ..
+            } => {
+                if *chain != context.chain_identifier {
+                    return Err(SuiError::UserInputError {
+                        error: UserInputError::InvalidChainId {
+                            provided: format!("{:?}", chain),
+                            expected: format!("{:?}", context.chain_identifier),
+                        },
+                    });
+                }
+
+                if let Some(min) = min_epoch {
+                    if context.epoch < *min {
+                        return Err(SuiError::TransactionExpired);
+                    }
+                }
+                if let Some(max) = max_epoch {
+                    if context.epoch > *max {
+                        return Err(SuiError::TransactionExpired);
+                    }
+                }
+            }
         }
 
         if tx_data.has_funds_withdrawals() {
@@ -3225,8 +3370,24 @@ pub enum InputObjectKind {
     SharedMoveObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
-        mutable: bool,
+        mutability: SharedObjectMutability,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
+pub enum SharedObjectMutability {
+    // The "classic" mutable/immutable modes.
+    Immutable,
+    Mutable,
+}
+
+impl SharedObjectMutability {
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            SharedObjectMutability::Mutable => true,
+            SharedObjectMutability::Immutable => false,
+        }
+    }
 }
 
 impl InputObjectKind {
@@ -3272,14 +3433,6 @@ impl InputObjectKind {
 
     pub fn is_shared_object(&self) -> bool {
         matches!(self, Self::SharedMoveObject { .. })
-    }
-
-    pub fn is_mutable(&self) -> bool {
-        match self {
-            Self::MovePackage(..) => false,
-            Self::ImmOrOwnedMoveObject((_, _, _)) => true,
-            Self::SharedMoveObject { mutable, .. } => *mutable,
-        }
     }
 }
 
@@ -3381,7 +3534,10 @@ impl ObjectReadResult {
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::CancelledTransactionSharedObject(_),
             ) => unreachable!(),
-            (InputObjectKind::SharedMoveObject { mutable, .. }, _) => *mutable,
+            (InputObjectKind::SharedMoveObject { mutability, .. }, _) => match mutability {
+                SharedObjectMutability::Mutable => true,
+                SharedObjectMutability::Immutable => false,
+            },
         }
     }
 
@@ -3434,12 +3590,12 @@ impl ObjectReadResult {
         match self.input_object_kind {
             InputObjectKind::MovePackage(_) => None,
             InputObjectKind::ImmOrOwnedMoveObject(_) => None,
-            InputObjectKind::SharedMoveObject { id, mutable, .. } => Some(match &self.object {
+            InputObjectKind::SharedMoveObject { id, mutability, .. } => Some(match &self.object {
                 ObjectReadResultKind::Object(obj) => {
                     SharedInput::Existing(obj.compute_object_reference())
                 }
                 ObjectReadResultKind::ObjectConsensusStreamEnded(seq, digest) => {
-                    SharedInput::ConsensusStreamEnded((id, *seq, mutable, *digest))
+                    SharedInput::ConsensusStreamEnded((id, *seq, mutability, *digest))
                 }
                 ObjectReadResultKind::CancelledTransactionSharedObject(seq) => {
                     SharedInput::Cancelled((id, *seq))
@@ -3625,16 +3781,15 @@ impl InputObjects {
                         ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
                     ) => None,
                     (
-                        InputObjectKind::SharedMoveObject { mutable, .. },
+                        InputObjectKind::SharedMoveObject { mutability, .. },
                         ObjectReadResultKind::Object(object),
-                    ) => {
-                        if *mutable {
+                    ) => match mutability {
+                        SharedObjectMutability::Mutable => {
                             let oref = object.compute_object_reference();
                             Some((oref.0, ((oref.1, oref.2), object.owner.clone())))
-                        } else {
-                            None
                         }
-                    }
+                        SharedObjectMutability::Immutable => None,
+                    },
                     (
                         InputObjectKind::ImmOrOwnedMoveObject(_),
                         ObjectReadResultKind::CancelledTransactionSharedObject(_),

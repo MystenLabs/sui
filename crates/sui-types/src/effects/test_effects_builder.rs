@@ -156,8 +156,8 @@ impl TestEffectsBuilder {
                 InputObjectKind::SharedMoveObject {
                     id,
                     initial_shared_version,
-                    mutable,
-                } => mutable.then_some((
+                    mutability,
+                } => mutability.is_mutable().then_some((
                     *id,
                     EffectsObjectChange {
                         input_state: ObjectIn::Exist((

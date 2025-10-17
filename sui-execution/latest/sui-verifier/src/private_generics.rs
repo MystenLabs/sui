@@ -166,7 +166,7 @@ fn verify_private_event_emit(
 ) -> Result<(), String> {
     let fident = view.identifier_at(fhandle.name);
     if fident == GET_EVENTS_TEST_FUNCTION {
-        // test-only function witn no params--no need to verify
+        // test-only function with no params--no need to verify
         return Ok(());
     }
 

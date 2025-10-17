@@ -26,6 +26,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
     SignedCheckpointSummary,
 };
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::utils::{make_committee_key_num, to_sender_signed_transaction};
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
@@ -75,7 +76,7 @@ pub async fn test_certificates_with_gas_objects(
     let shared_object_arg = ObjectArg::SharedObject {
         id: shared_object.id(),
         initial_shared_version: shared_object.version(),
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     };
     for gas_object in gas_objects {
         // Object digest may be different in genesis than originally generated.
@@ -148,7 +149,7 @@ pub async fn test_user_transaction(
                 ObjectArg::SharedObject {
                     id: obj.id(),
                     initial_shared_version: obj.version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }
             } else {
                 ObjectArg::ImmOrOwnedObject(obj.compute_object_reference())

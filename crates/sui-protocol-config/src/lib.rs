@@ -9,6 +9,10 @@ use std::{
 
 use clap::*;
 use fastcrypto::encoding::{Base58, Encoding, Hex};
+use move_binary_format::{
+    binary_config::{BinaryConfig, TableConfig},
+    file_format_common::VERSION_1,
+};
 use move_vm_config::verifier::VerifierConfig;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -19,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 97;
+const MAX_PROTOCOL_VERSION: u64 = 99;
 
 // Record history of protocol version allocations here:
 //
@@ -264,8 +268,10 @@ const MAX_PROTOCOL_VERSION: u64 = 97;
 //             Fix bug where MFP transaction shared inputs' debts were not loaded
 //             Create Coin Registry object
 //             Enable checkpoint artifacts digest in devnet.
-// Version 97: Add authenticated event streams support via emit_authenticated function.
+// Version 97: Enable additional borrow checks
+// Version 98: Add authenticated event streams support via emit_authenticated function.
 //             Add better error messages to the loader.
+// Version 99: Enable new commit handler.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -750,6 +756,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_authenticated_event_streams: bool,
 
+    // Enable address balance gas payments
+    #[serde(skip_serializing_if = "is_false")]
+    enable_address_balance_gas_payments: bool,
+
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
@@ -821,6 +831,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     object_runtime_charge_cache_load_gas: bool,
 
+    // If true, perform additional borrow checks
+    #[serde(skip_serializing_if = "is_false")]
+    additional_borrow_checks: bool,
+
     // If true, use the new commit handler.
     #[serde(skip_serializing_if = "is_false")]
     use_new_commit_handler: bool,
@@ -832,6 +846,14 @@ struct FeatureFlags {
     // If true generate layouts for dynamic fields
     #[serde(skip_serializing_if = "is_false")]
     generate_df_type_layouts: bool,
+
+    // If true, allow Move functions called in PTBs to return references
+    #[serde(skip_serializing_if = "is_false")]
+    allow_references_in_ptbs: bool,
+
+    // Enable display registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_display_registry: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1936,12 +1958,20 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_address_balance_gas_payments(&self) -> bool {
+        self.feature_flags.enable_address_balance_gas_payments
+    }
+
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
     }
 
     pub fn enable_coin_registry(&self) -> bool {
         self.feature_flags.enable_coin_registry
+    }
+
+    pub fn enable_display_registry(&self) -> bool {
+        self.feature_flags.enable_display_registry
     }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {
@@ -2254,6 +2284,10 @@ impl ProtocolConfig {
         self.feature_flags.object_runtime_charge_cache_load_gas
     }
 
+    pub fn additional_borrow_checks(&self) -> bool {
+        self.feature_flags.additional_borrow_checks
+    }
+
     pub fn use_new_commit_handler(&self) -> bool {
         self.feature_flags.use_new_commit_handler
     }
@@ -2264,6 +2298,10 @@ impl ProtocolConfig {
 
     pub fn generate_df_type_layouts(&self) -> bool {
         self.feature_flags.generate_df_type_layouts
+    }
+
+    pub fn allow_references_in_ptbs(&self) -> bool {
+        self.feature_flags.allow_references_in_ptbs
     }
 }
 
@@ -4061,9 +4099,15 @@ impl ProtocolConfig {
                     cfg.feature_flags.mysticeti_fastpath = true;
                 }
                 97 => {
+                    cfg.feature_flags.additional_borrow_checks = true;
+                }
+                98 => {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
+                }
+                99 => {
+                    cfg.feature_flags.use_new_commit_handler = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4109,6 +4153,13 @@ impl ProtocolConfig {
             (None, None)
         };
 
+        let additional_borrow_checks = if signing_limits.is_some() {
+            // always turn on additional borrow checks during signing
+            true
+        } else {
+            self.additional_borrow_checks()
+        };
+
         VerifierConfig {
             max_loop_depth: Some(self.max_loop_depth() as usize),
             max_generic_instantiation_length: Some(self.max_generic_instantiation_length() as usize),
@@ -4132,8 +4183,50 @@ impl ProtocolConfig {
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
+            additional_borrow_checks,
             better_loader_errors: self.better_loader_errors(),
         }
+    }
+
+    pub fn binary_config(&self) -> BinaryConfig {
+        BinaryConfig::new(
+            self.move_binary_format_version(),
+            self.min_move_binary_format_version_as_option()
+                .unwrap_or(VERSION_1),
+            self.no_extraneous_module_bytes(),
+            TableConfig {
+                module_handles: self.binary_module_handles_as_option().unwrap_or(u16::MAX),
+                datatype_handles: self.binary_struct_handles_as_option().unwrap_or(u16::MAX),
+                function_handles: self.binary_function_handles_as_option().unwrap_or(u16::MAX),
+                function_instantiations: self
+                    .binary_function_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                signatures: self.binary_signatures_as_option().unwrap_or(u16::MAX),
+                constant_pool: self.binary_constant_pool_as_option().unwrap_or(u16::MAX),
+                identifiers: self.binary_identifiers_as_option().unwrap_or(u16::MAX),
+                address_identifiers: self
+                    .binary_address_identifiers_as_option()
+                    .unwrap_or(u16::MAX),
+                struct_defs: self.binary_struct_defs_as_option().unwrap_or(u16::MAX),
+                struct_def_instantiations: self
+                    .binary_struct_def_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                function_defs: self.binary_function_defs_as_option().unwrap_or(u16::MAX),
+                field_handles: self.binary_field_handles_as_option().unwrap_or(u16::MAX),
+                field_instantiations: self
+                    .binary_field_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                friend_decls: self.binary_friend_decls_as_option().unwrap_or(u16::MAX),
+                enum_defs: self.binary_enum_defs_as_option().unwrap_or(u16::MAX),
+                enum_def_instantiations: self
+                    .binary_enum_def_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                variant_handles: self.binary_variant_handles_as_option().unwrap_or(u16::MAX),
+                variant_instantiation_handles: self
+                    .binary_variant_instantiation_handles_as_option()
+                    .unwrap_or(u16::MAX),
+            },
+        )
     }
 
     /// Override one or more settings in the config, for testing.
@@ -4292,6 +4385,12 @@ impl ProtocolConfig {
         self.feature_flags.allow_private_accumulator_entrypoints = true;
     }
 
+    pub fn enable_address_balance_gas_payments_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = true;
+        self.feature_flags.allow_private_accumulator_entrypoints = true;
+        self.feature_flags.enable_address_balance_gas_payments = true;
+    }
+
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
@@ -4323,6 +4422,10 @@ impl ProtocolConfig {
 
     pub fn set_authority_capabilities_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.authority_capabilities_v2 = val;
+    }
+
+    pub fn allow_references_in_ptbs_for_testing(&mut self) {
+        self.feature_flags.allow_references_in_ptbs = true;
     }
 }
 

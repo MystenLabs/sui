@@ -17,6 +17,7 @@ use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
 use crate::is_system_package;
 use crate::object::{Owner, OBJECT_START_VERSION};
+use crate::transaction::SharedObjectMutability;
 use serde::{Deserialize, Serialize};
 #[cfg(debug_assertions)]
 use std::collections::HashSet;
@@ -582,18 +583,17 @@ impl TransactionEffectsV2 {
                         Some((id, UnchangedConsensusKind::ReadOnlyRoot((version, digest))))
                     }
                 }
-                SharedInput::ConsensusStreamEnded((id, version, mutable, _)) => {
+                SharedInput::ConsensusStreamEnded((id, version, mutability, _)) => {
                     debug_assert!(!changed_objects.contains_key(&id));
-                    if mutable {
-                        Some((
+                    match mutability {
+                        SharedObjectMutability::Mutable => Some((
                             id,
                             UnchangedConsensusKind::MutateConsensusStreamEnded(version),
-                        ))
-                    } else {
-                        Some((
+                        )),
+                        SharedObjectMutability::Immutable => Some((
                             id,
                             UnchangedConsensusKind::ReadConsensusStreamEnded(version),
-                        ))
+                        )),
                     }
                 }
                 SharedInput::Cancelled((id, version)) => {

@@ -15,15 +15,17 @@ use sui_indexer_alt_framework::{
 use sui_indexer_alt_schema::{schema::tx_calls, transactions::StoredTxCalls};
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
+use async_trait::async_trait;
 
 pub(crate) struct TxCalls;
 
+#[async_trait]
 impl Processor for TxCalls {
     const NAME: &'static str = "tx_calls";
 
     type Value = StoredTxCalls;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,
@@ -55,7 +57,7 @@ impl Processor for TxCalls {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for TxCalls {
     type Store = Db;
 
@@ -139,9 +141,9 @@ mod tests {
             .add_move_call(ObjectID::random(), "module", "function")
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = TxCalls.process(&checkpoint).unwrap();
+        let values = TxCalls.process(&checkpoint).await.unwrap();
         TxCalls::commit(&values, &mut conn).await.unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         builder = builder
@@ -150,9 +152,9 @@ mod tests {
             .add_move_call(ObjectID::random(), "module", "function")
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = TxCalls.process(&checkpoint).unwrap();
+        let values = TxCalls.process(&checkpoint).await.unwrap();
         TxCalls::commit(&values, &mut conn).await.unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         let reuse_package_id = ObjectID::random();
@@ -164,9 +166,9 @@ mod tests {
             .add_move_call(reuse_package_id, "donut", "prune4")
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = TxCalls.process(&checkpoint).unwrap();
+        let values = TxCalls.process(&checkpoint).await.unwrap();
         TxCalls::commit(&values, &mut conn).await.unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         let fetched_results = get_all_tx_calls(&mut conn).await.unwrap();

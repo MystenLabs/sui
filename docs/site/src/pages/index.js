@@ -118,6 +118,12 @@ export default function Home() {
             >
               Sui ecosystem directory
             </Link>
+            <Link
+              className={styles.cardLink}
+              to="/references/awesome-sui"
+            >
+              Awesome Sui
+            </Link>
             <Link className={styles.cardLink} to="https://blog.sui.io/">
               Sui blog
             </Link>
@@ -131,7 +137,7 @@ export default function Home() {
           <HomeCardCTA>
             <Link
               className={styles.cardCTALink}
-              to="/guides/developer/first-app"
+              to="/guides/developer/getting-started/hello-world"
             >
               <span>Build your dApp on Sui</span>
               <svg

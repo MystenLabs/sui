@@ -3,7 +3,7 @@
 
 // tests invalid writes of mut references using coin operations
 
-//# init --addresses test=0x0 --accounts A
+//# init --addresses test=0x0 --accounts A --allow-references-in-ptbs
 
 //# publish
 module test::m {
@@ -25,33 +25,33 @@ module test::m {
 //> SplitCoins(Gas, [Input(0), Input(0), Input(0)]);
 //> TransferObjects([NestedResult(0,0), NestedResult(0,1), NestedResult(0,2)], Input(1))
 
-//# programmable --dev-inspect --inputs 10 @A
+//# programmable --sender A --inputs 10 @A
 // Cannot write to borrowed gas coin via split coins
 //> 0: test::m::borrow_mut(Gas);
 //> 1: SplitCoins(Gas, [Input(0)]);
 //> 2: TransferObjects([Result(1)], Input(1));
-//> 3: test::m::borrow_mut(Gas);
+//> 3: test::m::borrow_mut(Result(0));
 
-//# programmable --dev-inspect --inputs 10 @A object(2,0)
+//# programmable --sender A --inputs 10 @A object(2,0)
 // Cannot write to borrowed gas coin via Merge coins
 //> 0: test::m::borrow_mut(Gas);
 //> 1: MergeCoins(Gas, [Input(2)]);
-//> 2: test::m::borrow_mut(Gas);
+//> 2: test::m::borrow_mut(Result(0));
 
-//# programmable --dev-inspect --inputs 10 @A object(2,0)
+//# programmable --sender A --inputs 10 @A object(2,0)
 // Cannot write to borrowed coin via split coins
 //> 0: test::m::borrow_mut(Input(2));
 //> 1: SplitCoins(Input(2), [Input(0)]);
 //> 2: TransferObjects([Result(1)], Input(1));
-//> 3: test::m::borrow_mut(Input(2));
+//> 3: test::m::borrow_mut(Result(0));
 
-//# programmable --dev-inspect --inputs 10 @A object(2,0) object(2,1)
+//# programmable --sender A --inputs 10 @A object(2,0) object(2,1)
 // Cannot write to borrowed coin via Merge coins
 //> 0: test::m::borrow_mut(Input(2));
 //> 1: MergeCoins(Input(2), [Input(3)]);
-//> 2: test::m::borrow_mut(Input(2));
+//> 2: test::m::borrow_mut(Result(0));
 
-//# programmable --dev-inspect --inputs 10 @A
+//# programmable --sender A --inputs 10 @A
 // Cannot write to borrowed fresh coin via split coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
 //> 1: test::m::borrow_mut(Result(0));
@@ -60,7 +60,7 @@ module test::m {
 //> 4: test::m::borrow_mut(Result(1));
 //> TransferObjects([Result(0)], Input(1))
 
-//# programmable --dev-inspect --inputs 10 @A object(2,0)
+//# programmable --sender A --inputs 10 @A object(2,0)
 // Cannot write to borrowed fresh coin via Merge coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
 //> 1: test::m::borrow_mut(Result(0));
@@ -68,7 +68,7 @@ module test::m {
 //> 3: test::m::borrow_mut(Result(1));
 //> TransferObjects([Result(0)], Input(1))
 
-//# programmable --dev-inspect --inputs 10 @A
+//# programmable --sender A --inputs 10 @A
 // Cannot write to borrowed coin via split coins
 //> 0: test::m::new_mut();
 //> 1: test::m::borrow_mut(Result(0));
@@ -76,7 +76,7 @@ module test::m {
 //> 3: TransferObjects([Result(2)], Input(1));
 //> 4: test::m::borrow_mut(Result(1));
 
-//# programmable --dev-inspect --inputs 10 @A object(2,0)
+//# programmable --sender A --inputs 10 @A object(2,0)
 // Cannot write to borrowed coin via Merge coins
 //> 0: test::m::new_mut();
 //> 1: test::m::borrow_mut(Result(0));

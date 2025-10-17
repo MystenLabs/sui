@@ -26,7 +26,7 @@ use sui_types::parse_sui_type_tag;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::NON_RECOVERABLE_ERROR_MSG;
 use sui_types::transaction::{Argument, Transaction};
-use sui_types::transaction::{Command, ObjectArg};
+use sui_types::transaction::{Command, ObjectArg, SharedObjectMutability};
 use sui_types::Identifier;
 use sui_types::{
     base_types::SuiAddress,
@@ -708,7 +708,11 @@ async fn get_object_arg(
         } => ObjectArg::SharedObject {
             id,
             initial_shared_version,
-            mutable: is_mutable_ref,
+            mutability: if is_mutable_ref {
+                SharedObjectMutability::Mutable
+            } else {
+                SharedObjectMutability::Immutable
+            },
         },
         Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
             ObjectArg::ImmOrOwnedObject(obj_ref)

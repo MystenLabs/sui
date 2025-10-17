@@ -28,7 +28,6 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::quorum_driver_types::EffectsFinalityInfo;
 use sui_types::quorum_driver_types::FinalizedEffects;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::Argument;
@@ -55,6 +54,7 @@ use sui_types::{
     messages_grpc::SubmitTxRequest,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
+use sui_types::{quorum_driver_types::EffectsFinalityInfo, transaction::SharedObjectMutability};
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
@@ -782,8 +782,10 @@ impl From<CallArg> for BenchMoveCallArg {
                 ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
-                } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+                    mutability,
+                } => {
+                    BenchMoveCallArg::Shared((id, initial_shared_version, mutability.is_mutable()))
+                }
                 ObjectArg::Receiving(_) => {
                     unimplemented!("Receiving is not supported for benchmarks")
                 }
@@ -810,7 +812,11 @@ pub fn convert_move_call_args(
                 .input(CallArg::Object(ObjectArg::SharedObject {
                     id: *id,
                     initial_shared_version: *initial_shared_version,
-                    mutable: *mutable,
+                    mutability: if *mutable {
+                        SharedObjectMutability::Mutable
+                    } else {
+                        SharedObjectMutability::Immutable
+                    },
                 }))
                 .unwrap(),
             BenchMoveCallArg::ImmOrOwnedObject(obj_ref) => {
@@ -827,7 +833,11 @@ pub fn convert_move_call_args(
                             |(id, initial_shared_version, mutable)| ObjectArg::SharedObject {
                                 id: *id,
                                 initial_shared_version: *initial_shared_version,
-                                mutable: *mutable,
+                                mutability: if *mutable {
+                                    SharedObjectMutability::Mutable
+                                } else {
+                                    SharedObjectMutability::Immutable
+                                },
                             },
                         ),
                 )
