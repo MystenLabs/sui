@@ -1,12 +1,12 @@
 ---
 title: Hello, World!
-description: Create and publish your first Move package using a basic 'Hello, world!' example.
+description: Create and publish your first Move package using a basic 'Hello, World!' example.
 keywords: [ first dapp, first package, move package, first move package, hello world, hello, world, what is move, what is a package, what is an object, move object, sui move object, sui move package, sui move module, move module, build package, publish package, call package, make call to package, how to call package ]
 pagination_prev: null
 pagination_next: null
 ---
 
-You'll build a "Hello, world!" program to learn the fundamentals of programming on Sui. You create programs on Sui by writing and deploying smart contracts to the network.
+You'll build a "Hello, World!" program to learn the fundamentals of programming on Sui. You create programs on Sui by writing and deploying smart contracts to the network.
 
 The most basic unit of storage on Sui is an [_object_](/concepts/object-model.mdx). Other blockchains typically structure storage using key-value stores. Sui centers storage around objects with unique ID addresses on-chain. Every Sui smart contract is an object that manipulates other objects.
 
@@ -32,7 +32,7 @@ Every Move package on Sui includes one or more **Sui Move modules** that define 
 
 A Sui Move module governs a Sui **Move object**, which is typed data from a Sui Move package. Each Move object value is a struct with fields that can contain primitive types, such as integers and addresses, other objects, and non-object structs.
 
-## Clone "Hello, world!"
+## Clone "Hello, World!"
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -62,7 +62,7 @@ A Sui Move module governs a Sui **Move object**, which is typed data from a Sui 
 </TabItem>
 </Tabs>
 
-To demonstrate creating objects, packages, and how to build your first Sui application, start by cloning the "Hello, world!" example:
+To demonstrate creating objects, packages, and how to build your first Sui application, start by cloning the "Hello, World!" example:
 
 ```
 $ git clone https://github.com/MystenLabs/sui-stack-hello-world.git
@@ -179,7 +179,7 @@ A unique aspect of programming applications on Sui is the resource safety enforc
 
 - Resources cannot be copied. 
 
-In the "Hello, world!" example, the struct `Greeting` is a resource type. 
+In the "Hello, World!" example, the struct `Greeting` is a resource type. 
 
 To satisfy the requirement that all resources must be moved or destroyed by the end of a transaction, `Greeting` is assigned to `new_greeting`, which the call to `transfer::share_object(new_greeting)` then moves into global storage.
 
@@ -195,7 +195,7 @@ The Ethereum Virtual Machine adopts a gas-based resource safety strategy. Every 
 
 Before you can publish a Move package to the network, you must first build it. Building your package is necessary because the `.move` source file is a human-readable piece of code, while the network can only understand bytecode.
 
-To build your "Hello, world!" package, first confirm your working directory is `~/sui-stack-hello-world/move/hello-world`, then run the following command:
+To build your "Hello, World!" package, first confirm your working directory is `~/sui-stack-hello-world/move/hello-world`, then run the following command:
 
 ```
 $ sui move build 
