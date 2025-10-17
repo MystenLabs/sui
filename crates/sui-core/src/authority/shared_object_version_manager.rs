@@ -17,6 +17,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::storage::{
     transaction_non_shared_input_object_keys, transaction_receiving_object_keys, ObjectKey,
 };
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::{base_types::SequenceNumber, error::SuiResult, SUI_RANDOMNESS_STATE_OBJECT_ID};
@@ -156,7 +157,7 @@ impl<T> Schedulable<T> {
                         .epoch_start_config()
                         .randomness_obj_initial_shared_version()
                         .expect("randomness obj initial shared version should be set"),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }))
             }
             Schedulable::AccumulatorSettlement(_, _) => {
@@ -166,7 +167,7 @@ impl<T> Schedulable<T> {
                         .epoch_start_config()
                         .accumulator_root_obj_initial_shared_version()
                         .expect("accumulator root obj initial shared version should be set"),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }))
             }
         }
@@ -405,7 +406,7 @@ impl SharedObjVerManager {
                 SharedInputObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutability,
                 },
                 assigned_version,
             ) in shared_input_objects.iter().map(|obj| {
@@ -418,7 +419,7 @@ impl SharedObjVerManager {
             }) {
                 assigned_versions.push(((*id, *initial_shared_version), assigned_version));
                 input_object_keys.push(ObjectKey(*id, assigned_version));
-                is_mutable_input.push(*mutable);
+                is_mutable_input.push(mutability.is_mutable());
             }
         }
 
@@ -504,7 +505,9 @@ mod tests {
 
     use sui_types::object::Object;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
+    use sui_types::transaction::{
+        ObjectArg, SenderSignedData, SharedObjectMutability, VerifiedTransaction,
+    };
 
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
@@ -947,7 +950,11 @@ mod tests {
                 .obj(ObjectArg::SharedObject {
                     id: *shared_object_id,
                     initial_shared_version: *shared_object_init_version,
-                    mutable: *shared_object_mutable,
+                    mutability: if *shared_object_mutable {
+                        SharedObjectMutability::Mutable
+                    } else {
+                        SharedObjectMutability::Immutable
+                    },
                 })
                 .unwrap();
         }
@@ -1034,7 +1041,7 @@ mod tests {
                     .obj(ObjectArg::SharedObject {
                         id,
                         initial_shared_version: init_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     })
                     .unwrap();
             }

@@ -3,5 +3,3 @@
 
 #[defines_primitive(bool)]
 module std::bool;
-
-

@@ -23,7 +23,7 @@ use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, CallArg, ObjectArg};
+use sui_types::transaction::{Argument, CallArg, ObjectArg, SharedObjectMutability};
 
 pub const SUI_ARGS_LONG: &str = "sui-args";
 
@@ -555,7 +555,7 @@ impl SuiValue {
             Ok(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })
         } else {
             bail!("{fake_id} is not a shared object.")
@@ -579,7 +579,7 @@ impl SuiValue {
             } => Ok(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             }),
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 let obj_ref = obj.compute_object_reference();

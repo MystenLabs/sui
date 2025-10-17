@@ -60,7 +60,7 @@ use sui_types::crypto::get_key_pair;
 use sui_types::crypto::ToFromBytes;
 use sui_types::digests::TransactionDigest;
 use sui_types::object::Object;
-use sui_types::transaction::{ObjectArg, Transaction, TransactionData};
+use sui_types::transaction::{ObjectArg, SharedObjectMutability, Transaction, TransactionData};
 use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use tokio::join;
 use tokio::task::JoinHandle;
@@ -1175,7 +1175,7 @@ async fn get_mut_bridge_arg(test_cluster: &TestCluster) -> Option<ObjectArg> {
     .map(|seq| ObjectArg::SharedObject {
         id: SUI_BRIDGE_OBJECT_ID,
         initial_shared_version: seq,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     })
 }
 

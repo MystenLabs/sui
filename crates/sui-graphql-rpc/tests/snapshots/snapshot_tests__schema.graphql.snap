@@ -996,6 +996,13 @@ type DisplayEntry {
 	error: String
 }
 
+type DisplayRegistryCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 enum DomainFormat {
 	AT
 	DOT
@@ -1121,7 +1128,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""

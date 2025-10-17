@@ -9,6 +9,10 @@ use std::{
 
 use clap::*;
 use fastcrypto::encoding::{Base58, Encoding, Hex};
+use move_binary_format::{
+    binary_config::{BinaryConfig, TableConfig},
+    file_format_common::VERSION_1,
+};
 use move_vm_config::verifier::VerifierConfig;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -19,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 98;
+const MAX_PROTOCOL_VERSION: u64 = 99;
 
 // Record history of protocol version allocations here:
 //
@@ -267,6 +271,7 @@ const MAX_PROTOCOL_VERSION: u64 = 98;
 // Version 97: Enable additional borrow checks
 // Version 98: Add authenticated event streams support via emit_authenticated function.
 //             Add better error messages to the loader.
+// Version 99: Enable new commit handler.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -845,6 +850,10 @@ struct FeatureFlags {
     // If true, allow Move functions called in PTBs to return references
     #[serde(skip_serializing_if = "is_false")]
     allow_references_in_ptbs: bool,
+
+    // Enable display registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_display_registry: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1959,6 +1968,10 @@ impl ProtocolConfig {
 
     pub fn enable_coin_registry(&self) -> bool {
         self.feature_flags.enable_coin_registry
+    }
+
+    pub fn enable_display_registry(&self) -> bool {
+        self.feature_flags.enable_display_registry
     }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {
@@ -4093,6 +4106,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
                 }
+                99 => {
+                    cfg.feature_flags.use_new_commit_handler = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4170,6 +4186,47 @@ impl ProtocolConfig {
             additional_borrow_checks,
             better_loader_errors: self.better_loader_errors(),
         }
+    }
+
+    pub fn binary_config(&self) -> BinaryConfig {
+        BinaryConfig::new(
+            self.move_binary_format_version(),
+            self.min_move_binary_format_version_as_option()
+                .unwrap_or(VERSION_1),
+            self.no_extraneous_module_bytes(),
+            TableConfig {
+                module_handles: self.binary_module_handles_as_option().unwrap_or(u16::MAX),
+                datatype_handles: self.binary_struct_handles_as_option().unwrap_or(u16::MAX),
+                function_handles: self.binary_function_handles_as_option().unwrap_or(u16::MAX),
+                function_instantiations: self
+                    .binary_function_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                signatures: self.binary_signatures_as_option().unwrap_or(u16::MAX),
+                constant_pool: self.binary_constant_pool_as_option().unwrap_or(u16::MAX),
+                identifiers: self.binary_identifiers_as_option().unwrap_or(u16::MAX),
+                address_identifiers: self
+                    .binary_address_identifiers_as_option()
+                    .unwrap_or(u16::MAX),
+                struct_defs: self.binary_struct_defs_as_option().unwrap_or(u16::MAX),
+                struct_def_instantiations: self
+                    .binary_struct_def_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                function_defs: self.binary_function_defs_as_option().unwrap_or(u16::MAX),
+                field_handles: self.binary_field_handles_as_option().unwrap_or(u16::MAX),
+                field_instantiations: self
+                    .binary_field_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                friend_decls: self.binary_friend_decls_as_option().unwrap_or(u16::MAX),
+                enum_defs: self.binary_enum_defs_as_option().unwrap_or(u16::MAX),
+                enum_def_instantiations: self
+                    .binary_enum_def_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                variant_handles: self.binary_variant_handles_as_option().unwrap_or(u16::MAX),
+                variant_instantiation_handles: self
+                    .binary_variant_instantiation_handles_as_option()
+                    .unwrap_or(u16::MAX),
+            },
+        )
     }
 
     /// Override one or more settings in the config, for testing.

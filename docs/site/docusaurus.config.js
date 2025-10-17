@@ -48,7 +48,7 @@ const config = {
   },
 
   onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "warn",
+  onBrokenMarkdownLinks: "throw",
 
   markdown: {
     format: "detect",

@@ -195,7 +195,6 @@ use crate::validator_tx_finalizer::ValidatorTxFinalizer;
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
-use sui_types::execution_config_utils::to_binary_config;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -3429,7 +3428,7 @@ impl AuthorityState {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = Arc::new(ExecutionScheduler::new(
             execution_cache_trait_pointers.object_cache_reader.clone(),
-            execution_cache_trait_pointers.child_object_resolver.clone(),
+            execution_cache_trait_pointers.object_store.clone(),
             execution_cache_trait_pointers
                 .transaction_cache_reader
                 .clone(),
@@ -3774,8 +3773,7 @@ impl AuthorityState {
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
-        self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+        self.execution_scheduler.reconfigure(&new_epoch_store);
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
@@ -3808,8 +3806,7 @@ impl AuthorityState {
                 .map(|c| *c.sequence_number())
                 .unwrap_or_default(),
         );
-        self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+        self.execution_scheduler.reconfigure(&new_epoch_store);
         let new_epoch = new_epoch_store.epoch();
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;
@@ -5430,6 +5427,25 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
+    fn create_display_registry_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_display_registry() {
+            info!("display registry not enabled");
+            return None;
+        }
+
+        if epoch_store.display_registry_exists() {
+            return None;
+        }
+
+        let tx = EndOfEpochTransactionKind::new_display_registry_create();
+        info!("Creating DisplayRegistryCreate tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
     fn create_bridge_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -5664,6 +5680,10 @@ impl AuthorityState {
             txns.push(tx);
         }
 
+        if let Some(tx) = self.create_display_registry_tx(epoch_store) {
+            txns.push(tx);
+        }
+
         let next_epoch = epoch_store.epoch() + 1;
 
         let buffer_stake_bps = epoch_store.get_effective_buffer_stake_bps();
@@ -5694,7 +5714,7 @@ impl AuthorityState {
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version
         let config = epoch_store.protocol_config();
-        let binary_config = to_binary_config(config);
+        let binary_config = config.binary_config();
         let Some(next_epoch_system_package_bytes) = self
             .get_system_package_bytes(next_epoch_system_packages.clone(), &binary_config)
             .await

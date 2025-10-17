@@ -29,7 +29,7 @@ use sui_types::{
     base_types::{FullObjectID, SequenceNumber},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
-    storage::{ChildObjectResolver, InputKey},
+    storage::{InputKey, ObjectStore},
     transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
@@ -42,6 +42,7 @@ use super::{overload_tracker::OverloadTracker, PendingCertificate};
 #[derive(Clone)]
 pub struct ExecutionScheduler {
     object_cache_read: Arc<dyn ObjectCacheRead>,
+    object_store: Arc<dyn ObjectStore + Send + Sync>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
@@ -82,21 +83,19 @@ impl Drop for PendingGuard<'_> {
 impl ExecutionScheduler {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
-        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+        object_store: Arc<dyn ObjectStore + Send + Sync>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
-        let balance_withdraw_scheduler =
-            Arc::new(Mutex::new(Self::initialize_balance_withdraw_scheduler(
-                epoch_store,
-                &object_cache_read,
-                child_object_resolver,
-            )));
+        let balance_withdraw_scheduler = Arc::new(Mutex::new(
+            Self::initialize_balance_withdraw_scheduler(epoch_store, &object_store),
+        ));
         Self {
             object_cache_read,
+            object_store,
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
@@ -107,20 +106,19 @@ impl ExecutionScheduler {
 
     fn initialize_balance_withdraw_scheduler(
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        object_cache_read: &Arc<dyn ObjectCacheRead>,
-        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+        object_store: &Arc<dyn ObjectStore + Send + Sync>,
     ) -> Option<BalanceWithdrawScheduler> {
         let withdraw_scheduler_enabled =
             epoch_store.is_validator() && epoch_store.accumulators_enabled();
         if !withdraw_scheduler_enabled {
             return None;
         }
-        let starting_accumulator_version = object_cache_read
+        let starting_accumulator_version = object_store
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .expect("Accumulator root object must be present if balance accumulator is enabled")
             .version();
         Some(BalanceWithdrawScheduler::new(
-            Arc::new(child_object_resolver),
+            Arc::new(object_store.clone()),
             starting_accumulator_version,
             // Use naive scheduler for now.
             false,
@@ -312,9 +310,9 @@ impl ExecutionScheduler {
                             let env = env.with_sufficient_balance();
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
-                        ScheduleStatus::AlreadySettled => {
+                        ScheduleStatus::SkipSchedule => {
                             let tx_digest = result.tx_digest;
-                            debug!(?tx_digest, "Withdraw already executed");
+                            debug!(?tx_digest, "Skip scheduling balance withdraw");
                         }
                     },
                     Err(e) => {
@@ -527,16 +525,9 @@ impl ExecutionScheduler {
 
     /// Reconfigure internal state at epoch start. This resets the balance withdraw scheduler
     /// to the current accumulator root object version.
-    pub fn reconfigure(
-        &self,
-        new_epoch_store: &Arc<AuthorityPerEpochStore>,
-        child_object_resolver: &Arc<dyn ChildObjectResolver + Send + Sync>,
-    ) {
-        let scheduler = Self::initialize_balance_withdraw_scheduler(
-            new_epoch_store,
-            &self.object_cache_read,
-            child_object_resolver.clone(),
-        );
+    pub fn reconfigure(&self, new_epoch_store: &Arc<AuthorityPerEpochStore>) {
+        let scheduler =
+            Self::initialize_balance_withdraw_scheduler(new_epoch_store, &self.object_store);
         let mut guard = self.balance_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
             old_scheduler.close_epoch();
@@ -582,7 +573,7 @@ mod test {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
-    use sui_types::transaction::VerifiedTransaction;
+    use sui_types::transaction::{SharedObjectMutability, VerifiedTransaction};
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         crypto::deterministic_random_account_key,
@@ -605,7 +596,7 @@ mod test {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = ExecutionScheduler::new(
             state.get_object_cache_reader().clone(),
-            state.get_child_object_resolver().clone(),
+            state.get_object_store().clone(),
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),
@@ -797,7 +788,7 @@ mod test {
         let shared_object_arg_read = ObjectArg::SharedObject {
             id: shared_object.id(),
             initial_shared_version,
-            mutable: false,
+            mutability: SharedObjectMutability::Immutable,
         };
         let transaction_read_0 = make_transaction(
             gas_objects[0].clone(),
@@ -826,7 +817,7 @@ mod test {
         let shared_object_arg_default = ObjectArg::SharedObject {
             id: shared_object.id(),
             initial_shared_version,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
         let transaction_default = make_transaction(
             gas_objects[2].clone(),
@@ -845,7 +836,7 @@ mod test {
         let shared_object_arg_read_2 = ObjectArg::SharedObject {
             id: shared_object_2.id(),
             initial_shared_version: initial_shared_version_2,
-            mutable: false,
+            mutability: SharedObjectMutability::Immutable,
         };
         let transaction_read_2 = make_transaction(
             gas_objects[3].clone(),
@@ -1389,12 +1380,12 @@ mod test {
         let shared_object_arg_1 = ObjectArg::SharedObject {
             id: shared_object_1.id(),
             initial_shared_version: initial_shared_version_1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
         let shared_object_arg_2 = ObjectArg::SharedObject {
             id: shared_object_2.id(),
             initial_shared_version: initial_shared_version_2,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
 
         // Changes the desired owned object version to a higher version. We will make it available later.

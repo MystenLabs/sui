@@ -19,7 +19,7 @@
     "fire:deploy-dev": "firebase deploy --only hosting:dev",
     "ampli": "ampli",
     "pull-amplitude": "ampli pull web"
-  },
+    },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.5.3",
     "@docusaurus/plugin-content-docs": "^3.8.0",

@@ -8,7 +8,6 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, SharedInput};
-use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
@@ -158,7 +157,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_runtime_objects: self.loaded_child_objects,
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
-            binary_config: to_binary_config(&self.protocol_config),
+            binary_config: self.protocol_config.binary_config(),
         }
     }
 

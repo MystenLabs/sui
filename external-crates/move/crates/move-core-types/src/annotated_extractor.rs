@@ -70,7 +70,7 @@ where
         layout: &'l A::MoveTypeLayout,
         inner: &'v mut V,
         path: Vec<Element<'p>>,
-    ) -> anyhow::Result<Option<V::Value>> {
+    ) -> Result<Option<V::Value>, V::Error> {
         let mut extractor = Extractor::new(inner, &path);
         A::MoveValue::visit_deserialize(bytes, layout, &mut extractor)
     }
@@ -80,7 +80,7 @@ where
         layout: &'l A::MoveStructLayout,
         inner: &'v mut V,
         path: Vec<Element<'p>>,
-    ) -> anyhow::Result<Option<V::Value>> {
+    ) -> Result<Option<V::Value>, V::Error> {
         let mut extractor = Extractor::new(inner, &path);
         A::MoveStruct::visit_deserialize(bytes, layout, &mut extractor)
     }

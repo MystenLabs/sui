@@ -150,7 +150,6 @@ There are two options:
 
 If you want to use the Mysten hosted ZK Proving Service for Mainnet, please refer to [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact us for accessing it.
 
-Use the `prover-dev` endpoint (https://prover-dev.mystenlabs.com/v1) freely for testing on Devnet. Note that you can submit proofs generated with this endpoint for Devnet zkLogin transactions only; submitting them to Testnet or Mainnet fails.
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
@@ -251,7 +250,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
      | Mainnet, Testnet | `zkLogin-main.zkey` | `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` |
      | Devnet           | `zkLogin-test.zkey` | `686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2` |
 
-1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded zkey from the same directory as the YAML file.
+1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/r/mysten/zklogin) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded zkey from the same directory as the YAML file.
 
 ```yaml
 services:

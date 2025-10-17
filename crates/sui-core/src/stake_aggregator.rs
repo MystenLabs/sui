@@ -4,7 +4,7 @@
 use serde::Serialize;
 use shared_crypto::intent::Intent;
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
@@ -240,9 +240,15 @@ impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH> {
     }
 
     pub fn total_votes(&self) -> StakeUnit {
-        self.stake_maps
-            .values()
-            .map(|(_, stake_aggregator)| stake_aggregator.total_votes())
+        let mut voted_authorities = HashSet::new();
+        self.stake_maps.values().for_each(|(_, stake_aggregator)| {
+            stake_aggregator.keys().for_each(|k| {
+                voted_authorities.insert(k);
+            })
+        });
+        voted_authorities
+            .iter()
+            .map(|k| self.committee.weight(k))
             .sum()
     }
 }
@@ -400,4 +406,397 @@ fn test_votes_per_authority() {
     let key3: &str = "key3";
     agg.insert(authority1, key3);
     assert_eq!(agg.votes_for_authority(authority1), 2);
+}
+
+#[cfg(test)]
+mod multi_stake_aggregator_tests {
+    use super::*;
+    use fastcrypto::hash::{HashFunction, Sha3_256};
+    use shared_crypto::intent::IntentScope;
+
+    #[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]
+    struct TestMessage {
+        value: String,
+    }
+
+    impl Message for TestMessage {
+        type DigestType = [u8; 32];
+        const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
+
+        fn digest(&self) -> Self::DigestType {
+            let mut hasher = Sha3_256::default();
+            hasher.update(self.value.as_bytes());
+            hasher.finalize().digest
+        }
+    }
+
+    #[test]
+    fn test_equivocation_stake_not_double_counted() {
+        let (committee, key_pairs) = Committee::new_simple_test_committee();
+        let committee = Arc::new(committee);
+        let authorities: Vec<_> = committee.names().copied().collect();
+
+        let mut agg: MultiStakeAggregator<String, TestMessage, true> =
+            MultiStakeAggregator::new(committee.clone());
+
+        // Get the actual total stake from the committee
+        let total_stake = committee.total_votes();
+        let num_authorities = authorities.len();
+        let stake_per_authority = total_stake / num_authorities as u64;
+
+        // Simulate equivocation: authority0 signs multiple different values
+        let authority0 = authorities[0];
+        let key0 = &key_pairs[0];
+
+        // First signature for "value1"
+        let msg1 = TestMessage {
+            value: "value1".to_string(),
+        };
+        let envelope1 =
+            <Envelope<TestMessage, AuthoritySignInfo>>::new(0, msg1.clone(), key0, authority0);
+        agg.insert("key1".to_string(), envelope1);
+
+        // Second signature from same authority for "value2" (equivocation)
+        let msg2 = TestMessage {
+            value: "value2".to_string(),
+        };
+        let envelope2 =
+            <Envelope<TestMessage, AuthoritySignInfo>>::new(0, msg2.clone(), key0, authority0);
+        agg.insert("key2".to_string(), envelope2);
+
+        // Third signature from same authority for "value3" (more equivocation)
+        let msg3 = TestMessage {
+            value: "value3".to_string(),
+        };
+        let envelope3 =
+            <Envelope<TestMessage, AuthoritySignInfo>>::new(0, msg3.clone(), key0, authority0);
+        agg.insert("key3".to_string(), envelope3);
+
+        // With the fix: authority0's stake should only be counted once, even though they signed 3 different values
+        let aggregated_votes = agg.total_votes();
+        assert_eq!(aggregated_votes, stake_per_authority);
+
+        // Add more authorities signing different values
+        let authority1 = authorities[1];
+        let key1 = &key_pairs[1];
+        let envelope4 =
+            <Envelope<TestMessage, AuthoritySignInfo>>::new(0, msg1.clone(), key1, authority1);
+        agg.insert("key1".to_string(), envelope4);
+
+        let authority2 = authorities[2];
+        let key2 = &key_pairs[2];
+        let envelope5 = <Envelope<TestMessage, AuthoritySignInfo>>::new(0, msg2, key2, authority2);
+        agg.insert("key2".to_string(), envelope5);
+
+        // Now total_votes() should be stake_per_authority * 3 (3 unique authorities)
+        // NOT stake_per_authority * 5 (which would be if we double-counted authority0)
+        let aggregated_votes = agg.total_votes();
+        assert_eq!(aggregated_votes, stake_per_authority * 3);
+        assert!(aggregated_votes <= total_stake);
+
+        // uncommitted_stake should work without underflow
+        let uncommitted = agg.uncommitted_stake();
+        assert_eq!(uncommitted, stake_per_authority); // Only authority3 hasn't voted
+
+        // Verify we have 3 different keys with votes
+        assert_eq!(agg.unique_key_count(), 3);
+    }
+
+    #[test]
+    fn test_multistake_uncommitted_and_plurality() {
+        let (committee, key_pairs) = Committee::new_simple_test_committee();
+        let committee = Arc::new(committee);
+        let authorities: Vec<_> = committee.names().copied().collect();
+
+        let mut agg: MultiStakeAggregator<String, TestMessage, true> =
+            MultiStakeAggregator::new(committee.clone());
+
+        let total_stake = committee.total_votes();
+        let num_authorities = authorities.len();
+        let stake_per_authority = total_stake / num_authorities as u64;
+
+        // Initially, all stake is uncommitted
+        assert_eq!(agg.uncommitted_stake(), total_stake);
+        assert_eq!(agg.plurality_stake(), 0);
+        assert!(!agg.quorum_unreachable());
+
+        // Add first authority voting for value1
+        let msg1 = TestMessage {
+            value: "value1".to_string(),
+        };
+        let envelope1 = <Envelope<TestMessage, AuthoritySignInfo>>::new(
+            0,
+            msg1.clone(),
+            &key_pairs[0],
+            authorities[0],
+        );
+        agg.insert("key1".to_string(), envelope1);
+
+        assert_eq!(agg.uncommitted_stake(), total_stake - stake_per_authority);
+        assert_eq!(agg.plurality_stake(), stake_per_authority);
+
+        // Add second authority voting for value2
+        let msg2 = TestMessage {
+            value: "value2".to_string(),
+        };
+        let envelope2 = <Envelope<TestMessage, AuthoritySignInfo>>::new(
+            0,
+            msg2.clone(),
+            &key_pairs[1],
+            authorities[1],
+        );
+        agg.insert("key2".to_string(), envelope2);
+
+        assert_eq!(
+            agg.uncommitted_stake(),
+            total_stake - 2 * stake_per_authority
+        );
+        assert_eq!(agg.plurality_stake(), stake_per_authority);
+
+        // Add third authority voting for value1 (now value1 has plurality)
+        let envelope3 = <Envelope<TestMessage, AuthoritySignInfo>>::new(
+            0,
+            msg1.clone(),
+            &key_pairs[2],
+            authorities[2],
+        );
+        agg.insert("key1".to_string(), envelope3);
+
+        assert_eq!(
+            agg.uncommitted_stake(),
+            total_stake - 3 * stake_per_authority
+        );
+        assert_eq!(agg.plurality_stake(), 2 * stake_per_authority);
+    }
+
+    #[test]
+    fn test_multistake_quorum_unreachable() {
+        let (committee, key_pairs) = Committee::new_simple_test_committee();
+        let committee = Arc::new(committee);
+        let authorities: Vec<_> = committee.names().copied().collect();
+
+        let mut agg: MultiStakeAggregator<String, TestMessage, true> =
+            MultiStakeAggregator::new(committee.clone());
+
+        // Split votes evenly so no value can reach quorum
+        // With 4 authorities and strong quorum needing 2f+1, we need at least 3
+        let msg1 = TestMessage {
+            value: "value1".to_string(),
+        };
+        let msg2 = TestMessage {
+            value: "value2".to_string(),
+        };
+
+        // Two authorities vote for value1
+        let envelope1 = <Envelope<TestMessage, AuthoritySignInfo>>::new(
+            0,
+            msg1.clone(),
+            &key_pairs[0],
+            authorities[0],
+        );
+        agg.insert("key1".to_string(), envelope1);
+
+        let envelope2 = <Envelope<TestMessage, AuthoritySignInfo>>::new(
+            0,
+            msg1.clone(),
+            &key_pairs[1],
+            authorities[1],
+        );
+        agg.insert("key1".to_string(), envelope2);
+
+        // Two authorities vote for value2
+        let envelope3 = <Envelope<TestMessage, AuthoritySignInfo>>::new(
+            0,
+            msg2.clone(),
+            &key_pairs[2],
+            authorities[2],
+        );
+        agg.insert("key2".to_string(), envelope3);
+
+        let envelope4 = <Envelope<TestMessage, AuthoritySignInfo>>::new(
+            0,
+            msg2.clone(),
+            &key_pairs[3],
+            authorities[3],
+        );
+        agg.insert("key2".to_string(), envelope4);
+
+        // With evenly split votes, neither can reach quorum now
+        assert!(agg.quorum_unreachable());
+    }
+}
+
+#[cfg(test)]
+mod stake_aggregator_tests {
+    use super::*;
+
+    #[test]
+    fn test_stake_aggregator_strong_quorum() {
+        let (committee, _) = Committee::new_simple_test_committee();
+        let committee = Arc::new(committee);
+        let authorities: Vec<_> = committee.names().copied().collect();
+
+        let mut agg: StakeAggregator<(), true> = StakeAggregator::new(committee.clone());
+
+        let total_stake = committee.total_votes();
+        let num_authorities = authorities.len();
+        let stake_per_authority = total_stake / num_authorities as u64;
+
+        assert_eq!(agg.total_votes(), 0);
+        assert!(!agg.has_quorum());
+        assert_eq!(agg.validator_sig_count(), 0);
+
+        // Add first authority - should not reach quorum yet
+        let result = agg.insert_generic(authorities[0], ());
+        assert!(matches!(result, InsertResult::NotEnoughVotes { .. }));
+        assert_eq!(agg.total_votes(), stake_per_authority);
+        assert!(!agg.has_quorum());
+        assert_eq!(agg.validator_sig_count(), 1);
+
+        // Add second authority - still not enough for strong quorum (2f+1)
+        let result = agg.insert_generic(authorities[1], ());
+        assert!(matches!(result, InsertResult::NotEnoughVotes { .. }));
+        assert_eq!(agg.total_votes(), 2 * stake_per_authority);
+        assert!(!agg.has_quorum());
+
+        // Add third authority - should reach strong quorum
+        let result = agg.insert_generic(authorities[2], ());
+        assert!(result.is_quorum_reached());
+        assert!(agg.has_quorum());
+        assert_eq!(agg.validator_sig_count(), 3);
+    }
+
+    #[test]
+    fn test_stake_aggregator_weak_quorum() {
+        let (committee, _) = Committee::new_simple_test_committee();
+        let committee = Arc::new(committee);
+        let authorities: Vec<_> = committee.names().copied().collect();
+
+        let mut agg: StakeAggregator<(), false> = StakeAggregator::new(committee.clone());
+
+        // Weak quorum (f+1) should be reached faster than strong quorum
+        let result = agg.insert_generic(authorities[0], ());
+        assert!(matches!(result, InsertResult::NotEnoughVotes { .. }));
+        assert!(!agg.has_quorum());
+
+        // Second authority should reach weak quorum
+        let result = agg.insert_generic(authorities[1], ());
+        assert!(result.is_quorum_reached());
+        assert!(agg.has_quorum());
+    }
+
+    #[test]
+    fn test_stake_aggregator_repeated_signer() {
+        let (committee, _) = Committee::new_simple_test_committee();
+        let committee = Arc::new(committee);
+        let authorities: Vec<_> = committee.names().copied().collect();
+
+        let mut agg: StakeAggregator<u32, true> = StakeAggregator::new(committee.clone());
+
+        // Insert first time - should succeed
+        let result = agg.insert_generic(authorities[0], 1);
+        assert!(matches!(result, InsertResult::NotEnoughVotes { .. }));
+
+        // Insert same authority again with same value - should fail
+        let result = agg.insert_generic(authorities[0], 1);
+        assert!(matches!(
+            result,
+            InsertResult::Failed {
+                error: SuiError::StakeAggregatorRepeatedSigner { .. }
+            }
+        ));
+
+        // Insert same authority with different value - should also fail (conflicting signature)
+        let result = agg.insert_generic(authorities[0], 2);
+        if let InsertResult::Failed {
+            error:
+                SuiError::StakeAggregatorRepeatedSigner {
+                    signer,
+                    conflicting_sig,
+                },
+        } = result
+        {
+            assert_eq!(signer, authorities[0]);
+            assert!(conflicting_sig);
+        } else {
+            panic!("Expected StakeAggregatorRepeatedSigner error");
+        }
+    }
+
+    #[test]
+    fn test_stake_aggregator_from_iter() {
+        let (committee, _) = Committee::new_simple_test_committee();
+        let committee = Arc::new(committee);
+        let authorities: Vec<_> = committee.names().copied().collect();
+
+        let data = vec![
+            Ok((authorities[0], ())),
+            Ok((authorities[1], ())),
+            Ok((authorities[2], ())),
+        ];
+
+        let agg: StakeAggregator<(), true> =
+            StakeAggregator::from_iter(committee.clone(), data.into_iter()).unwrap();
+
+        assert_eq!(agg.validator_sig_count(), 3);
+        assert!(agg.has_quorum());
+        assert!(agg.contains_key(&authorities[0]));
+        assert!(agg.contains_key(&authorities[1]));
+        assert!(agg.contains_key(&authorities[2]));
+    }
+
+    #[test]
+    fn test_stake_aggregator_from_iter_with_error() {
+        let (committee, _) = Committee::new_simple_test_committee();
+        let committee = Arc::new(committee);
+        let authorities: Vec<_> = committee.names().copied().collect();
+
+        let data: Vec<Result<(AuthorityName, ()), TypedStoreError>> = vec![
+            Ok((authorities[0], ())),
+            Err(TypedStoreError::RocksDBError("test error".to_string())),
+        ];
+
+        let result: SuiResult<StakeAggregator<(), true>> =
+            StakeAggregator::from_iter(committee.clone(), data.into_iter());
+
+        assert!(result.is_err());
+    }
+}
+
+#[cfg(test)]
+mod generic_multi_stake_aggregator_tests {
+    use super::*;
+
+    #[test]
+    fn test_has_quorum_for_key() {
+        let (committee, _) = Committee::new_simple_test_committee();
+        let committee = Arc::new(committee);
+        let authorities: Vec<_> = committee.names().copied().collect();
+
+        let mut agg: GenericMultiStakeAggregator<&str, true> =
+            GenericMultiStakeAggregator::new(committee.clone());
+
+        let key1 = "key1";
+        let key2 = "key2";
+
+        // No quorum initially
+        assert!(!agg.has_quorum_for_key(&key1));
+        assert!(!agg.has_quorum_for_key(&key2));
+
+        // Add votes for key1 until quorum
+        agg.insert(authorities[0], key1);
+        assert!(!agg.has_quorum_for_key(&key1));
+
+        agg.insert(authorities[1], key1);
+        assert!(!agg.has_quorum_for_key(&key1));
+
+        agg.insert(authorities[2], key1);
+        assert!(agg.has_quorum_for_key(&key1));
+        assert!(!agg.has_quorum_for_key(&key2));
+
+        // Add vote for key2, but not enough for quorum
+        agg.insert(authorities[3], key2);
+        assert!(agg.has_quorum_for_key(&key1));
+        assert!(!agg.has_quorum_for_key(&key2));
+    }
 }

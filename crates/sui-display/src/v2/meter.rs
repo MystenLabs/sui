@@ -12,12 +12,16 @@ pub(crate) struct Limits {
     /// Maximum number of AST nodes that can be allocated during parsing. This counts all values
     /// that are instances of AST types (but not, for example, `Vec<T>`).
     pub max_nodes: usize,
+
+    /// Maximum number of times the format can try to load an object.
+    pub max_loads: usize,
 }
 
 /// The available budget left for limits that are tracked across all invocations to the parser for
 /// a single Display.
 pub(crate) struct Budget {
     pub nodes: usize,
+    pub loads: usize,
 }
 
 pub(crate) struct Meter<'b> {
@@ -29,6 +33,7 @@ impl Limits {
     pub fn budget(&self) -> Budget {
         Budget {
             nodes: self.max_nodes,
+            loads: self.max_loads,
         }
     }
 }
@@ -62,6 +67,16 @@ impl<'b> Meter<'b> {
         self.budget.nodes -= 1;
         Ok(())
     }
+
+    /// Signal that a load could be performed.
+    pub fn load(&mut self) -> Result<(), Error> {
+        if self.budget.loads == 0 {
+            return Err(Error::TooManyLoads);
+        }
+
+        self.budget.loads -= 1;
+        Ok(())
+    }
 }
 
 impl Default for Limits {
@@ -69,6 +84,7 @@ impl Default for Limits {
         Self {
             max_depth: 32,
             max_nodes: 32768,
+            max_loads: 8,
         }
     }
 }

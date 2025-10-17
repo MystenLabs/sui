@@ -142,7 +142,11 @@ impl<'a> Resolver<'a> for ToObject {
             } => ObjectArg::SharedObject {
                 id: object_ref.0,
                 initial_shared_version,
-                mutable: self.is_mut,
+                mutability: if self.is_mut {
+                    Tx::SharedObjectMutability::Mutable
+                } else {
+                    Tx::SharedObjectMutability::Immutable
+                },
             },
             Owner::ObjectOwner(_) => {
                 error!(loc => help: {

@@ -8,7 +8,9 @@ use std::collections::HashMap;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{CallArg, ObjectArg, Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
+use sui_types::transaction::{
+    CallArg, ObjectArg, SharedObjectMutability, Transaction, DEFAULT_VALIDATOR_GAS_PRICE,
+};
 
 pub struct MoveTxGenerator {
     move_package: ObjectID,
@@ -82,7 +84,7 @@ impl TxGenerator for MoveTxGenerator {
                         vec![CallArg::Object(ObjectArg::SharedObject {
                             id: shared_object.0,
                             initial_shared_version: shared_object.1,
-                            mutable: true,
+                            mutability: SharedObjectMutability::Mutable,
                         })],
                     )
                     .unwrap();

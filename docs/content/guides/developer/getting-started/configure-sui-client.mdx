@@ -1,0 +1,128 @@
+---
+title: Configure a Sui Client
+description: The Sui client configuration specifies which network to connect to and which address to send transactions.
+keywords: [ sui client, sui configuration, client.yaml, client config, local config, configure tooling, configure sui client, configure sui, config sui ]
+pagination_prev: null
+pagination_next: null
+---
+
+The Sui client configuration specifies which network to connect to and which address to send transactions. 
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+First, confirm that Sui has been installed successfully:
+
+```
+$ sui --version
+```
+
+If this command returns `sui not found`, then Sui is not installed and you must [follow the installation instructions](/guides/developer/getting-started/sui-install.mdx).
+
+</TabItem>
+</Tabs>
+
+## `sui client` 
+
+Run the Sui CLI with the command:
+
+```
+$ sui client
+```
+
+The first prompt confirms if you want to create the `client.yaml` file, select `Y`:
+
+```
+Config file ["<PATH-TO-FILE>/client.yaml"] doesn't exist, do you want to connect to a Sui full node server [y/N]?
+```
+
+The second prompt configures the network server URL to connect to:
+
+```
+Sui full node server URL (Defaults to Sui Testnet if not specified) :
+```
+
+If you specify nothing, the client uses Testnet by default. Using Testnet is recommended for developers new to Sui that do not have a project already developed. 
+
+The options are:
+
+- `https://fullnode.testnet.sui.io:443`: The RPC URL for Testnet.
+
+- `https://fullnode.devnet.sui.io:443`: The RPC URL for Devnet. Devnet is not recommended for new Sui developers, as it is better suited for more advanced use cases and the network wipes data weekly as part of its update process.
+
+- `https://fullnode.mainnet.sui.io:443`: The RPC URL for Mainnet network. Publishing applications to Mainnet costs real SUI tokens. 
+
+- `http://0.0.0.0:9000`: The RPC URL for a Localnet network, if configured. Learn how to [setup a local network](/guides/developer/sui-101/local-network.mdx).
+
+<ImportContent source="data-wipe.mdx" mode="snippet" />
+
+The final prompt is to select an encryption scheme. You must select a key scheme by pressing <kbd>0</kbd>, <kbd>1</kbd>, or <kbd>2</kbd>. After you select a scheme, the client generates a new Sui address.
+
+```
+Select key scheme to generate key pair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
+```
+
+<ImportContent source="crypto-schemes.mdx" mode="snippet" />
+
+:::caution 
+
+Store recovery phrases securely and do not share them with anyone, as they provide access to any objects and tokens that an address owns.
+
+It will not be visible again once the CLI history disappears.
+
+[Learn more](/guides/developer/getting-started/get-address.mdx) about Sui addresses, key generation, and recovery phrases.
+
+:::
+
+## `client.yaml`
+
+Your Sui client is now configured. By default, Sui stores this information in either the `~/.sui/sui_config/client.yaml` file (macOS/Linux) or `%USERPROFILE%\.sui\sui_config\client.yaml` file (Windows). You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
+
+Sui stores the key for the Sui address in a separate file, `~/.sui/sui_config/sui.keystore` (macOS/Linux) or `%USERPROFILE/.sui/sui_config/sui.keystore` (Windows). Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
+
+:::caution 
+
+If a previous Sui installation stored a `client.yaml` file locally, you will receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
+
+:::
+
+The `client.yaml` file contains the following configuration information:
+
+```yaml
+keystore:
+  File: /Users/your_user/.sui/sui_config/sui.keystore
+external_keys: ~
+envs:
+  - alias: testnet
+    rpc: "https://fullnode.testnet.sui.io:443"
+    ws: ~
+    basic_auth: ~
+active_env: testnet
+active_address: "0x7df01d3935b7ab3cd1da6828eed763ee2cc556670528a47baa6af8c251866e48"
+```
+
+<div className="next-steps-module">
+  <div className="next-steps-header">
+    <h3>Next steps</h3>
+  </div>
+  <div className="next-steps-grid">
+    <Card 
+      title="Learn More About Sui Addresses" 
+      href="/guides/developer/getting-started/get-address"
+    >
+      Now that you have created a Sui address, learn about address management, key pairs, and recovery phrase best practices. 
+    </Card>
+    <Card 
+      title="Get SUI from Faucet" 
+      href="/guides/developer/getting-started/get-coins"
+    >
+      Obtain SUI from a faucet to deploy packages on Testnet.
+    </Card>
+        <Card 
+      title="Hello, World!" 
+      href="/guides/developer/getting-started/hello-world"
+    >
+      Clone the "Hello, World!" project.
+    </Card>
+  </div>
+</div>

@@ -20,7 +20,9 @@ use sui_types::effects::{
     TransactionEffects, TransactionEffectsAPI,
 };
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, CallArg, ObjectArg, TransactionKind};
+use sui_types::transaction::{
+    Argument, CallArg, ObjectArg, SharedObjectMutability, TransactionKind,
+};
 use sui_types::{
     TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -326,7 +328,7 @@ impl AccumulatorSettlementTxBuilder {
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
                 initial_shared_version: accumulator_root_obj_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             }))
             .unwrap();
 

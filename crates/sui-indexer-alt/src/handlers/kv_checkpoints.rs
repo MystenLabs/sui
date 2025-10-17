@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
@@ -15,12 +16,13 @@ use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoin
 
 pub(crate) struct KvCheckpoints;
 
+#[async_trait]
 impl Processor for KvCheckpoints {
     const NAME: &'static str = "kv_checkpoints";
 
     type Value = StoredCheckpoint;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let sequence_number = checkpoint.checkpoint_summary.sequence_number as i64;
         let checkpoint_summary = checkpoint.checkpoint_summary.data();
         let signatures = checkpoint.checkpoint_summary.auth_sig();
@@ -36,7 +38,7 @@ impl Processor for KvCheckpoints {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for KvCheckpoints {
     type Store = Db;
 
@@ -86,17 +88,17 @@ mod tests {
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = KvCheckpoints.process(&checkpoint).unwrap();
+        let values = KvCheckpoints.process(&checkpoint).await.unwrap();
         KvCheckpoints::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = KvCheckpoints.process(&checkpoint).unwrap();
+        let values = KvCheckpoints.process(&checkpoint).await.unwrap();
         KvCheckpoints::commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = KvCheckpoints.process(&checkpoint).unwrap();
+        let values = KvCheckpoints.process(&checkpoint).await.unwrap();
         KvCheckpoints::commit(&values, &mut conn).await.unwrap();
 
         // Prune checkpoints from `[0, 2)`

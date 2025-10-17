@@ -57,6 +57,10 @@ use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use tap::Pipe;
 use tracing::trace;
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_serialization_tests.rs"]
+mod transaction_serialization_tests;
+
 pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 70_000;
@@ -104,12 +108,12 @@ impl CallArg {
     pub const CLOCK_IMM: Self = Self::Object(ObjectArg::SharedObject {
         id: SUI_CLOCK_OBJECT_ID,
         initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        mutable: false,
+        mutability: SharedObjectMutability::Immutable,
     });
     pub const CLOCK_MUT: Self = Self::Object(ObjectArg::SharedObject {
         id: SUI_CLOCK_OBJECT_ID,
         initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     });
 }
 
@@ -122,7 +126,9 @@ pub enum ObjectArg {
     SharedObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
-        mutable: bool,
+        // Note: this used to be a bool, but because true/false encode to 0x00/0x01, we are able to
+        // be backward compatible.
+        mutability: SharedObjectMutability,
     },
     // A Move object that can be received in this transaction.
     Receiving(ObjectRef),
@@ -432,6 +438,7 @@ pub enum EndOfEpochTransactionKind {
     StoreExecutionTimeObservations(StoredExecutionTimeObservations),
     AccumulatorRootCreate,
     CoinRegistryCreate,
+    DisplayRegistryCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -483,6 +490,10 @@ impl EndOfEpochTransactionKind {
         Self::CoinRegistryCreate
     }
 
+    pub fn new_display_registry_create() -> Self {
+        Self::DisplayRegistryCreate
+    }
+
     pub fn new_deny_list_state_create() -> Self {
         Self::DenyListStateCreate
     }
@@ -507,7 +518,7 @@ impl EndOfEpochTransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::AuthenticatorStateCreate => vec![],
@@ -515,7 +526,7 @@ impl EndOfEpochTransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: expire.authenticator_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::RandomnessStateCreate => vec![],
@@ -525,23 +536,24 @@ impl EndOfEpochTransactionKind {
                 InputObjectKind::SharedMoveObject {
                     id: SUI_BRIDGE_OBJECT_ID,
                     initial_shared_version: *bridge_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
                 InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
             ],
             Self::StoreExecutionTimeObservations(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::AccumulatorRootCreate => vec![],
             Self::CoinRegistryCreate => vec![],
+            Self::DisplayRegistryCreate => vec![],
         }
     }
 
@@ -554,7 +566,7 @@ impl EndOfEpochTransactionKind {
                 vec![SharedInputObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: expire.authenticator_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
                 .into_iter(),
             ),
@@ -567,7 +579,7 @@ impl EndOfEpochTransactionKind {
                     SharedInputObject {
                         id: SUI_BRIDGE_OBJECT_ID,
                         initial_shared_version: *bridge_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     },
                     SharedInputObject::SUI_SYSTEM_OBJ,
                 ]
@@ -578,6 +590,7 @@ impl EndOfEpochTransactionKind {
             }
             Self::AccumulatorRootCreate => Either::Right(iter::empty()),
             Self::CoinRegistryCreate => Either::Right(iter::empty()),
+            Self::DisplayRegistryCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -648,6 +661,13 @@ impl EndOfEpochTransactionKind {
                     ));
                 }
             }
+            Self::DisplayRegistryCreate => {
+                if !config.enable_display_registry() {
+                    return Err(UserInputError::Unsupported(
+                        "display registry not enabled".to_string(),
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -663,17 +683,12 @@ impl CallArg {
             CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
-            }) => {
-                let id = *id;
-                let initial_shared_version = *initial_shared_version;
-                let mutable = *mutable;
-                vec![InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version,
-                    mutable,
-                }]
-            }
+                mutability,
+            }) => vec![InputObjectKind::SharedMoveObject {
+                id: *id,
+                initial_shared_version: *initial_shared_version,
+                mutability: *mutability,
+            }],
             // Receiving objects are not part of the input objects.
             CallArg::Object(ObjectArg::Receiving(_)) => vec![],
             // While we do read accumulator state when processing withdraws,
@@ -707,7 +722,11 @@ impl CallArg {
                 );
             }
             CallArg::Object(o) => match o {
-                ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. } => (),
+                ObjectArg::ImmOrOwnedObject(_) => (),
+                ObjectArg::SharedObject { mutability, .. } => match mutability {
+                    SharedObjectMutability::Mutable | SharedObjectMutability::Immutable => (),
+                },
+
                 ObjectArg::Receiving(_) => {
                     if !config.receiving_objects_supported() {
                         return Err(UserInputError::Unsupported(format!(
@@ -782,7 +801,7 @@ impl ObjectArg {
     pub const SUI_SYSTEM_MUT: Self = Self::SharedObject {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     };
 
     pub fn id(&self) -> ObjectID {
@@ -826,6 +845,14 @@ pub struct ProgrammableTransaction {
     /// The commands to be executed sequentially. A failure in any command will
     /// result in the failure of the entire transaction.
     pub commands: Vec<Command>,
+}
+
+impl ProgrammableTransaction {
+    pub fn has_shared_inputs(&self) -> bool {
+        self.inputs
+            .iter()
+            .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
+    }
 }
 
 /// A single command in a programmable transaction.
@@ -1182,7 +1209,10 @@ impl ProgrammableTransaction {
         // If randomness is used, it must be enabled by protocol config.
         // A command that uses Random can only be followed by TransferObjects or MergeCoins.
         if let Some(random_index) = inputs.iter().position(|obj| {
-            matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+            matches!(
+                obj,
+                CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID
+            )
         }) {
             fp_ensure!(
                 config.random_beacon(),
@@ -1219,11 +1249,11 @@ impl ProgrammableTransaction {
             CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             }) => Some(SharedInputObject {
                 id: *id,
                 initial_shared_version: *initial_shared_version,
-                mutable: *mutable,
+                mutability: *mutability,
             }),
         })
     }
@@ -1341,14 +1371,14 @@ impl Display for ProgrammableTransaction {
 pub struct SharedInputObject {
     pub id: ObjectID,
     pub initial_shared_version: SequenceNumber,
-    pub mutable: bool,
+    pub mutability: SharedObjectMutability,
 }
 
 impl SharedInputObject {
     pub const SUI_SYSTEM_OBJ: Self = Self {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     };
 
     pub fn id(&self) -> ObjectID {
@@ -1431,21 +1461,21 @@ impl TransactionKind {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })))
             }
             Self::AuthenticatorStateUpdate(update) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_obj_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })))
             }
             Self::RandomnessStateUpdate(update) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                     initial_shared_version: update.randomness_obj_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })))
             }
             Self::EndOfEpochTransaction(txns) => Either::Left(Either::Right(
@@ -1491,7 +1521,7 @@ impl TransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::Genesis(_) => {
@@ -1504,21 +1534,21 @@ impl TransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::AuthenticatorStateUpdate(update) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::RandomnessStateUpdate(update) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                     initial_shared_version: update.randomness_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::EndOfEpochTransaction(txns) => {
@@ -2103,7 +2133,7 @@ impl TransactionData {
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
                 Owner::Immutable => {
                     return Err(anyhow::anyhow!(
@@ -3340,8 +3370,24 @@ pub enum InputObjectKind {
     SharedMoveObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
-        mutable: bool,
+        mutability: SharedObjectMutability,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
+pub enum SharedObjectMutability {
+    // The "classic" mutable/immutable modes.
+    Immutable,
+    Mutable,
+}
+
+impl SharedObjectMutability {
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            SharedObjectMutability::Mutable => true,
+            SharedObjectMutability::Immutable => false,
+        }
+    }
 }
 
 impl InputObjectKind {
@@ -3387,14 +3433,6 @@ impl InputObjectKind {
 
     pub fn is_shared_object(&self) -> bool {
         matches!(self, Self::SharedMoveObject { .. })
-    }
-
-    pub fn is_mutable(&self) -> bool {
-        match self {
-            Self::MovePackage(..) => false,
-            Self::ImmOrOwnedMoveObject((_, _, _)) => true,
-            Self::SharedMoveObject { mutable, .. } => *mutable,
-        }
     }
 }
 
@@ -3496,7 +3534,10 @@ impl ObjectReadResult {
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::CancelledTransactionSharedObject(_),
             ) => unreachable!(),
-            (InputObjectKind::SharedMoveObject { mutable, .. }, _) => *mutable,
+            (InputObjectKind::SharedMoveObject { mutability, .. }, _) => match mutability {
+                SharedObjectMutability::Mutable => true,
+                SharedObjectMutability::Immutable => false,
+            },
         }
     }
 
@@ -3549,12 +3590,12 @@ impl ObjectReadResult {
         match self.input_object_kind {
             InputObjectKind::MovePackage(_) => None,
             InputObjectKind::ImmOrOwnedMoveObject(_) => None,
-            InputObjectKind::SharedMoveObject { id, mutable, .. } => Some(match &self.object {
+            InputObjectKind::SharedMoveObject { id, mutability, .. } => Some(match &self.object {
                 ObjectReadResultKind::Object(obj) => {
                     SharedInput::Existing(obj.compute_object_reference())
                 }
                 ObjectReadResultKind::ObjectConsensusStreamEnded(seq, digest) => {
-                    SharedInput::ConsensusStreamEnded((id, *seq, mutable, *digest))
+                    SharedInput::ConsensusStreamEnded((id, *seq, mutability, *digest))
                 }
                 ObjectReadResultKind::CancelledTransactionSharedObject(seq) => {
                     SharedInput::Cancelled((id, *seq))
@@ -3740,16 +3781,15 @@ impl InputObjects {
                         ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
                     ) => None,
                     (
-                        InputObjectKind::SharedMoveObject { mutable, .. },
+                        InputObjectKind::SharedMoveObject { mutability, .. },
                         ObjectReadResultKind::Object(object),
-                    ) => {
-                        if *mutable {
+                    ) => match mutability {
+                        SharedObjectMutability::Mutable => {
                             let oref = object.compute_object_reference();
                             Some((oref.0, ((oref.1, oref.2), object.owner.clone())))
-                        } else {
-                            None
                         }
-                    }
+                        SharedObjectMutability::Immutable => None,
+                    },
                     (
                         InputObjectKind::ImmOrOwnedMoveObject(_),
                         ObjectReadResultKind::CancelledTransactionSharedObject(_),

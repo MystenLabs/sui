@@ -153,7 +153,7 @@ pub(super) fn broadcaster(
     })
 }
 
-/// Fetch the the file described by `metadata` from `snapshot` as a live objects file.
+/// Fetch the file described by `metadata` from `snapshot` as a live objects file.
 ///
 /// This function will repeatedly retry the fetch, with exponential backoff, until it succeeds. It
 /// also monitors for individual fetches that seem slower than expected, logging a warning if one

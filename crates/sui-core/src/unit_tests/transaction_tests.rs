@@ -368,7 +368,7 @@ pub fn init_move_call_transaction(
         FullObjectID::Consensus((id, initial_shared_version)) => ObjectArg::SharedObject {
             id,
             initial_shared_version,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         },
     });
     let mut data = TransactionData::new_move_call(
@@ -1785,7 +1785,7 @@ async fn test_handle_soft_bundle_certificates() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure((i as u64).to_le_bytes().to_vec()),
                 ],
@@ -2059,7 +2059,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(11u64.to_le_bytes().to_vec()),
                 ],
@@ -2088,7 +2088,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(12u64.to_le_bytes().to_vec()),
                 ],
@@ -2143,7 +2143,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(11u64.to_le_bytes().to_vec()),
                 ],
@@ -2172,7 +2172,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(12u64.to_le_bytes().to_vec()),
                 ],

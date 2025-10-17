@@ -283,11 +283,15 @@ mod tests {
 
     pub struct DataPipeline;
 
+    #[async_trait]
     impl Processor for DataPipeline {
         const NAME: &'static str = "data";
         type Value = StoredData;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(
+            &self,
+            _checkpoint: &Arc<CheckpointData>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }

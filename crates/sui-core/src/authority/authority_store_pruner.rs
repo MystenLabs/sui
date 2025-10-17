@@ -310,6 +310,7 @@ impl AuthorityStorePruner {
         metrics
             .last_pruned_effects_checkpoint
             .set(checkpoint_number as i64);
+
         Ok(())
     }
 

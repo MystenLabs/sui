@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.59.0"
+    "version": "1.60.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "98",
+              "maxSupportedProtocolVersion": "99",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1342,6 +1342,7 @@
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
                 "enable_coin_registry": false,
+                "enable_display_registry": false,
                 "enable_effects_v2": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
@@ -9002,7 +9003,8 @@
               "CoinDenyListStateCreate",
               "StoreExecutionTimeObservations",
               "AccumulatorRootCreate",
-              "CoinRegistryCreate"
+              "CoinRegistryCreate",
+              "DisplayRegistryCreate"
             ]
           },
           {

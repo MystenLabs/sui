@@ -14,6 +14,7 @@ use crate::{
     move_package::PACKAGE_MODULE_NAME,
     transaction::{
         Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, ProgrammableTransaction,
+        SharedObjectMutability,
     },
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -87,12 +88,12 @@ impl ProgrammableTransactionBuilder {
                     ObjectArg::SharedObject {
                         id: id1,
                         initial_shared_version: v1,
-                        mutable: mut1,
+                        mutability: mut1,
                     },
                     ObjectArg::SharedObject {
                         id: id2,
                         initial_shared_version: v2,
-                        mutable: mut2,
+                        mutability: mut2,
                     },
                 ) if v1 == &v2 => {
                     anyhow::ensure!(
@@ -102,7 +103,13 @@ impl ProgrammableTransactionBuilder {
                     ObjectArg::SharedObject {
                         id,
                         initial_shared_version: v2,
-                        mutable: *mut1 || mut2,
+                        mutability: if mut1 == &SharedObjectMutability::Mutable
+                            || mut2 == SharedObjectMutability::Mutable
+                        {
+                            SharedObjectMutability::Mutable
+                        } else {
+                            mut2
+                        },
                     }
                 }
                 (old_obj_arg, obj_arg) => {
@@ -252,7 +259,7 @@ impl ProgrammableTransactionBuilder {
             FullObjectID::Consensus((id, initial_shared_version)) => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
         });
         self.commands

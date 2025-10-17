@@ -56,7 +56,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
         CallArg::Object(ObjectArg::SharedObject {
             id,
             initial_shared_version,
-            mutable,
+            mutability,
         }) => {
             let obj = env.read_object(&id)?;
             let Some(ty) = obj.type_() else {
@@ -75,7 +75,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 L::InputArg::Object(L::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutable: mutability.is_mutable(),
                     kind,
                 }),
                 L::InputType::Fixed(ty),
