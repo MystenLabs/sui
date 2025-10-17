@@ -212,26 +212,25 @@ impl Type {
     }
 
     pub fn node_count(&self) -> u64 {
-        match self {
-            Type::Bool
-            | Type::U8
-            | Type::U16
-            | Type::U32
-            | Type::U64
-            | Type::U128
-            | Type::U256
-            | Type::Address
-            | Type::Signer => 1,
-            Type::Vector(v) => 1 + v.element_type.node_count(),
-            Type::Reference(_, inner) => 1 + inner.node_count(),
-            Type::Datatype(dt) => {
-                let mut sum: u64 = 0;
-                for arg in &dt.type_arguments {
-                    sum = sum.saturating_add(arg.node_count());
+        use Type::*;
+        let mut total = 0u64;
+        let mut stack = vec![self];
+
+        while let Some(ty) = stack.pop() {
+            total = total.saturating_add(1);
+            match ty {
+                Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => {}
+                Vector(v) => stack.push(&v.element_type),
+                Reference(_, inner) => stack.push(inner),
+                Datatype(dt) => {
+                    for arg in &dt.type_arguments {
+                        stack.push(arg);
+                    }
                 }
-                sum.saturating_add(1)
             }
         }
+
+        total
     }
 
     pub fn is_reference(&self) -> bool {
