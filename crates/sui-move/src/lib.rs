@@ -57,7 +57,7 @@ pub async fn execute_move_command(
                 .await
         }
         Command::Test(c) => {
-            let result = c.execute(package_path, build_config)?;
+            let result = c.execute(package_path, build_config).await?;
 
             // Return a non-zero exit code if any test failed
             if let UnitTestResult::Failure = result {

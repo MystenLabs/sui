@@ -24,3 +24,4 @@ fastcrypto.workspace = true
 test-fuzz.workspace = true
 sui-move-build.workspace = true
 sui-framework.workspace = true
+tokio.workspace = true

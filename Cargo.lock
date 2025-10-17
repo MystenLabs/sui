@@ -13598,6 +13598,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
+ "sui-move-build",
  "sui-network",
  "sui-protocol-config",
  "sui-sdk",
@@ -14325,6 +14326,7 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "tempfile",
+ "tokio",
  "tracing",
 ]
 
@@ -14355,6 +14357,7 @@ dependencies = [
  "move-cli",
  "move-package-alt-compilation",
  "move-unit-test",
+ "msim",
  "prometheus",
  "sui-adapter-latest",
  "sui-config",
@@ -14364,6 +14367,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "tokio",
 ]
 
 [[package]]
@@ -15043,6 +15047,7 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "test-fuzz",
+ "tokio",
 ]
 
 [[package]]
@@ -16269,7 +16274,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
- "move-package",
  "move-symbol-pool",
  "once_cell",
  "prometheus",
@@ -16793,7 +16797,9 @@ dependencies = [
  "move-binary-format",
  "move-command-line-common",
  "move-compiler",
+ "msim",
  "sui-move-build",
+ "tokio",
 ]
 
 [[package]]

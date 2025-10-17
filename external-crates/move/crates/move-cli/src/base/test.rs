@@ -104,7 +104,8 @@ impl Test {
             compute_coverage,
             save_disassembly,
             &mut std::io::stdout(),
-        )?;
+        )
+        .await?;
 
         // Return a non-zero exit code if any test failed
         if let (UnitTestResult::Failure, _) = result {
@@ -148,7 +149,7 @@ pub enum UnitTestResult {
     Failure,
 }
 
-pub fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
+pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     pkg_path: &Path,
     mut build_config: move_package_alt_compilation::build_config::BuildConfig,
     mut unit_test_config: UnitTestingConfig,
@@ -165,7 +166,7 @@ pub fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     // Load the package (package graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer)
     let env = find_env::<F>(pkg_path, &build_config)?;
-    let root_pkg = RootPackage::<F>::load_sync(pkg_path.to_path_buf(), env)?;
+    let root_pkg = RootPackage::<F>::load(pkg_path.to_path_buf(), env).await?;
     let root_pkg_name = Symbol::from(root_pkg.name().as_str());
 
     let mut addresses: Vec<(String, NumericalAddress)> = vec![];

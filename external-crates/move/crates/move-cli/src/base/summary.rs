@@ -61,17 +61,13 @@ impl Summary {
         additional_metadata: Option<&T>,
         // address_derivation_fn_opt: Option<F>,
     ) -> anyhow::Result<()> {
-        let path = reroot_path(path)?;
-        let env = find_env::<F>(&path, &config)?;
-
         let model_source;
         let model_compiled;
 
         let (summary, address_mapping) = if self.bytecode {
-            let bytecode_files = find_filenames(&[path], |path| {
+            let bytecode_files = find_filenames(&[path.unwrap_or(Path::new("."))], |path| {
                 extension_equals(path, MOVE_COMPILED_EXTENSION)
             })?;
-
             let mut modules = Vec::new();
             for bytecode_file in &bytecode_files {
                 let bytes = std::fs::read(bytecode_file)?;
@@ -104,6 +100,8 @@ impl Summary {
                     .collect::<BTreeMap<_, _>>(),
             )
         } else {
+            let path = reroot_path(path)?;
+            let env = find_env::<F>(&path, &config)?;
             let root_pkg = RootPackage::<F>::load(&path, env).await?;
             // Get named addresses from the root package graph
             let named_addresses: BuildNamedAddresses = root_pkg

@@ -7,8 +7,8 @@ use std::path::Path;
 
 use crate::BuildConfig;
 
-#[test]
-fn generate_struct_layouts() {
+#[tokio::test]
+async fn generate_struct_layouts() {
     // build the Sui framework and generate struct layouts to make sure nothing crashes
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -17,7 +17,10 @@ fn generate_struct_layouts() {
         .join("sui-framework")
         .join("packages")
         .join("sui-framework");
-    let pkg = BuildConfig::new_for_testing().build(&path).unwrap();
+    let pkg = BuildConfig::new_for_testing()
+        .build_async(&path)
+        .await
+        .unwrap();
     let registry = pkg.generate_struct_layouts();
     // check for a couple of types that aren't likely to go away
     assert!(registry.contains_key(
@@ -31,9 +34,9 @@ fn generate_struct_layouts() {
     ));
 }
 
-// TODO: pkg-alt FAILING TEST
-// #[test]
-// fn development_mode_not_allowed() {
+// TODO: pkg-alt ENABLE WHEN WE VALIDATE THIS PROPERLY
+// #[tokio::test]
+// async fn development_mode_not_allowed() {
 //     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
 //         .to_path_buf()
 //         .join("src")
