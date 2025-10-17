@@ -39,18 +39,22 @@ impl SimulationResult {
         response: proto::SimulateTransactionResponse,
         transaction_data: TransactionData,
     ) -> Result<Self, RpcError> {
-        let effects = Some(TransactionEffects::from_simulation_response(
-            scope.clone(),
-            response.clone(),
-            transaction_data.clone(),
-        )?);
-
-        // Parse events - break into clear steps
         let executed_transaction = response
             .transaction
             .as_ref()
-            .context("No transaction in simulation response")?;
+            .context("SimulateTransactionResponse should have transaction")?;
 
+        // Create scope with execution objects
+        let scope = scope.with_executed_transaction(executed_transaction);
+
+        let effects = TransactionEffects::from_executed_transaction(
+            scope.clone(),
+            executed_transaction,
+            transaction_data.clone(),
+            vec![], // No signatures for simulated transactions
+        )?;
+
+        // Parse events using the scope
         let events_bcs = executed_transaction
             .events
             .as_ref()
@@ -86,7 +90,7 @@ impl SimulationResult {
         );
 
         Ok(Self {
-            effects,
+            effects: Some(effects),
             events,
             outputs,
             error: None,
