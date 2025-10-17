@@ -18,7 +18,9 @@ use std::{fs, io};
 use sui_config::{genesis::Genesis, NodeConfig};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_core::execution_cache::build_execution_cache_from_env;
-use sui_data_ingestion_core::{end_of_epoch_data, setup_single_workflow, ReaderOptions};
+use sui_data_ingestion_core::{
+    create_remote_store_client, end_of_epoch_data, setup_single_workflow, ReaderOptions,
+};
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
 use sui_sdk::SuiClient;
@@ -56,7 +58,9 @@ use sui_snapshot::setup_db_state;
 use sui_storage::object_store::util::{copy_file, exists, get_path};
 use sui_storage::object_store::ObjectStoreGetExt;
 use sui_storage::verify_checkpoint_range;
-use sui_types::messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest};
+use sui_types::messages_checkpoint::{
+    CheckpointCommitment, ECMHLiveObjectSetDigest, VerifiedCheckpoint,
+};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
     TransactionStatus,
@@ -992,14 +996,25 @@ pub async fn download_formal_snapshot(
         epoch,
         root_global_state_hash.clone(),
         perpetual_db.clone(),
-        checkpoint_store,
+        checkpoint_store.clone(),
         committee_store,
         network,
         verify == SnapshotVerifyMode::Strict,
         num_live_objects,
-        m,
+        m.clone(),
     )
     .await?;
+
+    if epoch > 0 {
+        hydrate_previous_epoch_checkpoint_digests(
+            epoch,
+            ingestion_url,
+            checkpoint_store.clone(),
+            num_parallel_downloads,
+            &m,
+        )
+        .await?;
+    }
 
     let new_path = path.parent().unwrap().join("live");
     if new_path.exists() {
@@ -1012,6 +1027,95 @@ pub async fn download_formal_snapshot(
         epoch
     );
 
+    Ok(())
+}
+
+async fn hydrate_previous_epoch_checkpoint_digests(
+    target_epoch: u64,
+    ingestion_url: &str,
+    checkpoint_store: Arc<CheckpointStore>,
+    num_parallel_downloads: usize,
+    m: &MultiProgress,
+) -> Result<(), anyhow::Error> {
+    let Some(prev_epoch) = target_epoch.checked_sub(1) else {
+        return Ok(());
+    };
+    let Some(prev_epoch_last) = checkpoint_store
+        .get_epoch_last_checkpoint_seq_number(prev_epoch)?
+    else {
+        return Ok(());
+    };
+    let prev_epoch_first = if prev_epoch == 0 {
+        0
+    } else {
+        checkpoint_store
+            .get_epoch_last_checkpoint_seq_number(prev_epoch - 1)?
+            .map(|seq| seq + 1)
+            .unwrap_or(0)
+    };
+    if prev_epoch_first > prev_epoch_last {
+        return Ok(());
+    }
+
+    let total = prev_epoch_last - prev_epoch_first + 1;
+    info!(
+        prev_epoch,
+        start = prev_epoch_first,
+        end = prev_epoch_last,
+        "Hydrating checkpoint digests for previous epoch"
+    );
+
+    let progress_bar = m.add(
+        ProgressBar::new(total).with_style(
+            ProgressStyle::with_template(
+                "[{elapsed_precise}] {wide_bar} {pos}/{len} prior-epoch checkpoints ({msg})",
+            )
+            .unwrap(),
+        ),
+    );
+    progress_bar.set_message(format!(
+        "latest seq {}",
+        prev_epoch_first.saturating_sub(1)
+    ));
+
+    let client = create_remote_store_client(ingestion_url.to_string(), vec![], 60)?;
+    let client: Arc<dyn object_store::ObjectStore> = client.into();
+    let concurrency = num_parallel_downloads.max(1);
+
+    futures::stream::iter(prev_epoch_first..=prev_epoch_last)
+        .map(|seq| {
+            let client = client.clone();
+            async move {
+                let (checkpoint_data, _) =
+                    sui_data_ingestion_core::CheckpointReader::fetch_from_object_store(
+                        client.as_ref(),
+                        seq,
+                    )
+                    .await?;
+                Ok::<_, anyhow::Error>((seq, checkpoint_data))
+            }
+        })
+        .buffer_unordered(concurrency)
+        .try_for_each(|(seq, checkpoint_data)| {
+            let checkpoint_store = checkpoint_store.clone();
+            let progress_bar = progress_bar.clone();
+            async move {
+                let verified =
+                    VerifiedCheckpoint::new_unchecked(checkpoint_data.checkpoint_summary.clone());
+                checkpoint_store
+                    .insert_verified_checkpoint(&verified)
+                    .map_err(|e| anyhow!(e))?;
+                checkpoint_store
+                    .insert_checkpoint_contents(checkpoint_data.checkpoint_contents.clone())
+                    .map_err(|e| anyhow!(e))?;
+                progress_bar.inc(1);
+                progress_bar.set_message(format!("latest seq {}", seq));
+                Ok::<(), anyhow::Error>(())
+            }
+        })
+        .await?;
+
+    progress_bar.finish_with_message("Prior-epoch checkpoint digests hydrated");
     Ok(())
 }
 
