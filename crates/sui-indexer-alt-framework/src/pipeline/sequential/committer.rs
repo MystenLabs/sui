@@ -322,7 +322,7 @@ where
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
                     // processing.
-                    let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive));
+                    let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive + 1));
                     // docs::/#send
 
                     let _ = std::mem::take(&mut batch);
@@ -450,7 +450,7 @@ mod tests {
     struct TestSetup {
         store: MockStore,
         checkpoint_tx: mpsc::Sender<IndexedCheckpoint<TestHandler>>,
-        watermark_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
+        commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
         committer_handle: JoinHandle<()>,
     }
 
@@ -462,14 +462,14 @@ mod tests {
 
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
         #[allow(clippy::disallowed_methods)]
-        let (watermark_tx, watermark_rx) = mpsc::unbounded_channel();
+        let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
 
         let store_clone = store.clone();
         let committer_handle = committer(
             config,
             next_checkpoint,
             checkpoint_rx,
-            watermark_tx,
+            commit_hi_tx,
             store_clone,
             metrics,
             cancel,
@@ -478,7 +478,7 @@ mod tests {
         TestSetup {
             store,
             checkpoint_tx,
-            watermark_rx,
+            commit_hi_rx,
             committer_handle,
         }
     }
@@ -527,10 +527,10 @@ mod tests {
             assert_eq!(watermark.tx_hi, 2);
         }
 
-        // Verify watermark was sent to ingestion
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(watermark.1, 2, "Watermark should be at checkpoint 2");
+        // Verify commit_hi was sent to ingestion
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
+        assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
 
         // Clean up
         drop(setup.checkpoint_tx);
@@ -608,10 +608,10 @@ mod tests {
             assert_eq!(watermark.tx_hi, 2);
         }
 
-        // Verify watermark was sent to ingestion
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(watermark.1, 2, "Watermark should be at checkpoint 2");
+        // Verify commit_hi was sent to ingestion
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
+        assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
 
         // Clean up
         drop(setup.checkpoint_tx);
@@ -634,17 +634,17 @@ mod tests {
         // Wait for processing
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        // Verify watermarks are sent for each batch
-        let watermark1 = setup.watermark_rx.recv().await.unwrap();
+        // Verify commit_hi values are sent for each batch
+        let commit_hi1 = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(
-            watermark1.1, 2,
-            "First watermark should be at checkpoint 2 (highest processed of first batch)"
+            commit_hi1.1, 3,
+            "First commit_hi should be 3 (checkpoint 2 + 1, highest processed of first batch)"
         );
 
-        let watermark2 = setup.watermark_rx.recv().await.unwrap();
+        let commit_hi2 = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(
-            watermark2.1, 3,
-            "Second watermark should be at checkpoint 3 (highest processed of second batch)"
+            commit_hi2.1, 4,
+            "Second commit_hi should be 4 (checkpoint 3 + 1, highest processed of second batch)"
         );
 
         // Verify data is written in order across batches
@@ -673,8 +673,8 @@ mod tests {
 
         // Verify only checkpoints 0 and 1 are written (since checkpoint 2 is not lagged enough)
         assert_eq!(setup.store.get_sequential_data(), vec![0, 1]);
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.1, 1, "Watermark should be at checkpoint 1");
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.1, 2, "commit_hi should be 2 (checkpoint 1 + 1)");
 
         // Send checkpoint 3 to exceed the checkpoint_lag for checkpoint 2
         send_checkpoint(&mut setup, 3).await;
@@ -684,8 +684,8 @@ mod tests {
 
         // Verify checkpoint 2 is now written
         assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2]);
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.1, 2, "Watermark should be at checkpoint 2");
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
 
         // Clean up
         drop(setup.checkpoint_tx);
@@ -797,10 +797,13 @@ mod tests {
         // Verify data is written after retries complete on next polling
         assert_eq!(setup.store.get_sequential_data(), vec![10]);
 
-        // Verify watermark is updated
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(watermark.1, 10, "Watermark should be at checkpoint 10");
+        // Verify commit_hi is updated
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
+        assert_eq!(
+            commit_hi.1, 11,
+            "commit_hi should be 11 (checkpoint 10 + 1)"
+        );
 
         // Clean up
         drop(setup.checkpoint_tx);
