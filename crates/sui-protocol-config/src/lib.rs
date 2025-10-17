@@ -286,7 +286,7 @@ impl ProtocolVersion {
     pub const MAX: Self = Self(MAX_PROTOCOL_VERSION);
 
     #[cfg(not(msim))]
-    const MAX_ALLOWED: Self = Self::MAX;
+    pub const MAX_ALLOWED: Self = Self::MAX;
 
     // We create one additional "fake" version in simulator builds so that we can test upgrades.
     #[cfg(msim)]
@@ -304,6 +304,10 @@ impl ProtocolVersion {
     // universally appropriate default value.
     pub fn max() -> Self {
         Self::MAX
+    }
+
+    pub fn prev(self) -> Self {
+        Self(self.0.checked_sub(1).unwrap())
     }
 }
 
@@ -751,6 +755,11 @@ struct FeatureFlags {
     // Enable accumulators
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
+
+    // If true, create the root accumulator object in the change epoch transaction.
+    // This must be enabled and shipped before `enable_accumulators` is set to true.
+    #[serde(skip_serializing_if = "is_false")]
+    create_root_accumulator_object: bool,
 
     // Enable authenticated event streams
     #[serde(skip_serializing_if = "is_false")]
@@ -1960,6 +1969,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn create_root_accumulator_object(&self) -> bool {
+        self.feature_flags.create_root_accumulator_object
     }
 
     pub fn enable_address_balance_gas_payments(&self) -> bool {
@@ -4117,6 +4130,7 @@ impl ProtocolConfig {
                 }
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
+                    cfg.feature_flags.create_root_accumulator_object = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4399,6 +4413,10 @@ impl ProtocolConfig {
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
+    }
+
+    pub fn create_root_accumulator_object_for_testing(&mut self) {
+        self.feature_flags.create_root_accumulator_object = true;
     }
 
     pub fn enable_address_balance_gas_payments_for_testing(&mut self) {

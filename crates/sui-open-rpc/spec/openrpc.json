@@ -1329,6 +1329,7 @@
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
                 "correct_gas_payment_limit_check": false,
+                "create_root_accumulator_object": false,
                 "debug_fatal_on_move_invariant_violation": false,
                 "dependency_linkage_error": false,
                 "deprecate_global_storage_ops_during_deserialization": false,

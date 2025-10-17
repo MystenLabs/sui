@@ -5,7 +5,7 @@ use move_core_types::identifier::Identifier;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     accumulator_metadata::AccumulatorOwner,
@@ -17,6 +17,7 @@ use sui_types::{
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ChildObjectResolver,
+    supported_protocol_versions::SupportedProtocolVersions,
     transaction::{Argument, Command, TransactionData, TransactionKind},
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -82,9 +83,76 @@ fn create_transaction_with_expiration(
     })
 }
 
+// Test protocol gating of accumulator root creation. This test can be deleted after the feature
+// is released.
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_accumulators_root_created() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
+        if version >= ProtocolVersion::MAX {
+            cfg.create_root_accumulator_object_for_testing();
+            // for some reason all 4 nodes are not reliably submitting capability messages
+            cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+        }
+        if version == ProtocolVersion::MAX_ALLOWED {
+            cfg.enable_accumulators_for_testing();
+        }
+        cfg
+    });
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+            ProtocolVersion::MAX.as_u64(),
+            ProtocolVersion::MAX_ALLOWED.as_u64(),
+        ))
+        .build()
+        .await;
+
+    // accumulator root is not created yet.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        assert!(!state
+            .load_epoch_store_one_call_per_task()
+            .accumulator_root_exists());
+    });
+
+    test_cluster.trigger_reconfiguration().await;
+
+    // accumulator root was created at the end of previous epoch,
+    // but we didn't upgrade to the next protocol version yet.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        assert!(state
+            .load_epoch_store_one_call_per_task()
+            .accumulator_root_exists());
+        assert_eq!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .protocol_config()
+                .version,
+            ProtocolVersion::MAX
+        );
+    });
+
+    // now we can upgrade to the next protocol version.
+    test_cluster.trigger_reconfiguration().await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        assert_eq!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .protocol_config()
+                .version,
+            ProtocolVersion::MAX_ALLOWED
+        );
+    });
+}
+
 #[sim_test]
 async fn test_deposits() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
         cfg.enable_accumulators_for_testing();
         cfg
     });
@@ -172,6 +240,7 @@ fn verify_accumulator_exists(
 #[sim_test]
 async fn test_deposit_and_withdraw() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
         cfg.enable_accumulators_for_testing();
         cfg
     });
@@ -218,6 +287,7 @@ async fn test_deposit_and_withdraw() {
 #[sim_test]
 async fn test_deposit_and_withdraw_with_larger_reservation() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
         cfg.enable_accumulators_for_testing();
         cfg
     });
@@ -250,6 +320,7 @@ async fn test_deposit_and_withdraw_with_larger_reservation() {
 #[sim_test]
 async fn test_withdraw_non_existent_balance() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
         cfg.enable_accumulators_for_testing();
         cfg
     });
@@ -280,6 +351,7 @@ async fn test_withdraw_non_existent_balance() {
 #[sim_test]
 async fn test_withdraw_underflow() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
         cfg.enable_accumulators_for_testing();
         cfg
     });

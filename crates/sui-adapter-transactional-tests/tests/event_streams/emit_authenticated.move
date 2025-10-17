@@ -4,23 +4,23 @@
 // Exercise test functions that emit authenticated events
 
 // Protocol version pinned to avoid snapshot churn from genesis changes
-//# init --addresses test=0x0 --accounts A B --simulator --enable-authenticated-event-streams --protocol-version 98
+//# init --addresses test=0x0 --accounts A B --simulator --enable-authenticated-event-streams --protocol-version 99
 
 //# publish
 
-module test::event_streams {
-	use sui::event;
+module test::event_streams;
 
-	public struct AuthEvent has copy, drop {
-		value: u64,
-	}
+use sui::event;
 
-	// test that reading o2 and updating o1 works
-	public entry fun emit_event(value: u64) {
-		// emit an event so the world can see the new value
-		let ev = AuthEvent { value };
-		event::emit_authenticated(ev);
-	}
+public struct AuthEvent has copy, drop {
+  value: u64,
+}
+
+// test that reading o2 and updating o1 works
+public entry fun emit_event(value: u64) {
+  // emit an event so the world can see the new value
+  let ev = AuthEvent { value };
+  event::emit_authenticated(ev);
 }
 
 //# run test::event_streams::emit_event --sender A --args 10
