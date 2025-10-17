@@ -169,9 +169,9 @@ impl Value<'_> {
                 layout,
                 bytes: data,
             }) => match layout {
-                L::U8 => bcs::from_bytes::<u8>(data).ok()?.try_into().ok(),
-                L::U16 => bcs::from_bytes::<u16>(data).ok()?.try_into().ok(),
-                L::U32 => bcs::from_bytes::<u32>(data).ok()?.try_into().ok(),
+                L::U8 => Some(bcs::from_bytes::<u8>(data).ok()?.into()),
+                L::U16 => Some(bcs::from_bytes::<u16>(data).ok()?.into()),
+                L::U32 => Some(bcs::from_bytes::<u32>(data).ok()?.into()),
                 L::U64 => bcs::from_bytes::<u64>(data).ok(),
                 L::U128 => bcs::from_bytes::<u128>(data).ok()?.try_into().ok(),
                 L::U256 => bcs::from_bytes::<U256>(data).ok()?.try_into().ok(),
