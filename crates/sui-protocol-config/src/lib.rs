@@ -854,6 +854,10 @@ struct FeatureFlags {
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
+
+    // If true, deprecate global storage ops during Move module deserialization
+    #[serde(skip_serializing_if = "is_false")]
+    deprecate_global_storage_ops_during_deserialization: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2302,6 +2306,11 @@ impl ProtocolConfig {
 
     pub fn allow_references_in_ptbs(&self) -> bool {
         self.feature_flags.allow_references_in_ptbs
+    }
+
+    pub fn deprecate_global_storage_ops_during_deserialization(&self) -> bool {
+        self.feature_flags
+            .deprecate_global_storage_ops_during_deserialization
     }
 }
 
@@ -4188,12 +4197,19 @@ impl ProtocolConfig {
         }
     }
 
-    pub fn binary_config(&self) -> BinaryConfig {
+    pub fn binary_config(
+        &self,
+        override_deprecate_global_storage_ops_during_deserialization: Option<bool>,
+    ) -> BinaryConfig {
+        let deprecate_global_storage_ops_during_deserialization =
+            override_deprecate_global_storage_ops_during_deserialization
+                .unwrap_or_else(|| self.deprecate_global_storage_ops_during_deserialization());
         BinaryConfig::new(
             self.move_binary_format_version(),
             self.min_move_binary_format_version_as_option()
                 .unwrap_or(VERSION_1),
             self.no_extraneous_module_bytes(),
+            deprecate_global_storage_ops_during_deserialization,
             TableConfig {
                 module_handles: self.binary_module_handles_as_option().unwrap_or(u16::MAX),
                 datatype_handles: self.binary_struct_handles_as_option().unwrap_or(u16::MAX),

@@ -35,6 +35,7 @@ pub fn check_for_verifier_timeout(major_status_code: &StatusCode) -> bool {
         StatusCode::TOO_MANY_BACK_EDGES,
         StatusCode::BORROWLOC_EXISTS_BORROW_ERROR,
         StatusCode::COPYLOC_EXISTS_BORROW_ERROR,
+        StatusCode::DEPRECATED_BYTECODE_FORMAT,
     ]
     .contains(major_status_code)
 }

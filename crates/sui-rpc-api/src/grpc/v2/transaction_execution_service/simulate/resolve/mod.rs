@@ -91,7 +91,7 @@ pub(super) fn called_packages(
     protocol_config: &ProtocolConfig,
     commands: &[Command],
 ) -> Result<NormalizedPackages> {
-    let binary_config = protocol_config.binary_config();
+    let binary_config = protocol_config.binary_config(None);
     let mut pool = normalized::RcPool::new();
     let mut packages = HashMap::new();
 

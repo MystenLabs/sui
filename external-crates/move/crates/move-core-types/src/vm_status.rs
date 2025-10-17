@@ -366,6 +366,7 @@ pub enum StatusCode {
     TRAILING_BYTES = 3026,
     UNKNOWN_ENUM_FLAG = 3027,
     UNKNOWN_JUMP_TABLE_FLAG = 3028,
+    DEPRECATED_BYTECODE_FORMAT = 3029,
 
     // Errors that can arise at runtime
     // Runtime Errors: 4000-4999

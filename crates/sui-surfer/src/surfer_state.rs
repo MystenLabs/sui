@@ -278,7 +278,7 @@ impl SurferState {
         let move_package = package.into_inner().data.try_into_package().unwrap();
         let proto_version = self.cluster.highest_protocol_version();
         let config = ProtocolConfig::get_for_version(proto_version, Chain::Unknown);
-        let binary_config = config.binary_config();
+        let binary_config = config.binary_config(None);
         let pool: &mut normalized::ArcPool = &mut *self.pool.write().await;
         let entry_functions: Vec<_> = move_package
             .normalize(pool, &binary_config, /* include code */ false)

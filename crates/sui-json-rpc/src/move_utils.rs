@@ -93,7 +93,10 @@ impl MoveUtilsInternalTrait for MoveUtilsInternal {
                     Data::Package(p) => {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format
-                        let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
+                        let binary_config = BinaryConfig::legacy_with_flags(
+                            /* check_no_extraneous_bytes */ false,
+                            /* deprecate_global_storage_ops */ false,
+                        );
                         normalize_modules(
                             pool,
                             p.serialized_module_map().values(),
@@ -234,7 +237,10 @@ impl MoveUtilsServer for MoveUtils {
                     Data::Package(p) => {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format
-                        let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
+                        let binary_config = BinaryConfig::legacy_with_flags(
+                            /* check_no_extraneous_bytes */ false,
+                            /* deprecate_global_storage_ops */ false,
+                        );
                         normalize_modules(
                             pool,
                             p.serialized_module_map().values(),

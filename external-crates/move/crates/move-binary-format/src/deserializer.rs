@@ -22,7 +22,13 @@ use std::{
 impl CompiledModule {
     /// Deserialize a &[u8] slice into a `CompiledModule` instance.
     pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        Self::deserialize_with_config(binary, &BinaryConfig::with_extraneous_bytes_check(true))
+        Self::deserialize_with_config(
+            binary,
+            &BinaryConfig::legacy_with_flags(
+                /* check_no_extraneous_bytes */ true,
+                /* deprecate_global_storage_ops */ true,
+            ),
+        )
     }
 
     /// Deserialize a &[u8] slice into a `CompiledModule` instance with settings
@@ -40,7 +46,13 @@ impl CompiledModule {
     // exposed as a public function to enable testing the deserializer
     #[doc(hidden)]
     pub fn deserialize_no_check_bounds(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        deserialize_compiled_module(binary, &BinaryConfig::with_extraneous_bytes_check(false))
+        deserialize_compiled_module(
+            binary,
+            &BinaryConfig::legacy_with_flags(
+                /* check_no_extraneous_bytes */ false,
+                /* deprecate_global_storage_ops */ false,
+            ),
+        )
     }
 }
 
@@ -1538,6 +1550,9 @@ fn load_function_def(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Functio
     };
 
     let acquires_global_resources = load_struct_definition_indices(cursor)?;
+    if !acquires_global_resources.is_empty() {
+        check_deprecate_global_storage_ops(cursor)?;
+    }
     let code_unit = if (extra_flags & FunctionDefinition::NATIVE) != 0 {
         extra_flags ^= FunctionDefinition::NATIVE;
         None
@@ -1634,6 +1649,15 @@ fn check_cursor_version_enum_compatible(cursor_version: u32) -> BinaryLoaderResu
                 cursor_version
             )),
         )
+    } else {
+        Ok(())
+    }
+}
+
+fn check_deprecate_global_storage_ops(cursor: &VersionedCursor) -> BinaryLoaderResult<()> {
+    if cursor.deprecate_global_storage_ops {
+        Err(PartialVMError::new(StatusCode::DEPRECATED_BYTECODE_FORMAT)
+            .with_message("global storage operations are not supported".to_owned()))
     } else {
         Ok(())
     }
@@ -1834,33 +1858,43 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             }
             // ******** DEPRECATED BYTECODES ********
             Opcodes::EXISTS_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::ExistsDeprecated(load_struct_def_index(cursor)?)
             }
             Opcodes::EXISTS_GENERIC_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::ExistsGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }
             Opcodes::MUT_BORROW_GLOBAL_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::MutBorrowGlobalDeprecated(load_struct_def_index(cursor)?)
             }
             Opcodes::MUT_BORROW_GLOBAL_GENERIC_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::MutBorrowGlobalGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }
             Opcodes::IMM_BORROW_GLOBAL_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::ImmBorrowGlobalDeprecated(load_struct_def_index(cursor)?)
             }
             Opcodes::IMM_BORROW_GLOBAL_GENERIC_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::ImmBorrowGlobalGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }
             Opcodes::MOVE_FROM_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::MoveFromDeprecated(load_struct_def_index(cursor)?)
             }
             Opcodes::MOVE_FROM_GENERIC_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::MoveFromGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }
             Opcodes::MOVE_TO_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::MoveToDeprecated(load_struct_def_index(cursor)?)
             }
             Opcodes::MOVE_TO_GENERIC_DEPRECATED => {
+                check_deprecate_global_storage_ops(cursor)?;
                 Bytecode::MoveToGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }
         };
@@ -2100,6 +2134,7 @@ struct VersionedBinary<'a, 'b> {
 #[derive(Debug)]
 struct VersionedCursor<'a> {
     version: u32,
+    deprecate_global_storage_ops: bool,
     cursor: Cursor<&'a [u8]>,
 }
 
@@ -2160,7 +2195,11 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
             return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
         }
 
-        let mut versioned_cursor = VersionedCursor { version, cursor };
+        let mut versioned_cursor = VersionedCursor {
+            version,
+            deprecate_global_storage_ops: binary_config.deprecate_global_storage_ops,
+            cursor,
+        };
         // load table info
         let table_count = load_table_count(&mut versioned_cursor)?;
         let mut tables: Vec<Table> = Vec::new();
@@ -2209,8 +2248,9 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
 
     fn new_cursor(&self, start: usize, end: usize) -> VersionedCursor<'a> {
         VersionedCursor {
-            cursor: Cursor::new(&self.binary[start + self.data_offset..end + self.data_offset]),
             version: self.version(),
+            deprecate_global_storage_ops: self.binary_config.deprecate_global_storage_ops,
+            cursor: Cursor::new(&self.binary[start + self.data_offset..end + self.data_offset]),
         }
     }
 
@@ -2252,7 +2292,11 @@ impl<'a> VersionedCursor<'a> {
 
     #[cfg(test)]
     fn new_for_test(version: u32, cursor: Cursor<&'a [u8]>) -> Self {
-        Self { version, cursor }
+        Self {
+            version,
+            deprecate_global_storage_ops: false,
+            cursor,
+        }
     }
 }
 
