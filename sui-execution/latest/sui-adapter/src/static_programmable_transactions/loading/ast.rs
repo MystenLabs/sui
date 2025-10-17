@@ -223,9 +223,7 @@ impl Type {
                 Vector(v) => stack.push(&v.element_type),
                 Reference(_, inner) => stack.push(inner),
                 Datatype(dt) => {
-                    for arg in &dt.type_arguments {
-                        stack.push(arg);
-                    }
+                    stack.extend(&dt.type_arguments);
                 }
             }
         }

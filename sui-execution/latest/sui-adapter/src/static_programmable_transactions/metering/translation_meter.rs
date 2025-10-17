@@ -33,11 +33,7 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         let amount = (num_inputs as u64)
             .max(1)
             .saturating_mul(self.protocol_config.translation_per_input_base_charge());
-        debug_assert!(amount > 0);
-        self.charger
-            .move_gas_status_mut()
-            .deduct_gas(amount.into())
-            .map_err(Self::gas_error)
+        self.charge(amount)
     }
 
     pub fn charge_pure_input_bytes(&mut self, num_bytes: usize) -> Result<(), ExecutionError> {
