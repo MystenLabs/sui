@@ -280,10 +280,10 @@ impl MockStore {
 
         let key = pipeline.to_string();
         let mut total = 0;
-        let inner = self.data.entry(key).or_insert_with(DashMap::new);
+        let inner = self.data.entry(key).or_default();
         for (cp, v) in values {
             total += v.len();
-            inner.entry(cp).or_insert_with(Vec::new).extend(v);
+            inner.entry(cp).or_default().extend(v);
         }
         Ok(total)
     }
@@ -312,7 +312,7 @@ impl MockStore {
 
         let key = pipeline.to_string();
         let mut total = 0;
-        let inner = self.data.entry(key).or_insert_with(DashMap::new);
+        let inner = self.data.entry(key).or_default();
         total += values.len();
         inner.insert(checkpoint, values);
         Ok(total)
