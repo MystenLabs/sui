@@ -186,7 +186,7 @@ pub fn simulate_transaction(
             .filter_map(|(object_ref, _owner, _kind)| objects.get(&object_ref.into()).cloned())
             .collect::<Vec<_>>();
 
-        message.balance_changes = read_mask
+        message.balance_changes = submask
             .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
             .then(|| {
                 derive_balance_changes(&effects, &input_objects, &output_objects)
