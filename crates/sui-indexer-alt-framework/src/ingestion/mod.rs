@@ -157,7 +157,11 @@ impl IngestionService {
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub async fn run<R>(self, checkpoints: R, initial_commit_hi: Option<u64>) -> Result<JoinHandle<()>>
+    pub async fn run<R>(
+        self,
+        checkpoints: R,
+        initial_commit_hi: Option<u64>,
+    ) -> Result<JoinHandle<()>>
     where
         R: std::ops::RangeBounds<u64> + Send + 'static,
     {
