@@ -7,7 +7,6 @@ use tower::Service;
 
 pub mod alpha;
 pub mod v2;
-pub(crate) mod v2beta2;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
