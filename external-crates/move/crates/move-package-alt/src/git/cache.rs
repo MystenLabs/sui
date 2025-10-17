@@ -13,7 +13,7 @@ use path_clean::PathClean;
 use tokio::process::Command;
 use tracing::{debug, info};
 
-use crate::schema::GitSha;
+use crate::{package::package_lock::PackageSystemLock, schema::GitSha};
 
 use super::errors::{GitError, GitResult};
 
@@ -167,6 +167,8 @@ impl GitTree {
     ///
     /// Fails if `allow_dirty` is false and a dirty checkout of the directory already exists
     async fn checkout_repo(&self, allow_dirty: bool) -> GitResult<PathBuf> {
+        // All git checkouts are sequentialized
+        let _lock = PackageSystemLock::new_for_git().map_err(GitError::LockingError)?;
         let tree_path = self.path_to_tree();
 
         // create repo if necessary

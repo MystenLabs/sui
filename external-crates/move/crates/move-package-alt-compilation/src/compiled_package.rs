@@ -205,6 +205,15 @@ impl From<BTreeMap<PackageName, NamedAddress>> for BuildNamedAddresses {
     }
 }
 
+impl From<BuildNamedAddresses> for BTreeMap<Symbol, AccountAddress> {
+    fn from(val: BuildNamedAddresses) -> Self {
+        val.inner
+            .into_iter()
+            .map(|(pkg, address)| (pkg, address.into_inner()))
+            .collect()
+    }
+}
+
 fn format_named_addresses(
     value: BTreeMap<PackageName, NamedAddress>,
     root_as_zero: bool,

@@ -59,19 +59,22 @@ pub mod test_utils {
     use crate::{BuildConfig, CompiledPackage};
     use std::path::PathBuf;
 
-    pub fn compile_basics_package() -> CompiledPackage {
-        compile_example_package("../../examples/move/basics")
+    pub async fn compile_basics_package() -> CompiledPackage {
+        compile_example_package("../../examples/move/basics").await
     }
 
-    pub fn compile_managed_coin_package() -> CompiledPackage {
-        compile_example_package("../../crates/sui-core/src/unit_tests/data/managed_coin")
+    pub async fn compile_managed_coin_package() -> CompiledPackage {
+        compile_example_package("../../crates/sui-core/src/unit_tests/data/managed_coin").await
     }
 
-    pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
+    pub async fn compile_example_package(relative_path: &str) -> CompiledPackage {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push(relative_path);
 
-        BuildConfig::new_for_testing().build(&path).unwrap()
+        BuildConfig::new_for_testing()
+            .build_async(&path)
+            .await
+            .unwrap()
     }
 }
 
@@ -118,20 +121,19 @@ impl BuildConfig {
         }
     }
 
-    pub fn new_for_testing_replace_addresses<I, S>(_dep_original_addresses: I) -> Self
+    pub fn new_for_testing_replace_addresses<I, S>(dep_original_addresses: I) -> Self
     where
         I: IntoIterator<Item = (S, ObjectID)>,
         S: Into<String>,
     {
-        todo!()
-        // let mut build_config = Self::new_for_testing();
-        // for (addr_name, obj_id) in dep_original_addresses {
-        //     build_config
-        //         .config
-        //         .additional_named_addresses
-        //         .insert(addr_name.into(), AccountAddress::from(obj_id));
-        // }
-        // build_config
+        let mut build_config = Self::new_for_testing();
+        for (addr_name, obj_id) in dep_original_addresses {
+            build_config
+                .config
+                .additional_named_addresses
+                .insert(addr_name.into(), AccountAddress::from(obj_id));
+        }
+        build_config
     }
 
     fn fn_info(units: &[AnnotatedCompiledModule]) -> FnInfoMap {

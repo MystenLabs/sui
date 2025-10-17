@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::io::Write;
 use std::path::PathBuf;
 use std::{collections::BTreeMap, fmt, path::Path};
 
@@ -100,7 +101,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         // hold a lock to the package system. All operations with Move package should be sequential
         // to avoid weird side-effects in our caches.
-        let _lock = PackageSystemLock::new()?;
+        let _lock = PackageSystemLock::new_for_project(package_path.path())?;
 
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
@@ -281,10 +282,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// if `self` was loaded with [Self::load_ignore_digests], then the digests will not be
     /// changed (since no repinning was performed).
     pub fn save_to_disk(&self) -> PackageResult<()> {
-        std::fs::write(
-            self.graph.root_package().path().lockfile_path(),
-            self.lockfile.render_as_toml(),
-        )?;
+        let mut file =
+            PackageSystemLock::new_for_file(self.graph.root_package().path().lockfile_path())?;
+
+        file.file_mut()
+            .write_all(self.lockfile.render_as_toml().as_bytes())?;
+
         Ok(())
     }
 

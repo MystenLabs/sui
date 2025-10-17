@@ -15,11 +15,11 @@ pub struct New {
 
 impl New {
     pub fn execute(self, path: Option<&Path>) -> anyhow::Result<()> {
-        let name = &self.new.name.to_lowercase();
-        let provided_name = &self.new.name.to_string();
+        let name = self.new.package_name();
+        let path_name = self.new.name.to_string();
 
         self.new.execute(path)?;
-        let p = path.unwrap_or_else(|| Path::new(&provided_name));
+        let p = path.unwrap_or_else(|| Path::new(&path_name));
         let mut w = std::fs::File::create(
             p.join(SourcePackageLayout::Sources.path())
                 .join(format!("{name}.move")),

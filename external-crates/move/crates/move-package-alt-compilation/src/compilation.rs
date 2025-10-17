@@ -4,9 +4,7 @@
 use crate::{
     build_config::BuildConfig,
     build_plan::BuildPlan,
-    compiled_package::{
-        BuildNamedAddresses, CompiledPackage, CompiledPackageInfo, CompiledUnitWithSource,
-    },
+    compiled_package::{CompiledPackage, CompiledPackageInfo, CompiledUnitWithSource},
     documentation::build_docs,
     shared,
     source_discovery::get_sources,
@@ -32,14 +30,10 @@ use move_compiler::{
     },
     sui_mode,
 };
-use move_core_types::account_address::AccountAddress;
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult,
-    flavor::MoveFlavor,
-    graph::{NamedAddress, PackageInfo},
-    package::RootPackage,
-    schema::{Environment, OriginalID},
+    errors::PackageResult, flavor::MoveFlavor, graph::PackageInfo, package::RootPackage,
+    schema::Environment,
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -139,7 +133,14 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
     // compilation
     if build_config.generate_docs {
         // TODO: fix this root_name_address_map
-        let root_named_address_map = BTreeMap::new();
+        let named_addresses = root_pkg
+            .package_graph()
+            .root_package_info()
+            .named_addresses()?;
+
+        // TODO: pkg-alt verify this is producing the correct map.
+        let root_named_address_map = build_config.addresses_for_config(named_addresses).into();
+
         let program_info = program_info_hook.take_typing_info();
         let model = move_model_2::source_model::Model::from_source(
             file_map.clone(),
@@ -176,7 +177,7 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
         root_compiled_units.clone(),
         compiled_package_info.clone(),
         deps_compiled_units.clone(),
-        compiled_docs,
+        compiled_docs.clone(),
         package_name,
         under_path,
     )?;
@@ -185,9 +186,8 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
         compiled_package_info,
         root_compiled_units,
         deps_compiled_units,
-        compiled_docs: None,
         file_map,
-        // compiled_docs,
+        compiled_docs,
     };
 
     Ok(compiled_package)
@@ -361,32 +361,9 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
         }
 
-        // Build the named address mapping for this package taking into consideration if the
-        // set_unpublished_deps_to_zero flag is set
-        let named_addresses: BTreeMap<_, _> = pkg
-            .named_addresses()?
-            .into_iter()
-            .map(|(id, addr)| {
-                (
-                    id,
-                    match addr {
-                        NamedAddress::Unpublished { dummy_addr: _ }
-                            if build_config.set_unpublished_deps_to_zero =>
-                        {
-                            NamedAddress::Defined(OriginalID(AccountAddress::ZERO))
-                        }
-                        addr => addr,
-                    },
-                )
-            })
-            .collect();
         // if the root_as_zero flag is set, we want to ensure that the root package is always
         // mapped to `0x0`
-        let addresses: BuildNamedAddresses = if build_config.root_as_zero {
-            BuildNamedAddresses::root_as_zero(named_addresses)
-        } else {
-            named_addresses.into()
-        };
+        let addresses = build_config.addresses_for_config(pkg.named_addresses()?);
 
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {

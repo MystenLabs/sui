@@ -101,9 +101,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test
         run: |
-          # TODO: pkg-alt DISABLED ALL TESTS EXCEPT sui-move, sui-move-build, and sui crates
-          # cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
-          cargo nextest run --profile ci -p sui -p sui-move-build -p sui-move
+          cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
       # Ensure there are no uncommitted changes in the repo after running tests
       # TODO: pkg-alt DISABLED THIS SINCE IT IS FAILING DUE TO UNCOMMITTED CHANGES
       # - run: scripts/changed-files.sh

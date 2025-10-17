@@ -33,6 +33,10 @@ move-cli.workspace = true
 move-package-alt-compilation.workspace = true
 move-unit-test.workspace = true
 sui-config.workspace = true
+tokio.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+msim.workspace = true
 
 [dependencies]
 anyhow.workspace = true

@@ -305,6 +305,16 @@ impl TestTransactionBuilder {
         self
     }
 
+    pub async fn publish_async(mut self, path: PathBuf) -> Self {
+        let compiled_package = BuildConfig::new_for_testing()
+            .build_async(&path)
+            .await
+            .unwrap();
+        self.test_data =
+            TestTransactionData::Publish(PublishData::CompiledPackage(compiled_package));
+        self
+    }
+
     pub fn publish_with_deps(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
         self.test_data = TestTransactionData::Publish(PublishData::Source(path, true));
@@ -317,8 +327,8 @@ impl TestTransactionBuilder {
         self
     }
 
-    pub fn publish_examples(self, subpath: &'static str) -> Self {
-        let path = if let Ok(p) = std::env::var("MOVE_EXAMPLES_DIR") {
+    pub async fn publish_examples(self, subpath: &'static str) -> Self {
+        let path: PathBuf = if let Ok(p) = std::env::var("MOVE_EXAMPLES_DIR") {
             let mut path = PathBuf::from(p);
             path.extend([subpath]);
             path
@@ -327,7 +337,18 @@ impl TestTransactionBuilder {
             path.extend(["..", "..", "examples", "move", subpath]);
             path
         };
-        self.publish(path)
+        self.publish_async(path).await
+    }
+
+    pub async fn publish_with_data_async(mut self, data: PublishData) -> Self {
+        assert!(matches!(self.test_data, TestTransactionData::Empty));
+
+        if let PublishData::Source(path, _) = &data {
+            return self.publish_async(path.clone()).await;
+        }
+
+        self.test_data = TestTransactionData::Publish(data);
+        self
     }
 
     pub fn programmable(mut self, programmable: ProgrammableTransaction) -> Self {
@@ -377,14 +398,30 @@ impl TestTransactionBuilder {
                     .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
                 self.gas_price,
             ),
+            TestTransactionData::Programmable(pt) => TransactionData::new_programmable(
+                self.sender,
+                vec![self.gas_object],
+                pt,
+                self.gas_budget
+                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
+                self.gas_price,
+            ),
             TestTransactionData::Publish(data) => {
                 let (all_module_bytes, dependencies) = match data {
-                    PublishData::Source(path, with_unpublished_deps) => {
-                        let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
-                        let all_module_bytes =
-                            compiled_package.get_package_bytes(with_unpublished_deps);
-                        let dependencies = compiled_package.get_dependency_storage_package_ids();
-                        (all_module_bytes, dependencies)
+                    PublishData::Source(_path, _with_unpublished_deps) => {
+                        #[cfg(msim)]
+                        panic!("You must call `publish_async` when you have a `publish from source` operations in simtests.");
+
+                        #[cfg(not(msim))]
+                        {
+                            let compiled_package =
+                                BuildConfig::new_for_testing().build(&_path).unwrap();
+                            let all_module_bytes =
+                                compiled_package.get_package_bytes(_with_unpublished_deps);
+                            let dependencies =
+                                compiled_package.get_dependency_storage_package_ids();
+                            (all_module_bytes, dependencies)
+                        }
                     }
                     PublishData::ModuleBytes(bytecode) => (bytecode, vec![]),
                     PublishData::CompiledPackage(compiled_package) => {
@@ -405,14 +442,6 @@ impl TestTransactionBuilder {
                     self.gas_price,
                 )
             }
-            TestTransactionData::Programmable(pt) => TransactionData::new_programmable(
-                self.sender,
-                vec![self.gas_object],
-                pt,
-                self.gas_budget
-                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
-                self.gas_price,
-            ),
             TestTransactionData::Empty => {
                 panic!("Cannot build empty transaction");
             }
@@ -589,7 +618,8 @@ pub async fn make_publish_transaction(context: &WalletContext, path: PathBuf) ->
     context
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .publish(path)
+                .publish_async(path)
+                .await
                 .build(),
         )
         .await
@@ -616,7 +646,8 @@ pub async fn publish_package(context: &WalletContext, path: PathBuf) -> ObjectRe
     let txn = context
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .publish(path)
+                .publish_async(path)
+                .await
                 .build(),
         )
         .await;
@@ -632,6 +663,7 @@ pub async fn publish_basics_package(context: &WalletContext) -> ObjectRef {
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
                 .publish_examples("basics")
+                .await
                 .build(),
         )
         .await;
@@ -786,6 +818,7 @@ pub async fn publish_nfts_package(
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
                 .publish_examples("nft")
+                .await
                 .build(),
         )
         .await;

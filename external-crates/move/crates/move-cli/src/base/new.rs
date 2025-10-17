@@ -26,10 +26,8 @@ impl New {
     }
 
     pub fn execute(self, path: Option<&Path>) -> anyhow::Result<()> {
-        // TODO warn on build config flags
-
         ensure!(
-            Identifier::is_valid(&self.name),
+            Identifier::is_valid(&self.package_name()),
             "Invalid package name. Package name must start with a letter or underscore \
                      and consist only of letters, numbers, and underscores."
         );
@@ -38,7 +36,7 @@ impl New {
         create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
         let mut w = std::fs::File::create(
             path.join(SourcePackageLayout::Sources.path())
-                .join(format!("{}.move", self.name)),
+                .join(format!("{}.move", self.package_name())),
         )?;
 
         writeln!(
@@ -53,7 +51,7 @@ module {name}::{name};
 public fun hello_world() {{
 
 }}"#,
-            name = self.name
+            name = self.package_name()
         )?;
         self.write_move_toml(path)?;
         self.write_gitignore(path)?;
@@ -84,7 +82,7 @@ public fun hello_world() {{
 
     /// create default `Move.toml`
     fn write_move_toml(&self, path: &Path) -> anyhow::Result<()> {
-        let Self { name } = self;
+        let name = self.package_name();
 
         let _ = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
         let toml_content = r#"# Full documentation for Move.toml can be found at: docs.sui.io
@@ -125,5 +123,10 @@ edition = "2024"         # use "2024" for Move 2024 edition
         std::fs::write(&toml_path, toml_content)?;
 
         Ok(())
+    }
+
+    /// The name of the package is the lower case variant of the provided name
+    pub fn package_name(&self) -> String {
+        self.name.to_lowercase()
     }
 }

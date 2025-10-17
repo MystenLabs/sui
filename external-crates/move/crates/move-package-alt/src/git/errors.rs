@@ -32,6 +32,9 @@ pub enum GitError {
 
     #[error("relative path `{path}` is not contained in the repository")]
     BadPath { path: PathBuf },
+
+    #[error(transparent)]
+    LockingError(#[from] anyhow::Error),
 }
 
 #[derive(Error, Debug)]
