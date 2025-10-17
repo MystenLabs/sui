@@ -91,6 +91,12 @@ This file contains content similar to the following:
 
 When you create a new address on your system, a new line is added to this file that consists of the address's private key. Make sure you do not expose this to anyone, as they can use it to get access to your account.
 
+:::danger 
+
+The `sui.keystore` file is **not** the same as your machine's local keystore that contains passwords for websites, biometric data like fingerprints, or other authentication credentials. Your machine's local keystore cannot sign and submit transactions on Sui. Only addresses with their associated keys included in the `sui.keystore` file can sign and submit transactions.
+
+:::
+
 ## Address aliases 
 
 An _alias_ is a human-readable name that can be used in place of a Sui address's full 32-byte hexadecimal string. They can be used anywhere an address would be used to make referencing the address easier in scripts and CLI commands. 
