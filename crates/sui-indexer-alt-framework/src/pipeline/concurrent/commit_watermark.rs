@@ -371,7 +371,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Verify watermark progression
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 3);
 
         // Clean up
@@ -396,7 +396,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Verify watermark hasn't progressed past 2
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 2);
 
         // Send checkpoint 3 to fill the gap
@@ -410,7 +410,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         // Verify watermark has progressed to 4
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 4);
 
         // Clean up
@@ -435,14 +435,14 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         // Verify watermark hasn't progressed
-        let watermark = setup.store.watermark();
+        let watermark = setup.store.watermark(DataPipeline::NAME);
         assert!(watermark.is_none());
 
         // Wait for next polling and processing
         tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
 
         // Verify watermark has progressed
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Clean up
@@ -472,14 +472,14 @@ mod tests {
 
         // Wait for initial poll to be over
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-        let watermark = setup.store.watermark();
+        let watermark = setup.store.watermark(DataPipeline::NAME);
         assert!(watermark.is_none());
 
         // Wait for retries to complete
         tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
 
         // Verify watermark is still none
-        let watermark = setup.store.watermark();
+        let watermark = setup.store.watermark(DataPipeline::NAME);
         assert!(watermark.is_none());
 
         // Clean up
@@ -509,7 +509,7 @@ mod tests {
 
         // Wait for initial poll to be over
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-        let watermark = setup.store.watermark();
+        let watermark = setup.store.watermark(DataPipeline::NAME);
         assert!(watermark.is_none());
 
         let part = WatermarkPart {
@@ -525,7 +525,7 @@ mod tests {
         // Wait for retries to complete
         tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
 
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 11);
 
         // Clean up
@@ -556,7 +556,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         // Verify watermark hasn't progressed
-        let watermark = setup.store.watermark();
+        let watermark = setup.store.watermark(DataPipeline::NAME);
         assert!(watermark.is_none());
 
         // Send the other two parts to complete the watermark
@@ -570,7 +570,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
 
         // Verify watermark has progressed
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Clean up
@@ -594,7 +594,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         // Verify watermark hasn't progressed
-        let watermark = setup.store.watermark();
+        let watermark = setup.store.watermark(DataPipeline::NAME);
         assert!(watermark.is_none());
 
         // Send the checkpoint 0 watermark to fill the gap.
@@ -608,7 +608,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(1200)).await;
 
         // Verify watermark has progressed
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Clean up

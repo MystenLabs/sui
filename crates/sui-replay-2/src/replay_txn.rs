@@ -496,11 +496,7 @@ fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<ObjectKey>, anyh
                             object_id: *id,
                             version_query: VersionQuery::Version(seq_num.value()),
                         }),
-                        ObjectArg::SharedObject {
-                            id: _,
-                            initial_shared_version: _,
-                            mutable: _,
-                        } => {
+                        ObjectArg::SharedObject { .. } => {
                             None // will be in transaction effects
                         }
                         ObjectArg::Receiving((id, seq_num, _digest)) => Some(ObjectKey {
@@ -626,12 +622,12 @@ pub fn get_input_objects_for_replay(
             InputObjectKind::SharedMoveObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             } => {
                 let input_object_kind = InputObjectKind::SharedMoveObject {
                     id: *id,
                     initial_shared_version: *initial_shared_version,
-                    mutable: *mutable,
+                    mutability: *mutability,
                 };
                 let versions =
                     object_cache

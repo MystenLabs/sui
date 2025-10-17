@@ -626,7 +626,11 @@ fn resolve_shared_input_with_object(
     Ok(ObjectArg::SharedObject {
         id: object_id,
         initial_shared_version,
-        mutable,
+        mutability: if mutable {
+            sui_types::transaction::SharedObjectMutability::Mutable
+        } else {
+            sui_types::transaction::SharedObjectMutability::Immutable
+        },
     })
 }
 

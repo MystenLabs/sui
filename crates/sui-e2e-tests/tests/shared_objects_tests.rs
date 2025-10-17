@@ -19,7 +19,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest};
-use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
 
@@ -320,12 +320,12 @@ async fn call_shared_object_contract() {
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     };
     let counter_object_arg_imm = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
-        mutable: false,
+        mutability: SharedObjectMutability::Immutable,
     };
     let counter_creation_transaction = test_cluster
         .get_object_from_fullnode_store(&counter_id)

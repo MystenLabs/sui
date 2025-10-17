@@ -11,7 +11,7 @@ use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
 use sui_types::base_types::{FullObjectRef, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
-use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
 use tracing::info;
 
@@ -40,7 +40,7 @@ async fn party_object_deletion() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
         )
         .build();
@@ -100,7 +100,7 @@ async fn party_object_deletion_multiple_times() {
                 ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
             )
             .build();
@@ -177,7 +177,7 @@ async fn party_object_deletion_multiple_times_cert_racing() {
                 ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
             )
             .build();
@@ -235,7 +235,7 @@ async fn party_object_transfer() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -305,7 +305,7 @@ async fn party_object_transfer_multiple_times() {
                 ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
                 SuiAddress::ZERO,
             )
@@ -392,7 +392,7 @@ async fn party_object_transfer_multi_certs() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -407,7 +407,7 @@ async fn party_object_transfer_multi_certs() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -423,7 +423,7 @@ async fn party_object_transfer_multi_certs() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -532,7 +532,7 @@ async fn party_object_read() {
                 vec![CallArg::Object(ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: false,
+                    mutability: SharedObjectMutability::Immutable,
                 })],
             )
             .build();
@@ -561,7 +561,7 @@ async fn party_object_read() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             recipient,
         )
@@ -600,7 +600,7 @@ async fn party_object_read() {
                 vec![CallArg::Object(ObjectArg::SharedObject {
                     id: object_id,
                     initial_shared_version: object_initial_shared_version,
-                    mutable: false,
+                    mutability: SharedObjectMutability::Immutable,
                 })],
             )
             .build();
@@ -639,11 +639,11 @@ async fn party_object_read() {
 async fn party_object_grpc() {
     use sui_rpc::field::FieldMask;
     use sui_rpc::field::FieldMaskUtil;
-    use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
-    use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
-    use sui_rpc::proto::sui::rpc::v2beta2::owner::OwnerKind;
-    use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
-    use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
+    use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
+    use sui_rpc::proto::sui::rpc::v2::state_service_client::StateServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 
     if sui_simulator::has_mainnet_protocol_config_override() {
         return;
@@ -665,7 +665,7 @@ async fn party_object_grpc() {
         .await
         .unwrap();
 
-    let mut live_data_service_client = LiveDataServiceClient::new(channel.clone());
+    let mut live_data_service_client = StateServiceClient::new(channel.clone());
     let mut ledger_service_client = LedgerServiceClient::new(channel);
 
     // run a list operation to make sure the party object shows up for the current owner
@@ -714,7 +714,7 @@ async fn party_object_grpc() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )
@@ -783,19 +783,20 @@ async fn party_object_grpc() {
 async fn party_coin_grpc() {
     use sui_rpc::field::FieldMask;
     use sui_rpc::field::FieldMaskUtil;
-    use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
-    use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
-    use sui_rpc::proto::sui::rpc::v2beta2::owner::OwnerKind;
-    use sui_rpc::proto::sui::rpc::v2beta2::Argument;
-    use sui_rpc::proto::sui::rpc::v2beta2::Command;
-    use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
-    use sui_rpc::proto::sui::rpc::v2beta2::Input;
-    use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
-    use sui_rpc::proto::sui::rpc::v2beta2::MoveCall;
-    use sui_rpc::proto::sui::rpc::v2beta2::ProgrammableTransaction;
-    use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionRequest;
-    use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
-    use sui_rpc::proto::sui::rpc::v2beta2::TransactionKind;
+    use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
+    use sui_rpc::proto::sui::rpc::v2::state_service_client::StateServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::Argument;
+    use sui_rpc::proto::sui::rpc::v2::Command;
+    use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
+    use sui_rpc::proto::sui::rpc::v2::Input;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+    use sui_rpc::proto::sui::rpc::v2::MoveCall;
+    use sui_rpc::proto::sui::rpc::v2::ProgrammableTransaction;
+    use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
+    use sui_rpc::proto::sui::rpc::v2::Transaction;
+    use sui_rpc::proto::sui::rpc::v2::TransactionKind;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
     use sui_types::Identifier;
@@ -811,7 +812,8 @@ async fn party_coin_grpc() {
         .await
         .unwrap();
 
-    let mut live_data_service_client = LiveDataServiceClient::new(channel.clone());
+    let mut live_data_service_client = StateServiceClient::new(channel.clone());
+    let mut execution_client = TransactionExecutionServiceClient::new(channel.clone());
     let mut ledger_service_client = LedgerServiceClient::new(channel);
 
     // Make a transaction to transfer 1 gas coin that is Address owned and 1 gas coin that is
@@ -947,7 +949,7 @@ async fn party_coin_grpc() {
     }));
     unresolved_transaction.sender = Some(recipient.to_string());
 
-    let resolved = live_data_service_client
+    let resolved = execution_client
         .simulate_transaction(
             SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
         )
@@ -1023,7 +1025,7 @@ async fn party_object_jsonrpc() {
             ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: object_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
             SuiAddress::ZERO,
         )

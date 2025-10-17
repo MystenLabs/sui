@@ -43,7 +43,7 @@ use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::bridge::{BridgeChainId, BridgeCommitteeSummary, TOKEN_ID_USDC};
 use sui_types::crypto::ToFromBytes;
 use sui_types::object::Owner;
-use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use tokio::task::JoinHandle;
@@ -51,7 +51,7 @@ use tokio::task::JoinHandle;
 pub const DUMMY_MUTALBE_BRIDGE_OBJECT_ARG: ObjectArg = ObjectArg::SharedObject {
     id: SUI_BRIDGE_OBJECT_ID,
     initial_shared_version: SequenceNumber::from_u64(1),
-    mutable: true,
+    mutability: SharedObjectMutability::Mutable,
 };
 
 pub fn get_test_authority_and_key(

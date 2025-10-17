@@ -122,7 +122,7 @@ Frontend code is not included in this guide. The Move call is demonstrated using
     :::info
 
     - To allow the enclave to access additional external domains, add them to `allowed_endpoints.yaml`. If you update this file, you must re-run `configure_enclave.sh` to generate a new instance, as the endpoint list is compiled into the enclave build.
-    - You can optionally create a secret to store any sensitive value you don’t want included in the codebase. The secret is passed to the enclave as an environment variable. You can verify newly created secrets or find existing ARNs in the [AWS Secrets Manager console](https://us-east-1.console.aws.amazon.com/secretsmanager/listsecrets?region=<REGION>).
+    - You can optionally create a secret to store any sensitive value you don’t want included in the codebase. The secret is passed to the enclave as an environment variable. You can verify newly created secrets or find existing ARNs in the [AWS Secrets Manager console](https://us-east-1.console.aws.amazon.com/secretsmanager/).
 
     :::
 

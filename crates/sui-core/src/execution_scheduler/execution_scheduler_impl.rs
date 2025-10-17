@@ -573,7 +573,7 @@ mod test {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
-    use sui_types::transaction::VerifiedTransaction;
+    use sui_types::transaction::{SharedObjectMutability, VerifiedTransaction};
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         crypto::deterministic_random_account_key,
@@ -788,7 +788,7 @@ mod test {
         let shared_object_arg_read = ObjectArg::SharedObject {
             id: shared_object.id(),
             initial_shared_version,
-            mutable: false,
+            mutability: SharedObjectMutability::Immutable,
         };
         let transaction_read_0 = make_transaction(
             gas_objects[0].clone(),
@@ -817,7 +817,7 @@ mod test {
         let shared_object_arg_default = ObjectArg::SharedObject {
             id: shared_object.id(),
             initial_shared_version,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
         let transaction_default = make_transaction(
             gas_objects[2].clone(),
@@ -836,7 +836,7 @@ mod test {
         let shared_object_arg_read_2 = ObjectArg::SharedObject {
             id: shared_object_2.id(),
             initial_shared_version: initial_shared_version_2,
-            mutable: false,
+            mutability: SharedObjectMutability::Immutable,
         };
         let transaction_read_2 = make_transaction(
             gas_objects[3].clone(),
@@ -1380,12 +1380,12 @@ mod test {
         let shared_object_arg_1 = ObjectArg::SharedObject {
             id: shared_object_1.id(),
             initial_shared_version: initial_shared_version_1,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
         let shared_object_arg_2 = ObjectArg::SharedObject {
             id: shared_object_2.id(),
             initial_shared_version: initial_shared_version_2,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
 
         // Changes the desired owned object version to a higher version. We will make it available later.

@@ -17,6 +17,7 @@ use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::ObjectArg;
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
 use sui_types::Identifier;
@@ -91,7 +92,7 @@ async fn test_unchanged_loaded_runtime_objects() {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: "0x5".parse().unwrap(),
                 initial_shared_version: 1.into(),
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })],
         )
         .unwrap();

@@ -84,8 +84,8 @@ use sui_types::{
     signature::GenericSignature,
     sui_serde,
     transaction::{
-        InputObjectKind, ObjectArg, SenderSignedData, Transaction, TransactionData,
-        TransactionDataAPI, TransactionKind,
+        InputObjectKind, ObjectArg, SenderSignedData, SharedObjectMutability, Transaction,
+        TransactionData, TransactionDataAPI, TransactionKind,
     },
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -1900,7 +1900,7 @@ impl SuiClientCommands {
                         ObjectArg::SharedObject {
                             id,
                             initial_shared_version,
-                            mutable: true,
+                            mutability: SharedObjectMutability::Mutable,
                         }
                     }
                 })?;

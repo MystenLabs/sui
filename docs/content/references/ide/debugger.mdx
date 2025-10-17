@@ -318,7 +318,7 @@ If you cannot locate sources for a user package, you can still locate source cod
 
 System packages in Sui (the Sui framework package in particular), might only change when the protocol version for Sui changes. These changes [are tracked](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework-snapshot/manifest.json) and include information about protocol version numbers (starting with 3) and corresponding git revisions that represent the exact version of the Sui framework package's source code at a given protocol version. This allows you to locate which protocol version was in effect when the user package was published on-chain.
 
-Run the following query against the mainnet's GraphQL [endpoint](https://graphql.mainnet.sui.io/graphql) where the `address` parameter is the ID of the user package (`0xb29d83c26cdd2a64959263abbcfc4a6937f0c9fccaf98580ca56faded65be244` in this example).
+Run the following query against Mainnet's GraphQL [endpoint](https://graphql.mainnet.sui.io/graphql) where the `address` parameter is the ID of the user package (`0xb29d83c26cdd2a64959263abbcfc4a6937f0c9fccaf98580ca56faded65be244` in this example).
 
 ```
 {

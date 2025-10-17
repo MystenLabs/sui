@@ -855,7 +855,8 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
-          - mutable: BOOL
+          - mutability:
+              TYPENAME: SharedObjectMutability
     2:
       Receiving:
         NEWTYPE:
@@ -1040,6 +1041,12 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+SharedObjectMutability:
+  ENUM:
+    0:
+      Immutable: UNIT
+    1:
+      Mutable: UNIT
 StoredExecutionTimeObservations:
   ENUM:
     0:

@@ -175,7 +175,7 @@ pub fn simulate_transaction(
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
 
-        message.balance_changes = read_mask
+        message.balance_changes = submask
             .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
             .then(|| {
                 derive_balance_changes_2(&effects, &objects)

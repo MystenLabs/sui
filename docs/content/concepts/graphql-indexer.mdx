@@ -5,7 +5,7 @@ beta: devnet, testnet, mainnet
 keywords: [ indexer, archival store, graphql, custom indexer ]
 ---
 
-The GraphQL and `sui-indexer-alt` (Indexer) stack are part of the [Sui data access infrastructure](../guides/developer/getting-started/data-serving.mdx). The stack provides access to on-chain data through a high-performance GraphQL service backed by a scalable and general-purpose indexer. This stack is optimized for developers who need flexible queries, structured output, and historical access to data (with configurable retention) across the Sui network.
+The GraphQL and `sui-indexer-alt` (Indexer) stack are part of the [Sui data access infrastructure](../guides/developer/sui-101/data-serving.mdx). The stack provides access to on-chain data through a high-performance GraphQL service backed by a scalable and general-purpose indexer. This stack is optimized for developers who need flexible queries, structured output, and historical access to data (with configurable retention) across the Sui network.
 
 GraphQL is ideal for applications that require rich query patterns over structured data, such as fetching owned objects, transaction history, specific onchain attributes, and more. The GraphQL service runs on top of a Postgres-compatible database that is updated by different Indexer pipelines in parallel.
 
@@ -30,7 +30,7 @@ The key components of the stack include the following:
 
 - **General-purpose Indexer:** Ingests and transforms Sui checkpoint data using configurable and parallel pipelines, and writes it into a Postgres-compatible database. Can be configured to use the Sui remote checkpoint store and a full node as its sources.
 - **Postgres-compatible database:** Stores indexed data for GraphQL queries. Tested using [GCP AlloyDB](https://cloud.google.com/products/alloydb), but you can run any Postgres-compatible database. You're encouraged to test alternative databases and share feedback on performance, cost, and operational characteristics.
-- **GraphQL service:** Serves structured queries over indexed data. Follows the [GraphQL specification](https://graphql.org/) and the supported schema is documented in the [GraphQL API reference](/references/sui-graphql). Also take a look at the [getting started guide](/guides/developer/getting-started/graphql-rpc).
+- **GraphQL service:** Serves structured queries over indexed data. Follows the [GraphQL specification](https://graphql.org/) and the supported schema is documented in the [GraphQL API reference](/references/sui-graphql). Also take a look at the [getting started guide](/guides/developer/advanced/graphql-rpc).
 - **Archival Service:** Enables point lookups for historical data from a key-value store. If unavailable, the GraphQL service falls back to the Postgres-compatible database for lookups, which might be limited by that database's retention policy. See [Archival Store and Service](./archival-store.mdx) for more information.
 - **Consistent Store:** Answers questions about the latest state of the network within the last hour (objects owned by addresses, objects by type, balances by address and type). Consistency is guaranteed by pinning queries to a specific (recent) checkpoint.
 - **Full node:** Enables transaction execution and simulation. Currently, JSON-RPC is used but there will be a switch to [gRPC](/concepts/grpc-overview) soon as the long-term full node API in the future.
