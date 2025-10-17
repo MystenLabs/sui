@@ -23,9 +23,6 @@ pub enum Error {
     #[error("Shutdown signal received, stopping ingestion service")]
     Cancelled,
 
-    #[error("Backpressure: checkpoint {0} exceeds ingest hi {1}")]
-    Backpressured(u64, u64),
-
     #[error(transparent)]
     RpcClientError(#[from] tonic::Status),
 }
