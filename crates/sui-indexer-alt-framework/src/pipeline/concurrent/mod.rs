@@ -365,7 +365,7 @@ mod tests {
             }
 
             // Commit all data at once
-            conn.0.commit_data(grouped).await
+            conn.0.commit_bulk_data(DataPipeline::NAME, grouped).await
         }
 
         async fn prune<'a>(
@@ -374,7 +374,7 @@ mod tests {
             to_exclusive: u64,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            conn.0.prune_data(from, to_exclusive)
+            conn.0.prune_data(DataPipeline::NAME, from, to_exclusive)
         }
     }
 
@@ -472,7 +472,10 @@ mod tests {
 
         // Verify all initial data is available (before any pruning)
         for i in 0..3 {
-            let data = setup.store.wait_for_data(i, TEST_TIMEOUT).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, TEST_TIMEOUT)
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -487,7 +490,10 @@ mod tests {
         // Verify data is still available BEFORE pruning kicks in
         // With long pruning interval (5s), we can safely verify data without race conditions
         for i in 0..6 {
-            let data = setup.store.wait_for_data(i, Duration::from_secs(1)).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, Duration::from_secs(1))
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -496,7 +502,7 @@ mod tests {
 
         // Verify pruning has occurred
         {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
 
             // Verify recent checkpoints are still available
             assert!(data.contains_key(&3));
@@ -530,11 +536,17 @@ mod tests {
         }
 
         // Wait for all data to be processed and committed
-        let watermark = setup.store.wait_for_watermark(9, TEST_TIMEOUT).await;
+        let watermark = setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 9, TEST_TIMEOUT)
+            .await;
 
         // Verify ALL data was processed correctly (no pruning)
         for i in 0..10 {
-            let data = setup.store.wait_for_data(i, Duration::from_secs(1)).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, Duration::from_secs(1))
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -545,7 +557,7 @@ mod tests {
 
         // Verify no data was pruned - all 10 checkpoints should still exist
         let total_checkpoints = {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
             data.len()
         };
         assert_eq!(total_checkpoints, 10);
@@ -569,14 +581,17 @@ mod tests {
         }
 
         // Wait for all data to be processed
-        let _watermark = setup
+        setup
             .store
-            .wait_for_watermark(4, Duration::from_secs(5))
+            .wait_for_watermark(DataPipeline::NAME, 4, Duration::from_secs(5))
             .await;
 
         // Verify all checkpoints were processed correctly despite out-of-order arrival
         for i in 0..5 {
-            let data = setup.store.wait_for_data(i, Duration::from_secs(1)).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, Duration::from_secs(1))
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -601,7 +616,7 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         // Watermark should only progress to 1 (can't progress past the gap)
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Now send the missing checkpoint 2
@@ -611,7 +626,10 @@ mod tests {
             .unwrap();
 
         // Now watermark should progress to 4
-        let watermark = setup.store.wait_for_watermark(4, TEST_TIMEOUT).await;
+        let watermark = setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 4, TEST_TIMEOUT)
+            .await;
         assert_eq!(watermark.checkpoint_hi_inclusive, 4);
 
         setup.shutdown().await;
@@ -678,7 +696,10 @@ mod tests {
             .unwrap();
 
         // Verify data was processed correctly
-        let data = setup.store.wait_for_data(0, TEST_TIMEOUT).await;
+        let data = setup
+            .store
+            .wait_for_data(DataPipeline::NAME, 0, TEST_TIMEOUT)
+            .await;
         assert_eq!(data, vec![1, 2]);
 
         setup.shutdown().await;
@@ -749,7 +770,10 @@ mod tests {
         );
 
         // Verify that some data has been processed (pipeline is working)
-        setup.store.wait_for_any_data(TEST_TIMEOUT).await;
+        setup
+            .store
+            .wait_for_any_data(DataPipeline::NAME, TEST_TIMEOUT)
+            .await;
 
         // Allow pipeline to drain by sending the blocked checkpoint with longer timeout
         setup
@@ -775,10 +799,16 @@ mod tests {
             .unwrap();
 
         // Should eventually succeed despite initial commit failures
-        let _watermark = setup.store.wait_for_watermark(0, TEST_TIMEOUT).await;
+        setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 0, TEST_TIMEOUT)
+            .await;
 
         // Verify data was eventually committed
-        let data = setup.store.wait_for_data(0, Duration::from_secs(1)).await;
+        let data = setup
+            .store
+            .wait_for_data(DataPipeline::NAME, 0, Duration::from_secs(1))
+            .await;
         assert_eq!(data, vec![1, 2]);
 
         setup.shutdown().await;
@@ -811,7 +841,10 @@ mod tests {
         // Verify data is still available BEFORE pruning kicks in
         // With long pruning interval (5s), we can safely verify data without race conditions
         for i in 0..4 {
-            let data = setup.store.wait_for_data(i, Duration::from_secs(1)).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, Duration::from_secs(1))
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -821,7 +854,7 @@ mod tests {
             .wait_for_prune_attempts(0, 2, 1, TEST_TIMEOUT)
             .await;
         {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
             for i in 0..4 {
                 assert!(data.contains_key(&i));
             }
@@ -833,7 +866,7 @@ mod tests {
             .wait_for_prune_attempts(0, 2, 2, TEST_TIMEOUT)
             .await;
         {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
             // Verify recent checkpoints are still available
             assert!(data.contains_key(&2));
             assert!(data.contains_key(&3));
@@ -871,13 +904,16 @@ mod tests {
         }
 
         // Wait for processing to complete
-        let _watermark = setup.store.wait_for_watermark(5, TEST_TIMEOUT).await;
+        setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 5, TEST_TIMEOUT)
+            .await;
 
         // Wait for reader watermark task to attempt updates (with failures and retries)
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         // Verify that reader watermark was eventually updated despite failures
-        let watermark = setup.store.watermark().unwrap();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.reader_lo, 3);
 
         setup.shutdown().await;
@@ -896,10 +932,16 @@ mod tests {
             .unwrap();
 
         // Should eventually succeed despite initial failures
-        let _watermark = setup.store.wait_for_watermark(0, TEST_TIMEOUT).await;
+        setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 0, TEST_TIMEOUT)
+            .await;
 
         // Verify data was eventually committed
-        let data = setup.store.wait_for_data(0, TEST_TIMEOUT).await;
+        let data = setup
+            .store
+            .wait_for_data(DataPipeline::NAME, 0, TEST_TIMEOUT)
+            .await;
         assert_eq!(data, vec![1, 2]);
 
         setup.shutdown().await;
