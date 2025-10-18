@@ -3,6 +3,7 @@
 
 const concepts = [
 	'concepts',
+	'concepts/sui-for-ethereum',
 	'concepts/components',
 	{
 		type: 'category',
