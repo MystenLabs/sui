@@ -162,6 +162,21 @@ public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
     balance.join(into_balance(coin));
 }
 
+// === Address Balance <-> Coin utility functions ===
+
+/// Redeem a `Withdrawal<Balance<T>>` and create a `Coin<T>` from the withdrawn Balance<T>.
+public fun redeem_funds<T>(
+    withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
+    ctx: &mut TxContext,
+): Coin<T> {
+    balance::redeem_funds(withdrawal).into_coin(ctx)
+}
+
+/// Send a coin to an address balance
+public fun send_funds<T>(coin: Coin<T>, recipient: address) {
+    balance::send_funds(coin.into_balance(), recipient);
+}
+
 // === Base Coin functionality ===
 
 #[allow(lint(public_entry))]
