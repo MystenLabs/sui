@@ -241,13 +241,6 @@ impl<'s> Accessor<'s> {
     }
 }
 
-#[cfg(test)]
-impl<'s> Slice<'s> {
-    pub fn new_for_test(layout: &'s MoveTypeLayout, bytes: &'s [u8]) -> Self {
-        Self { layout, bytes }
-    }
-}
-
 impl Vector<'_> {
     fn type_(&self) -> TypeTag {
         TypeTag::Vector(Box::new(if let Some(explicit) = self.type_ {
@@ -573,7 +566,10 @@ pub(crate) mod tests {
     #[test]
     fn test_slice_serialize_roundtrip() {
         let bytes = &[0x01, 0x02, 0x03, 0x04];
-        let slice = Slice::new_for_test(&T::U64, bytes);
+        let slice = Slice {
+            layout: &L::U64,
+            bytes,
+        };
 
         let serialized = bcs::to_bytes(&slice).unwrap();
         assert_eq!(serialized, bytes);
