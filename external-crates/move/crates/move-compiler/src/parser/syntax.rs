@@ -6,6 +6,8 @@
 //      (<T> ",")* <T>?
 // Note that this allows an optional trailing comma.
 
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
     diag,
     diagnostics::{
@@ -28,7 +30,7 @@ pub(crate) struct Context<'env, 'lexer, 'input> {
     env: &'env CompilationEnv,
     reporter: DiagnosticReporter<'env>,
     tokens: &'lexer mut Lexer<'input>,
-    stop_set: TokenSet,
+    stop_set: Rc<RefCell<TokenSet>>,
 }
 
 impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
@@ -37,7 +39,7 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         tokens: &'lexer mut Lexer<'input>,
         package_name: Option<Symbol>,
     ) -> Self {
-        let stop_set = TokenSet::from([Tok::EOF]);
+        let stop_set = Rc::new(RefCell::new(TokenSet::from([Tok::EOF])));
         let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             current_package: package_name,
@@ -50,7 +52,7 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
 
     /// Checks if the current token is a member of the stop set.
     fn at_stop_set(&self) -> bool {
-        self.tokens.at_set(&self.stop_set)
+        self.tokens.at_set(&self.stop_set.borrow())
     }
 
     /// Advances tokens until reaching an element of the stop set, recording diagnostics along the
@@ -90,6 +92,32 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         } = self;
         env.check_feature(reporter, *current_package, feature, loc)
     }
+}
+
+//**************************************************************************************************
+// Macros
+//**************************************************************************************************
+
+macro_rules! with_stop_set {
+    ($context:expr, $stop_set:expr, $body:expr) => {{
+        let __ctx = &$context;
+        let new: &TokenSet = $stop_set;
+        let mut new = new.clone();
+        let __old = {
+            new.union(&__ctx.stop_set.borrow());
+            std::mem::replace(&mut *__ctx.stop_set.borrow_mut(), new)
+        };
+
+        struct Restore(Rc<RefCell<TokenSet>>, TokenSet);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                *self.0.borrow_mut() = std::mem::replace(&mut self.1, TokenSet::new());
+            }
+        }
+        let __restore = Restore(Rc::clone(&__ctx.stop_set), __old);
+
+        { $body }
+    }};
 }
 
 //**************************************************************************************************
@@ -1545,41 +1573,6 @@ fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagno
     ))
 }
 
-// Checks if parsing of a sequence should continue after encountering an error.
-fn should_continue_sequence_after_error(context: &mut Context, diag: Diagnostic) -> bool {
-    context.add_diag(diag);
-    // This is intended to handle a rather specific case when a valid sequence item is on the following line
-    // from the parsing error. This is particularly useful for the IDE use case when a programmer starts
-    // typing an incomplete (and unparsable) line right before the line containing a valid expression.
-    // In this case, we would like to still report the error but try to avoid dropping the valid expression
-    // itself, particularly as it might lead to unnecessary cascading errors to appear if this expression
-    // is a variable declaration as in the example below where we want to avoid `_tmp1` being undefined
-    // in the following lines.
-    //
-    // let v =
-    // let _tmp1 = 42;
-    // let _tmp2 = _tmp1 * param;
-    // let _tmp3 = _tmp1 + param;
-
-    if context.at_stop_set() {
-        // don't continue if we are at the stop set
-        return false;
-    }
-    let tok = context.tokens.peek();
-    if context.tokens.last_token_preceded_by_eol()
-        && (SEQ_ITEM_START_SET.contains(tok, context.tokens.content())
-            //  ANY identfier can start a sequence item
-            || tok == Tok::Identifier
-            || tok == Tok::SyntaxIdentifier
-            || tok == Tok::RestrictedIdentifier)
-    {
-        // if the last token was preceded by EOL, and it's in the start set for sequence items, continue
-        // parsing the sequence
-        return true;
-    }
-    false
-}
-
 // Parse a sequence:
 //      Sequence = <UseDecl>* (<SequenceItem> ";")* <Exp>? "}"
 //
@@ -1599,16 +1592,50 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
         uses.push(tmp);
     }
 
+    // Checks if parsing of a sequence should continue after encountering an error.
+    fn should_continue_sequence_after_error(context: &mut Context, diag: Diagnostic) -> bool {
+        context.add_diag(diag);
+        // This is intended to handle a rather specific case when a valid sequence item is on the
+        // following line from the parsing error. This is particularly useful for the IDE use case
+        // when a programmer starts typing an incomplete (and unparsable) line right before the
+        // line containing a valid expression. In this case, we would like to still report the
+        // error but try to avoid dropping the valid expression itself, particularly as it might
+        // lead to unnecessary cascading errors to appear if this expression is a variable
+        // declaration as in the example below where we want to avoid `_tmp1` being undefined in
+        // the following lines.
+        //
+        // let v =
+        // let _tmp1 = 42;
+        // let _tmp2 = _tmp1 * param;
+        // let _tmp3 = _tmp1 + param;
+
+        if context.at_stop_set() {
+            // don't continue if we are at the stop set
+            return false;
+        }
+        let tok = context.tokens.peek();
+        if context.tokens.last_token_preceded_by_eol()
+            && (SEQ_ITEM_START_SET.contains(tok, context.tokens.content())
+            //  ANY identfier can start a sequence item
+            || tok == Tok::Identifier
+            || tok == Tok::SyntaxIdentifier
+            || tok == Tok::RestrictedIdentifier)
+        {
+            // if the last token was preceded by EOL, and it's in the start set for sequence items, continue
+            // parsing the sequence
+            return true;
+        }
+        false
+    }
+
     let mut seq: Vec<SequenceItem> = vec![];
     let mut last_semicolon_loc = None;
     let mut eopt = None;
     while context.tokens.peek() != Tok::RBrace {
         // this helps when a sequence contains a comma-separated list without the ending token (in
         // which case the parser would be likely fast-forwarded to EOF)
-        context.stop_set.add(Tok::Semicolon);
-        match parse_sequence_item(context) {
+        match with_stop_set!(context, &SEMICOLON_SET, parse_sequence_item(context)) {
             Ok(item) => {
-                context.stop_set.remove(Tok::Semicolon);
                 if context.tokens.peek() == Tok::RBrace {
                     // If the sequence ends with an expression that is not
                     // followed by a semicolon, split out that expression
@@ -1646,7 +1673,6 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                 }
             }
             Err(diag) => {
-                context.stop_set.remove(Tok::Semicolon);
                 if should_continue_sequence_after_error(context, diag.as_ref().clone()) {
                     continue;
                 }
@@ -3036,16 +3062,18 @@ fn parse_type_(
     let start_loc = context.tokens.start_loc();
     let t = match context.tokens.peek() {
         Tok::LParen => {
-            context.stop_set.union(&TYPE_STOP_SET);
-            let mut ts = parse_comma_list(
+            let mut ts = with_stop_set!(
                 context,
-                Tok::LParen,
-                Tok::RParen,
-                &TYPE_START_SET,
-                parse_type,
-                "a type",
+                &TYPE_STOP_SET,
+                parse_comma_list(
+                    context,
+                    Tok::LParen,
+                    Tok::RParen,
+                    &TYPE_START_SET,
+                    parse_type,
+                    "a type",
+                )
             );
-            context.stop_set.difference(&TYPE_STOP_SET);
             match ts.len() {
                 0 => Type_::Unit,
                 1 => ts.pop().unwrap().value,
@@ -3068,17 +3096,18 @@ fn parse_type_(
                 context.tokens.advance()?;
                 vec![]
             } else {
-                context.stop_set.union(&TYPE_STOP_SET);
-                let list = parse_comma_list(
+                with_stop_set!(
                     context,
-                    Tok::Pipe,
-                    Tok::Pipe,
-                    &TYPE_START_SET,
-                    parse_type,
-                    "a type",
-                );
-                context.stop_set.difference(&TYPE_STOP_SET);
-                list
+                    &TYPE_STOP_SET,
+                    parse_comma_list(
+                        context,
+                        Tok::Pipe,
+                        Tok::Pipe,
+                        &TYPE_START_SET,
+                        parse_type,
+                        "a type",
+                    )
+                )
             };
             let result = if context
                 .tokens
@@ -3149,16 +3178,18 @@ fn parse_optional_type_args(context: &mut Context) -> Option<Vec<Type>> {
             context.advance();
             return Some(vec![]);
         }
-        context.stop_set.union(&TYPE_STOP_SET);
-        let list = parse_comma_list(
+        let list = with_stop_set!(
             context,
-            Tok::Less,
-            Tok::Greater,
-            &TYPE_START_SET,
-            parse_type,
-            "a type",
+            &TYPE_STOP_SET,
+            parse_comma_list(
+                context,
+                Tok::Less,
+                Tok::Greater,
+                &TYPE_START_SET,
+                parse_type,
+                "a type",
+            )
         );
-        context.stop_set.difference(&TYPE_STOP_SET);
         if !list.is_empty() {
             return Some(list);
         }
@@ -3249,21 +3280,22 @@ fn parse_type_parameter_with_phantom_decl(
 //    OptionalTypeParameters = '<' Comma<TypeParameter> ">" | <empty>
 fn parse_optional_type_parameters(context: &mut Context) -> Vec<(Name, Vec<Ability>)> {
     if context.tokens.peek() == Tok::Less {
-        context.stop_set.union(&TYPE_STOP_SET);
-        let list = parse_comma_list(
+        with_stop_set!(
             context,
-            Tok::Less,
-            Tok::Greater,
-            &TokenSet::from([
-                Tok::Identifier,
-                Tok::SyntaxIdentifier,
-                Tok::RestrictedIdentifier,
-            ]),
-            parse_type_parameter,
-            "a type parameter",
-        );
-        context.stop_set.difference(&TYPE_STOP_SET);
-        list
+            &TYPE_STOP_SET,
+            parse_comma_list(
+                context,
+                Tok::Less,
+                Tok::Greater,
+                &TokenSet::from([
+                    Tok::Identifier,
+                    Tok::SyntaxIdentifier,
+                    Tok::RestrictedIdentifier,
+                ]),
+                parse_type_parameter,
+                "a type parameter",
+            )
+        )
     } else {
         vec![]
     }
@@ -3273,17 +3305,18 @@ fn parse_optional_type_parameters(context: &mut Context) -> Vec<(Name, Vec<Abili
 //    DatatypeTypeParameter = '<' Comma<TypeParameterWithPhantomDecl> ">" | <empty>
 fn parse_datatype_type_parameters(context: &mut Context) -> Vec<DatatypeTypeParameter> {
     if context.tokens.peek() == Tok::Less {
-        context.stop_set.union(&TYPE_STOP_SET);
-        let list = parse_comma_list(
+        with_stop_set!(
             context,
-            Tok::Less,
-            Tok::Greater,
-            &TokenSet::from([Tok::Identifier, Tok::RestrictedIdentifier]),
-            parse_datatype_type_parameter,
-            "a type parameter",
-        );
-        context.stop_set.difference(&TYPE_STOP_SET);
-        list
+            &TYPE_STOP_SET,
+            parse_comma_list(
+                context,
+                Tok::Less,
+                Tok::Greater,
+                &TokenSet::from([Tok::Identifier, Tok::RestrictedIdentifier]),
+                parse_datatype_type_parameter,
+                "a type parameter",
+            )
+        )
     } else {
         vec![]
     }
@@ -3331,33 +3364,35 @@ fn parse_function_decl(
     consume_token(context.tokens, Tok::Fun)?;
     let name = FunctionName(parse_identifier(context)?);
 
-    context.stop_set.add(Tok::LParen);
-    context.stop_set.add(Tok::LBrace);
+    let (type_parameters, parameters, return_type) =
+        with_stop_set!(context, &TokenSet::from(&[Tok::LBrace]), {
+            let type_parameters = with_stop_set!(
+                context,
+                &TokenSet::from(&[Tok::LParen]),
+                parse_optional_type_parameters(context)
+            );
 
-    let type_parameters = parse_optional_type_parameters(context);
-    context.stop_set.remove(Tok::LParen);
+            // "(" Comma<Parameter> ")"
+            let parameters = parse_comma_list(
+                context,
+                Tok::LParen,
+                Tok::RParen,
+                if context.env.edition(context.current_package) == Edition::E2024_MIGRATION {
+                    &MIGRATION_PARAM_START_SET
+                } else {
+                    &PARAM_START_SET
+                },
+                parse_parameter,
+                "a function parameter",
+            );
 
-    // "(" Comma<Parameter> ")"
-    let parameters = parse_comma_list(
-        context,
-        Tok::LParen,
-        Tok::RParen,
-        if context.env.edition(context.current_package) == Edition::E2024_MIGRATION {
-            &MIGRATION_PARAM_START_SET
-        } else {
-            &PARAM_START_SET
-        },
-        parse_parameter,
-        "a function parameter",
-    );
-
-    let return_type = parse_ret_type(context, name)
-        .inspect_err(|diag| {
-            context.advance_until_stop_set(Some(*diag.clone()));
-        })
-        .ok();
-
-    context.stop_set.remove(Tok::LBrace);
+            let return_type = parse_ret_type(context, name)
+                .inspect_err(|diag| {
+                    context.advance_until_stop_set(Some(*diag.clone()));
+                })
+                .ok();
+            (type_parameters, parameters, return_type)
+        });
 
     let body = parse_body(context, native)
         .inspect_err(|diag| {
@@ -3692,58 +3727,58 @@ fn parse_struct_decl(
     // <StructDefName>
     let name = DatatypeName(parse_identifier(context)?);
 
-    context
-        .stop_set
-        .add_all(&[Tok::LBrace, Tok::LParen, Tok::Semicolon]);
-    let type_parameters = parse_datatype_type_parameters(context);
+    let (type_parameters, infix_ability_declaration_loc, mut abilities) = with_stop_set!(
+        context,
+        &TokenSet::from(&[Tok::LBrace, Tok::LParen, Tok::Semicolon]),
+        {
+            let type_parameters = parse_datatype_type_parameters(context);
 
-    let mut infix_ability_declaration_loc = parse_contextual_keyword_opt(context, "has");
+            let mut infix_ability_declaration_loc = parse_contextual_keyword_opt(context, "has");
 
-    // is the `has` keyword for infix abilities present
-    let infix_ability_has_keyword = infix_ability_declaration_loc.is_some();
+            // is the `has` keyword for infix abilities present
+            let infix_ability_has_keyword = infix_ability_declaration_loc.is_some();
 
-    let mut abilities = if infix_ability_declaration_loc.is_some() {
-        parse_infix_ability_declarations(context)
-            .inspect_err(|diag| {
-                // if parsing failed, assume no abilities present even if `has` keyword was present
-                infix_ability_declaration_loc = None;
-                context.advance_until_stop_set(Some(*diag.clone()));
-            })
-            .unwrap_or_default()
-    } else {
-        vec![]
-    };
+            let abilities = if infix_ability_declaration_loc.is_some() {
+                parse_infix_ability_declarations(context)
+                    .inspect_err(|diag| {
+                        // if parsing failed, assume no abilities present even with `has` keyword
+                        infix_ability_declaration_loc = None;
+                        context.advance_until_stop_set(Some(*diag.clone()));
+                    })
+                    .unwrap_or_default()
+            } else {
+                vec![]
+            };
 
-    // we are supposed to start parsing struct fields here
-    if !context
-        .tokens
-        .at_set(&TokenSet::from(&[Tok::LBrace, Tok::LParen, Tok::Semicolon]))
-    {
-        let unexpected_loc = current_token_loc(context.tokens);
-        let msg = if infix_ability_has_keyword {
-            format!(
-                "Unexpected '{}'. Expected struct fields or ';' for a native struct",
-                context.tokens.peek()
-            )
-        } else {
-            format!(
-                "Unexpected '{}'. Expected struct fields, 'has' to start abilities declaration, \
-                 or ';' for a native struct",
-                context.tokens.peek()
-            )
-        };
-        let diag = diag!(Syntax::UnexpectedToken, (unexpected_loc, msg));
-        context.add_diag(diag);
-    }
+            // we are supposed to start parsing struct fields here
+            if !context
+                .tokens
+                .at_set(&TokenSet::from(&[Tok::LBrace, Tok::LParen, Tok::Semicolon]))
+            {
+                let unexpected_loc = current_token_loc(context.tokens);
+                let msg = if infix_ability_has_keyword {
+                    format!(
+                        "Unexpected '{}'. Expected struct fields or ';' for a native struct",
+                        context.tokens.peek()
+                    )
+                } else {
+                    format!(
+                        "Unexpected '{}'. Expected struct fields, 'has' to start abilities \
+                        declaration, or ';' for a native struct",
+                        context.tokens.peek()
+                    )
+                };
+                let diag = diag!(Syntax::UnexpectedToken, (unexpected_loc, msg));
+                context.add_diag(diag);
+            }
 
-    if !context.at_stop_set() {
-        // try advancing until we reach fields defnition or the "outer" stop set
-        context.advance_until_stop_set(None);
-    }
-
-    context
-        .stop_set
-        .remove_all(&[Tok::LBrace, Tok::LParen, Tok::Semicolon]);
+            if !context.at_stop_set() {
+                // try advancing until we reach fields defnition or the "outer" stop set
+                context.advance_until_stop_set(None);
+            }
+            (type_parameters, infix_ability_declaration_loc, abilities)
+        }
+    );
 
     let mut fields = None;
     if !context.at_stop_set() {
@@ -3902,17 +3937,18 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
     if positional_declaration {
         let loc = current_token_loc(context.tokens);
         context.check_feature(FeatureGate::PositionalFields, loc);
-
-        context.stop_set.union(&TYPE_STOP_SET);
-        let list = parse_comma_list(
+        let list = with_stop_set!(
             context,
-            Tok::LParen,
-            Tok::RParen,
-            &TYPE_START_SET,
-            parse_positional_field,
-            "a type",
+            &TYPE_STOP_SET,
+            parse_comma_list(
+                context,
+                Tok::LParen,
+                Tok::RParen,
+                &TYPE_START_SET,
+                parse_positional_field,
+                "a type",
+            )
         );
-        context.stop_set.difference(&TYPE_STOP_SET);
         Ok(StructFields::Positional(list))
     } else {
         let fields = parse_comma_list(
@@ -4273,66 +4309,65 @@ fn parse_use_decl(
             } else {
                 // add `;` to stop set to limit number of eaten tokens if the list is parsed
                 // incorrectly
-                context.stop_set.add(Tok::Semicolon);
-                match context.tokens.peek() {
-                    Tok::LBrace => {
-                        let lbrace_loc = context.tokens.current_token_loc();
-                        let parse_inner = |ctxt: &mut Context<'_, '_, '_>| {
-                            parse_use_module(ctxt).map(|(name, _, use_)| (name, use_))
-                        };
-                        let use_decls = parse_comma_list(
-                            context,
-                            Tok::LBrace,
-                            Tok::RBrace,
-                            &TokenSet::from([Tok::Identifier]),
-                            parse_inner,
-                            "a module use clause",
-                        );
-                        let use_ = if use_decls.is_empty() {
-                            // empty list does not make much sense as it contains no alias
-                            // information and it actually helps IDE to treat this case as a partial
-                            // use
-                            Use::Partial {
-                                package: address,
-                                colon_colon: Some(colon_colon_loc),
-                                opening_brace: Some(lbrace_loc),
-                            }
-                        } else {
-                            Use::NestedModuleUses(address, use_decls)
-                        };
-                        context.stop_set.remove(Tok::Semicolon);
-                        use_
-                    }
-                    _ => {
-                        let use_ = match parse_use_module(context) {
-                            Ok((name, end_loc, use_)) => {
-                                let loc = make_loc(
-                                    context.tokens.file_hash(),
-                                    address_start_loc,
-                                    end_loc,
-                                );
-                                let module_ident = sp(
-                                    loc,
-                                    ModuleIdent_ {
-                                        address,
-                                        module: name,
-                                    },
-                                );
-                                Use::ModuleUse(module_ident, use_)
-                            }
-                            Err(diag) => {
-                                context.add_diag(*diag);
+                with_stop_set!(
+                    context,
+                    &TokenSet::from([Tok::Semicolon]),
+                    match context.tokens.peek() {
+                        Tok::LBrace => {
+                            let lbrace_loc = context.tokens.current_token_loc();
+                            let parse_inner = |ctxt: &mut Context<'_, '_, '_>| {
+                                parse_use_module(ctxt).map(|(name, _, use_)| (name, use_))
+                            };
+                            let use_decls = parse_comma_list(
+                                context,
+                                Tok::LBrace,
+                                Tok::RBrace,
+                                &TokenSet::from([Tok::Identifier]),
+                                parse_inner,
+                                "a module use clause",
+                            );
+                            if use_decls.is_empty() {
+                                // empty list does not make much sense as it contains no alias
+                                // information and it actually helps IDE to treat this case as a
+                                // partial use
                                 Use::Partial {
                                     package: address,
                                     colon_colon: Some(colon_colon_loc),
-                                    opening_brace: None,
+                                    opening_brace: Some(lbrace_loc),
+                                }
+                            } else {
+                                Use::NestedModuleUses(address, use_decls)
+                            }
+                        }
+                        _ => {
+                            match parse_use_module(context) {
+                                Ok((name, end_loc, use_)) => {
+                                    let loc = make_loc(
+                                        context.tokens.file_hash(),
+                                        address_start_loc,
+                                        end_loc,
+                                    );
+                                    let module_ident = sp(
+                                        loc,
+                                        ModuleIdent_ {
+                                            address,
+                                            module: name,
+                                        },
+                                    );
+                                    Use::ModuleUse(module_ident, use_)
+                                }
+                                Err(diag) => {
+                                    context.add_diag(*diag);
+                                    Use::Partial {
+                                        package: address,
+                                        colon_colon: Some(colon_colon_loc),
+                                        opening_brace: None,
+                                    }
                                 }
                             }
-                        };
-                        context.stop_set.remove(Tok::Semicolon);
-                        use_
+                        }
                     }
-                }
+                )
             }
         }
     };
@@ -4520,38 +4555,32 @@ fn parse_module(
             stop_parsing = true;
             break;
         }
-        context.stop_set.union(&MODULE_MEMBER_OR_MODULE_START_SET);
-        match parse_module_member(context) {
-            Ok(m) => {
-                context
-                    .stop_set
-                    .difference(&MODULE_MEMBER_OR_MODULE_START_SET);
-                members.push(m);
-            }
-            Err(ErrCase::ContinueToModule(attrs)) => {
-                context
-                    .stop_set
-                    .difference(&MODULE_MEMBER_OR_MODULE_START_SET);
-                // while trying to parse module members, we moved past the current module and
-                // encountered a new one - keep parsing it at a higher level, keeping the
-                // already parsed attributes
-                next_mod_attributes = Some(attrs);
-                stop_parsing = true;
-                break;
-            }
-            Err(ErrCase::Unknown(diag)) => {
-                context
-                    .stop_set
-                    .difference(&MODULE_MEMBER_OR_MODULE_START_SET);
-                context.add_diag(*diag);
-                skip_to_next_desired_tok_or_eof(context, &MODULE_MEMBER_OR_MODULE_START_SET);
-                if context.tokens.at(Tok::EOF) || context.tokens.at(Tok::Module) {
-                    // either end of file or next module to potentially be parsed
+        with_stop_set!(
+            context,
+            &MODULE_MEMBER_OR_MODULE_START_SET,
+            match parse_module_member(context) {
+                Ok(m) => {
+                    members.push(m);
+                }
+                Err(ErrCase::ContinueToModule(attrs)) => {
+                    // while trying to parse module members, we moved past the current module and
+                    // encountered a new one - keep parsing it at a higher level, keeping the
+                    // already parsed attributes
+                    next_mod_attributes = Some(attrs);
                     stop_parsing = true;
                     break;
                 }
+                Err(ErrCase::Unknown(diag)) => {
+                    context.add_diag(*diag);
+                    skip_to_next_desired_tok_or_eof(context, &MODULE_MEMBER_OR_MODULE_START_SET);
+                    if context.tokens.at(Tok::EOF) || context.tokens.at(Tok::Module) {
+                        // either end of file or next module to potentially be parsed
+                        stop_parsing = true;
+                        break;
+                    }
+                }
             }
-        }
+        )
     }
     if !stop_parsing {
         consume_token(context.tokens, Tok::RBrace)?;
@@ -4565,13 +4594,14 @@ fn parse_module(
         // Ensure there is always a mode on extension definitions. We opt to error here instead of
         // returning a definition for risk avoidance.
         if !(attributes.iter().any(|attr| !attr.value.modes().is_empty())) {
-            let diag = diag!(
+            let mut diag = diag!(
                 Syntax::InvalidModifier,
                 (
                     loc,
-                    "Module extensions must have a 'mode' or 'test_only' attribute"
+                    "Module extensions must be gated by a 'mode' or 'test_only' attribute"
                 )
             );
+            diag.add_note("Add '#[mode(...)]' or '#[test_only]' to this module extension");
             return Err(Box::new(diag));
         }
     }
@@ -4725,7 +4755,9 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                             ),
                         )
                     };
-                    if tok == Tok::Module {
+                    if tok == Tok::Module
+                        || (tok == Tok::Identifier && context.tokens.content() == EXTEND_MODIFIER)
+                    {
                         context.add_diag(*diag);
                         Err(ErrCase::ContinueToModule(attributes))
                     } else {

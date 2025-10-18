@@ -42,6 +42,12 @@ pub static MODULE_START_SET: Lazy<TokenSet> = Lazy::new(|| {
     token_set
 });
 
+pub static SEMICOLON_SET: Lazy<TokenSet> = Lazy::new(|| {
+    let mut token_set = TokenSet::new();
+    token_set.add(Tok::Semicolon);
+    token_set
+});
+
 pub static MODULE_MEMBER_OR_MODULE_START_SET: Lazy<TokenSet> = Lazy::new(|| {
     let mut token_set = TokenSet::new();
     token_set.add_all(MODULE_MEMBER_TOKENS);

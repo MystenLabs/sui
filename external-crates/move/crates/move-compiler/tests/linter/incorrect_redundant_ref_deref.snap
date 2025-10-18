@@ -126,40 +126,21 @@ warning[Lint W01009]: redundant reference/dereference
     │
     = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
-    ┌─ tests/linter/incorrect_redundant_ref_deref.move:111:13
-    │
-111 │         let mut resource = MyResource { value: 10 };
-    │             ^^^ Unused local variable 'mut'. Consider removing or prefixing with an underscore: '_mut'
-    │
-    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E01002]: unexpected token
-    ┌─ tests/linter/incorrect_redundant_ref_deref.move:111:17
-    │
-111 │         let mut resource = MyResource { value: 10 };
-    │                 ^^^^^^^^
-    │                 │
-    │                 Unexpected 'resource'
-    │                 Expected ';'
-
-error[E04010]: cannot infer type
+warning[Lint W01009]: redundant reference/dereference
     ┌─ tests/linter/incorrect_redundant_ref_deref.move:112:21
     │
 112 │         let _ref = &*&mut *&resource;  // Mixed mutable and immutable redundant borrows
-    │                     ^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+    │                     ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
+    │
+    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04010]: cannot infer type
+warning[Lint W01009]: redundant reference/dereference
     ┌─ tests/linter/incorrect_redundant_ref_deref.move:112:27
     │
 112 │         let _ref = &*&mut *&resource;  // Mixed mutable and immutable redundant borrows
-    │                           ^^^^^^^^^^ Could not infer this type. Try adding an annotation
-
-error[E03009]: unbound variable
-    ┌─ tests/linter/incorrect_redundant_ref_deref.move:112:29
+    │                           ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
     │
-112 │         let _ref = &*&mut *&resource;  // Mixed mutable and immutable redundant borrows
-    │                             ^^^^^^^^ Unbound variable 'resource'
+    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W01009]: redundant reference/dereference
     ┌─ tests/linter/incorrect_redundant_ref_deref.move:117:25

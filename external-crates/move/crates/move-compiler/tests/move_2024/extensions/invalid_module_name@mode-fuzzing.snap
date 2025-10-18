@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02003]: invalid 'address' declaration
+   ┌─ tests/move_2024/extensions/invalid_module_name.move:11:15
+   │
+11 │ extend module m {
+   │               ^ Could not determine the address for this module extension
+   │
+   = Module extensions must be defined for a previously-defined address and module, as '<address>::<module>'
