@@ -242,6 +242,7 @@ mod tests {
             ("ser_bool", "{flag}"),
             ("ser_nums", "{n8}, {n16}, {n32}, {n64}, {n128}, {n256}"),
             ("ser_strs", "{ascii}, {utf8}, {url}"),
+            ("ser_bytes", "{ascii.bytes}, {utf8.bytes}, {url.url.bytes}"),
             ("lit_addr", "{@0x5455}"),
             ("lit_bool", "{false}"),
             (
@@ -274,6 +275,9 @@ mod tests {
                 String("48, 49, 50, 51, 52, 53"),
             ),
             "ser_strs": Ok(
+                String("hello, world, https://example.com"),
+            ),
+            "ser_bytes": Ok(
                 String("hello, world, https://example.com"),
             ),
             "lit_addr": Ok(
@@ -986,7 +990,7 @@ mod tests {
             ),
             "toobig": Err(
                 TransformInvalid(
-                    "not a timestamp",
+                    "expected unix timestamp in milliseconds",
                 ),
             ),
         }
