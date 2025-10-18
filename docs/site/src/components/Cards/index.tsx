@@ -37,7 +37,10 @@ export function Card(props) {
   };
 
   return (
-    <div className={styles.card} onClick={() => handleClick(props.href)}>
+    <div
+      className={`${styles.card} ${props.className}`}
+      onClick={() => handleClick(props.href)}
+    >
       <div className={styles.card__header}>
         <h2 className={styles.card__header__copy}>{props.title}</h2>
       </div>
