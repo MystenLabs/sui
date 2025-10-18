@@ -215,6 +215,10 @@ pub struct ReplayConfigExperimental {
     /// Include execution and total time in transaction output.
     #[arg(long = "track-time", default_value = "false")]
     pub track_time: bool,
+
+    /// Cache executors across transactions within the same epoch.
+    #[arg(long = "cache-executor", default_value = "false")]
+    pub cache_executor: bool,
 }
 
 impl Default for ReplayConfigExperimental {
@@ -224,6 +228,7 @@ impl Default for ReplayConfigExperimental {
             verbose: false,
             store_mode: StoreMode::GqlOnly,
             track_time: false,
+            cache_executor: false,
         }
     }
 }
@@ -400,6 +405,7 @@ pub async fn handle_replay_config(
         verbose,
         store_mode,
         track_time,
+        cache_executor,
     } = experimental_config;
 
     let output_root_dir = if let Some(dir) = output_dir {
@@ -460,6 +466,7 @@ pub async fn handle_replay_config(
                 *verbose,
                 terminate_early,
                 *track_time,
+                *cache_executor,
             )
             .await?;
         }
@@ -479,6 +486,7 @@ pub async fn handle_replay_config(
                 *verbose,
                 terminate_early,
                 *track_time,
+                *cache_executor,
             )
             .await?;
         }
@@ -495,6 +503,7 @@ pub async fn handle_replay_config(
                 *verbose,
                 terminate_early,
                 *track_time,
+                *cache_executor,
             )
             .await?;
         }
@@ -513,6 +522,7 @@ pub async fn handle_replay_config(
                 *verbose,
                 terminate_early,
                 *track_time,
+                *cache_executor,
             )
             .await?;
         }
@@ -534,6 +544,7 @@ pub async fn handle_replay_config(
                 *verbose,
                 terminate_early,
                 *track_time,
+                *cache_executor,
             )
             .await?;
         }
@@ -552,14 +563,17 @@ async fn run_replay<S>(
     verbose: bool,
     terminate_early: bool,
     track_time: bool,
+    cache_executor: bool,
 ) -> Result<()>
 where
     S: ReadDataStore + StoreSummary + SetupStore,
 {
+    use crate::replay_txn::ExecutorProvider;
     use std::time::Instant;
 
     data_store.setup(None)?;
     let mut total_metrics = TotalMetrics::new();
+    let mut executor_provider = ExecutorProvider::new(cache_executor);
 
     for tx_digest in digests {
         let tx_dir = output_root_dir.join(tx_digest);
@@ -573,6 +587,7 @@ where
             data_store,
             node.network_name(),
             trace,
+            &mut executor_provider,
         )
         .instrument(span)
         .await;
