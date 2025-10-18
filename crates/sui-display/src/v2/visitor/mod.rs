@@ -3,4 +3,5 @@
 
 pub(crate) mod address;
 pub(crate) mod extractor;
+pub(crate) mod option;
 pub(crate) mod vec_map;
