@@ -286,21 +286,20 @@ pub fn use_decl_completions(
                         .map(|n| completion_item(n.as_str(), CompletionItemKind::UNIT)),
                 );
             } else {
-                if let Some((first_name, _)) = uses.first() {
-                    if cursor.loc.start() > leading_name.loc.end()
-                        && cursor.loc.end() <= first_name.loc().start()
-                    {
-                        // cursor is after `::` succeeding address/package but before the first
-                        // module
-                        for ident in pkg_mod_identifiers(symbols, &info, &leading_name) {
-                            completions.push(completion_item(
-                                ident.value.module.value().as_str(),
-                                CompletionItemKind::MODULE,
-                            ));
-                        }
-                        // no point in falling through to the uses loop below
-                        return (completions, completion_finalized);
+                if let Some((first_name, _)) = uses.first()
+                    && cursor.loc.start() > leading_name.loc.end()
+                    && cursor.loc.end() <= first_name.loc().start()
+                {
+                    // cursor is after `::` succeeding address/package but before the first
+                    // module
+                    for ident in pkg_mod_identifiers(symbols, &info, &leading_name) {
+                        completions.push(completion_item(
+                            ident.value.module.value().as_str(),
+                            CompletionItemKind::MODULE,
+                        ));
                     }
+                    // no point in falling through to the uses loop below
+                    return (completions, completion_finalized);
                 }
 
                 for (mod_name, mod_use) in &uses {
@@ -339,15 +338,15 @@ pub fn use_decl_completions(
                         .map(|n| completion_item(n.as_str(), CompletionItemKind::UNIT)),
                 );
             }
-            if let Some(colon_colon_loc) = colon_colon {
-                if cursor.loc.start() >= colon_colon_loc.start() {
-                    // cursor is on or past `::`
-                    for ident in pkg_mod_identifiers(symbols, &info, &package) {
-                        completions.push(completion_item(
-                            ident.value.module.value().as_str(),
-                            CompletionItemKind::MODULE,
-                        ));
-                    }
+            if let Some(colon_colon_loc) = colon_colon
+                && cursor.loc.start() >= colon_colon_loc.start()
+            {
+                // cursor is on or past `::`
+                for ident in pkg_mod_identifiers(symbols, &info, &package) {
+                    completions.push(completion_item(
+                        ident.value.module.value().as_str(),
+                        CompletionItemKind::MODULE,
+                    ));
                 }
             }
         }
@@ -1195,21 +1194,20 @@ fn module_use_completions(
     match mod_use {
         MU::Module(_) => (), // nothing to do with just module alias
         MU::Members(members) => {
-            if let Some((first_name, _)) = members.first() {
-                if cursor.loc.start() > mod_name.loc().end()
-                    && cursor.loc.end() <= first_name.loc.start()
-                {
-                    // cursor is after `::` succeeding module but before the first module member
-                    completions.extend(module_member_completions(
-                        symbols,
-                        cursor,
-                        &mod_ident,
-                        ChainCompletionKind::All,
-                        /* inside_use */ true,
-                    ));
-                    // no point in falling through to the members loop below
-                    return completions;
-                }
+            if let Some((first_name, _)) = members.first()
+                && cursor.loc.start() > mod_name.loc().end()
+                && cursor.loc.end() <= first_name.loc.start()
+            {
+                // cursor is after `::` succeeding module but before the first module member
+                completions.extend(module_member_completions(
+                    symbols,
+                    cursor,
+                    &mod_ident,
+                    ChainCompletionKind::All,
+                    /* inside_use */ true,
+                ));
+                // no point in falling through to the members loop below
+                return completions;
             }
 
             for (sp!(mloc, _), _) in members {
@@ -1231,17 +1229,17 @@ fn module_use_completions(
             colon_colon,
             opening_brace: _,
         } => {
-            if let Some(colon_colon_loc) = colon_colon {
-                if cursor.loc.start() >= colon_colon_loc.start() {
-                    // cursor is on or past `::`
-                    completions.extend(module_member_completions(
-                        symbols,
-                        cursor,
-                        &mod_ident,
-                        ChainCompletionKind::All,
-                        /* inside_use */ true,
-                    ));
-                }
+            if let Some(colon_colon_loc) = colon_colon
+                && cursor.loc.start() >= colon_colon_loc.start()
+            {
+                // cursor is on or past `::`
+                completions.extend(module_member_completions(
+                    symbols,
+                    cursor,
+                    &mod_ident,
+                    ChainCompletionKind::All,
+                    /* inside_use */ true,
+                ));
             }
         }
     }

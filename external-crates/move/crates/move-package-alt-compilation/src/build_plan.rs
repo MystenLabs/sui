@@ -124,13 +124,13 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
                 }
             }
         });
-        if let Some(diags) = diags {
-            if let Err(err) = std::io::stdout().write_all(&diags) {
-                return Err(PackageError::Generic(format!(
-                    "Cannot output compiler diagnostics: {}",
-                    err
-                )));
-            }
+        if let Some(diags) = diags
+            && let Err(err) = std::io::stdout().write_all(&diags)
+        {
+            return Err(PackageError::Generic(format!(
+                "Cannot output compiler diagnostics: {}",
+                err
+            )));
         }
         res
     }

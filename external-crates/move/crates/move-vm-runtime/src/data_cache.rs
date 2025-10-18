@@ -106,10 +106,10 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
     }
 
     fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
-        if let Some(account_cache) = self.module_map.get(module_id.address()) {
-            if let Some(blob) = account_cache.module_map.get(module_id.name()) {
-                return Ok(blob.clone());
-            }
+        if let Some(account_cache) = self.module_map.get(module_id.address())
+            && let Some(blob) = account_cache.module_map.get(module_id.name())
+        {
+            return Ok(blob.clone());
         }
         match self.remote.get_module(module_id) {
             Ok(Some(bytes)) => Ok(bytes),

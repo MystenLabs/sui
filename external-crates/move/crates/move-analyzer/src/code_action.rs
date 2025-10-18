@@ -241,29 +241,29 @@ pub fn access_chain_autofix_actions_for_error(
             });
         }
         NameAccessChain_::Path(name_path) => {
-            if let LeadingNameAccess_::Name(unbound_name) = name_path.root.name.value {
-                if name_path.entries.len() == 1 {
-                    // we assume that diagnostic reporting unbound chain component
-                    // is on the first element of the chain
-                    if unbound_name.loc.contains(&cursor.loc) {
-                        TwoElementChainDiagPrefix::iter().for_each(|prefix| match prefix {
-                            TwoElementChainDiagPrefix::UnresolvedName => {
-                                if err_msg.starts_with(prefix.as_str()) {
-                                    two_element_access_chain_autofixes(
-                                        code_actions,
-                                        symbols,
-                                        file_url.clone(),
-                                        unbound_name,
-                                        name_path.entries[0].name,
-                                        all_mod_structs_to_import(symbols, cursor)
-                                            .chain(all_mod_enums_to_import(symbols, cursor))
-                                            .chain(all_mod_functions_to_import(symbols, cursor)),
-                                        diag.clone(),
-                                    );
-                                }
+            if let LeadingNameAccess_::Name(unbound_name) = name_path.root.name.value
+                && name_path.entries.len() == 1
+            {
+                // we assume that diagnostic reporting unbound chain component
+                // is on the first element of the chain
+                if unbound_name.loc.contains(&cursor.loc) {
+                    TwoElementChainDiagPrefix::iter().for_each(|prefix| match prefix {
+                        TwoElementChainDiagPrefix::UnresolvedName => {
+                            if err_msg.starts_with(prefix.as_str()) {
+                                two_element_access_chain_autofixes(
+                                    code_actions,
+                                    symbols,
+                                    file_url.clone(),
+                                    unbound_name,
+                                    name_path.entries[0].name,
+                                    all_mod_structs_to_import(symbols, cursor)
+                                        .chain(all_mod_enums_to_import(symbols, cursor))
+                                        .chain(all_mod_functions_to_import(symbols, cursor)),
+                                    diag.clone(),
+                                );
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             }
         }

@@ -726,24 +726,24 @@ impl Move2024PathExpander {
             tyargs: &Option<Spanned<Vec<Type>>>,
             result: &NR,
         ) {
-            if let NR::Address(_, _) | NR::ModuleIdent(_, _) | NR::Variant(_, _, _) = result {
-                if let Some(tyargs) = tyargs {
-                    let loc = tyargs.loc;
-                    let kind = result.err_name();
-                    let mut note = None;
-                    if let NR::Variant(_, sp!(_, (mident, name)), variant) = result {
-                        let tys = tyargs
-                            .value
-                            .iter()
-                            .map(|ty| format!("{}", ty.value))
-                            .collect::<Vec<_>>()
-                            .join(",");
-                        note = Some(format!(
-                            "Type arguments are used with the enum, as '{mident}::{name}<{tys}>::{variant}'"
-                        ));
-                    }
-                    errors.push(PathExpansionError::invalid_type_parameter(loc, kind, note));
+            if let NR::Address(_, _) | NR::ModuleIdent(_, _) | NR::Variant(_, _, _) = result
+                && let Some(tyargs) = tyargs
+            {
+                let loc = tyargs.loc;
+                let kind = result.err_name();
+                let mut note = None;
+                if let NR::Variant(_, sp!(_, (mident, name)), variant) = result {
+                    let tys = tyargs
+                        .value
+                        .iter()
+                        .map(|ty| format!("{}", ty.value))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    note = Some(format!(
+                        "Type arguments are used with the enum, as '{mident}::{name}<{tys}>::{variant}'"
+                    ));
                 }
+                errors.push(PathExpansionError::invalid_type_parameter(loc, kind, note));
             }
         }
 
@@ -752,10 +752,10 @@ impl Move2024PathExpander {
             is_macro: &Option<Loc>,
             result: &NR,
         ) {
-            if let NR::Address(_, _) | NR::ModuleIdent(_, _) = result {
-                if let Some(loc) = is_macro {
-                    errors.push(PathExpansionError::invalid_macro(*loc, result.err_name()));
-                }
+            if let NR::Address(_, _) | NR::ModuleIdent(_, _) = result
+                && let Some(loc) = is_macro
+            {
+                errors.push(PathExpansionError::invalid_macro(*loc, result.err_name()));
             }
         }
 

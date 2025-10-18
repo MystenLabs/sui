@@ -534,14 +534,14 @@ impl Package {
             );
         };
 
-        if let Some(digest) = dep.digest {
-            if digest != resolved_dep.source_digest {
-                bail!(
-                    "Source digest mismatch in dependency '{dep_name}' of '{pkg_name}'. \
+        if let Some(digest) = dep.digest
+            && digest != resolved_dep.source_digest
+        {
+            bail!(
+                "Source digest mismatch in dependency '{dep_name}' of '{pkg_name}'. \
                      Expected '{digest}' but got '{}'.",
-                    resolved_dep.source_digest
-                )
-            }
+                resolved_dep.source_digest
+            )
         }
 
         Ok(())

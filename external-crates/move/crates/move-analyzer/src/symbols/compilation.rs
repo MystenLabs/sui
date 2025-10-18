@@ -738,15 +738,14 @@ fn merge_diagnostics_for_file(
 ) {
     // sadly, `Diagnostic` does not implement `Hash`, only `Eq`, so the check is rather costly...
     let ide_diags_for_file_opt = ide_diags.get_mut(file_path);
-    if ide_diags_for_file_opt.is_none() {
-        ide_diags.insert(file_path.clone(), diagnostics.clone());
-    } else {
-        let ide_diags_for_file = ide_diags_for_file_opt.unwrap();
+    if let Some(ide_diags_for_file) = ide_diags_for_file_opt {
         for d in diagnostics {
             if !ide_diags_for_file.contains(d) {
                 ide_diags_for_file.push(d.clone());
             }
         }
+    } else {
+        ide_diags.insert(file_path.clone(), diagnostics.clone());
     }
 }
 

@@ -271,20 +271,20 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         })?;
 
         let root_pkg_name = root_manifest.package.name;
-        if self.force_lock_file {
-            if let Some((_, _, Some(lock_string))) = digest_and_lock_contents {
-                eprintln!("Force-reading from lock file");
-                return Ok((
-                    DependencyGraph::read_from_lock(
-                        root_path,
-                        root_pkg_id,
-                        root_pkg_name,
-                        &mut lock_string.as_bytes(), // safe since old_deps_digest exists
-                        None,
-                    )?,
-                    false,
-                ));
-            }
+        if self.force_lock_file
+            && let Some((_, _, Some(lock_string))) = digest_and_lock_contents
+        {
+            eprintln!("Force-reading from lock file");
+            return Ok((
+                DependencyGraph::read_from_lock(
+                    root_path,
+                    root_pkg_id,
+                    root_pkg_name,
+                    &mut lock_string.as_bytes(), // safe since old_deps_digest exists
+                    None,
+                )?,
+                false,
+            ));
         }
 
         // implicits deps should be skipped if the manifest contains any of them

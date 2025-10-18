@@ -250,7 +250,7 @@ pub fn module_frame_generation(
             };
         }
 
-        if generated > 0 && generated % 100 == 0 {
+        if generated > 0 && generated.is_multiple_of(100) {
             info!(
                 "Generated: {} Verified: {} Executed: {}",
                 generated,

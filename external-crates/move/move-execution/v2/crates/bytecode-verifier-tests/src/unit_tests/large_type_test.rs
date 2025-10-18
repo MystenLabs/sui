@@ -28,9 +28,11 @@ fn test_large_types() {
     let mut m = empty_module();
 
     m.signatures.push(Signature(
-        std::iter::repeat(SignatureToken::Reference(Box::new(get_nested_vec_type(64))))
-            .take(NUM_LOCALS as usize)
-            .collect(),
+        std::iter::repeat_n(
+            SignatureToken::Reference(Box::new(get_nested_vec_type(64))),
+            NUM_LOCALS as usize,
+        )
+        .collect(),
     ));
 
     m.function_handles.push(FunctionHandle {

@@ -61,10 +61,10 @@ impl<S: ModuleResolver> ModuleResolver for DeltaStorage<'_, '_, S> {
     type Error = S::Error;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        if let Some(account_storage) = self.delta.accounts().get(module_id.address()) {
-            if let Some(blob_opt) = account_storage.modules().get(module_id.name()) {
-                return Ok(blob_opt.clone().ok());
-            }
+        if let Some(account_storage) = self.delta.accounts().get(module_id.address())
+            && let Some(blob_opt) = account_storage.modules().get(module_id.name())
+        {
+            return Ok(blob_opt.clone().ok());
         }
 
         self.base.get_module(module_id)

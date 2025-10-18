@@ -421,10 +421,10 @@ impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
         idx: SignatureIndex,
         type_parameters: &[AbilitySet],
     ) -> PartialVMResult<()> {
-        if let Some(checked_abilities) = self.abilities_cache.get(&idx) {
-            if checked_abilities.contains(type_parameters) {
-                return Ok(());
-            }
+        if let Some(checked_abilities) = self.abilities_cache.get(&idx)
+            && checked_abilities.contains(type_parameters)
+        {
+            return Ok(());
         };
         for ty in &self.module.signature_at(idx).0 {
             self.check_type_instantiation(ty, type_parameters)?

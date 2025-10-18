@@ -248,9 +248,7 @@ fn find_counterexample_impl(
     has_guards: bool,
 ) -> bool {
     fn make_wildcards(n: usize) -> Vec<CounterExample> {
-        std::iter::repeat(CounterExample::Wildcard)
-            .take(n)
-            .collect()
+        vec![CounterExample::Wildcard; n]
     }
 
     #[growing_stack]

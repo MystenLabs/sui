@@ -303,10 +303,10 @@ impl SharedTestingConfig {
                 .map(|(bytes, _layout)| bytes)
                 .collect()
         });
-        if !self.report_stacktrace_on_abort {
-            if let Err(err) = &mut return_result {
-                err.remove_exec_state();
-            }
+        if !self.report_stacktrace_on_abort
+            && let Err(err) = &mut return_result
+        {
+            err.remove_exec_state();
         }
         let trace = if self.trace_location.is_some() {
             Some(move_tracer.into_trace())

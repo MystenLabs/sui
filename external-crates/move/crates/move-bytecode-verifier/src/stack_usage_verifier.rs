@@ -68,11 +68,11 @@ impl<'a> StackUsageVerifier<'a> {
             };
 
             // Check that the accumulated pushes does not exceed a pre-defined max size
-            if let Some(max_push_size) = config.max_push_size {
-                if overall_push > max_push_size as u64 {
-                    return Err(PartialVMError::new(StatusCode::VALUE_STACK_PUSH_OVERFLOW)
-                        .at_code_offset(self.current_function(), block_start));
-                }
+            if let Some(max_push_size) = config.max_push_size
+                && overall_push > max_push_size as u64
+            {
+                return Err(PartialVMError::new(StatusCode::VALUE_STACK_PUSH_OVERFLOW)
+                    .at_code_offset(self.current_function(), block_start));
             }
 
             // Check that the stack height is sufficient to accommodate the number

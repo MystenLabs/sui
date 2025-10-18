@@ -65,10 +65,10 @@ fn verify_module_impl<'env>(
         .map_err(|err| err.at_index(IndexKind::FunctionDefinition, index.0))?;
         total_back_edges += num_back_edges;
     }
-    if let Some(limit) = verifier_config.max_back_edges_per_module {
-        if total_back_edges > limit {
-            return Err(PartialVMError::new(StatusCode::TOO_MANY_BACK_EDGES));
-        }
+    if let Some(limit) = verifier_config.max_back_edges_per_module
+        && total_back_edges > limit
+    {
+        return Err(PartialVMError::new(StatusCode::TOO_MANY_BACK_EDGES));
     }
     Ok(())
 }
@@ -104,21 +104,17 @@ pub fn verify_function<'env>(
         meter,
     )?;
 
-    if let Some(limit) = verifier_config.max_basic_blocks {
-        if function_context.cfg().blocks().count() > limit {
-            return Err(
-                PartialVMError::new(StatusCode::TOO_MANY_BASIC_BLOCKS).at_code_offset(index, 0)
-            );
-        }
+    if let Some(limit) = verifier_config.max_basic_blocks
+        && function_context.cfg().blocks().count() > limit
+    {
+        return Err(PartialVMError::new(StatusCode::TOO_MANY_BASIC_BLOCKS).at_code_offset(index, 0));
     }
 
     let num_back_edges = function_context.cfg().num_back_edges();
-    if let Some(limit) = verifier_config.max_back_edges_per_function {
-        if num_back_edges > limit {
-            return Err(
-                PartialVMError::new(StatusCode::TOO_MANY_BACK_EDGES).at_code_offset(index, 0)
-            );
-        }
+    if let Some(limit) = verifier_config.max_back_edges_per_function
+        && num_back_edges > limit
+    {
+        return Err(PartialVMError::new(StatusCode::TOO_MANY_BACK_EDGES).at_code_offset(index, 0));
     }
 
     // verify

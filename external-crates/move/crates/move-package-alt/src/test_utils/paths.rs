@@ -23,6 +23,7 @@ pub trait PathExt {
     fn rm_rf(&self);
     fn mkdir_p(&self);
 
+    #[allow(dead_code)]
     /// Returns a list of all files and directories underneath the given
     /// directory, recursively, including the starting path.
     fn ls_r(&self) -> Vec<PathBuf>;

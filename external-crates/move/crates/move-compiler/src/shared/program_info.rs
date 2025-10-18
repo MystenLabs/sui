@@ -440,11 +440,10 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
         module: &ModuleIdent,
         struct_name: &DatatypeName,
     ) -> Option<UniqueMap<Field, usize>> {
-        let fields = match &self.struct_definition(module, struct_name).fields {
+        match &self.struct_definition(module, struct_name).fields {
             N::StructFields::Defined(_, fields) => Some(fields.ref_map(|_, (ndx, _)| *ndx)),
             N::StructFields::Native(_) => None,
-        };
-        fields
+        }
     }
 
     /// Indicates if the struct is positional. Returns false on native.

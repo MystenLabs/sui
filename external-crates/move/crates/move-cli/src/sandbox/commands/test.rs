@@ -317,10 +317,10 @@ pub fn run_one(
         );
 
         // clean the trace file as well if it exists
-        if let Some(trace_path) = &trace_file {
-            if trace_path.exists() {
-                fs::remove_file(trace_path)?;
-            }
+        if let Some(trace_path) = &trace_file
+            && trace_path.exists()
+        {
+            fs::remove_file(trace_path)?;
         }
     }
 

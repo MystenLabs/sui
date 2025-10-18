@@ -41,9 +41,7 @@ fn test_locals() {
 
     // signature of locals in f1..f<NUM_FUNCTIONS>
     m.signatures.push(Signature(
-        std::iter::repeat(SignatureToken::U8)
-            .take(MAX_LOCALS as usize)
-            .collect(),
+        std::iter::repeat_n(SignatureToken::U8, MAX_LOCALS as usize).collect(),
     ));
 
     m.identifiers.push(Identifier::new("pwn").unwrap());

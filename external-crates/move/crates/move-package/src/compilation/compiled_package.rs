@@ -530,14 +530,14 @@ impl CompiledPackage {
                 ModuleFormat::Bytecode => Either::Right(p),
             });
         // If bytecode dependency is not empty, do not allow renaming
-        if !bytecode_deps.is_empty() {
-            if let Some(pkg_name) = resolution_graph.contains_renaming() {
-                anyhow::bail!(
-                    "Found address renaming in package '{}' when \
+        if !bytecode_deps.is_empty()
+            && let Some(pkg_name) = resolution_graph.contains_renaming()
+        {
+            anyhow::bail!(
+                "Found address renaming in package '{}' when \
                     building with bytecode dependencies -- this is currently not supported",
-                    pkg_name
-                )
-            }
+                pkg_name
+            )
         }
 
         // invoke the compiler

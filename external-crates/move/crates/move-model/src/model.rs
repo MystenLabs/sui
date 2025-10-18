@@ -2970,10 +2970,9 @@ impl<'env> FunctionEnv<'env> {
             .data
             .source_map
             .get_function_source_map(self.data.def_idx)
+            && let Some(loc) = fmap.get_code_location(offset)
         {
-            if let Some(loc) = fmap.get_code_location(offset) {
-                return self.module_env.env.to_loc(&loc);
-            }
+            return self.module_env.env.to_loc(&loc);
         }
         self.get_loc()
     }
@@ -3224,18 +3223,17 @@ impl<'env> FunctionEnv<'env> {
             .data
             .source_map
             .get_function_source_map(self.data.def_idx)
+            && let Some((ident, _)) = fmap.get_parameter_or_local_name(idx as u64)
         {
-            if let Some((ident, _)) = fmap.get_parameter_or_local_name(idx as u64) {
-                // The Move compiler produces temporary names of the form `<foo>%#<num>`,
-                // where <num> seems to be generated non-deterministically.
-                // Substitute this by a deterministic name which the backend accepts.
-                let clean_ident = if ident.contains("%#") {
-                    format!("tmp#${}", idx)
-                } else {
-                    ident
-                };
-                return self.module_env.env.symbol_pool.make(clean_ident.as_str());
-            }
+            // The Move compiler produces temporary names of the form `<foo>%#<num>`,
+            // where <num> seems to be generated non-deterministically.
+            // Substitute this by a deterministic name which the backend accepts.
+            let clean_ident = if ident.contains("%#") {
+                format!("tmp#${}", idx)
+            } else {
+                ident
+            };
+            return self.module_env.env.symbol_pool.make(clean_ident.as_str());
         }
         self.module_env.env.symbol_pool.make(&format!("$t{}", idx))
     }

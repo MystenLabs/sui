@@ -205,14 +205,12 @@ pub fn on_use_request(
 
     if let Some(symbols) =
         SymbolicatorRunner::root_dir(use_fpath).and_then(|pkg_path| symbols_map.get(&pkg_path))
+        && let Some(mod_symbols) = symbols.file_use_defs.get(use_fpath)
+        && let Some(uses) = mod_symbols.get(use_line)
     {
-        if let Some(mod_symbols) = symbols.file_use_defs.get(use_fpath) {
-            if let Some(uses) = mod_symbols.get(use_line) {
-                for u in uses {
-                    if use_col >= u.col_start && use_col <= u.col_end {
-                        result = use_def_action(&u, symbols);
-                    }
-                }
+        for u in uses {
+            if use_col >= u.col_start && use_col <= u.col_end {
+                result = use_def_action(&u, symbols);
             }
         }
     }

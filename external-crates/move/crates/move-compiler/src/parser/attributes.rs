@@ -290,11 +290,11 @@ fn parse_lint_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<At
             let mut allow_set = BTreeSet::new();
             for lint_attr in lint_attrs.into_iter() {
                 let attr_loc = lint_attr.loc;
-                if let Some(lint_name) = expect_name_attr(context, lint_attr) {
-                    if !allow_set.insert(lint_name) {
-                        let msg = format!("Duplicate lint '{}'", lint_name);
-                        context.add_diag(diag!(Declarations::InvalidAttribute, (attr_loc, msg)));
-                    }
+                if let Some(lint_name) = expect_name_attr(context, lint_attr)
+                    && !allow_set.insert(lint_name)
+                {
+                    let msg = format!("Duplicate lint '{}'", lint_name);
+                    context.add_diag(diag!(Declarations::InvalidAttribute, (attr_loc, msg)));
                 }
             }
             let diagnostic = sp(loc, Attribute_::LintAllow { allow_set });
@@ -392,16 +392,16 @@ fn parse_mode(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribut
             let mut modes = UniqueSet::new();
             for mode_attr in mode_attrs.into_iter() {
                 let attr_loc = mode_attr.loc;
-                if let Some(mode_name) = expect_name_attr(context, mode_attr) {
-                    if let Err((_, prev_loc)) = modes.add(mode_name) {
-                        let msg = format!("Duplicate mode '{}'", mode_name);
-                        let prev_msg = "Previously defined here".to_string();
-                        context.add_diag(diag!(
-                            Declarations::InvalidAttribute,
-                            (attr_loc, msg),
-                            (prev_loc, prev_msg)
-                        ));
-                    }
+                if let Some(mode_name) = expect_name_attr(context, mode_attr)
+                    && let Err((_, prev_loc)) = modes.add(mode_name)
+                {
+                    let msg = format!("Duplicate mode '{}'", mode_name);
+                    let prev_msg = "Previously defined here".to_string();
+                    context.add_diag(diag!(
+                        Declarations::InvalidAttribute,
+                        (attr_loc, msg),
+                        (prev_loc, prev_msg)
+                    ));
                 }
             }
             let mode = sp(loc, Attribute_::Mode { modes });

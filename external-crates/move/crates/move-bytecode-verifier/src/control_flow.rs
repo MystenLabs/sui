@@ -153,10 +153,10 @@ fn verify_reducibility<'a>(
         // Collapse all the nodes in `body` into `head`, so it appears as one node when processing
         // outer loops (this performs a sequence of Operation 4(b), followed by a 4(a)).
         let depth = partition.collapse_loop(head, &body);
-        if let Some(max_depth) = verifier_config.max_loop_depth {
-            if depth as usize > max_depth {
-                return err(StatusCode::LOOP_MAX_DEPTH_REACHED, summary.block(head));
-            }
+        if let Some(max_depth) = verifier_config.max_loop_depth
+            && depth as usize > max_depth
+        {
+            return err(StatusCode::LOOP_MAX_DEPTH_REACHED, summary.block(head));
         }
     }
 

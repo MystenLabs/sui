@@ -2613,14 +2613,14 @@ impl Loader {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<R::MoveDatatypeLayout> {
-        if let Some(type_map) = self.type_cache.read().cached_types.get(&gidx) {
-            if let Some(type_info) = type_map.get(ty_args) {
-                if let Some(node_count) = &type_info.node_count {
-                    *count += *node_count
-                }
-                if let Some(layout) = &type_info.layout {
-                    return Ok(layout.clone());
-                }
+        if let Some(type_map) = self.type_cache.read().cached_types.get(&gidx)
+            && let Some(type_info) = type_map.get(ty_args)
+        {
+            if let Some(node_count) = &type_info.node_count {
+                *count += *node_count
+            }
+            if let Some(layout) = &type_info.layout {
+                return Ok(layout.clone());
             }
         }
 
@@ -2728,14 +2728,14 @@ impl Loader {
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<A::MoveDatatypeLayout> {
-        if let Some(datatype_map) = self.type_cache.read().cached_types.get(&gidx) {
-            if let Some(datatype_info) = datatype_map.get(ty_args) {
-                if let Some(annotated_node_count) = &datatype_info.annotated_node_count {
-                    *count += *annotated_node_count
-                }
-                if let Some(layout) = &datatype_info.annotated_layout {
-                    return Ok(layout.clone());
-                }
+        if let Some(datatype_map) = self.type_cache.read().cached_types.get(&gidx)
+            && let Some(datatype_info) = datatype_map.get(ty_args)
+        {
+            if let Some(annotated_node_count) = &datatype_info.annotated_node_count {
+                *count += *annotated_node_count
+            }
+            if let Some(layout) = &datatype_info.annotated_layout {
+                return Ok(layout.clone());
             }
         }
 

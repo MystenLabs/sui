@@ -104,10 +104,9 @@ pub fn all_mod_functions_to_import<'a>(
                     .filter_map(move |(member_name, fdef)| {
                         if let Some(DefInfo::Function(_, visibility, ..)) =
                             symbols.def_info(&fdef.name_loc)
+                            && exclude_member_from_import(mod_defs, cursor.module, visibility)
                         {
-                            if exclude_member_from_import(mod_defs, cursor.module, visibility) {
-                                return None;
-                            }
+                            return None;
                         }
                         Some(*member_name)
                     }),
@@ -132,10 +131,9 @@ pub fn all_mod_structs_to_import<'a>(
                     .filter_map(move |(member_name, sdef)| {
                         if let Some(DefInfo::Struct(_, _, visibility, ..)) =
                             symbols.def_info(&sdef.name_loc)
+                            && exclude_member_from_import(mod_defs, cursor.module, visibility)
                         {
-                            if exclude_member_from_import(mod_defs, cursor.module, visibility) {
-                                return None;
-                            }
+                            return None;
                         }
                         Some(*member_name)
                     }),
@@ -160,10 +158,9 @@ pub fn all_mod_enums_to_import<'a>(
                     .filter_map(move |(member_name, edef)| {
                         if let Some(DefInfo::Enum(_, _, visibility, ..)) =
                             symbols.def_info(&edef.name_loc)
+                            && exclude_member_from_import(mod_defs, cursor.module, visibility)
                         {
-                            if exclude_member_from_import(mod_defs, cursor.module, visibility) {
-                                return None;
-                            }
+                            return None;
                         }
                         Some(*member_name)
                     }),
