@@ -7,6 +7,8 @@ use move_core_types::annotated_visitor as AV;
 use move_core_types::u256::U256;
 
 use super::address::AddressExtractor;
+use super::option::OptionExtractor;
+use super::option::is_option;
 use crate::v2::error::FormatError;
 use crate::v2::value::{Accessor, Slice, Value};
 use crate::v2::visitor::vec_map::VecMapVisitor;
@@ -141,11 +143,20 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         driver: &mut AV::StructDriver<'_, 'v, 'v>,
     ) -> Result<Self::Value, Self::Error> {
         let Some(accessor) = self.path.last() else {
-            while driver.skip_field()?.is_some() {}
-            return Ok(Some(Value::Slice(Slice {
-                layout: driver.layout()?,
-                bytes: &driver.bytes()[driver.start()..driver.position()],
-            })));
+            // Detect if the value being sliced out is the Move representation of an optional, and if so,
+            // extract the underlying value if it is `Some`, or convert it into a `None` otherwise.
+            if is_option(driver.struct_layout()) {
+                return Ok(driver
+                    .next_field(&mut OptionExtractor)?
+                    .and_then(|(_, v)| v)
+                    .map(Value::Slice));
+            } else {
+                while driver.skip_field()?.is_some() {}
+                return Ok(Some(Value::Slice(Slice {
+                    layout: driver.layout()?,
+                    bytes: &driver.bytes()[driver.start()..driver.position()],
+                })));
+            }
         };
 
         // If the next accessor is for a dynamic field, try and find the parent ID within this

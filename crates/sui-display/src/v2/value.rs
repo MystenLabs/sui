@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::MoveTypeLayout,
+    annotated_value::{MoveFieldLayout, MoveTypeLayout},
     language_storage::{StructTag, TypeTag},
     u256::U256,
 };
@@ -205,24 +205,6 @@ impl Value<'_> {
             | V::Struct(_)
             | V::Vector(_) => None,
         }
-    }
-
-    /// Predicate to check whether this value represents a `None: std::option::Option<T>` value.
-    /// Only values sliced out of real Move values are detected as `None`. Literals that are
-    /// constructed to look like `None` are not detected as such.
-    pub(crate) fn is_none(&self) -> bool {
-        let Value::Slice(Slice { layout, bytes }) = self else {
-            return false;
-        };
-
-        let MoveTypeLayout::Struct(s) = layout else {
-            return false;
-        };
-
-        s.type_.address == MOVE_STDLIB_ADDRESS
-            && s.type_.module.as_ref() == STD_OPTION_MODULE_NAME
-            && s.type_.name.as_ref() == STD_OPTION_STRUCT_NAME
-            && bytes == &[0x00]
     }
 }
 
@@ -709,6 +691,14 @@ pub(crate) mod tests {
 
     pub fn vector_(layout: MoveTypeLayout) -> MoveTypeLayout {
         MoveTypeLayout::Vector(Box::new(layout))
+    }
+
+    pub fn optional_(layout: MoveTypeLayout) -> MoveTypeLayout {
+        let type_ = TypeTag::from(&layout);
+        struct_(
+            &format!("0x1::option::Option<{type_}>"),
+            vec![("vec", vector_(layout))],
+        )
     }
 
     #[test]
