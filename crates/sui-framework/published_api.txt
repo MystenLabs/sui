@@ -2692,6 +2692,9 @@ migrate_regulated_state_by_metadata
 migrate_regulated_state_by_cap
 	public fun
 	0x2::coin_registry
+mark_as_migrated
+	public fun
+	0x2::coin_registry
 decimals
 	public fun
 	0x2::coin_registry
