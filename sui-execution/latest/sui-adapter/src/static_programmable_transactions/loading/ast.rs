@@ -210,6 +210,43 @@ impl Type {
             Type::Datatype(dt) => dt.all_addresses(),
         }
     }
+
+    pub fn node_count(&self) -> u64 {
+        use Type::*;
+        let mut total = 0u64;
+        let mut stack = vec![self];
+
+        while let Some(ty) = stack.pop() {
+            total = total.saturating_add(1);
+            match ty {
+                Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => {}
+                Vector(v) => stack.push(&v.element_type),
+                Reference(_, inner) => stack.push(inner),
+                Datatype(dt) => {
+                    stack.extend(&dt.type_arguments);
+                }
+            }
+        }
+
+        total
+    }
+
+    pub fn is_reference(&self) -> bool {
+        match self {
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer
+            | Type::Vector(_)
+            | Type::Datatype(_) => false,
+            Type::Reference(_, _) => true,
+        }
+    }
 }
 
 impl Datatype {
