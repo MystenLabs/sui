@@ -74,7 +74,7 @@ pub enum FormatError {
     #[error("Display produces too much output")]
     TooMuchOutput,
 
-    #[error("Invalid format: {0}")]
+    #[error("Invalid transform: {0}")]
     TransformInvalid(&'static str),
 
     #[error("Unexpected end-of-string, expected {expect}")]
