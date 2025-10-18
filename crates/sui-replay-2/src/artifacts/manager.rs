@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution::{MoveCallInfo, ReplayCacheSummary};
+use crate::artifacts::{MoveCallInfo, ReplayCacheSummary};
 use anyhow::bail;
 use move_trace_format::format::{MoveTrace, MoveTraceReader};
 use std::{

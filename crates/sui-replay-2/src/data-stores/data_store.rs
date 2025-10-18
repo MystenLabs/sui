@@ -319,7 +319,6 @@ impl DataStore {
     ) -> Result<Option<(TransactionData, TransactionEffects, u64)>, anyhow::Error> {
         let _span = debug_span!("gql_txn_query", digest = %digest).entered();
         debug!(op = "txn_query", phase = "start", "transaction query");
-        tx_counts_add_txn();
         let t0 = Instant::now();
         let data = gql_queries::txn_query::query(digest.to_string(), self).await;
         let elapsed = t0.elapsed().as_millis();
@@ -336,7 +335,6 @@ impl DataStore {
     async fn epoch(&self, epoch_id: u64) -> Result<Option<EpochData>, anyhow::Error> {
         let _span = debug_span!("gql_epoch_query", epoch = epoch_id).entered();
         debug!(op = "epoch_query", phase = "start", "epoch query");
-        tx_counts_add_epoch();
         let t0 = Instant::now();
         let data = gql_queries::epoch_query::query(epoch_id, self).await;
         let elapsed = t0.elapsed().as_millis();
@@ -356,9 +354,6 @@ impl DataStore {
     ) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
         let _span = debug_span!("gql_objects_query", num_keys = keys.len()).entered();
         debug!(op = "objects_query", phase = "start", "objects query");
-        // Track how many objects were requested in this batch
-        tx_objs_add(keys.len());
-        tx_counts_add_objs();
         let t0 = Instant::now();
         let data = gql_queries::object_query::query(keys, self).await?;
         let elapsed = t0.elapsed().as_millis();
