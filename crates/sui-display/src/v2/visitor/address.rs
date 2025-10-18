@@ -147,5 +147,5 @@ fn extract_address(
 ) -> Result<AccountAddress, FormatError> {
     driver.skip_field()?;
     let bytes = &driver.bytes()[driver.start()..driver.position()];
-    AccountAddress::from_bytes(bytes).map_err(|_| FormatError::InvalidBytes)
+    Ok(bcs::from_bytes(bytes)?)
 }

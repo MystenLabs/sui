@@ -44,9 +44,6 @@ pub enum FormatError {
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
 
-    #[error("Invalid bytes for type")]
-    InvalidBytes,
-
     #[error("Hex {0} contains invalid character")]
     InvalidHexCharacter(OwnedLexeme),
 
