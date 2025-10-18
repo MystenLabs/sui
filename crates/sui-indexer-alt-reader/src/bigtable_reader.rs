@@ -22,6 +22,10 @@ pub struct BigtableArgs {
     /// Time spent waiting for a request to Bigtable to complete, in milliseconds.
     #[arg(long)]
     pub bigtable_statement_timeout_ms: Option<u64>,
+
+    /// App profile ID to use for Bigtable client. If not provided, the default profile will be used.
+    #[arg(long)]
+    pub bigtable_app_profile_id: Option<String>,
 }
 
 /// A reader backed by BigTable KV store.
@@ -35,6 +39,10 @@ impl BigtableArgs {
     pub fn statement_timeout(&self) -> Option<Duration> {
         self.bigtable_statement_timeout_ms
             .map(Duration::from_millis)
+    }
+
+    pub fn app_profile_id(&self) -> Option<String> {
+        self.bigtable_app_profile_id.clone()
     }
 }
 
@@ -62,7 +70,7 @@ impl BigtableReader {
                 bigtable_args.statement_timeout(),
                 client_name,
                 Some(registry),
-                None,
+                bigtable_args.app_profile_id(),
             )
             .await
             .context("Failed to create BigTable client")?,
