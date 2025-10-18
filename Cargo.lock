@@ -7778,6 +7778,7 @@ dependencies = [
  "sha2 0.9.9",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "sysinfo",
  "tempfile",
  "url",
  "vfs",
