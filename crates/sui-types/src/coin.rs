@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::ExecutionErrorKind;
-use crate::error::SuiError;
+use crate::error::{SuiError, SuiErrorKind};
 use crate::{
     balance::{Balance, Supply},
     error::ExecutionError,
@@ -164,9 +164,9 @@ impl TreasuryCap {
 
     /// Create a TreasuryCap from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
-        bcs::from_bytes(content).map_err(|err| SuiError::ObjectDeserializationError {
+        bcs::from_bytes(content).map_err(|err| SuiErrorKind::ObjectDeserializationError {
             error: format!("Unable to deserialize TreasuryCap object: {}", err),
-        })
+        }.into())
     }
 
     pub fn type_(type_param: StructTag) -> StructTag {
@@ -203,9 +203,9 @@ impl TryFrom<Object> for TreasuryCap {
             Data::Package(_) => {}
         }
 
-        Err(SuiError::TypeError {
+        Err(SuiErrorKind::TypeError {
             error: format!("Object type is not a TreasuryCap: {:?}", object),
-        })
+        }.into())
     }
 }
 
@@ -235,9 +235,9 @@ impl CoinMetadata {
 
     /// Create a coin from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
-        bcs::from_bytes(content).map_err(|err| SuiError::ObjectDeserializationError {
+        bcs::from_bytes(content).map_err(|err| SuiErrorKind::ObjectDeserializationError {
             error: format!("Unable to deserialize CoinMetadata object: {}", err),
-        })
+        }.into())
     }
 
     pub fn type_(type_param: StructTag) -> StructTag {
@@ -281,9 +281,9 @@ impl TryFrom<&Object> for CoinMetadata {
             Data::Package(_) => {}
         }
 
-        Err(SuiError::TypeError {
+        Err(SuiErrorKind::TypeError {
             error: format!("Object type is not a CoinMetadata: {:?}", object),
-        })
+        }.into())
     }
 }
 
@@ -307,12 +307,12 @@ impl RegulatedCoinMetadata {
 
     /// Create a coin from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
-        bcs::from_bytes(content).map_err(|err| SuiError::ObjectDeserializationError {
+        bcs::from_bytes(content).map_err(|err| SuiErrorKind::ObjectDeserializationError {
             error: format!(
                 "Unable to deserialize RegulatedCoinMetadata object: {}",
                 err
             ),
-        })
+        }.into())
     }
 
     pub fn type_(type_param: StructTag) -> StructTag {
@@ -356,8 +356,8 @@ impl TryFrom<&Object> for RegulatedCoinMetadata {
             Data::Package(_) => {}
         }
 
-        Err(SuiError::TypeError {
+        Err(SuiErrorKind::TypeError {
             error: format!("Object type is not a RegulatedCoinMetadata: {:?}", object),
-        })
+        }.into())
     }
 }

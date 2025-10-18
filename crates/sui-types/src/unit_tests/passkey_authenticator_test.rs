@@ -265,7 +265,7 @@ async fn test_passkey_fails_invalid_json() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Invalid client data json".to_string()
         }
     );
@@ -322,7 +322,7 @@ async fn test_passkey_fails_invalid_challenge() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Invalid encoded challenge".to_string()
         }
     );
@@ -343,7 +343,7 @@ async fn test_passkey_fails_wrong_client_data_type() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Invalid client data type".to_string()
         }
     );

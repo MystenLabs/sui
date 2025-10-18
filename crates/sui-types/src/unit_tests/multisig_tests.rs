@@ -436,7 +436,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
     );
     // since the zklogin inputs is crafted, it is expected that the proof verify failed, but all checks before passes.
     assert!(
-        matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
+        matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
     );
 
     // initialize zklogin pk (pk1_padd) with padded address seed
@@ -475,7 +475,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         Arc::new(VerifiedDigestCache::new_empty()),
     );
     assert!(
-        matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
+        matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
     );
 }
 

@@ -89,7 +89,7 @@ impl fmt::Display for NitroAttestationVerifyError {
 
 impl From<NitroAttestationVerifyError> for SuiError {
     fn from(err: NitroAttestationVerifyError) -> Self {
-        SuiError::NitroAttestationFailedToVerify(err.to_string())
+        SuiErrorKind::NitroAttestationFailedToVerify(err.to_string())
     }
 }
 
@@ -363,7 +363,7 @@ impl CoseSign1 {
         // 17 for extra metadata bytes
         let mut bytes = Vec::with_capacity(self.protected.len() + self.payload.len() + 17);
         ciborium::ser::into_writer(&value, &mut bytes).map_err(|_| {
-            SuiError::NitroAttestationFailedToVerify("cannot parse message".to_string())
+            SuiErrorKind::NitroAttestationFailedToVerify("cannot parse message".to_string())
         })?;
         Ok(bytes)
     }

@@ -303,7 +303,7 @@ pub fn load_package_object_from_object_store(
     if let Some(obj) = &package {
         fp_ensure!(
             obj.is_package(),
-            SuiError::BadObjectType {
+            SuiErrorKind::BadObjectType {
                 error: format!("Package expected, Move object found: {package_id}"),
             }
         );

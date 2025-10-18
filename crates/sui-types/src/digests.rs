@@ -4,7 +4,7 @@
 use std::{env, fmt};
 
 use crate::{
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     sui_serde::Readable,
 };
 use fastcrypto::encoding::{Base58, Encoding, Hex};
@@ -94,7 +94,7 @@ impl TryFrom<Vec<u8>> for Digest {
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
         let bytes: [u8; 32] =
-            <[u8; 32]>::try_from(&bytes[..]).map_err(|_| SuiError::InvalidDigestLength {
+            <[u8; 32]>::try_from(&bytes[..]).map_err(|_| SuiErrorKind::InvalidDigestLength {
                 expected: 32,
                 actual: bytes.len(),
             })?;
@@ -629,7 +629,7 @@ impl TryFrom<&[u8]> for TransactionDigest {
     fn try_from(bytes: &[u8]) -> Result<Self, crate::error::SuiError> {
         let arr: [u8; 32] = bytes
             .try_into()
-            .map_err(|_| crate::error::SuiError::InvalidTransactionDigest)?;
+            .map_err(|_| crate::error::SuiErrorKind::InvalidTransactionDigest)?;
         Ok(Self::new(arr))
     }
 }
@@ -1016,7 +1016,7 @@ impl TryFrom<&[u8]> for ObjectDigest {
     fn try_from(bytes: &[u8]) -> Result<Self, crate::error::SuiError> {
         let arr: [u8; 32] = bytes
             .try_into()
-            .map_err(|_| crate::error::SuiError::InvalidTransactionDigest)?;
+            .map_err(|_| crate::error::SuiErrorKind::InvalidTransactionDigest)?;
         Ok(Self::new(arr))
     }
 }

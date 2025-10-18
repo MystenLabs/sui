@@ -27,7 +27,7 @@ fn attestation_parse_and_verify() {
     let res = verify_nitro_attestation(&parsed.0, &parsed.1, &mutated_document, 1731627987382);
     assert_eq!(
         res.unwrap_err(),
-        SuiError::NitroAttestationFailedToVerify(
+        SuiErrorKind::NitroAttestationFailedToVerify(
             "InvalidCertificate: certificate chain issuer mismatch".to_string()
         )
     );
@@ -38,7 +38,7 @@ fn attestation_parse_and_verify() {
     let res = verify_nitro_attestation(&parsed.0, &parsed.1, &mutated_document, 1731627987382);
     assert_eq!(
         res.unwrap_err(),
-        SuiError::NitroAttestationFailedToVerify(
+        SuiErrorKind::NitroAttestationFailedToVerify(
             "InvalidCertificate: certificate fails to verify".to_string()
         )
     );
@@ -49,7 +49,7 @@ fn attestation_parse_and_verify() {
     let res = verify_nitro_attestation(&parsed.0, &parsed.1, &mutated_document, 1731627987382);
     assert_eq!(
         res.unwrap_err(),
-        SuiError::NitroAttestationFailedToVerify(
+        SuiErrorKind::NitroAttestationFailedToVerify(
             "InvalidCertificate: certificate fails to verify".to_string()
         )
     );
@@ -75,7 +75,7 @@ fn test_over_certificate_expiration() {
     let res = verify_nitro_attestation(&parsed.0, &parsed.1, &parsed.2, now);
     assert_eq!(
         res.unwrap_err(),
-        SuiError::NitroAttestationFailedToVerify(
+        SuiErrorKind::NitroAttestationFailedToVerify(
             "InvalidCertificate: Certificate timestamp not valid".to_string()
         )
     );
@@ -86,7 +86,7 @@ fn test_over_certificate_expiration() {
     let res = verify_nitro_attestation(&parsed.0, &parsed.1, &parsed.2, now);
     assert_eq!(
         res.unwrap_err(),
-        SuiError::NitroAttestationFailedToVerify(
+        SuiErrorKind::NitroAttestationFailedToVerify(
             "InvalidCertificate: Certificate timestamp not valid".to_string()
         )
     );
@@ -98,7 +98,7 @@ fn test_with_malformed_attestation() {
 
     assert!(matches!(
         err,
-        SuiError::NitroAttestationFailedToVerify(msg) if msg.starts_with("InvalidCoseSign1")
+        SuiErrorKind::NitroAttestationFailedToVerify(msg) if msg.starts_with("InvalidCoseSign1")
     ));
 }
 
@@ -207,7 +207,7 @@ fn bad_signature_cose() {
     let res = verify_nitro_attestation(&bad_sig, &parsed.1, &parsed.2, 1731627987382);
     assert_eq!(
         res.unwrap_err(),
-        SuiError::NitroAttestationFailedToVerify("InvalidSignature".to_string())
+        SuiErrorKind::NitroAttestationFailedToVerify("InvalidSignature".to_string())
     );
 }
 

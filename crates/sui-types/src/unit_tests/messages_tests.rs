@@ -738,7 +738,7 @@ fn test_sponsored_transaction_message() {
         Transaction::from_generic_sig_data(tx_data.clone(), vec![sender_sig.clone()],)
             .try_into_verified_for_testing(epoch, &Default::default())
             .unwrap_err(),
-        SuiError::SignerSignatureNumberMismatch { .. }
+        SuiErrorKind::SignerSignatureNumberMismatch { .. }
     ));
 
     // Test incomplete signature lists (missing sender sig)
@@ -746,7 +746,7 @@ fn test_sponsored_transaction_message() {
         Transaction::from_generic_sig_data(tx_data.clone(), vec![sponsor_sig.clone()],)
             .try_into_verified_for_testing(epoch, &Default::default())
             .unwrap_err(),
-        SuiError::SignerSignatureNumberMismatch { .. }
+        SuiErrorKind::SignerSignatureNumberMismatch { .. }
     ));
 
     // Test incomplete signature lists (more sigs than expected)
@@ -760,7 +760,7 @@ fn test_sponsored_transaction_message() {
         )
         .try_into_verified_for_testing(epoch, &Default::default())
         .unwrap_err(),
-        SuiError::SignerSignatureNumberMismatch { .. }
+        SuiErrorKind::SignerSignatureNumberMismatch { .. }
     ));
 
     // Test irrelevant sigs
@@ -768,7 +768,7 @@ fn test_sponsored_transaction_message() {
         Transaction::from_generic_sig_data(tx_data, vec![sponsor_sig, third_party_sig],)
             .try_into_verified_for_testing(epoch, &Default::default())
             .unwrap_err(),
-        SuiError::SignerSignatureAbsent { .. }
+        SuiErrorKind::SignerSignatureAbsent { .. }
     ));
 
     let tx = transaction.data().transaction_data();

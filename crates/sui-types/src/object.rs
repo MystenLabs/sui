@@ -320,7 +320,7 @@ impl MoveObject {
     ) -> Result<MoveStructLayout, SuiError> {
         let type_ = TypeTag::Struct(Box::new(struct_tag));
         let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
         })?;
@@ -335,7 +335,7 @@ impl MoveObject {
     /// Convert `self` to the JSON representation dictated by `layout`.
     pub fn to_move_struct(&self, layout: &MoveStructLayout) -> Result<MoveStruct, SuiError> {
         BoundedVisitor::deserialize_struct(&self.contents, layout).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
         })
@@ -388,7 +388,7 @@ impl MoveObject {
 
             let mut traversal = BalanceTraversal::default();
             MoveValue::visit_deserialize(&self.contents, &layout.into_layout(), &mut traversal)
-                .map_err(|e| SuiError::ObjectSerializationError {
+                .map_err(|e| SuiErrorKind::ObjectSerializationError {
                     error: e.to_string(),
                 })?;
 
@@ -513,7 +513,7 @@ impl Owner {
             Self::Shared { .. }
             | Self::Immutable
             | Self::ObjectOwner(_)
-            | Self::ConsensusAddressOwner { .. } => Err(SuiError::UnexpectedOwnerType),
+            | Self::ConsensusAddressOwner { .. } => Err(SuiErrorKind::UnexpectedOwnerType),
         }
     }
 
@@ -525,7 +525,7 @@ impl Owner {
             Self::AddressOwner(address)
             | Self::ObjectOwner(address)
             | Self::ConsensusAddressOwner { owner: address, .. } => Ok(*address),
-            Self::Shared { .. } | Self::Immutable => Err(SuiError::UnexpectedOwnerType),
+            Self::Shared { .. } | Self::Immutable => Err(SuiErrorKind::UnexpectedOwnerType),
         }
     }
 
@@ -964,12 +964,12 @@ impl ObjectInner {
     /// like this: `S<T>`.
     /// Returns the inner parameter type `T`.
     pub fn get_move_template_type(&self) -> SuiResult<TypeTag> {
-        let move_struct = self.data.struct_tag().ok_or_else(|| SuiError::TypeError {
+        let move_struct = self.data.struct_tag().ok_or_else(|| SuiErrorKind::TypeError {
             error: "Object must be a Move object".to_owned(),
         })?;
         fp_ensure!(
             move_struct.type_params.len() == 1,
-            SuiError::TypeError {
+            SuiErrorKind::TypeError {
                 error: "Move object struct must have one type parameter".to_owned()
             }
         );
