@@ -114,6 +114,7 @@ const concepts = [
 				},
 				items: [
 					'concepts/graphql-rpc',
+					'concepts/prod-setup/overview',
 					'concepts/custom-indexing-framework',
 					'concepts/custom-indexer/pipeline-architecture'
 				]

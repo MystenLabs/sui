@@ -1,0 +1,9 @@
+[ingestion]
+
+[committer]
+write-concurrency = 20
+
+[pruner]
+retention = 10368000
+
+[pipeline.tx_affected_objects]
