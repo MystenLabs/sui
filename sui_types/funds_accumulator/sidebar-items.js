@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FUNDS_ACCUMULATOR_MODULE_NAME","WITHDRAWAL_STRUCT_NAME"],"struct":["Withdrawal"]};

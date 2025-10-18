@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["new_wallet_context_from_cluster"],"struct":["ClusterFactory","LocalNewCluster","RemoteRunningCluster"],"trait":["Cluster"]};

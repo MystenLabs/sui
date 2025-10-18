@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DynamicFieldKind","IndexedObjectChange","ObjectStatus","OwnerType","TransactionKind"],"fn":["owner_to_owner_info"],"struct":["EventIndex","IndexedCheckpoint","IndexedDeletedObject","IndexedEvent","IndexedObject","IndexedPackage","IndexedTransaction","SuiTransactionBlockResponseWithOptions","TxIndex"],"type":["IndexerResult"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MoveType","ObjectType"],"fn":["execute_transaction_to_effects"],"struct":["CacheEntry","FunctionSignature","MoveCallInfo","PackageInfo","ReplayCacheSummary","ReplayExecutor","TxnContextAndEffects"],"type":["Datatype"]};

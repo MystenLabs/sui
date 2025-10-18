@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LoadType"],"struct":["BenchmarkParameters","BenchmarkParametersGenerator"],"trait":["BenchmarkType"]};

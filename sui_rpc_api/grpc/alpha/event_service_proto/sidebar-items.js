@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["event_service_client","event_service_server"],"struct":["AuthenticatedEvent","ListAuthenticatedEventsRequest","ListAuthenticatedEventsResponse"]};

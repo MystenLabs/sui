@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["PACKAGE_CACHE_WORKER_NAME"],"struct":["PackageCacheWorker"]};
