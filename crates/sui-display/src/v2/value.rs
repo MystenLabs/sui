@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(unused)]
 
-use std::{borrow::Cow, fmt::Write as _};
+use std::{borrow::Cow, fmt::Write as _, str};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -18,12 +18,14 @@ use serde::{
 };
 use sui_types::{
     MOVE_STDLIB_ADDRESS,
-    base_types::{RESOLVED_UTF8_STR, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME},
+    base_types::{
+        RESOLVED_UTF8_STR, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, move_ascii_str_layout,
+        move_utf8_str_layout, url_layout,
+    },
+    id::{ID, UID},
 };
 
-use super::{
-    error::FormatError, parser::Transform, visitor::formatter::Formatter, writer::BoundedWriter,
-};
+use super::{error::FormatError, parser::Transform, writer::BoundedWriter};
 
 /// Dynamically load objects by their ID. The output should be a `Slice` containing references to
 /// the raw BCS bytes and the corresponding `MoveTypeLayout` for the object. This implies the
@@ -33,7 +35,7 @@ pub trait Store<'s> {
     async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<Slice<'s>>>;
 }
 
-/// Value representation for the Display v2 interpreter.
+/// Value representation used during evaluation by the Display v2 interpreter.
 #[derive(Clone)]
 pub enum Value<'s> {
     Address(AccountAddress),
@@ -50,6 +52,21 @@ pub enum Value<'s> {
     U128(u128),
     U256(U256),
     Vector(Vector<'s>),
+}
+
+/// Non-aggregate values that can be formatted during string interpolation.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Atom<'s> {
+    Address(AccountAddress),
+    Bool(bool),
+    Bytes(Cow<'s, [u8]>),
+    String(Cow<'s, str>),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+    U256(U256),
 }
 
 /// A single step in a chain of accesses, with its inner expression (if there is one) evaluated.
@@ -105,15 +122,16 @@ impl Value<'_> {
     /// This operation can fail if the transform is not supported for this value, or if the output
     /// is too large. If it succeds, `w` will be modified to include the newly written data.
     pub(crate) fn format(
-        &self,
+        self,
         transform: Transform,
         w: &mut BoundedWriter<'_>,
     ) -> Result<(), FormatError> {
         // TODO(amnn): Detect transforms that can't be applied in this context (e.g. 'json' and
         // 'display').
+        let atom = Atom::try_from(self)?;
         match transform {
-            Transform::Str => self.format_as_str(w),
-            Transform::Timestamp => self.format_as_timestamp(w),
+            Transform::Str => atom.format_as_str(w),
+            Transform::Timestamp => atom.format_as_timestamp(w),
         }
     }
 
@@ -206,61 +224,56 @@ impl Value<'_> {
             && s.type_.name.as_ref() == STD_OPTION_STRUCT_NAME
             && bytes == &[0x00]
     }
+}
 
-    /// Implementation of 'string' transform, which is the transform used if
+impl Atom<'_> {
+    /// Format the atom as a string.
     fn format_as_str(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
         match self {
-            Value::Address(a) => write!(w, "{}", a.to_canonical_display(true))?,
-            Value::Bool(b) => write!(w, "{b}")?,
-            Value::U8(n) => write!(w, "{n}")?,
-            Value::U16(n) => write!(w, "{n}")?,
-            Value::U32(n) => write!(w, "{n}")?,
-            Value::U64(n) => write!(w, "{n}")?,
-            Value::U128(n) => write!(w, "{n}")?,
-            Value::U256(n) => write!(w, "{n}")?,
-            Value::String(s) => write!(w, "{s}")?,
-
-            Value::Slice(s) => Formatter::deserialize_slice(*s, w)?,
-
-            Value::Bytes(_) => {
-                return Err(FormatError::TransformInvalid(
-                    "bytes cannot be formatted as a string",
-                ));
-            }
-
-            Value::Enum(_) => {
-                return Err(FormatError::TransformInvalid(
-                    "enums cannot be formatted as a string",
-                ));
-            }
-
-            Value::Struct(_) => {
-                return Err(FormatError::TransformInvalid(
-                    "struct literals cannot be formatted as a string",
-                ));
-            }
-
-            Value::Vector(_) => {
-                return Err(FormatError::TransformInvalid(
-                    "vector literals cannot be formatted as a string",
-                ));
+            Atom::Address(a) => write!(w, "{}", a.to_canonical_display(true))?,
+            Atom::Bool(b) => write!(w, "{b}")?,
+            Atom::U8(n) => write!(w, "{n}")?,
+            Atom::U16(n) => write!(w, "{n}")?,
+            Atom::U32(n) => write!(w, "{n}")?,
+            Atom::U64(n) => write!(w, "{n}")?,
+            Atom::U128(n) => write!(w, "{n}")?,
+            Atom::U256(n) => write!(w, "{n}")?,
+            Atom::String(s) => write!(w, "{s}")?,
+            Atom::Bytes(bs) => {
+                let s = str::from_utf8(bs)
+                    .map_err(|_| FormatError::TransformInvalid("expected utf8 bytes"))?;
+                write!(w, "{s}")?;
             }
         }
 
         Ok(())
     }
 
-    /// Coerce the value into a number, interpreted as an offset in milliseconds since the Unix
+    /// Coerce the atom into an `i64`, interpreted as an offset in milliseconds since the Unix
     /// epoch, and format it as an ISO8601 timestamp.
     fn format_as_timestamp(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
         let ts = self
-            .as_u64()
-            .and_then(|ts| ts.try_into().ok())
+            .as_i64()
             .and_then(DateTime::from_timestamp_millis)
-            .ok_or_else(|| FormatError::TransformInvalid("not a timestamp"))?;
+            .ok_or_else(|| {
+                FormatError::TransformInvalid("expected unix timestamp in milliseconds")
+            })?;
 
         write!(w, "{ts:?}")?;
         Ok(())
+    }
+
+    /// Attempt to coerce this atom into an `i64`, if possible.
+    fn as_i64(&self) -> Option<i64> {
+        match self {
+            Atom::U8(n) => Some(*n as i64),
+            Atom::U16(n) => Some(*n as i64),
+            Atom::U32(n) => Some(*n as i64),
+            Atom::U64(n) => i64::try_from(*n).ok(),
+            Atom::U128(n) => i64::try_from(*n).ok(),
+            Atom::U256(n) => u64::try_from(*n).ok().and_then(|v| i64::try_from(v).ok()),
+            _ => None,
+        }
     }
 }
 
@@ -446,9 +459,94 @@ impl Serialize for Enum<'_> {
     }
 }
 
+impl<'s> TryFrom<Value<'s>> for Atom<'s> {
+    type Error = FormatError;
+
+    fn try_from(value: Value<'s>) -> Result<Atom<'s>, FormatError> {
+        use Atom as A;
+        use MoveTypeLayout as L;
+        use TypeTag as T;
+        use Value as V;
+
+        Ok(match value {
+            V::Address(a) => A::Address(a),
+            V::Bool(b) => A::Bool(b),
+            V::Bytes(bs) => A::Bytes(bs),
+            V::String(s) => A::String(s),
+            V::U8(n) => A::U8(n),
+            V::U16(n) => A::U16(n),
+            V::U32(n) => A::U32(n),
+            V::U64(n) => A::U64(n),
+            V::U128(n) => A::U128(n),
+            V::U256(n) => A::U256(n),
+
+            V::Enum(_) => return Err(FormatError::TransformInvalid("unexpected enum")),
+            V::Struct(_) => return Err(FormatError::TransformInvalid("unexpected struct")),
+
+            // Vector literals are supported if they are byte vectors.
+            V::Vector(Vector { type_, elements }) => {
+                if type_.is_some_and(|t| t != &T::U8) {
+                    return Err(FormatError::TransformInvalid("unexpected vector"));
+                }
+
+                let bytes: Result<Vec<_>, _> = elements
+                    .into_iter()
+                    .map(|e| match e {
+                        V::U8(b) => Ok(b),
+                        V::Slice(Slice { layout, bytes }) if layout == &L::U8 => {
+                            Ok(bcs::from_bytes(bytes)?)
+                        }
+                        _ => Err(FormatError::TransformInvalid("unexpected vector")),
+                    })
+                    .collect();
+
+                A::Bytes(Cow::Owned(bytes?))
+            }
+
+            V::Slice(Slice { layout, bytes }) => match layout {
+                L::Address => A::Address(bcs::from_bytes(bytes)?),
+                L::Bool => A::Bool(bcs::from_bytes(bytes)?),
+                L::U8 => A::U8(bcs::from_bytes(bytes)?),
+                L::U16 => A::U16(bcs::from_bytes(bytes)?),
+                L::U32 => A::U32(bcs::from_bytes(bytes)?),
+                L::U64 => A::U64(bcs::from_bytes(bytes)?),
+                L::U128 => A::U128(bcs::from_bytes(bytes)?),
+                L::U256 => A::U256(bcs::from_bytes(bytes)?),
+
+                L::Vector(layout) if layout.as_ref() == &L::U8 => {
+                    A::Bytes(Cow::Borrowed(bcs::from_bytes(bytes)?))
+                }
+
+                L::Struct(layout)
+                    if [
+                        move_ascii_str_layout(),
+                        move_utf8_str_layout(),
+                        url_layout(),
+                    ]
+                    .contains(layout.as_ref()) =>
+                {
+                    let s = str::from_utf8(bcs::from_bytes(bytes)?)
+                        .map_err(|_| FormatError::TransformInvalid("invalid utf8 bytes"))?;
+                    A::String(Cow::Borrowed(s))
+                }
+
+                L::Struct(layout) if [UID::layout(), ID::layout()].contains(layout.as_ref()) => {
+                    A::Address(bcs::from_bytes(bytes)?)
+                }
+
+                L::Signer => return Err(FormatError::TransformInvalid("unexpected signer")),
+                L::Enum(_) => return Err(FormatError::TransformInvalid("unexpected enum")),
+                L::Struct(_) => return Err(FormatError::TransformInvalid("unexpected struct")),
+                L::Vector(_) => return Err(FormatError::TransformInvalid("unexpected vector")),
+            },
+        })
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::collections::BTreeMap;
+    use std::str::FromStr;
 
     use move_core_types::annotated_value::{
         MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout as L,
@@ -817,5 +915,138 @@ pub(crate) mod tests {
         });
 
         assert_eq!(bcs::to_bytes(&vec).unwrap(), &[0x00]);
+    }
+
+    #[test]
+    fn test_literal_to_atom_conversion() {
+        let values = vec![
+            Value::Bool(true),
+            Value::U8(42),
+            Value::U16(1234),
+            Value::U32(123456),
+            Value::U64(12345678),
+            Value::U128(123456),
+            Value::U256(U256::from(42u64)),
+            Value::Address("0x42".parse().unwrap()),
+            Value::String(Cow::Borrowed("hello")),
+            Value::Bytes(Cow::Borrowed(&[1, 2, 3])),
+            Value::Vector(Vector {
+                type_: Some(&TypeTag::U8),
+                elements: vec![Value::U8(4), Value::U8(5), Value::U8(6)],
+            }),
+            Value::Vector(Vector {
+                type_: None,
+                elements: vec![Value::U8(7), Value::U8(8), Value::U8(9)],
+            }),
+            Value::Vector(Vector {
+                type_: None,
+                elements: vec![
+                    Value::U8(10),
+                    Value::U16(11),
+                    Value::Slice(Slice {
+                        layout: &L::U8,
+                        bytes: &[12],
+                    }),
+                ],
+            }),
+        ];
+
+        let atoms = vec![
+            Atom::Bool(true),
+            Atom::U8(42),
+            Atom::U16(1234),
+            Atom::U32(123456),
+            Atom::U64(12345678),
+            Atom::U128(123456),
+            Atom::U256(U256::from(42u64)),
+            Atom::Address("0x42".parse().unwrap()),
+            Atom::String(Cow::Borrowed("hello")),
+            Atom::Bytes(Cow::Borrowed(&[1, 2, 3])),
+            Atom::Bytes(Cow::Borrowed(&[4, 5, 6])),
+            Atom::Bytes(Cow::Borrowed(&[7, 8, 9])),
+        ];
+
+        for (value, expect) in values.into_iter().zip(atoms.into_iter()) {
+            let actual = Atom::try_from(value).unwrap();
+            assert_eq!(actual, expect);
+        }
+    }
+
+    #[test]
+    fn test_slice_to_atom_converion() {
+        let bool_bytes = bcs::to_bytes(&true).unwrap();
+        let u8_bytes = bcs::to_bytes(&42u8).unwrap();
+        let u16_bytes = bcs::to_bytes(&1234u16).unwrap();
+        let u32_bytes = bcs::to_bytes(&123456u32).unwrap();
+        let u64_bytes = bcs::to_bytes(&12345678u64).unwrap();
+        let u128_bytes = bcs::to_bytes(&123456u128).unwrap();
+        let u256_bytes = bcs::to_bytes(&U256::from(42u64)).unwrap();
+        let addr_bytes = bcs::to_bytes(&AccountAddress::from_str("0x42").unwrap()).unwrap();
+        let str_bytes = bcs::to_bytes("hello").unwrap();
+        let vec_bytes = bcs::to_bytes(&vec![1u8, 2, 3]).unwrap();
+
+        let str_layout = L::Struct(Box::new(move_utf8_str_layout()));
+        let vec_layout = L::Vector(Box::new(L::U8));
+
+        let values = vec![
+            Value::Slice(Slice {
+                layout: &L::Bool,
+                bytes: &bool_bytes,
+            }),
+            Value::Slice(Slice {
+                layout: &L::U8,
+                bytes: &u8_bytes,
+            }),
+            Value::Slice(Slice {
+                layout: &L::U16,
+                bytes: &u16_bytes,
+            }),
+            Value::Slice(Slice {
+                layout: &L::U32,
+                bytes: &u32_bytes,
+            }),
+            Value::Slice(Slice {
+                layout: &L::U64,
+                bytes: &u64_bytes,
+            }),
+            Value::Slice(Slice {
+                layout: &L::U128,
+                bytes: &u128_bytes,
+            }),
+            Value::Slice(Slice {
+                layout: &L::U256,
+                bytes: &u256_bytes,
+            }),
+            Value::Slice(Slice {
+                layout: &L::Address,
+                bytes: &addr_bytes,
+            }),
+            Value::Slice(Slice {
+                layout: &str_layout,
+                bytes: &str_bytes,
+            }),
+            Value::Slice(Slice {
+                layout: &vec_layout,
+                bytes: &vec_bytes,
+            }),
+        ];
+
+        let atoms = vec![
+            Atom::Bool(true),
+            Atom::U8(42),
+            Atom::U16(1234),
+            Atom::U32(123456),
+            Atom::U64(12345678),
+            Atom::U128(123456),
+            Atom::U256(U256::from(42u64)),
+            Atom::Address(AccountAddress::from_str("0x42").unwrap()),
+            Atom::String(Cow::Borrowed("hello")),
+            Atom::Bytes(Cow::Borrowed(&[1, 2, 3])),
+        ];
+
+        for (value, expect) in values.into_iter().zip(atoms.into_iter()) {
+            let actual = Atom::try_from(value).unwrap();
+            assert_eq!(actual, expect);
+        }
     }
 }
