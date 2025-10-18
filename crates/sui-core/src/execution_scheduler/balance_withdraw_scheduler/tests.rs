@@ -23,12 +23,10 @@ use tokio::time::error::Elapsed;
 use tokio::time::timeout;
 use tracing::{debug, info};
 
-/// A test scheduler that runs multiple schedulers in parallel and waits for all results to be received.
-/// It internally checks that all schedulers return the same results.
 #[derive(Clone)]
 struct TestScheduler {
     mock_read: Arc<MockBalanceRead>,
-    schedulers: BTreeMap<String, BalanceWithdrawScheduler>,
+    scheduler: BalanceWithdrawScheduler,
 }
 
 impl TestScheduler {
@@ -38,67 +36,21 @@ impl TestScheduler {
     }
 
     fn new_with_mock_read(mock_read: Arc<MockBalanceRead>) -> Self {
-        let naive_scheduler =
-            BalanceWithdrawScheduler::new(mock_read.clone(), mock_read.cur_version(), false);
-        let eager_scheduler =
-            BalanceWithdrawScheduler::new(mock_read.clone(), mock_read.cur_version(), true);
+        let scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), mock_read.cur_version());
         Self {
             mock_read,
-            schedulers: BTreeMap::from([
-                ("naive_scheduler".to_string(), naive_scheduler),
-                ("eager_scheduler".to_string(), eager_scheduler),
-            ]),
+            scheduler,
         }
     }
 
-    /// Spawns a task to collect results from all schedulers, check that their results match,
-    /// and return a unified list of receivers to the caller.
     fn schedule_withdraws(
         &self,
         version: SequenceNumber,
         withdraws: Vec<TxBalanceWithdraw>,
     ) -> FuturesUnordered<oneshot::Receiver<ScheduleResult>> {
-        let (forward_senders, unified_receivers): (BTreeMap<_, _>, FuturesUnordered<_>) = withdraws
-            .iter()
-            .map(|withdraw| {
-                let (sender, receiver) = oneshot::channel();
-                ((withdraw.tx_digest, sender), receiver)
-            })
-            .unzip();
-        // Note that we must call schedule_withdraws async outside the spawn task,
-        // since the system expects the schedule_withdraws call to be in order.
-        let all_receivers = self
-            .schedulers
-            .iter()
-            .map(|(name, scheduler)| {
-                let receivers = scheduler.schedule_withdraws(version, withdraws.clone());
-                (name.clone(), receivers)
-            })
-            .collect::<BTreeMap<_, _>>();
-        tokio::spawn(async move {
-            let mut unique_results = None;
-            for (name, receivers) in all_receivers {
-                let mut local_results = BTreeMap::new();
-                for receiver in receivers {
-                    let result = receiver.await.unwrap();
-                    local_results.insert(result.tx_digest, result);
-                }
-                if let Some(results) = &unique_results {
-                    assert_eq!(results, &local_results, "Scheduler: {:?}", name);
-                } else {
-                    unique_results = Some(local_results);
-                }
-            }
-            let mut unique_results = unique_results.unwrap();
-            for (tx_digest, sender) in forward_senders {
-                let result = unique_results.remove(&tx_digest).unwrap();
-                let _ = sender.send(result);
-            }
-        });
-        unified_receivers
+        self.scheduler.schedule_withdraws(version, withdraws)
     }
 
-    /// Settles the balance changes for all schedulers.
     fn settle_balance_changes(
         &self,
         next_accumulator_version: SequenceNumber,
@@ -110,19 +62,15 @@ impl TestScheduler {
             .collect();
         self.mock_read
             .settle_balance_changes(accumulator_changes.clone(), next_accumulator_version);
-        self.schedulers.values().for_each(|scheduler| {
-            scheduler.settle_balances(BalanceSettlement {
-                next_accumulator_version,
-                balance_changes: accumulator_changes.clone(),
-            });
+        self.scheduler.settle_balances(BalanceSettlement {
+            next_accumulator_version,
+            balance_changes: accumulator_changes.clone(),
         });
     }
 
     async fn wait_for_accumulator_version(&self, version: SequenceNumber) {
-        for scheduler in self.schedulers.values() {
-            while scheduler.get_current_accumulator_version() < version {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
+        while self.scheduler.get_current_accumulator_version() < version {
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
 }
@@ -412,11 +360,9 @@ async fn test_settle_just_updated_account_object() {
 
     // Bring the scheduler to `v1`.
     // The pending withdraw is still pending since the object version is v1.
-    scheduler.schedulers.values().for_each(|scheduler| {
-        scheduler.settle_balances(BalanceSettlement {
-            next_accumulator_version: v1,
-            balance_changes: BTreeMap::new(),
-        });
+    scheduler.scheduler.settle_balances(BalanceSettlement {
+        next_accumulator_version: v1,
+        balance_changes: BTreeMap::new(),
     });
     scheduler.wait_for_accumulator_version(v1).await;
     assert!(wait_for_results(

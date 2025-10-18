@@ -44,7 +44,7 @@ pub(crate) struct ScheduleResult {
 
 /// Details regarding a balance settlement, generated when a settlement transaction has been executed
 /// and committed to the writeback cache.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BalanceSettlement {
     // After this settlement, the accumulator object will be at this version.
     // This means that all transactions that read `next_accumulator_version - 1`

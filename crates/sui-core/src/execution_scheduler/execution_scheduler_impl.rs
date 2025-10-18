@@ -120,8 +120,6 @@ impl ExecutionScheduler {
         Some(BalanceWithdrawScheduler::new(
             Arc::new(object_store.clone()),
             starting_accumulator_version,
-            // Use naive scheduler for now.
-            false,
         ))
     }
 
