@@ -3,23 +3,24 @@
 
 use anyhow::Result;
 use move_binary_format::{file_format::Visibility, CompiledModule};
-use move_compiler::editions::Edition;
-use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
+use move_compiler::editions::{Edition, Flavor};
+use move_package_alt_compilation::{
+    build_config::BuildConfig as MoveBuildConfig, lint_flag::LintFlag,
+};
 use std::{
     collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
 };
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::BuildConfig;
 
 const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 const COMPILED_PACKAGES_DIR: &str = "packages_compiled";
 const DOCS_DIR: &str = "docs";
 const PUBLISHED_API_FILE: &str = "published_api.txt";
 
-#[test]
-fn build_system_packages() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+#[tokio::test]
+async fn build_system_packages() {
     let tempdir = tempfile::tempdir().unwrap();
     let out_dir = if std::env::var_os("UPDATE").is_some() {
         let crate_root = Path::new(CRATE_ROOT);
@@ -49,7 +50,8 @@ fn build_system_packages() {
         &sui_framework_path,
         &move_stdlib_path,
         out_dir,
-    );
+    )
+    .await;
     check_diff(Path::new(CRATE_ROOT), out_dir)
 }
 
@@ -77,7 +79,7 @@ fn check_diff(checked_in: &Path, built: &Path) {
     }
 }
 
-fn build_packages(
+async fn build_packages(
     bridge_path: &Path,
     deepbook_path: &Path,
     sui_system_path: &Path,
@@ -89,8 +91,9 @@ fn build_packages(
         generate_docs: true,
         warnings_are_errors: true,
         install_dir: Some(PathBuf::from(".")),
-        lint_flag: LintFlag::LEVEL_NONE,
+        lint_flag: LintFlag::LEVEL_DEFAULT,
         default_edition: Some(Edition::E2024_BETA),
+        default_flavor: Some(Flavor::Sui),
         ..Default::default()
     };
     debug_assert!(!config.test_mode);
@@ -107,10 +110,11 @@ fn build_packages(
         "sui-framework",
         "move-stdlib",
         config,
-    );
+    )
+    .await;
 }
 
-fn build_packages_with_move_config(
+async fn build_packages_with_move_config(
     bridge_path: &Path,
     deepbook_path: &Path,
     sui_system_path: &Path,
@@ -130,7 +134,8 @@ fn build_packages_with_move_config(
         print_diags_to_stderr: false,
         chain_id: None, // Framework pkg addr is agnostic to chain, resolves from Move.toml
     }
-    .build(stdlib_path)
+    .build_async(stdlib_path)
+    .await
     .unwrap();
     let framework_pkg = BuildConfig {
         config: config.clone(),
@@ -138,7 +143,8 @@ fn build_packages_with_move_config(
         print_diags_to_stderr: false,
         chain_id: None, // Framework pkg addr is agnostic to chain, resolves from Move.toml
     }
-    .build(sui_framework_path)
+    .build_async(sui_framework_path)
+    .await
     .unwrap();
     let system_pkg = BuildConfig {
         config: config.clone(),
@@ -146,7 +152,8 @@ fn build_packages_with_move_config(
         print_diags_to_stderr: false,
         chain_id: None, // Framework pkg addr is agnostic to chain, resolves from Move.toml
     }
-    .build(sui_system_path)
+    .build_async(sui_system_path)
+    .await
     .unwrap();
     let deepbook_pkg = BuildConfig {
         config: config.clone(),
@@ -154,7 +161,8 @@ fn build_packages_with_move_config(
         print_diags_to_stderr: false,
         chain_id: None, // Framework pkg addr is agnostic to chain, resolves from Move.toml
     }
-    .build(deepbook_path)
+    .build_async(deepbook_path)
+    .await
     .unwrap();
     let bridge_pkg = BuildConfig {
         config,
@@ -162,7 +170,8 @@ fn build_packages_with_move_config(
         print_diags_to_stderr: false,
         chain_id: None, // Framework pkg addr is agnostic to chain, resolves from Move.toml
     }
-    .build(bridge_path)
+    .build_async(bridge_path)
+    .await
     .unwrap();
 
     let move_stdlib = stdlib_pkg.get_stdlib_modules();

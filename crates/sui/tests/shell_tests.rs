@@ -3,7 +3,6 @@
 
 use fs_extra::dir::CopyOptions;
 use insta_cmd::get_cargo_bin;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use sui_config::SUI_CLIENT_CONFIG;
@@ -68,7 +67,7 @@ async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     let output = shell.output()?;
     let result = format!(
         "----- script -----\n{}\n----- results -----\nsuccess: {:?}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
-        fs::read_to_string(path)?,
+        std::fs::read_to_string(path)?,
         output.status.success(),
         output.status.code().unwrap_or(!0),
         String::from_utf8_lossy(&output.stdout),
@@ -83,7 +82,6 @@ async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     insta::with_settings!({description => path.to_string_lossy(), omit_expression => true}, {
         insta::assert_snapshot!(snapshot_name, result);
     });
-
     Ok(())
 }
 

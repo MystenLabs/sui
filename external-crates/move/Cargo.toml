@@ -150,6 +150,7 @@ inline_colorization = "0.1.6"
 insta = "1.42.0"
 zstd = "0.13.2"
 lcov = "0.8.1"
+fs4 = { version = "0.13.1" }
 
 bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util" }

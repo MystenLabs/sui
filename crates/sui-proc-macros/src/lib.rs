@@ -48,25 +48,6 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 let mut cache = ::sui_simulator::lru::LruCache::new(1.try_into().unwrap());
                 cache.put(1, 1);
 
-                {
-                    // Initialize the static initializers here:
-                    // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
-                    use std::path::PathBuf;
-                    use sui_simulator::sui_move_build::{BuildConfig, SuiPackageHooks};
-                    use sui_simulator::tempfile::TempDir;
-                    use sui_simulator::move_package::package_hooks::register_package_hooks;
-
-                    register_package_hooks(Box::new(SuiPackageHooks {}));
-                    let mut path = PathBuf::from(env!("SIMTEST_STATIC_INIT_MOVE"));
-                    let mut build_config = BuildConfig::new_for_testing();
-
-                    build_config.config.install_dir = Some(TempDir::new().unwrap().keep());
-                    let _all_module_bytes = build_config
-                        .build(&path)
-                        .unwrap()
-                        .get_package_bytes(/* with_unpublished_deps */ false);
-                }
-
                 use std::sync::Arc;
 
                 use ::sui_simulator::anemo_tower::callback::CallbackLayer;
@@ -85,6 +66,23 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 let rt = ::sui_simulator::runtime::Runtime::new();
                 rt.block_on(async move {
                     use ::sui_simulator::anemo::{Network, Request};
+
+                    {
+                        // Initialize the static initializers here:
+                        // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
+                        use std::path::PathBuf;
+                        use sui_simulator::sui_move_build::BuildConfig;
+                        use sui_simulator::tempfile::TempDir;
+
+                        let mut path = PathBuf::from(env!("SIMTEST_STATIC_INIT_MOVE"));
+                        let mut build_config = BuildConfig::new_for_testing();
+                        build_config.config.install_dir = Some(TempDir::new().unwrap().keep());
+                        let _all_module_bytes = build_config
+                            .build_async(&path)
+                            .await
+                            .unwrap()
+                            .get_package_bytes(/* with_unpublished_deps */ false);
+                    }
 
                     let make_network = |port: u16| {
                         let registry = prometheus::Registry::new();

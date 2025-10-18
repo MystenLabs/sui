@@ -2,5 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module examples::main {
-  public entry fun main() {}
+  public entry fun main() {
+    non_zero::non_zero::test();
+  }
 }

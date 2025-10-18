@@ -64,6 +64,7 @@ pub struct LegacyPackageMetadata {
     pub edition: Option<Edition>,
     pub published_at: Option<String>,
     pub unrecognized_fields: BTreeMap<String, toml::Value>,
+    pub implicit_deps: bool,
 }
 
 /// If `path` contains a valid legacy manifest, convert it to a modern format and return it. By
@@ -196,13 +197,14 @@ fn parse_source_manifest(
             let is_system_package =
                 LEGACY_SYSTEM_DEPS_NAMES.contains(&metadata.legacy_name.as_str());
 
-            // IF we have one system package OR this package is a system package itself,
-            // we disable implicit deps.
-            let system_dependencies = if has_system_package || is_system_package {
-                Some(vec![])
-            } else {
-                None
-            };
+            // IF we have one system package OR this package is a system package itself (OR
+            // implicit deps are explicitly disabled), we disable implicit deps.
+            let system_dependencies =
+                if has_system_package || is_system_package || !metadata.implicit_deps {
+                    Some(vec![])
+                } else {
+                    None
+                };
 
             // We create a normalized legacy name, to make sure we can always use a package
             // as an Identifier.
@@ -248,7 +250,7 @@ fn parse_source_manifest(
     }
 }
 
-fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
+pub fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, &["name"])?;
@@ -267,6 +269,11 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
             let published_at = table
                 .remove("published-at")
                 .map(|v| v.as_str().unwrap_or_default().to_string());
+
+            let implicit_deps = table
+                .remove("implicit-deps")
+                .map(|v| v.as_bool().unwrap_or(true))
+                .unwrap_or(true);
 
             let name = name.to_string();
 
@@ -308,6 +315,7 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
                 edition,
                 published_at,
                 unrecognized_fields: table.into_iter().collect(),
+                implicit_deps,
             })
         }
         x => bail!(
