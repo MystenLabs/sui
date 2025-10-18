@@ -276,9 +276,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
             }
         }
 
-        // Detect if the value we sliced out was the serialized Move representation of `None` and
-        // convert that to `Ok(None)`, otherwise return the extracted value.
-        Ok(if root.is_none() { None } else { Some(root) })
+        Ok(Some(root))
     }
 
     /// Evaluates the contents of an accessor to a value.

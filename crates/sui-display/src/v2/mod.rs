@@ -173,8 +173,8 @@ mod tests {
         id::{ID, UID},
     };
 
-    use crate::v2::error::FormatError;
     use crate::v2::value::tests::{MockStore, enum_, struct_, vector_};
+    use crate::v2::{error::FormatError, value::tests::optional_};
 
     const ONE_MB: usize = 1024 * 1024;
 
@@ -660,6 +660,39 @@ mod tests {
             ),
             "fallback": Ok(
                 String("default"),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_alternate_optional() {
+        let bytes = bcs::to_bytes(&(Some(100u64), None::<u64>)).unwrap();
+        let layout = struct_(
+            "0x1::m::S",
+            vec![("a", optional_(T::U64)), ("b", optional_(T::U64))],
+        );
+
+        let formats = [("some", "{a | 42u64}"), ("none", "{b | 43u64}")];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "some": Ok(
+                String("100"),
+            ),
+            "none": Ok(
+                String("43"),
             ),
         }
         "###);
