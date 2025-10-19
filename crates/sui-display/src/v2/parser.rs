@@ -124,6 +124,10 @@ pub enum Fields<'s> {
 /// Ways to modify a value before displaying it.
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub enum Transform {
+    Base64,
+    Base64NoPad,
+    Base64Url,
+    Base64UrlNoPad,
     Hex,
     #[default]
     Str,
@@ -908,6 +912,26 @@ impl<'s> Parser<'s> {
 
     fn parse_xform(&mut self) -> Result<Transform, FormatError> {
         Ok(match_token! { self.lexer;
+            Lit(_, T::Ident, _, "base64") => {
+                self.lexer.next();
+                Transform::Base64
+            },
+
+            Lit(_, T::Ident, _, "base64_nopad") => {
+                self.lexer.next();
+                Transform::Base64NoPad
+            },
+
+            Lit(_, T::Ident, _, "base64url") => {
+                self.lexer.next();
+                Transform::Base64Url
+            },
+
+            Lit(_, T::Ident, _, "base64url_nopad") => {
+                self.lexer.next();
+                Transform::Base64UrlNoPad
+            },
+
             Lit(_, T::Ident, _, "hex") => {
                 self.lexer.next();
                 Transform::Hex
@@ -1093,6 +1117,10 @@ impl fmt::Debug for Enum<'_> {
 impl fmt::Debug for Transform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Transform::Base64 => write!(f, "base64"),
+            Transform::Base64NoPad => write!(f, "base64_nopad"),
+            Transform::Base64Url => write!(f, "base64url"),
+            Transform::Base64UrlNoPad => write!(f, "base64url_nopad"),
             Transform::Hex => write!(f, "hex"),
             Transform::Str => write!(f, "str"),
             Transform::Timestamp => write!(f, "ts"),
