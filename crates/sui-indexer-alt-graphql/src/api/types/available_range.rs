@@ -44,23 +44,23 @@ impl AvailableRange {
     }
 }
 
-macro_rules! field_pipelines {
-    ($($ty:ident . field @ $($field:ident) * {
-        $(filters.insert($filter:literal);)?
-        $(delegate => $delegate_ty:ident $(. $delegate_field:ident)?;)?
-        $(pipelines.insert($pipeline:literal);)*
-        $(if $if_filter:literal => $if_pipeline:literal
-            $(
-                else if $elif_filter:literal => $elif_pipeline:literal
-            )*
-            $(
-                else => $else_pipeline:literal
-            )?)?
-    });* $(;)?) => {
-
-        /// Recursively resolves GraphQL type/field/filter combinations to their required indexer pipelines.
-        ///
-        /// Populates `pipelines` with indexer pipeline names by matching against the field_pipelines! macro configuration.
+/// Expands a series of type/field/filter patterns to generate the collect_pipelines function and accompanying tests to
+/// validate that arguments of the macro invocation exist in the GraphQL schema registry.
+///
+/// # Generated Functions and Tests
+///
+/// - `collect_pipelines`: resolves type/field/filter combinations to the indexer pipelines where data is available.
+/// - `test_schema_inclusion`: Testing entry point that calls the other two tests using a GraphQL extension.
+/// - `test_macro_invocation_matches_schema`: Tests that the macro invocation matches the types and fields in the GraphQL schema.
+/// - `test_registry_collect_pipelines_snapshot`: Generates a snapshot of all type.field (filter) -> pipeline mappings for regression testing and auditing.
+macro_rules! collect_pipelines {
+    (
+        $($type:ident . [$($field:ident),*]
+        $(=> $delegate_type:ident . $delegate_field:tt $( ( $(.., $f_to_add:literal)? ) )? )?
+        $(|$pipes:ident, $filt:ident| $block:block)?
+        ;
+    )*) => {
+        /// Populates `pipelines` with indexer pipeline names by matching against the collect_pipelines! macro configuration.
         fn collect_pipelines(
             type_: &str,
             field: Option<&str>,
@@ -69,43 +69,22 @@ macro_rules! field_pipelines {
         ) {
             match (type_, field) {
                 $(
-                    // Match on the type and field
-                    (stringify!($ty), _field @ Some($(stringify!($field)) |*)) => {
-                        // Insert any filters that are intersected based on the type and field
+                    (stringify!($type), _field @ Some($(stringify!($field)) |*)) => {
                         $(
-                            filters.insert($filter.to_string());
+                            $($(
+                                filters.insert($f_to_add.to_string());
+                            )?)?
+                            let delegate_field = if stringify!($delegate_field) == "*" {
+                                _field
+                            } else {
+                                Some(stringify!($delegate_field))
+                            };
+                            collect_pipelines(stringify!($delegate_type), delegate_field, filters, pipelines);
                         )?
-                        // Delegate to another type/field:
-                        // - `delegate => Type.field` uses the specified field
-                        // - `delegate => Type` uses the matched field (_field)
                         $(
-                            let delegate_field = None$(.or(Some(stringify!($delegate_field))))?;
-                            collect_pipelines(
-                                stringify!($delegate_ty),
-                                delegate_field.or(_field),
-                                filters,
-                                pipelines
-                            );
-                        )?
-                        // Insert any base pipelines that are included by default
-                        $(
-                            pipelines.insert($pipeline.to_string());
-                        )*
-                        // Conditionally add pipeline based on filter presence
-                        $(
-                            if filters.contains($if_filter) {
-                                pipelines.insert($if_pipeline.to_string());
-                            }
-                            $(
-                                else if filters.contains($elif_filter) {
-                                    pipelines.insert($elif_pipeline.to_string());
-                                }
-                            )*
-                            $(
-                                else {
-                                    pipelines.insert($else_pipeline.to_string());
-                                }
-                            )?
+                            let $filt = filters;
+                            let $pipes = pipelines;
+                            $block
                         )?
                     }
                 )*
@@ -115,289 +94,232 @@ macro_rules! field_pipelines {
 
         #[cfg(test)]
         mod field_piplines_tests {
+            use crate::schema;
             use async_graphql::{
-                registry::{MetaField, MetaType, Registry},
-                Context, MergedObject, Object,
+                extensions::{Extension, ExtensionContext, ExtensionFactory, NextRequest},
+                registry::{MetaType, Registry},
+                Response,
             };
-            use async_graphql_value::indexmap::IndexMap;
+            use std::{collections::BTreeSet, sync::Arc};
 
-            fn get_type_fields<'a>(registry: &'a Registry, type_name: &str) -> &'a IndexMap<String, MetaField> {
-                let meta_type = registry
-                    .types
-                    .get(type_name)
-                    .unwrap_or_else(|| panic!("Type '{}' not found in schema registry", type_name));
-
-                match meta_type {
-                    MetaType::Object { fields, .. } | MetaType::Interface { fields, .. } => fields,
-                    _ => panic!("Type '{}' is not an Object or Interface type", type_name),
-                }
-            }
-
-            fn filter_exists(registry: &Registry, type_name: &str, field_name: &str, meta_field: &MetaField, filter_name: &str) {
-                if let Some(MetaType::InputObject { input_fields, .. }) = meta_field.args.get("filter")
-                    .and_then(|arg| registry.types.get(&arg.ty))
-                {
-                    assert!(
-                        input_fields.contains_key(filter_name),
-                        "Filter '{}' not found in field '{}.{}'",
-                        filter_name, type_name, field_name
-                    );
-                }
-            }
-
-            #[derive(Default)]
-            struct SchemaValidator;
-
-            #[Object]
-            impl SchemaValidator {
-                async fn validate_fields(&self, ctx: &Context<'_>) -> bool {
-                    let registry = &ctx.schema_env.registry;
-
-                    $(
-                        let type_name = stringify!($ty);
-                        let fields = get_type_fields(registry, type_name);
-                        let field_names = &[$(stringify!($field)),*];
-
-                        field_names.iter().for_each(|&field_name| {
-                            let _meta_field = fields.get(field_name)
-                                .unwrap_or_else(|| panic!("Field '{}.{}' not found in schema registry", type_name, field_name));
-
-                            $(
-                                filter_exists(registry, type_name, field_name, _meta_field, $if_filter);
-                                $(filter_exists(registry, type_name, field_name, _meta_field, $elif_filter);)*
-                            )?
-                        });
-                    )*
-
-                    true
-                }
-            }
-
+            /// Validates that all types, fields in the macro exist in the GraphQL schema
+            /// and outputs a snapshot of all type.field (filter) -> pipeline mappings for regression testing.
+            ///
+            /// This test ensures that the macro configuration stays in sync with the actual
+            /// GraphQL schema. If a type, field, or filter is referenced in the macro but
+            /// doesn't exist in the schema, this test will fail.
             #[tokio::test]
             async fn test_schema_inclusion() {
-                #[derive(MergedObject, Default)]
-                struct TestQuery(crate::api::query::Query, SchemaValidator);
-                let schema = async_graphql::Schema::build(
-                    TestQuery::default(),
-                    crate::api::mutation::Mutation,
-                    async_graphql::EmptySubscription,
-                )
-                .register_output_type::<crate::api::types::address::IAddressable>()
-                .register_output_type::<crate::api::types::move_datatype::IMoveDatatype>()
-                .register_output_type::<crate::api::types::move_object::IMoveObject>()
-                .register_output_type::<crate::api::types::object::IObject>()
-                .finish();
+                struct SchemaValidationExtension;
 
-                let response = schema.execute("{ validateFields }").await;
-                assert!(response.errors.is_empty(), "Schema validation failed: {:?}", response.errors);
+                impl ExtensionFactory for SchemaValidationExtension {
+                    fn create(&self) -> Arc<dyn Extension> {
+                        Arc::new(SchemaValidationExtensionImpl)
+                    }
+                }
+
+                struct SchemaValidationExtensionImpl;
+
+                #[async_trait::async_trait]
+                impl Extension for SchemaValidationExtensionImpl {
+                    async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
+                        let registry = &ctx.schema_env.registry;
+
+                        test_macro_invocation_matches_schema(registry);
+                        test_registry_collect_pipelines_snapshot(registry);
+
+                        next.run(ctx).await
+                    }
+                }
+
+                let schema = schema().extension(SchemaValidationExtension).finish();
+                let response = schema.execute("{ __typename }").await;
+                assert!(response.errors.is_empty(), "Schema operation failed: {:?}", response.errors);
             }
 
-            pub(crate) fn type_field_filter_to_pipeline_snapshot() -> String {
-                use std::fmt::Write;
-                use std::collections::BTreeSet;
-                let mut output = String::new();
-
+            /// Validates that the macro invocation matches the schema. This is to catch any typos in types or fields in the macro invocation.
+            fn test_macro_invocation_matches_schema(registry: &Registry) {
+                let mut type_field_filters = Vec::new();
                 $(
-                    let type_name = stringify!($ty);
+                    let type_name = stringify!($type);
                     let field_names = vec![$(stringify!($field)),*];
-
-                    for field_name in field_names {
-                        // Collect all filters that might be used with this field
-                        #[allow(unused_mut)]
-                        let mut all_filters: BTreeSet<String> = BTreeSet::new();
-                        $(
-                            all_filters.insert($filter.to_string());
-                        )?
-                        $(
-                            all_filters.insert($if_filter.to_string());
-                            $(
-                                all_filters.insert($elif_filter.to_string());
-                            )*
-                        )?
-
-                        // Helper closure to write pipelines for a given filter set
-                        let mut write_pipelines = |filter_opt: Option<&str>| {
-                            let (mut pipelines, mut filters) = (BTreeSet::new(), BTreeSet::new());
-                            if let Some(f) = filter_opt {
-                                filters.insert(f.to_string());
-                            }
-                            super::collect_pipelines(type_name, Some(field_name), &mut filters, &mut pipelines);
-
-                            match filter_opt {
-                                Some(f) => writeln!(output, "{}.{} (filter: {})", type_name, field_name, f),
-                                None => writeln!(output, "{}.{}", type_name, field_name),
-                            }.unwrap();
-                            if !pipelines.is_empty() {
-                                writeln!(output, "  pipelines: {:?}", pipelines).unwrap();
-                            }
-                            writeln!(output).unwrap();
-                        };
-
-                        // Write pipelines for the type.field without any filters
-                        write_pipelines(None);
-                        // Write pipelines for the type.field with each filter
-                        all_filters.iter().for_each(|f| write_pipelines(Some(f)));
-                    }
+                    type_field_filters.push((type_name, field_names));
                 )*
 
+                for (type_name, field_names) in type_field_filters {
+                    let fields = match registry.types.get(type_name) {
+                        Some(MetaType::Object { fields, .. } | MetaType::Interface { fields, .. }) => fields,
+                        Some(_) => panic!("Type '{}' is not an Object or Interface type", type_name),
+                        None => panic!("Type '{}' not found in schema registry", type_name),
+                    };
+                    for field_name in field_names {
+                        fields.get(field_name)
+                            .unwrap_or_else(|| panic!("Field '{}' not found in type '{}'", field_name, type_name));
+                    }
+                }
+            }
+
+            /// Calls collect_pipeline on types, fields, and filters in the schema registry and
+            /// stores the input and output in a snapshot for regression testing and auditing.
+            fn test_registry_collect_pipelines_snapshot(registry: &Registry) -> String {
+                let mut output = String::new();
+
+                for (type_name, meta_type) in registry.types.iter() {
+                    if type_name.starts_with("__") {
+                        continue;
+                    }
+
+                    let fields = match meta_type {
+                        MetaType::Object { fields, .. } | MetaType::Interface { fields, .. } => fields,
+                        _ => continue,
+                    };
+
+                    for (field_name, meta_field) in fields.iter() {
+                        let filter_fields: Vec<String> = meta_field.args.get("filter")
+                            .and_then(|arg| registry.types.get(&arg.ty))
+                            .and_then(|t| match t {
+                                MetaType::InputObject { input_fields, .. } => Some(input_fields.keys().cloned().collect()),
+                                _ => None,
+                            })
+                            .unwrap_or_else(Vec::new);
+
+                        for filter_field in std::iter::once(None).chain(filter_fields.iter().map(|f| Some(f.as_str()))) {
+                            let mut filters = filter_field.iter().map(|s| s.to_string()).collect();
+                            let mut pipelines = BTreeSet::new();
+                            super::collect_pipelines(type_name, Some(field_name), &mut filters, &mut pipelines);
+
+                            let filter_suffix = filter_field.map_or(String::new(), |f| format!(" (filter: {f})"));
+                            let pipeline_strs: Vec<_> = pipelines.iter().map(|s| format!("\"{s}\"")).collect();
+                            let pipeline_output = format!("{type_name}.{field_name}{filter_suffix}\n  => {{{}}}\n\n", pipeline_strs.join(", "));
+                            output.push_str(&pipeline_output);
+                        }
+                    }
+                }
+
+                insta::assert_snapshot!(output);
                 output
             }
 
-            #[test]
-            fn test_schema_pipeline_export() {
-                let snapshot = type_field_filter_to_pipeline_snapshot();
-                insta::assert_snapshot!(snapshot);
-            }
         }
     };
 }
 
 // Pipeline mapping syntax:
-// - `Type.field @ field1 field2`: GraphQL type and fields to match
-// - `delegate => Type.field`: inherit pipelines from Type.field
-// - `delegate => Type`: inherit pipelines from Type using the matched field
-// - `filters.insert("name")`: add filter constraint before delegating
-// - `pipelines.insert("name")`: unconditionally required pipelines
-// - `if "filter" => "pipeline"`: filter-conditional pipeline selection
-field_pipelines! {
-    Address.field @ asObject {
-        delegate => IObject.objectAt;
-    };
-    Address.field @ transactions {
-        filters.insert("affectedAddress");
-        delegate => Query.transactions;
-    };
-    Address.field @ balance balances multiGetBalances objects {
-        delegate => IAddressable;
-    };
-    Address.field @ defaultSuinsName {
-        delegate => IAddressable.defaultSuinsName;
-    };
-    Address.field @ dynamicField dynamicObjectField multiGetDynamicFields multiGetDynamicObjectFields {
-        delegate => IMoveObject;
+// - `Type.[field1, field2, ...]`: GraphQL type and fields to match
+// - `=> OtherType.*`: delegate to OtherType using the same field name
+// - `=> OtherType.specificField()`: delegate to OtherType.specificField
+// - `=> OtherType.field(.., "filterName")`: delegate and add filter constraint
+// - `|pipelines, filters| { ... }`: block of statements to execute
+//   - `pipelines.insert("name".to_string())`: add required pipeline
+//   - `filters.contains("name")`: check for filter in conditional logic
+collect_pipelines! {
+    Address.[asObject] => IObject.objectAt();
+    Address.[transactions] => Query.transactions(.., "affectedAddress");
+    Address.[balance, balances, multiGetBalances, objects] => IAddressable.*;
+    Address.[defaultSuinsName] => IAddressable.defaultSuinsName;
+    Address.[dynamicField, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] => IMoveObject.*;
+
+    Checkpoint.[transactions] |pipelines, _filters| {
+        pipelines.insert("cp_sequence_numbers".to_string());
+        pipelines.insert("tx_digests".to_string());
     };
 
-    Checkpoint.field @ transactions {
-        filters.insert("atCheckpoint");
-        delegate => Query.transactions;
+    CoinMetadata.[balance, balances, multiGetBalances, objects] => IAddressable.*;
+    CoinMetadata.[dynamicField, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] => IMoveObject.*;
+    CoinMetadata.[dynamicFields] => IMoveObject.dynamicFields();
+    CoinMetadata.[receivedTransactions] => IObject.receivedTransactions();
+    CoinMetadata.[objectAt, objectVersionsAfter, objectVersionsBefore] => IObject.*;
+    CoinMetadata.[supply] |pipelines, _filters| {
+        pipelines.insert("consistent".to_string());
     };
 
-    CoinMetadata.field @ balance balances multiGetBalances objects{
-        delegate => IAddressable;
+    Epoch.[checkpoints] |pipelines, _filters| {
+        pipelines.insert("cp_sequence_numbers".to_string());
     };
-    CoinMetadata.field @ dynamicField dynamicObjectField multiGetDynamicFields multiGetDynamicObjectFields {
-        delegate => IMoveObject;
-    };
-    CoinMetadata.field @ dynamicFields {
-        delegate => IMoveObject.dynamicFields;
-    };
-    CoinMetadata.field @ receivedTransactions {
-        delegate => IObject.receivedTransactions;
-    };
-    CoinMetadata.field @ objectAt objectVersionsAfter objectVersionsBefore {
-        delegate => IObject;
-    };
-    CoinMetadata.field @ supply {
-        pipelines.insert("consistent");
+    Epoch.[coinDenyList] |pipelines, _filters| {
+        pipelines.insert("obj_versions".to_string());
     };
 
-    Epoch.field @ checkpoints {
-        delegate => Query.checkpoints;
-    };
-    Epoch.field @ coinDenyList {
-        pipelines.insert("obj_versions");
+    Event.[contents, eventBcs, sender, sequenceNumber, timestamp, transaction, transactionModule] |pipelines, _filters| {
+        pipelines.insert("ev_struct_inst".to_string());
+        pipelines.insert("tx_digests".to_string());
     };
 
-    Event.field @ contents eventBcs sender sequenceNumber timestamp transaction transactionModule {
-        delegate => Query.events;
+    IAddressable.[balance, balances, multiGetBalances, objects] |pipelines, _filters| {
+        pipelines.insert("consistent".to_string());
+    };
+    IAddressable.[defaultSuinsName] |pipelines, _filters| {
+        pipelines.insert("obj_versions".to_string());
+    };
+    IMoveObject.[dynamicFields] |pipelines, _filters| {
+        pipelines.insert("consistent".to_string());
+    };
+    IMoveObject.[dynamicField, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] |pipelines, _filters| {
+        pipelines.insert("obj_versions".to_string());
     };
 
-    IAddressable.field @ balance balances multiGetBalances objects {
-        pipelines.insert("consistent");
-    };
-    IAddressable.field @ defaultSuinsName {
-        pipelines.insert("obj_versions");
+    IObject.[receivedTransactions] => Query.transactions(.., "affectedAddress");
+    IObject.[objectAt, objectVersionsAfter, objectVersionsBefore] |pipelines, _filters| {
+        pipelines.insert("obj_versions".to_string());
     };
 
-    IMoveObject.field @ dynamicFields {
-        pipelines.insert("consistent");
+    Object.[balance, balances, multiGetBalances, objects] => IAddressable.*;
+    Object.[defaultSuinsName] => IAddressable.defaultSuinsName();
+    Object.[dynamicField, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] => IMoveObject.*;
+    Object.[objectAt, objectVersionsAfter, objectVersionsBefore] => IObject.*;
+    Object.[receivedTransactions] => IObject.receivedTransactions();
+
+    MovePackage.[balance, balances, multiGetBalances, objects] => IAddressable.*;
+    MovePackage.[defaultSuinsName] => IAddressable.defaultSuinsName();
+    MovePackage.[objectAt, objectVersionsAfter, objectVersionsBefore] => IObject.*;
+    MovePackage.[receivedTransactions] => IObject.receivedTransactions();
+
+
+    Query.[checkpoints] |pipelines, _filters| {
+        pipelines.insert("cp_sequence_numbers".to_string());
     };
-    IMoveObject.field @ dynamicField dynamicObjectField multiGetDynamicFields multiGetDynamicObjectFields {
-        pipelines.insert("obj_versions");
+    Query.[coinMetadata] |pipelines, _filters| {
+        pipelines.insert("consistent".to_string());
+        pipelines.insert("obj_versions".to_string());
+    };
+    Query.[events] |pipelines, filters| {
+        pipelines.insert("tx_digests".to_string());
+        if filters.contains("module") {
+            pipelines.insert("ev_emit_mod".to_string());
+        } else {
+            pipelines.insert("ev_struct_inst".to_string());
+        }
+    };
+    Query.[object] |pipelines, filters| {
+        if !filters.contains("version") {
+            pipelines.insert("obj_versions".to_string());
+        }
+    };
+    Query.[objects] |pipelines, _filters| {
+        pipelines.insert("consistent".to_string());
+    };
+    Query.[objectVersions] |pipelines, _filters| {
+        pipelines.insert("obj_versions".to_string());
+    };
+    Query.[transactions] |pipelines, filters| {
+        pipelines.insert("cp_sequence_numbers".to_string());
+        pipelines.insert("tx_digests".to_string());
+        if filters.contains("function") {
+            pipelines.insert("tx_calls".to_string());
+        } else if filters.contains("affectedAddress") {
+            pipelines.insert("tx_affected_addresses".to_string());
+        } else if filters.contains("affectedObject") {
+            pipelines.insert("tx_affected_objects".to_string());
+        } else if filters.contains("sentAddress") {
+            pipelines.insert("tx_affected_addresses".to_string());
+        } else if filters.contains("kind") {
+            pipelines.insert("tx_kinds".to_string());
+        }
     };
 
-    IObject.field @ receivedTransactions {
-        filters.insert("affectedAddress");
-        delegate => Query.transactions;
-    };
-    IObject.field @ objectAt objectVersionsAfter objectVersionsBefore {
-        pipelines.insert("obj_versions");
-    };
-
-    Object.field @ balance balances multiGetBalances objects {
-        delegate => IAddressable;
-    };
-    Object.field @ defaultSuinsName {
-        delegate => IAddressable.defaultSuinsName;
-    };
-    Object.field @ dynamicField dynamicObjectField multiGetDynamicFields multiGetDynamicObjectFields {
-        delegate => IMoveObject;
-    };
-    Object.field @ objectAt objectVersionsAfter objectVersionsBefore {
-        delegate => IObject;
-    };
-    Object.field @ receivedTransactions {
-        delegate => IObject.receivedTransactions;
-    };
-
-    MovePackage.field @ balance balances multiGetBalances objects {
-        delegate => IAddressable;
-    };
-    MovePackage.field @ defaultSuinsName {
-        delegate => IAddressable.defaultSuinsName;
-    };
-    MovePackage.field @ objectAt objectVersionsAfter objectVersionsBefore {
-        delegate => IObject;
-    };
-    MovePackage.field @receivedTransactions {
-        delegate => IObject.receivedTransactions;
-    };
-
-    Query.field @checkpoints {
-        pipelines.insert("cp_sequence_numbers");
-    };
-    Query.field @coinMetadata {
-        pipelines.insert("consistent");
-        pipelines.insert("obj_versions");
-    };
-    Query.field @events {
-        pipelines.insert("tx_digests");
-        if "module" => "ev_emit_mod"
-        else => "ev_struct_inst"
-    };
-    Query.field @object {
-        if "version" => ""
-        else => "obj_versions"
-    };
-    Query.field @objects {
-        pipelines.insert("consistent");
-    };
-    Query.field @objectVersions {
-        pipelines.insert("obj_versions");
-    };
-    Query.field @ transactions {
-        pipelines.insert("tx_digests");
-        pipelines.insert("cp_sequence_numbers");
-        if "function" => "tx_calls"
-        else if "affectedAddress" => "tx_affected_addresses"
-        else if "affectedObject" => "tx_affected_objects"
-        else if "sentAddress" => "tx_affected_addresses"
-        else if "kind" => "tx_kinds"
-    };
-
-    TransactionEffects.field @ balanceChanges {
-        pipelines.insert("tx_balance_changes");
-        pipelines.insert("tx_digests");
+    TransactionEffects.[balanceChanges] |pipelines, _filters| {
+        pipelines.insert("tx_balance_changes".to_string());
+        pipelines.insert("tx_digests".to_string());
     };
 }
 
