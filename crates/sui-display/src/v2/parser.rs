@@ -128,6 +128,7 @@ pub enum Transform {
     Base64NoPad,
     Base64Url,
     Base64UrlNoPad,
+    Bcs,
     Hex,
     #[default]
     Str,
@@ -932,6 +933,11 @@ impl<'s> Parser<'s> {
                 Transform::Base64UrlNoPad
             },
 
+            Lit(_, T::Ident, _, "bcs") => {
+                self.lexer.next();
+                Transform::Bcs
+            },
+
             Lit(_, T::Ident, _, "hex") => {
                 self.lexer.next();
                 Transform::Hex
@@ -1121,6 +1127,7 @@ impl fmt::Debug for Transform {
             Transform::Base64NoPad => write!(f, "base64_nopad"),
             Transform::Base64Url => write!(f, "base64url"),
             Transform::Base64UrlNoPad => write!(f, "base64url_nopad"),
+            Transform::Bcs => write!(f, "bcs"),
             Transform::Hex => write!(f, "hex"),
             Transform::Str => write!(f, "str"),
             Transform::Timestamp => write!(f, "ts"),
