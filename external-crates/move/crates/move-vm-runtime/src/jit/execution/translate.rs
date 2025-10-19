@@ -110,7 +110,7 @@ impl PackageContext<'_> {
     fn try_resolve_direct_function_call(
         &self,
         vtable_entry: &VirtualTableKey,
-    ) -> PartialVMResult<VMPointer<Function>> {
+    ) -> PartialVMResult<Option<VMPointer<Function>>> {
         // We are calling into a different package so we cannot resolve this to a direct call.
         if vtable_entry.package_key != self.original_id {
             return Err(
@@ -122,13 +122,8 @@ impl PackageContext<'_> {
         }
 
         match self.vtable_funs.get(&vtable_entry.inner_pkg_key) {
-            Some(v) => Ok(v.ptr_clone()),
-            None => Err(
-                PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(format!(
-                    "Cannot resolve call with PackageKey {:?}",
-                    vtable_entry.package_key
-                )),
-            ),
+            Some(v) => Ok(Some(v.ptr_clone())),
+            None => Err(PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)),
         }
     }
 
@@ -1316,7 +1311,8 @@ fn call(
     dbg_println!(flag: function_resolution, "Resolving function: {:?}", vtable_key);
     Ok(
         match context.try_resolve_direct_function_call(&vtable_key) {
-            Ok(func) => CallType::Direct(func),
+            Ok(Some(func)) => CallType::Direct(func),
+            Ok(None) => CallType::Virtual(vtable_key),
             Err(_) => CallType::Virtual(vtable_key),
         },
     )
