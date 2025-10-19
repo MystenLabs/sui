@@ -5,6 +5,10 @@
 use std::{borrow::Cow, fmt::Write as _, str};
 
 use async_trait::async_trait;
+use base64::engine::{
+    Engine,
+    general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD},
+};
 use chrono::{DateTime, Utc};
 use move_core_types::{
     account_address::AccountAddress,
@@ -129,6 +133,10 @@ impl Value<'_> {
         // 'display').
         let atom = Atom::try_from(self)?;
         match transform {
+            Transform::Base64 => atom.format_encoded(&STANDARD, w),
+            Transform::Base64NoPad => atom.format_encoded(&STANDARD_NO_PAD, w),
+            Transform::Base64Url => atom.format_encoded(&URL_SAFE, w),
+            Transform::Base64UrlNoPad => atom.format_encoded(&URL_SAFE_NO_PAD, w),
             Transform::Hex => atom.format_as_hex(w),
             Transform::Str => atom.format_as_str(w),
             Transform::Timestamp => atom.format_as_timestamp(w),
@@ -295,6 +303,28 @@ impl Atom<'_> {
             }
         }
 
+        Ok(())
+    }
+
+    /// Base64-encode the byte representation of this atom.
+    fn format_encoded(
+        &self,
+        e: &impl Engine,
+        w: &mut BoundedWriter<'_>,
+    ) -> Result<(), FormatError> {
+        let base64 = match self {
+            Atom::Address(a) => e.encode(a.into_bytes()),
+            Atom::Bool(b) => e.encode(&[*b as u8]),
+            Atom::U8(n) => e.encode(&[*n]),
+            Atom::U16(n) => e.encode(&n.to_le_bytes()),
+            Atom::U32(n) => e.encode(&n.to_le_bytes()),
+            Atom::U64(n) => e.encode(&n.to_le_bytes()),
+            Atom::U128(n) => e.encode(&n.to_le_bytes()),
+            Atom::U256(n) => e.encode(&n.to_le_bytes()),
+            Atom::Bytes(bs) => e.encode(bs),
+        };
+
+        write!(w, "{base64}")?;
         Ok(())
     }
 
