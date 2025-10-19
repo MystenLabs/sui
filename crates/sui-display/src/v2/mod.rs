@@ -164,10 +164,12 @@ mod tests {
 
     use super::*;
 
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
     use insta::assert_debug_snapshot;
     use move_core_types::{
         account_address::AccountAddress, annotated_value::MoveTypeLayout as T, u256::U256,
     };
+    use serde::Serialize;
     use sui_types::{
         base_types::{move_ascii_str_layout, move_utf8_str_layout, url_layout},
         id::{ID, UID},
@@ -1274,6 +1276,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_bcs() {
+        let bytes = bcs::to_bytes(&(
+            0x42u8,
+            0x1234u16,
+            0x12345678u32,
+            0x123456789abcdef0u64,
+            "hello",
+            vec![1u8, 2, 3],
+        ))
+        .unwrap();
+
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("n8", T::U8),
+                ("n16", T::U16),
+                ("n32", T::U32),
+                ("n64", T::U64),
+                ("str", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", vector_(T::U8)),
+            ],
+        );
+
+        let formats = [
+            ("s8", "{n8:bcs}"),
+            ("l8", "{0x43u8:bcs}"),
+            ("s16", "{n16:bcs}"),
+            ("l16", "{0x1235u16:bcs}"),
+            ("s32", "{n32:bcs}"),
+            ("l32", "{0x12345679u32:bcs}"),
+            ("s64", "{n64:bcs}"),
+            ("l64", "{0x123456789abcdef1u64:bcs}"),
+            ("sstr", "{str:bcs}"),
+            ("lstr", "{'goodbye':bcs}"),
+            ("sbytes", "{bytes:bcs}"),
+            ("lbytes", "{x'010204':bcs}"),
+            ("hbytes", "{vector[0x41u8, n8, 0x43u8]:bcs}"),
+            ("lstruct", "{0x1::m::S(n8, n16):bcs}"),
+            ("lempty", "{0x1::m::Empty():bcs}"),
+            ("lnone", "{0x1::option::Option<u8>::None#0():bcs}"),
+            ("lsome", "{0x1::option::Option<u8>::Some#1(0x44u8):bcs}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        let actual = |f: &str| output.get(f).unwrap().as_ref().unwrap().as_str().unwrap();
+        fn expect(x: impl Serialize) -> String {
+            STANDARD.encode(bcs::to_bytes(&x).unwrap())
+        }
+
+        assert_eq!(actual("s8"), expect(0x42u8));
+        assert_eq!(actual("l8"), expect(0x43u8));
+        assert_eq!(actual("s16"), expect(0x1234u16));
+        assert_eq!(actual("l16"), expect(0x1235u16));
+        assert_eq!(actual("s32"), expect(0x12345678u32));
+        assert_eq!(actual("l32"), expect(0x12345679u32));
+        assert_eq!(actual("s64"), expect(0x123456789abcdef0u64));
+        assert_eq!(actual("l64"), expect(0x123456789abcdef1u64));
+        assert_eq!(actual("sstr"), expect("hello"));
+        assert_eq!(actual("lstr"), expect("goodbye"));
+        assert_eq!(actual("sbytes"), expect(vec![1u8, 2, 3]));
+        assert_eq!(actual("lbytes"), expect(vec![1u8, 2, 4]));
+        assert_eq!(actual("hbytes"), expect(vec![0x41u8, 0x42, 0x43]));
+        assert_eq!(actual("lstruct"), expect((0x42u8, 0x1234u16)));
+        assert_eq!(actual("lempty"), expect(false));
+        assert_eq!(actual("lnone"), expect(None::<u8>));
+        assert_eq!(actual("lsome"), expect(Some(0x44u8)));
+    }
+
+    #[tokio::test]
     async fn test_string_hardening() {
         let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
         let layout = struct_(
@@ -1397,6 +1478,9 @@ mod tests {
                             ),
                             Literal(
                                 "base64url_nopad",
+                            ),
+                            Literal(
+                                "bcs",
                             ),
                             Literal(
                                 "hex",
