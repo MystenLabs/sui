@@ -218,10 +218,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                 // single `bytes` field.
                 (V::String(s), A::Field(f)) if *f == "bytes" => {
                     accessors.pop();
-                    root = match s {
-                        Cow::Borrowed(s) => V::Bytes(Cow::Borrowed(s.as_bytes())),
-                        Cow::Owned(s) => V::Bytes(Cow::Owned(s.into_bytes())),
-                    }
+                    root = V::Bytes(s)
                 }
 
                 // Fetch an element from a vector literal, as long as the accessor evaluates to a
@@ -320,7 +317,11 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
             L::U128(n) => Some(V::U128(*n)),
             L::U256(n) => Some(V::U256(*n)),
             L::ByteArray(bs) => Some(V::Bytes(bs.into())),
-            L::String(s) => Some(V::String(s.clone())),
+
+            L::String(s) => match s.clone() {
+                Cow::Borrowed(s) => Some(V::String(Cow::Borrowed(s.as_bytes()))),
+                Cow::Owned(s) => Some(V::String(Cow::Owned(s.into_bytes()))),
+            },
 
             L::Vector(v) => self.eval_chains(&v.elements).await?.map(|elements| {
                 V::Vector(Vector {
