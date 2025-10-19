@@ -128,6 +128,7 @@ pub enum Transform {
     #[default]
     Str,
     Timestamp,
+    Url,
 }
 
 pub(crate) struct Parser<'s> {
@@ -921,6 +922,11 @@ impl<'s> Parser<'s> {
                 self.lexer.next();
                 Transform::Timestamp
             },
+
+            Lit(_, T::Ident, _, "url") => {
+                self.lexer.next();
+                Transform::Url
+            },
         })
     }
 }
@@ -1090,6 +1096,7 @@ impl fmt::Debug for Transform {
             Transform::Hex => write!(f, "hex"),
             Transform::Str => write!(f, "str"),
             Transform::Timestamp => write!(f, "ts"),
+            Transform::Url => write!(f, "url"),
         }
     }
 }
