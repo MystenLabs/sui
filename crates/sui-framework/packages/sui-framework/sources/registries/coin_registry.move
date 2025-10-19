@@ -65,6 +65,9 @@ const EAlreadyBorrowed: vector<u8> = b"Already borrowed.";
 #[error(code = 15)]
 const EAlreadyMigrated: vector<u8> =
     b"Trying to mark as migrated, but the currency has stored legacy metadata.";
+#[error(code = 16)]
+const EMigratingNewCurrency: vector<u8> =
+    b"Trying to mark new currency as migrated, but the currency has already been migrated.";
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
@@ -549,8 +552,8 @@ public fun migrate_regulated_state_by_cap<T>(currency: &mut Currency<T>, cap: &D
 
 /// Mark the currency as migrated.
 public fun mark_as_migrated<T>(currency: &mut Currency<T>, legacy: &CoinMetadata<T>) {
-    assert!(!df::exists_(&currency.id, LegacyMetadataKey()), EAlreadyMigrated);
     assert!(!currency.extra_fields.contains(&LEGACY_METADATA_ID.to_string()), EAlreadyMigrated);
+    assert!(!df::exists_(&currency.id, LegacyMetadataKey()), EMigratingNewCurrency);
 
     currency
         .extra_fields
@@ -750,6 +753,11 @@ public fun create_coin_data_registry_for_testing(ctx: &mut TxContext): CoinRegis
 }
 
 #[test_only]
+public fun is_migrated_for_testing<T>(currency: &Currency<T>): bool {
+    currency.extra_fields.contains(&LEGACY_METADATA_ID.to_string())
+}
+
+#[test_only]
 /// Unwrap CurrencyInitializer for testing purposes.
 /// This function is test-only and should only be used in tests.
 public fun unwrap_for_testing<T>(init: CurrencyInitializer<T>): Currency<T> {
@@ -759,12 +767,24 @@ public fun unwrap_for_testing<T>(init: CurrencyInitializer<T>): Currency<T> {
 }
 
 #[test_only]
+/// Unset the legacy marker for testing purposes.
+public fun unset_legacy_marker_for_testing<T>(currency: &mut Currency<T>) {
+    currency.extra_fields.remove(&LEGACY_METADATA_ID.to_string());
+}
+
+#[test_only]
 public fun finalize_unwrap_for_testing<T>(
     init: CurrencyInitializer<T>,
     ctx: &mut TxContext,
 ): (Currency<T>, MetadataCap<T>) {
-    let CurrencyInitializer { mut currency, extra_fields, .. } = init;
+    let CurrencyInitializer { mut currency, extra_fields, is_otw } = init;
     extra_fields.destroy_empty();
+
+    // Keep the API consistent with non-test version of the function.
+    let legacy_metadata = currency.to_legacy_metadata(ctx);
+    if (is_otw) dof::add(&mut currency.id, LegacyMetadataKey(), legacy_metadata)
+    else df::add(&mut currency.id, LegacyMetadataKey(), option::some(legacy_metadata));
+
     let id = object::new(ctx);
     currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
     (currency, MetadataCap { id })
@@ -777,6 +797,13 @@ public fun migrate_legacy_metadata_for_testing<T>(
     _ctx: &mut TxContext,
 ): Currency<T> {
     assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
+    assert!(is_ascii_printable!(&legacy.get_symbol().to_string()), EInvalidSymbol);
+
+    let mut extra_fields = vec_map::empty();
+    extra_fields.insert(
+        LEGACY_METADATA_ID.to_string(),
+        ExtraField(type_name::with_original_ids<ID>(), bcs::to_bytes(&object::id(legacy))),
+    );
 
     Currency<T> {
         id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
@@ -792,6 +819,6 @@ public fun migrate_legacy_metadata_for_testing<T>(
         regulated: RegulatedState::Unknown,
         treasury_cap_id: option::none(),
         metadata_cap_id: MetadataCapState::Unclaimed,
-        extra_fields: vec_map::empty(),
+        extra_fields,
     }
 }

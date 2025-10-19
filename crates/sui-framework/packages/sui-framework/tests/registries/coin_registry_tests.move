@@ -302,7 +302,6 @@ fun perfect_migration_regulated() {
     assert_eq!(currency.name(), NAME.to_string());
     assert_eq!(currency.description(), DESCRIPTION.to_string());
     assert_eq!(currency.icon_url(), ICON_URL.to_string());
-    assert_eq!(currency.legacy_metadata_id().destroy_or!(abort), metadata_id);
 
     assert!(!currency.is_metadata_cap_claimed());
     assert!(!currency.is_regulated());
@@ -334,11 +333,28 @@ fun perfect_migration_regulated() {
     assert!(currency.is_metadata_cap_claimed());
     assert!(currency.metadata_cap_id().is_some_and!(|id| id == object::id(&metadata_cap)));
 
+    // Delete the legacy metadata and try to borrow it.
+    currency.delete_migrated_legacy_metadata(metadata);
+
+    // Borrow the legacy metadata and check the values.
+    let (legacy, borrow) = currency.borrow_as_legacy_metadata();
+
+    assert_eq!(legacy.get_decimals(), DECIMALS);
+    assert_eq!(legacy.get_name(), b"New name".to_string());
+    assert_eq!(legacy.get_symbol(), b"NEW_TEST".to_ascii_string());
+    assert_eq!(legacy.get_description(), b"New description".to_string());
+    assert_eq!(
+        legacy.get_icon_url().destroy_some().inner_url(),
+        b"https://new.test.com/img.png".to_ascii_string(),
+    );
+    assert_eq!(object::id(&legacy), metadata_id);
+
+    currency.return_borrowed_legacy_metadata(legacy, borrow);
+
     destroy(metadata_cap);
     destroy(registry);
     destroy(currency);
     destroy(deny_cap);
-    destroy(metadata);
     destroy(t_cap);
 }
 
@@ -422,23 +438,131 @@ fun update_legacy_fail() {
     abort
 }
 
-#[test, expected_failure, allow(deprecated_usage)]
-fun delete_legacy_fail() {
+// === Access to Legacy Metadata for Migrated Currencies ===
+
+#[test]
+// Scenario:
+// - Soft migrate a currency
+// - Check that the currency is migrated
+// - Unset the legacy marker (test only feature)
+// - Mark the currency as migrated
+// - Check that the currency is migrated
+fun incomplete_migration_mark_as_migrated() {
     let ctx = &mut tx_context::dummy();
     let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
-    let (_t_cap, _deny_cap, metadata) = new_builder().build_legacy_regulated(
-        COIN_REGISTRY_TESTS {},
-        ctx,
-    );
+    let (t_cap, legacy) = new_builder().build_legacy(COIN_REGISTRY_TESTS {}, ctx);
+    let mut currency = registry.migrate_legacy_metadata_for_testing(&legacy, ctx);
+
+    assert!(currency.is_migrated_for_testing());
+    currency.unset_legacy_marker_for_testing();
+    currency.mark_as_migrated(&legacy);
+    assert!(currency.is_migrated_for_testing());
+
+    destroy(t_cap);
+    destroy(legacy);
+    destroy(currency);
+    destroy(registry);
+}
+
+#[test, expected_failure(abort_code = coin_registry::EAlreadyMigrated)]
+// Scenario:
+// - Soft migrate a currency
+// - Try mark the currency as migrated
+fun try_mark_migrated_currency_again_fail() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (_t_cap, legacy) = new_builder().build_legacy(COIN_REGISTRY_TESTS {}, ctx);
     let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
         &mut registry,
-        &metadata,
+        &legacy,
         ctx,
     );
 
-    currency.delete_migrated_legacy_metadata(metadata);
+    // Fails here!
+    currency.mark_as_migrated(&legacy);
 
-    abort 0 // different abort code than the expected one
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_registry::ELegacyMetadataDoesNotExist)]
+fun try_borrow_soft_migrated_legacy_metadata_fail() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (_t_cap, legacy) = new_builder().build_legacy(COIN_REGISTRY_TESTS {}, ctx);
+    let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
+        &mut registry,
+        &legacy,
+        ctx,
+    );
+
+    // Fails here!
+    let (_legacy, _borrow) = currency.borrow_as_legacy_metadata();
+
+    abort
+}
+
+// === Access to Legacy Metadata for New Currencies ===
+
+#[test]
+// Scenario:
+// - Create a new Currency
+// - Borrow the legacy metadata
+// - Return the borrowed legacy metadata
+fun new_currency_with_legacy_metadata() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (builder, t_cap) = new_builder().build_dynamic(&mut registry, ctx);
+    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    currency.delete_metadata_cap(metadata_cap);
+
+    let (legacy, borrow) = currency.borrow_as_legacy_metadata();
+
+    assert_eq!(legacy.get_decimals(), DECIMALS);
+    assert_eq!(legacy.get_name(), NAME.to_string());
+    assert_eq!(legacy.get_symbol(), SYMBOL.to_ascii_string());
+    assert_eq!(legacy.get_description(), DESCRIPTION.to_string());
+    assert_eq!(legacy.get_icon_url().destroy_some().inner_url(), ICON_URL.to_ascii_string());
+
+    currency.return_borrowed_legacy_metadata(legacy, borrow);
+
+    destroy(currency);
+    destroy(registry);
+    destroy(t_cap);
+}
+
+#[test, expected_failure(abort_code = coin_registry::EMigratingNewCurrency)]
+// Scenario:
+// - Create a new Currency
+// - Borrow the legacy metadata
+// - Try and mark the Currency as migrated (should fail)
+fun try_mark_new_currency_as_migrated_fail() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (builder, _t_cap) = new_builder().build_dynamic(&mut registry, ctx);
+    let (mut currency, _metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+    let (legacy, _borrow) = currency.borrow_as_legacy_metadata();
+
+    currency.mark_as_migrated(&legacy);
+
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_registry::EAlreadyBorrowed)]
+// Scenario:
+// - Create a new Currency
+// - Borrow the legacy metadata
+// - Borrow the legacy metadata again (should fail)
+fun try_borrow_legacy_metadata_again_fail() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (builder, _t_cap) = new_builder().build_dynamic(&mut registry, ctx);
+    let (mut currency, _metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    let (_legacy, _borrow) = currency.borrow_as_legacy_metadata();
+    let (_legacy2, _borrow2) = currency.borrow_as_legacy_metadata();
+
+    abort
 }
 
 // === Test Scenario + Receiving ===
@@ -465,6 +589,17 @@ fun receive_promote() {
 
     currency.make_supply_fixed(t_cap);
     currency.delete_metadata_cap(metadata_cap);
+
+    // Do a borrow to make sure the legacy metadata is there in OTW case.
+    let (legacy, borrow) = currency.borrow_as_legacy_metadata();
+
+    assert_eq!(legacy.get_decimals(), DECIMALS);
+    assert_eq!(legacy.get_name(), NAME.to_string());
+    assert_eq!(legacy.get_symbol(), SYMBOL.to_ascii_string());
+    assert_eq!(legacy.get_description(), DESCRIPTION.to_string());
+    assert_eq!(legacy.get_icon_url().destroy_some().inner_url(), ICON_URL.to_ascii_string());
+
+    currency.return_borrowed_legacy_metadata(legacy, borrow);
 
     test_scenario::return_shared(currency);
 
