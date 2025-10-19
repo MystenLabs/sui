@@ -1031,6 +1031,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_string_hardening() {
+        let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("ascii", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("utf8", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("invalid", T::Struct(Box::new(move_utf8_str_layout()))),
+            ],
+        );
+
+        let formats = [
+            ("ascii", "{ascii}"),
+            ("utf8", "{utf8}"),
+            ("invalid", "{invalid}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "ascii": Ok(
+                String("ascii"),
+            ),
+            "utf8": Ok(
+                String("🔥"),
+            ),
+            "invalid": Err(
+                TransformInvalid(
+                    "expected utf8 bytes",
+                ),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_field_errors() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("byte", T::U8)]);

@@ -43,7 +43,7 @@ pub enum Value<'s> {
     Bytes(Cow<'s, [u8]>),
     Enum(Enum<'s>),
     Slice(Slice<'s>),
-    String(Cow<'s, str>),
+    String(Cow<'s, [u8]>),
     Struct(Struct<'s>),
     U8(u8),
     U16(u16),
@@ -60,7 +60,6 @@ pub enum Atom<'s> {
     Address(AccountAddress),
     Bool(bool),
     Bytes(Cow<'s, [u8]>),
-    String(Cow<'s, str>),
     U8(u8),
     U16(u16),
     U32(u32),
@@ -220,7 +219,6 @@ impl Atom<'_> {
             Atom::U64(n) => write!(w, "{n}")?,
             Atom::U128(n) => write!(w, "{n}")?,
             Atom::U256(n) => write!(w, "{n}")?,
-            Atom::String(s) => write!(w, "{s}")?,
             Atom::Bytes(bs) => {
                 let s = str::from_utf8(bs)
                     .map_err(|_| FormatError::TransformInvalid("expected utf8 bytes"))?;
@@ -453,14 +451,15 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
         Ok(match value {
             V::Address(a) => A::Address(a),
             V::Bool(b) => A::Bool(b),
-            V::Bytes(bs) => A::Bytes(bs),
-            V::String(s) => A::String(s),
             V::U8(n) => A::U8(n),
             V::U16(n) => A::U16(n),
             V::U32(n) => A::U32(n),
             V::U64(n) => A::U64(n),
             V::U128(n) => A::U128(n),
             V::U256(n) => A::U256(n),
+
+            // Byte arrays and strings are indistinguishable at the Atom level
+            V::Bytes(bs) | V::String(bs) => A::Bytes(bs),
 
             V::Enum(_) => return Err(FormatError::TransformInvalid("unexpected enum")),
             V::Struct(_) => return Err(FormatError::TransformInvalid("unexpected struct")),
@@ -507,9 +506,7 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                     ]
                     .contains(layout.as_ref()) =>
                 {
-                    let s = str::from_utf8(bcs::from_bytes(bytes)?)
-                        .map_err(|_| FormatError::TransformInvalid("invalid utf8 bytes"))?;
-                    A::String(Cow::Borrowed(s))
+                    A::Bytes(Cow::Borrowed(bcs::from_bytes(bytes)?))
                 }
 
                 L::Struct(layout) if [UID::layout(), ID::layout()].contains(layout.as_ref()) => {
@@ -786,7 +783,7 @@ pub(crate) mod tests {
     #[test]
     fn test_serialize_string() {
         assert_eq!(
-            bcs::to_bytes(&Value::String(Cow::Borrowed("hello"))).unwrap(),
+            bcs::to_bytes(&Value::String(Cow::Borrowed("hello".as_bytes()))).unwrap(),
             bcs::to_bytes("hello").unwrap()
         );
     }
@@ -808,7 +805,7 @@ pub(crate) mod tests {
             fields: Fields::Positional(vec![
                 Value::U64(42),
                 Value::Bool(true),
-                Value::String(Cow::Borrowed("test")),
+                Value::String(Cow::Borrowed("test".as_bytes())),
             ]),
         });
 
@@ -888,8 +885,8 @@ pub(crate) mod tests {
         let vec = Value::Vector(Vector {
             type_: None,
             elements: vec![
-                Value::String(Cow::Borrowed("hello")),
-                Value::String(Cow::Borrowed("world")),
+                Value::String(Cow::Borrowed("hello".as_bytes())),
+                Value::String(Cow::Borrowed("world".as_bytes())),
             ],
         });
 
@@ -918,7 +915,7 @@ pub(crate) mod tests {
             Value::U128(123456),
             Value::U256(U256::from(42u64)),
             Value::Address("0x42".parse().unwrap()),
-            Value::String(Cow::Borrowed("hello")),
+            Value::String(Cow::Borrowed("hello".as_bytes())),
             Value::Bytes(Cow::Borrowed(&[1, 2, 3])),
             Value::Vector(Vector {
                 type_: Some(&TypeTag::U8),
@@ -950,7 +947,7 @@ pub(crate) mod tests {
             Atom::U128(123456),
             Atom::U256(U256::from(42u64)),
             Atom::Address("0x42".parse().unwrap()),
-            Atom::String(Cow::Borrowed("hello")),
+            Atom::Bytes(Cow::Borrowed("hello".as_bytes())),
             Atom::Bytes(Cow::Borrowed(&[1, 2, 3])),
             Atom::Bytes(Cow::Borrowed(&[4, 5, 6])),
             Atom::Bytes(Cow::Borrowed(&[7, 8, 9])),
@@ -1030,7 +1027,7 @@ pub(crate) mod tests {
             Atom::U128(123456),
             Atom::U256(U256::from(42u64)),
             Atom::Address(AccountAddress::from_str("0x42").unwrap()),
-            Atom::String(Cow::Borrowed("hello")),
+            Atom::Bytes(Cow::Borrowed("hello".as_bytes())),
             Atom::Bytes(Cow::Borrowed(&[1, 2, 3])),
         ];
 
