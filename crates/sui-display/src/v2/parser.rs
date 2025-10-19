@@ -124,6 +124,7 @@ pub enum Fields<'s> {
 /// Ways to modify a value before displaying it.
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub enum Transform {
+    Hex,
     #[default]
     Str,
     Timestamp,
@@ -906,6 +907,11 @@ impl<'s> Parser<'s> {
 
     fn parse_xform(&mut self) -> Result<Transform, FormatError> {
         Ok(match_token! { self.lexer;
+            Lit(_, T::Ident, _, "hex") => {
+                self.lexer.next();
+                Transform::Hex
+            },
+
             Lit(_, T::Ident, _, "str") => {
                 self.lexer.next();
                 Transform::Str
@@ -1081,6 +1087,7 @@ impl fmt::Debug for Enum<'_> {
 impl fmt::Debug for Transform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Transform::Hex => write!(f, "hex"),
             Transform::Str => write!(f, "str"),
             Transform::Timestamp => write!(f, "ts"),
         }
