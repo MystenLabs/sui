@@ -50,7 +50,8 @@ impl AvailableRange {
 /// # Generated Functions and Tests
 ///
 /// - `collect_pipelines`: resolves type/field/filter combinations to the indexer pipelines where data is available.
-/// - `test_schema_inclusion`: Testing entry point that calls the other two tests using a GraphQL extension.
+/// - `test_schema_inclusion`: Testing entry point that calls the other tests using a GraphQL extension.
+/// = `test_implements_interface`: Tests if a type implements an interface, it should delegate to the correct type and fields in the macro invocation
 /// - `test_macro_invocation_matches_schema`: Tests that the macro invocation matches the types and fields in the GraphQL schema.
 /// - `test_registry_collect_pipelines_snapshot`: Generates a snapshot of all type.field (filter) -> pipeline mappings for regression testing and auditing.
 macro_rules! collect_pipelines {
@@ -102,12 +103,29 @@ macro_rules! collect_pipelines {
             };
             use std::{collections::BTreeSet, sync::Arc};
 
+            // Collect macro expansion into a vector of tuples for testing.
+            const TYPE_FIELD_DELEGATIONS: &[(&str, &[&str], Option<(&str, &str)>)] = &[
+            $(
+                (
+                    stringify!($type),
+                    &[$(stringify!($field)),*],
+                    {
+                        #[allow(unused_assignments)]
+                        let _delegation: Option<(&str, &str)> = None;
+                        $(
+                            let _delegation = Some((stringify!($delegate_type), stringify!($delegate_field)));
+                        )?
+                        _delegation
+                    }
+                ),
+                )*
+            ];
+
             /// Validates that all types, fields in the macro exist in the GraphQL schema
             /// and outputs a snapshot of all type.field (filter) -> pipeline mappings for regression testing.
             ///
-            /// This test ensures that the macro configuration stays in sync with the actual
-            /// GraphQL schema. If a type, field, or filter is referenced in the macro but
-            /// doesn't exist in the schema, this test will fail.
+            /// Test to ensure the macro configuration stays in sync with the GraphQL schema. If a type, field, or 
+            /// filter is referenced in the macro but doesn't exist in the schema, this test will fail.
             #[tokio::test]
             async fn test_schema_inclusion() {
                 struct SchemaValidationExtension;
@@ -126,6 +144,7 @@ macro_rules! collect_pipelines {
                         let registry = &ctx.schema_env.registry;
 
                         test_macro_invocation_matches_schema(registry);
+                        test_implements_interface(registry);
                         test_registry_collect_pipelines_snapshot(registry);
 
                         next.run(ctx).await
@@ -137,6 +156,63 @@ macro_rules! collect_pipelines {
                 assert!(response.errors.is_empty(), "Schema operation failed: {:?}", response.errors);
             }
 
+            /// If a type implements an interface, every field in the interface is delegated
+            /// to that interface in the macro invocation.
+            /// ex. CoinMetadata.[balance] => IMoveObject.balance();  in the macro invocation should throw an error because
+            ///     Type 'CoinMetadata' field 'balance' should delegate to interface 'IAddressable' but delegates to 'IMoveObject'
+            fn test_implements_interface(registry: &Registry) {
+                use std::collections::HashMap;
+
+                let mut type_delegations: HashMap<String, HashMap<String, (String, String)>> = HashMap::new();
+
+                for (type_name, fields, delegation) in TYPE_FIELD_DELEGATIONS {
+                    if let Some((delegate_type, delegate_field)) = delegation {
+                        let type_map = type_delegations.entry(type_name.to_string()).or_default();
+
+                        for field in *fields {
+                            let resolved_delegate_field = if *delegate_field == "*" {
+                                field.to_string()
+                            } else {
+                                delegate_field.to_string()
+                            };
+
+                            type_map.insert(
+                                field.to_string(),
+                                (delegate_type.to_string(), resolved_delegate_field)
+                            );
+                        }
+                    }
+                }
+
+                for (interface_name, meta_type) in registry.types.iter() {
+                    let (possible_types, interface_fields) = match meta_type {
+                        MetaType::Interface { possible_types, fields, .. } => (possible_types, fields),
+                        _ => continue,
+                    };
+
+                    for type_name in possible_types {
+                        let type_dels = type_delegations.get(type_name.as_str());
+
+                        for (interface_field_name, _) in interface_fields {
+                            if let Some(delegations) = type_dels {
+                                if let Some((delegate_type, delegate_field)) = delegations.get(interface_field_name) {
+                                    assert_eq!(
+                                        delegate_type, interface_name,
+                                        "Type '{}' field '{}' should delegate to interface '{}' but delegates to '{}'",
+                                        type_name, interface_field_name, interface_name, delegate_type
+                                    );
+                                    assert_eq!(
+                                        delegate_field, interface_field_name,
+                                        "Type '{}' field '{}' should delegate to interface field '{}' but delegates to '{}'",
+                                        type_name, interface_field_name, interface_field_name, delegate_field
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             /// Validates that the macro invocation matches the schema. This is to catch any typos in types or fields in the macro invocation.
             fn test_macro_invocation_matches_schema(registry: &Registry) {
                 let mut type_field_filters = Vec::new();
@@ -146,14 +222,14 @@ macro_rules! collect_pipelines {
                     type_field_filters.push((type_name, field_names));
                 )*
 
-                for (type_name, field_names) in type_field_filters {
-                    let fields = match registry.types.get(type_name) {
+                for (type_name, field_names, _) in TYPE_FIELD_DELEGATIONS {
+                    let fields = match registry.types.get(*type_name) {
                         Some(MetaType::Object { fields, .. } | MetaType::Interface { fields, .. }) => fields,
                         Some(_) => panic!("Type '{}' is not an Object or Interface type", type_name),
                         None => panic!("Type '{}' not found in schema registry", type_name),
                     };
-                    for field_name in field_names {
-                        fields.get(field_name)
+                    for field_name in *field_names {
+                        fields.get(*field_name)
                             .unwrap_or_else(|| panic!("Field '{}' not found in type '{}'", field_name, type_name));
                     }
                 }
@@ -209,9 +285,7 @@ macro_rules! collect_pipelines {
 // - `=> OtherType.*`: delegate to OtherType using the same field name
 // - `=> OtherType.specificField()`: delegate to OtherType.specificField
 // - `=> OtherType.field(.., "filterName")`: delegate and add filter constraint
-// - `|pipelines, filters| { ... }`: block of statements to execute
-//   - `pipelines.insert("name".to_string())`: add required pipeline
-//   - `filters.contains("name")`: check for filter in conditional logic
+// - `|pipelines, filters| { ... }`: block of statements operating on pipelines and filters to execute
 collect_pipelines! {
     Address.[asObject] => IObject.objectAt();
     Address.[transactions] => Query.transactions(.., "affectedAddress");
