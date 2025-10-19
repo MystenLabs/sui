@@ -129,6 +129,7 @@ impl Value<'_> {
         // 'display').
         let atom = Atom::try_from(self)?;
         match transform {
+            Transform::Hex => atom.format_as_hex(w),
             Transform::Str => atom.format_as_str(w),
             Transform::Timestamp => atom.format_as_timestamp(w),
         }
@@ -208,6 +209,33 @@ impl Value<'_> {
 }
 
 impl Atom<'_> {
+    /// Format the atom as a hexadecimal string.
+    fn format_as_hex(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
+        match self {
+            Atom::Bool(b) => write!(w, "{:02x}", *b as u8)?,
+            Atom::U8(n) => write!(w, "{n:02x}")?,
+            Atom::U16(n) => write!(w, "{n:04x}")?,
+            Atom::U32(n) => write!(w, "{n:08x}")?,
+            Atom::U64(n) => write!(w, "{n:016x}")?,
+            Atom::U128(n) => write!(w, "{n:032x}")?,
+            Atom::U256(n) => write!(w, "{n:064x}")?,
+
+            Atom::Address(a) => {
+                for b in a.into_bytes() {
+                    write!(w, "{b:02x}")?;
+                }
+            }
+
+            Atom::Bytes(bs) => {
+                for b in bs.iter() {
+                    write!(w, "{b:02x}")?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Format the atom as a string.
     fn format_as_str(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
         match self {
