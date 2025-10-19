@@ -113,12 +113,7 @@ impl PackageContext<'_> {
     ) -> PartialVMResult<Option<VMPointer<Function>>> {
         // We are calling into a different package so we cannot resolve this to a direct call.
         if vtable_entry.package_key != self.original_id {
-            return Err(
-                PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(format!(
-                    "Cannot resolve call in a different package with PackageKey {:?}",
-                    vtable_entry.package_key
-                )),
-            );
+            return Err(PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE));
         }
 
         match self.vtable_funs.get(&vtable_entry.inner_pkg_key) {
