@@ -1031,6 +1031,103 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_hex() {
+        let bytes = bcs::to_bytes(&(
+            0x42u8,
+            0x4243u16,
+            0x42434445u32,
+            0x4243444546474849u64,
+            0x42434445464748494a4b4c4d4e4f5051u128,
+            U256::from_str_radix(
+                "42434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061",
+                16,
+            )
+            .unwrap(),
+            AccountAddress::from_str(
+                "0x41403f3e3d3c3b3a393837363534333231300f0e0d0c0b0a0908070605040302",
+            )
+            .unwrap(),
+            vec![0x41u8, 0x40, 0x3a],
+            "ABC",
+        ))
+        .unwrap();
+
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("n8", T::U8),
+                ("n16", T::U16),
+                ("n32", T::U32),
+                ("n64", T::U64),
+                ("n128", T::U128),
+                ("n256", T::U256),
+                ("addr", T::Address),
+                ("bytes", vector_(T::U8)),
+                ("str", T::Struct(Box::new(move_ascii_str_layout()))),
+            ],
+        );
+
+        let formats = [
+            ("n8", "{n8:hex}"),
+            ("n16", "{n16:hex}"),
+            ("n32", "{n32:hex}"),
+            ("n64", "{n64:hex}"),
+            ("n128", "{n128:hex}"),
+            ("n256", "{n256:hex}"),
+            ("addr", "{addr:hex}"),
+            ("bytes", "{bytes:hex}"),
+            ("str", "{str:hex}"),
+            ("str_bytes", "{str.bytes:hex}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "n8": Ok(
+                String("42"),
+            ),
+            "n16": Ok(
+                String("4243"),
+            ),
+            "n32": Ok(
+                String("42434445"),
+            ),
+            "n64": Ok(
+                String("4243444546474849"),
+            ),
+            "n128": Ok(
+                String("42434445464748494a4b4c4d4e4f5051"),
+            ),
+            "n256": Ok(
+                String("42434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061"),
+            ),
+            "addr": Ok(
+                String("41403f3e3d3c3b3a393837363534333231300f0e0d0c0b0a0908070605040302"),
+            ),
+            "bytes": Ok(
+                String("41403a"),
+            ),
+            "str": Ok(
+                String("414243"),
+            ),
+            "str_bytes": Ok(
+                String("414243"),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_string_hardening() {
         let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
         let layout = struct_(
@@ -1143,6 +1240,9 @@ mod tests {
                     expect: ExpectedSet {
                         prev: [],
                         tried: [
+                            Literal(
+                                "hex",
+                            ),
                             Literal(
                                 "str",
                             ),
