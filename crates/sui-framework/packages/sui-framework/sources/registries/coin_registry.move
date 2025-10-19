@@ -505,10 +505,7 @@ public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &C
 /// Remove the legacy `CoinMetadata` object from public access if it exists and
 /// place it as a dynamic object field of the `Currency`, so it can still be
 /// accessed through `borrow_as_legacy_metadata` call.
-public fun delete_migrated_legacy_metadata<T>(
-    currency: &mut Currency<T>,
-    mut legacy: CoinMetadata<T>,
-) {
+public fun delete_migrated_legacy_metadata<T>(currency: &mut Currency<T>, legacy: CoinMetadata<T>) {
     assert!(currency.is_metadata_cap_claimed(), EMetadataCapNotClaimed);
 
     if (!currency.extra_fields.contains(&LEGACY_METADATA_ID.to_string())) {
@@ -520,7 +517,6 @@ public fun delete_migrated_legacy_metadata<T>(
         currency.extra_fields.insert(LEGACY_METADATA_ID.to_string(), field);
     };
 
-    currency.refresh_legacy_metadata(&mut legacy);
     df::add(&mut currency.id, LegacyMetadataKey(), option::some(legacy));
 }
 

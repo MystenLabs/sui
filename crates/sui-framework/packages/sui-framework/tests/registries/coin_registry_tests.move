@@ -249,6 +249,7 @@ fun dynamic_currency_default() {
     let (builder, t_cap) = new_builder().build_dynamic(&mut registry, ctx);
     let (currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
 
+    // Check that the registry exists and the currency is registered.
     assert!(registry.exists<TestDynamic>());
     assert!(currency.is_metadata_cap_claimed());
     assert!(!currency.is_supply_fixed());
