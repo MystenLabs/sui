@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::identifier::Identifier;
+use move_core_types::{identifier::Identifier, u256::U256};
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -147,6 +147,130 @@ async fn test_accumulators_root_created() {
             ProtocolVersion::MAX_ALLOWED
         );
     });
+}
+
+// Test protocol gating of address balances. This test can be deleted after the feature
+// is released.
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_accumulators_disabled() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
+        if version >= ProtocolVersion::MAX {
+            cfg.create_root_accumulator_object_for_testing();
+            // for some reason all 4 nodes are not reliably submitting capability messages
+            cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+        }
+        if version == ProtocolVersion::MAX_ALLOWED {
+            cfg.enable_accumulators_for_testing();
+        }
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+            ProtocolVersion::MAX.as_u64(),
+            ProtocolVersion::MAX_ALLOWED.as_u64(),
+        ))
+        .build()
+        .await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    let (sender, gas) = get_sender_and_gas(&mut test_cluster.wallet).await;
+
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Withdraw must be rejected at signing.
+    let withdraw_tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
+    let withdraw_tx = test_cluster.wallet.sign_transaction(&withdraw_tx).await;
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(withdraw_tx)
+        .await
+        .unwrap_err();
+
+    // Transfer fails at execution time
+    let tx = make_send_to_account_tx(1000, recipient, sender, gas, rgp);
+
+    let signed = test_cluster.wallet.sign_transaction(&tx).await;
+    let effects = test_cluster
+        .wallet
+        .execute_transaction_may_fail(signed)
+        .await
+        .unwrap()
+        .effects
+        .unwrap();
+    let gas = effects.gas_object().reference.to_object_ref();
+    let status = effects.status().clone();
+    assert!(status.is_err());
+
+    // we reconfigure, and create the accumulator root at the end of this epoch.
+    // but because the root did not exist during this epoch, we don't upgrade to
+    // the next protocol version yet.
+    test_cluster.trigger_reconfiguration().await;
+
+    // Withdraw must still be rejected at signing.
+    let withdraw_tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
+    let withdraw_tx = test_cluster.wallet.sign_transaction(&withdraw_tx).await;
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(withdraw_tx)
+        .await
+        .unwrap_err();
+
+    // transfer fails at execution time
+    let tx = make_send_to_account_tx(1000, recipient, sender, gas, rgp);
+
+    let signed = test_cluster.wallet.sign_transaction(&tx).await;
+    let effects = test_cluster
+        .wallet
+        .execute_transaction_may_fail(signed)
+        .await
+        .unwrap()
+        .effects
+        .unwrap();
+    let gas = effects.gas_object().reference.to_object_ref();
+    let status = effects.status().clone();
+    assert!(status.is_err());
+
+    // after one more reconfig, we can upgrade to the next protocol version.
+    test_cluster.trigger_reconfiguration().await;
+
+    let tx = make_send_to_account_tx(1000, sender, sender, gas, rgp);
+
+    let gas = test_cluster
+        .sign_and_execute_transaction(&tx)
+        .await
+        .effects
+        .unwrap()
+        .gas_object()
+        .reference
+        .to_object_ref();
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, sender, 1000);
+    });
+
+    // Withdraw can succeed now
+    let withdraw_tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
+    test_cluster
+        .sign_and_execute_transaction(&withdraw_tx)
+        .await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+
+        let sui_coin_type = Balance::type_tag(GAS::type_tag());
+        assert!(
+            !AccumulatorValue::exists(child_object_resolver, None, sender, &sui_coin_type).unwrap(),
+            "Accumulator value should have been removed"
+        );
+    });
+
+    // ensure that no conservation failures are detected during reconfig.
+    test_cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -408,24 +532,24 @@ fn withdraw_from_balance_tx_with_reservation(
         reservation_amount,
         sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
     );
-    builder.funds_withdrawal(withdraw_arg).unwrap();
+    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
 
-    let amount = builder.pure(amount).unwrap();
+    let amount_arg = builder.pure(U256::from(amount)).unwrap();
 
-    let balance = builder.programmable_move_call(
+    let split_withdraw_arg = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("balance").unwrap(),
-        Identifier::new("withdraw_from_account").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![amount],
+        Identifier::new("funds_accumulator").unwrap(),
+        Identifier::new("withdrawal_split").unwrap(),
+        vec!["0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap()],
+        vec![withdraw_arg, amount_arg],
     );
 
     let coin = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("coin").unwrap(),
-        Identifier::new("from_balance").unwrap(),
+        Identifier::new("redeem_funds").unwrap(),
         vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![balance],
+        vec![split_withdraw_arg],
     );
 
     builder.transfer_arg(sender, coin);
@@ -454,20 +578,12 @@ fn make_send_to_account_tx(
 
     let coin = Argument::NestedResult(coin_idx, 0);
 
-    let balance = builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("coin").unwrap(),
-        Identifier::new("into_balance").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![coin],
-    );
-
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("balance").unwrap(),
-        Identifier::new("send_to_account").unwrap(),
+        Identifier::new("coin").unwrap(),
+        Identifier::new("send_funds").unwrap(),
         vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![balance, recipient_arg],
+        vec![coin, recipient_arg],
     );
 
     let tx = TransactionKind::ProgrammableTransaction(builder.finish());

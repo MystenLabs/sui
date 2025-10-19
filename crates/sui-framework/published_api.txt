@@ -1865,10 +1865,10 @@ destroy_zero
 	public fun
 	0x2::balance
 send_funds
-	public(package) fun
+	public fun
 	0x2::balance
 redeem_funds
-	public(package) fun
+	public fun
 	0x2::balance
 withdraw_funds_from_object
 	public(package) fun
@@ -1884,12 +1884,6 @@ destroy_storage_rebates
 	0x2::balance
 destroy_supply
 	public(package) fun
-	0x2::balance
-send_to_account
-	fun
-	0x2::balance
-withdraw_from_account
-	fun
 	0x2::balance
 Element
 	public struct
@@ -2450,6 +2444,12 @@ take
 	public fun
 	0x2::coin
 put
+	public fun
+	0x2::coin
+redeem_funds
+	public fun
+	0x2::coin
+send_funds
 	public fun
 	0x2::coin
 join
