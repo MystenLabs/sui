@@ -131,16 +131,18 @@ impl Value<'_> {
     ) -> Result<(), FormatError> {
         // TODO(amnn): Detect transforms that can't be applied in this context (e.g. 'json' and
         // 'display').
-        let atom = Atom::try_from(self)?;
         match transform {
-            Transform::Base64 => atom.format_encoded(&STANDARD, w),
-            Transform::Base64NoPad => atom.format_encoded(&STANDARD_NO_PAD, w),
-            Transform::Base64Url => atom.format_encoded(&URL_SAFE, w),
-            Transform::Base64UrlNoPad => atom.format_encoded(&URL_SAFE_NO_PAD, w),
-            Transform::Hex => atom.format_as_hex(w),
-            Transform::Str => atom.format_as_str(w),
-            Transform::Timestamp => atom.format_as_timestamp(w),
-            Transform::Url => atom.format_as_url(w),
+            Transform::Base64 => Atom::try_from(self)?.format_as_base64(&STANDARD, w),
+            Transform::Base64NoPad => Atom::try_from(self)?.format_as_base64(&STANDARD_NO_PAD, w),
+            Transform::Base64Url => Atom::try_from(self)?.format_as_base64(&URL_SAFE, w),
+            Transform::Base64UrlNoPad => {
+                Atom::try_from(self)?.format_as_base64(&URL_SAFE_NO_PAD, w)
+            }
+            Transform::Bcs => Ok(write!(w, "{}", STANDARD.encode(bcs::to_bytes(&self)?))?),
+            Transform::Hex => Atom::try_from(self)?.format_as_hex(w),
+            Transform::Str => Atom::try_from(self)?.format_as_str(w),
+            Transform::Timestamp => Atom::try_from(self)?.format_as_timestamp(w),
+            Transform::Url => Atom::try_from(self)?.format_as_url(w),
         }
     }
 
@@ -307,20 +309,20 @@ impl Atom<'_> {
     }
 
     /// Base64-encode the byte representation of this atom.
-    fn format_encoded(
+    fn format_as_base64(
         &self,
         e: &impl Engine,
         w: &mut BoundedWriter<'_>,
     ) -> Result<(), FormatError> {
         let base64 = match self {
             Atom::Address(a) => e.encode(a.into_bytes()),
-            Atom::Bool(b) => e.encode(&[*b as u8]),
-            Atom::U8(n) => e.encode(&[*n]),
-            Atom::U16(n) => e.encode(&n.to_le_bytes()),
-            Atom::U32(n) => e.encode(&n.to_le_bytes()),
-            Atom::U64(n) => e.encode(&n.to_le_bytes()),
-            Atom::U128(n) => e.encode(&n.to_le_bytes()),
-            Atom::U256(n) => e.encode(&n.to_le_bytes()),
+            Atom::Bool(b) => e.encode([*b as u8]),
+            Atom::U8(n) => e.encode([*n]),
+            Atom::U16(n) => e.encode(n.to_le_bytes()),
+            Atom::U32(n) => e.encode(n.to_le_bytes()),
+            Atom::U64(n) => e.encode(n.to_le_bytes()),
+            Atom::U128(n) => e.encode(n.to_le_bytes()),
+            Atom::U256(n) => e.encode(n.to_le_bytes()),
             Atom::Bytes(bs) => e.encode(bs),
         };
 
@@ -478,6 +480,16 @@ impl Serialize for Struct<'_> {
         let mut s = serializer.serialize_tuple(self.fields.len())?;
 
         match &self.fields {
+            // Move values cannot serialize to an empty byte stream, so if there are no fields,
+            // `dummy_field: bool = false` is injected.
+            Fields::Positional(fs) if fs.is_empty() => {
+                s.serialize_element(&false)?;
+            }
+
+            Fields::Named(fs) if fs.is_empty() => {
+                s.serialize_element(&false)?;
+            }
+
             Fields::Positional(fs) => {
                 for f in fs {
                     s.serialize_element(f)?;
@@ -920,11 +932,37 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_serialize_empty_struct() {
+        let type_ = &"0x2::foo::Empty".parse().unwrap();
+
+        let positional = Value::Struct(Struct {
+            type_,
+            fields: Fields::Positional(vec![]),
+        });
+
+        let named = Value::Struct(Struct {
+            type_,
+            fields: Fields::Named(vec![]),
+        });
+
+        assert_eq!(
+            bcs::to_bytes(&positional).unwrap(),
+            bcs::to_bytes(&false).unwrap()
+        );
+
+        assert_eq!(
+            bcs::to_bytes(&named).unwrap(),
+            bcs::to_bytes(&false).unwrap()
+        );
+    }
+
+    #[test]
     fn test_serialize_enum() {
         #[derive(Serialize)]
         enum E {
             A(u64, bool),
             B { x: u32, y: u32 },
+            C,
         }
 
         let type_: StructTag = "0x1::m::E".parse().unwrap();
@@ -951,6 +989,19 @@ pub(crate) mod tests {
         assert_eq!(
             bcs::to_bytes(&enum_).unwrap(),
             bcs::to_bytes(&E::B { x: 100, y: 200 }).unwrap()
+        );
+
+        // Test enum with no fields
+        let enum_ = Value::Enum(Enum {
+            type_: &type_,
+            variant_name: Some("C"),
+            variant_index: 2,
+            fields: Fields::Positional(vec![]),
+        });
+
+        assert_eq!(
+            bcs::to_bytes(&enum_).unwrap(),
+            bcs::to_bytes(&E::C).unwrap()
         );
     }
 
