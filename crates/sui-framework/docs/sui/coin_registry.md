@@ -755,6 +755,16 @@ Attempt to migrate legacy metadata for a <code><a href="../sui/coin_registry.md#
 
 
 
+<a name="sui_coin_registry_EMigratingNewCurrency"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EMigratingNewCurrency">EMigratingNewCurrency</a>: vector&lt;u8&gt; = b"Trying to mark new currency <b>as</b> migrated, but the currency <b>has</b> already been migrated.";
+</code></pre>
+
+
+
 <a name="sui_coin_registry_REGULATED_COIN_VERSION"></a>
 
 Incremental identifier for regulated coin versions in the deny list.
@@ -1465,10 +1475,7 @@ accessed through <code><a href="../sui/coin_registry.md#sui_coin_registry_borrow
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_delete_migrated_legacy_metadata">delete_migrated_legacy_metadata</a>&lt;T&gt;(
-    currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;,
-    <b>mut</b> legacy: CoinMetadata&lt;T&gt;,
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_delete_migrated_legacy_metadata">delete_migrated_legacy_metadata</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;, legacy: CoinMetadata&lt;T&gt;) {
     <b>assert</b>!(currency.<a href="../sui/coin_registry.md#sui_coin_registry_is_metadata_cap_claimed">is_metadata_cap_claimed</a>(), <a href="../sui/coin_registry.md#sui_coin_registry_EMetadataCapNotClaimed">EMetadataCapNotClaimed</a>);
     <b>if</b> (!currency.extra_fields.contains(&<a href="../sui/coin_registry.md#sui_coin_registry_LEGACY_METADATA_ID">LEGACY_METADATA_ID</a>.to_string())) {
         <b>let</b> field = <a href="../sui/coin_registry.md#sui_coin_registry_ExtraField">ExtraField</a>(
@@ -1477,7 +1484,6 @@ accessed through <code><a href="../sui/coin_registry.md#sui_coin_registry_borrow
         );
         currency.extra_fields.insert(<a href="../sui/coin_registry.md#sui_coin_registry_LEGACY_METADATA_ID">LEGACY_METADATA_ID</a>.to_string(), field);
     };
-    currency.<a href="../sui/coin_registry.md#sui_coin_registry_refresh_legacy_metadata">refresh_legacy_metadata</a>(&<b>mut</b> legacy);
     df::add(&<b>mut</b> currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>(), option::some(legacy));
 }
 </code></pre>
@@ -1569,8 +1575,8 @@ Mark the currency as migrated.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_mark_as_migrated">mark_as_migrated</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;, legacy: &CoinMetadata&lt;T&gt;) {
-    <b>assert</b>!(!df::exists_(&currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>()), <a href="../sui/coin_registry.md#sui_coin_registry_EAlreadyMigrated">EAlreadyMigrated</a>);
     <b>assert</b>!(!currency.extra_fields.contains(&<a href="../sui/coin_registry.md#sui_coin_registry_LEGACY_METADATA_ID">LEGACY_METADATA_ID</a>.to_string()), <a href="../sui/coin_registry.md#sui_coin_registry_EAlreadyMigrated">EAlreadyMigrated</a>);
+    <b>assert</b>!(!df::exists_(&currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>()), <a href="../sui/coin_registry.md#sui_coin_registry_EMigratingNewCurrency">EMigratingNewCurrency</a>);
     currency
         .extra_fields
         .insert(
