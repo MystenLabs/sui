@@ -132,6 +132,7 @@ impl Value<'_> {
             Transform::Hex => atom.format_as_hex(w),
             Transform::Str => atom.format_as_str(w),
             Transform::Timestamp => atom.format_as_timestamp(w),
+            Transform::Url => atom.format_as_url(w),
         }
     }
 
@@ -268,6 +269,32 @@ impl Atom<'_> {
             })?;
 
         write!(w, "{ts:?}")?;
+        Ok(())
+    }
+
+    /// Like string formatting, but percent-encoding reserved URL characters.
+    fn format_as_url(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
+        match self {
+            Atom::Address(a) => write!(w, "{}", a.to_canonical_display(true))?,
+            Atom::Bool(b) => write!(w, "{b}")?,
+            Atom::U8(n) => write!(w, "{n}")?,
+            Atom::U16(n) => write!(w, "{n}")?,
+            Atom::U32(n) => write!(w, "{n}")?,
+            Atom::U64(n) => write!(w, "{n}")?,
+            Atom::U128(n) => write!(w, "{n}")?,
+            Atom::U256(n) => write!(w, "{n}")?,
+            Atom::Bytes(bs) => {
+                for b in bs.iter() {
+                    match *b {
+                        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                            write!(w, "{}", *b as char)?
+                        }
+                        b => write!(w, "%{b:02X}")?,
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 

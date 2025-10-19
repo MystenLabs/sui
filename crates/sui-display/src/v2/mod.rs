@@ -1128,6 +1128,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_url() {
+        let bytes = bcs::to_bytes(&(
+            1234u32,
+            "hello/goodbye world",
+            "🔥",
+            vec![0x3eu8, 0x3f, 0x40, 0x41, 0x42, 0x43],
+        ))
+        .unwrap();
+
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("num", T::U32),
+                ("str", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("emoji", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", T::Struct(Box::new(url_layout()))),
+            ],
+        );
+
+        let formats = [(
+            "url",
+            "https://example.com/?num={num:url}&str={str:url}&emoji={emoji:url}&data={bytes:url}",
+        )];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "url": Ok(
+                String("https://example.com/?num=1234&str=hello%2Fgoodbye%20world&emoji=%F0%9F%94%A5&data=%3E%3F%40ABC"),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_string_hardening() {
         let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
         let layout = struct_(
@@ -1248,6 +1293,9 @@ mod tests {
                             ),
                             Literal(
                                 "ts",
+                            ),
+                            Literal(
+                                "url",
                             ),
                         ],
                     },
