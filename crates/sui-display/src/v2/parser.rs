@@ -124,9 +124,16 @@ pub enum Fields<'s> {
 /// Ways to modify a value before displaying it.
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub enum Transform {
+    Base64,
+    Base64NoPad,
+    Base64Url,
+    Base64UrlNoPad,
+    Bcs,
+    Hex,
     #[default]
     Str,
     Timestamp,
+    Url,
 }
 
 pub(crate) struct Parser<'s> {
@@ -906,6 +913,36 @@ impl<'s> Parser<'s> {
 
     fn parse_xform(&mut self) -> Result<Transform, FormatError> {
         Ok(match_token! { self.lexer;
+            Lit(_, T::Ident, _, "base64") => {
+                self.lexer.next();
+                Transform::Base64
+            },
+
+            Lit(_, T::Ident, _, "base64_nopad") => {
+                self.lexer.next();
+                Transform::Base64NoPad
+            },
+
+            Lit(_, T::Ident, _, "base64url") => {
+                self.lexer.next();
+                Transform::Base64Url
+            },
+
+            Lit(_, T::Ident, _, "base64url_nopad") => {
+                self.lexer.next();
+                Transform::Base64UrlNoPad
+            },
+
+            Lit(_, T::Ident, _, "bcs") => {
+                self.lexer.next();
+                Transform::Bcs
+            },
+
+            Lit(_, T::Ident, _, "hex") => {
+                self.lexer.next();
+                Transform::Hex
+            },
+
             Lit(_, T::Ident, _, "str") => {
                 self.lexer.next();
                 Transform::Str
@@ -914,6 +951,11 @@ impl<'s> Parser<'s> {
             Lit(_, T::Ident, _, "ts") => {
                 self.lexer.next();
                 Transform::Timestamp
+            },
+
+            Lit(_, T::Ident, _, "url") => {
+                self.lexer.next();
+                Transform::Url
             },
         })
     }
@@ -1081,8 +1123,15 @@ impl fmt::Debug for Enum<'_> {
 impl fmt::Debug for Transform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Transform::Base64 => write!(f, "base64"),
+            Transform::Base64NoPad => write!(f, "base64_nopad"),
+            Transform::Base64Url => write!(f, "base64url"),
+            Transform::Base64UrlNoPad => write!(f, "base64url_nopad"),
+            Transform::Bcs => write!(f, "bcs"),
+            Transform::Hex => write!(f, "hex"),
             Transform::Str => write!(f, "str"),
             Transform::Timestamp => write!(f, "ts"),
+            Transform::Url => write!(f, "url"),
         }
     }
 }

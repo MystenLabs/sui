@@ -164,17 +164,19 @@ mod tests {
 
     use super::*;
 
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
     use insta::assert_debug_snapshot;
     use move_core_types::{
         account_address::AccountAddress, annotated_value::MoveTypeLayout as T, u256::U256,
     };
+    use serde::Serialize;
     use sui_types::{
         base_types::{move_ascii_str_layout, move_utf8_str_layout, url_layout},
         id::{ID, UID},
     };
 
-    use crate::v2::error::FormatError;
     use crate::v2::value::tests::{enum_, struct_, vector_, MockStore};
+    use crate::v2::{error::FormatError, value::tests::optional_};
 
     const ONE_MB: usize = 1024 * 1024;
 
@@ -242,6 +244,7 @@ mod tests {
             ("ser_bool", "{flag}"),
             ("ser_nums", "{n8}, {n16}, {n32}, {n64}, {n128}, {n256}"),
             ("ser_strs", "{ascii}, {utf8}, {url}"),
+            ("ser_bytes", "{ascii.bytes}, {utf8.bytes}, {url.url.bytes}"),
             ("lit_addr", "{@0x5455}"),
             ("lit_bool", "{false}"),
             (
@@ -274,6 +277,9 @@ mod tests {
                 String("48, 49, 50, 51, 52, 53"),
             ),
             "ser_strs": Ok(
+                String("hello, world, https://example.com"),
+            ),
+            "ser_bytes": Ok(
                 String("hello, world, https://example.com"),
             ),
             "lit_addr": Ok(
@@ -662,6 +668,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_alternate_optional() {
+        let bytes = bcs::to_bytes(&(Some(100u64), None::<u64>)).unwrap();
+        let layout = struct_(
+            "0x1::m::S",
+            vec![("a", optional_(T::U64)), ("b", optional_(T::U64))],
+        );
+
+        let formats = [("some", "{a | 42u64}"), ("none", "{b | 43u64}")];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "some": Ok(
+                String("100"),
+            ),
+            "none": Ok(
+                String("43"),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_dynamic_fields() {
         let parent = AccountAddress::from_str("0x1000").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
@@ -986,7 +1025,363 @@ mod tests {
             ),
             "toobig": Err(
                 TransformInvalid(
-                    "not a timestamp",
+                    "expected unix timestamp in milliseconds",
+                ),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_hex() {
+        let bytes = bcs::to_bytes(&(
+            0x42u8,
+            0x4243u16,
+            0x42434445u32,
+            0x4243444546474849u64,
+            0x42434445464748494a4b4c4d4e4f5051u128,
+            U256::from_str_radix(
+                "42434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061",
+                16,
+            )
+            .unwrap(),
+            AccountAddress::from_str(
+                "0x41403f3e3d3c3b3a393837363534333231300f0e0d0c0b0a0908070605040302",
+            )
+            .unwrap(),
+            vec![0x41u8, 0x40, 0x3a],
+            "ABC",
+        ))
+        .unwrap();
+
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("n8", T::U8),
+                ("n16", T::U16),
+                ("n32", T::U32),
+                ("n64", T::U64),
+                ("n128", T::U128),
+                ("n256", T::U256),
+                ("addr", T::Address),
+                ("bytes", vector_(T::U8)),
+                ("str", T::Struct(Box::new(move_ascii_str_layout()))),
+            ],
+        );
+
+        let formats = [
+            ("n8", "{n8:hex}"),
+            ("n16", "{n16:hex}"),
+            ("n32", "{n32:hex}"),
+            ("n64", "{n64:hex}"),
+            ("n128", "{n128:hex}"),
+            ("n256", "{n256:hex}"),
+            ("addr", "{addr:hex}"),
+            ("bytes", "{bytes:hex}"),
+            ("str", "{str:hex}"),
+            ("str_bytes", "{str.bytes:hex}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "n8": Ok(
+                String("42"),
+            ),
+            "n16": Ok(
+                String("4243"),
+            ),
+            "n32": Ok(
+                String("42434445"),
+            ),
+            "n64": Ok(
+                String("4243444546474849"),
+            ),
+            "n128": Ok(
+                String("42434445464748494a4b4c4d4e4f5051"),
+            ),
+            "n256": Ok(
+                String("42434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061"),
+            ),
+            "addr": Ok(
+                String("41403f3e3d3c3b3a393837363534333231300f0e0d0c0b0a0908070605040302"),
+            ),
+            "bytes": Ok(
+                String("41403a"),
+            ),
+            "str": Ok(
+                String("414243"),
+            ),
+            "str_bytes": Ok(
+                String("414243"),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_url() {
+        let bytes = bcs::to_bytes(&(
+            1234u32,
+            "hello/goodbye world",
+            "🔥",
+            vec![0x3eu8, 0x3f, 0x40, 0x41, 0x42, 0x43],
+        ))
+        .unwrap();
+
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("num", T::U32),
+                ("str", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("emoji", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", T::Struct(Box::new(url_layout()))),
+            ],
+        );
+
+        let formats = [(
+            "url",
+            "https://example.com/?num={num:url}&str={str:url}&emoji={emoji:url}&data={bytes:url}",
+        )];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "url": Ok(
+                String("https://example.com/?num=1234&str=hello%2Fgoodbye%20world&emoji=%F0%9F%94%A5&data=%3E%3F%40ABC"),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_base64() {
+        let bytes = bcs::to_bytes(&00u8).unwrap();
+        let layout = struct_("0x1::m::S", vec![("dummy_field", T::Bool)]);
+
+        let formats = [
+            ("byte", "{0u8:base64}"),
+            ("byte_nopad", "{0u8:base64_nopad}"),
+            ("byte_url", "{0u8:base64url}"),
+            ("byte_url_nopad", "{0u8:base64url_nopad}"),
+            ("long", "{0xf8fbu64:base64}"),
+            ("long_nopad", "{0xf8fbu64:base64_nopad}"),
+            ("long_url", "{0xf8fbu64:base64url}"),
+            ("long_url_nopad", "{0xf8fbu64:base64url_nopad}"),
+            ("str", "{'hello':base64}"),
+            ("str_nopad", "{'hello':base64_nopad}"),
+            ("str_url", "{'hello':base64url}"),
+            ("str_url_nopad", "{'hello':base64url_nopad}"),
+            ("flatland", "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64url}"),
+            ("flatland_nopad", "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64_nopad}"),
+            ("flatland_url", "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64url}"),
+            ("flatland_url_nopad", "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64url_nopad}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "byte": Ok(
+                String("AA=="),
+            ),
+            "byte_nopad": Ok(
+                String("AA"),
+            ),
+            "byte_url": Ok(
+                String("AA=="),
+            ),
+            "byte_url_nopad": Ok(
+                String("AA"),
+            ),
+            "long": Ok(
+                String("+/gAAAAAAAA="),
+            ),
+            "long_nopad": Ok(
+                String("+/gAAAAAAAA"),
+            ),
+            "long_url": Ok(
+                String("-_gAAAAAAAA="),
+            ),
+            "long_url_nopad": Ok(
+                String("-_gAAAAAAAA"),
+            ),
+            "str": Ok(
+                String("aGVsbG8="),
+            ),
+            "str_nopad": Ok(
+                String("aGVsbG8"),
+            ),
+            "str_url": Ok(
+                String("aGVsbG8="),
+            ),
+            "str_url_nopad": Ok(
+                String("aGVsbG8"),
+            ),
+            "flatland": Ok(
+                String("0tGFaqPKhfWCrycZHVcT6lgF7C-YIrMMzORXFwcsGmE="),
+            ),
+            "flatland_nopad": Ok(
+                String("0tGFaqPKhfWCrycZHVcT6lgF7C+YIrMMzORXFwcsGmE"),
+            ),
+            "flatland_url": Ok(
+                String("0tGFaqPKhfWCrycZHVcT6lgF7C-YIrMMzORXFwcsGmE="),
+            ),
+            "flatland_url_nopad": Ok(
+                String("0tGFaqPKhfWCrycZHVcT6lgF7C-YIrMMzORXFwcsGmE"),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_bcs() {
+        let bytes = bcs::to_bytes(&(
+            0x42u8,
+            0x1234u16,
+            0x12345678u32,
+            0x123456789abcdef0u64,
+            "hello",
+            vec![1u8, 2, 3],
+        ))
+        .unwrap();
+
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("n8", T::U8),
+                ("n16", T::U16),
+                ("n32", T::U32),
+                ("n64", T::U64),
+                ("str", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", vector_(T::U8)),
+            ],
+        );
+
+        let formats = [
+            ("s8", "{n8:bcs}"),
+            ("l8", "{0x43u8:bcs}"),
+            ("s16", "{n16:bcs}"),
+            ("l16", "{0x1235u16:bcs}"),
+            ("s32", "{n32:bcs}"),
+            ("l32", "{0x12345679u32:bcs}"),
+            ("s64", "{n64:bcs}"),
+            ("l64", "{0x123456789abcdef1u64:bcs}"),
+            ("sstr", "{str:bcs}"),
+            ("lstr", "{'goodbye':bcs}"),
+            ("sbytes", "{bytes:bcs}"),
+            ("lbytes", "{x'010204':bcs}"),
+            ("hbytes", "{vector[0x41u8, n8, 0x43u8]:bcs}"),
+            ("lstruct", "{0x1::m::S(n8, n16):bcs}"),
+            ("lempty", "{0x1::m::Empty():bcs}"),
+            ("lnone", "{0x1::option::Option<u8>::None#0():bcs}"),
+            ("lsome", "{0x1::option::Option<u8>::Some#1(0x44u8):bcs}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        let actual = |f: &str| output.get(f).unwrap().as_ref().unwrap().as_str().unwrap();
+        fn expect(x: impl Serialize) -> String {
+            STANDARD.encode(bcs::to_bytes(&x).unwrap())
+        }
+
+        assert_eq!(actual("s8"), expect(0x42u8));
+        assert_eq!(actual("l8"), expect(0x43u8));
+        assert_eq!(actual("s16"), expect(0x1234u16));
+        assert_eq!(actual("l16"), expect(0x1235u16));
+        assert_eq!(actual("s32"), expect(0x12345678u32));
+        assert_eq!(actual("l32"), expect(0x12345679u32));
+        assert_eq!(actual("s64"), expect(0x123456789abcdef0u64));
+        assert_eq!(actual("l64"), expect(0x123456789abcdef1u64));
+        assert_eq!(actual("sstr"), expect("hello"));
+        assert_eq!(actual("lstr"), expect("goodbye"));
+        assert_eq!(actual("sbytes"), expect(vec![1u8, 2, 3]));
+        assert_eq!(actual("lbytes"), expect(vec![1u8, 2, 4]));
+        assert_eq!(actual("hbytes"), expect(vec![0x41u8, 0x42, 0x43]));
+        assert_eq!(actual("lstruct"), expect((0x42u8, 0x1234u16)));
+        assert_eq!(actual("lempty"), expect(false));
+        assert_eq!(actual("lnone"), expect(None::<u8>));
+        assert_eq!(actual("lsome"), expect(Some(0x44u8)));
+    }
+
+    #[tokio::test]
+    async fn test_string_hardening() {
+        let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("ascii", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("utf8", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("invalid", T::Struct(Box::new(move_utf8_str_layout()))),
+            ],
+        );
+
+        let formats = [
+            ("ascii", "{ascii}"),
+            ("utf8", "{utf8}"),
+            ("invalid", "{invalid}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "ascii": Ok(
+                String("ascii"),
+            ),
+            "utf8": Ok(
+                String("🔥"),
+            ),
+            "invalid": Err(
+                TransformInvalid(
+                    "expected utf8 bytes",
                 ),
             ),
         }
@@ -1061,10 +1456,31 @@ mod tests {
                         prev: [],
                         tried: [
                             Literal(
+                                "base64",
+                            ),
+                            Literal(
+                                "base64_nopad",
+                            ),
+                            Literal(
+                                "base64url",
+                            ),
+                            Literal(
+                                "base64url_nopad",
+                            ),
+                            Literal(
+                                "bcs",
+                            ),
+                            Literal(
+                                "hex",
+                            ),
+                            Literal(
                                 "str",
                             ),
                             Literal(
                                 "ts",
+                            ),
+                            Literal(
+                                "url",
                             ),
                         ],
                     },
