@@ -3,6 +3,7 @@
 
 use anyhow::{anyhow, Result};
 use move_core_types::language_storage::StructTag;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
@@ -57,12 +58,12 @@ impl CheckpointStateLoader {
         Ok(storage)
     }
 
-    fn load_object_ids_from_file(&self, file_path: &str) -> Result<Vec<ObjectID>> {
+    fn load_object_ids_from_file(&self, file_path: &str) -> Result<HashSet<ObjectID>> {
         println!("Loading object IDs from file: {}", file_path);
         let file = File::open(file_path)
             .map_err(|e| anyhow!("Failed to open object ID file {}: {}", file_path, e))?;
         let reader = BufReader::new(file);
-        let mut object_ids = Vec::new();
+        let mut object_ids = HashSet::new();
 
         for line in reader.lines() {
             let line = line.map_err(|e| anyhow!("Failed to read line from file: {}", e))?;
@@ -72,7 +73,7 @@ impl CheckpointStateLoader {
             }
             let object_id = ObjectID::from_hex_literal(line)
                 .map_err(|e| anyhow!("Invalid object ID '{}': {}", line, e))?;
-            object_ids.push(object_id);
+            object_ids.insert(object_id);
         }
 
         println!("Loaded {} object IDs from file", object_ids.len());
@@ -82,7 +83,7 @@ impl CheckpointStateLoader {
     async fn fetch_objects(
         &self,
         client: &sui_sdk::SuiClient,
-        object_ids: Vec<ObjectID>,
+        object_ids: HashSet<ObjectID>,
     ) -> Result<Vec<Object>> {
         let mut objects = Vec::new();
 
