@@ -337,7 +337,7 @@ pub(super) fn main_reader_lo_task<H: Handler + 'static>(
             return;
         };
 
-        let mut reader_interval = interval(config.interval());
+        let mut reader_interval = interval(config.interval() / 2);
         reader_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         loop {

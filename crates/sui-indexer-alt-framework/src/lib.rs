@@ -1385,10 +1385,10 @@ mod tests {
         .await
         .unwrap();
 
-        // Start a tasked indexer that will ingest from genesis.
+        // Start a tasked indexer that will ingest from genesis to checkpoint 500.
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(0),
-            last_checkpoint: Some(31),
+            last_checkpoint: Some(500),
             pipeline: vec![],
             task: Some("task".to_string()),
             delimiter: Some("@".to_string()),
@@ -1397,7 +1397,7 @@ mod tests {
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: 0,
-            num_checkpoints: 32,
+            num_checkpoints: 501,
             checkpoint_size: 2,
         })
         .await;
@@ -1427,7 +1427,7 @@ mod tests {
                 ConcurrentConfig {
                     pruner: Some(PrunerConfig {
                         interval_ms: 10,
-                        delay_ms: 10,
+                        delay_ms: 1000,
                         retention: 10,
                         max_chunk_size: 10,
                         prune_concurrency: 1,
@@ -1451,45 +1451,35 @@ mod tests {
             )
             .await;
 
-        // Emulate a pruning cycle. Artificially bump the main pipeline's watermarks.
+        // Artificially bump the reader watermark to checkpoint 250. The tasked pipeline should only
+        // commit checkpoints >= 250 once it ticks.
         conn.set_committer_watermark(
             MockCheckpointSequenceNumberHandler::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 30,
+                checkpoint_hi_inclusive: 300,
                 ..Default::default()
             },
         )
         .await
         .unwrap();
-        conn.set_reader_watermark(MockCheckpointSequenceNumberHandler::NAME, 26)
+        conn.set_reader_watermark(MockCheckpointSequenceNumberHandler::NAME, 250)
             .await
-            .unwrap();
-        // Sleep to emulate pruner delay.
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        // And prune data.
-        store
-            .prune_data(MockCheckpointSequenceNumberHandler::NAME, 0, 26)
             .unwrap();
 
         indexer_handle.await.unwrap();
+
         let data = store
             .data
             .get(MockCheckpointSequenceNumberHandler::NAME)
             .unwrap();
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 32);
-        for i in 0..26 {
-            assert!(
-                data.get(&i).is_none(),
-                "Data for checkpoint {} should be none",
-                i
-            );
-        }
-        for i in 26..32 {
-            assert!(
-                data.get(&i).is_some(),
-                "Data for checkpoint {} should be some",
-                i
-            );
-        }
+        // All 500+1 checkpoints should have been ingested.
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 501);
+
+        let ge_250 = data.iter().filter(|e| *e.key() >= 250).count();
+        let lt_250 = data.iter().filter(|e| *e.key() < 250).count();
+        // Checkpoints 250 to 500 inclusive must have been committed.
+        assert_eq!(ge_250, 251);
+        // Lenient check that not all checkpoints < 250 were committed.
+        assert!(lt_250 < 250);
     }
 }
