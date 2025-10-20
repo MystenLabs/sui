@@ -366,7 +366,10 @@ Wait for the next epoch.
 
 #### `Unable to process transaction. Unexpected status code: 403`
 
-Indicates the Sui network responds to an RPC or API request with `HTTP 403: Forbidden` status. This may happen if an RPC provider requires authentication and you do not provide any, the provider has restricted your region or IP address, or the provider has rate limited you by sending too many requests in a given time period.
+Indicates the Sui network responds to an RPC or API request with `HTTP 403: Forbidden` status. This might happen if an RPC provider:
+- Requires authentication and you do not provide any.
+- Has restricted your region or IP address.
+- Has rate limited you by sending too many requests in a given time period.
 
 ##### Solution 
 
