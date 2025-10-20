@@ -40,10 +40,6 @@ impl BigtableArgs {
         self.bigtable_statement_timeout_ms
             .map(Duration::from_millis)
     }
-
-    pub fn app_profile_id(&self) -> Option<String> {
-        self.bigtable_app_profile_id.clone()
-    }
 }
 
 impl BigtableReader {
@@ -70,7 +66,7 @@ impl BigtableReader {
                 bigtable_args.statement_timeout(),
                 client_name,
                 Some(registry),
-                bigtable_args.app_profile_id(),
+                bigtable_args.bigtable_app_profile_id.clone(),
             )
             .await
             .context("Failed to create BigTable client")?,
