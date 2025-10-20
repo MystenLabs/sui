@@ -1738,6 +1738,60 @@ new_stream_head
 settle_events
 	fun
 	0x2::accumulator_settlement
+VecSet
+	public struct
+	0x2::vec_set
+empty
+	public fun
+	0x2::vec_set
+singleton
+	public fun
+	0x2::vec_set
+insert
+	public fun
+	0x2::vec_set
+remove
+	public fun
+	0x2::vec_set
+contains
+	public fun
+	0x2::vec_set
+length
+	public fun
+	0x2::vec_set
+is_empty
+	public fun
+	0x2::vec_set
+into_keys
+	public fun
+	0x2::vec_set
+from_keys
+	public fun
+	0x2::vec_set
+keys
+	public fun
+	0x2::vec_set
+size
+	public fun
+	0x2::vec_set
+Claimed
+	public struct
+	0x2::derived_object
+DerivedObjectKey
+	public struct
+	0x2::derived_object
+ClaimedStatus
+	public enum
+	0x2::derived_object
+claim
+	public fun
+	0x2::derived_object
+exists
+	public fun
+	0x2::derived_object
+derive_address
+	public fun
+	0x2::derived_object
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
@@ -1751,6 +1805,12 @@ JwkId
 	public struct
 	0x2::authenticator_state
 ActiveJwk
+	public struct
+	0x2::authenticator_state
+AddressAliases
+	public struct
+	0x2::authenticator_state
+AliasKey
 	public struct
 	0x2::authenticator_state
 active_jwk_equal
@@ -1791,6 +1851,18 @@ expire_jwks
 	0x2::authenticator_state
 get_active_jwks
 	fun
+	0x2::authenticator_state
+init_aliases
+	entry fun
+	0x2::authenticator_state
+add_alias
+	entry fun
+	0x2::authenticator_state
+set_aliases
+	entry fun
+	0x2::authenticator_state
+remove_alias
+	entry fun
 	0x2::authenticator_state
 Withdrawal
 	public struct
@@ -2149,42 +2221,6 @@ update
 is_one_time_witness
 	public fun
 	0x2::types
-VecSet
-	public struct
-	0x2::vec_set
-empty
-	public fun
-	0x2::vec_set
-singleton
-	public fun
-	0x2::vec_set
-insert
-	public fun
-	0x2::vec_set
-remove
-	public fun
-	0x2::vec_set
-contains
-	public fun
-	0x2::vec_set
-length
-	public fun
-	0x2::vec_set
-is_empty
-	public fun
-	0x2::vec_set
-into_keys
-	public fun
-	0x2::vec_set
-from_keys
-	public fun
-	0x2::vec_set
-keys
-	public fun
-	0x2::vec_set
-size
-	public fun
-	0x2::vec_set
 Table
 	public struct
 	0x2::table
@@ -2569,24 +2605,6 @@ deny_list_remove
 deny_list_contains
 	public fun
 	0x2::coin
-Claimed
-	public struct
-	0x2::derived_object
-DerivedObjectKey
-	public struct
-	0x2::derived_object
-ClaimedStatus
-	public enum
-	0x2::derived_object
-claim
-	public fun
-	0x2::derived_object
-exists
-	public fun
-	0x2::derived_object
-derive_address
-	public fun
-	0x2::derived_object
 CoinRegistry
 	public struct
 	0x2::coin_registry

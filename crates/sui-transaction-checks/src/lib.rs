@@ -212,7 +212,7 @@ mod checked {
             reference_gas_price,
             transaction,
         )?;
-        check_objects(transaction, input_objects)?;
+        check_objects(protocol_config, transaction, input_objects)?;
 
         Ok(gas_status)
     }
@@ -365,7 +365,11 @@ mod checked {
     /// Check all the objects used in the transaction against the database, and ensure
     /// that they are all the correct version and number.
     #[instrument(level = "trace", skip_all)]
-    fn check_objects(transaction: &TransactionData, objects: &InputObjects) -> UserInputResult<()> {
+    fn check_objects(
+        protocol_config: &ProtocolConfig,
+        transaction: &TransactionData,
+        objects: &InputObjects,
+    ) -> UserInputResult<()> {
         // We require that mutable objects cannot show up more than once.
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for object in objects.iter() {
@@ -400,6 +404,7 @@ mod checked {
                     // this object.
                     let system_transaction = transaction.is_system_tx();
                     check_one_object(
+                        protocol_config,
                         &owner_address,
                         input_object_kind,
                         object,
@@ -418,6 +423,7 @@ mod checked {
 
     /// Check one object against a reference
     fn check_one_object(
+        protocol_config: &ProtocolConfig,
         owner: &SuiAddress,
         object_kind: InputObjectKind,
         object: &Object,
@@ -507,7 +513,8 @@ mod checked {
                 id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                 ..
             } => {
-                if system_transaction {
+                if system_transaction || protocol_config.account_aliases() {
+                    // Access to authenticator state object allowed with account aliases feature.
                     return Ok(());
                 } else {
                     return Err(UserInputError::InaccessibleSystemObject {

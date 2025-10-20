@@ -8,17 +8,26 @@ use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::pin_mut;
 use im::hashmap::HashMap as ImHashMap;
 use itertools::{izip, Itertools as _};
+use move_core_types::{
+    identifier::Identifier,
+    language_storage::{StructTag, TypeTag},
+};
+use mysten_common::debug_fatal;
 use mysten_metrics::monitored_scope;
+use nonempty::NonEmpty;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
 use std::sync::Arc;
+use sui_types::authenticator_state::AddressAliases;
+use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
 use sui_types::signature_verification::{
     verify_sender_signed_data_message_signatures, VerifiedDigestCache,
 };
-use sui_types::transaction::SenderSignedData;
+use sui_types::storage::ObjectStore;
+use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
 use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
@@ -29,6 +38,7 @@ use sui_types::{
     signature::VerifyParams,
     transaction::{CertifiedTransaction, VerifiedCertificate},
 };
+use sui_types::{derived_object, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS};
 use tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::{
@@ -36,6 +46,7 @@ use tokio::{
     time::{timeout, Duration},
 };
 use tracing::debug;
+
 // Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
 const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(10);
 
@@ -92,6 +103,7 @@ impl CertBuffer {
 /// - User signed data - caching.
 pub struct SignatureVerifier {
     committee: Arc<Committee>,
+    object_store: Arc<dyn ObjectStore + Send + Sync>,
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
     zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
@@ -105,6 +117,9 @@ pub struct SignatureVerifier {
 
     /// Params that contains a list of supported providers for ZKLogin and the environment (prod/test) the code runs in.
     zk_login_params: ZkLoginParams,
+
+    /// If true, uses account aliases during signature verification.
+    enable_account_aliases: bool,
 
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<SignatureVerifierMetrics>,
@@ -132,6 +147,7 @@ struct ZkLoginParams {
 impl SignatureVerifier {
     pub fn new_with_batch_size(
         committee: Arc<Committee>,
+        object_store: Arc<dyn ObjectStore + Send + Sync>,
         batch_size: usize,
         metrics: Arc<SignatureVerifierMetrics>,
         supported_providers: Vec<OIDCProvider>,
@@ -141,9 +157,11 @@ impl SignatureVerifier {
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
+        enable_account_aliases: bool,
     ) -> Self {
         Self {
             committee,
+            object_store,
             certificate_cache: VerifiedDigestCache::new(
                 metrics.certificate_signatures_cache_hits.clone(),
                 metrics.certificate_signatures_cache_misses.clone(),
@@ -160,6 +178,7 @@ impl SignatureVerifier {
                 metrics.zklogin_inputs_cache_evictions.clone(),
             )),
             jwks: Default::default(),
+            enable_account_aliases,
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
             zk_login_params: ZkLoginParams {
@@ -176,6 +195,7 @@ impl SignatureVerifier {
 
     pub fn new(
         committee: Arc<Committee>,
+        object_store: Arc<dyn ObjectStore + Send + Sync>,
         metrics: Arc<SignatureVerifierMetrics>,
         supported_providers: Vec<OIDCProvider>,
         zklogin_env: ZkLoginEnv,
@@ -184,9 +204,11 @@ impl SignatureVerifier {
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
+        enable_account_aliases: bool,
     ) -> Self {
         Self::new_with_batch_size(
             committee,
+            object_store,
             MAX_BATCH_SIZE,
             metrics,
             supported_providers,
@@ -196,6 +218,7 @@ impl SignatureVerifier {
             accept_passkey_in_multisig,
             zklogin_max_epoch_upper_bound_delta,
             additional_multisig_checks,
+            enable_account_aliases,
         )
     }
 
@@ -212,8 +235,9 @@ impl SignatureVerifier {
 
         // Verify only the user sigs of certificates that were not cached already, since whenever we
         // insert a certificate into the cache, it is already verified.
+        // Aliases are only allowed via MFP, so CertifiedTransaction must have no aliases.
         for cert in &certs {
-            self.verify_tx(cert.data())?;
+            self.verify_tx_require_no_aliases(cert.data())?;
         }
         batch_verify_all_certificates_and_checkpoints(&self.committee, &certs, &checkpoints)?;
         self.certificate_cache
@@ -227,7 +251,8 @@ impl SignatureVerifier {
         if self.certificate_cache.is_cached(&cert_digest) {
             return Ok(VerifiedCertificate::new_unchecked(cert));
         }
-        self.verify_tx(cert.data())?;
+        // Aliases are only allowed via MFP, so CertifiedTransaction must have no aliases.
+        self.verify_tx_require_no_aliases(cert.data())?;
         self.verify_cert_skip_cache(cert)
             .await
             .tap_ok(|_| self.certificate_cache.cache_digest(cert_digest))
@@ -390,7 +415,101 @@ impl SignatureVerifier {
         self.jwks.read().clone()
     }
 
-    pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
+    pub fn verify_tx_with_current_aliases(
+        &self,
+        signed_tx: &SenderSignedData,
+    ) -> SuiResult<Vec<(SuiAddress, Option<SequenceNumber>)>> {
+        let alias_key_type = TypeTag::Struct(Box::new(StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: Identifier::new("authenticator_state").unwrap(),
+            name: Identifier::new("AliasKey").unwrap(),
+            type_params: vec![],
+        }));
+        let mut versions = Vec::new();
+        let mut aliases = Vec::new();
+
+        // Look up aliases for each address at the current version.
+        let signers = signed_tx.intent_message().value.required_signers();
+        for signer in signers {
+            if !self.enable_account_aliases {
+                versions.push((signer, None));
+                aliases.push((signer, NonEmpty::singleton(signer)));
+            } else {
+                // Look up aliases for the signer using the derived object address.
+                let key_bytes = bcs::to_bytes(&signer).unwrap();
+                let Ok(address_aliases_id) = derived_object::derive_object_id(
+                    SuiAddress::from(SUI_AUTHENTICATOR_STATE_OBJECT_ID),
+                    &alias_key_type,
+                    &key_bytes,
+                ) else {
+                    debug_fatal!("failed to compute derived object id for alias state");
+                    return Err(SuiError::Unknown(
+                        "failed to compute derived object id for alias state".to_string(),
+                    ));
+                };
+                let address_aliases = self.object_store.get_object(&address_aliases_id);
+
+                versions.push((signer, address_aliases.as_ref().map(|a| a.version())));
+                aliases.push((
+                    signer,
+                    address_aliases
+                        .map(|obj| {
+                            let move_obj = obj
+                                .data
+                                .try_as_move()
+                                .expect("AddressAliases object must be a MoveObject");
+                            let address_aliases: AddressAliases =
+                                bcs::from_bytes(move_obj.contents())
+                                    .expect("failed to parse AddressAliases object");
+                            NonEmpty::from_vec(address_aliases.aliases.contents.clone())
+                                .unwrap_or_else(|| {
+                                    debug_fatal!(
+                                    "AddressAliases struct has empty aliases field for signer {}",
+                                    signer
+                                );
+                                    NonEmpty::singleton(signer)
+                                })
+                        })
+                        .unwrap_or(NonEmpty::singleton(signer)),
+                ));
+            }
+        }
+
+        self.verify_tx(signed_tx, aliases)?;
+        Ok(versions)
+    }
+
+    pub fn verify_tx_require_alias_versions(
+        &self,
+        signed_tx: &SenderSignedData,
+        // Note: this must be in the same order as `required_signers` of the given tx.
+        versions: Vec<(SuiAddress, Option<SequenceNumber>)>,
+    ) -> SuiResult {
+        let current_aliases = self.verify_tx_with_current_aliases(signed_tx)?;
+        if current_aliases != versions {
+            return Err(SuiError::AliasesChanged);
+        }
+        Ok(())
+    }
+
+    pub fn verify_tx_require_no_aliases(&self, signed_tx: &SenderSignedData) -> SuiResult {
+        self.verify_tx_require_alias_versions(
+            signed_tx,
+            signed_tx
+                .intent_message()
+                .value
+                .required_signers()
+                .iter()
+                .map(|s| (*s, None))
+                .collect(),
+        )
+    }
+
+    fn verify_tx(
+        &self,
+        signed_tx: &SenderSignedData,
+        aliased_addresses: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
+    ) -> SuiResult {
         self.signed_data_cache.is_verified(
             signed_tx.full_message_digest(),
             || {
@@ -410,6 +529,7 @@ impl SignatureVerifier {
                     self.committee.epoch(),
                     &verify_params,
                     self.zklogin_inputs_cache.clone(),
+                    aliased_addresses,
                 )
             },
             || Ok(()),

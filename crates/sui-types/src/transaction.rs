@@ -2242,7 +2242,7 @@ pub trait TransactionDataAPI {
     fn into_kind(self) -> TransactionKind;
 
     /// Transaction signer and Gas owner
-    fn signers(&self) -> NonEmpty<SuiAddress>;
+    fn required_signers(&self) -> NonEmpty<SuiAddress>;
 
     fn gas_data(&self) -> &GasData;
 
@@ -2328,7 +2328,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     /// Transaction signer and Gas owner
-    fn signers(&self) -> NonEmpty<SuiAddress> {
+    fn required_signers(&self) -> NonEmpty<SuiAddress> {
         let mut signers = nonempty![self.sender];
         if self.gas_owner() != self.sender {
             signers.push(self.gas_owner());
@@ -3257,6 +3257,7 @@ impl Transaction {
             current_epoch,
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
+            vec![],
         )
     }
 
@@ -3281,6 +3282,7 @@ impl SignedTransaction {
             committee.epoch(),
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
+            vec![],
         )?;
 
         self.auth_sig().verify_secure(
@@ -3327,6 +3329,7 @@ impl CertifiedTransaction {
             committee.epoch(),
             verify_params,
             zklogin_inputs_cache,
+            vec![],
         )?;
         self.auth_sig().verify_secure(
             self.data(),
@@ -3359,6 +3362,86 @@ impl CertifiedTransaction {
 
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WithAliases<T>(T, Vec<(SuiAddress, Option<SequenceNumber>)>);
+
+impl<T> WithAliases<T> {
+    pub fn new(tx: T, aliases: Vec<(SuiAddress, Option<SequenceNumber>)>) -> Self {
+        Self(tx, aliases)
+    }
+
+    pub fn tx(&self) -> &T {
+        &self.0
+    }
+
+    pub fn aliases(&self) -> &Vec<(SuiAddress, Option<SequenceNumber>)> {
+        &self.1
+    }
+
+    pub fn into_tx(self) -> T {
+        self.0
+    }
+
+    pub fn into_aliases(self) -> Vec<(SuiAddress, Option<SequenceNumber>)> {
+        self.1
+    }
+
+    pub fn into_inner(self) -> (T, Vec<(SuiAddress, Option<SequenceNumber>)>) {
+        (self.0, self.1)
+    }
+}
+
+impl<T: Message, S> WithAliases<VerifiedEnvelope<T, S>> {
+    /// Analogous to VerifiedEnvelope::serializable.
+    pub fn serializable(self) -> WithAliases<TrustedEnvelope<T, S>> {
+        WithAliases(self.0.serializable(), self.1)
+    }
+}
+
+impl<S> WithAliases<Envelope<SenderSignedData, S>> {
+    pub fn no_aliases(tx: Envelope<SenderSignedData, S>) -> Self {
+        let no_aliases = tx
+            .intent_message()
+            .value
+            .required_signers()
+            .into_iter()
+            .map(|s| (s, None))
+            .collect();
+        Self::new(tx, no_aliases)
+    }
+}
+
+impl<S> WithAliases<VerifiedEnvelope<SenderSignedData, S>> {
+    pub fn no_aliases(tx: VerifiedEnvelope<SenderSignedData, S>) -> Self {
+        let no_aliases = tx
+            .intent_message()
+            .value
+            .required_signers()
+            .into_iter()
+            .map(|s| (s, None))
+            .collect();
+        Self::new(tx, no_aliases)
+    }
+}
+
+pub type TransactionWithAliases = WithAliases<Transaction>;
+pub type VerifiedTransactionWithAliases = WithAliases<VerifiedTransaction>;
+pub type TrustedTransactionWithAliases = WithAliases<TrustedTransaction>;
+
+impl<T: Message, S> From<WithAliases<VerifiedEnvelope<T, S>>> for WithAliases<Envelope<T, S>> {
+    fn from(value: WithAliases<VerifiedEnvelope<T, S>>) -> Self {
+        Self(value.0.into(), value.1)
+    }
+}
+
+impl<T: Message, S> From<WithAliases<TrustedEnvelope<T, S>>>
+    for WithAliases<VerifiedEnvelope<T, S>>
+{
+    fn from(value: WithAliases<TrustedEnvelope<T, S>>) -> Self {
+        Self(value.0.into(), value.1)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
 pub enum InputObjectKind {
@@ -3962,7 +4045,7 @@ impl TransactionKey {
     pub fn unwrap_digest(&self) -> &TransactionDigest {
         match self {
             TransactionKey::Digest(d) => d,
-            _ => panic!("called expect_digest on a non-Digest TransactionKey: {self:?}"),
+            _ => panic!("called unwrap_digest on a non-Digest TransactionKey: {self:?}"),
         }
     }
 
