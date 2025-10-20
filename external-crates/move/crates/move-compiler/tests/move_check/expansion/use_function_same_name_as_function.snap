@@ -28,4 +28,4 @@ error[E02001]: duplicate declaration, item, or annotation
    │         --- Module member or alias previously defined here
 16 │     }
 17 │     use 0x2::X::u as bar;
-   │                      ^^^ Duplicate alias 'bar'. Module aliases must be unique within a given namespace
+   │                      ^^^ Duplicate module member 'bar'. Top level names in a namespace must be unique

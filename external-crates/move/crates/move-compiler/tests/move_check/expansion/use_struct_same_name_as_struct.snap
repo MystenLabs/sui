@@ -38,7 +38,7 @@ error[E02001]: duplicate declaration, item, or annotation
    │            - Module member or alias previously defined here
 14 │ 
 15 │     use 0x2::X::{R, R as R2};
-   │                  ^ Duplicate alias 'R'. Module aliases must be unique within a given namespace
+   │                  ^ Duplicate module member 'R'. Top level names in a namespace must be unique
 
 warning[W09001]: unused alias
    ┌─ tests/move_check/expansion/use_struct_same_name_as_struct.move:15:26
@@ -55,4 +55,4 @@ error[E02001]: duplicate declaration, item, or annotation
    │            -- Module member or alias previously defined here
    ·
 15 │     use 0x2::X::{R, R as R2};
-   │                          ^^ Duplicate alias 'R2'. Module aliases must be unique within a given namespace
+   │                          ^^ Duplicate module member 'R2'. Top level names in a namespace must be unique

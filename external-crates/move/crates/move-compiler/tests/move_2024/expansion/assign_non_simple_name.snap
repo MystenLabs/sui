@@ -19,7 +19,7 @@ error[E02001]: duplicate declaration, item, or annotation
 5 │     use 0x42::X;
   │               - Module member or alias previously defined here
 6 │     use 0x42::X::S as X;
-  │                       ^ Duplicate alias 'X'. Module aliases must be unique within a given namespace
+  │                       ^ Duplicate module member 'X'. Top level names in a namespace must be unique
 
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/expansion/assign_non_simple_name.move:8:5

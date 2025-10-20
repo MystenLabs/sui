@@ -2051,9 +2051,9 @@ fn module_use(
                     };
                 if let Err(old_loc) = acc.add_member_alias(alias, mident, member, member_kind) {
                     if from_extension {
-                        extension_duplicate_module_alias(context, old_loc, alias)
+                        extension_duplicate_module_member(context, old_loc, alias)
                     } else {
-                        duplicate_module_alias(context, old_loc, alias)
+                        duplicate_module_member(context, old_loc, alias)
                     }
                 }
                 if matches!(member_kind, ModuleMemberKind::Function) {

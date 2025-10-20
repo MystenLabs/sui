@@ -17,7 +17,7 @@ error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/parser/nested_module_use_invalid.move:18:72
    │
 18 │     use 0x42::{a::{A, Self as q, foo as bar}, b::{Self as q, B, baz as bar}};
-   │                                         ---                            ^^^ Duplicate alias 'bar'. Module aliases must be unique within a given namespace
+   │                                         ---                            ^^^ Duplicate module member 'bar'. Top level names in a namespace must be unique
    │                                         │                               
    │                                         Module member or alias previously defined here
 

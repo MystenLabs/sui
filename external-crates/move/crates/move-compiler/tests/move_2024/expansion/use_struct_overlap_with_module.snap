@@ -17,7 +17,7 @@ error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/expansion/use_struct_overlap_with_module.move:6:29
   │
 6 │     use 0x2::X::{Self, S as X};
-  │                  ----       ^ Duplicate alias 'X'. Module aliases must be unique within a given namespace
+  │                  ----       ^ Duplicate module member 'X'. Top level names in a namespace must be unique
   │                  │           
   │                  Module member or alias previously defined here
 

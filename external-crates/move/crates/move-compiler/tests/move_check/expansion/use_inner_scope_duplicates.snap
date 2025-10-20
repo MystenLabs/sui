@@ -17,7 +17,7 @@ error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_inner_scope_duplicates.move:13:43
    │
 13 │         use 0x2::M::{check as foo, num as foo};
-   │                               ---         ^^^ Duplicate alias 'foo'. Module aliases must be unique within a given namespace
+   │                               ---         ^^^ Duplicate module member 'foo'. Top level names in a namespace must be unique
    │                               │            
    │                               Module member or alias previously defined here
 

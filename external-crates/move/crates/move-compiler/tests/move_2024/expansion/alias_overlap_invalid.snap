@@ -11,7 +11,7 @@ error[E02001]: duplicate declaration, item, or annotation
 8 │     use a::S;
   │            - Module member or alias previously defined here
 9 │     use a::S::S; // ERROR
-  │               ^ Duplicate alias 'S'. Module aliases must be unique within a given namespace
+  │               ^ Duplicate module member 'S'. Top level names in a namespace must be unique
 
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_2024/expansion/alias_overlap_invalid.move:14:19

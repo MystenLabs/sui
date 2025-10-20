@@ -33,4 +33,4 @@ error[E02001]: duplicate declaration, item, or annotation
 14 │     struct Bar {}
    │            --- Module member or alias previously defined here
 15 │     use 0x2::X::u as Bar;
-   │                      ^^^ Duplicate alias 'Bar'. Module aliases must be unique within a given namespace
+   │                      ^^^ Duplicate module member 'Bar'. Top level names in a namespace must be unique
