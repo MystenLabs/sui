@@ -401,7 +401,7 @@ pub(crate) mod tests {
     use std::collections::BTreeMap;
 
     use move_core_types::annotated_value::{
-        MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout as T,
+        MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout as L,
     };
     use move_core_types::identifier::Identifier;
     use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, Field};
@@ -445,10 +445,10 @@ pub(crate) mod tests {
             })
             .unwrap();
 
-            let field_layout = T::Struct(Box::new(S {
+            let field_layout = L::Struct(Box::new(S {
                 type_: DynamicFieldInfo::dynamic_field_type(name_type, value_type),
                 fields: vec![
-                    F::new(I::new("id").unwrap(), T::Struct(Box::new(UID::layout()))),
+                    F::new(I::new("id").unwrap(), L::Struct(Box::new(UID::layout()))),
                     F::new(I::new("name").unwrap(), name_layout),
                     F::new(I::new("value").unwrap(), value_layout),
                 ],
@@ -492,17 +492,17 @@ pub(crate) mod tests {
             })
             .unwrap();
 
-            let wrapper_layout = T::Struct(Box::new(S {
+            let wrapper_layout = L::Struct(Box::new(S {
                 type_: wrap_type.clone(),
                 fields: vec![F::new(I::new("name").unwrap(), name_layout)],
             }));
 
-            let field_layout = T::Struct(Box::new(S {
+            let field_layout = L::Struct(Box::new(S {
                 type_: DynamicFieldInfo::dynamic_field_type(wrap_type.into(), ID::type_().into()),
                 fields: vec![
-                    F::new(I::new("id").unwrap(), T::Struct(Box::new(UID::layout()))),
+                    F::new(I::new("id").unwrap(), L::Struct(Box::new(UID::layout()))),
                     F::new(I::new("name").unwrap(), wrapper_layout),
-                    F::new(I::new("value").unwrap(), T::Struct(Box::new(ID::layout()))),
+                    F::new(I::new("value").unwrap(), L::Struct(Box::new(ID::layout()))),
                 ],
             }));
 
