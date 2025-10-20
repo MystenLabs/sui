@@ -22,7 +22,7 @@ use crate::unit_test_utils::{
 };
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, SuiErrorKind};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 
 use std::collections::BTreeSet;
@@ -834,8 +834,8 @@ async fn test_authority_txn_signing_pushback() {
         .handle_transaction_for_benchmarking(tx.clone())
         .await;
     assert!(matches!(
-        SuiError::from(response.err().unwrap()),
-        SuiError::ValidatorOverloadedRetryAfter { .. }
+        SuiError::from(response.err().unwrap()).into_inner(),
+        SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
     ));
 
     // Check that the input object should be locked by the above transaction.
@@ -848,14 +848,15 @@ async fn test_authority_txn_signing_pushback() {
 
     // Send the same txn again. Although objects are locked, since authority is in load shedding mode,
     // it should still pushback the transaction.
+    let error: SuiError = validator_service
+        .handle_transaction_for_benchmarking(tx.clone())
+        .await
+        .err()
+        .unwrap()
+        .into();
     assert!(matches!(
-        validator_service
-            .handle_transaction_for_benchmarking(tx.clone())
-            .await
-            .err()
-            .unwrap()
-            .into(),
-        SuiError::ValidatorOverloadedRetryAfter { .. }
+        error.into_inner(),
+        SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
     ));
 
     // Send another transaction, that send the same object to a different recipient.
@@ -869,14 +870,15 @@ async fn test_authority_txn_signing_pushback() {
         recipient2,
         rgp,
     );
+    let error: SuiError = validator_service
+        .handle_transaction_for_benchmarking(tx2)
+        .await
+        .err()
+        .unwrap()
+        .into();
     assert!(matches!(
-        validator_service
-            .handle_transaction_for_benchmarking(tx2)
-            .await
-            .err()
-            .unwrap()
-            .into(),
-        SuiError::ObjectLockConflict { .. }
+        error.into_inner(),
+        SuiErrorKind::ObjectLockConflict { .. }
     ));
 
     // Clear the authority overload status.
@@ -979,14 +981,15 @@ async fn test_authority_txn_execution_pushback() {
     .unwrap();
 
     // Ask the validator to execute the certificate, it should fail with ValidatorOverloadedRetryAfter error.
+    let error: SuiError = validator_service
+        .execute_certificate_for_testing(cert.clone())
+        .await
+        .err()
+        .unwrap()
+        .into();
     assert!(matches!(
-        validator_service
-            .execute_certificate_for_testing(cert.clone())
-            .await
-            .err()
-            .unwrap()
-            .into(),
-        SuiError::ValidatorOverloadedRetryAfter { .. }
+        error.into_inner(),
+        SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
     ));
 
     // Clear the validator overload status and retry the certificate. It should succeed.

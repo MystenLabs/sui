@@ -17,7 +17,7 @@ use sui_config::genesis::Genesis;
 use sui_types::{
     committee::EpochId,
     crypto::AuthorityKeyPair,
-    error::SuiError,
+    error::{SuiError, SuiErrorKind},
     executable_transaction::VerifiedExecutableTransaction,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     messages_consensus::ConsensusPosition,
@@ -83,16 +83,17 @@ impl AuthorityAPI for LocalAuthorityClient {
         let raw_request = request.into_raw()?;
         // TODO(fastpath): handle multiple transactions.
         if raw_request.transactions.len() != 1 {
-            return Err(SuiError::UnsupportedFeatureError {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: format!(
                     "Expected exactly 1 transaction in request, got {}",
                     raw_request.transactions.len()
                 ),
-            });
+            }
+            .into());
         }
 
         let deserialized_transaction = bcs::from_bytes::<Transaction>(&raw_request.transactions[0])
-            .map_err(|e| SuiError::TransactionDeserializationError {
+            .map_err(|e| SuiErrorKind::TransactionDeserializationError {
                 error: e.to_string(),
             })?;
         let transaction = epoch_store
@@ -100,14 +101,16 @@ impl AuthorityAPI for LocalAuthorityClient {
             .map(|_| VerifiedTransaction::new_from_verified(deserialized_transaction))?;
         state.handle_vote_transaction(&epoch_store, transaction.clone())?;
         if self.fault_config.fail_after_vote_transaction {
-            return Err(SuiError::GenericAuthorityError {
+            return Err(SuiErrorKind::GenericAuthorityError {
                 error: "Mock error after vote transaction in submit_transaction".to_owned(),
-            });
+            }
+            .into());
         }
         if let Some(duration) = self.fault_config.overload_retry_after_vote_transaction {
-            return Err(SuiError::ValidatorOverloadedRetryAfter {
+            return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
                 retry_after_secs: duration.as_secs(),
-            });
+            }
+            .into());
         }
 
         // No submission to consensus is needed for test authority client, return
@@ -149,14 +152,16 @@ impl AuthorityAPI for LocalAuthorityClient {
             .map(|_| VerifiedTransaction::new_from_verified(transaction))?;
         let result = state.handle_transaction(&epoch_store, transaction).await;
         if self.fault_config.fail_after_handle_transaction {
-            return Err(SuiError::GenericAuthorityError {
+            return Err(SuiErrorKind::GenericAuthorityError {
                 error: "Mock error after handle_transaction".to_owned(),
-            });
+            }
+            .into());
         }
         if let Some(duration) = self.fault_config.overload_retry_after_handle_transaction {
-            return Err(SuiError::ValidatorOverloadedRetryAfter {
+            return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
                 retry_after_secs: duration.as_secs(),
-            });
+            }
+            .into());
         }
         result
     }
@@ -287,9 +292,10 @@ impl LocalAuthorityClient {
         fault_config: LocalAuthorityClientFaultConfig,
     ) -> Result<HandleCertificateResponseV3, SuiError> {
         if fault_config.fail_before_handle_confirmation {
-            return Err(SuiError::GenericAuthorityError {
+            return Err(SuiErrorKind::GenericAuthorityError {
                 error: "Mock error before handle_confirmation_transaction".to_owned(),
-            });
+            }
+            .into());
         }
         // Check existing effects before verifying the cert to allow querying certs finalized
         // from previous epochs.
@@ -329,9 +335,10 @@ impl LocalAuthorityClient {
         };
 
         if fault_config.fail_after_handle_confirmation {
-            return Err(SuiError::GenericAuthorityError {
+            return Err(SuiErrorKind::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
-            });
+            }
+            .into());
         }
 
         let input_objects = request
@@ -453,9 +460,10 @@ impl AuthorityAPI for MockAuthorityApi {
             tokio::time::sleep(self.delay).await;
         }
 
-        Err(SuiError::TransactionNotFound {
+        Err(SuiErrorKind::TransactionNotFound {
             digest: request.transaction_digest,
-        })
+        }
+        .into())
     }
 
     async fn handle_checkpoint(
@@ -602,8 +610,8 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
 impl HandleTransactionTestAuthorityClient {
     pub fn new() -> Self {
         Self {
-            tx_info_resp_to_return: Err(SuiError::Unknown("".to_string())),
-            cert_resp_to_return: Err(SuiError::Unknown("".to_string())),
+            tx_info_resp_to_return: Err(SuiErrorKind::Unknown("".to_string()).into()),
+            cert_resp_to_return: Err(SuiErrorKind::Unknown("".to_string()).into()),
             sleep_duration_before_responding: None,
         }
     }
@@ -617,19 +625,19 @@ impl HandleTransactionTestAuthorityClient {
     }
 
     pub fn reset_tx_info_response(&mut self) {
-        self.tx_info_resp_to_return = Err(SuiError::Unknown("".to_string()));
+        self.tx_info_resp_to_return = Err(SuiErrorKind::Unknown("".to_string()).into());
     }
 
     pub fn set_cert_resp_to_return(&mut self, resp: HandleCertificateResponseV2) {
         self.cert_resp_to_return = Ok(resp);
     }
 
-    pub fn set_cert_resp_to_return_error(&mut self, error: SuiError) {
-        self.cert_resp_to_return = Err(error);
+    pub fn set_cert_resp_to_return_error(&mut self, error: impl Into<SuiError>) {
+        self.cert_resp_to_return = Err(error.into());
     }
 
     pub fn reset_cert_response(&mut self) {
-        self.cert_resp_to_return = Err(SuiError::Unknown("".to_string()));
+        self.cert_resp_to_return = Err(SuiErrorKind::Unknown("".to_string()).into());
     }
 
     pub fn set_sleep_duration_before_responding(&mut self, duration: Duration) {

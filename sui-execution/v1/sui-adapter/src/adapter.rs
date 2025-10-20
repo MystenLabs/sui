@@ -21,7 +21,7 @@ mod checked {
         native_functions::NativeFunctionTable,
     };
     use sui_move_natives::object_runtime;
-    use sui_types::metrics::BytecodeVerifierMetrics;
+    use sui_types::{error::SuiErrorKind, metrics::BytecodeVerifierMetrics};
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
 
@@ -66,7 +66,7 @@ mod checked {
                     .deprecate_global_storage_ops_during_deserialization(),
             },
         )
-        .map_err(|_| SuiError::ExecutionInvariantViolation)
+        .map_err(|_| SuiErrorKind::ExecutionInvariantViolation.into())
     }
 
     pub fn new_native_extensions<'r>(
@@ -164,9 +164,10 @@ mod checked {
                             BytecodeVerifierMetrics::TIMEOUT_TAG,
                         ])
                         .inc();
-                    return Err(SuiError::ModuleVerificationFailure {
+                    return Err(SuiErrorKind::ModuleVerificationFailure {
                         error: format!("Verification timedout: {}", e),
-                    });
+                    }
+                    .into());
                 };
             } else if let Err(err) =
                 sui_verify_module_metered_check_timeout_only(module, &BTreeMap::new(), meter)

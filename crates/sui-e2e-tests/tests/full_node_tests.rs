@@ -32,7 +32,7 @@ use sui_types::base_types::{FullObjectRef, ObjectID, SuiAddress, TransactionDige
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
@@ -1255,7 +1255,7 @@ async fn test_access_old_object_pruned() {
                         )
                         .await
                         .unwrap_err(),
-                    SuiError::UserInputError {
+                    SuiErrorKind::UserInputError {
                         error: UserInputError::ObjectVersionUnavailableForConsumption {
                             provided_obj_ref: gas_object,
                             current_version: new_gas_version,

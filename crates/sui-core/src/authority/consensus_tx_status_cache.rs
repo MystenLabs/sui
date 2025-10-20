@@ -7,7 +7,7 @@ use consensus_types::block::Round;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use sui_types::{
-    error::{SuiError, SuiResult},
+    error::{SuiErrorKind, SuiResult},
     messages_consensus::ConsensusPosition,
 };
 use tokio::sync::watch;
@@ -263,10 +263,11 @@ impl ConsensusTxStatusCache {
             if position.block.round
                 > last_committed_leader_round + CONSENSUS_STATUS_RETENTION_ROUNDS
             {
-                return Err(SuiError::ValidatorConsensusLagging {
+                return Err(SuiErrorKind::ValidatorConsensusLagging {
                     round: position.block.round,
                     last_committed_round: last_committed_leader_round,
-                });
+                }
+                .into());
             }
         }
         Ok(())

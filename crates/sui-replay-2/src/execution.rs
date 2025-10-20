@@ -38,7 +38,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
-    error::{ExecutionError, SuiError, SuiResult},
+    error::{ExecutionError, SuiErrorKind, SuiResult},
     execution_params::{get_early_execution_error, BalanceWithdrawStatus, ExecutionOrEarlyError},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -642,7 +642,7 @@ impl ReplayStore<'_> {
                 object_id: *object_id,
                 version_query: VersionQuery::Version(version.value()),
             }])
-            .map_err(|e| SuiError::Storage(e.to_string()))
+            .map_err(|e| SuiErrorKind::Storage(e.to_string()))
             .ok()?
             .into_iter()
             .next()?
@@ -684,7 +684,7 @@ impl BackingPackageStore for ReplayStore<'_> {
         let package = self
             .store
             .get_objects(&[object_key])
-            .map_err(|e| SuiError::Storage(e.to_string()))?;
+            .map_err(|e| SuiErrorKind::Storage(e.to_string()))?;
         debug_assert!(
             package.len() == 1,
             "Expected one package object for {}",
@@ -718,7 +718,7 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
                         object_id: *object_id,
                         version_query: VersionQuery::AtCheckpoint(self.checkpoint),
                     }])
-                    .map_err(|e| SuiError::Storage(e.to_string()))
+                    .map_err(|e| SuiErrorKind::Storage(e.to_string()))
                     .ok()?
                     .into_iter()
                     .next()?
@@ -766,7 +766,7 @@ impl ChildObjectResolver for ReplayStore<'_> {
         let object = self
             .store
             .get_objects(&[object_key])
-            .map_err(|e| SuiError::Storage(e.to_string()))?;
+            .map_err(|e| SuiErrorKind::Storage(e.to_string()))?;
         debug_assert!(object.len() == 1, "Expected one object for {}", child,);
         let object = object
             .into_iter()

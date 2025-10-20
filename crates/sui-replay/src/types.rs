@@ -14,7 +14,7 @@ use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_sdk::error::Error as SuiRpcError;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
-use sui_types::error::{SuiError, SuiObjectResponseError, SuiResult, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, SuiObjectResponseError, SuiResult, UserInputError};
 use sui_types::object::Object;
 use sui_types::transaction::{InputObjectKind, SenderSignedData, TransactionKind};
 use thiserror::Error;
@@ -225,7 +225,13 @@ impl From<SuiObjectResponseError> for ReplayEngineError {
 
 impl From<ReplayEngineError> for SuiError {
     fn from(err: ReplayEngineError) -> Self {
-        SuiError::Unknown(format!("{:#?}", err))
+        SuiError::from(SuiErrorKind::from(err))
+    }
+}
+
+impl From<ReplayEngineError> for SuiErrorKind {
+    fn from(err: ReplayEngineError) -> Self {
+        SuiErrorKind::Unknown(format!("{:#?}", err))
     }
 }
 
@@ -234,6 +240,13 @@ impl From<SuiError> for ReplayEngineError {
         ReplayEngineError::SuiError { err }
     }
 }
+
+impl From<SuiErrorKind> for ReplayEngineError {
+    fn from(err: SuiErrorKind) -> Self {
+        SuiError::from(err).into()
+    }
+}
+
 impl From<SuiRpcError> for ReplayEngineError {
     fn from(err: SuiRpcError) -> Self {
         match err {

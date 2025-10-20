@@ -9,7 +9,7 @@ use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     digests::ObjectDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
-    error::{SuiError, UserInputError},
+    error::{SuiError, SuiErrorKind, UserInputError},
     execution_status::{ExecutionFailureStatus, ExecutionStatus},
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -359,7 +359,7 @@ async fn test_tto_intersection_input_and_receiving_objects() {
         let child_receiving_arg = CallArg::Object(ObjectArg::Receiving(child.0));
 
         // Duplicate object reference between receiving and input object arguments.
-        let SuiError::UserInputError { error } = runner
+        let SuiErrorKind::UserInputError { error } = runner
             .signing_error({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -372,13 +372,13 @@ async fn test_tto_intersection_input_and_receiving_objects() {
                 built.inputs.push(parent_receiving_arg);
                 built
             })
-            .await else {
+            .await.into_inner() else {
                 panic!("expected signing error");
             };
         assert!(matches!(error, UserInputError::DuplicateObjectRefInput));
 
         // Duplicate object reference in receiving object arguments.
-        let SuiError::UserInputError { error } = runner
+        let SuiErrorKind::UserInputError { error } = runner
             .signing_error({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -391,7 +391,7 @@ async fn test_tto_intersection_input_and_receiving_objects() {
                 built.inputs.push(child_receiving_arg);
                 built
             })
-            .await else {
+            .await.into_inner() else {
                 panic!("expected signing error");
             };
         assert!(matches!(error, UserInputError::DuplicateObjectRefInput));
@@ -488,7 +488,7 @@ async fn test_tto_invalid_receiving_arguments() {
         ];
 
         for (i, (mutate, expect)) in mutations.into_iter().enumerate() {
-            let SuiError::UserInputError { error } = runner.signing_error({
+            let SuiErrorKind::UserInputError { error } = runner.signing_error({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
                 let child = builder.obj(ObjectArg::Receiving(mutate(child.0))).unwrap();
@@ -498,7 +498,7 @@ async fn test_tto_invalid_receiving_arguments() {
                 };
                 builder.finish()
             })
-            .await else {
+            .await.into_inner() else {
                 panic!("failed on iteration {}", i);
             };
             assert!(

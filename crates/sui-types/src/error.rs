@@ -796,10 +796,16 @@ impl From<crate::storage::error::Error> for SuiError {
     }
 }
 
-impl From<SuiError> for Status {
-    fn from(error: SuiError) -> Self {
+impl From<SuiErrorKind> for Status {
+    fn from(error: SuiErrorKind) -> Self {
         let bytes = bcs::to_bytes(&error).unwrap();
         Status::with_details(tonic::Code::Internal, error.to_string(), bytes.into())
+    }
+}
+
+impl From<SuiError> for Status {
+    fn from(error: SuiError) -> Self {
+        Status::from(error.into_inner())
     }
 }
 
@@ -824,14 +830,22 @@ impl From<String> for SuiError {
     }
 }
 
+impl TryFrom<SuiErrorKind> for UserInputError {
+    type Error = anyhow::Error;
+
+    fn try_from(err: SuiErrorKind) -> Result<Self, Self::Error> {
+        match err {
+            SuiErrorKind::UserInputError { error } => Ok(error),
+            other => anyhow::bail!("error {:?} is not UserInputError", other),
+        }
+    }
+}
+
 impl TryFrom<SuiError> for UserInputError {
     type Error = anyhow::Error;
 
     fn try_from(err: SuiError) -> Result<Self, Self::Error> {
-        match *err.0 {
-            SuiErrorKind::UserInputError { error } => Ok(error),
-            other => anyhow::bail!("error {:?} is not UserInputError", other),
-        }
+        err.into_inner().try_into()
     }
 }
 
@@ -844,6 +858,28 @@ impl From<UserInputError> for SuiError {
 impl From<SuiObjectResponseError> for SuiError {
     fn from(error: SuiObjectResponseError) -> Self {
         SuiErrorKind::SuiObjectResponseError { error }.into()
+    }
+}
+
+impl PartialEq<SuiErrorKind> for SuiError {
+    fn eq(&self, other: &SuiErrorKind) -> bool {
+        &*self.0 == other
+    }
+}
+
+impl PartialEq<SuiError> for SuiErrorKind {
+    fn eq(&self, other: &SuiError) -> bool {
+        self == &*other.0
+    }
+}
+
+impl SuiError {
+    pub fn as_inner(&self) -> &SuiErrorKind {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> SuiErrorKind {
+        *self.0
     }
 }
 

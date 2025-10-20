@@ -9,7 +9,7 @@ use sui_types::{
     base_types::{AuthorityName, ConciseableName},
     committee::{EpochId, StakeUnit},
     digests::TransactionEffectsDigest,
-    error::{ErrorCategory, SuiError},
+    error::{ErrorCategory, SuiError, SuiErrorKind},
 };
 use thiserror::Error;
 
@@ -306,8 +306,8 @@ impl std::fmt::Display for AggregatedRequestErrors {
 // Match special handling of UserInputError in sui-json-rpc/src/error.rs NonRecoverableTransactionError
 fn format_transaction_request_error(error: &TransactionRequestError) -> String {
     match error {
-        TransactionRequestError::RejectedAtValidator(sui_error) => match sui_error {
-            SuiError::UserInputError { error: user_error } => user_error.to_string(),
+        TransactionRequestError::RejectedAtValidator(sui_error) => match sui_error.as_inner() {
+            SuiErrorKind::UserInputError { error: user_error } => user_error.to_string(),
             _ => sui_error.to_string(),
         },
         _ => error.to_string(),

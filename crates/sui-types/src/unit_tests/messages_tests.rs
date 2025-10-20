@@ -737,7 +737,8 @@ fn test_sponsored_transaction_message() {
     assert!(matches!(
         Transaction::from_generic_sig_data(tx_data.clone(), vec![sender_sig.clone()],)
             .try_into_verified_for_testing(epoch, &Default::default())
-            .unwrap_err(),
+            .unwrap_err()
+            .into_inner(),
         SuiErrorKind::SignerSignatureNumberMismatch { .. }
     ));
 
@@ -745,7 +746,8 @@ fn test_sponsored_transaction_message() {
     assert!(matches!(
         Transaction::from_generic_sig_data(tx_data.clone(), vec![sponsor_sig.clone()],)
             .try_into_verified_for_testing(epoch, &Default::default())
-            .unwrap_err(),
+            .unwrap_err()
+            .into_inner(),
         SuiErrorKind::SignerSignatureNumberMismatch { .. }
     ));
 
@@ -759,7 +761,8 @@ fn test_sponsored_transaction_message() {
             vec![sender_sig, sponsor_sig.clone(), third_party_sig.clone()],
         )
         .try_into_verified_for_testing(epoch, &Default::default())
-        .unwrap_err(),
+        .unwrap_err()
+        .into_inner(),
         SuiErrorKind::SignerSignatureNumberMismatch { .. }
     ));
 
@@ -767,7 +770,8 @@ fn test_sponsored_transaction_message() {
     assert!(matches!(
         Transaction::from_generic_sig_data(tx_data, vec![sponsor_sig, third_party_sig],)
             .try_into_verified_for_testing(epoch, &Default::default())
-            .unwrap_err(),
+            .unwrap_err()
+            .into_inner(),
         SuiErrorKind::SignerSignatureAbsent { .. }
     ));
 

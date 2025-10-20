@@ -22,7 +22,7 @@ use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::Signature;
 use sui_types::error::UserInputError;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::{
@@ -242,8 +242,8 @@ async fn test_passkey_feature_deny() {
     let tx = make_good_passkey_tx(response);
     let err = execute_tx(tx, &test_cluster).await.unwrap_err();
     assert!(matches!(
-        err,
-        SuiError::UserInputError {
+        err.as_inner(),
+        SuiErrorKind::UserInputError {
             error: UserInputError::Unsupported(..)
         }
     ));
@@ -283,7 +283,7 @@ async fn test_passkey_fails_mismatched_challenge() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Invalid challenge".to_string()
         }
     );
@@ -303,7 +303,7 @@ async fn test_passkey_fails_mismatched_challenge() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Invalid challenge".to_string()
         }
     );
@@ -335,7 +335,7 @@ async fn test_passkey_fails_to_verify_sig() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Fails to verify".to_string()
         }
     );
@@ -360,7 +360,7 @@ async fn test_passkey_fails_to_verify_sig() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Fails to verify".to_string()
         }
     );
@@ -387,5 +387,8 @@ async fn test_passkey_fails_wrong_author() {
     let tx = Transaction::from_generic_sig_data(response.intent_msg.value, vec![sig]);
     let res = execute_tx(tx, &test_cluster).await;
     let err = res.unwrap_err();
-    assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
+    assert!(matches!(
+        err.as_inner(),
+        SuiErrorKind::SignerSignatureAbsent { .. }
+    ));
 }

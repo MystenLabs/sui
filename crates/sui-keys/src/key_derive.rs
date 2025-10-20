@@ -16,7 +16,7 @@ use slip10_ed25519::derive_ed25519_private_key;
 use sui_types::{
     base_types::SuiAddress,
     crypto::{SignatureScheme, SuiKeyPair},
-    error::SuiError,
+    error::{SuiError, SuiErrorKind},
 };
 
 pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
@@ -39,34 +39,35 @@ pub fn derive_key_pair_from_path(
             let indexes = path.into_iter().map(|i| i.into()).collect::<Vec<_>>();
             let derived = derive_ed25519_private_key(seed, &indexes);
             let sk = Ed25519PrivateKey::from_bytes(&derived)
-                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
+                .map_err(|e| SuiErrorKind::SignatureKeyGenError(e.to_string()))?;
             let kp: Ed25519KeyPair = sk.into();
             Ok((kp.public().into(), SuiKeyPair::Ed25519(kp)))
         }
         SignatureScheme::Secp256k1 => {
             let child_xprv = XPrv::derive_from_path(seed, &path)
-                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
+                .map_err(|e| SuiErrorKind::SignatureKeyGenError(e.to_string()))?;
             let kp = Secp256k1KeyPair::from(
                 Secp256k1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
-                    .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?,
+                    .map_err(|e| SuiErrorKind::SignatureKeyGenError(e.to_string()))?,
             );
             Ok((kp.public().into(), SuiKeyPair::Secp256k1(kp)))
         }
         SignatureScheme::Secp256r1 => {
             let child_xprv = XPrv::derive_from_path(seed, &path)
-                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
+                .map_err(|e| SuiErrorKind::SignatureKeyGenError(e.to_string()))?;
             let kp = Secp256r1KeyPair::from(
                 Secp256r1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
-                    .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?,
+                    .map_err(|e| SuiErrorKind::SignatureKeyGenError(e.to_string()))?,
             );
             Ok((kp.public().into(), SuiKeyPair::Secp256r1(kp)))
         }
         SignatureScheme::BLS12381
         | SignatureScheme::MultiSig
         | SignatureScheme::ZkLoginAuthenticator
-        | SignatureScheme::PasskeyAuthenticator => Err(SuiError::UnsupportedFeatureError {
+        | SignatureScheme::PasskeyAuthenticator => Err(SuiErrorKind::UnsupportedFeatureError {
             error: format!("key derivation not supported {:?}", key_scheme),
-        }),
+        }
+        .into()),
     }
 }
 
@@ -90,17 +91,22 @@ pub fn validate_path(
                         {
                             Ok(p)
                         } else {
-                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                            Err(
+                                SuiErrorKind::SignatureKeyGenError("Invalid path".to_string())
+                                    .into(),
+                            )
                         }
                     } else {
-                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                        Err(SuiErrorKind::SignatureKeyGenError("Invalid path".to_string()).into())
                     }
                 }
                 None => Ok(format!(
                     "m/{DERVIATION_PATH_PURPOSE_ED25519}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0'/0'"
                 )
                 .parse()
-                .map_err(|_| SuiError::SignatureKeyGenError("Cannot parse path".to_string()))?),
+                .map_err(|_| {
+                    SuiErrorKind::SignatureKeyGenError("Cannot parse path".to_string())
+                })?),
             }
         }
         SignatureScheme::Secp256k1 => {
@@ -118,17 +124,22 @@ pub fn validate_path(
                         {
                             Ok(p)
                         } else {
-                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                            Err(
+                                SuiErrorKind::SignatureKeyGenError("Invalid path".to_string())
+                                    .into(),
+                            )
                         }
                     } else {
-                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                        Err(SuiErrorKind::SignatureKeyGenError("Invalid path".to_string()).into())
                     }
                 }
                 None => Ok(format!(
                     "m/{DERVIATION_PATH_PURPOSE_SECP256K1}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0/0"
                 )
                 .parse()
-                .map_err(|_| SuiError::SignatureKeyGenError("Cannot parse path".to_string()))?),
+                .map_err(|_| {
+                    SuiErrorKind::SignatureKeyGenError("Cannot parse path".to_string())
+                })?),
             }
         }
         SignatureScheme::Secp256r1 => {
@@ -146,25 +157,31 @@ pub fn validate_path(
                         {
                             Ok(p)
                         } else {
-                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                            Err(
+                                SuiErrorKind::SignatureKeyGenError("Invalid path".to_string())
+                                    .into(),
+                            )
                         }
                     } else {
-                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                        Err(SuiErrorKind::SignatureKeyGenError("Invalid path".to_string()).into())
                     }
                 }
                 None => Ok(format!(
                     "m/{DERVIATION_PATH_PURPOSE_SECP256R1}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0/0"
                 )
                 .parse()
-                .map_err(|_| SuiError::SignatureKeyGenError("Cannot parse path".to_string()))?),
+                .map_err(|_| {
+                    SuiErrorKind::SignatureKeyGenError("Cannot parse path".to_string())
+                })?),
             }
         }
         SignatureScheme::BLS12381
         | SignatureScheme::MultiSig
         | SignatureScheme::ZkLoginAuthenticator
-        | SignatureScheme::PasskeyAuthenticator => Err(SuiError::UnsupportedFeatureError {
+        | SignatureScheme::PasskeyAuthenticator => Err(SuiErrorKind::UnsupportedFeatureError {
             error: format!("key derivation not supported {:?}", key_scheme),
-        }),
+        }
+        .into()),
     }
 }
 

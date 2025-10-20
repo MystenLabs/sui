@@ -32,7 +32,7 @@ use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
 use sui_types::effects::TransactionEvents;
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::inner_temporary_store::TxCoins;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
@@ -899,7 +899,7 @@ impl IndexStore {
         let cursor = if let Some(cursor) = cursor {
             Some(
                 self.get_transaction_seq(&cursor)?
-                    .ok_or(SuiError::TransactionNotFound { digest: cursor })?,
+                    .ok_or(SuiErrorKind::TransactionNotFound { digest: cursor })?,
             )
         } else {
             None
@@ -926,9 +926,10 @@ impl IndexStore {
             }
             // NOTE: filter via checkpoint sequence number is implemented in
             // `get_transactions` of authority.rs.
-            Some(_) => Err(SuiError::UserInputError {
+            Some(_) => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::Unsupported(format!("{:?}", filter)),
-            }),
+            }
+            .into()),
             None => {
                 if reverse {
                     let iter = self
@@ -1080,20 +1081,22 @@ impl IndexStore {
     ) -> SuiResult<Vec<TransactionDigest>> {
         // If we are passed a function with no module return a UserInputError
         if function.is_some() && module.is_none() {
-            return Err(SuiError::UserInputError {
+            return Err(SuiErrorKind::UserInputError {
                 error: UserInputError::MoveFunctionInputError(
                     "Cannot supply function without supplying module".to_string(),
                 ),
-            });
+            }
+            .into());
         }
 
         // We cannot have a cursor without filling out the other keys.
         if cursor.is_some() && (module.is_none() || function.is_none()) {
-            return Err(SuiError::UserInputError {
+            return Err(SuiErrorKind::UserInputError {
                 error: UserInputError::MoveFunctionInputError(
                     "Cannot supply cursor without supplying module and function".to_string(),
                 ),
-            });
+            }
+            .into());
         }
 
         let cursor_val = cursor.unwrap_or(if reverse {
@@ -1229,7 +1232,7 @@ impl IndexStore {
     ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
         let seq = self
             .get_transaction_seq(digest)?
-            .ok_or(SuiError::TransactionNotFound { digest: *digest })?;
+            .ok_or(SuiErrorKind::TransactionNotFound { digest: *digest })?;
         Ok(if descending {
             self.tables
                 .event_order
@@ -1468,7 +1471,7 @@ impl IndexStore {
         let dynamic_field_id =
             dynamic_field::derive_dynamic_field_id(object, &name_type, name_bcs_bytes).map_err(
                 |e| {
-                    SuiError::Unknown(format!(
+                    SuiErrorKind::Unknown(format!(
                         "Unable to generate dynamic field id. Got error: {e:?}"
                     ))
                 },
@@ -1495,7 +1498,7 @@ impl IndexStore {
             name_bcs_bytes,
         )
         .map_err(|e| {
-            SuiError::Unknown(format!(
+            SuiErrorKind::Unknown(format!(
                 "Unable to generate dynamic field id. Got error: {e:?}"
             ))
         })?;
@@ -1653,7 +1656,7 @@ impl IndexStore {
         if force_disable_cache {
             Self::get_balance_from_db(metrics_cloned, coin_index_cloned, owner, cloned_coin_type)
                 .map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                SuiErrorKind::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
             })?;
         }
 
@@ -1686,7 +1689,8 @@ impl IndexStore {
                     cloned_coin_type,
                 )
                 .map_err(|e| {
-                    SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                    SuiErrorKind::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                        .into()
                 })
             })
     }
@@ -1707,7 +1711,10 @@ impl IndexStore {
         if force_disable_cache {
             Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner).map_err(
                 |e| {
-                    SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                    SuiErrorKind::ExecutionError(format!(
+                        "Failed to read all balance from DB: {:?}",
+                        e
+                    ))
                 },
             )?;
         }
@@ -1717,7 +1724,8 @@ impl IndexStore {
         let coin_index_cloned = self.tables.coin_index_2.clone();
         self.caches.all_balances.get_with(owner, move || {
             Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner).map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                SuiErrorKind::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                    .into()
             })
         })
     }
@@ -1764,7 +1772,7 @@ impl IndexStore {
             }
             let coin_type =
                 TypeTag::Struct(Box::new(parse_sui_struct_tag(&coin_type).map_err(|e| {
-                    SuiError::ExecutionError(format!(
+                    SuiErrorKind::ExecutionError(format!(
                         "Failed to parse event sender address: {:?}",
                         e
                     ))

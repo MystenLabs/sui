@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use super::to_signing_message;
 use crate::crypto::DefaultHash;
+use crate::error::SuiErrorKind;
 use crate::passkey_authenticator::{PasskeyAuthenticator, RawPasskeyAuthenticator};
 use crate::{
     base_types::{dbg_addr, ObjectID, SuiAddress},
