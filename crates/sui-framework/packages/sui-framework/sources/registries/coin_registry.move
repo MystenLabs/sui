@@ -481,6 +481,7 @@ public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &C
 
 /// Deleting `legacy` metadata is no longer supported to avoid removing
 /// backwards compatibility.
+#[deprecated(note = b"Deleting legacy metadata is no longer supported.")]
 public fun delete_migrated_legacy_metadata<T>(_: &mut Currency<T>, _: CoinMetadata<T>) {
     abort ENotSupported
 }
@@ -607,18 +608,6 @@ public fun exists<T>(registry: &CoinRegistry): bool {
     derived_object::exists(&registry.id, CurrencyKey<T>())
 }
 
-/// Create a new instance of legacy `CoinMetadata` object from a `Currency`.
-fun new_legacy<T>(currency: &Currency<T>, ctx: &mut TxContext): CoinMetadata<T> {
-    coin::new_metadata<T>(
-        currency.decimals,
-        currency.name,
-        currency.symbol.to_ascii(),
-        currency.description,
-        currency.icon_url,
-        ctx,
-    )
-}
-
 // === Compatibility: Borrow Legacy Metadata ===
 
 /// Ensures that the borrowed legacy `CoinMetadata` object is returned.
@@ -656,6 +645,18 @@ public fun return_borrowed_legacy_metadata<T>(
     let BorrowLegacyMetadata(id) = borrow;
     assert!(object::id(&legacy) == id, EWrongBorrow);
     dof::add(&mut currency.id, LegacyMetadataKey(), legacy);
+}
+
+/// Create a new instance of legacy `CoinMetadata` object from a `Currency`.
+fun new_legacy<T>(currency: &Currency<T>, ctx: &mut TxContext): CoinMetadata<T> {
+    coin::new_metadata<T>(
+        currency.decimals,
+        currency.name,
+        currency.symbol.to_ascii(),
+        currency.description,
+        currency.icon_url,
+        ctx,
+    )
 }
 
 #[allow(unused_function)]
