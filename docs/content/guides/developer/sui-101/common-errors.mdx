@@ -4,7 +4,11 @@ description: Find solutions to common issues with addresses, transactions, and M
 keywords: [ address errors, package errors, system errors, transaction errors, troubleshooting ]
 ---
 
+This page provides troubleshooting solutions to common errors.
+
 ## Address errors 
+
+Errors in this section relate to Sui addresses.
 
 #### `Failed to build Move modules: Unresolved addresses found.`
 
@@ -44,6 +48,8 @@ Verify the address you provide starts with `0x`, is 64 hex digits long, and does
 ---
 
 ## Move package errors 
+
+Errors in this section relate to Move packages.
 
 #### `Invalid URL: Invalid URL: relative URL without a base`
 
@@ -188,6 +194,8 @@ Ensure the resource's value is zero. For coins or tokens, split or burn the valu
 
 ## System errors
 
+Errors in this section relate to the system.
+
 ##### `"Segmentation fault (core dumped)"`
 
 Indicates a low-level memory crash. This is not a Move error, but rather an error with a portion of the toolchain such as the Move compiler or a dependency. 
@@ -257,6 +265,8 @@ Retry the request or increase the timeout duration if you control the client.
 ---
 
 ## Transaction errors 
+
+Errors in this section relate to transactions.
 
 #### `Requires a connection to the network. Current active network is [testnet/mainnet/devnet] but failed to connect to it.`
 
@@ -367,8 +377,11 @@ Wait for the next epoch.
 #### `Unable to process transaction. Unexpected status code: 403`
 
 Indicates the Sui network responds to an RPC or API request with `HTTP 403: Forbidden` status. This might happen if an RPC provider:
+
 - Requires authentication and you do not provide any.
+
 - Has restricted your region or IP address.
+
 - Has rate limited you by sending too many requests in a given time period.
 
 ##### Solution 
@@ -386,7 +399,15 @@ Indicates the Sui network rejects a transaction due to invalid transaction input
 
 ##### Solution 
 
-Ensure all objects you reference in your transaction exist, you are using the current version, you are not referencing the same object multiple times, and you are not using too many objects that exceed a protocol limit. 
+Ensure all objects you reference in your transaction:
+
+- Exist
+
+- Use the current version
+
+- Are not referenced twice
+
+- Do not exceed a protocol limit of maximum objects. 
 
 Verify you have a sufficient gas balance and that your transaction signature is valid.
 
