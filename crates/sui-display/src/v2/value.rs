@@ -132,10 +132,12 @@ impl Value<'_> {
         // TODO(amnn): Detect transforms that can't be applied in this context (e.g. 'json' and
         // 'display').
         match transform {
-            Transform::Base64 => Atom::try_from(self)?.format_encoded(&STANDARD, w),
-            Transform::Base64NoPad => Atom::try_from(self)?.format_encoded(&STANDARD_NO_PAD, w),
-            Transform::Base64Url => Atom::try_from(self)?.format_encoded(&URL_SAFE, w),
-            Transform::Base64UrlNoPad => Atom::try_from(self)?.format_encoded(&URL_SAFE_NO_PAD, w),
+            Transform::Base64 => Atom::try_from(self)?.format_as_base64(&STANDARD, w),
+            Transform::Base64NoPad => Atom::try_from(self)?.format_as_base64(&STANDARD_NO_PAD, w),
+            Transform::Base64Url => Atom::try_from(self)?.format_as_base64(&URL_SAFE, w),
+            Transform::Base64UrlNoPad => {
+                Atom::try_from(self)?.format_as_base64(&URL_SAFE_NO_PAD, w)
+            }
             Transform::Bcs => Ok(write!(w, "{}", STANDARD.encode(bcs::to_bytes(&self)?))?),
             Transform::Hex => Atom::try_from(self)?.format_as_hex(w),
             Transform::Str => Atom::try_from(self)?.format_as_str(w),
@@ -307,20 +309,20 @@ impl Atom<'_> {
     }
 
     /// Base64-encode the byte representation of this atom.
-    fn format_encoded(
+    fn format_as_base64(
         &self,
         e: &impl Engine,
         w: &mut BoundedWriter<'_>,
     ) -> Result<(), FormatError> {
         let base64 = match self {
             Atom::Address(a) => e.encode(a.into_bytes()),
-            Atom::Bool(b) => e.encode(&[*b as u8]),
-            Atom::U8(n) => e.encode(&[*n]),
-            Atom::U16(n) => e.encode(&n.to_le_bytes()),
-            Atom::U32(n) => e.encode(&n.to_le_bytes()),
-            Atom::U64(n) => e.encode(&n.to_le_bytes()),
-            Atom::U128(n) => e.encode(&n.to_le_bytes()),
-            Atom::U256(n) => e.encode(&n.to_le_bytes()),
+            Atom::Bool(b) => e.encode([*b as u8]),
+            Atom::U8(n) => e.encode([*n]),
+            Atom::U16(n) => e.encode(n.to_le_bytes()),
+            Atom::U32(n) => e.encode(n.to_le_bytes()),
+            Atom::U64(n) => e.encode(n.to_le_bytes()),
+            Atom::U128(n) => e.encode(n.to_le_bytes()),
+            Atom::U256(n) => e.encode(n.to_le_bytes()),
             Atom::Bytes(bs) => e.encode(bs),
         };
 
