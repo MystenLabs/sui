@@ -78,7 +78,7 @@ impl AncestorStateManager {
     const STATE_LOCK_CLOCK_ROUNDS: u32 = 5;
 
     // Exclusion threshold is based on propagation (reputation) scores
-    const SCORE_EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 20;
+    const SCORE_EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 30;
 
     pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
         let state_map = vec![AncestorInfo::new(); context.committee.size()];
