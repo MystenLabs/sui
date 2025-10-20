@@ -18,12 +18,11 @@ use sui_types::dynamic_field::{
     DynamicFieldInfo, DynamicFieldType,
 };
 
-use crate::v2::extractor::Extractor;
-
 use super::{
     error::FormatError,
     parser as P,
     value::{Accessor, Enum, Fields, Slice, Store, Struct, Value, Vector},
+    visitor::extractor::Extractor,
     writer::BoundedWriter,
 };
 
