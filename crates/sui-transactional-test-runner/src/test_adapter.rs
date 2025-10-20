@@ -1300,6 +1300,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     SuiValue::ImmShared(_, _) => {
                         bail!("read-only shared object is not supported as an input")
                     }
+                    SuiValue::Withdraw(_, _) => {
+                        bail!("withdraw reservation is not supported as an input for set-address")
+                    }
                 };
                 let value = NumericalAddress::new(value.into_bytes(), NumberFormat::Hex);
                 self.compiled_state
