@@ -17,11 +17,11 @@ use sui_types::{
     object::{Data, MoveObject, Object},
 };
 
-pub struct CheckpointStateLoader {
+pub struct ForkStateLoader {
     rpc_url: String,
 }
 
-impl CheckpointStateLoader {
+impl ForkStateLoader {
     pub fn new(rpc_url: String) -> Self {
         Self { rpc_url }
     }

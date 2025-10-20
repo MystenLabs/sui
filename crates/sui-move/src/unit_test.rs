@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoint_fork::CheckpointStateLoader;
+use crate::fork::ForkStateLoader;
 use clap::Parser;
 use move_cli::base::{
     self,
@@ -102,7 +102,7 @@ pub fn run_move_unit_tests(
 
     // Load fork state if parameters are provided
     if let (Some(rpc_url), Some(id_file)) = (fork_rpc_url, object_id_file) {
-        let loader = CheckpointStateLoader::new(rpc_url);
+        let loader = ForkStateLoader::new(rpc_url);
 
         // Check if we're already in a Tokio runtime
         let storage = if tokio::runtime::Handle::try_current().is_ok() {
