@@ -103,7 +103,10 @@ impl IngestionClient {
         Ok(Self::new_impl(Arc::new(client), metrics))
     }
 
-    fn new_impl(client: Arc<dyn IngestionClientTrait>, metrics: Arc<IndexerMetrics>) -> Self {
+    pub(crate) fn new_impl(
+        client: Arc<dyn IngestionClientTrait>,
+        metrics: Arc<IndexerMetrics>,
+    ) -> Self {
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new(
             metrics.ingested_checkpoint_timestamp_lag.clone(),
             metrics.latest_ingested_checkpoint_timestamp_lag_ms.clone(),
