@@ -651,7 +651,7 @@ public fun return_borrowed_legacy_metadata<T>(
     assert!(legacy.get_symbol() == currency.symbol.to_ascii(), ECannotReturnDifferentMetadata);
     assert!(legacy.get_description() == currency.description, ECannotReturnDifferentMetadata);
     assert!(
-        legacy.get_icon_url().map!(|url| url.inner_url().to_string()).destroy_or!(b"".to_string()) == currency.icon_url,
+        legacy.get_icon_url().destroy_some().inner_url().to_string() == currency.icon_url,
         ECannotReturnDifferentMetadata,
     );
     assert!(legacy.get_name() == currency.name, ECannotReturnDifferentMetadata);
