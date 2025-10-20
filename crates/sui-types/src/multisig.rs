@@ -4,6 +4,7 @@
 use crate::{
     crypto::{CompressedSignature, DefaultHash, SignatureScheme},
     digests::ZKLoginInputsDigest,
+    error::SuiErrorKind,
     passkey_authenticator::PasskeyAuthenticator,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     signature_verification::VerifiedDigestCache,
@@ -111,19 +112,22 @@ impl AuthenticatorTrait for MultiSig {
         if SuiAddress::from(&self.multisig_pk) != multisig_address {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid address derived from pks".to_string(),
-            });
+            }
+            .into());
         }
 
         if !self.get_zklogin_sigs()?.is_empty() && !verify_params.accept_zklogin_in_multisig {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "zkLogin sig not supported inside multisig".to_string(),
-            });
+            }
+            .into());
         }
 
         if self.has_passkey_sigs() && !verify_params.accept_passkey_in_multisig {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "Passkey sig not supported inside multisig".to_string(),
-            });
+            }
+            .into());
         }
 
         let mut weight_sum: u16 = 0;
@@ -152,7 +156,7 @@ impl AuthenticatorTrait for MultiSig {
                                 subsig_pubkey.encode_base64(),
                                 SuiAddress::from(subsig_pubkey)
                             ),
-                        });
+                        }.into());
                     }
                     let pk =
                         Ed25519PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(|_| {
@@ -177,7 +181,7 @@ impl AuthenticatorTrait for MultiSig {
                                 subsig_pubkey.encode_base64(),
                                 SuiAddress::from(subsig_pubkey)
                             ),
-                        });
+                        }.into());
                     }
                     let pk =
                         Secp256k1PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(|_| {
@@ -202,7 +206,7 @@ impl AuthenticatorTrait for MultiSig {
                                 subsig_pubkey.encode_base64(),
                                 SuiAddress::from(subsig_pubkey)
                             ),
-                        });
+                        }.into());
                     }
                     let pk =
                         Secp256r1PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(|_| {
@@ -230,7 +234,7 @@ impl AuthenticatorTrait for MultiSig {
                                 subsig_pubkey.encode_base64(),
                                 SuiAddress::from(subsig_pubkey)
                             ),
-                        });
+                        }.into());
                     }
                     let authenticator = ZkLoginAuthenticator::from_bytes(&z.0).map_err(|_| {
                         SuiErrorKind::InvalidSignature {
@@ -266,13 +270,16 @@ impl AuthenticatorTrait for MultiSig {
             if res.is_ok() {
                 weight_sum += *weight as u16;
             } else {
-                return res.map_err(|e| SuiErrorKind::InvalidSignature {
-                    error: format!(
-                        "Invalid sig for pk={} address={:?} error={:?}",
-                        subsig_pubkey.encode_base64(),
-                        SuiAddress::from(subsig_pubkey),
-                        e.to_string()
-                    ),
+                return res.map_err(|e| {
+                    SuiErrorKind::InvalidSignature {
+                        error: format!(
+                            "Invalid sig for pk={} address={:?} error={:?}",
+                            subsig_pubkey.encode_base64(),
+                            SuiAddress::from(subsig_pubkey),
+                            e.to_string()
+                        ),
+                    }
+                    .into()
                 });
             }
         }
@@ -284,7 +291,8 @@ impl AuthenticatorTrait for MultiSig {
                     "Insufficient weight={:?} threshold={:?}",
                     weight_sum, self.multisig_pk.threshold
                 ),
-            })
+            }
+            .into())
         }
     }
 }
@@ -295,7 +303,8 @@ pub fn as_indices(bitmap: u16) -> Result<Vec<u8>, SuiError> {
     if bitmap > MAX_BITMAP_VALUE {
         return Err(SuiErrorKind::InvalidSignature {
             error: "Invalid bitmap".to_string(),
-        });
+        }
+        .into());
     }
     let mut res = Vec::new();
     for i in 0..10 {
@@ -337,7 +346,8 @@ impl MultiSig {
         if full_sigs.len() > multisig_pk.pk_map.len() || full_sigs.is_empty() {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid number of signatures".to_string(),
-            });
+            }
+            .into());
         }
         let mut bitmap = 0;
         let mut sigs = Vec::with_capacity(full_sigs.len());
@@ -351,7 +361,8 @@ impl MultiSig {
             if bitmap & (1 << index) != 0 {
                 return Err(SuiErrorKind::InvalidSignature {
                     error: "Duplicate public key".to_string(),
-                });
+                }
+                .into());
             }
             bitmap |= 1 << index;
             sigs.push(s.to_compressed()?);
@@ -400,8 +411,11 @@ impl MultiSig {
         authenticator_as_bytes
             .iter()
             .map(|z| {
-                ZkLoginAuthenticator::from_bytes(&z.0).map_err(|_| SuiErrorKind::InvalidSignature {
-                    error: "Invalid zklogin authenticator bytes".to_string(),
+                ZkLoginAuthenticator::from_bytes(&z.0).map_err(|_| {
+                    SuiErrorKind::InvalidSignature {
+                        error: "Invalid zklogin authenticator bytes".to_string(),
+                    }
+                    .into()
                 })
             })
             .collect()
@@ -500,7 +514,8 @@ impl MultiSigPublicKey {
         {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid multisig public key construction".to_string(),
-            });
+            }
+            .into());
         }
 
         Ok(MultiSigPublicKey {

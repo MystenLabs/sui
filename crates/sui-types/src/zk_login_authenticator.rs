@@ -136,7 +136,8 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
                         epoch,
                         max_epoch_upper_bound
                     ),
-                }.into());
+                }
+                .into());
             }
         }
         // 2. ensure that max epoch in signature is greater than the current epoch.
@@ -147,7 +148,8 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
                     self.get_max_epoch(),
                     epoch
                 ),
-            }.into());
+            }
+            .into());
         }
         Ok(())
     }
@@ -180,13 +182,14 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
                 &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
                     SuiErrorKind::InvalidSignature {
                         error: "Unknown provider".to_string(),
-                    }.into()
+                    }
                 })?,
             )
         {
             return Err(SuiErrorKind::InvalidSignature {
                 error: format!("OIDC provider not supported: {}", self.inputs.get_iss()),
-            }.into());
+            }
+            .into());
         }
 
         // Verify the ephemeral signature over the intent message of the transaction data.
@@ -210,9 +213,12 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
                 &aux_verify_data.oidc_provider_jwks,
                 &aux_verify_data.zk_login_env,
             )
-            .map_err(|e| SuiErrorKind::InvalidSignature {
-                error: e.to_string(),
-            }.into());
+            .map_err(|e| {
+                SuiErrorKind::InvalidSignature {
+                    error: e.to_string(),
+                }
+                .into()
+            });
             match res {
                 Ok(_) => {
                     // If it's verified ok, we cache the digest.
@@ -237,9 +243,12 @@ fn verify_zklogin_inputs_wrapper(
         all_jwk,
         env,
     )
-    .map_err(|e| SuiErrorKind::InvalidSignature {
-        error: e.to_string(),
-    }.into())
+    .map_err(|e| {
+        SuiErrorKind::InvalidSignature {
+            error: e.to_string(),
+        }
+        .into()
+    })
 }
 
 impl ToFromBytes for ZkLoginAuthenticator {

@@ -5,7 +5,7 @@ use crate::execution_status::PackageUpgradeError;
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     crypto::DefaultHash,
-    error::{ExecutionError, ExecutionErrorKind, SuiError, SuiErrorKind, SuiResult},
+    error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, SuiResult},
     id::{ID, UID},
     object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
@@ -520,16 +520,16 @@ impl MovePackage {
         binary_config: &BinaryConfig,
     ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
-        let bytes =
-            self.serialized_module_map()
-                .get(module)
-                .ok_or_else(|| SuiErrorKind::ModuleNotFound {
-                    module_name: module.to_string(),
-                }.into())?;
+        let bytes = self.serialized_module_map().get(module).ok_or_else(|| {
+            SuiErrorKind::ModuleNotFound {
+                module_name: module.to_string(),
+            }
+        })?;
         CompiledModule::deserialize_with_config(bytes, binary_config).map_err(|error| {
             SuiErrorKind::ModuleDeserializationFailure {
                 error: error.to_string(),
-            }.into()
+            }
+            .into()
         })
     }
 
@@ -632,7 +632,7 @@ where
             CompiledModule::deserialize_with_config(bytecode, binary_config).map_err(|error| {
                 SuiErrorKind::ModuleDeserializationFailure {
                     error: error.to_string(),
-                }.into()
+                }
             })?;
         let normalized_module = normalized::Module::new(pool, &module, include_code);
         normalized_modules.insert(normalized_module.name().to_string(), normalized_module);

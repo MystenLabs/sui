@@ -9,7 +9,7 @@ use x509_parser::public_key::PublicKey;
 use x509_parser::time::ASN1Time;
 use x509_parser::x509::SubjectPublicKeyInfo;
 
-use crate::error::{SuiError, SuiResult};
+use crate::error::{SuiError, SuiErrorKind, SuiResult};
 
 use ciborium::value::{Integer, Value};
 use once_cell::sync::Lazy;
@@ -89,7 +89,7 @@ impl fmt::Display for NitroAttestationVerifyError {
 
 impl From<NitroAttestationVerifyError> for SuiError {
     fn from(err: NitroAttestationVerifyError) -> Self {
-        SuiErrorKind::NitroAttestationFailedToVerify(err.to_string())
+        SuiErrorKind::NitroAttestationFailedToVerify(err.to_string()).into()
     }
 }
 

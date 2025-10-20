@@ -160,9 +160,12 @@ impl TryFrom<&Object> for StakedSui {
         match &object.data {
             Data::Move(o) => {
                 if o.type_().is_staked_sui() {
-                    return bcs::from_bytes(o.contents()).map_err(|err| SuiErrorKind::TypeError {
-                        error: format!("Unable to deserialize StakedSui object: {:?}", err),
-                    }.into());
+                    return bcs::from_bytes(o.contents()).map_err(|err| {
+                        SuiErrorKind::TypeError {
+                            error: format!("Unable to deserialize StakedSui object: {:?}", err),
+                        }
+                        .into()
+                    });
                 }
             }
             Data::Package(_) => {}
@@ -170,6 +173,7 @@ impl TryFrom<&Object> for StakedSui {
 
         Err(SuiErrorKind::TypeError {
             error: format!("Object type is not a StakedSui: {:?}", object),
-        }.into())
+        }
+        .into())
     }
 }

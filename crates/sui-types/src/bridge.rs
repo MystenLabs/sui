@@ -198,12 +198,14 @@ pub fn get_bridge_wrapper(object_store: &dyn ObjectStore) -> Result<BridgeWrappe
     let wrapper = object_store
         .get_object(&SUI_BRIDGE_OBJECT_ID)
         // Don't panic here on None because object_store is a generic store.
-        .ok_or_else(|| SuiErrorKind::SuiBridgeReadError("BridgeWrapper object not found".to_owned()).into())?;
+        .ok_or_else(|| {
+            SuiErrorKind::SuiBridgeReadError("BridgeWrapper object not found".to_owned())
+        })?;
     let move_object = wrapper.data.try_as_move().ok_or_else(|| {
-        SuiErrorKind::SuiBridgeReadError("BridgeWrapper object must be a Move object".to_owned()).into()
+        SuiErrorKind::SuiBridgeReadError("BridgeWrapper object must be a Move object".to_owned())
     })?;
     let result = bcs::from_bytes::<BridgeWrapper>(move_object.contents())
-        .map_err(|err| SuiErrorKind::SuiBridgeReadError(err.to_string()).into())?;
+        .map_err(|err| SuiErrorKind::SuiBridgeReadError(err.to_string()))?;
     Ok(result)
 }
 
@@ -218,14 +220,15 @@ pub fn get_bridge(object_store: &dyn ObjectStore) -> Result<Bridge, SuiError> {
                     SuiErrorKind::SuiBridgeReadError(format!(
                         "Failed to load bridge inner object with ID {:?} and version {:?}: {:?}",
                         id, version, err
-                    )).into()
+                    ))
                 })?;
             Ok(Bridge::V1(result))
         }
         _ => Err(SuiErrorKind::SuiBridgeReadError(format!(
             "Unsupported SuiBridge version: {}",
             version
-        )).into()),
+        ))
+        .into()),
     }
 }
 
@@ -286,12 +289,12 @@ impl BridgeTrait for BridgeInnerV1 {
                 let source = BridgeChainId::try_from(e.key.source).map_err(|_e| {
                     SuiErrorKind::GenericBridgeError {
                         error: format!("Unrecognized chain id: {}", e.key.source),
-                    }.into()
+                    }
                 })?;
                 let destination = BridgeChainId::try_from(e.key.destination).map_err(|_e| {
                     SuiErrorKind::GenericBridgeError {
                         error: format!("Unrecognized chain id: {}", e.key.destination),
-                    }.into()
+                    }
                 })?;
                 Ok((source, destination, e.value))
             })
@@ -319,12 +322,12 @@ impl BridgeTrait for BridgeInnerV1 {
                 let source = BridgeChainId::try_from(e.key.source).map_err(|_e| {
                     SuiErrorKind::GenericBridgeError {
                         error: format!("Unrecognized chain id: {}", e.key.source),
-                    }.into()
+                    }
                 })?;
                 let destination = BridgeChainId::try_from(e.key.destination).map_err(|_e| {
                     SuiErrorKind::GenericBridgeError {
                         error: format!("Unrecognized chain id: {}", e.key.destination),
-                    }.into()
+                    }
                 })?;
                 Ok((source, destination, e.value))
             })
@@ -496,10 +499,10 @@ pub struct MoveTypeBridgeRecord {
 }
 
 pub fn is_bridge_committee_initiated(object_store: &dyn ObjectStore) -> SuiResult<bool> {
-    match get_bridge(object_store) {
+    match get_bridge(object_store).map_err(|e| *e.0) {
         Ok(bridge) => Ok(!bridge.committee().members.contents.is_empty()),
         Err(SuiErrorKind::SuiBridgeReadError(..)) => Ok(false),
-        Err(other) => Err(other),
+        Err(other) => Err(other.into()),
     }
 }
 

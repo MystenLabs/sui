@@ -106,7 +106,8 @@ impl AccumulatorValue {
         if !Balance::is_balance_type(type_) {
             return Err(SuiErrorKind::TypeError {
                 error: "only Balance<T> is supported".to_string(),
-            });
+            }
+            .into());
         }
 
         let key = AccumulatorKey { owner };
@@ -130,7 +131,8 @@ impl AccumulatorValue {
         if !Balance::is_balance_type(type_) {
             return Err(SuiErrorKind::TypeError {
                 error: "only Balance<T> is supported".to_string(),
-            });
+            }
+            .into());
         }
 
         let key = AccumulatorKey { owner };
@@ -168,7 +170,8 @@ impl AccumulatorValue {
         if !Balance::is_balance_type(type_) {
             return Err(SuiErrorKind::TypeError {
                 error: "only Balance<T> is supported".to_string(),
-            });
+            }
+            .into());
         }
 
         let key = AccumulatorKey { owner };
@@ -258,6 +261,7 @@ impl TryFrom<&MoveObject> for AccumulatorValue {
                     "Dynamic field {:?} is not a AccumulatorValue",
                     value.id()
                 ))
+                .into()
             })
     }
 }

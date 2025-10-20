@@ -4,6 +4,7 @@
 use crate::{
     crypto::{CompressedSignature, SignatureScheme},
     digests::ZKLoginInputsDigest,
+    error::SuiErrorKind,
     multisig::{MultiSig, MultiSigPublicKey},
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     signature_verification::VerifiedDigestCache,
@@ -175,7 +176,8 @@ impl MultiSigLegacy {
         if full_sigs.len() > multisig_pk.pk_map.len() || full_sigs.is_empty() {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid number of signatures".to_string(),
-            });
+            }
+            .into());
         }
         let mut bitmap = RoaringBitmap::new();
         let mut sigs = Vec::with_capacity(full_sigs.len());
@@ -189,7 +191,8 @@ impl MultiSigLegacy {
             if !inserted {
                 return Err(SuiErrorKind::InvalidSignature {
                     error: "Duplicate signature".to_string(),
-                });
+                }
+                .into());
             }
             sigs.push(s.to_compressed()?);
         }
@@ -305,7 +308,8 @@ impl MultiSigPublicKeyLegacy {
         {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid multisig public key construction".to_string(),
-            });
+            }
+            .into());
         }
         Ok(MultiSigPublicKeyLegacy {
             pk_map: pks.into_iter().zip(weights).collect(),

@@ -23,7 +23,7 @@ pub fn get_layout_from_struct_tag(
     let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
         SuiErrorKind::ObjectSerializationError {
             error: e.to_string(),
-        }.into()
+        }
     })?;
     match layout {
         A::MoveTypeLayout::Struct(l) => Ok(A::MoveDatatypeLayout::Struct(l)),
@@ -41,6 +41,7 @@ pub fn into_struct_layout(layout: A::MoveDatatypeLayout) -> Result<A::MoveStruct
         A::MoveDatatypeLayout::Struct(s) => Ok(*s),
         A::MoveDatatypeLayout::Enum(e) => Err(SuiErrorKind::ObjectSerializationError {
             error: format!("Expected struct layout but got an enum {e:?}"),
-        }.into()),
+        }
+        .into()),
     }
 }

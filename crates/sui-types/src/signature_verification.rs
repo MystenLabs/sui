@@ -129,6 +129,7 @@ pub fn verify_sender_signed_data_message_signatures(
             actual: txn.inner().tx_signatures.len(),
             expected: signers.len()
         }
+        .into()
     );
 
     // 3. Each signer must provide a signature.
@@ -138,7 +139,8 @@ pub fn verify_sender_signed_data_message_signatures(
             return Err(SuiErrorKind::SignerSignatureAbsent {
                 expected: s.to_string(),
                 actual: present_sigs.keys().map(|s| s.to_string()).collect(),
-            });
+            }
+            .into());
         }
     }
 

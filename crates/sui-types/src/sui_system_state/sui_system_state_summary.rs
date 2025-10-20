@@ -472,7 +472,7 @@ where
         SuiErrorKind::SuiSystemStateReadError(format!(
             "Failed to load candidate address from pool mappings: {:?}",
             err
-        )).into()
+        ))
     })?;
     let candidate_table_id = system_state_summary.validator_candidates_id;
     get_validator_from_table(&object_store, candidate_table_id, &candidate_address)

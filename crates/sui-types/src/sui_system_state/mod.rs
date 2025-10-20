@@ -230,15 +230,17 @@ pub fn get_sui_system_state_wrapper(
         .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
         // Don't panic here on None because object_store is a generic store.
         .ok_or_else(|| {
-            SuiErrorKind::SuiSystemStateReadError("SuiSystemStateWrapper object not found".to_owned()).into()
+            SuiErrorKind::SuiSystemStateReadError(
+                "SuiSystemStateWrapper object not found".to_owned(),
+            )
         })?;
     let move_object = wrapper.data.try_as_move().ok_or_else(|| {
         SuiErrorKind::SuiSystemStateReadError(
             "SuiSystemStateWrapper object must be a Move object".to_owned(),
-        ).into()
+        )
     })?;
     let result = bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents())
-        .map_err(|err| SuiErrorKind::SuiSystemStateReadError(err.to_string()).into())?;
+        .map_err(|err| SuiErrorKind::SuiSystemStateReadError(err.to_string()))?;
     Ok(result)
 }
 
@@ -253,7 +255,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
                         SuiErrorKind::DynamicFieldReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
-                        )).into()
+                        ))
                     },
                 )?;
             Ok(SuiSystemState::V1(result))
@@ -265,7 +267,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
                         SuiErrorKind::DynamicFieldReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
-                        )).into()
+                        ))
                     },
                 )?;
             Ok(SuiSystemState::V2(result))
@@ -312,7 +314,8 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
         _ => Err(SuiErrorKind::SuiSystemStateReadError(format!(
             "Unsupported SuiSystemState version: {}",
             wrapper.version
-        )).into()),
+        ))
+        .into()),
     }
 }
 
@@ -333,7 +336,7 @@ where
             SuiErrorKind::SuiSystemStateReadError(format!(
                 "Failed to load validator wrapper from table: {:?}",
                 err
-            )).into()
+            ))
         })?;
     let versioned = field.inner;
     let version = versioned.version;
@@ -345,7 +348,7 @@ where
                         SuiErrorKind::SuiSystemStateReadError(format!(
                             "Failed to load inner validator from the wrapper: {:?}",
                             err
-                        )).into()
+                        ))
                     })?;
             Ok(validator.into_sui_validator_summary())
         }
@@ -357,7 +360,7 @@ where
                         SuiErrorKind::SuiSystemStateReadError(format!(
                             "Failed to load inner validator from the wrapper: {:?}",
                             err
-                        )).into()
+                        ))
                     })?;
             Ok(validator.into_sui_validator_summary())
         }
@@ -369,14 +372,16 @@ where
                         SuiErrorKind::SuiSystemStateReadError(format!(
                             "Failed to load inner validator from the wrapper: {:?}",
                             err
-                        )).into()
+                        ))
+                        .into()
                     })?;
             Ok(validator.into_sui_validator_summary())
         }
         _ => Err(SuiErrorKind::SuiSystemStateReadError(format!(
             "Unsupported Validator version: {}",
             version
-        )).into()),
+        ))
+        .into()),
     }
 }
 
@@ -396,7 +401,7 @@ where
                 SuiErrorKind::SuiSystemStateReadError(format!(
                     "Failed to load validator from table: {:?}",
                     err
-                )).into()
+                ))
             })?;
         validators.push(validator);
     }

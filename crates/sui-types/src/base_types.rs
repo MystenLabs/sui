@@ -528,7 +528,8 @@ impl MoveObjectType {
                 Err(SuiErrorKind::ObjectDeserializationError {
                     error: "Error extracting dynamic object value from specialized object type"
                         .to_string(),
-                })
+                }
+                .into())
             }
             MoveObjectType_::SuiBalanceAccumulatorField
             | MoveObjectType_::BalanceAccumulatorField(_) => {
@@ -850,7 +851,7 @@ impl SuiAddress {
     /// Parse a SuiAddress from a byte array or buffer.
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, SuiError> {
         <[u8; SUI_ADDRESS_LENGTH]>::try_from(bytes.as_ref())
-            .map_err(|_| SuiErrorKind::InvalidAddress)
+            .map_err(|_| SuiErrorKind::InvalidAddress.into())
             .map(SuiAddress)
     }
 

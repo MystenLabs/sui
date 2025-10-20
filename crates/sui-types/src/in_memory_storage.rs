@@ -52,13 +52,15 @@ impl ChildObjectResolver for InMemoryStorage {
                 object: *child,
                 given_parent: parent,
                 actual_owner: child_object.owner.clone(),
-            });
+            }
+            .into());
         }
         if child_object.version() > child_version_upper_bound {
             return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
                     .to_owned(),
-            });
+            }
+            .into());
         }
         Ok(Some(child_object))
     }

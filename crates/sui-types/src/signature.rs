@@ -166,7 +166,8 @@ impl GenericSignature {
 
                     _ => Err(SuiErrorKind::UnsupportedFeatureError {
                         error: "Unsupported signature scheme".to_string(),
-                    }),
+                    }
+                    .into()),
                 }
             }
             GenericSignature::ZkLoginAuthenticator(s) => Ok(CompressedSignature::ZkLogin(
@@ -177,7 +178,8 @@ impl GenericSignature {
             )),
             _ => Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "Unsupported signature scheme".to_string(),
-            }),
+            }
+            .into()),
         }
     }
 
@@ -212,14 +214,16 @@ impl GenericSignature {
                     )),
                     _ => Err(SuiErrorKind::UnsupportedFeatureError {
                         error: "Unsupported signature scheme in MultiSig".to_string(),
-                    }),
+                    }
+                    .into()),
                 }
             }
             GenericSignature::ZkLoginAuthenticator(s) => s.get_pk(),
             GenericSignature::PasskeyAuthenticator(s) => s.get_pk(),
             _ => Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "Unsupported signature scheme".to_string(),
-            }),
+            }
+            .into()),
         }
     }
 }
