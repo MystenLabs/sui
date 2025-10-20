@@ -10,18 +10,20 @@ use crate::object::Owner;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
+/// Represents a fork-loaded object: (ObjectID, MoveObjectType, Owner, BCS bytes).
+pub type ForkLoadedObject = (ObjectID, MoveObjectType, Owner, Vec<u8>);
+
 /// Global storage for fork-loaded objects that works across threads.
-/// Stores (ObjectID, MoveObjectType, Owner, BCS bytes) tuples.
-static FORK_LOADED_OBJECTS: Lazy<Mutex<Vec<(ObjectID, MoveObjectType, Owner, Vec<u8>)>>> =
+static FORK_LOADED_OBJECTS: Lazy<Mutex<Vec<ForkLoadedObject>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
 
 /// Get a copy of all fork-loaded objects.
-pub fn get_fork_loaded_objects() -> Vec<(ObjectID, MoveObjectType, Owner, Vec<u8>)> {
+pub fn get_fork_loaded_objects() -> Vec<ForkLoadedObject> {
     FORK_LOADED_OBJECTS.lock().unwrap().clone()
 }
 
 /// Store fork-loaded objects for use in tests.
-pub fn set_fork_loaded_objects(objects: Vec<(ObjectID, MoveObjectType, Owner, Vec<u8>)>) {
+pub fn set_fork_loaded_objects(objects: Vec<ForkLoadedObject>) {
     *FORK_LOADED_OBJECTS.lock().unwrap() = objects;
 }
 
