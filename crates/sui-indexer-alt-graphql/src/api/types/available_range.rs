@@ -51,7 +51,7 @@ impl AvailableRange {
 ///
 /// - `collect_pipelines`: resolves type/field/filter combinations to the indexer pipelines where data is available.
 /// - `test_schema_inclusion`: Testing entry point that calls the other tests using a GraphQL extension.
-/// = `test_implements_interface`: Tests if a type implements an interface, it should delegate to the correct type and fields in the macro invocation
+/// - `test_implements_interface`: Tests if a type implements an interface, it should delegate to the correct type and fields in the macro invocation
 /// - `test_macro_invocation_matches_schema`: Tests that the macro invocation matches the types and fields in the GraphQL schema.
 /// - `test_registry_collect_pipelines_snapshot`: Generates a snapshot of all type.field (filter) -> pipeline mappings for regression testing and auditing.
 macro_rules! collect_pipelines {
@@ -124,7 +124,7 @@ macro_rules! collect_pipelines {
             /// Validates that all types, fields in the macro exist in the GraphQL schema
             /// and outputs a snapshot of all type.field (filter) -> pipeline mappings for regression testing.
             ///
-            /// Test to ensure the macro configuration stays in sync with the GraphQL schema. If a type, field, or 
+            /// Test to ensure the macro configuration stays in sync with the GraphQL schema. If a type, field, or
             /// filter is referenced in the macro but doesn't exist in the schema, this test will fail.
             #[tokio::test]
             async fn test_schema_inclusion() {
