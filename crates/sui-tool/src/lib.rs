@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use futures::future::AbortHandle;
 use futures::future::join_all;
@@ -63,7 +63,6 @@ use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
     TransactionStatus,
 };
-use sui_types::transaction::TrustedTransaction;
 
 use crate::formal_snapshot_util::read_summaries_for_list_no_verify;
 use sui_core::authority::authority_store_pruner::PrunerWatermarks;
@@ -1019,7 +1018,7 @@ async fn backfill_epoch_transaction_digests(
             .unwrap_or(0)
     };
     m.println(format!(
-        "Beginning transaction backfill for epoch: {:?}, backfilling from: {:?}..{:?}",
+        "Beginning transaction digest backfill for epoch: {:?}, backfilling from: {:?}..{:?}",
         epoch, epoch_start_cp, epoch_last_cp_seq
     ))?;
 
@@ -1070,18 +1069,9 @@ async fn backfill_epoch_transaction_digests(
             let checkpoint_data = checkpoint.0;
 
             async move {
-                // Serialize each transaction to BCS bytes and insert directly to avoid
-                // needing to construct TrustedEnvelope (which has private fields)
                 for tx_data in &checkpoint_data.transactions {
                     let tx_digest = tx_data.transaction.digest();
-                    let tx_bytes = bcs::to_bytes(&tx_data.transaction).with_context(|| {
-                        format!("Failed to serialize transaction {}", tx_digest)
-                    })?;
-                    let trusted_tx: TrustedTransaction =
-                        bcs::from_bytes(&tx_bytes).with_context(|| {
-                            format!("Failed to deserialize transaction {}", tx_digest)
-                        })?;
-                    perpetual_db.insert_transaction(tx_digest, &trusted_tx)?;
+                    perpetual_db.insert_executed_transaction_digest(epoch, tx_digest)?;
                     tx_counter.fetch_add(1, Ordering::Relaxed);
                 }
                 checkpoint_counter.fetch_add(1, Ordering::Relaxed);
