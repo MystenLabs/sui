@@ -1697,6 +1697,30 @@ pub struct ProtocolConfig {
     /// listed in `tx_digests`
     #[serde(skip_serializing_if = "Vec::is_empty")]
     aliased_addresses: Vec<AliasedAddress>,
+
+    /// The base charge for each command in a programmable transaction. This is a fixed cost to
+    /// account for the overhead of processing each command.
+    translation_per_command_base_charge: Option<u64>,
+
+    /// The base charge for each input in a programmable transaction regardless of if it is used or
+    /// not, or a pure/object/funds withdrawal input.
+    translation_per_input_base_charge: Option<u64>,
+
+    /// The base charge for each byte of pure input in a programmable transaction.
+    translation_pure_input_per_byte_charge: Option<u64>,
+
+    /// The multiplier for the number of type nodes when charging for type loading.
+    /// This is multiplied by the number of type nodes to get the total cost.
+    /// This should be a small number to avoid excessive gas costs for loading types.
+    translation_per_type_node_charge: Option<u64>,
+
+    /// The multiplier for the number of type references when charging for type checking and reference
+    /// checking.
+    translation_per_reference_node_charge: Option<u64>,
+
+    /// The metering step resolution for translation costs. This is the granularity at which we
+    /// step up the metering for translation costs.
+    translation_metering_step_resolution: Option<u64>,
 }
 
 /// An aliased address.
@@ -2888,6 +2912,13 @@ impl ProtocolConfig {
             consensus_commit_rate_estimation_window_size: None,
 
             aliased_addresses: vec![],
+
+            translation_per_command_base_charge: None,
+            translation_per_input_base_charge: None,
+            translation_pure_input_per_byte_charge: None,
+            translation_per_type_node_charge: None,
+            translation_per_reference_node_charge: None,
+            translation_metering_step_resolution: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4398,6 +4429,16 @@ impl ProtocolConfig {
 
     pub fn set_enable_ptb_execution_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_ptb_execution_v2 = val;
+        // Remove this and set these fields when we move this to be set for a specific protocol
+        // version.
+        if val {
+            self.translation_per_command_base_charge = Some(1);
+            self.translation_per_input_base_charge = Some(1);
+            self.translation_pure_input_per_byte_charge = Some(1);
+            self.translation_per_type_node_charge = Some(1);
+            self.translation_per_reference_node_charge = Some(1);
+            self.translation_metering_step_resolution = Some(1000);
+        }
     }
 
     pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
