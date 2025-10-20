@@ -6,6 +6,8 @@ use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
 use move_core_types::u256::U256;
 
+use super::address_visitor::AddressVisitor;
+use super::error::FormatError;
 use super::value::{Accessor, Slice, Value};
 
 /// A visitor that follows a path of accessors, to slice out the BCS and layout for a sub-part of
@@ -22,20 +24,20 @@ impl<'v, 'p> Extractor<'v, 'p> {
     pub(crate) fn deserialize_slice(
         slice: Slice<'v>,
         path: &'p mut Vec<Accessor<'v>>,
-    ) -> Result<Option<Value<'v>>, AV::Error> {
+    ) -> Result<Option<Value<'v>>, FormatError> {
         A::MoveValue::visit_deserialize(slice.bytes, slice.layout, &mut Self { path })
     }
 }
 
 impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
     type Value = Option<Value<'v>>;
-    type Error = AV::Error;
+    type Error = FormatError;
 
     fn visit_u8(
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         n: u8,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U8(n)))
     }
 
@@ -43,7 +45,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         n: u16,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U16(n)))
     }
 
@@ -51,7 +53,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         n: u32,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U32(n)))
     }
 
@@ -59,7 +61,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         n: u64,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U64(n)))
     }
 
@@ -67,7 +69,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         n: u128,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U128(n)))
     }
 
@@ -75,7 +77,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         n: U256,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U256(n)))
     }
 
@@ -83,7 +85,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         b: bool,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::Bool(b)))
     }
 
@@ -91,9 +93,12 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         a: AccountAddress,
-    ) -> Result<Self::Value, AV::Error> {
-        // TODO(amnn): support dynamic field and dynamic object field access
-        Ok(self.path.is_empty().then_some(Value::Address(a)))
+    ) -> Result<Self::Value, Self::Error> {
+        match self.path.last() {
+            Some(Accessor::DFIndex(_) | Accessor::DOFIndex(_)) => Ok(Some(Value::Address(a))),
+            Some(_) => Ok(None),
+            None => Ok(Some(Value::Address(a))),
+        }
     }
 
     /// Sui does not produce signer values, so we can never extract them.
@@ -101,14 +106,14 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         _: AccountAddress,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         Ok(None)
     }
 
     fn visit_vector(
         &mut self,
         driver: &mut AV::VecDriver<'_, 'v, 'v>,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         let Some(accessor) = self.path.pop() else {
             while driver.skip_element()? {}
             return Ok(Some(Value::Slice(Slice {
@@ -128,8 +133,8 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
     fn visit_struct(
         &mut self,
         driver: &mut AV::StructDriver<'_, 'v, 'v>,
-    ) -> Result<Self::Value, AV::Error> {
-        let Some(accessor) = self.path.pop() else {
+    ) -> Result<Self::Value, Self::Error> {
+        let Some(accessor) = self.path.last() else {
             while driver.skip_field()?.is_some() {}
             return Ok(Some(Value::Slice(Slice {
                 layout: driver.layout()?,
@@ -137,13 +142,19 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
             })));
         };
 
-        // TODO(amnn): Support dynamic field and dynamic object field access
+        if matches!(accessor, Accessor::DFIndex(_) | Accessor::DOFIndex(_)) {
+            return AddressVisitor
+                .visit_struct(driver)
+                .map(|a| a.map(Value::Address));
+        }
+
         // TODO(amnn): Support vec map access
 
         let Some(name) = accessor.as_field_name() else {
             return Ok(None);
         };
 
+        self.path.pop();
         while let Some(field) = driver.peek_field() {
             if field.name.as_str() == name.as_ref() {
                 return Ok(driver.next_field(self)?.and_then(|(_, v)| v));
@@ -158,7 +169,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
     fn visit_variant(
         &mut self,
         driver: &mut AV::VariantDriver<'_, 'v, 'v>,
-    ) -> Result<Self::Value, AV::Error> {
+    ) -> Result<Self::Value, Self::Error> {
         let Some(accessor) = self.path.pop() else {
             while driver.skip_field()?.is_some() {}
             return Ok(Some(Value::Slice(Slice {
