@@ -3,17 +3,14 @@
 
 use crate::{
     balance::Balance,
-    base_types::{move_ascii_str_layout, move_utf8_str_layout, RESOLVED_STD_OPTION},
+    base_types::{move_ascii_str_layout, move_utf8_str_layout, url_layout, RESOLVED_STD_OPTION},
     id::{ID, UID},
-    SUI_FRAMEWORK_ADDRESS,
 };
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::{self as A, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
+    annotated_value::{self as A, MoveStructLayout, MoveTypeLayout},
     annotated_visitor::{self, StructDriver, ValueDriver, VariantDriver, VecDriver, Visitor},
-    ident_str,
-    identifier::IdentStr,
-    language_storage::{StructTag, TypeTag},
+    language_storage::TypeTag,
     u256::U256,
 };
 use prost_types::value::Kind;
@@ -442,24 +439,6 @@ fn is_option(struct_layout: &MoveStructLayout) -> bool {
     }
 
     true
-}
-
-pub const URL_MODULE_NAME: &IdentStr = ident_str!("url");
-pub const URL_STRUCT_NAME: &IdentStr = ident_str!("Url");
-
-fn url_layout() -> MoveStructLayout {
-    MoveStructLayout {
-        type_: StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: URL_MODULE_NAME.to_owned(),
-            name: URL_STRUCT_NAME.to_owned(),
-            type_params: vec![],
-        },
-        fields: vec![MoveFieldLayout::new(
-            ident_str!("url").to_owned(),
-            MoveTypeLayout::Struct(Box::new(move_ascii_str_layout())),
-        )],
-    }
 }
 
 fn is_balance(struct_layout: &MoveStructLayout) -> bool {

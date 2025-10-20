@@ -25,10 +25,15 @@ pub(crate) struct Lexer<'s> {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Lexeme<'s>(pub bool, pub Token, pub usize, pub &'s str);
 
-/// Like [Lexeme] but owns the slice of source string. Useful for capturing context in an error
+/// Like `Lexeme` but owns the slice of source string. Useful for capturing context in an error
 /// message.
-#[derive(Debug)]
-pub(crate) struct OwnedLexeme(pub bool, pub Token, pub usize, pub String);
+#[derive(Debug, Clone)]
+pub struct OwnedLexeme(
+    pub(crate) bool,
+    pub(crate) Token,
+    pub(crate) usize,
+    pub(crate) String,
+);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Token {
