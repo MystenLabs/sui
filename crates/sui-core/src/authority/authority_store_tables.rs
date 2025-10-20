@@ -587,6 +587,17 @@ impl AuthorityPerpetualTables {
         Ok(Some(transaction))
     }
 
+    /// Insert a transaction into the transactions table.
+    /// Used by formal snapshot restore to backfill transactions from the previous epoch.
+    pub fn insert_transaction(
+        &self,
+        digest: &TransactionDigest,
+        transaction: &TrustedTransaction,
+    ) -> SuiResult {
+        self.transactions.insert(digest, transaction)?;
+        Ok(())
+    }
+
     pub fn get_effects(&self, digest: &TransactionDigest) -> SuiResult<Option<TransactionEffects>> {
         let Some(effect_digest) = self.executed_effects.get(digest)? else {
             return Ok(None);
