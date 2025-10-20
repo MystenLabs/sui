@@ -24,12 +24,12 @@ pub trait Connection: Send {
         pipeline: &'static str,
     ) -> anyhow::Result<Option<ReaderWatermark>>;
 
-    /// For some pipeline, get the bounds for the region that the pruner
-    /// is allowed to prune, and the time in milliseconds the pruner must wait before it can begin
-    /// pruning data. The pruner is allowed to prune the region between the returned `pruner_hi`
-    /// (inclusive) and `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has
-    /// passed. This minimizes the possibility for the pruner to delete data still expected by
-    /// inflight read requests.
+    /// Get the bounds for the region that the pruner is allowed to prune, and the time in
+    /// milliseconds the pruner must wait before it can begin pruning data for the given `pipeline`.
+    /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
+    /// `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has passed. This
+    /// minimizes the possibility for the pruner to delete data still expected by inflight read
+    /// requests.
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,

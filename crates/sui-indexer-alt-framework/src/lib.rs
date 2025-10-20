@@ -41,21 +41,26 @@ pub mod mocks;
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Default, Debug, Clone)]
 pub struct IndexerArgs {
-    /// An optional task name to support running one-off or temporary tasks, like backfills. By
-    /// default there is no task name, and pipelines run by an indexer without a configured task
-    /// name are considered main pipelines. Pipelines running on an indexer with a task name are
-    /// considered task pipelines - all pipelines running under a tasked-indexer will have the same
-    /// task name.
+    /// An optional task name for this indexer. When set, pipelines will record watermarks using the
+    /// format `{pipeline}{delimiter}{task}`. This allows the same pipelines to run under multiple
+    /// indexers (e.g. for backfills or temporary workflows) while maintaining separate watermark
+    /// entries in the database.
     ///
-    /// Sequential pipelines can only be run as main pipelines. Concurrent pipelines can be run as
-    /// main and/ or task pipelines.
+    /// By default, no task name is provided, and watermarks are keyed only by `pipeline`. When
+    /// specified, the task name is propagated to all attached pipelines so that their watermark
+    /// entries include both the pipeline and task identifiers.
     ///
-    /// The framework ensures that tasked pipelines do not commit checkpoints that are below the
-    /// main pipeline's reader watermark. If the main pipeline has pruning enabled, the tasked
-    /// pipeline should be run with the same pruning configuration so that the tasked indexer can
-    /// correctly track the main pipeline's pruning and reader watermarks.
-    #[arg(long)]
+    /// Sequential pipelines cannot be attached to a tasked indexer.
+    ///
+    /// The framework ensures that tasked pipelines never commit checkpoints below the main
+    /// pipeline’s reader watermark. If pruning is enabled for the main pipeline, the tasked
+    /// pipeline should use the same pruning configuration to correctly track both the main
+    /// pipeline’s pruning and reader watermarks.
+    #[arg(long, requires = "delimiter")]
     pub task: Option<String>,
+
+    #[arg(long, requires = "task")]
+    pub delimiter: Option<String>,
 
     /// Override for the checkpoint to start ingestion from. By default, ingestion will start just
     /// after the lowest checkpoint watermark across all active pipelines. If set, ingestion will
@@ -91,15 +96,21 @@ pub struct Indexer<S: Store> {
     /// Service for downloading and disseminating checkpoint data.
     ingestion_service: IngestionService,
 
-    /// An optional task name configured on the indexer to support running one-off or temporary
-    /// tasks, like backfills. By default there is no task name, and if left empty, watermark rows
-    /// will be keyed by only the `pipeline`. If one is provided, the indexer will propagate the
-    /// task name to each pipeline such that watermark rows will record both the pipeline and task
-    /// values.
+    /// An optional task name associated with this indexer instance. When set, the indexer records
+    /// all pipeline watermarks using the format `{pipeline}{delimiter}{task}`. This allows multiple
+    /// indexers to run the same pipelines concurrently (e.g. for backfills or temporary workflows)
+    /// while maintaining separate watermark entries in the database.
     ///
-    /// Example: An indexer with task "backfill-2024-01" running pipelines "events" and "objects"
-    /// will create watermark entries for (pipeline="events", task="backfill-2024-01") and
-    /// (pipeline="objects", task="backfill-2024-01").
+    /// By default, the task name is `None`, and watermark rows are keyed only by `pipeline`. When a
+    /// task is provided, the indexer automatically propagates it to all attached pipelines so that
+    /// each pipeline’s watermark entries include both the pipeline and task identifiers.
+    ///
+    /// Sequential pipelines cannot be attached to a tasked indexer.
+    ///
+    /// The framework ensures that tasked pipelines never commit checkpoints below the main
+    /// pipeline’s reader watermark. If pruning is enabled for the main pipeline, the tasked
+    /// pipeline should use the same pruning configuration to correctly track both the main
+    /// pipeline’s pruning and reader watermarks.
     task: Option<Task>,
 
     /// Optional override of the checkpoint lowerbound. By default, ingestion will start just after
@@ -138,6 +149,7 @@ pub struct Indexer<S: Store> {
     handles: Vec<JoinHandle<()>>,
 }
 
+/// Identifies a group of pipelines running under the same tasked indexer.
 #[derive(Clone, Debug)]
 pub struct Task {
     /// The name for the indexer run.
@@ -145,6 +157,21 @@ pub struct Task {
     /// The delimiter used to separate the task name from the pipeline name. Format is
     /// {task_name}{delimiter}{pipeline_name}.
     pub delimiter: String,
+}
+
+impl Task {
+    pub fn new(name: Option<String>, delimiter: Option<String>) -> anyhow::Result<Option<Self>> {
+        // Either both are None or both are Some
+        ensure!(
+            name.is_some() == delimiter.is_some(),
+            "both name and delimiter must be provided or both must be None"
+        );
+        let (Some(name), Some(delimiter)) = (name, delimiter) else {
+            return Ok(None);
+        };
+        ensure!(!name.contains(&delimiter), "name cannot contain delimiter");
+        Ok(Some(Self { name, delimiter }))
+    }
 }
 
 impl<S: Store> Indexer<S> {
@@ -173,6 +200,7 @@ impl<S: Store> Indexer<S> {
             last_checkpoint,
             pipeline,
             task,
+            delimiter,
         } = indexer_args;
 
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
@@ -184,9 +212,7 @@ impl<S: Store> Indexer<S> {
             cancel.clone(),
         )?;
 
-        // TODO (wlmyng)
-        let delimiter = "@".to_string();
-        let task = task.map(|t| Task { name: t, delimiter });
+        let task = Task::new(task, delimiter)?;
 
         Ok(Self {
             store,
@@ -386,10 +412,10 @@ impl<S: Store> Indexer<S> {
         pipeline.to_string()
     }
 
-    pub fn is_valid_pipeline_name(&self, pipeline: &'static str) -> bool {
+    pub fn is_valid(&self, value: &str) -> bool {
         if let Some(task) = &self.task {
-            // check delimiter is not in the pipeline name
-            if pipeline.contains(&task.delimiter) {
+            // check delimiter is not in the value
+            if value.contains(&task.delimiter) {
                 return false;
             }
         }
@@ -405,10 +431,10 @@ impl<S: Store> Indexer<S> {
         &mut self,
     ) -> Result<Option<Option<CommitterWatermark>>> {
         ensure!(
-            self.is_valid_pipeline_name(P::NAME),
+            self.is_valid(P::NAME),
             "Invalid pipeline name: {} contains delimiter {}",
             P::NAME,
-            // SAFETY: We know task is Some because we checked it in is_valid_pipeline_name
+            // SAFETY: We know task is Some because we checked it in is_valid
             self.task.as_ref().unwrap().delimiter
         );
 
@@ -692,10 +718,10 @@ mod tests {
         .unwrap();
 
         let indexer_args = IndexerArgs {
-            task: None,
             first_checkpoint: Some(50),
             last_checkpoint: None,
             pipeline: vec![],
+            ..Default::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
@@ -748,7 +774,7 @@ mod tests {
             first_checkpoint: Some(1001),
             last_checkpoint: None,
             pipeline: vec![],
-            task: None,
+            ..Default::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
@@ -800,7 +826,7 @@ mod tests {
             first_checkpoint: Some(1001),
             last_checkpoint: None,
             pipeline: vec![],
-            task: None,
+            ..Default::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
@@ -853,6 +879,7 @@ mod tests {
             last_checkpoint: None,
             pipeline: vec![],
             task: Some("should_fail".to_string()),
+            delimiter: Some("@".to_string()),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
@@ -907,7 +934,7 @@ mod tests {
             first_checkpoint: Some(indexer_first_checkpoint),
             last_checkpoint: Some(indexer_first_checkpoint + num_ingested_checkpoints - 1),
             pipeline: vec![],
-            task: None,
+            ..Default::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -985,7 +1012,7 @@ mod tests {
             first_checkpoint: Some(indexer_first_checkpoint),
             last_checkpoint: Some(indexer_first_checkpoint + checkpoints_to_ingest - 1),
             pipeline: vec![],
-            task: None,
+            ..Default::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1086,7 +1113,7 @@ mod tests {
             first_checkpoint: None,
             last_checkpoint: Some(19),
             pipeline: vec![],
-            task: None,
+            ..Default::default()
         };
 
         let client_args = ClientArgs {
@@ -1184,6 +1211,7 @@ mod tests {
             last_checkpoint: Some(15),
             pipeline: vec![],
             task: Some("task".to_string()),
+            delimiter: Some("@".to_string()),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1271,6 +1299,7 @@ mod tests {
             last_checkpoint: Some(25),
             pipeline: vec![],
             task: Some("task".to_string()),
+            delimiter: Some("@".to_string()),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1339,7 +1368,7 @@ mod tests {
 
     /// During a run, the tasked pipeline will stop processing checkpoints before the main
     /// pipeline's reader watermark.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    #[tokio::test]
     async fn test_tasked_pipelines_stop_when_trailing_main_reader_lo() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
@@ -1362,6 +1391,7 @@ mod tests {
             last_checkpoint: Some(31),
             pipeline: vec![],
             task: Some("task".to_string()),
+            delimiter: Some("@".to_string()),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1413,6 +1443,7 @@ mod tests {
             tasked_indexer.run().await.unwrap().await.unwrap();
         });
 
+        // This wait ensures that the tasked pipeline has started committing data.
         store
             .wait_for_any_data(
                 MockCheckpointSequenceNumberHandler::NAME,
@@ -1420,9 +1451,9 @@ mod tests {
             )
             .await;
 
-        // Artificially bump the main pipeline's watermarks.
+        // Emulate a pruning cycle. Artificially bump the main pipeline's watermarks.
         conn.set_committer_watermark(
-            "test",
+            MockCheckpointSequenceNumberHandler::NAME,
             CommitterWatermark {
                 checkpoint_hi_inclusive: 30,
                 ..Default::default()
@@ -1433,7 +1464,9 @@ mod tests {
         conn.set_reader_watermark(MockCheckpointSequenceNumberHandler::NAME, 26)
             .await
             .unwrap();
-        // And prune data
+        // Sleep to emulate pruner delay.
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        // And prune data.
         store
             .prune_data(MockCheckpointSequenceNumberHandler::NAME, 0, 26)
             .unwrap();
