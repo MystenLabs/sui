@@ -16100,6 +16100,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-rpc-resolver"
+version = "1.60.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.21.7",
+ "bcs",
+ "futures",
+ "lru 0.10.0",
+ "move-core-types",
+ "serde",
+ "serde_json",
+ "sui-json-rpc-api",
+ "sui-json-rpc-types",
+ "sui-package-resolver",
+ "sui-rpc-api",
+ "sui-sdk",
+ "sui-types",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "sui-sdk"
 version = "1.60.0"
 dependencies = [

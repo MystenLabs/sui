@@ -5,6 +5,7 @@ use crate::{
     balance::Balance,
     base_types::{move_ascii_str_layout, move_utf8_str_layout, RESOLVED_STD_OPTION},
     id::{ID, UID},
+    object::option_visitor::{OptionVisitor, OptionVisitorError},
     SUI_FRAMEWORK_ADDRESS,
 };
 use move_core_types::{
@@ -54,6 +55,12 @@ pub enum Error {
 
     #[error("Unexpected type")]
     UnexpectedType,
+}
+
+impl OptionVisitorError for Error {
+    fn unexpected_type() -> Self {
+        Error::UnexpectedType
+    }
 }
 
 impl ProtoVisitorBuilder {
@@ -323,131 +330,10 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
     }
 }
 
-struct OptionVisitor<'a, T>(&'a mut T);
-
-impl<'b, 'l, T> Visitor<'b, 'l> for OptionVisitor<'_, T>
-where
-    T: Visitor<'b, 'l, Error = Error>,
-{
-    type Value = Option<T::Value>;
-    type Error = Error;
-
-    fn visit_vector(&mut self, driver: &mut VecDriver<'_, 'b, 'l>) -> Result<Self::Value, Error> {
-        match driver.len() {
-            0 => Ok(None),
-            1 => driver.next_element(self.0),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    fn visit_struct(
-        &mut self,
-        driver: &mut StructDriver<'_, 'b, 'l>,
-    ) -> Result<Self::Value, Error> {
-        if is_option(driver.struct_layout()) {
-            driver
-                .next_field(self)?
-                .ok_or(Error::UnexpectedType)
-                .map(|(_, option)| option)
-        } else {
-            Err(Error::UnexpectedType)
-        }
-    }
-
-    // === Empty/default casees ===
-
-    fn visit_u8(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u8) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-
-    fn visit_u16(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u16) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-
-    fn visit_u32(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u32) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-
-    fn visit_u64(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u64) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-
-    fn visit_u128(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u128) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-
-    fn visit_u256(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: U256) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-
-    fn visit_bool(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: bool) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-
-    fn visit_address(
-        &mut self,
-        _: &ValueDriver<'_, 'b, 'l>,
-        _: AccountAddress,
-    ) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-
-    fn visit_signer(
-        &mut self,
-        _: &ValueDriver<'_, 'b, 'l>,
-        _: AccountAddress,
-    ) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-
-    fn visit_variant(&mut self, _: &mut VariantDriver<'_, 'b, 'l>) -> Result<Self::Value, Error> {
-        Err(Error::UnexpectedType)
-    }
-}
-
-fn is_option(struct_layout: &MoveStructLayout) -> bool {
-    let ty = &struct_layout.type_;
-
-    if (&ty.address, ty.module.as_ref(), ty.name.as_ref()) != RESOLVED_STD_OPTION {
-        return false;
-    }
-
-    if ty.type_params.len() != 1 {
-        return false;
-    }
-
-    let Some(type_param) = ty.type_params.first() else {
-        return false;
-    };
-
-    if struct_layout.fields.len() != 1 {
-        return false;
-    }
-
-    let Some(field) = struct_layout.fields.first() else {
-        return false;
-    };
-
-    if field.name.as_str() != "vec" {
-        return false;
-    }
-
-    match &field.layout {
-        MoveTypeLayout::Vector(elem) => {
-            if !elem.is_type(type_param) {
-                return false;
-            }
-        }
-        _ => return false,
-    }
-
-    true
-}
-
 pub const URL_MODULE_NAME: &IdentStr = ident_str!("url");
 pub const URL_STRUCT_NAME: &IdentStr = ident_str!("Url");
 
-fn url_layout() -> MoveStructLayout {
+pub fn url_layout() -> MoveStructLayout {
     MoveStructLayout {
         type_: StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
@@ -462,7 +348,7 @@ fn url_layout() -> MoveStructLayout {
     }
 }
 
-fn is_balance(struct_layout: &MoveStructLayout) -> bool {
+pub fn is_balance(struct_layout: &MoveStructLayout) -> bool {
     let ty = &struct_layout.type_;
 
     if !Balance::is_balance(ty) {
