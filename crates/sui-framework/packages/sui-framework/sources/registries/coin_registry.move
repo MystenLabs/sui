@@ -14,6 +14,7 @@ use sui::bag::{Self, Bag};
 use sui::balance::{Supply, Balance};
 use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata, Coin};
 use sui::derived_object;
+use sui::dynamic_object_field as dof;
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
 
@@ -53,6 +54,13 @@ const EEmptySupply: vector<u8> = b"Supply cannot be empty.";
 const ESupplyNotBurnOnly: vector<u8> = b"Cannot burn on a non burn-only supply.";
 #[error(code = 11)]
 const EInvariantViolation: vector<u8> = b"Code invariant violation.";
+#[error(code = 12)]
+const ENotSupported: vector<u8> = b"Deleting legacy metadata is no longer supported.";
+#[error(code = 13)]
+const ELegacyMetadataDoesNotExist: vector<u8> =
+    b"Cannot borrow legacy metadata for a legacy currency.";
+#[error(code = 14)]
+const EWrongBorrow: vector<u8> = b"Cannot return a different metadata object.";
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
@@ -70,6 +78,9 @@ public struct CoinRegistry has key {
 /// without changing the `Currency` structure.
 #[allow(unused_field)]
 public struct ExtraField(TypeName, vector<u8>) has store;
+
+/// Key to store the DOF for legacy `CoinMetadata`
+public struct LegacyMetadataKey() has copy, drop, store;
 
 /// Key used to derive addresses when creating `Currency<T>` objects.
 public struct CurrencyKey<phantom T>() has copy, drop, store;
@@ -312,6 +323,10 @@ public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): Me
     let id = object::new(ctx);
     currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
 
+    // Store the legacy metadata as a DOF for backwards compatibility.
+    let legacy_metadata = currency.new_legacy(ctx);
+    dof::add(&mut currency.id, LegacyMetadataKey(), legacy_metadata);
+
     if (is_otw) transfer::transfer(currency, object::sui_coin_registry_address())
     else transfer::share_object(currency);
 
@@ -331,7 +346,7 @@ public fun finalize_registration<T>(
     // 1. Consume Currency
     // 2. Re-create it with a "derived" address.
     let Currency {
-        id,
+        mut id,
         decimals,
         name,
         symbol,
@@ -343,9 +358,8 @@ public fun finalize_registration<T>(
         metadata_cap_id,
         extra_fields,
     } = transfer::receive(&mut registry.id, currency);
-    id.delete();
-    // Now, create the derived version of the coin currency.
-    transfer::share_object(Currency {
+
+    let mut currency = Currency {
         id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
         decimals,
         name,
@@ -357,7 +371,15 @@ public fun finalize_registration<T>(
         treasury_cap_id,
         metadata_cap_id,
         extra_fields,
-    })
+    };
+
+    // Remove from the previous ID and add it to the derived one.
+    if (dof::exists_(&id, LegacyMetadataKey())) {
+        let legacy_metadata: CoinMetadata<T> = dof::remove(&mut id, LegacyMetadataKey());
+        dof::add(&mut currency.id, LegacyMetadataKey(), legacy_metadata);
+    };
+    transfer::share_object(currency);
+    id.delete();
 }
 
 /// Delete the metadata cap making further updates of `Currency` metadata impossible.
@@ -457,14 +479,10 @@ public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &C
         legacy.get_icon_url().map!(|url| url.inner_url().to_string()).destroy_or!(b"".to_string());
 }
 
-/// Delete the legacy `CoinMetadata` object if the metadata cap for the new registry
-/// has already been claimed.
-///
-/// This function is only callable after there's "proof" that the author of the coin
-/// can manage the metadata using the registry system (so having a metadata cap claimed).
-public fun delete_migrated_legacy_metadata<T>(currency: &mut Currency<T>, legacy: CoinMetadata<T>) {
-    assert!(currency.is_metadata_cap_claimed(), EMetadataCapNotClaimed);
-    legacy.destroy_metadata();
+/// Deleting `legacy` metadata is no longer supported to avoid removing
+/// backwards compatibility.
+public fun delete_migrated_legacy_metadata<T>(_: &mut Currency<T>, _: CoinMetadata<T>) {
+    abort ENotSupported
 }
 
 /// Allow migrating the regulated state by access to `RegulatedCoinMetadata` frozen object.
@@ -587,6 +605,57 @@ public fun total_supply<T>(currency: &Currency<T>): Option<u64> {
 /// Check if coin data exists for the given type T in the registry.
 public fun exists<T>(registry: &CoinRegistry): bool {
     derived_object::exists(&registry.id, CurrencyKey<T>())
+}
+
+/// Create a new instance of legacy `CoinMetadata` object from a `Currency`.
+fun new_legacy<T>(currency: &Currency<T>, ctx: &mut TxContext): CoinMetadata<T> {
+    coin::new_metadata<T>(
+        currency.decimals,
+        currency.name,
+        currency.symbol.to_ascii(),
+        currency.description,
+        currency.icon_url,
+        ctx,
+    )
+}
+
+// === Compatibility: Borrow Legacy Metadata ===
+
+/// Ensures that the borrowed legacy `CoinMetadata` object is returned.
+/// See `borrow_as_legacy_metadata` and `return_borrowed_legacy_metadata` for
+/// more details.
+public struct BorrowLegacyMetadata(ID)
+
+/// Borrow the legacy `CoinMetadata` object if it exists to use in older functions
+/// that still depend on the `CoinMetadata` object. This is only supported for
+/// new currencies, and cannot work with legacy ones.
+public fun borrow_as_legacy_metadata<T>(
+    currency: &mut Currency<T>,
+): (CoinMetadata<T>, BorrowLegacyMetadata) {
+    assert!(dof::exists_(&currency.id, LegacyMetadataKey()), ELegacyMetadataDoesNotExist);
+
+    let mut legacy: CoinMetadata<T> = dof::remove(
+        &mut currency.id,
+        LegacyMetadataKey(),
+    );
+
+    let borrow = BorrowLegacyMetadata(object::id(&legacy));
+
+    // Make sure the legacy metadata is up to date based on the `Currency` state.
+    legacy.update_metadata(currency.name, currency.description, currency.icon_url);
+
+    (legacy, borrow)
+}
+
+/// Return the borrowed legacy `CoinMetadata` object back to the `Currency`.
+public fun return_borrowed_legacy_metadata<T>(
+    currency: &mut Currency<T>,
+    legacy: CoinMetadata<T>,
+    borrow: BorrowLegacyMetadata,
+) {
+    let BorrowLegacyMetadata(id) = borrow;
+    assert!(object::id(&legacy) == id, EWrongBorrow);
+    dof::add(&mut currency.id, LegacyMetadataKey(), legacy);
 }
 
 #[allow(unused_function)]
