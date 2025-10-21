@@ -41,22 +41,27 @@ use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
 use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, LocalFaucet};
-use sui_indexer::test_utils::{
-    start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
-};
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move::summary::PackageSummaryMetadata;
 use sui_sdk::apis::ReadApi;
 use sui_sdk::SuiClient;
 use sui_types::move_package::MovePackage;
 
-use sui_graphql_rpc::{
-    config::{ConnectionConfig, ServiceConfig},
-    test_infra::cluster::start_graphql_server_with_fn_rpc,
-};
-
 use move_core_types::account_address::AccountAddress;
 use serde_json::json;
+use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
+use sui_indexer_alt_consistent_store::{
+    args::RpcArgs as ConsistentArgs, config::ServiceConfig as ConsistentConfig,
+    start_service as start_consistent_store,
+};
+use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
+use sui_indexer_alt_graphql::{
+    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
+};
+use sui_indexer_alt_reader::{
+    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
+    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+};
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -67,6 +72,7 @@ use sui_move_build::{
     implicit_deps, BuildConfig as SuiBuildConfig, SuiPackageHooks,
 };
 use sui_package_management::system_package_versions::latest_system_packages;
+use sui_pg_db::DbArgs;
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -79,8 +85,8 @@ use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
 use sui_types::digests::ChainIdentifier;
-use tracing;
 use tracing::info;
+use url::Url;
 
 const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;
 
@@ -92,7 +98,7 @@ const DEFAULT_GRAPHQL_PORT: u16 = 9125;
 const DEFAULT_INDEXER_PORT: u16 = 9124;
 
 #[derive(Args)]
-pub struct IndexerArgs {
+pub struct RpcArgs {
     /// Start an indexer with default host and port: 0.0.0.0:9124. This flag accepts also a port,
     /// a host, or both (e.g., 0.0.0.0:9124).
     /// When providing a specific value, please use the = sign between the flag and value:
@@ -142,7 +148,7 @@ pub struct IndexerArgs {
     pg_password: String,
 }
 
-impl IndexerArgs {
+impl RpcArgs {
     pub fn for_testing() -> Self {
         Self {
             with_indexer: None,
@@ -223,7 +229,7 @@ pub enum SuiCommand {
         with_faucet: Option<String>,
 
         #[clap(flatten)]
-        indexer_feature_args: IndexerArgs,
+        rpc_args: RpcArgs,
 
         /// Port to start the Fullnode RPC server on. Default port is 9000.
         #[clap(long, default_value = "9000")]
@@ -426,7 +432,7 @@ impl SuiCommand {
                 config_dir,
                 force_regenesis,
                 with_faucet,
-                indexer_feature_args,
+                rpc_args,
                 fullnode_rpc_port,
                 data_ingestion_dir,
                 no_full_node,
@@ -436,7 +442,7 @@ impl SuiCommand {
                 start(
                     config_dir.clone(),
                     with_faucet,
-                    indexer_feature_args,
+                    rpc_args,
                     force_regenesis,
                     epoch_duration_ms,
                     fullnode_rpc_port,
@@ -834,7 +840,7 @@ impl SuiCommand {
 async fn start(
     config: Option<PathBuf>,
     with_faucet: Option<String>,
-    indexer_feature_args: IndexerArgs,
+    rpc_args: RpcArgs,
     force_regenesis: bool,
     epoch_duration_ms: Option<u64>,
     fullnode_rpc_port: u16,
@@ -849,7 +855,7 @@ async fn start(
         );
     }
 
-    let IndexerArgs {
+    let RpcArgs {
         mut with_indexer,
         with_graphql,
         pg_port,
@@ -857,7 +863,7 @@ async fn start(
         pg_db_name,
         pg_user,
         pg_password,
-    } = indexer_feature_args;
+    } = rpc_args;
 
     let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
 
@@ -1016,9 +1022,15 @@ async fn start(
     if no_full_node {
         swarm_builder = swarm_builder.with_fullnode_count(0);
     } else {
+        let rpc_config = sui_config::RpcConfig {
+            enable_indexing: Some(true),
+            ..Default::default()
+        };
+
         swarm_builder = swarm_builder
             .with_fullnode_count(1)
-            .with_fullnode_rpc_addr(fullnode_url);
+            .with_fullnode_rpc_addr(fullnode_url)
+            .with_fullnode_rpc_config(rpc_config);
     }
 
     let mut swarm = swarm_builder.build();
@@ -1028,61 +1040,125 @@ async fn start(
     info!("Cluster started");
 
     // the indexer requires a fullnode url with protocol specified
-    let fullnode_url = format!("http://{}", fullnode_url);
-    info!("Fullnode URL: {}", fullnode_url);
+    let fullnode_url_str = format!("http://{}", fullnode_url);
+    info!("Fullnode URL: {}", fullnode_url_str);
 
-    if let Some(input) = with_indexer {
+    let pipelines = if let Some(input) = with_indexer {
         let indexer_address = parse_host_port(input, DEFAULT_INDEXER_PORT)
-            .map_err(|_| anyhow!("Invalid indexer host and port"))?;
-        info!("Starting the indexer service at {indexer_address}");
-        // Start in reader mode
-        start_indexer_jsonrpc_for_testing(
-            pg_address.clone(),
-            fullnode_url.clone(),
-            indexer_address.to_string(),
-            None,
-        )
-        .await;
-        info!("Indexer started in reader mode");
-        start_indexer_writer_for_testing(
-            pg_address.clone(),
-            None,
-            None,
-            // We ensured above that this is set to something if --with-indexer is set
-            data_ingestion_dir,
-            None,
-            None, /* start_checkpoint */
-            None, /* end_checkpoint */
-        )
-        .await;
-        info!("Indexer started in writer mode");
-    }
+            .context("Invalid indexer host and port")?;
+        info!("Starting the indexer-alt service at {indexer_address}");
 
-    if let Some(input) = with_graphql {
-        let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
-            .map_err(|_| anyhow!("Invalid graphql host and port"))?;
-        tracing::info!("Starting the GraphQL service at {graphql_address}");
-        let graphql_connection_config = ConnectionConfig {
-            port: graphql_address.port(),
-            host: graphql_address.ip().to_string(),
-            db_url: pg_address,
+        let client_args = ClientArgs {
+            local_ingestion_path: data_ingestion_dir.clone(),
             ..Default::default()
         };
 
-        start_graphql_server_with_fn_rpc(
-            graphql_connection_config,
-            Some(fullnode_url.clone()),
-            None, // it will be initialized by default
-            ServiceConfig::test_defaults(),
+        let database_url = Url::parse(&pg_address).context("Invalid database URL")?;
+
+        let indexer = setup_indexer(
+            database_url,
+            DbArgs::default(),
+            IndexerArgs::default(),
+            client_args,
+            IndexerConfig::for_test(),
+            None,
+            &prometheus::Registry::new(),
+            tokio_util::sync::CancellationToken::new(),
         )
-        .await;
-        info!("GraphQL started");
+        .await
+        .context("Failed to setup indexer")?;
+
+        let pipelines = indexer.pipelines().map(|s| s.to_string()).collect();
+
+        let _indexer_handle = indexer.run().await.context("Failed to start indexer")?;
+
+        info!("Indexer-alt started with pipelines: {pipelines:?}");
+        pipelines
+    } else {
+        vec![]
+    };
+
+    if let Some(input) = with_graphql {
+        let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
+            .context("Invalid graphql host and port")?;
+
+        info!("Starting the GraphQL service at {graphql_address}");
+
+        let consistent_port = graphql_address.port() + 1;
+        let consistent_listen_address = SocketAddr::new(graphql_address.ip(), consistent_port);
+
+        let client_args = ClientArgs {
+            local_ingestion_path: data_ingestion_dir.clone(),
+            ..Default::default()
+        };
+
+        let database_url = Url::parse(&pg_address).context("Invalid database URL")?;
+
+        let rocksdb_dir = mysten_common::tempdir()?.keep();
+        let rocksdb_path = rocksdb_dir.join("rocksdb");
+
+        let consistent_args = ConsistentArgs {
+            rpc_listen_address: consistent_listen_address,
+            ..Default::default()
+        };
+
+        let _consistent_store_handle = start_consistent_store(
+            rocksdb_path,
+            IndexerArgs::default(),
+            client_args,
+            consistent_args,
+            "0.0.0",
+            ConsistentConfig::for_test(),
+            &prometheus::Registry::new(),
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await
+        .context("Failed to start Consistent Store")?;
+
+        info!("Consistent Store started at {consistent_listen_address}");
+
+        let graphql_args = GraphQlArgs {
+            rpc_listen_address: graphql_address,
+            no_ide: false,
+        };
+
+        let consistent_reader_args = ConsistentReaderArgs {
+            consistent_store_url: Some(
+                Url::parse(&format!("http://{}", consistent_listen_address))
+                    .context("Failed to parse consistent store URL")?,
+            ),
+            ..Default::default()
+        };
+
+        let fullnode_args = FullnodeArgs {
+            fullnode_rpc_url: Some(fullnode_url_str.clone()),
+        };
+
+        let _graphql_handle = start_graphql(
+            Some(database_url),
+            None,
+            fullnode_args,
+            DbArgs::default(),
+            BigtableArgs::default(),
+            consistent_reader_args,
+            graphql_args,
+            SystemPackageTaskArgs::default(),
+            "0.0.0",
+            GraphQlConfig::default(),
+            pipelines,
+            &prometheus::Registry::new(),
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await
+        .context("Failed to start GraphQL server")?;
+
+        info!("GraphQL started at {graphql_address}");
     }
 
     if let Some(input) = with_faucet {
         let faucet_address = parse_host_port(input, DEFAULT_FAUCET_PORT)
             .map_err(|_| anyhow!("Invalid faucet host and port"))?;
-        tracing::info!("Starting the faucet service at {faucet_address}");
+        info!("Starting the faucet service at {faucet_address}");
 
         let host_ip = match faucet_address {
             SocketAddr::V4(addr) => *addr.ip(),
@@ -1111,7 +1187,7 @@ async fn start(
                 external_keys: None,
                 envs: vec![SuiEnv {
                     alias: "localnet".to_string(),
-                    rpc: fullnode_url,
+                    rpc: fullnode_url_str,
                     ws: None,
                     basic_auth: None,
                 }],
