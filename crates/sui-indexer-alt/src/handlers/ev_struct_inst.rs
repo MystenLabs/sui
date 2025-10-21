@@ -58,13 +58,14 @@ impl Processor for EvStructInst {
 #[async_trait]
 impl Handler for EvStructInst {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
 
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(ev_struct_inst::table)
-            .values(values)
+            .values(batch)
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
@@ -142,7 +143,7 @@ mod tests {
         );
 
         let values = EvStructInst.process(&checkpoint).await.unwrap();
-        EvStructInst::commit(&values, &mut conn).await.unwrap();
+        EvStructInst.commit(&values, &mut conn).await.unwrap();
 
         assert_eq!(values.len(), 0);
     }
@@ -162,7 +163,7 @@ mod tests {
 
         // Process checkpoint with one event
         let values = EvStructInst.process(&checkpoint).await.unwrap();
-        EvStructInst::commit(&values, &mut conn).await.unwrap();
+        EvStructInst.commit(&values, &mut conn).await.unwrap();
 
         let events = get_all_ev_struct_inst(&mut conn).await.unwrap();
         assert_eq!(events.len(), 1);
@@ -179,9 +180,9 @@ mod tests {
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = EvStructInst.process(&checkpoint).await.unwrap();
 
-        EvStructInst::commit(&values, &mut conn).await.unwrap();
+        EvStructInst.commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
-        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+        CpSequenceNumbers.commit(&values, &mut conn).await.unwrap();
 
         // 1st checkpoint has 1 event
         builder = builder
@@ -191,9 +192,9 @@ mod tests {
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = EvStructInst.process(&checkpoint).await.unwrap();
 
-        EvStructInst::commit(&values, &mut conn).await.unwrap();
+        EvStructInst.commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
-        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+        CpSequenceNumbers.commit(&values, &mut conn).await.unwrap();
 
         // 2nd checkpoint has 2 events
         builder = builder
@@ -206,9 +207,9 @@ mod tests {
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = EvStructInst.process(&checkpoint).await.unwrap();
 
-        EvStructInst::commit(&values, &mut conn).await.unwrap();
+        EvStructInst.commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
-        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+        CpSequenceNumbers.commit(&values, &mut conn).await.unwrap();
 
         // Prune checkpoints from `[0, 2)`, expect 2 events remaining
         let rows_pruned = EvStructInst.prune(0, 2, &mut conn).await.unwrap();

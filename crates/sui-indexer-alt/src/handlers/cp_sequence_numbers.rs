@@ -41,10 +41,11 @@ impl Processor for CpSequenceNumbers {
 #[async_trait]
 impl Handler for CpSequenceNumbers {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(cp_sequence_numbers::table)
-            .values(values)
+            .values(batch)
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)

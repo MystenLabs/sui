@@ -294,11 +294,14 @@ mod tests {
     #[async_trait]
     impl concurrent::Handler for TxCounts {
         type Store = Db;
+        type Batch = Vec<Self::Value>;
 
         async fn commit<'a>(
-            values: &[Self::Value],
+            &self,
+            batch: &Self::Batch,
             conn: &mut Connection<'a>,
         ) -> anyhow::Result<usize> {
+            let values = batch.as_slice();
             Ok(diesel::insert_into(tx_counts::table)
                 .values(values)
                 .on_conflict_do_nothing()

@@ -150,15 +150,16 @@ impl Processor for CoinBalanceBuckets {
 #[async_trait]
 impl Handler for CoinBalanceBuckets {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
-        let stored = values
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
+        let stored = batch
             .iter()
             .map(|v| v.try_into())
             .collect::<Result<Vec<StoredCoinBalanceBucket>>>()?;
 
         let mut references = Vec::new();
-        for value in values {
+        for value in batch {
             match &value.change {
                 CoinBalanceBucketChangeKind::Upsert { created, .. } => {
                     if !created {
@@ -492,9 +493,7 @@ mod tests {
                 ..
             }
         )));
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 2);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 2);
@@ -528,9 +527,7 @@ mod tests {
                 created: true,
             }
         );
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 1);
@@ -564,9 +561,7 @@ mod tests {
                 created: true,
             }
         );
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 1);
@@ -595,9 +590,7 @@ mod tests {
                 created: true
             }
         );
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 2);
@@ -635,9 +628,7 @@ mod tests {
                 owner_id: TestCheckpointBuilder::derive_address(1),
                 created: true,
             }));
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         // 2 inserts to main table, only 1 from the transfer - creations don't emit rows on ref
         // table.
         assert_eq!(rows_inserted, 3);
@@ -697,9 +688,7 @@ mod tests {
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
         builder = builder
@@ -713,9 +702,7 @@ mod tests {
             .unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         // 1 insertion to main table, 2 to ref table because of delete.
         assert_eq!(rows_inserted, 3);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
@@ -753,9 +740,7 @@ mod tests {
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
         builder = builder
@@ -778,9 +763,7 @@ mod tests {
                 created: false,
             }
         );
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 2);
 
         let rows_pruned = CoinBalanceBuckets.prune(0, 2, &mut conn).await.unwrap();
@@ -814,9 +797,7 @@ mod tests {
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
         // So this is considered as a delete.
@@ -831,9 +812,7 @@ mod tests {
             .unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 3);
 
         let rows_pruned = CoinBalanceBuckets.prune(0, 2, &mut conn).await.unwrap();
@@ -859,9 +838,7 @@ mod tests {
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
         // Wrap the coin in checkpoint 1
@@ -877,9 +854,7 @@ mod tests {
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
         // 1 insertion to main table, 2 to ref table because of wrap.
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 3);
 
         // Unwrap the coin in checkpoint 2
@@ -903,9 +878,7 @@ mod tests {
                 created: true,
             }
         );
-        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&values, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
         // Prune after unwrap
@@ -939,9 +912,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result.len(), 3);
-        let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 3);
 
         // Transfer all coins to address 1 in checkpoint 1
@@ -957,9 +928,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result.len(), 3);
-        let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 6);
 
         // Transfer all coins back to address 0 in checkpoint 2
@@ -975,9 +944,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result.len(), 3);
-        let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
-            .await
-            .unwrap();
+        let rows_inserted = CoinBalanceBuckets.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 6);
 
         // Each of the 3 coins will have two deletion references, one at cp_sequence_number 1, another at 2.
@@ -1050,9 +1017,7 @@ mod tests {
             .process(&Arc::new(checkpoint0))
             .await
             .unwrap();
-        CoinBalanceBuckets::commit(&result, &mut conn)
-            .await
-            .unwrap();
+        CoinBalanceBuckets.commit(&result, &mut conn).await.unwrap();
 
         builder = builder
             .start_transaction(0)
@@ -1065,9 +1030,7 @@ mod tests {
             .process(&Arc::new(checkpoint1))
             .await
             .unwrap();
-        CoinBalanceBuckets::commit(&result, &mut conn)
-            .await
-            .unwrap();
+        CoinBalanceBuckets.commit(&result, &mut conn).await.unwrap();
 
         builder = builder
             .start_transaction(1)
@@ -1080,9 +1043,7 @@ mod tests {
             .process(&Arc::new(checkpoint2))
             .await
             .unwrap();
-        CoinBalanceBuckets::commit(&result, &mut conn)
-            .await
-            .unwrap();
+        CoinBalanceBuckets.commit(&result, &mut conn).await.unwrap();
 
         // Verify initial state
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;

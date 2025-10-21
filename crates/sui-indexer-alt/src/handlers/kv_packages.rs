@@ -58,10 +58,11 @@ impl Processor for KvPackages {
 #[async_trait]
 impl Handler for KvPackages {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_packages::table)
-            .values(values)
+            .values(batch)
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
