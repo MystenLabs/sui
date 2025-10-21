@@ -657,7 +657,11 @@ export class Runtime extends EventEmitter {
         }
         let currentEvent = this.trace.events[this.eventIndex];
 
-        if (currentEvent.type === TraceEventKind.Instruction ||
+        if (currentEvent.type === TraceEventKind.Effect &&
+            // error effects may happen inside or outside of Move calls
+            currentEvent.effect.type === TraceEffectKind.ExecutionError) {
+            return ExecutionResult.Exception;
+        } else if (currentEvent.type === TraceEventKind.Instruction ||
             currentEvent.type === TraceEventKind.ReplaceInlinedFrame ||
             currentEvent.type === TraceEventKind.OpenFrame ||
             currentEvent.type === TraceEventKind.CloseFrame ||
@@ -881,9 +885,6 @@ export class Runtime extends EventEmitter {
                 }
             } else if (currentEvent.type === TraceEventKind.Effect) {
                 const effect = currentEvent.effect;
-                if (effect.type === TraceEffectKind.ExecutionError) {
-                    return ExecutionResult.Exception;
-                }
                 if (effect.type === TraceEffectKind.Write) {
                     const traceLocation = effect.indexedLoc.loc;
                     if ('globalIndex' in traceLocation) {
