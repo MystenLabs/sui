@@ -426,6 +426,15 @@ pub fn ids_for_address(
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+
+    // Try to populate fork inventories (will load objects from storage on-demand)
+    try_populate_fork_inventories_for_address(
+        context,
+        &specified_ty,
+        specified_obj_ty.clone(),
+        account,
+    )?;
+
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let ids = inventories

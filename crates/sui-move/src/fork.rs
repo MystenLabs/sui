@@ -1,21 +1,31 @@
-// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) Amber Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Result};
 use move_core_types::language_storage::StructTag;
+use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::path::Path;
 use std::str::FromStr;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::rpc_types::SuiObjectDataOptions;
 use sui_sdk::rpc_types::SuiRawData;
 use sui_sdk::SuiClientBuilder;
 use sui_types::{
-    base_types::{MoveObjectType, ObjectID},
+    base_types::{MoveObjectType, ObjectID, SuiAddress},
     in_memory_storage::InMemoryStorage,
     object::{Data, MoveObject, Object},
 };
+
+#[derive(Debug, Deserialize)]
+struct ObjectIdsToml {
+    #[serde(default)]
+    objects: Vec<String>,
+    #[serde(default)]
+    addresses: Vec<String>,
+}
 
 pub struct ForkStateLoader {
     rpc_url: String,
@@ -37,16 +47,43 @@ impl ForkStateLoader {
             .await
             .map_err(|e| anyhow!("Failed to create Sui client: {}", e))?;
 
-        let object_ids_to_load = self.load_object_ids_from_file(&object_id_file)?;
+        let (object_ids_from_file, addresses_from_file) = if object_id_file.ends_with(".toml") {
+            self.parse_toml_file(&object_id_file)?
+        } else {
+            self.parse_ids_and_addresses_from_file(&object_id_file)?
+        };
 
-        if object_ids_to_load.is_empty() {
+        let mut all_object_ids = object_ids_from_file;
+
+        // For each address found, fetch all owned objects
+        for address in addresses_from_file {
+            println!("Fetching owned objects for address: {}", address);
+            match self.fetch_owned_objects(&client, address).await {
+                Ok(owned_ids) => {
+                    println!(
+                        "  Found {} owned objects for address {}",
+                        owned_ids.len(),
+                        address
+                    );
+                    all_object_ids.extend(owned_ids);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "  Warning: Failed to fetch owned objects for {}: {}",
+                        address, e
+                    );
+                }
+            }
+        }
+
+        if all_object_ids.is_empty() {
             println!("No objects found in file");
             return Ok(InMemoryStorage::default());
         }
 
-        println!("Found {} object IDs to fetch", object_ids_to_load.len());
+        println!("Total {} object IDs to fetch", all_object_ids.len());
 
-        let objects = self.fetch_objects(&client, object_ids_to_load).await?;
+        let objects = self.fetch_objects(&client, all_object_ids).await?;
 
         let mut storage = InMemoryStorage::default();
         for obj in objects {
@@ -58,12 +95,75 @@ impl ForkStateLoader {
         Ok(storage)
     }
 
-    fn load_object_ids_from_file(&self, file_path: &str) -> Result<HashSet<ObjectID>> {
-        println!("Loading object IDs from file: {}", file_path);
+    /// Parse a TOML file with structured format
+    fn parse_toml_file(
+        &self,
+        file_path: &str,
+    ) -> Result<(HashSet<ObjectID>, HashSet<SuiAddress>)> {
+        println!("Parsing TOML file: {}", file_path);
+        let content = std::fs::read_to_string(file_path)
+            .map_err(|e| anyhow!("Failed to read TOML file {}: {}", file_path, e))?;
+
+        let config: ObjectIdsToml = toml::from_str(&content)
+            .map_err(|e| anyhow!("Failed to parse TOML file {}: {}", file_path, e))?;
+
+        let mut object_ids = HashSet::new();
+        let mut addresses = HashSet::new();
+
+        // Parse objects
+        for obj_str in config.objects {
+            let obj_str = obj_str.trim();
+            if obj_str.is_empty() {
+                continue;
+            }
+            match ObjectID::from_hex_literal(obj_str) {
+                Ok(id) => {
+                    object_ids.insert(id);
+                    println!("  Found object: {}", id);
+                }
+                Err(e) => {
+                    eprintln!("  Warning: Invalid object ID '{}': {}", obj_str, e);
+                }
+            }
+        }
+
+        // Parse addresses
+        for addr_str in config.addresses {
+            let addr_str = addr_str.trim();
+            if addr_str.is_empty() {
+                continue;
+            }
+            match SuiAddress::from_str(addr_str) {
+                Ok(addr) => {
+                    addresses.insert(addr);
+                    println!("  Found address to preload: {}", addr);
+                }
+                Err(e) => {
+                    eprintln!("  Warning: Invalid address '{}': {}", addr_str, e);
+                }
+            }
+        }
+
+        println!(
+            "Parsed {} object IDs and {} addresses from TOML file",
+            object_ids.len(),
+            addresses.len()
+        );
+        Ok((object_ids, addresses))
+    }
+
+    /// Parse a line as either an ObjectID or a SuiAddress
+    /// Returns (object_ids, addresses) from parsing the file
+    fn parse_ids_and_addresses_from_file(
+        &self,
+        file_path: &str,
+    ) -> Result<(HashSet<ObjectID>, HashSet<SuiAddress>)> {
+        println!("Parsing IDs and addresses from file: {}", file_path);
         let file = File::open(file_path)
             .map_err(|e| anyhow!("Failed to open object ID file {}: {}", file_path, e))?;
         let reader = BufReader::new(file);
         let mut object_ids = HashSet::new();
+        let mut addresses = HashSet::new();
 
         for line in reader.lines() {
             let line = line.map_err(|e| anyhow!("Failed to read line from file: {}", e))?;
@@ -71,13 +171,25 @@ impl ForkStateLoader {
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-            let object_id = ObjectID::from_hex_literal(line)
-                .map_err(|e| anyhow!("Invalid object ID '{}': {}", line, e))?;
-            object_ids.insert(object_id);
+
+            // Try to parse as ObjectID first
+            if let Ok(object_id) = ObjectID::from_hex_literal(line) {
+                object_ids.insert(object_id);
+            } else if let Ok(address) = SuiAddress::from_str(line) {
+                // Try to parse as SuiAddress
+                addresses.insert(address);
+                println!("  Found user address to preload: {}", address);
+            } else {
+                eprintln!("  Warning: Could not parse line as ObjectID or Address: {}", line);
+            }
         }
 
-        println!("Loaded {} object IDs from file", object_ids.len());
-        Ok(object_ids)
+        println!(
+            "Parsed {} object IDs and {} addresses from file",
+            object_ids.len(),
+            addresses.len()
+        );
+        Ok((object_ids, addresses))
     }
 
     async fn fetch_objects(
@@ -226,5 +338,57 @@ impl ForkStateLoader {
         }
         
         Ok(field_ids)
+    }
+
+    /// Fetch all objects owned by a given address
+    async fn fetch_owned_objects(
+        &self,
+        client: &sui_sdk::SuiClient,
+        address: SuiAddress,
+    ) -> Result<Vec<ObjectID>> {
+        let mut all_object_ids = Vec::new();
+        let mut cursor = None;
+
+        // Paginate through all owned objects
+        loop {
+            match client
+                .read_api()
+                .get_owned_objects(
+                    address,
+                    Some(sui_sdk::rpc_types::SuiObjectResponseQuery::new(
+                        None,
+                        Some(
+                            SuiObjectDataOptions::new()
+                                .with_type()
+                                .with_owner()
+                                .with_bcs(),
+                        ),
+                    )),
+                    cursor,
+                    None, // Use default limit
+                )
+                .await
+            {
+                Ok(page) => {
+                    for obj_info in &page.data {
+                        if let Some(obj_data) = &obj_info.data {
+                            all_object_ids.push(obj_data.object_id);
+                        }
+                    }
+
+                    // Check if there are more pages
+                    if page.has_next_page {
+                        cursor = page.next_cursor;
+                    } else {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    return Err(anyhow!("Failed to fetch owned objects: {}", e));
+                }
+            }
+        }
+
+        Ok(all_object_ids)
     }
 }

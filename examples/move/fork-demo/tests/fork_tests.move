@@ -116,4 +116,16 @@ module fork_demo::fork_tests {
         ts::return_shared(demo_state);
         ts::end(scenario);
     }
+
+    #[test]
+    fun test_get_all_user_object_ids() {
+        let mut scenario = ts::begin(USER1);
+        let s = &mut scenario;
+
+        s.next_tx(USER1);
+        let ids: vector<ID> = s.ids_for_sender<Coin<DEMO_COIN>>();
+        assert!(ids.length() > 0, 8);
+
+        ts::end(scenario);
+    }
 }

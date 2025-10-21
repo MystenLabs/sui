@@ -208,13 +208,85 @@ Edit `scripts/2_mint_and_setup.sh` and change:
 USER1_ADDRESS="0x1111111111111111111111111111111111111111111111111111111111111111"
 ```
 
-### Testing with Multiple Objects
+### Automatic Preloading of All Owned Objects
 
-Add more object IDs to `object_ids.txt`:
+You can now add a **user address** to `object_ids.txt` and ALL objects owned by that address will be automatically preloaded:
+
+#### Plain Text Format (object_ids.txt)
+
+```plaintext
+# object_ids.txt
+# Specific objects
+0x5678...  # Shared object
+
+# User address - ALL owned objects will be automatically fetched!
+0x1111111111111111111111111111111111111111111111111111111111111111
+```
+
+#### TOML Format (object_ids.toml)
+
+For better organization, you can use a TOML file with separate categories:
+
+```toml
+# object_ids.toml
+
+# Specific object IDs to load
+objects = [
+    "0xf247cf530a7bb7e49ad66770c2610320e6604f9c030134ee983a8c35130b5dc1",
+    "0x7c35e877c3221da54f4518decca7f40e5399b7d3fe7f4d4a5e9af4ac2e2a96b6",
+    "0x0000000000000000000000000000000000000000000000000000000000000006",
+]
+
+# User addresses - ALL owned objects will be automatically fetched
+addresses = [
+    "0x1111111111111111111111111111111111111111111111111111111111111111",
+]
+```
+
+**Usage with TOML:**
+```bash
+sui move test \
+    --fork-rpc-url https://fullnode.testnet.sui.io:443 \
+    --object-id-file object_ids.toml
+```
+
+**Benefits:**
+- ✨ Clear separation between objects and addresses
+- ✨ Better organization with categories
+- ✨ Comments support for documentation
+- ✨ Type safety with structured format
+- No need to manually list every object ID
+- Automatically includes newly created objects
+- Handles pagination for addresses with many objects
+- Also loads dynamic fields for all objects
+
+**Output Example:**
+```
+Parsing IDs and addresses from file: object_ids.txt
+  Found user address to preload: 0x1111...1111
+Fetching owned objects for address: 0x1111...1111
+  Found 5 owned objects for address 0x1111...1111
+Total 6 object IDs to fetch
+  Successfully loaded object: 0xf247... (owner: AddressOwner(0x1111...))
+  Successfully loaded object: 0x8abc... (owner: AddressOwner(0x1111...))
+Successfully loaded 6 objects
+```
+
+See [PRELOAD_OWNED_OBJECTS.md](./PRELOAD_OWNED_OBJECTS.md) for detailed documentation.
+
+### Testing with Multiple Specific Objects
+
+You can still manually list specific object IDs in `object_ids.txt`:
 ```
 0x5678...  # First coin
 0x9abc...  # Second coin
 0xdef0...  # Third coin
+```
+
+Or mix both approaches:
+```
+0x5678...  # Specific shared object
+0x1111111111111111111111111111111111111111111111111111111111111111  # All objects for this address
 ```
 
 ### Testing Specific Test Functions

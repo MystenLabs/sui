@@ -14,6 +14,7 @@ colored.workspace = true
 once_cell.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+toml.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 bin-version.workspace = true
