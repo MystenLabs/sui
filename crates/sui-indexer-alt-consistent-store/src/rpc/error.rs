@@ -24,7 +24,7 @@ pub(super) enum RpcError<E = Infallible> {
     Custom(Arc<E>),
 
     /// Error to wrap existing framework errors.
-    Status(#[from] tonic::Status),
+    Status(Arc<tonic::Status>),
 
     /// An error produced by the internal works of the service (our fault).
     InternalError(Arc<anyhow::Error>),
@@ -39,6 +39,14 @@ impl StatusCode for Infallible {
 impl<E: std::error::Error + StatusCode> From<E> for RpcError<E> {
     fn from(err: E) -> Self {
         RpcError::Custom(Arc::new(err))
+    }
+}
+
+/// Cannot use `#[from]` for this conversion because we want to avoid cloning the `tonic::Status`,
+/// when cloning the eror.
+impl<E> From<tonic::Status> for RpcError<E> {
+    fn from(err: tonic::Status) -> Self {
+        RpcError::Status(Arc::new(err))
     }
 }
 
@@ -67,7 +75,7 @@ where
                 status
             }
 
-            RpcError::Status(status) => status,
+            RpcError::Status(status) => status.as_ref().clone(),
 
             RpcError::InternalError(err) => {
                 let mut chain = err.chain().enumerate();
