@@ -12,9 +12,15 @@ const ENonCanonicalInput: u64 = 0;
 /// Error if an empty vector is passed as input.
 const EEmptyInput: u64 = 1;
 
+/// Error if more than MAX_INPUTS inputs are given.
+const ETooManyInputs: u64 = 2;
+
 /// The field size for BN254 curve.
 const BN254_MAX: u256 =
     21888242871839275222246405745257275088548364400416034343698204186575808495617u256;
+
+/// The maximum number of inputs for the poseidon_bn254 function.
+const MAX_INPUTS: u64 = 16;
 
 /// @param data: Vector of BN254 field elements to hash.
 ///
@@ -23,16 +29,19 @@ const BN254_MAX: u256 =
 /// Each element has to be a BN254 field element in canonical representation so it must be smaller than the BN254
 /// scalar field size which is 21888242871839275222246405745257275088548364400416034343698204186575808495617.
 ///
-/// This function is currently only enabled on Devnet.
+/// This function supports between 1 and 16 inputs. If you need to hash more than 16 inputs, some implementations
+/// instead returns the root of a k-ary Merkle tree with the inputs as leafs, but since this is not standardized,
+/// we leave that to the caller to implement if needed.
+///
+/// If the input is empty, the function will abort with EEmptyInput.
+/// If more than 16 inputs are provided, the function will abort with ETooManyInputs.
 public fun poseidon_bn254(data: &vector<u256>): u256 {
-    let (mut i, mut b, l) = (0, vector[], data.length());
-    assert!(l > 0, EEmptyInput);
-    while (i < l) {
-        let field_element = &data[i];
-        assert!(*field_element < BN254_MAX, ENonCanonicalInput);
-        b.push_back(bcs::to_bytes(&data[i]));
-        i = i + 1;
-    };
+    assert!(data.length() > 0, EEmptyInput);
+    assert!(data.length() <= MAX_INPUTS, ETooManyInputs);
+    let b = data.map_ref!(|e| {
+        assert!(*e < BN254_MAX, ENonCanonicalInput);
+        bcs::to_bytes(e)
+    });
     let binary_output = poseidon_bn254_internal(&b);
     bcs::new(binary_output).peel_u256()
 }

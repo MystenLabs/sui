@@ -15,6 +15,7 @@ use proptest_derive::Arbitrary;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
+use sui_types::error::SuiErrorKind;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::{
     base_types::SuiAddress,
@@ -430,7 +431,7 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
         // *sender.current_balances.last().unwrap();
         let rgp = exec.get_reference_gas_price();
         let run_info = RunInfo::new(gas_balance, rgp, self);
-        let status = match run_info {
+        let status: Result<ExecutionStatus, SuiError> = match run_info {
             RunInfo {
                 enough_max_gas: true,
                 enough_computation_gas: true,
@@ -450,60 +451,60 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
             RunInfo {
                 too_many_gas_coins: true,
                 ..
-            } => Err(SuiError::UserInputError {
+            } => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::SizeLimitExceeded {
                     limit: "maximum number of gas payment objects".to_string(),
                     value: "256".to_string(),
                 },
-            }),
+            }.into()),
             RunInfo {
                 gas_price_too_low: true,
                 ..
-            } => Err(SuiError::UserInputError {
+            } => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::GasPriceUnderRGP {
                     gas_price: self.gas_price,
                     reference_gas_price: exec.get_reference_gas_price(),
                 },
-            }),
+            }.into()),
             RunInfo {
                 gas_price_too_high: true,
                 ..
-            } => Err(SuiError::UserInputError {
+            } => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::GasPriceTooHigh {
                     max_gas_price: PROTOCOL_CONFIG.max_gas_price(),
                 },
-            }),
+            }.into()),
             RunInfo {
                 gas_budget_too_high: true,
                 ..
-            } => Err(SuiError::UserInputError {
+            } => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::GasBudgetTooHigh {
                     gas_budget: self.gas,
                     max_budget: PROTOCOL_CONFIG.max_tx_gas(),
                 },
-            }),
+            }.into()),
             RunInfo {
                 gas_budget_too_low: true,
                 ..
-            } => Err(SuiError::UserInputError {
+            } => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::GasBudgetTooLow {
                     gas_budget: self.gas,
                     min_budget: PROTOCOL_CONFIG.base_tx_cost_fixed() * self.gas_price,
                 },
-            }),
+            }.into()),
             RunInfo {
                 enough_max_gas: false,
                 ..
-            } => Err(SuiError::UserInputError {
+            } => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::GasBalanceTooLow {
                     gas_balance: gas_balance as u128,
                     needed_gas_amount: self.gas as u128,
                 },
-            }),
+            }.into()),
             RunInfo {
                 wrong_gas_owner: true,
                 ..
-            } => Err(SuiError::UserInputError {
+            } => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::IncorrectUserSignature {
                     error: format!(
                                "Object {} is owned by account address {}, but given owner/signer address is {}",
@@ -512,7 +513,7 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
                                    payer.initial_data.account.address,
                            )
                 }
-            }),
+            }.into()),
             RunInfo {
                 enough_max_gas: true,
                 enough_to_succeed: false,

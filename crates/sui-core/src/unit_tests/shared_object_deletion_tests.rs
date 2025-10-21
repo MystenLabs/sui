@@ -8,6 +8,7 @@ use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
     effects::TransactionEffects,
+    error::SuiErrorKind,
     execution_status::{CommandArgumentError, ExecutionFailureStatus},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -1893,8 +1894,8 @@ async fn test_object_lock_conflict() {
     let mutate_cert_res = user_1.certify_shared_obj_transaction(mutate_obj_tx).await;
 
     assert!(matches!(
-        mutate_cert_res.err(),
-        Some(SuiError::ObjectLockConflict { .. })
+        mutate_cert_res.err().map(|e| e.into_inner()),
+        Some(SuiErrorKind::ObjectLockConflict { .. })
     ));
 }
 

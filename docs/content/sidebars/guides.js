@@ -53,6 +53,8 @@ const guides = [
 			'guides/developer/sui-101/sign-and-send-txn',
 			'guides/developer/sui-101/sponsor-txn',
 			'guides/developer/sui-101/avoid-equivocation',
+			'guides/developer/sui-101/common-errors',
+
 			{
 				type: 'category',
 				label: 'Working with PTBs',
@@ -63,7 +65,7 @@ const guides = [
 				items: [
 					'guides/developer/sui-101/building-ptb',
 					'guides/developer/sui-101/coin-mgt',
-					'guides/developer/sui-101/simulating-refs'
+					'guides/developer/sui-101/simulating-refs',
 				],
 			},
 		],

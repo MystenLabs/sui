@@ -22,7 +22,7 @@ use crate::sui_serde::AsProtocolVersion;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::transaction::{Transaction, TransactionData};
-use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
+use crate::{base_types::AuthorityName, committee::Committee, error::SuiErrorKind};
 use anyhow::Result;
 use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::MultisetHash;
@@ -144,7 +144,7 @@ impl CheckpointArtifact {
                         .iter()
                         .map(|(id, (seq, digest))| (id, seq, digest)),
                 )
-                .map_err(|e| SuiError::GenericAuthorityError {
+                .map_err(|e| SuiErrorKind::GenericAuthorityError {
                     error: format!("Failed to build Merkle tree: {}", e),
                 })?;
                 let root = tree.root().bytes();
@@ -180,10 +180,10 @@ impl CheckpointArtifacts {
             .iter()
             .any(|existing| existing.artifact_type() == artifact.artifact_type())
         {
-            return Err(SuiError::from(format!(
-                "Artifact {} already exists",
-                artifact.artifact_type()
-            )));
+            return Err(SuiErrorKind::GenericAuthorityError {
+                error: format!("Artifact {} already exists", artifact.artifact_type()),
+            }
+            .into());
         }
         self.artifacts.insert(artifact);
         Ok(())
@@ -205,9 +205,12 @@ impl CheckpointArtifacts {
             .map(|artifact| match artifact {
                 CheckpointArtifact::ObjectStates(states) => states,
             })
-            .ok_or(SuiError::GenericAuthorityError {
-                error: "Object states not found in checkpoint artifacts".to_string(),
-            })
+            .ok_or(
+                SuiErrorKind::GenericAuthorityError {
+                    error: "Object states not found in checkpoint artifacts".to_string(),
+                }
+                .into(),
+            )
     }
 
     pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
@@ -395,10 +398,11 @@ impl CheckpointSummary {
     pub fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
         fp_ensure!(
             self.epoch == epoch,
-            SuiError::WrongEpoch {
+            SuiErrorKind::WrongEpoch {
                 expected_epoch: epoch,
                 actual_epoch: self.epoch,
             }
+            .into()
         );
         Ok(())
     }
@@ -455,10 +459,13 @@ impl CheckpointSummary {
                 CheckpointCommitment::CheckpointArtifactsDigest(digest) => Some(digest),
                 _ => None,
             })
-            .ok_or(SuiError::GenericAuthorityError {
-                error: "Checkpoint artifacts digest not found in checkpoint commitments"
-                    .to_string(),
-            })
+            .ok_or(
+                SuiErrorKind::GenericAuthorityError {
+                    error: "Checkpoint artifacts digest not found in checkpoint commitments"
+                        .to_string(),
+                }
+                .into(),
+            )
     }
 }
 
@@ -517,7 +524,7 @@ impl CertifiedCheckpointSummary {
             let content_digest = *contents.digest();
             fp_ensure!(
                 content_digest == self.data().content_digest,
-                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, received content digest {:?}, received {} transactions", self.data(), content_digest, contents.size())}
+                SuiErrorKind::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, received content digest {:?}, received {} transactions", self.data(), content_digest, contents.size())}.into()
             );
         }
 

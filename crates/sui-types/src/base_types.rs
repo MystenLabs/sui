@@ -24,6 +24,7 @@ use crate::effects::TransactionEffectsAPI;
 use crate::epoch_data::EpochData;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
+use crate::error::SuiErrorKind;
 use crate::error::{ExecutionError, SuiResult};
 use crate::gas_coin::GasCoin;
 use crate::gas_coin::GAS;
@@ -506,10 +507,11 @@ impl MoveObjectType {
     pub fn try_extract_field_name(&self, type_: &DynamicFieldType) -> SuiResult<TypeTag> {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
-                Err(SuiError::ObjectDeserializationError {
+                Err(SuiErrorKind::ObjectDeserializationError {
                     error: "Error extracting dynamic object name from specialized object type"
                         .to_string(),
-                })
+                }
+                .into())
             }
             MoveObjectType_::SuiBalanceAccumulatorField
             | MoveObjectType_::BalanceAccumulatorField(_) => {
@@ -523,10 +525,11 @@ impl MoveObjectType {
     pub fn try_extract_field_value(&self) -> SuiResult<TypeTag> {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
-                Err(SuiError::ObjectDeserializationError {
+                Err(SuiErrorKind::ObjectDeserializationError {
                     error: "Error extracting dynamic object value from specialized object type"
                         .to_string(),
-                })
+                }
+                .into())
             }
             MoveObjectType_::SuiBalanceAccumulatorField
             | MoveObjectType_::BalanceAccumulatorField(_) => {
@@ -848,7 +851,7 @@ impl SuiAddress {
     /// Parse a SuiAddress from a byte array or buffer.
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, SuiError> {
         <[u8; SUI_ADDRESS_LENGTH]>::try_from(bytes.as_ref())
-            .map_err(|_| SuiError::InvalidAddress)
+            .map_err(|_| SuiErrorKind::InvalidAddress.into())
             .map(SuiAddress)
     }
 
@@ -974,7 +977,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                 let scheme = sig.scheme();
                 let pub_key_bytes = sig.public_key_bytes();
                 let pub_key = PublicKey::try_from_bytes(scheme, pub_key_bytes).map_err(|_| {
-                    SuiError::InvalidSignature {
+                    SuiErrorKind::InvalidSignature {
                         error: "Cannot parse pubkey".to_string(),
                     }
                 })?;
@@ -983,7 +986,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
             GenericSignature::MultiSig(ms) => Ok(ms.get_pk().into()),
             GenericSignature::MultiSigLegacy(ms) => {
                 Ok(crate::multisig::MultiSig::try_from(ms.clone())
-                    .map_err(|_| SuiError::InvalidSignature {
+                    .map_err(|_| SuiErrorKind::InvalidSignature {
                         error: "Invalid legacy multisig".to_string(),
                     })?
                     .get_pk()

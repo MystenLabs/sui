@@ -52,7 +52,7 @@ use sui_package_management::{
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     is_system_package,
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
@@ -218,7 +218,7 @@ impl BuildConfig {
         chain_id: Option<String>,
     ) -> SuiResult<ResolvedGraph> {
         if let Some(err_msg) = set_sui_flavor(&mut self.config) {
-            return Err(SuiError::ModuleBuildFailure { error: err_msg });
+            return Err(SuiErrorKind::ModuleBuildFailure { error: err_msg }.into());
         }
 
         if self.print_diags_to_stderr {
@@ -228,8 +228,11 @@ impl BuildConfig {
             self.config
                 .resolution_graph_for_package(path, chain_id, &mut std::io::sink())
         }
-        .map_err(|err| SuiError::ModuleBuildFailure {
-            error: format!("{:?}", err),
+        .map_err(|err| {
+            SuiErrorKind::ModuleBuildFailure {
+                error: format!("{:?}", err),
+            }
+            .into()
         })
     }
 }
@@ -286,7 +289,7 @@ pub fn build_from_resolution_graph(
         BuildConfig::compile_package(&resolution_graph, &mut std::io::sink())
     };
 
-    let (package, fn_info) = result.map_err(|error| SuiError::ModuleBuildFailure {
+    let (package, fn_info) = result.map_err(|error| SuiErrorKind::ModuleBuildFailure {
         // Use [Debug] formatting to capture [anyhow] error context
         error: format!("{:?}", error),
     })?;
@@ -317,18 +320,18 @@ fn collect_bytecode_deps(
         {
             continue;
         }
-        let modules =
-            pkg.get_bytecodes_bytes()
-                .map_err(|error| SuiError::ModuleDeserializationFailure {
-                    error: format!(
-                        "Deserializing bytecode dependency for package {}: {:?}",
-                        name, error
-                    ),
-                })?;
+        let modules = pkg.get_bytecodes_bytes().map_err(|error| {
+            SuiErrorKind::ModuleDeserializationFailure {
+                error: format!(
+                    "Deserializing bytecode dependency for package {}: {:?}",
+                    name, error
+                ),
+            }
+        })?;
         for module in modules {
             let module =
                 CompiledModule::deserialize_with_defaults(module.as_ref()).map_err(|error| {
-                    SuiError::ModuleDeserializationFailure {
+                    SuiErrorKind::ModuleDeserializationFailure {
                         error: format!(
                             "Deserializing bytecode dependency for package {}: {:?}",
                             name, error
@@ -349,7 +352,7 @@ fn verify_bytecode(package: &MoveCompiledPackage, fn_info: &FnInfoMap) -> SuiRes
 
     for m in compiled_modules.iter_modules() {
         move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
-            SuiError::ModuleVerificationFailure {
+            SuiErrorKind::ModuleVerificationFailure {
                 error: err.to_string(),
             }
         })?;
@@ -636,9 +639,10 @@ impl CompiledPackage {
                 .into(),
         );
 
-        Err(SuiError::ModulePublishFailure {
+        Err(SuiErrorKind::ModulePublishFailure {
             error: error_message.join("\n"),
-        })
+        }
+        .into())
     }
 
     pub fn get_published_dependencies_ids(&self) -> Vec<ObjectID> {
@@ -882,9 +886,10 @@ pub fn check_unpublished_dependencies(unpublished: &BTreeSet<Symbol>) -> Result<
             .into(),
     );
 
-    Err(SuiError::ModulePublishFailure {
+    Err(SuiErrorKind::ModulePublishFailure {
         error: error_messages.join("\n"),
-    })
+    }
+    .into())
 }
 
 pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<(), SuiError> {
@@ -903,9 +908,10 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
         })
         .collect::<Vec<_>>();
 
-    Err(SuiError::ModulePublishFailure {
+    Err(SuiErrorKind::ModulePublishFailure {
         error: error_messages.join("\n"),
-    })
+    }
+    .into())
 }
 
 pub fn check_conflicting_addresses(
@@ -940,10 +946,10 @@ pub fn check_conflicting_addresses(
     let error = format!("{err_msg}\n{conflicting_addresses_msg}\n{suggestion_message}");
 
     let err = if dump_bytecode_base64 {
-        SuiError::ModuleBuildFailure { error }
+        SuiErrorKind::ModuleBuildFailure { error }
     } else {
-        SuiError::ModulePublishFailure { error }
+        SuiErrorKind::ModulePublishFailure { error }
     };
 
-    Err(err)
+    Err(err.into())
 }

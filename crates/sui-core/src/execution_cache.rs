@@ -25,7 +25,7 @@ use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{FullObjectID, VerifiedExecutionData};
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -229,7 +229,7 @@ pub trait ObjectCacheRead: Send + Sync {
                             version: Some(object_ref.1),
                         }
                     };
-                    return Err(SuiError::UserInputError { error });
+                    return Err(SuiErrorKind::UserInputError { error }.into());
                 }
                 Some(object) => {
                     result.push(object);
@@ -722,11 +722,12 @@ macro_rules! implement_storage_traits {
 
                 let parent = *parent;
                 if child_object.owner != Owner::ObjectOwner(parent.into()) {
-                    return Err(SuiError::InvalidChildObjectAccess {
+                    return Err(SuiErrorKind::InvalidChildObjectAccess {
                         object: *child,
                         given_parent: parent,
                         actual_owner: child_object.owner.clone(),
-                    });
+                    }
+                    .into());
                 }
                 Ok(Some(child_object))
             }

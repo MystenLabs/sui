@@ -22,7 +22,7 @@ use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::dynamic_field::get_dynamic_field_from_store;
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
 use sui_types::governance::StakedSui;
 use sui_types::id::ID;
 use sui_types::object::ObjectRead;
@@ -389,10 +389,11 @@ async fn exchange_rates(
         None,
         system_state_summary.inactive_pools_size as usize,
     )? {
-        let pool_id: ID =
-            bcs::from_bytes(&df.1.bcs_name).map_err(|e| SuiError::ObjectDeserializationError {
+        let pool_id: ID = bcs::from_bytes(&df.1.bcs_name).map_err(|e| {
+            SuiErrorKind::ObjectDeserializationError {
                 error: e.to_string(),
-            })?;
+            }
+        })?;
         let validator = get_validator_from_table(
             state.get_object_store().as_ref(),
             system_state_summary.inactive_pools_id,
@@ -415,7 +416,7 @@ async fn exchange_rates(
             .into_iter()
             .map(|df| {
                 let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name).map_err(|e| {
-                    SuiError::ObjectDeserializationError {
+                    SuiErrorKind::ObjectDeserializationError {
                         error: e.to_string(),
                     }
                 })?;

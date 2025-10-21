@@ -10,7 +10,7 @@ use crate::{
         serialize_dynamic_field, DynamicFieldKey, DynamicFieldObject, Field,
         UnboundedDynamicFieldID, DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
     },
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     object::{MoveObject, Object, Owner},
     storage::{ChildObjectResolver, ObjectStore},
     MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_ADDRESS,
@@ -104,9 +104,10 @@ impl AccumulatorObjId {
 impl AccumulatorValue {
     pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> SuiResult<AccumulatorObjId> {
         if !Balance::is_balance_type(type_) {
-            return Err(SuiError::TypeError {
+            return Err(SuiErrorKind::TypeError {
                 error: "only Balance<T> is supported".to_string(),
-            });
+            }
+            .into());
         }
 
         let key = AccumulatorKey { owner };
@@ -128,9 +129,10 @@ impl AccumulatorValue {
         type_: &TypeTag,
     ) -> SuiResult<bool> {
         if !Balance::is_balance_type(type_) {
-            return Err(SuiError::TypeError {
+            return Err(SuiErrorKind::TypeError {
                 error: "only Balance<T> is supported".to_string(),
-            });
+            }
+            .into());
         }
 
         let key = AccumulatorKey { owner };
@@ -166,9 +168,10 @@ impl AccumulatorValue {
         type_: &TypeTag,
     ) -> SuiResult<Option<Self>> {
         if !Balance::is_balance_type(type_) {
-            return Err(SuiError::TypeError {
+            return Err(SuiErrorKind::TypeError {
                 error: "only Balance<T> is supported".to_string(),
-            });
+            }
+            .into());
         }
 
         let key = AccumulatorKey { owner };
@@ -254,10 +257,11 @@ impl TryFrom<&MoveObject> for AccumulatorValue {
             .flatten()
             .map(Self::U128)
             .ok_or_else(|| {
-                SuiError::DynamicFieldReadError(format!(
+                SuiErrorKind::DynamicFieldReadError(format!(
                     "Dynamic field {:?} is not a AccumulatorValue",
                     value.id()
                 ))
+                .into()
             })
     }
 }

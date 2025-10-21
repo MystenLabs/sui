@@ -33,7 +33,7 @@ use sui_protocol_config::Chain;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_grpc::{SubmitTxRequest, TxType};
 use sui_types::quorum_driver_types::{
     EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
@@ -784,7 +784,7 @@ where
                     LOCAL_EXECUTION_TIMEOUT
                 );
                 metrics.local_execution_timeout.inc();
-                Err(SuiError::TimeoutError)
+                Err(SuiErrorKind::TimeoutError.into())
             }
             Ok(_) => {
                 metrics.local_execution_success.inc();

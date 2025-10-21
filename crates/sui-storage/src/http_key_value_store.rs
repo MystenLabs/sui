@@ -18,7 +18,7 @@ use sui_types::storage::ObjectKey;
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::{SuiError, SuiResult},
+    error::{SuiErrorKind, SuiResult},
     messages_checkpoint::{
         CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     },
@@ -66,7 +66,7 @@ where
     E: std::error::Error,
 {
     fn into_sui_result(self) -> SuiResult<T> {
-        self.map_err(|e| SuiError::Storage(e.to_string()))
+        self.map_err(|e| SuiErrorKind::Storage(e.to_string()).into())
     }
 }
 

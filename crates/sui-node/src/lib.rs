@@ -176,6 +176,7 @@ pub struct P2pComponents {
 #[cfg(msim)]
 mod simulator {
     use std::sync::atomic::AtomicBool;
+    use sui_types::error::SuiErrorKind;
 
     use super::*;
     pub(super) struct SimState {
@@ -210,7 +211,7 @@ mod simulator {
             &OIDCProvider::Twitch,
             true,
         )
-        .map_err(|_| SuiError::JWKRetrievalError)
+        .map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 
     thread_local! {
@@ -2380,10 +2381,11 @@ impl SuiNode {
         provider: &OIDCProvider,
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
+        use sui_types::error::SuiErrorKind;
         let client = reqwest::Client::new();
         fetch_jwks(provider, &client, true)
             .await
-            .map_err(|_| SuiError::JWKRetrievalError)
+            .map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 }
 

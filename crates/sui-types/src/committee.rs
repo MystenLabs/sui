@@ -6,7 +6,7 @@ use super::base_types::*;
 use crate::crypto::{
     random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey, NetworkPublicKey,
 };
-use crate::error::{SuiError, SuiResult};
+use crate::error::{SuiErrorKind, SuiResult};
 use crate::multiaddr::Multiaddr;
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
@@ -150,11 +150,12 @@ impl Committee {
         debug_assert_eq!(self.expanded_keys.len(), self.voting_rights.len());
         match self.expanded_keys.get(authority) {
             Some(v) => Ok(v),
-            None => Err(SuiError::InvalidCommittee(format!(
+            None => Err(SuiErrorKind::InvalidCommittee(format!(
                 "Authority #{} not found, committee size {}",
                 authority,
                 self.expanded_keys.len()
-            ))),
+            ))
+            .into()),
         }
     }
 

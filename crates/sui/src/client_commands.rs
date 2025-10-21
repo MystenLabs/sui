@@ -72,7 +72,7 @@ use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
-    error::SuiError,
+    error::SuiErrorKind,
     gas::GasCostSummary,
     gas_coin::GasCoin,
     message_envelope::Envelope,
@@ -865,12 +865,11 @@ impl SuiClientCommands {
                 let chain_id = read_api.get_chain_identifier().await.ok();
 
                 check_protocol_version_and_warn(read_api).await?;
-                let package_path =
-                    package_path
-                        .canonicalize()
-                        .map_err(|e| SuiError::ModulePublishFailure {
-                            error: format!("Failed to canonicalize package path: {}", e),
-                        })?;
+                let package_path = package_path.canonicalize().map_err(|e| {
+                    SuiErrorKind::ModulePublishFailure {
+                        error: format!("Failed to canonicalize package path: {}", e),
+                    }
+                })?;
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
                     sui_package_management::set_package_id(
@@ -1009,7 +1008,7 @@ impl SuiClientCommands {
                 processing,
             } => {
                 if build_config.test_mode {
-                    return Err(SuiError::ModulePublishFailure {
+                    return Err(SuiErrorKind::ModulePublishFailure {
                         error:
                             "The `publish` subcommand should not be used with the `--test` flag\n\
                             \n\
@@ -1029,12 +1028,11 @@ impl SuiClientCommands {
                 let chain_id = read_api.get_chain_identifier().await.ok();
 
                 check_protocol_version_and_warn(read_api).await?;
-                let package_path =
-                    package_path
-                        .canonicalize()
-                        .map_err(|e| SuiError::ModulePublishFailure {
-                            error: format!("Failed to canonicalize package path: {}", e),
-                        })?;
+                let package_path = package_path.canonicalize().map_err(|e| {
+                    SuiErrorKind::ModulePublishFailure {
+                        error: format!("Failed to canonicalize package path: {}", e),
+                    }
+                })?;
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
                     sui_package_management::set_package_id(
@@ -2132,7 +2130,7 @@ pub(crate) async fn compile_package(
     {
         for module in compiled_package.get_modules_and_deps() {
             if module.version() < *min_version {
-                return Err(SuiError::ModulePublishFailure {
+                return Err(SuiErrorKind::ModulePublishFailure {
                     error: format!(
                         "Module {} has a version {} that is \
                          lower than the minimum version {min_version} supported by the chain.",
@@ -2157,7 +2155,7 @@ pub(crate) async fn compile_package(
                 } else {
                     ""
                 };
-                return Err(SuiError::ModulePublishFailure {
+                return Err(SuiErrorKind::ModulePublishFailure {
                     error: format!(
                         "Module {} has a version {} that is \
                          higher than the maximum version {max_version} supported by the chain.{help_msg}",
@@ -2172,7 +2170,7 @@ pub(crate) async fn compile_package(
 
     if !compiled_package.is_system_package() {
         if let Some(already_published) = compiled_package.published_root_module() {
-            return Err(SuiError::ModulePublishFailure {
+            return Err(SuiErrorKind::ModulePublishFailure {
                 error: format!(
                     "Modules must all have 0x0 as their addresses. \
                      Violated by module {:?}",
@@ -2191,7 +2189,7 @@ pub(crate) async fn compile_package(
             .verify(&compiled_package, ValidationMode::deps())
             .await
         {
-            return Err(SuiError::ModulePublishFailure {
+            return Err(SuiErrorKind::ModulePublishFailure {
                 error: format!(
                     "[warning] {e}\n\
                      \n\
@@ -2221,7 +2219,7 @@ pub(crate) async fn compile_package(
         .get_package_bytes(with_unpublished_dependencies)
         .is_empty()
     {
-        return Err(SuiError::ModulePublishFailure {
+        return Err(SuiErrorKind::ModulePublishFailure {
             error: "No modules found in the package".to_string(),
         }
         .into());
@@ -2232,7 +2230,7 @@ pub(crate) async fn compile_package(
         .compiled_package_info
         .build_flags
         .update_lock_file_toolchain_version(package_path, env!("CARGO_PKG_VERSION").into())
-        .map_err(|e| SuiError::ModuleBuildFailure {
+        .map_err(|e| SuiErrorKind::ModuleBuildFailure {
             error: format!("Failed to update Move.lock toolchain version: {e}"),
         })?;
 

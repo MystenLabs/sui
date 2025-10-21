@@ -19,7 +19,7 @@ use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::{dbg_addr, FullObjectRef},
     crypto::{get_key_pair, AccountKeyPair, Signature, SuiKeyPair},
-    error::{SuiError, UserInputError},
+    error::UserInputError,
     messages_consensus::ConsensusDeterminedVersionAssignments,
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
@@ -80,7 +80,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
                 vec![Signature::new_secure(data.intent_message(), &unknown_key).into()];
         },
         |err| {
-            assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+            assert_matches!(err, SuiErrorKind::SignerSignatureAbsent { .. });
         },
     )
     .await;
@@ -96,7 +96,7 @@ async fn test_handle_transfer_transaction_no_signature() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::SignerSignatureNumberMismatch {
+                SuiErrorKind::SignerSignatureNumberMismatch {
                     expected: 1,
                     actual: 0
                 }
@@ -117,7 +117,7 @@ async fn test_handle_transfer_transaction_extra_signature() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::SignerSignatureNumberMismatch {
+                SuiErrorKind::SignerSignatureNumberMismatch {
                     expected: 1,
                     actual: 2
                 }
@@ -137,7 +137,7 @@ async fn test_empty_gas_data() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::UserInputError {
+                SuiErrorKind::UserInputError {
                     error: UserInputError::MissingGasPayment
                 }
             );
@@ -158,7 +158,7 @@ async fn test_duplicate_gas_data() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::UserInputError {
+                SuiErrorKind::UserInputError {
                     error: UserInputError::MutableObjectUsedMoreThanOnce { .. }
                 }
             );
@@ -178,7 +178,7 @@ async fn test_gas_wrong_owner_matches_sender() {
         },
         |_| {},
         |err| {
-            assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+            assert_matches!(err, SuiErrorKind::SignerSignatureAbsent { .. });
         },
     )
     .await;
@@ -196,7 +196,7 @@ async fn test_gas_wrong_owner() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::SignerSignatureNumberMismatch {
+                SuiErrorKind::SignerSignatureNumberMismatch {
                     expected: 2,
                     actual: 1
                 }
@@ -284,7 +284,7 @@ async fn test_user_sends_system_transaction_impl(transaction_kind: TransactionKi
         |err| {
             assert_matches!(
                 err,
-                SuiError::UserInputError {
+                SuiErrorKind::UserInputError {
                     error: UserInputError::Unsupported { .. }
                 }
             );
@@ -300,10 +300,10 @@ async fn test_sender_is_not_consensus_v2_owner() {
     let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
     let start_version = SequenceNumber::new();
-    let err_check = |err: &SuiError| {
+    let err_check = |err: &SuiErrorKind| {
         assert_matches!(
             err,
-            SuiError::UserInputError {
+            SuiErrorKind::UserInputError {
                 error: UserInputError::IncorrectUserSignature { .. }
             }
         );
@@ -390,7 +390,7 @@ pub fn init_move_call_transaction(
 async fn do_transaction_test_skip_cert_checks(
     pre_sign_mutations: impl Fn(&mut TransactionData),
     post_sign_mutations: impl Fn(&mut Transaction),
-    err_check: impl Fn(&SuiError),
+    err_check: impl Fn(&SuiErrorKind),
 ) {
     let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
@@ -410,7 +410,7 @@ async fn do_transaction_test_skip_cert_checks(
 async fn do_transaction_test(
     pre_sign_mutations: impl Fn(&mut TransactionData),
     post_sign_mutations: impl Fn(&mut Transaction),
-    err_check: impl Fn(&SuiError),
+    err_check: impl Fn(&SuiErrorKind),
 ) {
     let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
@@ -435,7 +435,7 @@ async fn do_transaction_test_impl(
     post_sign_mutations: impl Fn(&mut Transaction),
     transfer_sender: usize,
     move_call_sender: usize,
-    err_check: impl Fn(&SuiError),
+    err_check: impl Fn(&SuiErrorKind),
 ) {
     telemetry_subscribers::init_for_testing();
 
@@ -508,7 +508,7 @@ async fn do_transaction_test_impl(
             .handle_transaction(transaction.clone(), Some(socket_addr))
             .await
             .unwrap_err();
-        err_check(&err);
+        err_check(err.as_inner());
     }
 
     check_locks(authority_state.clone(), vec![input_object_id]).await;
@@ -539,13 +539,13 @@ async fn do_transaction_test_impl(
                 .handle_certificate_v2(ct.clone(), Some(socket_addr))
                 .await
                 .unwrap_err();
-            err_check(&err);
+            err_check(err.as_inner());
             epoch_store.clear_signature_cache();
             let err = client
                 .handle_certificate_v2(ct.clone(), Some(socket_addr))
                 .await
                 .unwrap_err();
-            err_check(&err);
+            err_check(err.as_inner());
 
             // Additionally, if the tx contains access to shared objects, check if Soft Bundle handler returns the same error.
             if ct.is_consensus_tx() {
@@ -706,8 +706,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(txn.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
     assert_eq!(metrics.signature_errors.get(), 1);
 
@@ -808,8 +809,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(txn.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
     assert_eq!(metrics.signature_errors.get(), 2);
 
@@ -858,8 +860,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(transfer_transaction3.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
     assert_eq!(metrics.signature_errors.get(), 3);
 
@@ -891,8 +894,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(multisig_txn.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
 
     assert_eq!(
@@ -933,8 +937,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(txn4.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
     assert_eq!(metrics.signature_errors.get(), 5);
 
@@ -1506,7 +1511,7 @@ async fn test_very_large_certificate() {
     let quorum_signature = sui_types::crypto::AuthorityQuorumSignInfo {
         epoch: 0,
         signature: sui_types::crypto::AggregateAuthoritySignature::aggregate(&sigs)
-            .map_err(|e| SuiError::InvalidSignature {
+            .map_err(|e| SuiErrorKind::InvalidSignature {
                 error: e.to_string(),
             })
             .expect("Validator returned invalid signature"),
@@ -1522,7 +1527,7 @@ async fn test_very_large_certificate() {
     let err = res.err().unwrap();
     // The resulting error should be a RpcError with a message length too large.
     assert!(
-        matches!(err, SuiError::RpcError(..))
+        matches!(err.as_inner(), SuiErrorKind::RpcError(..))
             && err.to_string().contains("message length too large")
     );
 }
@@ -1591,8 +1596,8 @@ async fn test_handle_certificate_errors() {
         .await
         .unwrap_err();
     assert_matches!(
-        err,
-        SuiError::WrongEpoch {
+        err.into_inner(),
+        SuiErrorKind::WrongEpoch {
             expected_epoch: 0,
             actual_epoch: 1
         }
@@ -1622,8 +1627,8 @@ async fn test_handle_certificate_errors() {
         .unwrap_err();
 
     assert_matches!(
-        err,
-        SuiError::UserInputError {
+        err.into_inner(),
+        SuiErrorKind::UserInputError {
             error: UserInputError::Unsupported(message)
         } if message == "SenderSignedData must not contain system transaction"
     );
@@ -1640,11 +1645,12 @@ async fn test_handle_certificate_errors() {
     let err = client
         .handle_certificate_v2(ct.clone(), Some(socket_addr))
         .await
-        .unwrap_err();
+        .unwrap_err()
+        .into_inner();
 
     assert_matches!(
         err,
-        SuiError::SignerSignatureNumberMismatch {
+        SuiErrorKind::SignerSignatureNumberMismatch {
             expected: 1,
             actual: 0
         }
@@ -1667,7 +1673,7 @@ async fn test_handle_certificate_errors() {
         .await
         .unwrap_err();
 
-    assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+    assert_matches!(err.into_inner(), SuiErrorKind::SignerSignatureAbsent { .. });
 }
 
 #[sim_test]
@@ -1938,8 +1944,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::NoCertificateProvidedError { .. }
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::NoCertificateProvidedError { .. }
         );
     }
 
@@ -1985,8 +1991,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
                 error: UserInputError::TooManyTransactionsInBatch { .. },
             }
         );
@@ -2030,8 +2036,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
                 error: UserInputError::NoSharedObjectError { .. },
             }
         );
@@ -2114,8 +2120,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
                 error: UserInputError::GasPriceMismatchError { .. },
             }
         );
@@ -2200,8 +2206,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
                 error: UserInputError::CertificateAlreadyProcessed { .. },
             }
         );
@@ -2266,8 +2272,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
                 error: UserInputError::TotalTransactionSizeTooLargeInBatch {
                     size: 25116,
                     limit: 5000

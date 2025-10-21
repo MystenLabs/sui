@@ -9,7 +9,7 @@ use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_types::{
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::Transaction,
 };
@@ -71,10 +71,11 @@ impl SuiTxValidator {
                         .protocol_config()
                         .consensus_checkpoint_signature_key_includes_digest()
                     {
-                        return Err(SuiError::UnexpectedMessage(
+                        return Err(SuiErrorKind::UnexpectedMessage(
                             "ConsensusTransactionKind::CheckpointSignatureV2 is unsupported"
                                 .to_string(),
-                        ));
+                        )
+                        .into());
                     }
                     ckpt_messages.push(signature.as_ref());
                     ckpt_batch.push(&signature.summary);
@@ -82,13 +83,13 @@ impl SuiTxValidator {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Message too large");
-                        return Err(SuiError::InvalidDkgMessageSize);
+                        return Err(SuiErrorKind::InvalidDkgMessageSize.into());
                     }
                 }
                 ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
                     if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Confirmation too large");
-                        return Err(SuiError::InvalidDkgMessageSize);
+                        return Err(SuiErrorKind::InvalidDkgMessageSize.into());
                     }
                 }
 
@@ -101,9 +102,10 @@ impl SuiTxValidator {
 
                 ConsensusTransactionKind::UserTransaction(_tx) => {
                     if !epoch_store.protocol_config().mysticeti_fastpath() {
-                        return Err(SuiError::UnexpectedMessage(
+                        return Err(SuiErrorKind::UnexpectedMessage(
                             "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
-                        ));
+                        )
+                        .into());
                     }
                     // TODO(fastpath): move deterministic verifications of user transactions here,
                     // for example validity_check() and verify_transaction().
@@ -118,10 +120,11 @@ impl SuiTxValidator {
                             .try_into()
                             .unwrap()
                     {
-                        return Err(SuiError::UnexpectedMessage(format!(
+                        return Err(SuiErrorKind::UnexpectedMessage(format!(
                             "ExecutionTimeObservation contains too many estimates: {}",
                             obs.estimates.len()
-                        )));
+                        ))
+                        .into());
                     }
                 }
             }
@@ -290,7 +293,7 @@ mod tests {
     use sui_macros::sim_test;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::crypto::deterministic_random_account_key;
-    use sui_types::error::{SuiError, UserInputError};
+    use sui_types::error::{SuiErrorKind, UserInputError};
     use sui_types::messages_checkpoint::{
         CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
     };
@@ -484,7 +487,7 @@ mod tests {
 
         assert_eq!(
             reason,
-            SuiError::UserInputError {
+            SuiErrorKind::UserInputError {
                 error: UserInputError::TransactionDenied {
                     error: format!(
                         "Access to input object {:?} is temporarily disabled",

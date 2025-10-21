@@ -12,7 +12,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::digests::TransactionEffectsDigest;
 use sui_types::effects::TransactionEffectsAPI as _;
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -257,11 +257,12 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Rejected);
         epoch_store.set_rejection_vote_reason(
             tx_position,
-            &SuiError::UserInputError {
+            &SuiErrorKind::UserInputError {
                 error: UserInputError::TransactionDenied {
                     error: "object denied".to_string(),
                 },
-            },
+            }
+            .into(),
         );
     });
 
@@ -274,8 +275,8 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
     match response {
         WaitForEffectsResponse::Rejected { error } => {
             assert_eq!(
-                error,
-                Some(SuiError::UserInputError {
+                error.map(|e| e.into_inner()),
+                Some(SuiErrorKind::UserInputError {
                     error: UserInputError::TransactionDenied {
                         error: "object denied".to_string(),
                     },

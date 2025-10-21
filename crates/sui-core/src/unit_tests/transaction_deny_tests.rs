@@ -19,7 +19,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::transaction::{
@@ -160,8 +160,8 @@ async fn handle_move_call_transaction(
 
 fn assert_denied<T: std::fmt::Debug>(result: &SuiResult<T>) {
     assert!(matches!(
-        result.as_ref().unwrap_err(),
-        SuiError::UserInputError {
+        result.as_ref().unwrap_err().as_inner(),
+        SuiErrorKind::UserInputError {
             error: UserInputError::TransactionDenied { .. }
         }
     ));

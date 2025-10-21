@@ -299,7 +299,7 @@ mod tests {
     use sui_types::committee::{CommitteeTrait, StakeUnit};
     use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
     use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
-    use sui_types::error::SuiError;
+    use sui_types::error::{SuiError, SuiErrorKind};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
@@ -350,7 +350,7 @@ mod tests {
             _client_addr: Option<SocketAddr>,
         ) -> Result<HandleTransactionResponse, SuiError> {
             if self.inject_fault.load(Relaxed) {
-                return Err(SuiError::TimeoutError);
+                return Err(SuiErrorKind::TimeoutError.into());
             }
             let epoch_store = self.authority.epoch_store_for_testing();
             self.authority

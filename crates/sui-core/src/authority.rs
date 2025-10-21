@@ -121,7 +121,7 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, UserInputError};
+use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
@@ -865,11 +865,11 @@ impl ForkRecoveryState {
         let mut transaction_overrides = HashMap::new();
         for (tx_digest_str, effects_digest_str) in &config.transaction_overrides {
             let tx_digest = TransactionDigest::from_str(tx_digest_str).map_err(|_| {
-                SuiError::Unknown(format!("Invalid transaction digest: {}", tx_digest_str))
+                SuiErrorKind::Unknown(format!("Invalid transaction digest: {}", tx_digest_str))
             })?;
             let effects_digest =
                 TransactionEffectsDigest::from_str(effects_digest_str).map_err(|_| {
-                    SuiError::Unknown(format!("Invalid effects digest: {}", effects_digest_str))
+                    SuiErrorKind::Unknown(format!("Invalid effects digest: {}", effects_digest_str))
                 })?;
             transaction_overrides.insert(tx_digest, effects_digest);
         }
@@ -1218,7 +1218,7 @@ impl AuthorityState {
             .get_reconfig_state_read_lock_guard()
             .should_accept_user_certs()
         {
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
+            return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
         }
 
         let result =
@@ -1268,9 +1268,10 @@ impl AuthorityState {
             .get_cache_commit()
             .approximate_pending_transaction_count();
         if pending_tx_count > self.config.execution_cache.backpressure_threshold_for_rpc() {
-            return Err(SuiError::ValidatorOverloadedRetryAfter {
+            return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
                 retry_after_secs: 10,
-            });
+            }
+            .into());
         }
 
         Ok(())
@@ -1447,7 +1448,7 @@ impl AuthorityState {
                 *transaction.digest(),
             ))
             .await
-            .map_err(|_| SuiError::EpochEnded(epoch_store.epoch()))
+            .map_err(|_| SuiErrorKind::EpochEnded(epoch_store.epoch()).into())
             .and_then(|r| r)
     }
 
@@ -1467,7 +1468,7 @@ impl AuthorityState {
                 self.notify_read_effects("AuthorityState::await_transaction_effects", digest),
             )
             .await
-            .map_err(|_| SuiError::EpochEnded(epoch_store.epoch()))
+            .map_err(|_| SuiErrorKind::EpochEnded(epoch_store.epoch()).into())
             .and_then(|r| r)
     }
 
@@ -1543,10 +1544,11 @@ impl AuthorityState {
         if *execution_guard != epoch_store.epoch() {
             tx_guard.release();
             info!("The epoch of the execution_guard doesn't match the epoch store");
-            return Err(SuiError::WrongEpoch {
+            return Err(SuiErrorKind::WrongEpoch {
                 expected_epoch: epoch_store.epoch(),
                 actual_epoch: *execution_guard,
-            });
+            }
+            .into());
         }
 
         let scheduling_source = execution_env.scheduling_source;
@@ -1755,7 +1757,7 @@ impl AuthorityState {
             certificate,
         )?
         .write_to_file(&dump_dir)
-        .map_err(|e| SuiError::FileIOError(e.to_string()))
+        .map_err(|e| SuiErrorKind::FileIOError(e.to_string()).into())
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -1819,9 +1821,10 @@ impl AuthorityState {
         if let Some(traffic_controller) = self.traffic_controller.as_ref() {
             traffic_controller.admin_reconfigure(params).await
         } else {
-            Err(SuiError::InvalidAdminRequest(
+            Err(SuiErrorKind::InvalidAdminRequest(
                 "Traffic controller is not configured on this node".to_string(),
-            ))
+            )
+            .into())
         }
     }
 
@@ -2144,15 +2147,17 @@ impl AuthorityState {
     )> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
-            return Err(SuiError::UnsupportedFeatureError {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "dry-exec is only supported on fullnodes".to_string(),
-            });
+            }
+            .into());
         }
 
         if transaction.kind().is_system_tx() {
-            return Err(SuiError::UnsupportedFeatureError {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "dry-exec does not support system transactions".to_string(),
-            });
+            }
+            .into());
         }
 
         self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
@@ -2346,7 +2351,7 @@ impl AuthorityState {
                     transaction,
                     &module_cache,
                 )
-                .map_err(|e| SuiError::TransactionSerializationError {
+                .map_err(|e| SuiErrorKind::TransactionSerializationError {
                     error: format!(
                         "Failed to convert transaction to SuiTransactionBlockData: {}",
                         e
@@ -2375,16 +2380,18 @@ impl AuthorityState {
         checks: TransactionChecks,
     ) -> SuiResult<SimulateTransactionResult> {
         if transaction.kind().is_system_tx() {
-            return Err(SuiError::UnsupportedFeatureError {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "simulate does not support system transactions".to_string(),
-            });
+            }
+            .into());
         }
 
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
-            return Err(SuiError::UnsupportedFeatureError {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "simulate is only supported on fullnodes".to_string(),
-            });
+            }
+            .into());
         }
 
         // Cheap validity checks for a transaction, including input size limits.
@@ -2566,15 +2573,17 @@ impl AuthorityState {
         let epoch_store = self.load_epoch_store_one_call_per_task();
 
         if !self.is_fullnode(&epoch_store) {
-            return Err(SuiError::UnsupportedFeatureError {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "dev-inspect is only supported on fullnodes".to_string(),
-            });
+            }
+            .into());
         }
 
         if transaction_kind.is_system_tx() {
-            return Err(SuiError::UnsupportedFeatureError {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "system transactions are not supported".to_string(),
-            });
+            }
+            .into());
         }
 
         let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
@@ -2601,8 +2610,10 @@ impl AuthorityState {
         });
 
         let raw_txn_data = if show_raw_txn_data_and_effects {
-            bcs::to_bytes(&transaction).map_err(|_| SuiError::TransactionSerializationError {
-                error: "Failed to serialize transaction during dev inspect".to_string(),
+            bcs::to_bytes(&transaction).map_err(|_| {
+                SuiErrorKind::TransactionSerializationError {
+                    error: "Failed to serialize transaction during dev inspect".to_string(),
+                }
             })?
         } else {
             vec![]
@@ -2739,7 +2750,7 @@ impl AuthorityState {
         );
 
         let raw_effects = if show_raw_txn_data_and_effects {
-            bcs::to_bytes(&effects).map_err(|_| SuiError::TransactionSerializationError {
+            bcs::to_bytes(&effects).map_err(|_| SuiErrorKind::TransactionSerializationError {
                 error: "Failed to serialize transaction effects during dev inspect".to_string(),
             })?
         } else {
@@ -3053,7 +3064,7 @@ impl AuthorityState {
 
         let field =
             DFV::FieldVisitor::deserialize(move_object.contents(), &layout).map_err(|e| {
-                SuiError::ObjectDeserializationError {
+                SuiErrorKind::ObjectDeserializationError {
                     error: e.to_string(),
                 }
             })?;
@@ -3065,7 +3076,7 @@ impl AuthorityState {
         let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
             .map_err(|e| {
                 warn!("{e}");
-                SuiError::ObjectDeserializationError {
+                SuiErrorKind::ObjectDeserializationError {
                     error: e.to_string(),
                 }
             })?;
@@ -3077,7 +3088,7 @@ impl AuthorityState {
 
         let value_metadata = field.value_metadata().map_err(|e| {
             warn!("{e}");
-            SuiError::ObjectDeserializationError {
+            SuiErrorKind::ObjectDeserializationError {
                 error: e.to_string(),
             }
         })?;
@@ -3245,7 +3256,7 @@ impl AuthorityState {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         let (transaction, status) = self
             .get_transaction_status(&request.transaction_digest, &epoch_store)?
-            .ok_or(SuiError::TransactionNotFound {
+            .ok_or(SuiErrorKind::TransactionNotFound {
                 digest: request.transaction_digest,
             })?;
         Ok(TransactionInfoResponse {
@@ -3659,14 +3670,15 @@ impl AuthorityState {
         let lock = self
             .execution_lock
             .try_read()
-            .map_err(|_| SuiError::ValidatorHaltedAtEpochEnd)?;
+            .map_err(|_| SuiErrorKind::ValidatorHaltedAtEpochEnd)?;
         if *lock == transaction.auth_sig().epoch() {
             Ok(lock)
         } else {
-            Err(SuiError::WrongEpoch {
+            Err(SuiErrorKind::WrongEpoch {
                 expected_epoch: *lock,
                 actual_epoch: transaction.auth_sig().epoch(),
-            })
+            }
+            .into())
         }
     }
 
@@ -3677,7 +3689,7 @@ impl AuthorityState {
     pub fn execution_lock_for_signing(&self) -> SuiResult<ExecutionLockReadGuard> {
         self.execution_lock
             .try_read()
-            .map_err(|_| SuiError::ValidatorHaltedAtEpochEnd)
+            .map_err(|_| SuiErrorKind::ValidatorHaltedAtEpochEnd.into())
     }
 
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
@@ -3928,13 +3940,13 @@ impl AuthorityState {
 
         if checkpoint_path_tmp.exists() {
             fs::remove_dir_all(&checkpoint_path_tmp)
-                .map_err(|e| SuiError::FileIOError(e.to_string()))?;
+                .map_err(|e| SuiErrorKind::FileIOError(e.to_string()))?;
         }
 
         fs::create_dir_all(&checkpoint_path_tmp)
-            .map_err(|e| SuiError::FileIOError(e.to_string()))?;
+            .map_err(|e| SuiErrorKind::FileIOError(e.to_string()))?;
         fs::create_dir(&store_checkpoint_path_tmp)
-            .map_err(|e| SuiError::FileIOError(e.to_string()))?;
+            .map_err(|e| SuiErrorKind::FileIOError(e.to_string()))?;
 
         // NOTE: Do not change the order of invoking these checkpoint calls
         // We want to snapshot checkpoint db first to not race with state sync
@@ -3954,7 +3966,7 @@ impl AuthorityState {
         }
 
         fs::rename(checkpoint_path_tmp, checkpoint_path)
-            .map_err(|e| SuiError::FileIOError(e.to_string()))?;
+            .map_err(|e| SuiErrorKind::FileIOError(e.to_string()))?;
         Ok(())
     }
 
@@ -4064,14 +4076,15 @@ impl AuthorityState {
         let o = self.get_object_read(object_id)?.into_object()?;
         if let Some(move_object) = o.data.try_as_move() {
             Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
-                SuiError::ObjectDeserializationError {
+                SuiErrorKind::ObjectDeserializationError {
                     error: format!("{e}"),
                 }
             })?)
         } else {
-            Err(SuiError::ObjectDeserializationError {
+            Err(SuiErrorKind::ObjectDeserializationError {
                 error: format!("Provided object : [{object_id}] is not a Move object."),
-            })
+            }
+            .into())
         }
     }
 
@@ -4196,7 +4209,7 @@ impl AuthorityState {
         if let Some(indexes) = &self.indexes {
             indexes.get_owner_objects(owner, cursor, limit, filter)
         } else {
-            Err(SuiError::IndexStoreNotAvailable)
+            Err(SuiErrorKind::IndexStoreNotAvailable.into())
         }
     }
 
@@ -4212,7 +4225,7 @@ impl AuthorityState {
         if let Some(indexes) = &self.indexes {
             indexes.get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)
         } else {
-            Err(SuiError::IndexStoreNotAvailable)
+            Err(SuiErrorKind::IndexStoreNotAvailable.into())
         }
     }
 
@@ -4228,7 +4241,7 @@ impl AuthorityState {
         if let Some(indexes) = &self.indexes {
             indexes.get_owner_objects_iterator(owner, cursor_u, filter)
         } else {
-            Err(SuiError::IndexStoreNotAvailable)
+            Err(SuiErrorKind::IndexStoreNotAvailable.into())
         }
     }
 
@@ -4266,7 +4279,7 @@ impl AuthorityState {
                 SuiError::from(UserInputError::MovePackageAsObject { object_id: id.0 })
             })?;
             move_objects.push(bcs::from_bytes(move_object.contents()).map_err(|e| {
-                SuiError::ObjectDeserializationError {
+                SuiErrorKind::ObjectDeserializationError {
                     error: format!("{e}"),
                 }
             })?);
@@ -4298,7 +4311,7 @@ impl AuthorityState {
         if let Some(indexes) = &self.indexes {
             indexes.get_dynamic_fields_iterator(owner, cursor)
         } else {
-            Err(SuiError::IndexStoreNotAvailable)
+            Err(SuiErrorKind::IndexStoreNotAvailable.into())
         }
     }
 
@@ -4312,7 +4325,7 @@ impl AuthorityState {
         if let Some(indexes) = &self.indexes {
             indexes.get_dynamic_field_object_id(owner, name_type, name_bcs_bytes)
         } else {
-            Err(SuiError::IndexStoreNotAvailable)
+            Err(SuiErrorKind::IndexStoreNotAvailable.into())
         }
     }
 
@@ -4349,7 +4362,7 @@ impl AuthorityState {
     ) -> SuiResult<TransactionEvents> {
         self.get_transaction_cache_reader()
             .get_events(digest)
-            .ok_or(SuiError::TransactionEventsNotFound { digest: *digest })
+            .ok_or(SuiErrorKind::TransactionEventsNotFound { digest: *digest }.into())
     }
 
     pub fn get_transaction_input_objects(
@@ -4371,9 +4384,10 @@ impl AuthorityState {
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
         match &self.indexes {
             Some(i) => Ok(i.clone()),
-            None => Err(SuiError::UnsupportedFeatureError {
+            None => Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "extended object indexing is not enabled on this server".into(),
-            }),
+            }
+            .into()),
         }
     }
 
@@ -4431,9 +4445,12 @@ impl AuthorityState {
     pub fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
         self.get_checkpoint_store()
             .get_highest_executed_checkpoint_seq_number()?
-            .ok_or(SuiError::UserInputError {
-                error: UserInputError::LatestCheckpointSequenceNumberNotFound,
-            })
+            .ok_or(
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::LatestCheckpointSequenceNumberNotFound,
+                }
+                .into(),
+            )
     }
 
     #[cfg(msim)]
@@ -4455,9 +4472,10 @@ impl AuthorityState {
             .get_checkpoint_by_sequence_number(sequence_number)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().into_data()),
-            None => Err(SuiError::UserInputError {
+            None => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
-            }),
+            }
+            .into()),
         }
     }
 
@@ -4471,9 +4489,10 @@ impl AuthorityState {
             .get_checkpoint_by_digest(&digest)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().into_data()),
-            None => Err(SuiError::UserInputError {
+            None => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::VerifiedCheckpointDigestNotFound(Base58::encode(digest)),
-            }),
+            }
+            .into()),
         }
     }
 
@@ -4496,7 +4515,7 @@ impl AuthorityState {
         let content = self.get_checkpoint_contents(summary.content_digest)?;
         let genesis_transaction = content.enumerate_transactions(&summary).next();
         Ok(genesis_transaction
-            .ok_or(SuiError::UserInputError {
+            .ok_or(SuiErrorKind::UserInputError {
                 error: UserInputError::GenesisTransactionNotFound,
             })?
             .1
@@ -4513,9 +4532,10 @@ impl AuthorityState {
             .get_checkpoint_by_sequence_number(sequence_number)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => Ok(verified_checkpoint),
-            None => Err(SuiError::UserInputError {
+            None => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
-            }),
+            }
+            .into()),
         }
     }
 
@@ -4529,9 +4549,10 @@ impl AuthorityState {
             .get_checkpoint_by_digest(&digest)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => Ok(verified_checkpoint),
-            None => Err(SuiError::UserInputError {
+            None => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::VerifiedCheckpointDigestNotFound(Base58::encode(digest)),
-            }),
+            }
+            .into()),
         }
     }
 
@@ -4542,9 +4563,12 @@ impl AuthorityState {
     ) -> SuiResult<CheckpointContents> {
         self.get_checkpoint_store()
             .get_checkpoint_contents(&digest)?
-            .ok_or(SuiError::UserInputError {
-                error: UserInputError::CheckpointContentsNotFound(digest),
-            })
+            .ok_or(
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::CheckpointContentsNotFound(digest),
+                }
+                .into(),
+            )
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -4560,9 +4584,10 @@ impl AuthorityState {
                 let content_digest = verified_checkpoint.into_inner().content_digest;
                 self.get_checkpoint_contents(content_digest)
             }
-            None => Err(SuiError::UserInputError {
+            None => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
-            }),
+            }
+            .into()),
         }
     }
 
@@ -4581,7 +4606,7 @@ impl AuthorityState {
         //Get the tx_num from tx_digest
         let (tx_num, event_num) = if let Some(cursor) = cursor.as_ref() {
             let tx_seq = index_store.get_transaction_seq(&cursor.tx_digest)?.ok_or(
-                SuiError::TransactionNotFound {
+                SuiErrorKind::TransactionNotFound {
                     digest: cursor.tx_digest,
                 },
             )?;
@@ -4628,11 +4653,12 @@ impl AuthorityState {
                 )?,
             // not using "_ =>" because we want to make sure we remember to add new variants here
             EventFilter::Any(_) => {
-                return Err(SuiError::UserInputError {
+                return Err(SuiErrorKind::UserInputError {
                     error: UserInputError::Unsupported(
                         "'Any' queries are not supported by the fullnode.".to_string(),
                     ),
-                })
+                }
+                .into())
             }
         };
 
@@ -4677,7 +4703,7 @@ impl AuthorityState {
                 |((_event_digest, tx_digest, event_seq, timestamp), event)| {
                     event
                         .map(|e| (e, tx_digest, event_seq, timestamp))
-                        .ok_or(SuiError::TransactionEventsNotFound { digest: tx_digest })
+                        .ok_or(SuiErrorKind::TransactionEventsNotFound { digest: tx_digest })
                 },
             )
             .collect::<Result<Vec<_>, _>>()?;
@@ -4953,10 +4979,11 @@ impl AuthorityState {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         let actual_epoch = epoch_store.epoch();
         if actual_epoch != expected_epoch {
-            return Err(SuiError::WrongEpoch {
+            return Err(SuiErrorKind::WrongEpoch {
                 expected_epoch,
                 actual_epoch,
-            });
+            }
+            .into());
         }
 
         epoch_store.set_override_protocol_upgrade_buffer_stake(buffer_stake_bps)
@@ -4969,10 +4996,11 @@ impl AuthorityState {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         let actual_epoch = epoch_store.epoch();
         if actual_epoch != expected_epoch {
-            return Err(SuiError::WrongEpoch {
+            return Err(SuiErrorKind::WrongEpoch {
                 expected_epoch,
                 actual_epoch,
-            });
+            }
+            .into());
         }
 
         epoch_store.clear_override_protocol_upgrade_buffer_stake()

@@ -48,7 +48,7 @@ use sui_types::crypto::{
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
@@ -1210,7 +1210,7 @@ impl AuthorityPerEpochStore {
     pub fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
         match self.tables.load_full() {
             Some(tables) => Ok(tables),
-            None => Err(SuiError::EpochEnded(self.epoch())),
+            None => Err(SuiErrorKind::EpochEnded(self.epoch()).into()),
         }
     }
 
@@ -2049,7 +2049,7 @@ impl AuthorityPerEpochStore {
             Ok(tables) => tables,
             // After Epoch ends, it is no longer necessary to remove pending transactions
             // because the table will not be used anymore and be deleted eventually.
-            Err(SuiError::EpochEnded(_)) => return Ok(()),
+            Err(e) if matches!(e.as_inner(), SuiErrorKind::EpochEnded(_)) => return Ok(()),
             Err(e) => return Err(e),
         };
         let mut batch = tables.signed_effects_digests.batch();
