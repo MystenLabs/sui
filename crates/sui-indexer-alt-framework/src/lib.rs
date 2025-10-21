@@ -46,9 +46,7 @@ pub struct IndexerArgs {
     /// indexers (e.g. for backfills or temporary workflows) while maintaining separate watermark
     /// entries in the database.
     ///
-    /// By default, no task name is provided, and watermarks are keyed only by `pipeline`. When
-    /// specified, the task name is propagated to all attached pipelines so that their watermark
-    /// entries include both the pipeline and task identifiers.
+    /// By default there is no task name, and watermarks are keyed only by `pipeline`.
     ///
     /// Sequential pipelines cannot be attached to a tasked indexer.
     ///
@@ -65,6 +63,10 @@ pub struct IndexerArgs {
     /// Override for the checkpoint to start ingestion from. By default, ingestion will start just
     /// after the lowest checkpoint watermark across all active pipelines. If set, ingestion will
     /// start from the configured checkpoint.
+    ///
+    /// An untasked indexer complains if this first checkpoint is larger than any of its pipelines'
+    /// committer watermark. For tasked indexers, the framework ensures that tasked pipelines never
+    /// commit checkpoints below the main pipeline's reader watermark.
     ///
     /// If the pipeline or task has never been run before, the pipeline is initialized to start
     /// committing from `--first-checkpoint`, or from genesis if the value is not set. If the
@@ -101,9 +103,7 @@ pub struct Indexer<S: Store> {
     /// indexers to run the same pipelines concurrently (e.g. for backfills or temporary workflows)
     /// while maintaining separate watermark entries in the database.
     ///
-    /// By default, the task name is `None`, and watermark rows are keyed only by `pipeline`. When a
-    /// task is provided, the indexer automatically propagates it to all attached pipelines so that
-    /// each pipeline’s watermark entries include both the pipeline and task identifiers.
+    /// By default there is no task name, and watermarks are keyed only by `pipeline`.
     ///
     /// Sequential pipelines cannot be attached to a tasked indexer.
     ///
@@ -1365,6 +1365,8 @@ mod tests {
         assert_eq!(tasked_pipeline_watermark.checkpoint_hi_inclusive, 25);
         assert_eq!(tasked_pipeline_watermark.reader_lo, 0);
     }
+
+    // TODO: test that while tasked pipelines can surpass main pipeline committer hi, can't start if would create gap?
 
     /// During a run, the tasked pipeline will stop processing checkpoints before the main
     /// pipeline's reader watermark.
