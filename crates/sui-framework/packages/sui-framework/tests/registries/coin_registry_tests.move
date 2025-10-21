@@ -450,6 +450,103 @@ fun receive_promote() {
     test.end();
 }
 
+// === Access to Legacy Metadata for New Currencies ===
+
+#[test]
+// Scenario:
+// - Create a new Currency
+// - Borrow the legacy metadata
+// - Return the borrowed legacy metadata
+fun new_currency_with_legacy_metadata() {
+    let mut test = test_scenario::begin(@0x0);
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(test.ctx());
+    let (builder, t_cap) = new_builder().build_dynamic(&mut registry, test.ctx());
+    let metadata_cap = builder.finalize(test.ctx());
+
+    test.next_tx(@10);
+    let mut currency = test.take_shared<Currency<TestDynamic>>();
+
+    let (legacy, borrow) = currency.borrow_as_legacy_metadata();
+    assert_eq!(legacy.get_name(), NAME.to_string());
+    currency.return_borrowed_legacy_metadata(legacy, borrow);
+
+    currency.set_name(&metadata_cap, b"New name".to_string());
+
+    currency.delete_metadata_cap(metadata_cap);
+
+    let (legacy, borrow) = currency.borrow_as_legacy_metadata();
+
+    assert_eq!(legacy.get_decimals(), DECIMALS);
+    assert_eq!(legacy.get_name(), b"New name".to_string());
+    assert_eq!(legacy.get_symbol(), SYMBOL.to_ascii_string());
+    assert_eq!(legacy.get_description(), DESCRIPTION.to_string());
+    assert_eq!(legacy.get_icon_url().destroy_some().inner_url(), ICON_URL.to_ascii_string());
+
+    currency.return_borrowed_legacy_metadata(legacy, borrow);
+
+    test_scenario::return_shared(currency);
+
+    destroy(registry);
+    destroy(t_cap);
+    test.end();
+}
+
+#[test, expected_failure(abort_code = coin_registry::ELegacyMetadataDoesNotExist)]
+fun try_borrow_soft_migrated_legacy_metadata_fail() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (_t_cap, legacy) = new_builder().build_legacy(COIN_REGISTRY_TESTS {}, ctx);
+    let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
+        &mut registry,
+        &legacy,
+        ctx,
+    );
+
+    // Fails here!
+    let (_legacy, _borrow) = currency.borrow_as_legacy_metadata();
+
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_registry::ELegacyMetadataDoesNotExist)]
+// Scenario:
+// - Create a new Currency
+// - Borrow the legacy metadata
+// - Borrow the legacy metadata again (should fail)
+fun try_borrow_twice() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (builder, _t_cap) = new_builder().build_dynamic(&mut registry, ctx);
+    let (mut currency, _metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    let (_legacy, _borrow) = currency.borrow_as_legacy_metadata();
+    let (_legacy2, _borrow2) = currency.borrow_as_legacy_metadata();
+
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_registry::ECannotReturnDifferentMetadata)]
+// Scenario:
+// - Create a new Currency
+// - Borrow the legacy metadata
+// - Update some of its values
+// - Return the borrowed legacy metadata (should fail)
+fun cannot_return_different_metadata() {
+    let mut test = test_scenario::begin(@0x0);
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(test.ctx());
+    let (builder, t_cap) = new_builder().build_dynamic(&mut registry, test.ctx());
+    let metadata_cap = builder.finalize(test.ctx());
+
+    test.next_tx(@10);
+    let mut currency = test.take_shared<Currency<TestDynamic>>();
+
+    let (mut legacy, borrow) = currency.borrow_as_legacy_metadata();
+    legacy.update_metadata(b"New name".to_string(), DESCRIPTION.to_string(), ICON_URL.to_string());
+    currency.return_borrowed_legacy_metadata(legacy, borrow);
+
+    abort
+}
+
 // === Metadata Builder ===
 
 public struct MetadataBuilder has drop {

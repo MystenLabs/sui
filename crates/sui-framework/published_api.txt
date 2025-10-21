@@ -2554,6 +2554,12 @@ new_treasury_cap
 allow_global_pause
 	public(package) fun
 	0x2::coin
+new_metadata
+	public(package) fun
+	0x2::coin
+update_metadata
+	public(package) fun
+	0x2::coin
 supply
 	public fun
 	0x2::coin
@@ -2593,6 +2599,9 @@ CoinRegistry
 ExtraField
 	public struct
 	0x2::coin_registry
+LegacyMetadataKey
+	public struct
+	0x2::coin_registry
 CurrencyKey
 	public struct
 	0x2::coin_registry
@@ -2603,6 +2612,9 @@ Currency
 	public struct
 	0x2::coin_registry
 CurrencyInitializer
+	public struct
+	0x2::coin_registry
+BorrowLegacyMetadata
 	public struct
 	0x2::coin_registry
 SupplyState
@@ -2724,6 +2736,15 @@ total_supply
 	0x2::coin_registry
 exists
 	public fun
+	0x2::coin_registry
+borrow_as_legacy_metadata
+	public fun
+	0x2::coin_registry
+return_borrowed_legacy_metadata
+	public fun
+	0x2::coin_registry
+new_legacy_metadata
+	fun
 	0x2::coin_registry
 create
 	fun
