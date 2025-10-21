@@ -444,9 +444,7 @@ where
 }
 
 // Chooses the percentage of transactions to be driven by TransactionDriver.
-pub fn choose_transaction_driver_percentage(
-    chain_id: Option<sui_types::digests::ChainIdentifier>,
-) -> u8 {
+pub fn choose_transaction_driver_percentage() -> u8 {
     if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
         if let Ok(tx_driver_percentage) = v.parse::<u8>() {
             if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
@@ -455,16 +453,8 @@ pub fn choose_transaction_driver_percentage(
         }
     }
 
-    if let Some(chain_identifier) = chain_id {
-        if chain_identifier.chain() == sui_protocol_config::Chain::Mainnet {
-            // Require explicit opt-in to TransactionDriver on mainnet,
-            // via the TRANSACTION_DRIVER environment variable.
-            return 0;
-        }
-    }
-
-    // Default to 50% everywhere except mainnet
-    50
+    // Default to 100% everywhere
+    100
 }
 
 // Inner state of TransactionDriver.

@@ -288,7 +288,7 @@ impl LocalValidatorAggregatorProxy {
         } else {
             // We don't need to gate transaction driver for benchmark since we
             // are not running it on mainnet.
-            choose_transaction_driver_percentage(None)
+            choose_transaction_driver_percentage()
         };
 
         Self::new_impl(
