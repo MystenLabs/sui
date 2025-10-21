@@ -66,7 +66,7 @@ impl BigtableReader {
                 bigtable_args.statement_timeout(),
                 client_name,
                 Some(registry),
-                bigtable_args.bigtable_app_profile_id.clone(),
+                bigtable_args.bigtable_app_profile_id,
             )
             .await
             .context("Failed to create BigTable client")?,
