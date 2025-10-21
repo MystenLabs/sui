@@ -10,6 +10,7 @@ use crate::{
     displays::Pretty,
     replay_interface::{ReadDataStore, SetupStore, StoreSummary},
     replay_txn::replay_transaction,
+    summary_metrics::TotalMetrics,
 };
 use anyhow::{anyhow, bail};
 use clap::{Parser, ValueEnum};
@@ -206,9 +207,14 @@ pub struct ReplayConfigExperimental {
     /// - gql-only: remote GraphQL only
     /// - fs-then-gql: FileSystem primary with GraphQL fallback
     /// - fs-only: FileSystem only
+    /// - inmem-fs: InMemory -> FileSystem
     /// - inmem-fs-gql: InMemory -> FileSystem -> GraphQL (default)
     #[arg(long = "store-mode", value_enum, default_value_t = StoreMode::GqlOnly)]
     pub store_mode: StoreMode,
+
+    /// Include execution and total time in transaction output.
+    #[arg(long = "track-time", default_value = "false")]
+    pub track_time: bool,
 }
 
 impl Default for ReplayConfigExperimental {
@@ -217,6 +223,7 @@ impl Default for ReplayConfigExperimental {
             node: Node::Mainnet,
             verbose: false,
             store_mode: StoreMode::GqlOnly,
+            track_time: false,
         }
     }
 }
@@ -229,6 +236,8 @@ pub enum StoreMode {
     FsThenGql,
     #[value(name = "fs-only")]
     FsOnly,
+    #[value(name = "inmem-fs")]
+    InmemFs,
     #[value(name = "inmem-fs-gql")]
     InmemFsGql,
 }
@@ -390,6 +399,7 @@ pub async fn handle_replay_config(
         node,
         verbose,
         store_mode,
+        track_time,
     } = experimental_config;
 
     let output_root_dir = if let Some(dir) = output_dir {
@@ -449,6 +459,7 @@ pub async fn handle_replay_config(
                 *trace,
                 *verbose,
                 terminate_early,
+                *track_time,
             )
             .await?;
         }
@@ -467,6 +478,7 @@ pub async fn handle_replay_config(
                 *trace,
                 *verbose,
                 terminate_early,
+                *track_time,
             )
             .await?;
         }
@@ -482,6 +494,25 @@ pub async fn handle_replay_config(
                 *trace,
                 *verbose,
                 terminate_early,
+                *track_time,
+            )
+            .await?;
+        }
+        StoreMode::InmemFs => {
+            let fs_store = FileSystemStore::new(node.clone())
+                .map_err(|e| anyhow!("Failed to create file system store: {:?}", e))?;
+            let in_memory_store = InMemoryStore::new(node.clone());
+            let store = ReadThroughStore::new(in_memory_store, fs_store);
+            run_replay(
+                &store,
+                &output_root_dir,
+                &digests,
+                node,
+                *overwrite_existing,
+                *trace,
+                *verbose,
+                terminate_early,
+                *track_time,
             )
             .await?;
         }
@@ -502,6 +533,7 @@ pub async fn handle_replay_config(
                 *trace,
                 *verbose,
                 terminate_early,
+                *track_time,
             )
             .await?;
         }
@@ -519,15 +551,22 @@ async fn run_replay<S>(
     trace: bool,
     verbose: bool,
     terminate_early: bool,
+    track_time: bool,
 ) -> anyhow::Result<()>
 where
     S: ReadDataStore + StoreSummary + SetupStore,
 {
+    use std::time::Instant;
+
     data_store.setup(None)?;
+    let mut total_metrics = TotalMetrics::new();
+
     for tx_digest in digests {
         let tx_dir = output_root_dir.join(tx_digest);
         let artifact_manager = ArtifactManager::new(&tx_dir, overwrite_existing)?;
         let span = info_span!("replay", tx_digest = %tx_digest);
+
+        let tx_start = Instant::now();
         let result = replay_transaction(
             &artifact_manager,
             tx_digest,
@@ -537,6 +576,24 @@ where
         )
         .instrument(span)
         .await;
+        let tx_total_ms = tx_start.elapsed().as_millis();
+
+        let success = result.is_ok();
+        let exec_ms = result.as_ref().ok().copied().unwrap_or(0);
+
+        total_metrics.add_transaction(success, tx_total_ms, exec_ms);
+
+        // Print per-transaction result
+        let status = if success { "OK" } else { "FAILED" };
+        if track_time {
+            println!(
+                "> Replayed txn {} ({}): exec_ms={}, total_ms={}",
+                tx_digest, status, exec_ms, tx_total_ms
+            );
+        } else {
+            println!("> Replayed txn {} ({})", tx_digest, status);
+        }
+
         match result {
             Err(e) if terminate_early => {
                 error!(tx_digest = %tx_digest, error = ?e, "Replay error; terminating early");
@@ -558,6 +615,18 @@ where
             warn!("Failed to write data store summary: {:?}", e);
         }
     }
+
+    if digests.len() > 1 {
+        println!(
+            "Replay run: tx_count={} success={} failure={} - exec_ms={}, total_ms={}",
+            total_metrics.tx_count,
+            total_metrics.success_count,
+            total_metrics.failure_count,
+            total_metrics.exec_ms,
+            total_metrics.total_ms
+        );
+    }
+
     Ok(())
 }
 

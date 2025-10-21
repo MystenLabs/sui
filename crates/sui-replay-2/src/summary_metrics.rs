@@ -1,119 +1,95 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cell::RefCell;
-use tracing::debug;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-// Per-transaction query time accumulators (thread-local)
-thread_local! {
-    static TX_QUERY_METRICS_MS: RefCell<(u128, u128, u128)> = const { RefCell::new((0, 0, 0)) }; // (txn, objs, epoch)
-    static TX_OBJS_REQUESTED: RefCell<u64> = const { RefCell::new(0) };
-    static TX_QUERY_COUNTS: RefCell<(u64, u64, u64)> = const { RefCell::new((0, 0, 0)) }; // (txn, objs, epoch)
+/// Per-transaction metrics structure (shared atomic state)
+pub(crate) struct TxMetrics {
+    query_txn: (AtomicU64, AtomicU64),   // (ms, count)
+    query_objs: (AtomicU64, AtomicU64),  // (ms, count)
+    query_epoch: (AtomicU64, AtomicU64), // (ms, count)
 }
 
-// Reset per-transaction metrics (timers, requested-objects counter, and query counts).
+impl TxMetrics {
+    const fn new() -> Self {
+        Self {
+            query_txn: (AtomicU64::new(0), AtomicU64::new(0)),
+            query_objs: (AtomicU64::new(0), AtomicU64::new(0)),
+            query_epoch: (AtomicU64::new(0), AtomicU64::new(0)),
+        }
+    }
+
+    fn reset(&self) {
+        self.query_txn.0.store(0, Ordering::Relaxed);
+        self.query_txn.1.store(0, Ordering::Relaxed);
+        self.query_objs.0.store(0, Ordering::Relaxed);
+        self.query_objs.1.store(0, Ordering::Relaxed);
+        self.query_epoch.0.store(0, Ordering::Relaxed);
+        self.query_epoch.1.store(0, Ordering::Relaxed);
+    }
+
+    fn add_txn(&self, ms: u128) {
+        self.query_txn.0.fetch_add(ms as u64, Ordering::Relaxed);
+        self.query_txn.1.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn add_objs(&self, ms: u128) {
+        self.query_objs.0.fetch_add(ms as u64, Ordering::Relaxed);
+        self.query_objs.1.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn add_epoch(&self, ms: u128) {
+        self.query_epoch.0.fetch_add(ms as u64, Ordering::Relaxed);
+        self.query_epoch.1.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+static TX_METRICS: TxMetrics = TxMetrics::new();
+
+// Reset per-transaction metrics (timers and query counts).
 pub(crate) fn tx_metrics_reset() {
-    TX_QUERY_METRICS_MS.with(|m| *m.borrow_mut() = (0, 0, 0));
-    TX_OBJS_REQUESTED.with(|c| *c.borrow_mut() = 0);
-    TX_QUERY_COUNTS.with(|c| *c.borrow_mut() = (0, 0, 0));
+    TX_METRICS.reset();
 }
 
-// Add elapsed milliseconds to the transaction-data query timer for this transaction.
+// Add elapsed milliseconds to the transaction-data query timer and increment count.
 pub(crate) fn tx_metrics_add_txn(ms: u128) {
-    TX_QUERY_METRICS_MS.with(|m| {
-        let (t, o, e) = *m.borrow();
-        *m.borrow_mut() = (t + ms, o, e);
-    });
+    TX_METRICS.add_txn(ms);
 }
 
-// Add elapsed milliseconds to the objects query timer for this transaction.
+// Add elapsed milliseconds to the objects query timer and increment count.
 pub(crate) fn tx_metrics_add_objs(ms: u128) {
-    TX_QUERY_METRICS_MS.with(|m| {
-        let (t, o, e) = *m.borrow();
-        *m.borrow_mut() = (t, o + ms, e);
-    });
+    TX_METRICS.add_objs(ms);
 }
 
-// Add elapsed milliseconds to the epoch query timer for this transaction.
+// Add elapsed milliseconds to the epoch query timer and increment count.
 pub(crate) fn tx_metrics_add_epoch(ms: u128) {
-    TX_QUERY_METRICS_MS.with(|m| {
-        let (t, o, e) = *m.borrow();
-        *m.borrow_mut() = (t, o, e + ms);
-    });
+    TX_METRICS.add_epoch(ms);
 }
 
-// Snapshot of per-transaction query timers: (txn_ms, objs_ms, epoch_ms).
-pub(crate) fn tx_metrics_snapshot() -> (u128, u128, u128) {
-    TX_QUERY_METRICS_MS.with(|m| *m.borrow())
+/// Accumulator for total metrics across all transactions in a replay run.
+#[derive(Debug, Default, Clone)]
+pub struct TotalMetrics {
+    pub tx_count: u64,
+    pub success_count: u64,
+    pub failure_count: u64,
+    pub total_ms: u128,
+    pub exec_ms: u128,
 }
 
-// Increment the number of objects requested in the current multi-get batch.
-pub(crate) fn tx_objs_add(n: usize) {
-    TX_OBJS_REQUESTED.with(|c| *c.borrow_mut() += n as u64);
-}
+impl TotalMetrics {
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-// Snapshot of how many objects were requested for this transaction.
-pub(crate) fn tx_objs_snapshot() -> u64 {
-    TX_OBJS_REQUESTED.with(|c| *c.borrow())
-}
-
-// Increment the number of transaction-data queries executed for this transaction.
-pub(crate) fn tx_counts_add_txn() {
-    TX_QUERY_COUNTS.with(|c| {
-        let (t, o, e) = *c.borrow();
-        *c.borrow_mut() = (t + 1, o, e);
-    });
-}
-
-// Increment the number of object batches (multi-get objects) executed for this transaction.
-pub(crate) fn tx_counts_add_objs() {
-    TX_QUERY_COUNTS.with(|c| {
-        let (t, o, e) = *c.borrow();
-        *c.borrow_mut() = (t, o + 1, e);
-    });
-}
-
-// Increment the number of epoch-info queries executed for this transaction.
-pub(crate) fn tx_counts_add_epoch() {
-    TX_QUERY_COUNTS.with(|c| {
-        let (t, o, e) = *c.borrow();
-        *c.borrow_mut() = (t, o, e + 1);
-    });
-}
-
-// Snapshot of query counts: (txn_count, objs_count, epoch_count).
-pub(crate) fn tx_query_counts_snapshot() -> (u64, u64, u64) {
-    TX_QUERY_COUNTS.with(|c| *c.borrow())
-}
-
-// Log a concise summary of replay metrics for a transaction at debug level.
-pub(crate) fn log_replay_metrics(tx_digest: &str, total_ms: u128, exec_ms: u128) {
-    let (txn_ms, objs_ms, epoch_ms) = tx_metrics_snapshot();
-    let objs_requested = tx_objs_snapshot();
-    let (txn_q, objs_q, epoch_q) = tx_query_counts_snapshot();
-    let bucket = if total_ms <= 10_000 {
-        "le10"
-    } else if total_ms <= 20_000 {
-        "gt10le20"
-    } else if total_ms <= 30_000 {
-        "gt20le30"
-    } else if total_ms <= 60_000 {
-        "gt30le60"
-    } else {
-        "gt60"
-    };
-    debug!(
-        "Tx metrics {}: bucket={} total_ms={} exec_ms={} txn_ms={} objs_ms={} epoch_ms={} objs_requested={} q_counts(txn,objs,epoch)=({},{},{})",
-        tx_digest,
-        bucket,
-        total_ms,
-        exec_ms,
-        txn_ms,
-        objs_ms,
-        epoch_ms,
-        objs_requested,
-        txn_q,
-        objs_q,
-        epoch_q
-    );
+    /// Accumulate metrics from a single transaction replay.
+    pub fn add_transaction(&mut self, success: bool, total_ms: u128, exec_ms: u128) {
+        self.tx_count += 1;
+        if success {
+            self.success_count += 1;
+        } else {
+            self.failure_count += 1;
+        }
+        self.total_ms += total_ms;
+        self.exec_ms += exec_ms;
+    }
 }
