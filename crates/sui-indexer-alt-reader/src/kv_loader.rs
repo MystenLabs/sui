@@ -45,6 +45,7 @@ pub enum KvLoader {
 }
 
 /// A wrapper for the contents of a transaction, either from Bigtable, Postgres, or just executed.
+#[allow(clippy::large_enum_variant)]
 pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),

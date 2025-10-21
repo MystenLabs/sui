@@ -13,6 +13,7 @@ use crate::{
 };
 
 /// Test fixture for store tests. Wraps around various store implementations.
+#[allow(clippy::large_enum_variant)]
 enum TestStore {
     RocksDB((RocksDBStore, TempDir)),
     Mem(MemStore),

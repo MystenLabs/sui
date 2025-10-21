@@ -55,6 +55,7 @@ pub enum FetchError {
 pub type FetchResult = Result<FetchData, FetchError>;
 
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum FetchData {
     Raw(Bytes),
     CheckpointData(CheckpointData),

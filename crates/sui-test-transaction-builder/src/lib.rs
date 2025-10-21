@@ -469,6 +469,7 @@ impl TestTransactionBuilder {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum TestTransactionData {
     Move(MoveData),
     Transfer(TransferData),
@@ -487,6 +488,7 @@ struct MoveData {
     type_args: Vec<TypeTag>,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum PublishData {
     /// Path to source code directory and with_unpublished_deps.
     /// with_unpublished_deps indicates whether to publish unpublished dependencies in the same transaction or not.

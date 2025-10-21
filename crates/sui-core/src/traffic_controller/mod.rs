@@ -862,15 +862,14 @@ impl TrafficSim {
         let metrics = futures::future::join_all(tasks).await.into_iter().fold(
             TrafficSimMetrics::default(),
             |acc, run_client_ret| {
-                if run_client_ret.is_err() {
+                if let Ok(metrics) = run_client_ret {
+                    acc + metrics
+                } else {
                     error!(
                         "Error running traffic sim client: {:?}",
                         run_client_ret.err()
                     );
                     acc
-                } else {
-                    let metrics = run_client_ret.unwrap();
-                    acc + metrics
                 }
             },
         );
