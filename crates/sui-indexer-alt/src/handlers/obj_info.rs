@@ -97,16 +97,17 @@ impl Processor for ObjInfo {
 #[async_trait]
 impl Handler for ObjInfo {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
-        let stored = values
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
+        let stored = batch
             .iter()
             .map(|v| v.try_into())
             .collect::<Result<Vec<StoredObjInfo>>>()?;
 
         // Entries to commit to the reference table for pruning.
         let mut references = Vec::new();
-        for value in values {
+        for value in batch {
             match &value.update {
                 ProcessedObjInfoUpdate::Upsert { object, created } => {
                     // Created objects don't have a previous entry in the main table. Unwrapped
@@ -318,7 +319,7 @@ mod tests {
                 created: true,
             }
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
         let rows_pruned = ObjInfo.prune(0, 1, &mut conn).await.unwrap();
         // The object is newly created, so no prior state to prune.
@@ -345,7 +346,7 @@ mod tests {
         let checkpoint2 = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint2)).await.unwrap();
         assert!(result.is_empty());
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 0);
         let rows_pruned = ObjInfo.prune(1, 2, &mut conn).await.unwrap();
         // No new entries are inserted to the table, so no old entries to prune.
@@ -372,7 +373,7 @@ mod tests {
                 created: false,
             }
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
@@ -407,7 +408,7 @@ mod tests {
             processed.update,
             ProcessedObjInfoUpdate::Delete(_)
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         // 1 insertion to main table, 2 to ref table because of delete.
         assert_eq!(rows_inserted, 3);
         let rows_pruned = ObjInfo.prune(3, 4, &mut conn).await.unwrap();
@@ -435,7 +436,7 @@ mod tests {
         let checkpoint = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert!(result.is_empty());
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 0);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
@@ -456,7 +457,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
         builder = builder
@@ -471,7 +472,7 @@ mod tests {
             processed.update,
             ProcessedObjInfoUpdate::Delete(_)
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         // 3, not 2, because the wrap entry emits two rows on the ref table
         assert_eq!(rows_inserted, 3);
 
@@ -508,7 +509,7 @@ mod tests {
                 created: true,
             }
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
         let rows_pruned = ObjInfo.prune(2, 3, &mut conn).await.unwrap();
         // No entry prior to this checkpoint, so no entries to prune.
@@ -535,7 +536,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
         builder = builder
@@ -550,7 +551,7 @@ mod tests {
             processed.update,
             ProcessedObjInfoUpdate::Delete(_)
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         // 3, not 2, because the wrap entry emits two rows on the ref table
         assert_eq!(rows_inserted, 3);
 
@@ -569,7 +570,7 @@ mod tests {
                 created: true,
             }
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         // Only one, we don't insert a row to ref table on create or unwrap.
         assert_eq!(rows_inserted, 1);
 
@@ -605,7 +606,7 @@ mod tests {
                 created: true,
             }
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
         let rows_pruned = ObjInfo.prune(0, 1, &mut conn).await.unwrap();
         // No entry prior to this checkpoint, so no entries to prune.
@@ -629,7 +630,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
+        ObjInfo.commit(&result, &mut conn).await.unwrap();
 
         builder = builder
             .start_transaction(0)
@@ -646,7 +647,7 @@ mod tests {
                 created: false,
             }
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 2);
         let rows_pruned = ObjInfo.prune(0, 2, &mut conn).await.unwrap();
         // The creation entry will be pruned. Result is 2, 1 from main table and 1 from reference.
@@ -670,7 +671,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
+        ObjInfo.commit(&result, &mut conn).await.unwrap();
 
         builder = builder
             .start_transaction(0)
@@ -687,7 +688,7 @@ mod tests {
                 created: false,
             }
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 2);
 
         let rows_pruned = ObjInfo.prune(1, 2, &mut conn).await.unwrap();
@@ -714,7 +715,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
         builder = builder
@@ -738,7 +739,7 @@ mod tests {
                 created: false,
             }
         ));
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
@@ -769,7 +770,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        ObjInfo::commit(&values, &mut conn).await.unwrap();
+        ObjInfo.commit(&values, &mut conn).await.unwrap();
 
         builder = builder
             .start_transaction(0)
@@ -777,7 +778,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        ObjInfo::commit(&values, &mut conn).await.unwrap();
+        ObjInfo.commit(&values, &mut conn).await.unwrap();
 
         builder = builder
             .start_transaction(0)
@@ -785,7 +786,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        ObjInfo::commit(&values, &mut conn).await.unwrap();
+        ObjInfo.commit(&values, &mut conn).await.unwrap();
 
         let rows_pruned = ObjInfo.prune(0, 3, &mut conn).await.unwrap();
         let delete_row_pruned = ObjInfo.prune(3, 4, &mut conn).await.unwrap();
@@ -806,7 +807,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        ObjInfo::commit(&values, &mut conn).await.unwrap();
+        ObjInfo.commit(&values, &mut conn).await.unwrap();
 
         // No entries to prune yet.
         assert_eq!(ObjInfo.prune(0, 2, &mut conn).await.unwrap(), 0);
@@ -817,7 +818,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        ObjInfo::commit(&values, &mut conn).await.unwrap();
+        ObjInfo.commit(&values, &mut conn).await.unwrap();
 
         // Now we can prune both checkpoints 0 and 1.
         ObjInfo.prune(0, 2, &mut conn).await.unwrap();
@@ -828,7 +829,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        ObjInfo::commit(&values, &mut conn).await.unwrap();
+        ObjInfo.commit(&values, &mut conn).await.unwrap();
 
         // Prune based on new info from checkpoint 2
         assert_eq!(ObjInfo.prune(2, 4, &mut conn).await.unwrap(), 2);
@@ -839,7 +840,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = builder.build_checkpoint().into();
         let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
-        ObjInfo::commit(&values, &mut conn).await.unwrap();
+        ObjInfo.commit(&values, &mut conn).await.unwrap();
 
         // Now we can prune checkpoint 2, as well as 3.
         ObjInfo.prune(2, 4, &mut conn).await.unwrap();
@@ -891,7 +892,7 @@ mod tests {
         let checkpoint0 = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint0)).await.unwrap();
         assert_eq!(result.len(), 3);
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 3);
 
         builder = builder
@@ -903,7 +904,7 @@ mod tests {
         let checkpoint1 = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint1)).await.unwrap();
         assert_eq!(result.len(), 3);
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 6);
 
         builder = builder
@@ -915,7 +916,7 @@ mod tests {
         let checkpoint2 = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint2)).await.unwrap();
         assert_eq!(result.len(), 3);
-        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let rows_inserted = ObjInfo.commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 6);
 
         // Each of the 3 objects will have two entries, one at cp_sequence_number 1, another at 2.
@@ -978,7 +979,7 @@ mod tests {
             .finish_transaction();
         let checkpoint0 = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint0)).await.unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
+        ObjInfo.commit(&result, &mut conn).await.unwrap();
 
         builder = builder
             .start_transaction(0)
@@ -988,7 +989,7 @@ mod tests {
             .finish_transaction();
         let checkpoint1 = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint1)).await.unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
+        ObjInfo.commit(&result, &mut conn).await.unwrap();
 
         builder = builder
             .start_transaction(1)
@@ -998,7 +999,7 @@ mod tests {
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint().into();
         let result = ObjInfo.process(&Arc::new(checkpoint2)).await.unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
+        ObjInfo.commit(&result, &mut conn).await.unwrap();
 
         // Verify initial state
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();

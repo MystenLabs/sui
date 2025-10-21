@@ -14,6 +14,7 @@ use tracing::{debug, info};
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{CommitterConfig, IndexedCheckpoint, WatermarkPart},
+    store::BatchStrategy,
 };
 
 use super::{BatchedRows, Handler};
@@ -22,45 +23,30 @@ use super::{BatchedRows, Handler};
 /// by the concurrent collector to hold data it is waiting to send to the committer.
 struct PendingCheckpoint<H: Handler> {
     /// Values to be inserted into the database from this checkpoint
-    values: Vec<H::Value>,
+    values: std::iter::Peekable<Box<dyn Iterator<Item = H::Value> + Send>>,
     /// The watermark associated with this checkpoint and the part of it that is left to commit
     watermark: WatermarkPart,
 }
 
 impl<H: Handler> PendingCheckpoint<H> {
     /// Whether there are values left to commit from this indexed checkpoint.
-    fn is_empty(&self) -> bool {
-        let empty = self.values.is_empty();
-        debug_assert!(!empty || self.watermark.batch_rows == 0);
-        empty
-    }
-
-    /// Adds data from this indexed checkpoint to the `batch`, honoring the handler's bounds on
-    /// chunk size.
-    fn batch_into(&mut self, batch: &mut BatchedRows<H>) {
-        let max_chunk_rows = super::max_chunk_rows::<H>();
-        if batch.values.len() + self.values.len() > max_chunk_rows {
-            let mut for_batch = self.values.split_off(max_chunk_rows - batch.values.len());
-
-            std::mem::swap(&mut self.values, &mut for_batch);
-            batch.watermark.push(self.watermark.take(for_batch.len()));
-            batch.values.extend(for_batch);
-        } else {
-            batch.watermark.push(self.watermark.take(self.values.len()));
-            batch.values.extend(std::mem::take(&mut self.values));
-        }
+    fn is_empty(&mut self) -> bool {
+        self.values.peek().is_none()
     }
 }
 
 impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
     fn from(indexed: IndexedCheckpoint<H>) -> Self {
+        let total_rows = indexed.values.len();
         Self {
             watermark: WatermarkPart {
                 watermark: indexed.watermark,
-                batch_rows: indexed.values.len(),
-                total_rows: indexed.values.len(),
+                batch_rows: total_rows,
+                total_rows,
             },
-            values: indexed.values,
+            values: (Box::new(indexed.values.into_iter())
+                as Box<dyn Iterator<Item = H::Value> + Send>)
+                .peekable(),
         }
     }
 }
@@ -83,9 +69,15 @@ pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
+    store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> JoinHandle<()>
+where
+    H::Value: Send + Sync,
+    H::Store: crate::store::StoreTypes,
+    <H::Store as crate::store::StoreTypes>::BatchStrategy<H::Value>: BatchStrategy<H::Value>,
+{
     tokio::spawn(async move {
         // The `poll` interval controls the maximum time to wait between collecting batches,
         // regardless of number of rows pending.
@@ -118,14 +110,26 @@ pub(super) fn collector<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let mut batch = BatchedRows::new();
-                    while !batch.is_full() {
+                    let mut batch = BatchedRows::new(&store);
+                    loop {
                         let Some(mut entry) = pending.first_entry() else {
                             break;
                         };
 
+                        // Check watermark limit first (cheap)
+                        if batch.watermark.len() >= H::MAX_WATERMARK_UPDATES {
+                            break;
+                        }
+
                         let indexed = entry.get_mut();
-                        indexed.batch_into(&mut batch);
+
+                        // Try to extend the batch - will return 0 if full
+                        let taken = BatchStrategy::take_from(&mut batch.strategy, &mut indexed.values);
+                        if taken == 0 {
+                            break;  // Batch is full, send it
+                        }
+
+                        batch.watermark.push(indexed.watermark.take(taken));
                         if indexed.is_empty() {
                             checkpoint_lag_reporter.report_lag(
                                 indexed.watermark.checkpoint(),
@@ -200,24 +204,35 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use sui_pg_db::{Connection, Db};
+    use sui_pg_db::{Connection, Db, DbArgs};
     use tokio::sync::mpsc;
 
     use crate::{
-        metrics::tests::test_metrics,
-        pipeline::{concurrent::max_chunk_rows, Processor},
-        types::full_checkpoint_content::Checkpoint,
-        FieldCount,
+        metrics::tests::test_metrics, pipeline::Processor,
+        types::full_checkpoint_content::Checkpoint, FieldCount,
     };
 
     use super::*;
+
+    async fn test_store() -> Db {
+        use sui_pg_db::temp::TempDb;
+        let temp_db = TempDb::new().unwrap();
+        Db::for_write(temp_db.database().url().clone(), DbArgs::default())
+            .await
+            .unwrap()
+    }
 
     #[derive(Clone)]
     struct Entry;
 
     impl FieldCount for Entry {
-        // Fake a large number of fields to test max_chunk_rows.
+        // Fake a large number of fields to test batch sizing.
         const FIELD_COUNT: usize = 32;
+    }
+
+    fn max_chunk_rows_for_test() -> usize {
+        use crate::store::RowCountBatchStrategy;
+        RowCountBatchStrategy::<Entry>::max_rows()
     }
 
     struct TestHandler;
@@ -236,11 +251,13 @@ mod tests {
     #[async_trait]
     impl Handler for TestHandler {
         type Store = Db;
+        type Batch = Vec<Self::Value>;
 
         const MIN_EAGER_ROWS: usize = 10;
         const MAX_PENDING_ROWS: usize = 10000;
         async fn commit<'a>(
-            _values: &[Self::Value],
+            &self,
+            _batch: &Self::Batch,
             _conn: &mut Connection<'a>,
         ) -> anyhow::Result<usize> {
             tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -279,11 +296,12 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            test_store().await,
             test_metrics(),
             cancel.clone(),
         );
 
-        let max_chunk_rows = max_chunk_rows::<TestHandler>();
+        let max_chunk_rows = max_chunk_rows_for_test();
         let part1_length = max_chunk_rows / 2;
         let part2_length = max_chunk_rows - part1_length - 1;
 
@@ -320,6 +338,7 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            test_store().await,
             test_metrics(),
             cancel.clone(),
         );
@@ -359,6 +378,7 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            test_store().await,
             metrics.clone(),
             cancel.clone(),
         );
@@ -373,7 +393,7 @@ mod tests {
                 Entry;
                 // Decreasing this number by even 1 would make the test fail.
                 TestHandler::MAX_PENDING_ROWS
-                    + max_chunk_rows::<TestHandler>() * collector_channel_size
+                    + max_chunk_rows_for_test() * collector_channel_size
             ],
         );
         processor_tx.send(data).await.unwrap();
@@ -413,6 +433,7 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
+            test_store().await,
             test_metrics(),
             cancel.clone(),
         );
@@ -467,6 +488,7 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
+            test_store().await,
             test_metrics(),
             cancel.clone(),
         );
@@ -510,6 +532,7 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
+            test_store().await,
             test_metrics(),
             cancel.clone(),
         );

@@ -14,7 +14,7 @@ use pipeline::{
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework_store_traits::{
-    CommitterWatermark, Connection, Store, TransactionalStore,
+    CommitterWatermark, Connection, Store, StoreTypes, TransactionalStore,
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -223,6 +223,8 @@ impl<S: Store> Indexer<S> {
     ) -> Result<()>
     where
         H: concurrent::Handler<Store = S> + Send + Sync + 'static,
+        <S as StoreTypes>::BatchStrategy<H::Value>:
+            store::BatchStrategy<H::Value, Batch = H::Batch>,
     {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
@@ -474,10 +476,12 @@ mod tests {
     #[async_trait]
     impl crate::pipeline::concurrent::Handler for MockHandler {
         type Store = MockStore;
+        type Batch = Vec<Self::Value>;
 
         async fn commit<'a>(
-            _values: &[Self::Value],
-            _conn: &mut <Self::Store as Store>::Connection<'a>,
+            &self,
+            _batch: &Self::Batch,
+            _conn: &mut <Self::Store as StoreTypes>::Connection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(1)
         }
@@ -494,7 +498,7 @@ mod tests {
 
         async fn commit<'a>(
             _batch: &Self::Batch,
-            _conn: &mut <Self::Store as Store>::Connection<'a>,
+            _conn: &mut <Self::Store as StoreTypes>::Connection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(1)
         }
@@ -526,7 +530,7 @@ mod tests {
 
         async fn commit<'a>(
             _batch: &Self::Batch,
-            _conn: &mut <Self::Store as Store>::Connection<'a>,
+            _conn: &mut <Self::Store as StoreTypes>::Connection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(1)
         }

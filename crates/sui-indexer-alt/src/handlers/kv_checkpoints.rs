@@ -41,10 +41,11 @@ impl Processor for KvCheckpoints {
 #[async_trait]
 impl Handler for KvCheckpoints {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_checkpoints::table)
-            .values(values)
+            .values(batch)
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
@@ -89,17 +90,17 @@ mod tests {
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = KvCheckpoints.process(&checkpoint).await.unwrap();
-        KvCheckpoints::commit(&values, &mut conn).await.unwrap();
+        KvCheckpoints.commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = KvCheckpoints.process(&checkpoint).await.unwrap();
-        KvCheckpoints::commit(&values, &mut conn).await.unwrap();
+        KvCheckpoints.commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint().into());
         let values = KvCheckpoints.process(&checkpoint).await.unwrap();
-        KvCheckpoints::commit(&values, &mut conn).await.unwrap();
+        KvCheckpoints.commit(&values, &mut conn).await.unwrap();
 
         // Prune checkpoints from `[0, 2)`
         let rows_pruned = KvCheckpoints.prune(0, 2, &mut conn).await.unwrap();

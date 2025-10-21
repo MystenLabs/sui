@@ -19,6 +19,8 @@ use self::synchronizer::Synchronizer;
 
 pub(crate) mod synchronizer;
 
+use store::RowCountBatchStrategy;
+
 /// Defines the schema for the database.
 pub(crate) trait Schema: Sized {
     /// Configuration for this schema's column families (names and options). Takes database-level
@@ -115,16 +117,24 @@ impl<S: Schema> Store<S> {
     }
 }
 
+impl<S: Send + Sync + 'static> store::StoreTypes for Store<S> {
+    type Connection<'s> = Connection<'s, S>;
+    type BatchStrategy<V> = RowCountBatchStrategy<V>;
+    type Config = ();
+}
+
 #[async_trait::async_trait]
 impl<S: Send + Sync + 'static> store::Store for Store<S> {
-    type Connection<'s> = Connection<'s, S>;
-
     async fn connect(&self) -> anyhow::Result<Connection<'_, S>> {
         Ok(Connection {
             store: self,
             batch: rocksdb::WriteBatch::default(),
             watermark: None,
         })
+    }
+
+    fn config(&self) -> &Self::Config {
+        &()
     }
 }
 

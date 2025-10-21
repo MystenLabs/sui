@@ -109,7 +109,7 @@ pub mod tests {
 
     use async_trait::async_trait;
     use std::sync::Arc;
-    use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Store};
+    use sui_indexer_alt_framework_store_traits::{CommitterWatermark, StoreTypes};
     use sui_types::full_checkpoint_content::Checkpoint;
 
     use super::*;
@@ -140,10 +140,12 @@ pub mod tests {
             #[async_trait]
             impl concurrent::Handler for $name {
                 type Store = Db;
+                type Batch = Vec<Self::Value>;
 
                 async fn commit<'a>(
-                    _values: &[Self::Value],
-                    _conn: &mut <Self::Store as Store>::Connection<'a>,
+                    &self,
+                    _batch: &Self::Batch,
+                    _conn: &mut <Self::Store as StoreTypes>::Connection<'a>,
                 ) -> anyhow::Result<usize> {
                     todo!()
                 }

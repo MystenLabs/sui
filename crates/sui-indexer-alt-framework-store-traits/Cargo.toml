@@ -11,3 +11,4 @@ anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 scoped-futures.workspace = true
+sui-field-count.workspace = true
