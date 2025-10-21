@@ -4162,9 +4162,9 @@ impl ProtocolConfig {
                 }
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
-                    cfg.feature_flags.create_root_accumulator_object = true;
                 }
                 100 => {
+                    cfg.feature_flags.create_root_accumulator_object = true;
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_poseidon = true;
                     }
