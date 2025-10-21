@@ -755,13 +755,7 @@ impl CallArg {
                     }
                 }
             },
-            CallArg::FundsWithdrawal(withdraw) => {
-                if matches!(withdraw.withdraw_from, WithdrawFrom::Sponsor) {
-                    return Err(UserInputError::InvalidWithdrawReservation {
-                        error: "Explicit sponsor withdrawals are not yet supported".to_string(),
-                    });
-                }
-            }
+            CallArg::FundsWithdrawal(_) => {}
         }
         Ok(())
     }
@@ -1797,16 +1791,15 @@ pub struct GasData {
     pub budget: u64,
 }
 
-impl GasData {
-    pub fn is_paid_from_address_balance(&self) -> bool {
-        self.payment.is_empty()
-    }
-
-    pub fn is_address_balance_transaction(&self, config: &ProtocolConfig) -> bool {
-        config.enable_accumulators()
-            && config.enable_address_balance_gas_payments()
-            && self.is_paid_from_address_balance()
-    }
+pub fn is_gas_paid_from_address_balance(
+    gas_data: &GasData,
+    transaction_kind: &TransactionKind,
+) -> bool {
+    gas_data.payment.is_empty()
+        && matches!(
+            transaction_kind,
+            TransactionKind::ProgrammableTransaction(_)
+        )
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
@@ -2337,6 +2330,8 @@ pub trait TransactionDataAPI {
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool;
 
+    fn is_gas_paid_from_address_balance(&self) -> bool;
+
     fn sender_mut_for_testing(&mut self) -> &mut SuiAddress;
 
     fn gas_data_mut(&mut self) -> &mut GasData;
@@ -2443,15 +2438,6 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
         let mut withdraws = self.get_funds_withdrawals();
-        // TODO(address-balances): Use a protocol config parameter for max_withdraws.
-        let max_withdraws = 10;
-        if withdraws.len() > max_withdraws {
-            return Err(UserInputError::InvalidWithdrawReservation {
-                error: format!(
-                    "Maximum number of balance withdraw reservations is {max_withdraws}"
-                ),
-            });
-        }
 
         for withdraw in &withdraws {
             if matches!(withdraw.withdraw_from, WithdrawFrom::Sponsor) {
@@ -2461,7 +2447,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
         }
 
-        if self.gas_data().is_paid_from_address_balance() {
+        if self.is_gas_paid_from_address_balance() {
             let gas_withdraw = if self.sender() != self.gas_owner() {
                 FundsWithdrawalArg::balance_from_sponsor(
                     self.gas_data().budget,
@@ -2474,14 +2460,16 @@ impl TransactionDataAPI for TransactionDataV1 {
                 )
             };
             withdraws.push(gas_withdraw);
+        }
 
-            if withdraws.len() > max_withdraws {
-                return Err(UserInputError::InvalidWithdrawReservation {
-                    error: format!(
-                        "Maximum number of balance withdraw reservations is {max_withdraws} (including gas reservation)"
-                    ),
-                });
-            }
+        // TODO(address-balances): Use a protocol config parameter for max_withdraws.
+        let max_withdraws = 10;
+        if withdraws.len() > max_withdraws {
+            return Err(UserInputError::InvalidWithdrawReservation {
+                error: format!(
+                    "Maximum number of balance withdraw reservations is {max_withdraws}"
+                ),
+            });
         }
 
         // Accumulate all withdraws per account.
@@ -2532,7 +2520,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn has_funds_withdrawals(&self) -> bool {
-        if self.gas_data().is_paid_from_address_balance() {
+        if self.is_gas_paid_from_address_balance() {
             return true;
         }
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
@@ -2596,7 +2584,7 @@ impl TransactionDataAPI for TransactionDataV1 {
 
         if config.enable_accumulators()
             && config.enable_address_balance_gas_payments()
-            && self.gas_data().is_paid_from_address_balance()
+            && self.is_gas_paid_from_address_balance()
         {
             match self.expiration() {
                 TransactionExpiration::None => {
@@ -2644,6 +2632,10 @@ impl TransactionDataAPI for TransactionDataV1 {
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool {
         self.gas_owner() != self.sender
+    }
+
+    fn is_gas_paid_from_address_balance(&self) -> bool {
+        is_gas_paid_from_address_balance(&self.gas_data, &self.kind)
     }
 
     /// Check if the transaction is compliant with sponsorship.
@@ -2992,9 +2984,10 @@ impl SenderSignedData {
         if tx_data.has_funds_withdrawals() {
             fp_ensure!(
                 !tx_data.gas().is_empty() || context.config.enable_address_balance_gas_payments(),
-                SuiError::UserInputError {
+                SuiErrorKind::UserInputError {
                     error: UserInputError::MissingGasPayment
                 }
+                .into()
             );
             fp_ensure!(
                 context.config.enable_accumulators()

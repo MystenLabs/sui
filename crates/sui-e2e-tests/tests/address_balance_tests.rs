@@ -25,7 +25,7 @@ use sui_types::{
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
         Argument, Command, FundsWithdrawalArg, GasData, Transaction, TransactionData,
-        TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
+        TransactionDataV1, TransactionExpiration, TransactionKind,
     },
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -1708,9 +1708,13 @@ async fn test_explicit_sponsor_withdrawal_banned() {
         },
     });
 
-    let result = tx.validity_check(&ProtocolConfig::get_for_max_version_UNSAFE());
+    let signed_tx = test_cluster.sign_transaction(&tx).await;
+    let result = test_cluster
+        .execute_transaction_return_raw_effects(signed_tx)
+        .await;
+
     let err = result.expect_err("Transaction with explicit sponsor withdrawal should be rejected");
-    let err_str = err.to_string();
+    let err_str = format!("{:?}", err);
     assert!(
         err_str.contains("Explicit sponsor withdrawals are not yet supported"),
         "Error should mention that sponsor withdrawals are not supported, got: {}",
