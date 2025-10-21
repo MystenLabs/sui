@@ -7,7 +7,9 @@ use crate::{
     diagnostics::Diagnostic,
     editions::{Edition, FeatureGate, create_feature_error},
     expansion::{
-        alias_map_builder::{AliasEntry, AliasMapBuilder, NameSpace, UnnecessaryAlias},
+        alias_map_builder::{
+            AliasEntry, AliasMapBuilder, LeadingAccessEntry, NameSpace, UnnecessaryAlias,
+        },
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, ModuleIdent, ModuleIdent_},
         legacy_aliases,
@@ -315,8 +317,20 @@ impl AccessChainResolutionError {
                 AccessChainFailure::UnresolvedAlias(name) => {
                     format!("Could not resolve the name '{}'", name)
                 }
+                AccessChainFailure::Suggestion(name, _) => {
+                    format!("Could not resolve the name '{}'", name)
+                }
             };
-            crate::diag!(NameResolution::NamePositionMismatch, (loc, msg))
+            let mut diag = crate::diag!(NameResolution::NamePositionMismatch, (loc, msg));
+            if let AccessChainFailure::Suggestion(_, suggestion) = reason {
+                let suggestion_loc = if suggestion.loc.is_valid() {
+                    Some(suggestion.loc)
+                } else {
+                    None
+                };
+                add_suggestion(&mut diag, loc, suggestion, suggestion_loc);
+            }
+            diag
         } else {
             ice!((
                 result.loc(),
@@ -575,6 +589,7 @@ struct AccessChainResult {
 #[derive(Debug, PartialEq, Eq)]
 enum AccessChainFailure {
     UnresolvedAlias(Name),
+    Suggestion(/* original */ Name, /* suggestion */ Name),
     InvalidKind(&'static str),
 }
 
@@ -604,11 +619,50 @@ impl Move2024PathExpander {
     fn resolve_root(
         &mut self,
         context: &mut DefnContext,
+        chain_length: usize,
+        access: &Access,
         sp!(loc, name): P::LeadingNameAccess,
     ) -> AccessChainNameResult {
         use AccessChainFailure as NF;
         use AccessChainNameResult as NR;
         use P::LeadingNameAccess_ as LN;
+
+        fn filter_suggestion(
+            chain_length: usize,
+            access: &Access,
+            entry: &LeadingAccessEntry,
+        ) -> bool {
+            use LeadingAccessEntry as LA;
+            if chain_length == 0 {
+                // This should be unreachable.
+                return false;
+            }
+            // Depending on the chain length and access type, we filter suggestions based on the
+            // entry we found.
+            match (chain_length, access, entry) {
+                // TYPE PARAMETERS
+                // - Never suggest type params
+                (_, _, LA::TypeParam) => false,
+                // MODULE ACCESSES
+                // - If there is a valid module that would fit for a module, suggest that.
+                // - If the moodule has a leading address, suggest that.
+                // - Never suggest a member for a module access.
+                (_, Access::Module, LA::Module(_)) => true,
+                (n, Access::Module, LA::Address(_)) if n > 1 => true,
+                (_, Access::Module, LA::Member(_, _)) => false,
+                // OTHER ACCESSES
+                // For any other accesses:
+                // - Only suggest members on chain length 2, in case it was meant to be an enum.
+                // - Only suggest addresses or modules on chain length 2 or longer.
+                (2, _, LA::Member(_, _)) => true,
+                (_, _, LA::Member(_, _)) => false,
+                (0 | 1, _, LA::Address(_) | LA::Module(_)) => false,
+                (_, _, LA::Module(_)) => true,
+                (2, _, LA::Address(_)) => false,
+                (_, _, LA::Address(_)) => true,
+            }
+        }
+
         match name {
             LN::AnonymousAddress(address) => NR::Address(loc, E::Address::anonymous(loc, address)),
             LN::GlobalAddress(name) => {
@@ -628,7 +682,14 @@ impl Move2024PathExpander {
             }
             LN::Name(name) => match self.resolve_name(context, NameSpace::LeadingAccess, name) {
                 result @ NR::UnresolvedName(_, _) => {
-                    NR::ResolutionFailure(Box::new(result), NF::UnresolvedAlias(name))
+                    let filter_fn =
+                        |kind: &LeadingAccessEntry| filter_suggestion(chain_length, access, kind);
+
+                    let Some(suggestion) = self.aliases.suggest_leading_access(filter_fn, &name)
+                    else {
+                        return NR::ResolutionFailure(Box::new(result), NF::UnresolvedAlias(name));
+                    };
+                    NR::ResolutionFailure(Box::new(result), NF::Suggestion(name, suggestion))
                 }
                 other => other,
             },
@@ -795,7 +856,9 @@ impl Move2024PathExpander {
                     entries,
                     is_incomplete: incomplete,
                 } = path;
-                let mut result = match self.resolve_root(context, root.name) {
+                let chain_length = entries.len() + 1;
+                let mut result = match self.resolve_root(context, chain_length, &access, root.name)
+                {
                     // In Move Legacy, we always treated three-place names as fully-qualified.
                     // For migration mode, if we could have gotten the correct result doing so,
                     // we emit a migration change to globally-qualify that path and remediate

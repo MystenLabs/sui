@@ -2,18 +2,23 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_ir_types::location::Loc;
-
 use crate::{
     diagnostics::Diagnostic,
     expansion::alias_map_builder::*,
     ice,
+    parser::ast::ModuleName,
     shared::{unique_map::UniqueMap, unique_set::UniqueSet, *},
 };
+use move_ir_types::location::{Loc, sp};
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
 };
+
+//**************************************************************************************************
+// Type Definitions
+//**************************************************************************************************
 
 #[derive(Clone, Debug)]
 pub struct AliasSet {
@@ -33,6 +38,10 @@ pub struct AliasMap {
     ide_alias_info: Option<ide::AliasAutocompleteInfo>,
     previous: Option<Box<AliasMap>>,
 }
+
+//**************************************************************************************************
+// Traits
+//**************************************************************************************************
 
 trait NamespaceEntry: Copy {
     fn namespace(m: &AliasMap) -> &UniqueMap<Name, Self>;
@@ -86,6 +95,10 @@ macro_rules! namespace_entry {
 
 namespace_entry!(LeadingAccessEntry, .leading_access);
 namespace_entry!(MemberEntry, .module_members);
+
+//**************************************************************************************************
+// Impls
+//**************************************************************************************************
 
 impl AliasSet {
     pub fn new() -> Self {
@@ -150,6 +163,40 @@ impl AliasMap {
             }
         }
         None
+    }
+
+    /// Finds a suggestion for a leading access name that is close to the given name.
+    /// The filter function is used to restrict the kinds of entries considered, so that we can
+    /// only suggest reasonable candidates (e.g., only suggest modules or addresses for friend
+    /// statements).
+    pub fn suggest_leading_access<F>(&self, filter_fn: F, name: &Name) -> Option<Name>
+    where
+        F: Fn(&LeadingAccessEntry) -> bool,
+    {
+        // Heuristic: We prefer closer-scope matches, even if they are not the closest in edit
+        // distance. This means we search the current scope first, then the previous ones.
+        // Also, if this was actually a type parameter, we don't want to suggest anything.
+        if let Some(LeadingAccessEntry::TypeParam) = self.leading_access.get(name) {
+            return None;
+        }
+
+        let self_name = ModuleName::SELF_NAME.into();
+        // Gather candidates from the current scope, excluding "Self" and filtered entries.
+        let candidates = self
+            .leading_access
+            .iter()
+            .filter(|(_, name, _)| **name != self_name)
+            .filter(|(_, _, value)| filter_fn(value));
+
+        suggest_levenshtein_candidate(candidates, name.value.as_str(), |(_, candidate, _)| {
+            candidate.as_str()
+        })
+        .map(|(loc, name, _)| sp(loc, *name))
+        .or_else(|| {
+            self.previous
+                .as_ref()
+                .and_then(|prev| prev.suggest_leading_access(filter_fn, name))
+        })
     }
 
     /// Pushes a new scope, adding all of the new items to it (shadowing the outer one).

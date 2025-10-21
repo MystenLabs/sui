@@ -1214,6 +1214,7 @@ fn module_(
         is_spec_module: _,
         is_extension,
         name,
+        name_loc,
         members,
         definition_mode: _,
     } = mdef;
@@ -1239,7 +1240,6 @@ fn module_(
         context.add_diag(diag!(Declarations::InvalidName, (name.loc(), msg)));
     }
 
-    let name_loc = name.0.loc;
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
 
     // [NOTE: MOD-EXT] Extensions are currently injected directly into the original module before any
