@@ -106,7 +106,6 @@ impl BuildConfig {
         let install_dir = mysten_common::tempdir().unwrap().keep();
         let config = MoveBuildConfig {
             default_flavor: Some(move_compiler::editions::Flavor::Sui),
-
             lock_file: Some(install_dir.join("Move.lock")),
             install_dir: Some(install_dir),
             silence_warnings: true,
@@ -156,7 +155,12 @@ impl BuildConfig {
         root_pkg: &RootPackage<F>,
         writer: &mut W,
     ) -> anyhow::Result<(MoveCompiledPackage, FnInfoMap)> {
-        let build_plan = BuildPlan::create(root_pkg, &self.config)?;
+        let mut config = self.config.clone();
+        // set the default flavor to Sui if not already set by the user
+        if config.default_flavor.is_none() {
+            config.default_flavor = Some(move_compiler::editions::Flavor::Sui);
+        }
+        let build_plan = BuildPlan::create(root_pkg, &config)?;
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
             let (files, units_res) = compiler.build()?;

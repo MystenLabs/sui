@@ -425,7 +425,6 @@ impl<'env> DiagnosticReporter<'env> {
             // becomes one
             return;
         }
-
         if !self.warning_filters_scope.is_filtered(&diag) {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
@@ -699,6 +698,7 @@ impl Diagnostics {
         else {
             return (0, 0);
         };
+
         let mut filtered_diags_num = 0;
         let mut unique = HashSet::new();
         inner.filtered_source_diagnostics.iter().for_each(|d| {
