@@ -47,8 +47,8 @@ pub mod checked {
         // be smashed into. It can be None for system transactions when `gas_coins` is empty.
         smashed_gas_coin: Option<ObjectID>,
         gas_status: SuiGasStatus,
-        // For address balance payments: sender address to charge
-        address_balance_payer: Option<SuiAddress>,
+        // For address balance payments: sender or sponsor address to charge
+        address_balance_gas_payer: Option<SuiAddress>,
     }
 
     impl GasCharger {
@@ -57,7 +57,7 @@ pub mod checked {
             gas_coins: Vec<ObjectRef>,
             gas_status: SuiGasStatus,
             protocol_config: &ProtocolConfig,
-            address_balance_payer: Option<SuiAddress>,
+            address_balance_gas_payer: Option<SuiAddress>,
         ) -> Self {
             let gas_model_version = protocol_config.gas_model_version();
             Self {
@@ -66,7 +66,7 @@ pub mod checked {
                 gas_coins,
                 smashed_gas_coin: None,
                 gas_status,
-                address_balance_payer,
+                address_balance_gas_payer,
             }
         }
 
@@ -77,7 +77,7 @@ pub mod checked {
                 gas_coins: vec![],
                 smashed_gas_coin: None,
                 gas_status: SuiGasStatus::new_unmetered(),
-                address_balance_payer: None,
+                address_balance_gas_payer: None,
             }
         }
 
@@ -301,7 +301,7 @@ pub mod checked {
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
 
-            if self.smashed_gas_coin.is_some() || self.address_balance_payer.is_some() {
+            if self.smashed_gas_coin.is_some() || self.address_balance_gas_payer.is_some() {
                 // bucketize computation cost
                 let is_move_abort = execution_result
                     .as_ref()
@@ -337,7 +337,7 @@ pub mod checked {
 
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
             // for storage, however they track storage values to check for conservation rules
-            if let Some(payer_address) = self.address_balance_payer {
+            if let Some(payer_address) = self.address_balance_gas_payer {
                 let is_insufficient_balance_error = execution_result
                     .as_ref()
                     .err()
