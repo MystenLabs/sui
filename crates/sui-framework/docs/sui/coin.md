@@ -60,6 +60,8 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `new_deny_cap_v2`](#sui_coin_new_deny_cap_v2)
 -  [Function `new_treasury_cap`](#sui_coin_new_treasury_cap)
 -  [Function `allow_global_pause`](#sui_coin_allow_global_pause)
+-  [Function `new_metadata`](#sui_coin_new_metadata)
+-  [Function `update_metadata`](#sui_coin_update_metadata)
 -  [Function `supply`](#sui_coin_supply)
 -  [Function `create_regulated_currency`](#sui_coin_create_regulated_currency)
 -  [Function `deny_list_add`](#sui_coin_deny_list_add)
@@ -1702,6 +1704,79 @@ Destroy legacy <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a>&lt;T&gt;(cap: &<a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;): bool {
     cap.<a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_new_metadata"></a>
+
+## Function `new_metadata`
+
+Create a new <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> object to support legacy compatibility APIs in
+the <code><a href="../sui/coin_registry.md#sui_coin_registry">coin_registry</a></code> module.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_metadata">new_metadata</a>&lt;T&gt;(decimals: u8, name: <a href="../std/string.md#std_string_String">std::string::String</a>, symbol: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, description: <a href="../std/string.md#std_string_String">std::string::String</a>, icon_url: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_metadata">new_metadata</a>&lt;T&gt;(
+    decimals: u8,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: string::String,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt; {
+    <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url: option::some(<a href="../sui/url.md#sui_url_new_unsafe">url::new_unsafe</a>(icon_url.to_ascii())),
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_update_metadata"></a>
+
+## Function `update_metadata`
+
+Update the <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> in place. Required to maintain integrity of the
+legacy <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> in <code>CoinRegistry</code> calls.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_update_metadata">update_metadata</a>&lt;T&gt;(metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>, description: <a href="../std/string.md#std_string_String">std::string::String</a>, icon_url: <a href="../std/string.md#std_string_String">std::string::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_update_metadata">update_metadata</a>&lt;T&gt;(
+    metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;,
+    name: string::String,
+    description: string::String,
+    icon_url: string::String,
+) {
+    metadata.name = name;
+    metadata.description = description;
+    metadata.icon_url = option::some(<a href="../sui/url.md#sui_url_new_unsafe">url::new_unsafe</a>(icon_url.to_ascii()));
 }
 </code></pre>
 

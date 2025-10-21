@@ -516,6 +516,39 @@ public(package) fun allow_global_pause<T>(cap: &DenyCapV2<T>): bool {
     cap.allow_global_pause
 }
 
+/// Create a new `CoinMetadata` object to support legacy compatibility APIs in
+/// the `coin_registry` module.
+public(package) fun new_metadata<T>(
+    decimals: u8,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: string::String,
+    ctx: &mut TxContext,
+): CoinMetadata<T> {
+    CoinMetadata {
+        id: object::new(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url: option::some(url::new_unsafe(icon_url.to_ascii())),
+    }
+}
+
+/// Update the `CoinMetadata` in place. Required to maintain integrity of the
+/// legacy `CoinMetadata` in `CoinRegistry` calls.
+public(package) fun update_metadata<T>(
+    metadata: &mut CoinMetadata<T>,
+    name: string::String,
+    description: string::String,
+    icon_url: string::String,
+) {
+    metadata.name = name;
+    metadata.description = description;
+    metadata.icon_url = option::some(url::new_unsafe(icon_url.to_ascii()));
+}
+
 // === Test-only code ===
 
 #[test_only]
