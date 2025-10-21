@@ -10,7 +10,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
-    FieldCount, metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint,
+    metrics::IndexerMetrics,
+    store::{BatchAccumulator, Store},
+    types::full_checkpoint_content::Checkpoint,
 };
 
 use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
@@ -26,27 +28,15 @@ mod committer;
 mod pruner;
 mod reader_watermark;
 
-/// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data (by
-/// implementing [Processor]) into rows for their table, and how to write those rows to the database.
+/// Simple handler trait for the common case where handlers use `Vec<Value>` as their batch type.
 ///
-/// The handler is also responsible for tuning the various parameters of the pipeline (provided as
-/// associated values). Reasonable defaults have been chosen to balance concurrency with memory
-/// usage, but each handle may choose to override these defaults, e.g.
+/// This trait provides the simplest interface for writing data to the database. Handlers
+/// implementing this trait automatically get a FullHandler implementation through a blanket impl.
 ///
-/// - Handlers that produce many small rows may wish to increase their batch/chunk/max-pending
-///   sizes).
-/// - Handlers that do more work during processing may wish to increase their fanout so more of it
-///   can be done concurrently, to preserve throughput.
-///
-/// Concurrent handlers can only be used in concurrent pipelines, where checkpoint data is
-/// processed and committed out-of-order and a watermark table is kept up-to-date with the latest
-/// checkpoint below which all data has been committed.
-///
-/// Back-pressure is handled through the `MAX_PENDING_SIZE` constant -- if more than this many rows
-/// build up, the collector will stop accepting new checkpoints, which will eventually propagate
-/// back to the ingestion service.
+/// Most handlers should implement this trait. Only implement FullHandler directly when
+/// you need custom batch types (e.g., `Option<V>` for single-row batches, RecordBatch for Parquet).
 #[async_trait]
-pub trait Handler: Processor<Value: FieldCount> {
+pub trait Handler: Processor {
     type Store: Store;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
@@ -60,8 +50,7 @@ pub trait Handler: Processor<Value: FieldCount> {
     /// checkpoints -- the size of these pipeline's batches will be dominated by watermark updates.
     const MAX_WATERMARK_UPDATES: usize = 10_000;
 
-    /// Take a chunk of values and commit them to the database, returning the number of rows
-    /// affected.
+    /// Take a slice of values and commit them to the database, returning the number of rows affected.
     async fn commit<'a>(
         values: &[Self::Value],
         conn: &mut <Self::Store as Store>::Connection<'a>,
@@ -76,6 +65,84 @@ pub trait Handler: Processor<Value: FieldCount> {
         _conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize> {
         Ok(0)
+    }
+}
+
+/// The framework uses this trait internally. Simple handlers get this implementation
+/// automatically through the blanket impl. Only implement this directly when you need
+/// custom batching logic.
+#[async_trait]
+pub trait FullHandler: Processor {
+    type Store: Store;
+    /// The batch accumulator type that determines how values are batched.
+    type Accumulator: BatchAccumulator<Self::Value, Batch = Self::Batch> + Default;
+    /// The batch type produced by the accumulator.
+    type Batch: Send + Sync;
+
+    /// If at least this many rows are pending, the committer will commit them eagerly.
+    const MIN_EAGER_ROWS: usize = 50;
+
+    /// If there are more than this many rows pending, the committer applies backpressure.
+    const MAX_PENDING_ROWS: usize = 5000;
+
+    /// The maximum number of watermarks that can show up in a single batch.
+    const MAX_WATERMARK_UPDATES: usize = 10_000;
+
+    /// Create a new batch accumulator instance for this handler.
+    /// Override this factory method if you need to inject configuration into the accumlator.
+    fn accumulator(&self) -> Self::Accumulator {
+        Default::default()
+    }
+
+    /// Take a batch and commit it to the database, returning the number of rows affected.
+    async fn commit<'a>(
+        &self,
+        batch: &Self::Batch,
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> anyhow::Result<usize>;
+
+    /// Clean up data between checkpoints `_from` and `_to_exclusive` (exclusive) in the database, returning
+    /// the number of rows affected. This function is optional, and defaults to not pruning at all.
+    async fn prune<'a>(
+        &self,
+        _from: u64,
+        _to_exclusive: u64,
+        _conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> anyhow::Result<usize> {
+        Ok(0)
+    }
+}
+
+// Blanket implementation that makes any Handler automatically implement FullHandler
+#[async_trait]
+impl<H> FullHandler for H
+where
+    H: Handler,
+    H::Value: crate::store::FieldCount,
+{
+    type Store = H::Store;
+    type Accumulator = crate::store::ParameterCountBatchAccumulator<H::Value>;
+    type Batch = Vec<H::Value>;
+
+    const MIN_EAGER_ROWS: usize = H::MIN_EAGER_ROWS;
+    const MAX_PENDING_ROWS: usize = H::MAX_PENDING_ROWS;
+    const MAX_WATERMARK_UPDATES: usize = H::MAX_WATERMARK_UPDATES;
+
+    async fn commit<'a>(
+        &self,
+        batch: &Self::Batch,
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> anyhow::Result<usize> {
+        H::commit(batch.as_slice(), conn).await
+    }
+
+    async fn prune<'a>(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> anyhow::Result<usize> {
+        <H as Handler>::prune(self, from, to_exclusive, conn).await
     }
 }
 
@@ -108,18 +175,19 @@ pub struct PrunerConfig {
     pub prune_concurrency: u64,
 }
 
-/// Values ready to be written to the database. This is an internal type used to communicate
-/// between the collector and the committer parts of the pipeline.
+/// A batch of rows ready to be committed to the database. This is an internal type used to
+/// communicate between the collector and the committer parts of the pipeline.
 ///
 /// Values inside each batch may or may not be from the same checkpoint. Values in the same
 /// checkpoint can also be split across multiple batches.
-struct BatchedRows<H: Handler> {
-    /// The rows to write
-    values: Vec<H::Value>,
-    /// Proportions of all the watermarks that are represented in this chunk
-    watermark: Vec<WatermarkPart>,
+pub(super) struct BatchedRows<H: FullHandler> {
+    /// The batch ready to be committed
+    pub(super) batch: H::Batch,
+    /// Number of rows in the batch (precomputed for metrics)
+    pub(super) batch_len: usize,
+    /// Proportions of all the watermarks that are represented in this batch
+    pub(super) watermark: Vec<WatermarkPart>,
 }
-
 impl PrunerConfig {
     pub fn interval(&self) -> Duration {
         Duration::from_millis(self.interval_ms)
@@ -127,27 +195,6 @@ impl PrunerConfig {
 
     pub fn delay(&self) -> Duration {
         Duration::from_millis(self.delay_ms)
-    }
-}
-
-impl<H: Handler> BatchedRows<H> {
-    fn new() -> Self {
-        Self {
-            values: vec![],
-            watermark: vec![],
-        }
-    }
-
-    /// Number of rows in this batch.
-    fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    /// The batch is full if it has more than enough values to write to the database, or more than
-    /// enough watermarks to update.
-    fn is_full(&self) -> bool {
-        self.values.len() >= max_chunk_rows::<H>()
-            || self.watermark.len() >= H::MAX_WATERMARK_UPDATES
     }
 }
 
@@ -183,7 +230,7 @@ impl Default for PrunerConfig {
 /// channels are created to communicate between its various components. The pipeline can be
 /// shutdown using its `cancel` token, and will also shutdown if any of its independent tasks
 /// reports an issue.
-pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
+pub(crate) fn pipeline<H: FullHandler + Send + Sync + 'static>(
     handler: H,
     next_checkpoint: u64,
     config: ConcurrentConfig,
@@ -192,7 +239,10 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> JoinHandle<()>
+where
+    H::Value: Send + Sync,
+{
     info!(
         pipeline = H::NAME,
         "Starting pipeline with config: {:?}", config
@@ -229,11 +279,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config.clone(),
         collector_rx,
         collector_tx,
+        handler.clone(),
         metrics.clone(),
         cancel.clone(),
     );
 
     let committer = committer::<H>(
+        handler.clone(),
         committer_config.clone(),
         skip_watermark,
         committer_rx,
@@ -274,14 +326,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner_cancel.cancel();
         let _ = futures::join!(reader_watermark, pruner);
     })
-}
-
-const fn max_chunk_rows<H: Handler>() -> usize {
-    if H::Value::FIELD_COUNT == 0 {
-        i16::MAX as usize
-    } else {
-        i16::MAX as usize / H::Value::FIELD_COUNT
-    }
 }
 
 #[cfg(test)]
@@ -342,6 +386,7 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+
         const MIN_EAGER_ROWS: usize = 1000; // High value to disable eager batching
         const MAX_PENDING_ROWS: usize = 4; // Small value to trigger back pressure quickly
         const MAX_WATERMARK_UPDATES: usize = 1; // Each batch will have 1 checkpoint for an ease of testing.

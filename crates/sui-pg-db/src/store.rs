@@ -18,7 +18,7 @@ use crate::model::StoredWatermark;
 use crate::schema::watermarks;
 use crate::{Connection, Db};
 
-pub use sui_indexer_alt_framework_store_traits::Store;
+pub use sui_indexer_alt_framework_store_traits::{ParameterCountBatchAccumulator, Store};
 
 #[async_trait]
 impl store::Connection for Connection<'_> {

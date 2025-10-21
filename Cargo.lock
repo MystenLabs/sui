@@ -14960,6 +14960,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "scoped-futures",
+ "sui-field-count",
 ]
 
 [[package]]

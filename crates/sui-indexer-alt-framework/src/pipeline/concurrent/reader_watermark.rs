@@ -12,7 +12,7 @@ use crate::{
     store::{Connection, Store},
 };
 
-use super::{Handler, PrunerConfig};
+use super::{FullHandler, PrunerConfig};
 
 /// The reader watermark task is responsible for updating the `reader_lo` and `pruner_timestamp`
 /// values for a pipeline's row in the watermark table, based on the pruner configuration, and the
@@ -25,7 +25,7 @@ use super::{Handler, PrunerConfig};
 ///
 /// If there is no pruner configuration, this task will immediately exit. Otherwise, the task exits
 /// when the provided cancellation token is triggered.
-pub(super) fn reader_watermark<H: Handler + 'static>(
+pub(super) fn reader_watermark<H: FullHandler + 'static>(
     config: Option<PrunerConfig>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
@@ -108,6 +108,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use super::super::Handler;
     use async_trait::async_trait;
     use std::sync::Arc;
     use sui_pg_db::FieldCount;

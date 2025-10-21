@@ -222,7 +222,8 @@ impl<S: Store> Indexer<S> {
         config: ConcurrentConfig,
     ) -> Result<()>
     where
-        H: concurrent::Handler<Store = S> + Send + Sync + 'static,
+        H: concurrent::FullHandler<Store = S> + Send + Sync + 'static,
+        H::Value: Send + Sync,
     {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());

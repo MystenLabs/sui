@@ -49,7 +49,7 @@ struct IndexedCheckpoint<P: Processor> {
 
 /// A representation of the proportion of a watermark.
 #[derive(Debug, Clone)]
-struct WatermarkPart {
+pub(crate) struct WatermarkPart {
     /// The watermark itself
     watermark: CommitterWatermark,
     /// The number of rows from this watermark that are in this part

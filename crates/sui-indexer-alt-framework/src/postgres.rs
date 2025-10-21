@@ -109,13 +109,17 @@ pub mod tests {
 
     use async_trait::async_trait;
     use std::sync::Arc;
-    use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Store};
+    use sui_indexer_alt_framework_store_traits::CommitterWatermark;
     use sui_types::full_checkpoint_content::Checkpoint;
 
     use super::*;
 
     use crate::pipeline::concurrent;
-    use crate::{ConcurrentConfig, FieldCount, pipeline::Processor, store::Connection};
+    use crate::{
+        ConcurrentConfig, FieldCount,
+        pipeline::Processor,
+        store::{Connection, Store},
+    };
 
     #[derive(FieldCount)]
     struct V {

@@ -21,7 +21,7 @@ use crate::{
     store::{Connection, Store},
 };
 
-use super::Handler;
+use super::FullHandler;
 
 use crate::store::CommitterWatermark;
 
@@ -91,7 +91,7 @@ fn gather_next_watermark(
 /// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and
 /// the watermark cannot be progressed. If `skip_watermark` is set, the task will shutdown
 /// immediately.
-pub(super) fn commit_watermark<H: Handler + 'static>(
+pub(super) fn commit_watermark<H: FullHandler + 'static>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
     skip_watermark: bool,
@@ -327,6 +327,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use super::super::Handler;
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -364,7 +365,7 @@ mod tests {
         type Store = MockStore;
 
         async fn commit<'a>(
-            _values: &[StoredData],
+            _values: &[Self::Value],
             _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(0)
@@ -382,7 +383,10 @@ mod tests {
         config: CommitterConfig,
         next_checkpoint: u64,
         store: MockStore,
-    ) -> TestSetup {
+    ) -> TestSetup
+    where
+        H::Value: FieldCount,
+    {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
         let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();

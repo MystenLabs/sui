@@ -6,6 +6,109 @@ use chrono::{DateTime, Utc};
 use scoped_futures::ScopedBoxFuture;
 use std::time::Duration;
 
+pub use sui_field_count::FieldCount;
+
+/// Accumulates values into batches.
+///
+/// Different implementations use different batching strategies (e.g., parameter count for SQL,
+/// row count for Parquet).
+pub trait BatchAccumulator<V>: Send {
+    /// The output batch type that is committed to the Store.
+    type Batch;
+
+    /// Takes as many values as will fit from source, removing them.
+    /// Returns count taken (0 if at capacity or source empty).
+    /// MUST return 0 when at capacity.
+    fn take_from(&mut self, source: &mut Vec<V>) -> usize;
+
+    /// Extracts the accumulated batch, consuming the accumulator.
+    fn take_batch(self) -> Self::Batch;
+
+    /// Returns the number of values currently accumulated.
+    fn len(&self) -> usize;
+
+    /// Returns true if no values have been accumulated.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns true if at capacity.
+    fn is_full(&self) -> bool;
+}
+
+/// Batch accumulator that limits batch size based on sql parameter count.
+/// Used by stores that have parameter count limits (e.g., PostgreSQL's i16::MAX limit).
+/// Capacity is measured in parameter slots, where each row consumes FIELD_COUNT slots.
+pub struct ParameterCountBatchAccumulator<V> {
+    values: Vec<V>,
+}
+
+impl<V> Default for ParameterCountBatchAccumulator<V> {
+    fn default() -> Self {
+        Self { values: Vec::new() }
+    }
+}
+
+impl<V: FieldCount> ParameterCountBatchAccumulator<V> {
+    /// Returns the maximum number of rows that can fit in a batch.
+    /// For ParameterCountBatchAccumulator, this is i16::MAX / FIELD_COUNT.
+    pub const fn max_rows() -> usize {
+        if V::FIELD_COUNT == 0 {
+            i16::MAX as usize
+        } else {
+            i16::MAX as usize / V::FIELD_COUNT
+        }
+    }
+}
+
+impl<V: FieldCount + Send> BatchAccumulator<V> for ParameterCountBatchAccumulator<V> {
+    type Batch = Vec<V>;
+
+    fn take_from(&mut self, source: &mut Vec<V>) -> usize {
+        let max_params = i16::MAX as usize;
+        let used_params = self.values.len() * V::FIELD_COUNT;
+        let capacity_left = max_params.saturating_sub(used_params);
+
+        if capacity_left < V::FIELD_COUNT {
+            return 0;
+        }
+
+        let max_rows = capacity_left / V::FIELD_COUNT;
+        let to_take = max_rows.min(source.len());
+
+        if to_take == 0 {
+            return 0;
+        }
+
+        if to_take == source.len() {
+            let taken = std::mem::take(source);
+            self.values.extend(taken);
+        } else {
+            let mut remainder = source.split_off(to_take);
+            std::mem::swap(source, &mut remainder);
+            self.values.extend(remainder);
+        }
+        to_take
+    }
+
+    fn take_batch(self) -> Vec<V> {
+        self.values
+    }
+
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn is_full(&self) -> bool {
+        let max_params = i16::MAX as usize;
+        let used_params = self.values.len() * V::FIELD_COUNT;
+        let capacity_left = max_params.saturating_sub(used_params);
+
+        // Full if we can't fit another row
+        capacity_left < V::FIELD_COUNT
+    }
+}
+
 /// Represents a database connection that can be used by the indexer framework to manage watermark
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]

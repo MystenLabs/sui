@@ -19,7 +19,7 @@ use crate::{
     store::{Connection, Store},
 };
 
-use super::{Handler, PrunerConfig};
+use super::{FullHandler, PrunerConfig};
 
 #[derive(Default)]
 struct PendingRanges {
@@ -94,7 +94,7 @@ impl PendingRanges {
 ///
 /// The task will shutdown if the `cancel` token is signalled. If the `config` is `None`, the task
 /// will shutdown immediately.
-pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
+pub(super) fn pruner<H: FullHandler + Send + Sync + 'static>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
@@ -296,7 +296,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     })
 }
 
-async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
+async fn prune_task_impl<H: FullHandler + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
     db: H::Store,
     handler: Arc<H>,
@@ -344,6 +344,7 @@ async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use super::super::Handler;
     use std::sync::Arc;
     use std::{
         collections::HashMap,
