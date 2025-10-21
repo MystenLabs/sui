@@ -12,7 +12,6 @@ use sui_rpc_api::Client;
 use sui_rpc_api::client::HeadersInterceptor;
 use sui_storage::blob::Blob;
 use tokio_util::bytes::Bytes;
-use tracing::info;
 use tracing::{debug, warn};
 use url::Url;
 
@@ -225,11 +224,6 @@ impl IngestionClient {
             .report_lag(checkpoint, data.checkpoint_summary.timestamp_ms);
 
         self.metrics.total_ingested_checkpoints.inc();
-        info!(
-            checkpoint,
-            "Ingested checkpoint with metrics {total_ingested_checkpoints}",
-            total_ingested_checkpoints = self.metrics.total_ingested_checkpoints.get()
-        );
 
         self.metrics
             .total_ingested_transactions

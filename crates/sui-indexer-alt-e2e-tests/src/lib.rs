@@ -698,7 +698,7 @@ pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
         rpc_api_url: None,
         rpc_username: None,
         rpc_password: None,
-        streaming_endpoint: None,
+        streaming_uri: None,
     };
     (client_args, temp_dir)
 }

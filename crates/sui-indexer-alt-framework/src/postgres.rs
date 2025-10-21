@@ -92,7 +92,7 @@ impl Indexer<Db> {
                 rpc_api_url: None,
                 rpc_username: None,
                 rpc_password: None,
-                streaming_endpoint: None,
+                streaming_uri: None,
             },
             IngestionConfig::default(),
             None,

@@ -60,7 +60,7 @@ pub async fn run_benchmark(
         rpc_api_url: None,
         rpc_username: None,
         rpc_password: None,
-        streaming_endpoint: None,
+        streaming_uri: None,
     };
 
     let cur_time = Instant::now();

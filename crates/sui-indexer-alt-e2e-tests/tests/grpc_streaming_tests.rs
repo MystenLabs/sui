@@ -38,11 +38,12 @@ struct StoredTxCount {
 /// Test concurrent pipeline for populating [tx_counts].
 struct TxCounts;
 
+#[async_trait::async_trait]
 impl Processor for TxCounts {
     const NAME: &'static str = "tx_counts";
     type Value = StoredTxCount;
 
-    fn process(
+    async fn process(
         &self,
         checkpoint: &std::sync::Arc<CheckpointData>,
     ) -> anyhow::Result<Vec<Self::Value>> {
@@ -120,7 +121,7 @@ async fn test_indexer_cluster_with_grpc_streaming() {
         rpc_username: None,
         rpc_password: None,
         // Use the TestCluster's RPC URL as the gRPC streaming endpoint
-        streaming_endpoint: Some(test_cluster.rpc_url().to_string()),
+        streaming_uri: Some(test_cluster.rpc_url().parse().unwrap()),
     };
 
     // Create writer/reader for database operations
@@ -175,7 +176,6 @@ async fn test_indexer_cluster_with_grpc_streaming() {
             .await
             .unwrap();
 
-        println!("Tx counts: {:?}", counts);
         // We should have processed some checkpoints.
         assert!(!counts.is_empty());
         for (i, count) in counts.iter().enumerate() {
@@ -185,8 +185,8 @@ async fn test_indexer_cluster_with_grpc_streaming() {
         }
     }
 
-    // Verify metrics show that checkpoints were ingested
-    assert!(metrics.total_ingested_checkpoints.get() >= 5);
+    // Verify metrics show that checkpoints were streamed
+    assert!(metrics.total_streamed_checkpoints.get() >= 5);
 
     // Verify pipeline metrics
     assert!(
@@ -198,9 +198,6 @@ async fn test_indexer_cluster_with_grpc_streaming() {
             >= 5
     );
 
-    println!("here");
-
     cancel.cancel();
-    println!("here here");
     handle.await.unwrap();
 }

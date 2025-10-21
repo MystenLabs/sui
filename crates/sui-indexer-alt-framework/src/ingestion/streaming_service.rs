@@ -2,52 +2,51 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use futures::{stream::Peekable, StreamExt};
+use futures::{stream::Peekable, Stream, StreamExt};
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use sui_rpc::{
     field::{FieldMask, FieldMaskUtil},
     proto::sui::rpc::v2::{
         subscription_service_client::SubscriptionServiceClient, SubscribeCheckpointsRequest,
-        SubscribeCheckpointsResponse,
     },
 };
-use tonic::{Status, Streaming};
+use tonic::{transport::Uri, Status};
 
 use crate::ingestion::error::{Error, Result};
 use crate::types::full_checkpoint_content::CheckpointData;
 
 #[async_trait]
 pub trait StreamingService {
-    async fn start_streaming(&mut self) -> Result<()>;
-    async fn next_checkpoint(&mut self) -> Result<CheckpointData>;
-    async fn peek_next_checkpoint(&mut self) -> Result<u64>;
+    type Stream: PeekableStream + Send;
+    async fn connect(&mut self) -> Result<Self::Stream>;
+}
+
+#[async_trait]
+pub trait PeekableStream: Stream<Item = Result<CheckpointData>> + Unpin {
+    async fn peek(&mut self) -> Option<Result<CheckpointData>>;
 }
 
 pub struct GRPCStreamingService {
-    client: Option<SubscriptionServiceClient<tonic::transport::Channel>>,
-    stream: Option<Peekable<Streaming<SubscribeCheckpointsResponse>>>,
-    endpoint: String,
+    uri: Uri,
 }
 
-impl GRPCStreamingService {
-    pub fn new(endpoint: String) -> Self {
-        Self {
-            client: None,
-            stream: None,
-            endpoint,
-        }
-    }
+/// Wrapper around Peekable stream that implements PeekableStream trait
+pub struct GrpcPeekableStream {
+    inner: Peekable<Pin<Box<dyn Stream<Item = Result<CheckpointData>> + Send>>>,
 }
 
 #[async_trait]
 impl StreamingService for GRPCStreamingService {
-    async fn start_streaming(&mut self) -> Result<()> {
-        let mut client = SubscriptionServiceClient::connect(self.endpoint.clone())
+    type Stream = GrpcPeekableStream;
+
+    async fn connect(&mut self) -> Result<Self::Stream> {
+        let mut client = SubscriptionServiceClient::connect(self.uri.clone())
             .await
             .map_err(|err| Error::RpcClientError(Status::from_error(err.into())))?;
 
         // Request all the fields we need to construct CheckpointData
         let mut request = SubscribeCheckpointsRequest::default();
-        // TODO: we probably don't need all of these fields, trim down later.
         request.read_mask = Some(FieldMask::from_paths([
             "sequence_number",
             "summary.bcs",
@@ -64,63 +63,59 @@ impl StreamingService for GRPCStreamingService {
             .subscribe_checkpoints(request)
             .await
             .map_err(Error::RpcClientError)?
-            .into_inner()
-            .peekable();
+            .into_inner();
 
-        self.client = Some(client);
-        self.stream = Some(stream);
-        Ok(())
-    }
-
-    async fn next_checkpoint(&mut self) -> Result<CheckpointData> {
-        let stream = self.stream.as_mut().ok_or_else(|| {
-            Error::StreamingError("Stream not initialized. Call start_streaming first.".to_string())
-        })?;
-
-        match stream.next().await {
-            Some(Ok(response)) => {
-                let checkpoint = response.checkpoint.ok_or_else(|| {
+        // We need to convert the stream items from the gRPC response type to CheckpointData.
+        let converted_stream = stream.map(|result| match result {
+            Ok(response) => response
+                .checkpoint
+                .ok_or_else(|| {
                     Error::StreamingError("Checkpoint data missing in response".to_string())
-                })?;
+                })
+                .and_then(|checkpoint| {
+                    sui_types::full_checkpoint_content::Checkpoint::try_from(&checkpoint)
+                        .map(Into::into)
+                        .map_err(|e| {
+                            Error::StreamingError(format!("Failed to parse checkpoint: {}", e))
+                        })
+                }),
+            Err(e) => Err(Error::RpcClientError(e)),
+        });
 
-                // Use the conversion function from sui-rpc-api
-                sui_types::full_checkpoint_content::Checkpoint::try_from(&checkpoint)
-                    .map(Into::into)
-                    .map_err(|e| {
-                        Error::StreamingError(format!("Failed to parse checkpoint: {}", e))
-                    })
+        let boxed_stream: Pin<Box<dyn Stream<Item = Result<CheckpointData>> + Send>> =
+            Box::pin(converted_stream);
+
+        Ok(GrpcPeekableStream {
+            inner: boxed_stream.peekable(),
+        })
+    }
+}
+
+impl Stream for GrpcPeekableStream {
+    type Item = Result<CheckpointData>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.inner).poll_next(cx)
+    }
+}
+
+#[async_trait]
+impl PeekableStream for GrpcPeekableStream {
+    async fn peek(&mut self) -> Option<Result<CheckpointData>> {
+        match Pin::new(&mut self.inner).peek().await {
+            Some(Ok(checkpoint)) => Some(Ok(checkpoint.clone())),
+            Some(Err(_)) => {
+                // Consume the error from the stream
+                self.inner.next().await
             }
-            Some(Err(e)) => Err(Error::RpcClientError(e)),
-            None => Err(Error::StreamingError(
-                "Stream ended unexpectedly".to_string(),
-            )),
+            None => None,
         }
     }
+}
 
-    async fn peek_next_checkpoint(&mut self) -> Result<u64> {
-        use std::pin::Pin;
-
-        let stream = self.stream.as_mut().ok_or_else(|| {
-            Error::StreamingError("Stream not initialized. Call start_streaming first.".to_string())
-        })?;
-
-        match Pin::new(stream).peek().await {
-            Some(Ok(response)) => {
-                let checkpoint = response.checkpoint.as_ref().ok_or_else(|| {
-                    Error::StreamingError("Checkpoint data missing in response".to_string())
-                })?;
-
-                let sequence_number = checkpoint.sequence_number.ok_or_else(|| {
-                    Error::StreamingError("Checkpoint sequence number missing".to_string())
-                })?;
-
-                Ok(sequence_number)
-            }
-            Some(Err(e)) => Err(Error::StreamingError(format!("Error in stream: {}", e))),
-            None => Err(Error::StreamingError(
-                "Stream ended unexpectedly".to_string(),
-            )),
-        }
+impl GRPCStreamingService {
+    pub fn new(uri: Uri) -> Self {
+        Self { uri }
     }
 }
 
@@ -129,17 +124,70 @@ pub mod test_utils {
     use super::*;
     use crate::types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
     use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
 
+    #[derive(Clone)]
     enum MockCheckpointOrError {
         Checkpoint(u64),
         Error,
     }
 
+    /// Mock stream that shares state across all instances
+    pub struct MockStream {
+        state: Arc<Mutex<VecDeque<MockCheckpointOrError>>>,
+        peek_failures_remaining: Arc<Mutex<usize>>,
+    }
+
+    impl Stream for MockStream {
+        type Item = Result<CheckpointData>;
+
+        fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            let mut state = self.state.lock().unwrap();
+
+            match state.pop_front() {
+                Some(MockCheckpointOrError::Checkpoint(sequence_number)) => {
+                    let mut builder = TestCheckpointDataBuilder::new(sequence_number);
+                    Poll::Ready(Some(Ok(builder.build_checkpoint())))
+                }
+                Some(MockCheckpointOrError::Error) => Poll::Ready(Some(Err(
+                    Error::StreamingError("Failed to stream checkpoint".to_string()),
+                ))),
+                None => Poll::Ready(None),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl PeekableStream for MockStream {
+        async fn peek(&mut self) -> Option<Result<CheckpointData>> {
+            // Check if we should fail this peek
+            let mut failures = self.peek_failures_remaining.lock().unwrap();
+            if *failures > 0 {
+                *failures -= 1;
+                return Some(Err(Error::StreamingError("Mock peek failure".to_string())));
+            }
+
+            let state = self.state.lock().unwrap();
+
+            // Look at the front without removing it
+            match state.front() {
+                Some(MockCheckpointOrError::Checkpoint(sequence_number)) => {
+                    let mut builder = TestCheckpointDataBuilder::new(*sequence_number);
+                    Some(Ok(builder.build_checkpoint()))
+                }
+                Some(MockCheckpointOrError::Error) => Some(Err(Error::StreamingError(
+                    "Failed to stream checkpoint".to_string(),
+                ))),
+                None => None,
+            }
+        }
+    }
+
     /// Mock streaming service for testing
     pub struct MockStreamingService {
-        checkpoints_or_errors: VecDeque<MockCheckpointOrError>,
+        checkpoints_or_errors: Arc<Mutex<VecDeque<MockCheckpointOrError>>>,
         start_streaming_failures_remaining: usize,
-        peek_should_fail_once: bool,
+        peek_failures_remaining: Arc<Mutex<usize>>,
     }
 
     impl MockStreamingService {
@@ -152,9 +200,9 @@ pub mod test_utils {
                 .map(MockCheckpointOrError::Checkpoint)
                 .collect();
             Self {
-                checkpoints_or_errors: checkpoints,
+                checkpoints_or_errors: Arc::new(Mutex::new(checkpoints)),
                 start_streaming_failures_remaining: 0,
-                peek_should_fail_once: false,
+                peek_failures_remaining: Arc::new(Mutex::new(0)),
             }
         }
 
@@ -164,21 +212,25 @@ pub mod test_utils {
             self
         }
 
-        /// Make peek_next_checkpoint fail once
-        pub fn fail_peek_once(mut self) -> Self {
-            self.peek_should_fail_once = true;
+        /// Make peek fail for the next N calls
+        pub fn fail_peek_times(self, times: usize) -> Self {
+            *self.peek_failures_remaining.lock().unwrap() = times;
             self
         }
 
         /// Insert an error at the back of the queue.
         pub fn insert_error(&mut self) {
             self.checkpoints_or_errors
+                .lock()
+                .unwrap()
                 .push_back(MockCheckpointOrError::Error);
         }
 
         /// Insert a checkpoint at the back of the queue.
         pub fn insert_checkpoint(&mut self, sequence_number: u64) {
             self.checkpoints_or_errors
+                .lock()
+                .unwrap()
                 .push_back(MockCheckpointOrError::Checkpoint(sequence_number));
         }
 
@@ -186,54 +238,31 @@ pub mod test_utils {
         where
             I: IntoIterator<Item = u64>,
         {
+            let mut checkpoints = self.checkpoints_or_errors.lock().unwrap();
             for sequence_number in checkpoint_range {
-                self.checkpoints_or_errors
-                    .push_back(MockCheckpointOrError::Checkpoint(sequence_number));
+                checkpoints.push_back(MockCheckpointOrError::Checkpoint(sequence_number));
             }
         }
     }
 
     #[async_trait]
     impl StreamingService for MockStreamingService {
-        async fn start_streaming(&mut self) -> Result<()> {
+        type Stream = MockStream;
+
+        async fn connect(&mut self) -> Result<Self::Stream> {
+            // Simulate start_streaming failures
             if self.start_streaming_failures_remaining > 0 {
                 self.start_streaming_failures_remaining -= 1;
                 return Err(Error::StreamingError(
                     "Mock start_streaming failure".to_string(),
                 ));
             }
-            Ok(())
-        }
 
-        async fn next_checkpoint(&mut self) -> Result<CheckpointData> {
-            match self.checkpoints_or_errors.pop_front() {
-                Some(MockCheckpointOrError::Checkpoint(sequence_number)) => {
-                    // Create a builder with the desired checkpoint number and build it
-                    let mut builder = TestCheckpointDataBuilder::new(sequence_number);
-                    Ok(builder.build_checkpoint())
-                }
-                Some(MockCheckpointOrError::Error) => Err(Error::StreamingError(
-                    "Failed to stream checkpoint".to_string(),
-                )),
-                None => Err(Error::StreamingError("No more checkpoints".to_string())),
-            }
-        }
-
-        async fn peek_next_checkpoint(&mut self) -> Result<u64> {
-            if self.peek_should_fail_once {
-                self.peek_should_fail_once = false;
-                return Err(Error::StreamingError(
-                    "Mock peek_next_checkpoint failure".to_string(),
-                ));
-            }
-
-            match self.checkpoints_or_errors.front() {
-                Some(MockCheckpointOrError::Checkpoint(sequence_number)) => Ok(*sequence_number),
-                Some(MockCheckpointOrError::Error) => Err(Error::StreamingError(
-                    "Failed to stream checkpoint".to_string(),
-                )),
-                None => Err(Error::StreamingError("No more checkpoints".to_string())),
-            }
+            // Share the checkpoints queue and peek failures counter with the new stream
+            Ok(MockStream {
+                state: Arc::clone(&self.checkpoints_or_errors),
+                peek_failures_remaining: Arc::clone(&self.peek_failures_remaining),
+            })
         }
     }
 }

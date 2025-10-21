@@ -3,39 +3,38 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use futures::{future::try_join_all, stream};
+use futures::{future::try_join_all, stream, Stream, StreamExt};
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use super::{IngestionConfig, client::IngestionClient};
 use crate::{
-    ingestion::{error::Error, streaming_service::StreamingService},
+    ingestion::{
+        error::Error,
+        streaming_service::{PeekableStream, StreamingService},
+    },
     metrics::IndexerMetrics,
     task::TrySpawnStreamExt,
     types::full_checkpoint_content::CheckpointData,
 };
 
-// TODO: Make these configurable via IngestionConfig.
-/// If streaming fails to start, we'll use ingestion for this many more checkpoints before trying
-/// to start streaming again.
-const INGESTION_CHECK_INTERVAL: u64 = 10;
-
-/// If the gap between the start of streaming and the current position of ingestion is less than this
-/// threshold, we'll enter the transition mode where we ingest and stream at the same time before
-/// filling up the gap, then switch to streaming.
-const TRANSITION_THRESHOLD: u64 = 100;
-
-/// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges.
+/// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges
+/// via either streaming or ingesting, or both.
 ///
 /// This task:
-/// 1. Maintains an ingest_hi based on subscriber feedback
-/// 2. Spawns a broadcaster task for the requested checkpoint range. Right now the entire requested range is given to
-///    each broadcaster, but with streaming support the end of the range could be different.
-/// 3. The broadcast_range task waits on the watch channel when it hits the ingest_hi limit
+/// 1. Maintains an ingest_hi based on subscriber feedback.
+/// 2. Spawns streaming or ingesting tasks for the requested checkpoint range. Depending on
+///    the current latest checkpoint available from streaming, it may spawn either or both tasks
+///    to cover the requested range. The overall idea is that ingestion covers the range
+///    [start, network_latest_cp), while streaming covers [network_latest_cp, end).
+/// 3. When both the streaming and ingesting task finish due to failures or range completion, it
+///    updates the overall watermark and runs a new loop iteration if the requested range is not complete.
+/// 4. Both the ingest_and_broadcast_range and stream_and_broadcast_range tasks wait on the watch
+///    channel when they hit the ingest_hi limit.
 ///
 /// The task will shut down if the `cancel` token is signalled, or if the `checkpoints` range completes.
 pub(super) fn broadcaster<R, S>(
@@ -44,7 +43,7 @@ pub(super) fn broadcaster<R, S>(
     mut streaming_service: Option<S>,
     config: IngestionConfig,
     client: IngestionClient,
-    mut ingest_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
+    mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -53,9 +52,6 @@ where
     R: std::ops::RangeBounds<u64> + Send + 'static,
     S: StreamingService + Send + 'static,
 {
-    let retry_interval = config.retry_interval();
-    let concurrency = config.ingest_concurrency;
-
     tokio::spawn(async move {
         info!("Starting broadcaster");
 
@@ -67,116 +63,151 @@ where
         };
 
         let end_cp = match checkpoints.end_bound() {
-            std::ops::Bound::Included(&n) => n,
-            std::ops::Bound::Excluded(&n) => n.saturating_sub(1),
+            std::ops::Bound::Included(&n) => n.saturating_add(1),
+            std::ops::Bound::Excluded(&n) => n,
             std::ops::Bound::Unbounded => u64::MAX,
         };
 
-        let buffer_size = config.checkpoint_buffer_size;
+        let buffer_size = config.checkpoint_buffer_size as u64;
 
         let subscribers = Arc::new(subscribers);
 
         // Track subscriber watermarks
         let mut subscribers_hi = HashMap::<&'static str, u64>::new();
 
-        // Try to receive initial subscriber feedback before spawning the broadcaster.
-        // This ensures we don't miss early watermark updates.
-        if let Ok((name, hi)) = ingest_hi_rx.try_recv() {
-            subscribers_hi.insert(name, hi);
+        // Initialize ingest_hi watch channel.
+        // Start with None (no backpressure) or Some if we have been provided an initial bound.
+        let mut ingest_hi = initial_commit_hi.map(|min_hi| min_hi + buffer_size);
+        let (ingest_hi_watch_tx, ingest_hi_watch_rx) = watch::channel(ingest_hi);
+
+        // Backoff state for streaming connection retries.
+        // If the first attempt at streaming connection fails, we back off for an initial delay,
+        // and keep broadcasting ingestion_batch_size checkpoints via ingestion until the backoff period ends.
+        // On each subsequent failure, we double the backoff delay until reaching the max backoff delay.
+        let mut streaming_backoff_until = tokio::time::Instant::now();
+        let mut streaming_backoff_delay = config.streaming_backoff_initial_delay();
+        let max_backoff_delay = config.streaming_backoff_max_delay();
+        let ingestion_batch_size = config.ingestion_batch_size as u64;
+
+        // Helper macro to create a dummy streaming handle that just returns
+        // the provided checkpoint_hi immediately.
+        // We use this to simplify the join logic when streaming is not used.
+        macro_rules! dummy_streaming_handle {
+            ($checkpoint_hi:expr) => {
+                tokio::spawn(async move { $checkpoint_hi })
+            };
         }
 
-        // Initialize ingest_hi watch channel.
-        // Start with None (no backpressure) or Some if we have been provided aninitial bound.
-        let initial_ingest_hi = initial_commit_hi.map(|min_hi| min_hi + buffer_size as u64);
-        let (ingest_hi_watch_tx, ingest_hi_watch_rx) = watch::channel(initial_ingest_hi);
+        // Initialize the overall checkpoint_hi watermark to start_cp.
+        // This value is updated every outer loop iteration
+        // after both streaming and broadcasting complete.
+        let mut checkpoint_hi = start_cp;
 
-        let mut watermark = start_cp;
+        'outer: while checkpoint_hi < end_cp {
+            let (streaming_handle, ingestion_end) =
+                if let Some(streaming_service) = &mut streaming_service {
+                    // Attempt to connect to streaming service if not in backoff period.
+                    if tokio::time::Instant::now() < streaming_backoff_until {
+                        // Still in backoff period, skip connection attempt
+                        info!(
+                            delay_secs = streaming_backoff_delay.as_secs(),
+                            "In streaming backoff period, skipping connection attempt"
+                        );
 
-        'outer: loop {
-            if watermark > end_cp {
-                info!("Reached end of requested checkpoint range, stopping broadcaster");
-                break;
-            }
-
-            let (mut broadcaster_handle, mut ingestion_range) = (None, None);
-            let mut is_streaming = false;
-
-            if let Some(streaming_service) = &mut streaming_service {
-                if let Err(e) = streaming_service.start_streaming().await {
-                    error!("Failed to start streaming service with error {}, falling back to ingestion only for {} checkpoints", e, INGESTION_CHECK_INTERVAL);
-                    let ingestion_end = (watermark + INGESTION_CHECK_INTERVAL - 1).min(end_cp);
-                    ingestion_range = Some((watermark, ingestion_end));
-                    watermark = ingestion_end.saturating_add(1);
-                } else {
-                    match streaming_service.peek_next_checkpoint().await {
-                        Ok(streamed_cp) => {
-                            if streamed_cp >= end_cp {
-                                info!("Network is too far ahead at {} beyond end_cp {}, ingesting only", streamed_cp, end_cp);
-                                ingestion_range = Some((watermark, end_cp));
-                                watermark = end_cp.saturating_add(1);
-                            } else if streamed_cp <= watermark {
-                                // We are already caught up, start only streaming from the watermark
-                                info!("Caught up, starting streaming from watermark {}", watermark);
-                                is_streaming = true;
-                            } else if streamed_cp <= watermark + TRANSITION_THRESHOLD {
-                                // We are within the transition threshold, so ingest and stream at the same time.
-                                info!("Streaming within transition threshold at {}, with watermark {}, ingesting and streaming", streamed_cp, watermark);
-                                ingestion_range = Some((watermark, streamed_cp.saturating_sub(1)));
-                                is_streaming = true;
-                                watermark = streamed_cp;
-                            } else {
-                                // We are beyond the transition threshold, so ingest up to the streamed_cp.
-                                info!("Behind streaming by more than transition threshold at {}, with watermark {}, ingesting only until caught up", streamed_cp, watermark);
-                                ingestion_range = Some((watermark, streamed_cp.saturating_sub(1)));
-                                watermark = streamed_cp;
+                        // We broadcast a batch of checkpoints via ingestion before retrying in next loop iteration.
+                        let ingestion_end = (checkpoint_hi + ingestion_batch_size).min(end_cp);
+                        (dummy_streaming_handle!(ingestion_end), ingestion_end)
+                    } else {
+                        // Backoff period elapsed, attempt connection
+                        async {
+                            let mut stream = streaming_service.connect().await?;
+                            match stream.peek().await {
+                                Some(Ok(checkpoint)) => {
+                                    let cp = *checkpoint.checkpoint_summary.sequence_number();
+                                    Ok((stream, cp))
+                                }
+                                _ => Err(Error::StreamingError("Peeking fails".to_string())),
                             }
                         }
-                        Err(e) => {
-                            error!("Failed to peek next checkpoint from streaming service with error {}, falling back to ingestion only for {} checkpoints", e, INGESTION_CHECK_INTERVAL);
-                            let ingestion_end =
-                                (watermark + INGESTION_CHECK_INTERVAL - 1).min(end_cp);
-                            ingestion_range = Some((watermark, ingestion_end));
-                            watermark = ingestion_end.saturating_add(1);
-                        }
+                        .await
+                        .map(|(stream, streamed_cp)| {
+                            info!(streamed_cp, "Connected to streaming service successfully");
+
+                            // Reset backoff state since we connected successfully.
+                            streaming_backoff_until = tokio::time::Instant::now();
+                            streaming_backoff_delay = config.streaming_backoff_initial_delay();
+                            metrics.streaming_connection_failures.set(0);
+
+                            // We ingest up to the streamed_cp because anything beyond that is
+                            // either handled by the streaming task (if we decide to spawn a streaming task)
+                            // or will be reassessed in the next loop iteration once we finish this batch.
+                            let ingestion_end = streamed_cp.min(end_cp);
+
+                            // Decide whether to start streaming now or delay it until we are within buffer size.
+                            let streaming_handle = if streamed_cp <= checkpoint_hi + buffer_size {
+                                info!(
+                                    streamed_cp,
+                                    checkpoint_hi, "Within buffer size, starting streaming"
+                                );
+
+                                tokio::spawn(stream_and_broadcast_range(
+                                    streamed_cp.max(checkpoint_hi), // Need the max here to avoid sending already processed checkpoints
+                                    end_cp,
+                                    stream,
+                                    subscribers.clone(),
+                                    ingest_hi_watch_rx.clone(),
+                                    metrics.clone(),
+                                    cancel.clone(),
+                                ))
+                            } else {
+                                info!(
+                                    streamed_cp,
+                                    checkpoint_hi, "Outside buffer size, delaying streaming start"
+                                );
+                                dummy_streaming_handle!(ingestion_end)
+                            };
+                            (streaming_handle, ingestion_end)
+                        })
+                        .unwrap_or_else(|_| {
+                            // Streaming connection failed so we set backoff timer and double the delay
+                            error!(
+                                delay_millis = streaming_backoff_delay.as_millis(),
+                                "Streaming connection failed, setting backoff timer"
+                            );
+                            metrics.streaming_connection_failures.inc();
+
+                            streaming_backoff_until =
+                                tokio::time::Instant::now() + streaming_backoff_delay;
+                            streaming_backoff_delay =
+                                (streaming_backoff_delay * 2).min(max_backoff_delay);
+
+                            // We broadcast a batch of checkpoints via ingestion before retrying
+                            let ingestion_end = (checkpoint_hi + ingestion_batch_size).min(end_cp);
+                            (dummy_streaming_handle!(ingestion_end), ingestion_end)
+                        })
                     }
-                }
-            } else {
-                // No streaming service, so just ingest the entire range.
-                ingestion_range = Some((watermark, end_cp));
-                watermark = end_cp.saturating_add(1);
-            }
+                } else {
+                    // No streaming service configured, so we just use ingestion for the entire range.
+                    (dummy_streaming_handle!(end_cp), end_cp)
+                };
 
-            println!(
-                "ingestion_range: {:?}, is_streaming: {}",
-                ingestion_range, is_streaming
-            );
+            // Spawn a broadcaster task for this range.
+            // It will exit when the range is complete or if it is cancelled.
+            let ingestion_handle = tokio::spawn(ingest_and_broadcast_range(
+                checkpoint_hi,
+                ingestion_end,
+                config.retry_interval(),
+                config.ingest_concurrency,
+                ingest_hi_watch_rx.clone(),
+                client.clone(),
+                subscribers.clone(),
+                cancel.clone(),
+            ));
 
-            if let Some((broadcaster_start, broadcaster_end)) = ingestion_range {
-                info!(
-                    broadcaster_start,
-                    broadcaster_end, "Starting broadcaster for checkpoint range"
-                );
+            let join_future = async { tokio::join!(streaming_handle, ingestion_handle) };
+            tokio::pin!(join_future);
 
-                // Spawn a broadcaster task for this range.
-                // It will exit when the range is complete or if it is cancelled.
-                broadcaster_handle = Some(tokio::spawn(broadcast_range(
-                    broadcaster_start,
-                    broadcaster_end,
-                    retry_interval,
-                    concurrency,
-                    ingest_hi_watch_rx.clone(),
-                    client.clone(),
-                    subscribers.clone(),
-                    cancel.clone(),
-                )));
-            }
-
-            assert!(
-                broadcaster_handle.is_some() || is_streaming,
-                "Either broadcaster_handle or is_streaming must be set"
-            );
-
-            while broadcaster_handle.is_some() || is_streaming {
+            loop {
                 tokio::select! {
                     _ = cancel.cancelled() => {
                         info!("Shutdown received, stopping ingestion");
@@ -185,94 +216,22 @@ where
 
                     // Subscriber watermark update
                     // docs::#regulator (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                    Some((name, hi)) = ingest_hi_rx.recv() => {
+                    Some((name, hi)) = commit_hi_rx.recv() => {
                         subscribers_hi.insert(name, hi);
 
                         if let Some(min_hi) = subscribers_hi.values().copied().min() {
-                            ingest_hi = Some(min_hi + buffer_size as u64);
+                            ingest_hi = Some(min_hi + buffer_size);
                             // Update the watch channel, which will notify all waiting tasks
                             let _ = ingest_hi_watch_tx.send(ingest_hi);
-                            info!(ingest_hi, "Updated ingest_hi");
                         }
                     }
                     // docs::/#regulator
 
-                    // Handle streaming of checkpoints
-                    checkpoint_result = async {
-                        // SAFETY: unwrap is safe because is_streaming guards against streaming_service being None.
-                        streaming_service.as_mut().unwrap().next_checkpoint().await
-                    }, if is_streaming => {
-                        match checkpoint_result {
-                            Ok(checkpoint) => {
-                                let sequence_number = *checkpoint.checkpoint_summary.sequence_number();
-                                info!(checkpoint = sequence_number, "Received streamed checkpoint");
-
-                                // We reached the end of the requested range, stop streaming.
-                                // We `continue` instead of `break` to allow broadcaster_handle to complete.
-                                if sequence_number > end_cp {
-                                    info!("Reached end of requested checkpoint range, stopping streaming");
-                                    is_streaming = false;
-                                    continue;
-                                }
-
-                                // We somehow got a checkpoint beyond the current watermark, which should not happen.
-                                // We'll restart the streaming service to recover in the next outer loop iteration.
-                                if sequence_number > watermark {
-                                    info!(checkpoint = sequence_number, watermark, "Streamed checkpoint beyond watermark unexpectedly, stopping streaming");
-                                    is_streaming = false;
-                                    continue;
-                                }
-
-                                // We got a checkpoint we've already processed, so just skip it.
-                                if sequence_number < watermark {
-                                    // We are still catching up, so skip this checkpoint.
-                                    info!(checkpoint = sequence_number, watermark, "Skipping already processed checkpoint");
-                                    continue;
-                                }
-
-                                assert_eq!(sequence_number, watermark, "Watermark should match streamed checkpoint at this point");
-
-                                if ingest_hi.is_some_and(|hi| sequence_number > hi) {
-                                    // We hit the ingest_hi limit, so pause streaming until it advances.
-                                    info!(checkpoint = sequence_number, ingest_hi, "Hit ingest_hi limit, pausing streaming");
-                                    is_streaming = false;
-                                    continue;
-                                }
-
-                                // Send checkpoint to all subscribers.
-                                if let Err(e) = send_checkpoint(Arc::new(checkpoint), &subscribers).await {
-                                    error!("Failed to send streamed checkpoint to subscribers: {}", e);
-                                    // Treat this as a cancellation signal for the entire ingestion.
-                                    cancel.cancel();
-                                    break 'outer;
-                                } else {
-                                    info!(checkpoint = sequence_number, "Broadcasted streamed checkpoint");
-                                    metrics.total_streamed_checkpoints.inc();
-                                    watermark = sequence_number.saturating_add(1);
-                                }
-                            }
-                            Err(e) => {
-                                error!("Streaming service error: {}, pausing streaming", e);
-                                is_streaming = false;
-                            }
-                        }
-                    }
-
-                    // Handle broadcaster task completion
-                    result = async {
-                        // SAFETY: unwrap is safe because we check is_some in the condition
-                        broadcaster_handle.as_mut().unwrap().await
-                    }, if broadcaster_handle.is_some() => {
-                        match result {
-                            Ok(Ok(())) => {
-                                info!("Broadcaster completed successfully");
-                                broadcaster_handle = None;
-                                continue;
-                            }
-                            Ok(Err(Error::Cancelled)) => {
-                                info!("Broadcaster was cancelled, finishing everything");
-                                break 'outer;
-                            }
+                    // Handle both streaming and broadcaster completion
+                    (streaming_result, broadcaster_result) = join_future.as_mut() => {
+                        // Check broadcaster result, cancel on any error
+                        match broadcaster_result {
+                            Ok(Ok(())) => {} // Success, continue
                             Ok(Err(e)) => {
                                 error!("Broadcaster failed: {}", e);
                                 cancel.cancel();
@@ -284,6 +243,19 @@ where
                                 break 'outer;
                             }
                         }
+
+                        // Update checkpoint_hi from streaming, or cancel on error
+                        checkpoint_hi = match streaming_result {
+                            Ok(w) => w,
+                            Err(e) => {
+                                error!("Streaming task panicked: {}", e);
+                                cancel.cancel();
+                                break 'outer;
+                            }
+                        };
+
+                        info!(checkpoint_hi, "Both tasks completed, moving on to next range");
+                        break;
                     }
                 }
             }
@@ -291,11 +263,86 @@ where
     })
 }
 
-/// Fetch and broadcasts checkpoints from a range to subscribers.
+/// Streams and broadcasts checkpoints from a range [start, end) to subscribers.
+/// This task is ingest_hi-aware and will wait if it encounters a checkpoint
+/// beyond the current ingest_hi, resuming when ingest_hi advances to currently
+/// streaming checkpoint.
+/// If we encounter any streaming error or unexpected checkpoint ahead of the current
+/// checkpoint_hi, we return the next checkpoint we want to stream.
+async fn stream_and_broadcast_range(
+    start: u64,
+    end: u64,
+    mut stream: impl Stream<Item = Result<CheckpointData, Error>> + std::marker::Unpin,
+    subscribers: Arc<Vec<mpsc::Sender<Arc<CheckpointData>>>>,
+    mut ingest_hi_rx: watch::Receiver<Option<u64>>,
+    metrics: Arc<IndexerMetrics>,
+    cancel: CancellationToken,
+) -> u64 {
+    let mut checkpoint_hi = start;
+    while checkpoint_hi < end {
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                info!("Shutdown received, stopping streaming");
+                return checkpoint_hi;
+            }
+            item = stream.next() => {
+                match item {
+                    Some(Ok(checkpoint)) => {
+                        let sequence_number = *checkpoint.checkpoint_summary.sequence_number();
+
+                        if sequence_number < checkpoint_hi {
+                            // Already processed checkpoint, skip.
+                            info!(checkpoint = sequence_number, checkpoint_hi, "Skipping already processed checkpoint");
+                            continue;
+                        }
+
+                        if sequence_number > checkpoint_hi {
+                            // Unexpected checkpoint ahead of current watermark, return to main loop
+                            // to fill up the gap.
+                            warn!(checkpoint = sequence_number, checkpoint_hi, "Unexpected checkpoint");
+                            return checkpoint_hi;
+                        }
+
+                        assert_eq!(sequence_number, checkpoint_hi);
+
+                        // Wait until ingest_hi allows processing this checkpoint.
+                        if tokio::select! {
+                            result = ingest_hi_rx.wait_for(|hi| hi.is_none_or(|h| checkpoint_hi < h)) => result.is_err(),
+                            _ = cancel.cancelled() => true,
+                        } {
+                            return checkpoint_hi;
+                        }
+
+                        // Send checkpoint to all subscribers and return on any error.
+                        if send_checkpoint(Arc::new(checkpoint), &subscribers).await.is_err() {
+                            return checkpoint_hi;
+                        }
+
+                        info!(checkpoint = checkpoint_hi, "Streamed checkpoint to subscribers");
+                        checkpoint_hi = checkpoint_hi.saturating_add(1);
+                        metrics.total_streamed_checkpoints.inc();
+                    }
+                    Some(Err(e)) => {
+                        warn!("Streaming error: {}", e);
+                        return checkpoint_hi;
+                    }
+                    None => {
+                        warn!("Streaming ended unexpectedly");
+                        return checkpoint_hi;
+                    }
+                }
+            }
+        }
+    }
+
+    checkpoint_hi
+}
+
+/// Ingests and broadcasts checkpoints from a range [start, end) to subscribers.
 /// This task is ingest_hi-aware and will wait if it encounters a checkpoint
 /// beyond the current ingest_hi, resuming when ingest_hi advances to currently
 /// ingesting checkpoints.
-async fn broadcast_range(
+async fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
     retry_interval: Duration,
@@ -305,28 +352,27 @@ async fn broadcast_range(
     subscribers: Arc<Vec<mpsc::Sender<Arc<CheckpointData>>>>,
     cancel: CancellationToken,
 ) -> Result<(), Error> {
-    stream::iter(start..=end)
+    info!(start, end, "Starting broadcaster for checkpoint range");
+
+    stream::iter(start..end)
         .try_for_each_spawned(ingest_concurrency, |cp| {
             let mut ingest_hi_rx = ingest_hi_rx.clone();
             let client = client.clone();
             let subscribers = subscribers.clone();
 
-            // One clone is for the supervisor to signal a cancel if it detects a
-            // subscriber that wants to wind down ingestion, and the other is to pass to
-            // each worker to detect cancellation.
-            // let supervisor_cancel = cancel.clone();
             let cancel = cancel.clone();
 
             async move {
                 // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                 // Wait until ingest_hi allows processing this checkpoint.
-                // None means no backpressure limit. If we get Some(hi) we wait until cp <= hi.
+                // None means no backpressure limit. If we get Some(hi) we wait until cp < hi.
                 // wait_for only errors if the sender is dropped (main broadcaster shut down) so
                 // we treat an error returned here as cancellation too.
                 if tokio::select! {
                     result = ingest_hi_rx.wait_for(|hi| hi.is_none_or(|h| cp < h)) => result.is_err(),
                     _ = cancel.cancelled() => true,
                 } {
+                    tracing::error!(checkpoint = cp, "Ingestion cancelled while waiting for ingest_hi");
                     return Err(Error::Cancelled);
                 }
                 // docs::/#bound
@@ -335,6 +381,7 @@ async fn broadcast_range(
                 let checkpoint = tokio::select! {
                     cp = client.wait_for(cp, retry_interval) => cp?,
                     _ = cancel.cancelled() => {
+                        tracing::error!(checkpoint = cp, "Ingestion cancelled while fetching checkpoint");
                         return Err(Error::Cancelled);
                     }
                 };
@@ -346,9 +393,10 @@ async fn broadcast_range(
                             info!(checkpoint = cp, "Broadcasted checkpoint");
                             Ok(())
                         } else {
+                            tracing::error!(checkpoint = cp, "Failed to broadcast checkpoint, subscriber channel closed");
                             // An error is returned meaning some subscriber channel has closed, which we consider
                             // a cancellation signal for the entire ingestion.
-                            cancel.cancel();
+                            // cancel.cancel();
                             Err(Error::Cancelled)
                         }
                     },
@@ -407,6 +455,10 @@ mod tests {
             checkpoint_buffer_size: 5,
             ingest_concurrency: 2,
             retry_interval_ms: 100,
+            ingestion_batch_size: 10,
+            // Setting the delay to 0 so some tests testing failure recovery can run deterministically
+            streaming_backoff_initial_delay_ms: 0,
+            streaming_backoff_max_delay_ms: 60000,
         }
     }
 
@@ -602,6 +654,7 @@ mod tests {
 
     #[tokio::test]
     async fn resumption() {
+        telemetry_subscribers::init_for_testing();
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
         let cancel = CancellationToken::new();
@@ -626,12 +679,15 @@ mod tests {
 
         // Regulator stopped because of watermark, but resumes when that watermark is updated.
         expect_timeout(&mut subscriber_rx).await;
+
         hi_tx.send(("test", 4)).unwrap();
 
         expect_checkpoints_in_range(&mut subscriber_rx, 2..4).await;
 
         // Halted again.
         expect_timeout(&mut subscriber_rx).await;
+
+        println!("Updating watermark to 4 yayaya");
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
@@ -855,7 +911,7 @@ mod tests {
             cancel.clone(),
         );
 
-        // Should fallback to ingestion for INGESTION_CHECK_INTERVAL (10) checkpoints
+        // Should fallback to ingestion for ingestion_batch_size (10) checkpoints
         expect_checkpoints_in_range(&mut subscriber_rx, 0..10).await;
 
         // After the interval, it should complete the remaining checkpoints from streaming
@@ -875,8 +931,8 @@ mod tests {
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
         let cancel = CancellationToken::new();
 
-        // Streaming service where peek fails
-        let streaming_service = MockStreamingService::new(10..20).fail_peek_once();
+        // Streaming service where peek fails on first attempt
+        let streaming_service = MockStreamingService::new(0..20).fail_peek_times(1);
 
         let metrics = test_metrics();
         let h_broadcaster = broadcaster(
@@ -934,6 +990,39 @@ mod tests {
         // Verify no streaming was used (all from ingestion)
         assert_eq!(metrics.total_streamed_checkpoints.get(), 0);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 30);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_before_start_checkpoint() {
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(30);
+        let cancel = CancellationToken::new();
+
+        // Streaming service starts at checkpoint 0 but indexing starts at 30.
+        let streaming_service = MockStreamingService::new(0..100);
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            30..100,
+            None,
+            Some(streaming_service),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        expect_checkpoints_in_order(&mut subscriber_rx, 30..100).await;
+
+        // Verify only streaming was used (all from streaming)
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 70);
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
@@ -1007,6 +1096,50 @@ mod tests {
         // Verify both ingestion and streaming were used
         assert_eq!(metrics.total_ingested_checkpoints.get(), 10);
         assert_eq!(metrics.total_streamed_checkpoints.get(), 15);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_connection_retry_with_backoff() {
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let cancel = CancellationToken::new();
+
+        // Streaming service where peek always fails (never recovers)
+        let streaming_service = MockStreamingService::new(30..50).fail_peek_times(usize::MAX);
+
+        let metrics = test_metrics();
+
+        // Custom config with a small backoff delay
+        let mut config = test_config();
+        config.streaming_backoff_initial_delay_ms = 5; // Short delay for test speed
+
+        let h_broadcaster = broadcaster(
+            0..,
+            None,
+            Some(streaming_service),
+            config,
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Should fallback to ingestion for all checkpoints
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..30).await;
+
+        // Verify retry counter incremented at least twice.
+        assert!(metrics.streaming_connection_failures.get() >= 2);
+
+        // Verify only ingestion was used (streaming never succeeded)
+        assert!(metrics.total_ingested_checkpoints.get() > 0);
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 0);
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
@@ -1158,40 +1291,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn streaming_at_transition_threshold_boundary() {
-        telemetry_subscribers::init_for_testing();
-        let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(150);
-        let cancel = CancellationToken::new();
-
-        // TRANSITION_THRESHOLD is 100
-        // Test streaming at exactly watermark + 100
-        let streaming_service = MockStreamingService::new(100..110);
-
-        let metrics = test_metrics();
-        let h_broadcaster = broadcaster(
-            0..110,
-            100,
-            Some(streaming_service),
-            test_config(),
-            mock_client(metrics.clone()),
-            hi_rx,
-            vec![subscriber_tx],
-            metrics.clone(),
-            cancel.clone(),
-        );
-
-        // Should handle transition correctly
-        expect_checkpoints_in_range(&mut subscriber_rx, 0..110).await;
-
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 10);
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 100);
-
-        cancel.cancel();
-        h_broadcaster.await.unwrap();
-    }
-
-    #[tokio::test]
     async fn streaming_with_backpressure() {
         telemetry_subscribers::init_for_testing();
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
@@ -1217,7 +1316,7 @@ mod tests {
         );
 
         // Should receive first 11 checkpoints (0..=10) from streaming
-        expect_checkpoints_in_order(&mut subscriber_rx, 0..=10).await;
+        expect_checkpoints_in_order(&mut subscriber_rx, 0..10).await;
 
         // Should halt due to backpressure
         expect_timeout(&mut subscriber_rx).await;
@@ -1226,10 +1325,9 @@ mod tests {
         hi_tx.send(("test", 20)).unwrap();
 
         // Should receive remaining checkpoints
-        expect_checkpoints_in_range(&mut subscriber_rx, 11..20).await;
+        expect_checkpoints_in_order(&mut subscriber_rx, 10..20).await;
 
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 18);
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 2);
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
