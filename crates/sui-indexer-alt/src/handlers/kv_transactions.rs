@@ -66,13 +66,14 @@ impl Processor for KvTransactions {
 #[async_trait]
 impl Handler for KvTransactions {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
 
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_transactions::table)
-            .values(values)
+            .values(batch)
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
@@ -117,14 +118,14 @@ mod tests {
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = KvTransactions.process(&checkpoint).await.unwrap();
 
-        KvTransactions::commit(&values, &mut conn).await.unwrap();
+        KvTransactions.commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = KvTransactions.process(&checkpoint).await.unwrap();
 
-        KvTransactions::commit(&values, &mut conn).await.unwrap();
+        KvTransactions.commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
@@ -133,7 +134,7 @@ mod tests {
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = KvTransactions.process(&checkpoint).await.unwrap();
 
-        KvTransactions::commit(&values, &mut conn).await.unwrap();
+        KvTransactions.commit(&values, &mut conn).await.unwrap();
 
         let transactions = get_all_kv_transactions(&mut conn).await.unwrap();
         assert_eq!(transactions.len(), 7);
