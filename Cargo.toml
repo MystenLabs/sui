@@ -103,6 +103,7 @@ members = [
   "crates/sui-bridge-indexer",
   "crates/sui-bridge-indexer-alt",
   "crates/sui-bridge-schema",
+  "crates/sui-checkpoint-object-store-indexer",
   "crates/sui-cluster-test",
   "crates/sui-config",
   "crates/sui-core",
