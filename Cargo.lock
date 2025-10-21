@@ -14864,6 +14864,7 @@ dependencies = [
  "futures",
  "pin-project-lite",
  "prometheus",
+ "prost 0.14.1",
  "prost-types 0.14.1",
  "rand 0.8.5",
  "reqwest 0.12.9",
@@ -14889,6 +14890,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "wiremock",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
