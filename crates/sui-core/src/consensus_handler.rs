@@ -1436,6 +1436,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             .or_default()
                             .push(transaction);
                     } else {
+                        antithesis_sdk::assert_sometimes!(
+                            transaction.transaction_data().uses_randomness(),
+                            "cancelled randomness-using transaction"
+                        );
+                        antithesis_sdk::assert_sometimes!(
+                            !transaction.transaction_data().uses_randomness(),
+                            "cancelled non-randomness-using transaction"
+                        );
+
                         // Cancel the transaction that has been deferred for too long.
                         debug!(
                                 "Cancelling consensus transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
