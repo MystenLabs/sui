@@ -63,6 +63,7 @@ use sui_config::NodeConfig;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
+use sui_types::execution::ExecutionOutput;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::get_early_execution_error;
@@ -289,6 +290,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_transaction_queue_age_s: Histogram,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
+    pub(crate) execution_driver_paused_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
     pub(crate) execution_queueing_delay_s: Histogram,
     pub(crate) prepare_cert_gas_latency_ratio: Histogram,
@@ -579,6 +581,12 @@ impl AuthorityMetrics {
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
                 "Cumulative number of transaction executed by execution driver",
+                registry,
+            )
+            .unwrap(),
+            execution_driver_paused_transactions: register_int_counter_with_registry!(
+                "execution_driver_paused_transactions",
+                "Cumulative number of transactions paused by execution driver",
                 registry,
             )
             .unwrap(),
@@ -1489,7 +1497,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         mut execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+    ) -> ExecutionOutput<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
@@ -1508,7 +1516,7 @@ impl AuthorityState {
         }
 
         // prevent concurrent executions of the same tx.
-        let tx_guard = epoch_store.acquire_tx_guard(certificate)?;
+        let tx_guard = epoch_store.acquire_tx_guard(certificate);
 
         let tx_cache_reader = self.get_transaction_cache_reader();
         if let Some(effects) = tx_cache_reader.get_executed_effects(tx_digest) {
@@ -1521,7 +1529,7 @@ impl AuthorityState {
                 );
             }
             tx_guard.release();
-            return Ok((effects, None));
+            return ExecutionOutput::Success((effects, None));
         }
 
         let execution_start_time = Instant::now();
@@ -1530,12 +1538,10 @@ impl AuthorityState {
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
         // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
         // epoch, then it's invalid.
-        let execution_guard = match self.execution_lock_for_executable_transaction(certificate) {
-            Ok(execution_guard) => execution_guard,
-            Err(err) => {
-                tx_guard.release();
-                return Err(err);
-            }
+        let Some(execution_guard) = self.execution_lock_for_executable_transaction(certificate)
+        else {
+            tx_guard.release();
+            return ExecutionOutput::EpochEnded;
         };
         // Since we obtain a reference to the epoch store before taking the execution lock, it's
         // possible that reconfiguration has happened and they no longer match.
@@ -1544,11 +1550,7 @@ impl AuthorityState {
         if *execution_guard != epoch_store.epoch() {
             tx_guard.release();
             info!("The epoch of the execution_guard doesn't match the epoch store");
-            return Err(SuiErrorKind::WrongEpoch {
-                expected_epoch: epoch_store.epoch(),
-                actual_epoch: *execution_guard,
-            }
-            .into());
+            return ExecutionOutput::EpochEnded;
         }
 
         let scheduling_source = execution_env.scheduling_source;
@@ -1575,17 +1577,17 @@ impl AuthorityState {
             );
             (outputs, None, None)
         } else {
-            let (transaction_outputs, timings, execution_error_opt) = self
+            let (transaction_outputs, timings, execution_error_opt) = match self
                 .process_certificate(
                     &tx_guard,
                     &execution_guard,
                     certificate,
                     execution_env,
                     epoch_store,
-                )
-                .tap_err(|e| {
-                    info!(name = ?self.name, ?tx_digest, "Error executing transaction: {e}");
-                })?;
+                ) {
+                ExecutionOutput::Success(result) => result,
+                output => return output.unwrap_err(),
+            };
             (
                 Arc::new(transaction_outputs),
                 Some(timings),
@@ -1612,7 +1614,7 @@ impl AuthorityState {
             if let Err(err) = commit_result {
                 error!(?tx_digest, "Error committing transaction: {err}");
                 tx_guard.release();
-                return Err(err);
+                return ExecutionOutput::Fatal(err);
             }
         }
 
@@ -1665,7 +1667,7 @@ impl AuthorityState {
                 .execution_gas_latency_ratio
                 .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed_us);
         };
-        Ok((effects, execution_error_opt))
+        ExecutionOutput::Success((effects, execution_error_opt))
     }
 
     pub fn read_objects_for_execution(
@@ -1690,13 +1692,13 @@ impl AuthorityState {
         )
     }
 
-    /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
-    /// pre-conditions are not satisfied, and executing change epoch transactions.
+    /// Test only wrapper for `try_execute_immediately()` above, useful for executing change epoch
+    /// transactions. Assumes execution will always succeed.
     pub async fn try_execute_for_test(
         &self,
         certificate: &VerifiedCertificate,
         execution_env: ExecutionEnv,
-    ) -> SuiResult<(VerifiedSignedTransactionEffects, Option<ExecutionError>)> {
+    ) -> (VerifiedSignedTransactionEffects, Option<ExecutionError>) {
         let epoch_store = self.epoch_store_for_testing();
         let (effects, execution_error_opt) = self
             .try_execute_immediately(
@@ -1704,9 +1706,10 @@ impl AuthorityState {
                 execution_env,
                 &epoch_store,
             )
-            .await?;
-        let signed_effects = self.sign_effects(effects, &epoch_store)?;
-        Ok((signed_effects, execution_error_opt))
+            .await
+            .unwrap();
+        let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
+        (signed_effects, execution_error_opt)
     }
 
     pub async fn notify_read_effects(
@@ -1768,7 +1771,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(
+    ) -> ExecutionOutput<(
         TransactionOutputs,
         Vec<ExecutionTiming>,
         Option<ExecutionError>,
@@ -1776,12 +1779,15 @@ impl AuthorityState {
         let _scope = monitored_scope("Execution::process_certificate");
         let tx_digest = *certificate.digest();
 
-        let input_objects = self.read_objects_for_execution(
+        let input_objects = match self.read_objects_for_execution(
             tx_guard.as_lock_guard(),
             certificate,
             execution_env.assigned_versions,
             epoch_store,
-        )?;
+        ) {
+            Ok(objects) => objects,
+            Err(e) => return ExecutionOutput::Fatal(e),
+        };
 
         let expected_effects_digest = match execution_env.expected_effects_digest {
             Some(expected_effects_digest) => Some(expected_effects_digest),
@@ -1790,7 +1796,10 @@ impl AuthorityState {
                 // restarting with a new binary. In this situation, if we have published an effects signature,
                 // we must be sure not to equivocate.
                 // TODO: read from cache instead of DB
-                epoch_store.get_signed_effects_digest(&tx_digest)?
+                match epoch_store.get_signed_effects_digest(&tx_digest) {
+                    Ok(digest) => digest,
+                    Err(e) => return ExecutionOutput::Fatal(e),
+                }
             }
         };
 
@@ -1912,10 +1921,9 @@ impl AuthorityState {
     ///
     /// It reads state from the db (both owned and shared locks), but it has no side effects.
     ///
-    /// It can be generally understood that a failure of execute_certificate indicates a
-    /// non-transient error, e.g. the transaction input is somehow invalid, the correct
-    /// locks are not held, etc. However, this is not entirely true, as a transient db read error
-    /// may also cause this function to fail.
+    /// Executes a certificate and returns an ExecutionOutput.
+    /// The function can fail with Fatal errors (e.g., the transaction input is invalid,
+    /// locks are not held correctly, etc.) or transient errors (e.g., db read errors).
     #[instrument(level = "trace", skip_all)]
     fn execute_certificate(
         &self,
@@ -1925,7 +1933,7 @@ impl AuthorityState {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         withdraw_status: BalanceWithdrawStatus,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(
+    ) -> ExecutionOutput<(
         TransactionOutputs,
         Vec<ExecutionTiming>,
         Option<ExecutionError>,
@@ -1936,20 +1944,27 @@ impl AuthorityState {
 
         // TODO: We need to move this to a more appropriate place to avoid redundant checks.
         let tx_data = certificate.data().transaction_data();
-        tx_data.validity_check(epoch_store.protocol_config())?;
+        if let Err(e) = tx_data.validity_check(epoch_store.protocol_config()) {
+            return ExecutionOutput::Fatal(e.into());
+        }
 
         // The cost of partially re-auditing a transaction before execution is tolerated.
         // This step is required for correctness because, for example, ConsensusAddressOwner
         // object owner may have changed between signing and execution.
-        let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
+        let (gas_status, input_objects) = match sui_transaction_checks::check_certificate_input(
             certificate,
             input_objects,
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
-        )?;
+        ) {
+            Ok(result) => result,
+            Err(e) => return ExecutionOutput::Fatal(e),
+        };
 
         let owned_object_refs = input_objects.inner().filter_owned_objects();
-        self.check_owned_locks(&owned_object_refs)?;
+        if let Err(e) = self.check_owned_locks(&owned_object_refs) {
+            return ExecutionOutput::Fatal(e);
+        }
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
@@ -2110,7 +2125,7 @@ impl AuthorityState {
             );
         }
 
-        Ok((transaction_outputs, timings, execution_error_opt.err()))
+        ExecutionOutput::Success((transaction_outputs, timings, execution_error_opt.err()))
     }
 
     pub fn prepare_certificate_for_benchmark(
@@ -2122,14 +2137,16 @@ impl AuthorityState {
         let lock = RwLock::new(epoch_store.epoch());
         let execution_guard = lock.try_read().unwrap();
 
-        let (transaction_outputs, _timings, execution_error_opt) = self.execute_certificate(
-            &execution_guard,
-            certificate,
-            input_objects,
-            None,
-            BalanceWithdrawStatus::NoWithdraw,
-            epoch_store,
-        )?;
+        let (transaction_outputs, _timings, execution_error_opt) = self
+            .execute_certificate(
+                &execution_guard,
+                certificate,
+                input_objects,
+                None,
+                BalanceWithdrawStatus::NoWithdraw,
+                epoch_store,
+            )
+            .unwrap();
         Ok((transaction_outputs, execution_error_opt))
     }
 
@@ -3661,24 +3678,18 @@ impl AuthorityState {
     }
 
     /// Attempts to acquire execution lock for an executable transaction.
-    /// Returns the lock if the transaction is matching current executed epoch
-    /// Returns None otherwise
+    /// Returns Some(lock) if the transaction is matching current executed epoch.
+    /// Returns None if validator is halted at epoch end or epoch mismatch.
     pub fn execution_lock_for_executable_transaction(
         &self,
         transaction: &VerifiedExecutableTransaction,
-    ) -> SuiResult<ExecutionLockReadGuard> {
-        let lock = self
-            .execution_lock
-            .try_read()
-            .map_err(|_| SuiErrorKind::ValidatorHaltedAtEpochEnd)?;
+    ) -> Option<ExecutionLockReadGuard> {
+        let lock = self.execution_lock.try_read().ok()?;
         if *lock == transaction.auth_sig().epoch() {
-            Ok(lock)
+            Some(lock)
         } else {
-            Err(SuiErrorKind::WrongEpoch {
-                expected_epoch: *lock,
-                actual_epoch: transaction.auth_sig().epoch(),
-            }
-            .into())
+            // TODO: Can this still happen?
+            None
         }
     }
 
@@ -5838,7 +5849,10 @@ impl AuthorityState {
             return Err(CheckpointBuilderError::ChangeEpochTxAlreadyExecuted);
         }
 
-        let execution_guard = self.execution_lock_for_executable_transaction(&executable_tx)?;
+        let Some(execution_guard) = self.execution_lock_for_executable_transaction(&executable_tx)
+        else {
+            return Err(CheckpointBuilderError::ChangeEpochTxAlreadyExecuted);
+        };
 
         // We must manually assign the shared object versions to the transaction before executing it.
         // This is because we do not sequence end-of-epoch transactions through consensus.
@@ -5857,14 +5871,16 @@ impl AuthorityState {
             epoch_store,
         )?;
 
-        let (transaction_outputs, _timings, _execution_error_opt) = self.execute_certificate(
-            &execution_guard,
-            &executable_tx,
-            input_objects,
-            None,
-            BalanceWithdrawStatus::NoWithdraw,
-            epoch_store,
-        )?;
+        let (transaction_outputs, _timings, _execution_error_opt) = self
+            .execute_certificate(
+                &execution_guard,
+                &executable_tx,
+                input_objects,
+                None,
+                BalanceWithdrawStatus::NoWithdraw,
+                epoch_store,
+            )
+            .unwrap();
         let system_obj = get_sui_system_state(&transaction_outputs.written)
             .expect("change epoch tx must write to system object");
 

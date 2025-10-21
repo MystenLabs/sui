@@ -1711,9 +1711,9 @@ impl AuthorityPerEpochStore {
         )
     }
 
-    pub fn acquire_tx_guard(&self, cert: &VerifiedExecutableTransaction) -> SuiResult<CertTxGuard> {
+    pub fn acquire_tx_guard(&self, cert: &VerifiedExecutableTransaction) -> CertTxGuard {
         let digest = cert.digest();
-        Ok(CertTxGuard(self.acquire_tx_lock(digest)))
+        CertTxGuard(self.acquire_tx_lock(digest))
     }
 
     /// Acquire the lock for a tx without writing to the WAL.
@@ -2455,8 +2455,8 @@ impl AuthorityPerEpochStore {
             && self.randomness_state_enabled()
             && cert.transaction_data().uses_randomness()
         {
-            // TODO(commit-handler-rewrite): propogate original deferred_from_round when re-deferring
-            // DONE(commit-handler-rewrite): propogate original deferred_from_round when re-deferring
+            // TODO(commit-handler-rewrite): propagate original deferred_from_round when re-deferring
+            // DONE(commit-handler-rewrite): propagate original deferred_from_round when re-deferring
             // (TODO and DONE are in same place because this code is shared between old and new commit handler)
             let deferred_from_round = previously_deferred_tx_digests
                 .get(cert.digest())
@@ -3714,7 +3714,7 @@ impl AuthorityPerEpochStore {
         }
 
         {
-            // TODO(commit-handler-rewrite): propogate deferral deletion to consensus output cache
+            // TODO(commit-handler-rewrite): propagate deferral deletion to consensus output cache
             let mut deferred_transactions =
                 self.consensus_output_cache.deferred_transactions.lock();
             for deleted_deferred_key in output.get_deleted_deferred_txn_keys() {

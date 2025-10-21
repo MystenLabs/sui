@@ -376,7 +376,8 @@ mod tests {
                     ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                     &epoch_store,
                 )
-                .await?;
+                .await
+                .unwrap();
             let events = if effects.events_digest().is_some() {
                 self.authority
                     .get_transaction_events(effects.transaction_digest())?
