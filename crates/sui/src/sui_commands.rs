@@ -103,18 +103,17 @@ const DEFAULT_GRAPHQL_PORT: u16 = 9125;
 
 #[derive(Args)]
 pub struct RpcArgs {
-    /// Start an indexer with default host and port: 0.0.0.0:9124. This flag accepts also a port,
-    /// a host, or both (e.g., 0.0.0.0:9124).
+    /// Start an indexer with the given PostgreSQL database URL.
     ///
-    /// When providing a specific value, please use the = sign between the flag and value:
-    /// `--with-indexer=9124` or `--with-indexer=0.0.0.0`, or `--with-indexer=0.0.0.0:9124`
-    #[clap(long,
-            default_missing_value = "0.0.0.0:9124",
-            num_args = 0..=1,
-            require_equals = true,
-            value_name = "INDEXER_HOST_PORT",
-        )]
-    with_indexer: Option<String>,
+    /// If no URL is provided, defaults to postgres://postgres:postgrespw@localhost:5432/sui_indexer
+    #[clap(
+        long,
+        default_missing_value = "postgres://postgres:postgrespw@localhost:5432/sui_indexer",
+        num_args = 0..=1,
+        require_equals = true,
+        value_name = "INDEXER_DATABASE_URL"
+    )]
+    with_indexer: Option<Url>,
 
     /// Start a Consistent Store with default host and port: 0.0.0.0:9124. This flag accepts also a
     /// port, a host, or both (e.g., 0.0.0.0:9124).
@@ -123,12 +122,12 @@ pub struct RpcArgs {
     /// `--with-consistent-store=9124` or `--with-consistent-store=0.0.0.0`, or `--with-consistent-store=0.0.0.0:9124`
     /// The Consistent Store will be automatically enabled when `--with-graphql` is set.
     #[clap(
-            long,
-            default_missing_value = "0.0.0.0:9124",
-            num_args = 0..=1,
-            require_equals = true,
-            value_name = "CONSISTENT_STORE_HOST_PORT"
-        )]
+        long,
+        default_missing_value = "0.0.0.0:9124",
+        num_args = 0..=1,
+        require_equals = true,
+        value_name = "CONSISTENT_STORE_HOST_PORT"
+    )]
     with_consistent_store: Option<String>,
 
     /// Start a GraphQL server with default host and port: 0.0.0.0:9125. This flag accepts also a
@@ -140,33 +139,13 @@ pub struct RpcArgs {
     /// Note that GraphQL requires a running indexer and consistent store, which will be enabled
     /// by default even if those flags are not set.
     #[clap(
-            long,
-            default_missing_value = "0.0.0.0:9125",
-            num_args = 0..=1,
-            require_equals = true,
-            value_name = "GRAPHQL_HOST_PORT"
-        )]
+        long,
+        default_missing_value = "0.0.0.0:9125",
+        num_args = 0..=1,
+        require_equals = true,
+        value_name = "GRAPHQL_HOST_PORT"
+    )]
     with_graphql: Option<String>,
-
-    /// Port for the Indexer Postgres DB. Default port is 5432.
-    #[clap(long, default_value = "5432")]
-    pg_port: u16,
-
-    /// Hostname for the Indexer Postgres DB. Default host is localhost.
-    #[clap(long, default_value = "localhost")]
-    pg_host: String,
-
-    /// DB name for the Indexer Postgres DB. Default DB name is sui_indexer.
-    #[clap(long, default_value = "sui_indexer")]
-    pg_db_name: String,
-
-    /// DB username for the Indexer Postgres DB. Default username is postgres.
-    #[clap(long, default_value = "postgres")]
-    pg_user: String,
-
-    /// DB password for the Indexer Postgres DB. Default password is postgrespw.
-    #[clap(long, default_value = "postgrespw")]
-    pg_password: String,
 }
 
 impl RpcArgs {
@@ -175,11 +154,6 @@ impl RpcArgs {
             with_indexer: None,
             with_consistent_store: None,
             with_graphql: None,
-            pg_port: 5432,
-            pg_host: "localhost".to_string(),
-            pg_db_name: "sui_indexer".to_string(),
-            pg_user: "postgres".to_string(),
-            pg_password: "postgrespw".to_string(),
         }
     }
 }
@@ -878,14 +852,9 @@ async fn start(
     }
 
     let RpcArgs {
-        mut with_indexer,
+        with_indexer,
         mut with_consistent_store,
         with_graphql,
-        pg_port,
-        pg_host,
-        pg_db_name,
-        pg_user,
-        pg_password,
     } = rpc_args;
 
     // Automatically enable consistent store if GraphQL is enabled
@@ -893,13 +862,15 @@ async fn start(
         with_consistent_store = Some("0.0.0.0:9124".to_string());
     }
 
-    let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
+    // Enable indexer if GraphQL is enabled or --with-indexer is explicitly provided
+    let database_url = if with_graphql.is_some() && with_indexer.is_none() {
+        // GraphQL requires indexer, use default database URL
+        Some(Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer").unwrap())
+    } else {
+        with_indexer
+    };
 
-    if with_graphql.is_some() {
-        with_indexer = Some(with_indexer.unwrap_or_default());
-    }
-
-    if with_indexer.is_some() {
+    if database_url.is_some() {
         ensure!(
             !no_full_node,
             "Cannot start the indexer without a fullnode."
@@ -1036,7 +1007,7 @@ async fn start(
     // the indexer requires to set the fullnode's data ingestion directory
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
-    if with_indexer.is_some() && data_ingestion_dir.is_none() {
+    if database_url.is_some() && data_ingestion_dir.is_none() {
         data_ingestion_dir = Some(mysten_common::tempdir()?.keep())
     }
 
@@ -1074,16 +1045,16 @@ async fn start(
     let cancel = CancellationToken::new();
     let mut rpc_services = vec![];
 
-    let pipelines = if let Some(_) = with_indexer {
+    let pipelines = if let Some(ref db_url) = database_url {
+        info!("Starting the indexer with database: {db_url}");
+
         let client_args = ClientArgs {
             local_ingestion_path: data_ingestion_dir.clone(),
             ..Default::default()
         };
 
-        let database_url = Url::parse(&pg_address).context("Invalid database URL")?;
-
         let indexer = setup_indexer(
-            database_url,
+            db_url.clone(),
             DbArgs::default(),
             IndexerArgs::default(),
             client_args,
@@ -1143,7 +1114,7 @@ async fn start(
         let address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
             .context("Invalid graphql host and port")?;
 
-        let database_url = Url::parse(&pg_address).context("Invalid database URL")?;
+        info!("Starting the GraphQL service at {address}");
 
         let graphql_args = GraphQlArgs {
             rpc_listen_address: address,
@@ -1164,7 +1135,7 @@ async fn start(
         };
 
         let handle = start_graphql(
-            Some(database_url),
+            database_url.clone(),
             None,
             fullnode_args,
             DbArgs::default(),
