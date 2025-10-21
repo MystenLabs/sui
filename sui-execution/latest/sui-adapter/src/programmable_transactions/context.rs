@@ -1917,13 +1917,10 @@ mod checked {
                 let owner = match withdraw_from {
                     WithdrawFrom::Sender => tx_context.sender(),
                     WithdrawFrom::Sponsor => {
-                        let Some(sponsor) = tx_context.sponsor() else {
-                            invariant_violation!(
-                                "WithdrawFrom::Sponsor requires a sponsor, \
-                                should have been checked at signing"
-                            );
-                        };
-                        sponsor
+                        invariant_violation!(
+                            "WithdrawFrom::Sponsor call arg not supported, \
+                            should have been checked at signing"
+                        );
                     }
                 };
                 // After this point, we can treat this like any other returned/loaded value, e.g.

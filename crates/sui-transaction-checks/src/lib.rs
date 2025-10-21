@@ -213,7 +213,7 @@ mod checked {
             protocol_config,
             reference_gas_price,
             transaction,
-            transaction.gas_data().is_paid_from_address_balance(),
+            transaction.is_gas_paid_from_address_balance(),
         )?;
         check_objects(transaction, input_objects)?;
 
