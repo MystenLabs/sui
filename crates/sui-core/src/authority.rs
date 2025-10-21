@@ -800,8 +800,9 @@ pub struct ExecutionEnv {
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
     /// The source of the scheduling of the transaction.
     pub scheduling_source: SchedulingSource,
-    /// Status of the balance withdraw scheduling of the transaction.
-    pub withdraw_status: BalanceWithdrawStatus,
+    /// Status of the balance withdraw scheduling of the transaction,
+    /// including both address and object balance withdraws.
+    pub balance_withdraw_status: BalanceWithdrawStatus,
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
@@ -813,7 +814,7 @@ impl Default for ExecutionEnv {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
             scheduling_source: SchedulingSource::NonFastPath,
-            withdraw_status: BalanceWithdrawStatus::NoWithdraw,
+            balance_withdraw_status: BalanceWithdrawStatus::Unknown,
             barrier_dependencies: Default::default(),
         }
     }
@@ -842,13 +843,8 @@ impl ExecutionEnv {
         self
     }
 
-    pub fn with_sufficient_balance(mut self) -> Self {
-        self.withdraw_status = BalanceWithdrawStatus::SufficientBalance;
-        self
-    }
-
     pub fn with_insufficient_balance(mut self) -> Self {
-        self.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
+        self.balance_withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
         self
     }
 
@@ -1744,7 +1740,7 @@ impl AuthorityState {
         &self,
         tx_lock: &CertLockGuard,
         certificate: &VerifiedExecutableTransaction,
-        assigned_shared_object_versions: AssignedVersions,
+        assigned_shared_object_versions: &AssignedVersions,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<InputObjects> {
         let _scope = monitored_scope("Execution::load_input_objects");
@@ -1757,7 +1753,7 @@ impl AuthorityState {
             &certificate.key(),
             tx_lock,
             input_objects,
-            &assigned_shared_object_versions,
+            assigned_shared_object_versions,
             epoch_store.epoch(),
         )
     }
@@ -1852,7 +1848,7 @@ impl AuthorityState {
         let input_objects = match self.read_objects_for_execution(
             tx_guard.as_lock_guard(),
             certificate,
-            execution_env.assigned_versions,
+            &execution_env.assigned_versions,
             epoch_store,
         ) {
             Ok(objects) => objects,
@@ -1888,7 +1884,7 @@ impl AuthorityState {
             certificate,
             input_objects,
             expected_effects_digest,
-            execution_env.withdraw_status,
+            execution_env,
             epoch_store,
         )
     }
@@ -2001,7 +1997,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
-        withdraw_status: BalanceWithdrawStatus,
+        execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> ExecutionOutput<(
         TransactionOutputs,
@@ -2043,7 +2039,7 @@ impl AuthorityState {
             &tx_digest,
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
-            &withdraw_status,
+            &execution_env.balance_withdraw_status,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2052,8 +2048,7 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
-        #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
+        let (inner_temp_store, _, effects, timings, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 &tracking_store,
                 protocol_config,
@@ -2077,6 +2072,13 @@ impl AuthorityState {
                 tx_digest,
                 &mut None,
             );
+
+        if !self
+            .execution_scheduler
+            .should_commit_object_balance_withdraws(certificate, &effects, &execution_env)
+        {
+            return ExecutionOutput::RetryLater;
+        }
 
         if let Some(expected_effects_digest) = expected_effects_digest
             && effects.digest() != expected_effects_digest
@@ -2213,7 +2215,7 @@ impl AuthorityState {
                 certificate,
                 input_objects,
                 None,
-                BalanceWithdrawStatus::NoWithdraw,
+                ExecutionEnv::default(),
                 epoch_store,
             )
             .unwrap();
@@ -2357,7 +2359,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::Unknown,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2565,7 +2567,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::Unknown,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2810,7 +2812,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::Unknown,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -5948,7 +5950,7 @@ impl AuthorityState {
         let input_objects = self.read_objects_for_execution(
             &tx_lock,
             &executable_tx,
-            assigned_versions,
+            &assigned_versions,
             epoch_store,
         )?;
 
@@ -5958,7 +5960,7 @@ impl AuthorityState {
                 &executable_tx,
                 input_objects,
                 None,
-                BalanceWithdrawStatus::NoWithdraw,
+                ExecutionEnv::default(),
                 epoch_store,
             )
             .unwrap();

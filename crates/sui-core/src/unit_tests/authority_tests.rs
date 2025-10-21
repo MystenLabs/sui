@@ -6767,7 +6767,7 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
     // Create an execution environment with insufficient balance status
     let mut execution_env =
         ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath);
-    execution_env.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
+    execution_env.balance_withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
 
     // Test that the transaction fails with InsufficientBalanceForWithdraw error
     let (effects, execution_error) = state
@@ -6778,18 +6778,12 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
     // Check that we got an execution error due to insufficient balance
     assert!(execution_error.is_some());
     let error = execution_error.unwrap();
-    assert_eq!(
-        error.kind(),
-        &ExecutionFailureStatus::InsufficientBalanceForWithdraw
-    );
+    assert_eq!(error.kind(), &ExecutionFailureStatus::InsufficientFunds);
 
     // Check that the transaction status shows failure
     assert!(effects.status().is_err());
     if let ExecutionStatus::Failure { error, .. } = effects.status() {
-        assert_eq!(
-            error,
-            &ExecutionFailureStatus::InsufficientBalanceForWithdraw
-        );
+        assert_eq!(error, &ExecutionFailureStatus::InsufficientFunds);
     } else {
         panic!("Expected execution status to be Failure");
     }
