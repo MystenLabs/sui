@@ -15006,6 +15006,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-alt-object-store"
+version = "1.60.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "object_store",
+ "serde",
+ "serde_json",
+ "sui-indexer-alt-framework-store-traits",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-indexer-alt-reader"
 version = "1.60.0"
 dependencies = [
