@@ -5,6 +5,7 @@ use crate::{
     accumulator_event::AccumulatorEvent,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
+    error::SuiError,
     event::Event,
     is_system_package,
     object::{Data, Object, Owner},
@@ -316,3 +317,49 @@ impl ExecutionTiming {
 }
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
+
+/// Captures the output of executing a transaction in the execution driver.
+pub enum ExecutionOutput<T> {
+    /// The expected typical path - transaction executed successfully.
+    Success(T),
+    /// Validator has halted at epoch end or epoch mismatch. This is a valid state that should
+    /// be handled gracefully.
+    EpochEnded,
+    /// Execution failed with an error. This should never happen - we use fatal! when encountered.
+    Fatal(SuiError),
+    /// Execution should be retried later due to unsatisfied constraints such as insufficient object
+    /// balance withdrawals that require waiting for the balance to reach a deterministic amount.
+    /// When this happens, the transaction is auto-rescheduled from AuthorityState.
+    RetryLater,
+}
+
+impl<T> ExecutionOutput<T> {
+    /// Unwraps the ExecutionOutput, panicking if it's not Success.
+    /// This is primarily for test code.
+    pub fn unwrap(self) -> T {
+        match self {
+            ExecutionOutput::Success(value) => value,
+            ExecutionOutput::EpochEnded => {
+                panic!("called `ExecutionOutput::unwrap()` on `EpochEnded`")
+            }
+            ExecutionOutput::Fatal(e) => {
+                panic!("called `ExecutionOutput::unwrap()` on `Fatal`: {e}")
+            }
+            ExecutionOutput::RetryLater => {
+                panic!("called `ExecutionOutput::unwrap()` on `RetryLater`")
+            }
+        }
+    }
+
+    /// Expect the execution output to be an error (i.e. not Success).
+    pub fn unwrap_err<S>(self) -> ExecutionOutput<S> {
+        match self {
+            Self::Success(_) => {
+                panic!("called `ExecutionOutput::unwrap_err()` on `Success`")
+            }
+            Self::EpochEnded => ExecutionOutput::EpochEnded,
+            Self::Fatal(e) => ExecutionOutput::Fatal(e),
+            Self::RetryLater => ExecutionOutput::RetryLater,
+        }
+    }
+}
