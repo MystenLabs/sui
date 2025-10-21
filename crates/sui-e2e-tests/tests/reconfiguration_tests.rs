@@ -21,7 +21,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
-use sui_types::error::SuiError;
+use sui_types::error::SuiErrorKind;
 use sui_types::governance::{
     VALIDATOR_LOW_POWER_PHASE_1, VALIDATOR_MIN_POWER_PHASE_1, VALIDATOR_VERY_LOW_POWER_PHASE_1,
 };
@@ -77,7 +77,7 @@ async fn test_transaction_expiration() {
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains(&SuiError::TransactionExpired.to_string()));
+        .contains(&SuiErrorKind::TransactionExpired.to_string()));
 
     // Non expired transaction signed without issue
     *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);

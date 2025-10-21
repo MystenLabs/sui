@@ -30,7 +30,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     transaction::*,
 };
 use tap::TapFallible;
@@ -190,7 +190,7 @@ impl<C: Clone> SafeClient<C> {
     fn get_committee(&self, epoch_id: &EpochId) -> SuiResult<Arc<Committee>> {
         self.committee_store
             .get_committee(epoch_id)?
-            .ok_or(SuiError::MissingCommitteeAtEpoch(*epoch_id))
+            .ok_or(SuiErrorKind::MissingCommitteeAtEpoch(*epoch_id).into())
     }
 
     fn check_signed_effects_plain(
@@ -202,30 +202,33 @@ impl<C: Clone> SafeClient<C> {
         // Check it has the right signer
         fp_ensure!(
             signed_effects.auth_sig().authority == self.address,
-            SuiError::ByzantineAuthoritySuspicion {
+            SuiErrorKind::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: format!(
                     "Unexpected validator address in the signed effects signature: {:?}",
                     signed_effects.auth_sig().authority
                 ),
             }
+            .into()
         );
         // Checks it concerns the right tx
         fp_ensure!(
             signed_effects.data().transaction_digest() == digest,
-            SuiError::ByzantineAuthoritySuspicion {
+            SuiErrorKind::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: "Unexpected tx digest in the signed effects".to_string()
             }
+            .into()
         );
         // check that the effects digest is correct.
         if let Some(effects_digest) = expected_effects_digest {
             fp_ensure!(
                 signed_effects.digest() == effects_digest,
-                SuiError::ByzantineAuthoritySuspicion {
+                SuiErrorKind::ByzantineAuthoritySuspicion {
                     authority: self.address,
                     reason: "Effects digest does not match with expected digest".to_string()
                 }
+                .into()
             );
         }
         self.get_committee(&signed_effects.epoch())?;
@@ -240,10 +243,11 @@ impl<C: Clone> SafeClient<C> {
     ) -> SuiResult<PlainTransactionInfoResponse> {
         fp_ensure!(
             digest == transaction.digest(),
-            SuiError::ByzantineAuthoritySuspicion {
+            SuiErrorKind::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: "Signed transaction digest does not match with expected digest".to_string()
             }
+            .into()
         );
         match status {
             TransactionStatus::Signed(signed) => {
@@ -262,7 +266,7 @@ impl<C: Clone> SafeClient<C> {
                             cert,
                         );
                         ct.verify_committee_sigs_only(&committee).map_err(|e| {
-                            SuiError::FailedToVerifyTxCertWithExecutedEffects {
+                            SuiErrorKind::FailedToVerifyTxCertWithExecutedEffects {
                                 validator_name: self.address,
                                 error: e.to_string(),
                             }
@@ -296,10 +300,11 @@ impl<C: Clone> SafeClient<C> {
 
         fp_ensure!(
             request.object_id == object.id(),
-            SuiError::ByzantineAuthoritySuspicion {
+            SuiErrorKind::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: "Object id mismatch in the response".to_string()
             }
+            .into()
         );
 
         Ok(VerifiedObjectInfoResponse { object })
@@ -420,11 +425,12 @@ where
             (None, None) | (None, Some(_)) => Ok(()),
             (Some(events), None) => {
                 if !events.data.is_empty() {
-                    Err(SuiError::ByzantineAuthoritySuspicion {
+                    Err(SuiErrorKind::ByzantineAuthoritySuspicion {
                         authority: self.address,
                         reason: "Returned events but no event digest present in effects"
                             .to_string(),
-                    })
+                    }
+                    .into())
                 } else {
                     Ok(())
                 }
@@ -432,10 +438,11 @@ where
             (Some(events), Some(events_digest)) => {
                 fp_ensure!(
                     &events.digest() == events_digest,
-                    SuiError::ByzantineAuthoritySuspicion {
+                    SuiErrorKind::ByzantineAuthoritySuspicion {
                         authority: self.address,
                         reason: "Returned events don't match events digest in effects".to_string(),
                     }
+                    .into()
                 );
                 Ok(())
             }
@@ -455,10 +462,11 @@ where
                     .get(&object_ref.0)
                     .is_none_or(|expect| &object_ref != expect)
                 {
-                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                    return Err(SuiErrorKind::ByzantineAuthoritySuspicion {
                         authority: self.address,
                         reason: "Returned object that wasn't present in effects".to_string(),
-                    });
+                    }
+                    .into());
                 }
             }
         }

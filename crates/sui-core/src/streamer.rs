@@ -12,7 +12,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use sui_json_rpc_types::Filter;
 use sui_types::base_types::ObjectID;
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, SuiErrorKind};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, warn};
@@ -147,9 +147,10 @@ where
                 .with_label_values(&[self.metrics_label])
                 .inc();
 
-            SuiError::FailedToDispatchSubscription {
+            SuiErrorKind::FailedToDispatchSubscription {
                 error: e.to_string(),
             }
+            .into()
         })
     }
 }

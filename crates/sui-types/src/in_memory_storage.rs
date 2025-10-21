@@ -3,6 +3,7 @@
 
 use crate::base_types::VersionNumber;
 use crate::committee::EpochId;
+use crate::error::SuiErrorKind;
 use crate::inner_temporary_store::WrittenObjects;
 use crate::storage::{
     get_module, get_module_by_id, load_package_object_from_object_store, PackageObject,
@@ -47,17 +48,19 @@ impl ChildObjectResolver for InMemoryStorage {
         };
         let parent = *parent;
         if child_object.owner != Owner::ObjectOwner(parent.into()) {
-            return Err(SuiError::InvalidChildObjectAccess {
+            return Err(SuiErrorKind::InvalidChildObjectAccess {
                 object: *child,
                 given_parent: parent,
                 actual_owner: child_object.owner.clone(),
-            });
+            }
+            .into());
         }
         if child_object.version() > child_version_upper_bound {
-            return Err(SuiError::UnsupportedFeatureError {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
                     .to_owned(),
-            });
+            }
+            .into());
         }
         Ok(Some(child_object))
     }

@@ -875,7 +875,7 @@ async fn test_entry_point_vector_empty() {
     .unwrap_err();
     assert_eq!(
         err,
-        SuiError::UserInputError {
+        SuiErrorKind::UserInputError {
             error: UserInputError::EmptyCommandInput
         }
     );
@@ -905,7 +905,7 @@ async fn test_entry_point_vector_empty() {
     .unwrap_err();
     assert_eq!(
         err,
-        SuiError::UserInputError {
+        SuiErrorKind::UserInputError {
             error: UserInputError::EmptyCommandInput
         }
     );
@@ -2745,7 +2745,7 @@ async fn test_make_move_vec_empty() {
     .unwrap_err();
     assert_eq!(
         result,
-        SuiError::UserInputError {
+        SuiErrorKind::UserInputError {
             error: UserInputError::EmptyCommandInput
         }
     );
@@ -2787,7 +2787,7 @@ async fn test_object_no_id_error() {
     path.extend(["src", "unit_tests", "data", "object_no_id"]);
     let res = build_config.build(&path);
 
-    matches!(res.err(), Some(SuiError::ExecutionError(err_str)) if
+    matches!(res.err().map(|e|e.into_inner()), Some(SuiErrorKind::ExecutionError(err_str)) if
                  err_str.contains("SuiMoveVerificationError")
                  && err_str.contains("First field of struct NotObject must be 'id'"));
 }

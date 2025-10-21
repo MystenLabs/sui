@@ -6,6 +6,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
+use sui_types::error::SuiErrorKind;
 use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObject};
 use sui_types::{
     base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
@@ -239,18 +240,20 @@ impl ChildObjectResolver for InMemoryStore {
 
         let parent = *parent;
         if child_object.owner != Owner::ObjectOwner(parent.into()) {
-            return Err(SuiError::InvalidChildObjectAccess {
+            return Err(SuiErrorKind::InvalidChildObjectAccess {
                 object: *child,
                 given_parent: parent,
                 actual_owner: child_object.owner.clone(),
-            });
+            }
+            .into());
         }
 
         if child_object.version() > child_version_upper_bound {
-            return Err(SuiError::UnsupportedFeatureError {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
                     .to_owned(),
-            });
+            }
+            .into());
         }
 
         Ok(Some(child_object))

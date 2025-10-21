@@ -37,7 +37,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
 use sui_types::error::ExecutionError;
-use sui_types::error::SuiError;
+use sui_types::error::SuiErrorKind;
 use sui_types::error::SuiResult;
 use sui_types::event::Event;
 use sui_types::executable_transaction::{ExecutableTransaction, VerifiedExecutableTransaction};
@@ -291,7 +291,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             .fullnode
             .get_system_state()
             .map_err(|e| {
-                SuiError::SuiSystemStateReadError(format!(
+                SuiErrorKind::SuiSystemStateReadError(format!(
                     "Failed to get system state from fullnode: {}",
                     e
                 ))

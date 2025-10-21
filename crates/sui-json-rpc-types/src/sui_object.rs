@@ -27,7 +27,8 @@ use sui_types::base_types::{
     TransactionDigest,
 };
 use sui_types::error::{
-    ExecutionError, SuiError, SuiObjectResponseError, SuiResult, UserInputError, UserInputResult,
+    ExecutionError, SuiErrorKind, SuiObjectResponseError, SuiResult, UserInputError,
+    UserInputResult,
 };
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -783,7 +784,7 @@ impl SuiData for SuiParsedData {
             // this function is only from JSON RPC - it is OK to deserialize with max Move binary
             // version
             let module = move_binary_format::CompiledModule::deserialize_with_defaults(bytecode)
-                .map_err(|error| SuiError::ModuleDeserializationFailure {
+                .map_err(|error| SuiErrorKind::ModuleDeserializationFailure {
                     error: error.to_string(),
                 })?;
             let d = move_disassembler::disassembler::Disassembler::from_module_with_max_size(
@@ -791,14 +792,14 @@ impl SuiData for SuiParsedData {
                 move_ir_types::location::Spanned::unsafe_no_loc(()).loc,
                 *sui_types::move_package::MAX_DISASSEMBLED_MODULE_SIZE,
             )
-            .map_err(|e| SuiError::ObjectSerializationError {
+            .map_err(|e| SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             })?;
-            let bytecode_str = d
-                .disassemble()
-                .map_err(|e| SuiError::ObjectSerializationError {
-                    error: e.to_string(),
-                })?;
+            let bytecode_str =
+                d.disassemble()
+                    .map_err(|e| SuiErrorKind::ObjectSerializationError {
+                        error: e.to_string(),
+                    })?;
             disassembled.insert(module.name().to_string(), Value::String(bytecode_str));
         }
 
@@ -952,9 +953,10 @@ pub fn type_and_fields_from_move_event_data(
             SuiMoveStruct::WithTypes { type_, .. } => {
                 Ok((type_.clone(), move_struct.clone().to_json_value()))
             }
-            _ => Err(SuiError::ObjectDeserializationError {
+            _ => Err(SuiErrorKind::ObjectDeserializationError {
                 error: "Found non-type SuiMoveStruct in MoveValue event".to_string(),
-            }),
+            }
+            .into()),
         },
         SuiMoveValue::Variant(v) => Ok((v.type_.clone(), v.clone().to_json_value())),
         SuiMoveValue::Vector(_)
@@ -963,9 +965,10 @@ pub fn type_and_fields_from_move_event_data(
         | SuiMoveValue::Address(_)
         | SuiMoveValue::String(_)
         | SuiMoveValue::UID { .. }
-        | SuiMoveValue::Option(_) => Err(SuiError::ObjectDeserializationError {
+        | SuiMoveValue::Option(_) => Err(SuiErrorKind::ObjectDeserializationError {
             error: "Invalid MoveValue event type -- this should not be possible".to_string(),
-        }),
+        }
+        .into()),
     }
 }
 

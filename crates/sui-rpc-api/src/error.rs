@@ -106,14 +106,14 @@ impl From<bcs::Error> for RpcError {
 impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
     fn from(error: sui_types::quorum_driver_types::QuorumDriverError) -> Self {
         use itertools::Itertools;
-        use sui_types::error::SuiError;
+        use sui_types::error::SuiErrorKind;
         use sui_types::quorum_driver_types::QuorumDriverError::*;
 
         match error {
             InvalidUserSignature(err) => {
                 let message = {
-                    let err = match err {
-                        SuiError::UserInputError { error } => error.to_string(),
+                    let err = match err.as_inner() {
+                        SuiErrorKind::UserInputError { error } => error.to_string(),
                         _ => err.to_string(),
                     };
                     format!("Invalid user signature: {err}")
@@ -134,7 +134,7 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                     .collect::<std::collections::BTreeMap<_, Vec<_>>>();
 
                 let message = format!(
-                        "Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions:\n{new_map:#?}",  
+                        "Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions:\n{new_map:#?}",
                     );
 
                 RpcError::new(Code::FailedPrecondition, message)
@@ -159,7 +159,7 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                     // sort by total stake, descending, so users see the most prominent one first
                     .sorted_by(|(_, a, _), (_, b, _)| b.cmp(a))
                     .filter_map(|(err, _, _)| {
-                        match &err {
+                        match err.as_inner(){
                             // Special handling of UserInputError:
                             // ObjectNotFound and DependentPackageNotFound are considered
                             // retryable errors but they have different treatment
@@ -170,7 +170,7 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                             // So, we take an easier route and consider them non-retryable
                             // at all. Combining this with the sorting above, clients will
                             // see the dominant error first.
-                            SuiError::UserInputError { error } => Some(error.to_string()),
+                            SuiErrorKind::UserInputError { error } => Some(error.to_string()),
                             _ => {
                                 if err.is_retryable().0 {
                                     None

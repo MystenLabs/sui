@@ -34,6 +34,7 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::error::SuiErrorKind;
 use sui_types::execution_params::{
     get_early_execution_error, BalanceWithdrawStatus, ExecutionOrEarlyError,
 };
@@ -1892,7 +1893,7 @@ impl BackingPackageStore for LocalExec {
             // If package not present fetch it from the network
             self_
                 .get_or_download_object(package_id, true /* we expect a Move package*/)
-                .map_err(|e| SuiError::Storage(e.to_string()))
+                .map_err(|e| SuiErrorKind::Storage(e.to_string()).into())
         }
 
         let res = inner(self, package_id);
@@ -1929,18 +1930,20 @@ impl ChildObjectResolver for LocalExec {
                 };
             let child_version = child_object.version();
             if child_object.version() > child_version_upper_bound {
-                return Err(SuiError::Unknown(format!(
+                return Err(SuiErrorKind::Unknown(format!(
                     "Invariant Violation. Replay loaded child_object {child} at version \
                     {child_version} but expected the version to be <= {child_version_upper_bound}"
-                )));
+                ))
+                .into());
             }
             let parent = *parent;
             if child_object.owner != Owner::ObjectOwner(parent.into()) {
-                return Err(SuiError::InvalidChildObjectAccess {
+                return Err(SuiErrorKind::InvalidChildObjectAccess {
                     object: *child,
                     given_parent: parent,
                     actual_owner: child_object.owner.clone(),
-                });
+                }
+                .into());
             }
             Ok(Some(child_object))
         }
@@ -1977,10 +1980,10 @@ impl ChildObjectResolver for LocalExec {
                 Some(o) => o,
             };
             if recv_object.version() != receive_object_at_version {
-                return Err(SuiError::Unknown(format!(
+                return Err(SuiErrorKind::Unknown(format!(
                     "Invariant Violation. Replay loaded child_object {receiving_object_id} at version \
                     {receive_object_at_version} but expected the version to be == {receive_object_at_version}"
-                )));
+                )).into());
             }
             if recv_object.owner != Owner::AddressOwner((*owner).into()) {
                 return Ok(None);

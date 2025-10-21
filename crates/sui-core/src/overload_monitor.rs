@@ -11,7 +11,7 @@ use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::digests::TransactionDigest;
-use sui_types::error::SuiError;
+use sui_types::error::SuiErrorKind;
 use sui_types::error::SuiResult;
 use sui_types::fp_bail;
 use tokio::time::sleep;
@@ -249,9 +249,10 @@ pub fn overload_monitor_accept_tx(
     if should_reject_tx(load_shedding_percentage, tx_digest, temporal_seed) {
         // TODO: using `SEED_UPDATE_DURATION_SECS` is a safe suggestion that the time based seed
         // is definitely different by then. However, a shorter suggestion may be available.
-        fp_bail!(SuiError::ValidatorOverloadedRetryAfter {
+        fp_bail!(SuiErrorKind::ValidatorOverloadedRetryAfter {
             retry_after_secs: SEED_UPDATE_DURATION_SECS
-        });
+        }
+        .into());
     }
     Ok(())
 }

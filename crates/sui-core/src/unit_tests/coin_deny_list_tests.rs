@@ -18,7 +18,7 @@ use sui_types::deny_list_v2::{
     check_address_denied_by_config, check_global_pause, get_per_type_coin_deny_list_v2, DenyCapV2,
 };
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
@@ -286,8 +286,8 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
         .await
         .expect_err("signing should fail for denied address");
 
-    match err {
-        SuiError::UserInputError {
+    match err.into_inner() {
+        SuiErrorKind::UserInputError {
             error: UserInputError::AddressDeniedForCoin { address, coin_type },
         } => {
             assert_eq!(address, denied_address);

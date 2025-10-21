@@ -540,7 +540,7 @@ mod tests {
     use sui_types::coin::TreasuryCap;
     use sui_types::digests::{ObjectDigest, TransactionDigest};
     use sui_types::effects::{TransactionEffects, TransactionEvents};
-    use sui_types::error::{SuiError, SuiResult};
+    use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
     use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
@@ -1002,7 +1002,7 @@ mod tests {
                 .expect_get_owned_coins()
                 .returning(move |_, _, _, _| {
                     Err(StateReadError::Client(
-                        SuiError::IndexStoreNotAvailable.into(),
+                        SuiErrorKind::IndexStoreNotAvailable.into(),
                     ))
                 });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
@@ -1028,7 +1028,7 @@ mod tests {
             mock_state
                 .expect_get_owned_coins()
                 .returning(move |_, _, _, _| {
-                    Err(SuiError::Storage("mock rocksdb error".to_string()).into())
+                    Err(SuiErrorKind::Storage("mock rocksdb error".to_string()).into())
                 });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
@@ -1283,7 +1283,7 @@ mod tests {
             let mut mock_state = MockStateRead::new();
             mock_state.expect_get_balance().returning(move |_, _| {
                 Err(StateReadError::Client(
-                    SuiError::IndexStoreNotAvailable.into(),
+                    SuiErrorKind::IndexStoreNotAvailable.into(),
                 ))
             });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
@@ -1308,7 +1308,7 @@ mod tests {
             let coin_type = get_test_coin_type(get_test_package_id());
             let mut mock_state = MockStateRead::new();
             mock_state.expect_get_balance().returning(move |_, _| {
-                Err(SuiError::ExecutionError("mock db error".to_string()).into())
+                Err(SuiErrorKind::ExecutionError("mock db error".to_string()).into())
             });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
@@ -1328,6 +1328,8 @@ mod tests {
     }
 
     mod get_all_balances_tests {
+        use sui_types::error::SuiErrorKind;
+
         use super::super::*;
         use super::*;
 
@@ -1398,7 +1400,7 @@ mod tests {
             let mut mock_state = MockStateRead::new();
             mock_state.expect_get_all_balance().returning(move |_| {
                 Err(StateReadError::Client(
-                    SuiError::IndexStoreNotAvailable.into(),
+                    SuiError(Box::new(SuiErrorKind::IndexStoreNotAvailable)).into(),
                 ))
             });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);

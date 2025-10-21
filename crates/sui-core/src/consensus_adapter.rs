@@ -40,7 +40,7 @@ use sui_simulator::anemo::PeerId;
 use sui_types::base_types::AuthorityName;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::ConsensusTransactionKind;
@@ -662,7 +662,7 @@ impl ConsensusAdapter {
                             transaction.kind,
                             ConsensusTransactionKind::UserTransaction(_)
                         ),
-                        SuiError::InvalidTxKindInSoftBundle
+                        SuiErrorKind::InvalidTxKindInSoftBundle.into()
                     );
                 } else if is_cert_batch {
                     fp_ensure!(
@@ -670,11 +670,11 @@ impl ConsensusAdapter {
                             transaction.kind,
                             ConsensusTransactionKind::CertifiedTransaction(_)
                         ),
-                        SuiError::InvalidTxKindInSoftBundle
+                        SuiErrorKind::InvalidTxKindInSoftBundle.into()
                     );
                 } else {
                     // Other transaction kinds cannot be batched
-                    return Err(SuiError::InvalidTxKindInSoftBundle);
+                    return Err(SuiErrorKind::InvalidTxKindInSoftBundle.into());
                 }
             }
         }
@@ -1245,7 +1245,7 @@ impl ConsensusOverloadChecker for ConsensusAdapter {
     fn check_consensus_overload(&self) -> SuiResult {
         fp_ensure!(
             self.check_limits(),
-            SuiError::TooManyTransactionsPendingConsensus
+            SuiErrorKind::TooManyTransactionsPendingConsensus.into()
         );
         Ok(())
     }
@@ -1443,7 +1443,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         let permit = match self.submit_semaphore.clone().try_acquire_owned() {
             Ok(permit) => permit,
             Err(_) => {
-                return Err(SuiError::TooManyTransactionsPendingConsensus);
+                return Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into());
             }
         };
 

@@ -7,6 +7,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
+    error::SuiErrorKind,
     move_package::UpgradePolicy,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -22,7 +23,7 @@ use std::{
     sync::Arc,
 };
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::UserInputError;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
 };
@@ -1568,7 +1569,7 @@ async fn test_upgrade_more_than_max_packages_error() {
         .unwrap_err();
     assert_eq!(
         err,
-        SuiError::UserInputError {
+        SuiErrorKind::UserInputError {
             error: UserInputError::MaxPublishCountExceeded {
                 max_publish_commands: max_pub_cmd,
                 publish_count: max_pub_cmd + 2,

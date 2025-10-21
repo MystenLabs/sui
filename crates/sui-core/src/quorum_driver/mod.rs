@@ -35,7 +35,7 @@ use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use std::fmt::Write;
 use sui_macros::fail_point;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::transaction::{CertifiedTransaction, Transaction};
 
 use self::reconfig_observer::ReconfigObserver;
@@ -132,8 +132,11 @@ impl<A: Clone> QuorumDriver<A> {
                         .observe(task.retry_times as f64);
                 }
             })
-            .map_err(|e| SuiError::QuorumDriverCommunicationError {
-                error: e.to_string(),
+            .map_err(|e| {
+                SuiErrorKind::QuorumDriverCommunicationError {
+                    error: e.to_string(),
+                }
+                .into()
             })
     }
 

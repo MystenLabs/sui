@@ -1782,7 +1782,7 @@ pub enum TransactionExpiration {
     /// is greater than or equal to the current epoch
     Epoch(EpochId),
     /// ValidDuring enables gas payments from address balances.
-    ///  
+    ///
     /// When transactions use address balances for gas payment instead of explicit gas coins,
     /// we lose the natural transaction uniqueness and replay prevention that comes from
     /// mutation of gas coin objects.
@@ -2811,8 +2811,11 @@ impl SenderSignedData {
     }
 
     pub fn serialized_size(&self) -> SuiResult<usize> {
-        bcs::serialized_size(self).map_err(|e| SuiError::TransactionSerializationError {
-            error: e.to_string(),
+        bcs::serialized_size(self).map_err(|e| {
+            SuiErrorKind::TransactionSerializationError {
+                error: e.to_string(),
+            }
+            .into()
         })
     }
 
@@ -2821,29 +2824,32 @@ impl SenderSignedData {
             match sig {
                 GenericSignature::MultiSig(_) => {
                     if !config.supports_upgraded_multisig() {
-                        return Err(SuiError::UserInputError {
+                        return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "upgraded multisig format not enabled on this network".to_string(),
                             ),
-                        });
+                        }
+                        .into());
                     }
                 }
                 GenericSignature::ZkLoginAuthenticator(_) => {
                     if !config.zklogin_auth() {
-                        return Err(SuiError::UserInputError {
+                        return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "zklogin is not enabled on this network".to_string(),
                             ),
-                        });
+                        }
+                        .into());
                     }
                 }
                 GenericSignature::PasskeyAuthenticator(_) => {
                     if !config.passkey_auth() {
-                        return Err(SuiError::UserInputError {
+                        return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "passkey is not enabled on this network".to_string(),
                             ),
-                        });
+                        }
+                        .into());
                     }
                 }
                 GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
@@ -2866,11 +2872,12 @@ impl SenderSignedData {
         let tx_data = &self.transaction_data();
         fp_ensure!(
             !tx_data.is_system_tx(),
-            SuiError::UserInputError {
+            SuiErrorKind::UserInputError {
                 error: UserInputError::Unsupported(
                     "SenderSignedData must not contain system transaction".to_string()
                 )
             }
+            .into()
         );
 
         // Checks to see if the transaction has expired
@@ -2880,7 +2887,7 @@ impl SenderSignedData {
             }
             TransactionExpiration::Epoch(exp_epoch) => {
                 if *exp_epoch < context.epoch {
-                    return Err(SuiError::TransactionExpired);
+                    return Err(SuiErrorKind::TransactionExpired.into());
                 }
             }
             TransactionExpiration::ValidDuring {
@@ -2890,22 +2897,23 @@ impl SenderSignedData {
                 ..
             } => {
                 if *chain != context.chain_identifier {
-                    return Err(SuiError::UserInputError {
+                    return Err(SuiErrorKind::UserInputError {
                         error: UserInputError::InvalidChainId {
                             provided: format!("{:?}", chain),
                             expected: format!("{:?}", context.chain_identifier),
                         },
-                    });
+                    }
+                    .into());
                 }
 
                 if let Some(min) = min_epoch {
                     if context.epoch < *min {
-                        return Err(SuiError::TransactionExpired);
+                        return Err(SuiErrorKind::TransactionExpired.into());
                     }
                 }
                 if let Some(max) = max_epoch {
                     if context.epoch > *max {
-                        return Err(SuiError::TransactionExpired);
+                        return Err(SuiErrorKind::TransactionExpired.into());
                     }
                 }
             }
@@ -2915,11 +2923,12 @@ impl SenderSignedData {
             fp_ensure!(
                 context.config.enable_accumulators()
                     && context.accumulator_object_init_shared_version.is_some(),
-                SuiError::UserInputError {
+                SuiErrorKind::UserInputError {
                     error: UserInputError::Unsupported(
                         "Address balance withdraw is not enabled".to_string()
                     )
                 }
+                .into()
             );
             tx_data.process_funds_withdrawals()?;
         }
@@ -2929,7 +2938,7 @@ impl SenderSignedData {
         let max_tx_size_bytes = context.config.max_tx_size_bytes();
         fp_ensure!(
             tx_size as u64 <= max_tx_size_bytes,
-            SuiError::UserInputError {
+            SuiErrorKind::UserInputError {
                 error: UserInputError::SizeLimitExceeded {
                     limit: format!(
                         "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
@@ -2937,6 +2946,7 @@ impl SenderSignedData {
                     value: tx_size.to_string(),
                 }
             }
+            .into()
         );
 
         tx_data

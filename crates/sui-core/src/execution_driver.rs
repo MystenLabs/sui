@@ -7,7 +7,7 @@ use mysten_common::{fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_macros::fail_point_async;
-use sui_types::error::SuiError;
+use sui_types::error::SuiErrorKind;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot, Semaphore};
 use tracing::{error_span, info, trace, warn, Instrument};
 
@@ -121,8 +121,8 @@ pub async fn execution_process(
                 &certificate,
                 execution_env,
                 &epoch_store_clone,
-            ).await {
-                Err(SuiError::ValidatorHaltedAtEpochEnd) => {
+            ).await.map_err(|e| e.into_inner()) {
+                Err(SuiErrorKind::ValidatorHaltedAtEpochEnd) => {
                     warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
                     return;
                 }

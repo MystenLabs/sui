@@ -9,7 +9,7 @@ use crate::authority::{
 use move_binary_format::CompiledModule;
 use sui_types::{
     base_types::ObjectID,
-    error::UserInputError,
+    error::{SuiErrorKind, UserInputError},
     object::{Data, ObjectRead, Owner},
     transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     utils::to_sender_signed_transaction,
@@ -17,10 +17,7 @@ use sui_types::{
 
 use move_package::source_package::manifest_parser;
 use sui_move_build::{check_unpublished_dependencies, gather_published_ids, BuildConfig};
-use sui_types::{
-    crypto::{get_key_pair, AccountKeyPair},
-    error::SuiError,
-};
+use sui_types::crypto::{get_key_pair, AccountKeyPair};
 
 use crate::authority::move_integration_tests::{
     build_multi_publish_txns, build_package, run_multi_txns,
@@ -123,7 +120,7 @@ async fn test_publish_empty_package() {
         .unwrap_err();
     assert_eq!(
         err,
-        SuiError::UserInputError {
+        SuiErrorKind::UserInputError {
             error: UserInputError::EmptyCommandInput
         }
     );
@@ -301,11 +298,12 @@ async fn test_custom_property_check_unpublished_dependencies() {
         .resolution_graph_for_package(&path, None, &mut std::io::sink())
         .expect("Could not build resolution graph.");
 
-    let SuiError::ModulePublishFailure { error } = check_unpublished_dependencies(
+    let SuiErrorKind::ModulePublishFailure { error } = check_unpublished_dependencies(
         &gather_published_ids(&resolution_graph, None).1.unpublished,
     )
     .err()
-    .unwrap() else {
+    .unwrap()
+    .into_inner() else {
         panic!("Expected ModulePublishFailure")
     };
 
@@ -490,7 +488,7 @@ async fn test_publish_more_than_max_packages_error() {
         .unwrap_err();
     assert_eq!(
         err,
-        SuiError::UserInputError {
+        SuiErrorKind::UserInputError {
             error: UserInputError::MaxPublishCountExceeded {
                 max_publish_commands: max_pub_cmd,
                 publish_count: max_pub_cmd + 1,

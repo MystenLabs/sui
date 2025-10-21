@@ -144,7 +144,7 @@ impl<A: Clone> RequestRetrier<A> {
 mod tests {
     use sui_types::{
         base_types::ConciseableName,
-        error::{SuiError, UserInputError},
+        error::{SuiErrorKind, UserInputError},
     };
 
     use crate::{
@@ -300,18 +300,24 @@ mod tests {
             retrier
                 .add_error(
                     authorities[1],
-                    TransactionRequestError::RejectedAtValidator(SuiError::UserInputError {
-                        error: UserInputError::EmptyCommandInput,
-                    }),
+                    TransactionRequestError::RejectedAtValidator(
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::EmptyCommandInput,
+                        }
+                        .into(),
+                    ),
                 )
                 .unwrap();
             // 50% stake non-retriable error. Above validity threshold.
             let aggregated_error = retrier
                 .add_error(
                     authorities[2],
-                    TransactionRequestError::RejectedAtValidator(SuiError::UserInputError {
-                        error: UserInputError::EmptyCommandInput,
-                    }),
+                    TransactionRequestError::RejectedAtValidator(
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::EmptyCommandInput,
+                        }
+                        .into(),
+                    ),
                 )
                 .unwrap_err();
             // The aggregated error is non-retriable.

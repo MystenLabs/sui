@@ -22,7 +22,6 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::crypto::{SignatureScheme, ToFromBytes};
 use sui_types::error::UserInputError;
 use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::passkey_authenticator::{to_signing_message, PasskeyAuthenticator};
@@ -32,13 +31,17 @@ use sui_types::{
         get_key_pair, CompressedSignature, PublicKey, Signature, SuiKeyPair,
         ZkLoginAuthenticatorAsBytes, ZkLoginPublicIdentifier,
     },
-    error::{SuiError, SuiResult},
+    error::SuiResult,
     multisig::{MultiSig, MultiSigPublicKey},
     multisig_legacy::MultiSigPublicKeyLegacy,
     signature::GenericSignature,
     transaction::Transaction,
     utils::{keys, load_test_vectors, make_upgraded_multisig_tx},
     zk_login_authenticator::ZkLoginAuthenticator,
+};
+use sui_types::{
+    crypto::{SignatureScheme, ToFromBytes},
+    error::SuiErrorKind,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 use url::Url;
@@ -298,8 +301,8 @@ async fn test_upgraded_multisig_feature_deny() {
     let err = do_upgraded_multisig_test().await.unwrap_err();
 
     assert!(matches!(
-        err,
-        SuiError::UserInputError {
+        err.as_inner(),
+        SuiErrorKind::UserInputError {
             error: UserInputError::Unsupported(..)
         }
     ));
@@ -316,7 +319,10 @@ async fn test_upgraded_multisig_feature_allow() {
 
     // we didn't make a real transaction with a valid object, but we verify that we pass the
     // feature gate.
-    assert!(matches!(res.unwrap_err(), SuiError::UserInputError { .. }));
+    assert!(matches!(
+        res.unwrap_err().as_inner(),
+        SuiErrorKind::UserInputError { .. }
+    ));
 }
 
 #[sim_test]

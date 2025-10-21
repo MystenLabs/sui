@@ -63,7 +63,7 @@ use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -2590,13 +2590,17 @@ impl CheckpointSignatureAggregator {
             SignedCheckpointSummary::new_from_data_and_sig(self.summary.clone(), signature);
         match self.signatures_by_digest.insert(their_digest, envelope) {
             // ignore repeated signatures
-            InsertResult::Failed {
-                error:
-                    SuiError::StakeAggregatorRepeatedSigner {
+            InsertResult::Failed { error }
+                if matches!(
+                    error.as_inner(),
+                    SuiErrorKind::StakeAggregatorRepeatedSigner {
                         conflicting_sig: false,
                         ..
                     },
-            } => Err(()),
+                ) =>
+            {
+                Err(())
+            }
             InsertResult::Failed { error } => {
                 warn!(
                     checkpoint_seq = self.summary.sequence_number,

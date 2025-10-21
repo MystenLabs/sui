@@ -22,6 +22,7 @@ mod checked {
         native_functions::NativeFunctionTable,
     };
     use sui_move_natives::{object_runtime, transaction_context::TransactionContext};
+    use sui_types::error::SuiErrorKind;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
@@ -66,7 +67,7 @@ mod checked {
                     .deprecate_global_storage_ops_during_deserialization(),
             },
         )
-        .map_err(|_| SuiError::ExecutionInvariantViolation)
+        .map_err(|_| SuiErrorKind::ExecutionInvariantViolation.into())
     }
 
     pub fn new_native_extensions<'r>(
@@ -196,9 +197,10 @@ mod checked {
         if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
             // Check that the status indicates metering timeout.
             if check_for_verifier_timeout(&e.major_status()) {
-                return Err(SuiError::ModuleVerificationFailure {
+                return Err(SuiErrorKind::ModuleVerificationFailure {
                     error: format!("Verification timed out: {}", e),
-                });
+                }
+                .into());
             }
         } else if let Err(err) = sui_verify_module_metered_check_timeout_only(
             module,
@@ -210,9 +212,10 @@ mod checked {
         }
 
         if meter.transfer(Scope::Module, Scope::Package, 1.0).is_err() {
-            return Err(SuiError::ModuleVerificationFailure {
+            return Err(SuiErrorKind::ModuleVerificationFailure {
                 error: "Verification timed out".to_string(),
-            });
+            }
+            .into());
         }
 
         Ok(())

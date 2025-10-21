@@ -23,7 +23,7 @@ use sui_network::randomness;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{
     ConsensusTransaction, Round, TimestampMs, VersionedDkgConfirmation, VersionedDkgMessage,
 };
@@ -725,7 +725,7 @@ impl RandomnessManager {
     fn epoch_store(&self) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         self.epoch_store
             .upgrade()
-            .ok_or(SuiError::EpochEnded(self.epoch))
+            .ok_or(SuiErrorKind::EpochEnded(self.epoch).into())
     }
 
     fn randomness_dkg_info_from_committee(
@@ -781,7 +781,7 @@ impl RandomnessReporter {
         let epoch_store = self
             .epoch_store
             .upgrade()
-            .ok_or(SuiError::EpochEnded(self.epoch))?;
+            .ok_or(SuiErrorKind::EpochEnded(self.epoch))?;
         let mut highest_completed_round = self.highest_completed_round.lock();
         if Some(round) > *highest_completed_round {
             *highest_completed_round = Some(round);

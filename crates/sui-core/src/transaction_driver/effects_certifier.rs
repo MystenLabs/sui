@@ -14,7 +14,7 @@ use sui_types::{
     committee::StakeUnit,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::TransactionEffectsAPI as _,
-    error::SuiError,
+    error::{SuiError, SuiErrorKind},
     messages_consensus::ConsensusPosition,
     messages_grpc::{
         ExecutedData, PingType, RawWaitForEffectsRequest, SubmitTxResult, TxType,
@@ -329,7 +329,7 @@ impl EffectsCertifier {
                             ping_type,
                             result: Err(()),
                         });
-                        (name, Err(SuiError::TimeoutError))
+                        (name, Err(SuiErrorKind::TimeoutError.into()))
                     }
                 }
             };
@@ -608,7 +608,7 @@ impl EffectsCertifier {
                         ping_type,
                         result: Err(()),
                     });
-                    if !matches!(e, SuiError::RpcError(_, _)) {
+                    if !matches!(e.as_inner(), SuiErrorKind::RpcError(_, _)) {
                         return Err(e);
                     }
                     tracing::trace!(
@@ -620,7 +620,7 @@ impl EffectsCertifier {
             };
             sleep(delay).await;
         }
-        Err(SuiError::TimeoutError)
+        Err(SuiErrorKind::TimeoutError.into())
     }
 
     /// Creates the final full response.
