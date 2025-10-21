@@ -98,17 +98,16 @@ const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;
 const DEFAULT_FAUCET_MIST_AMOUNT: u64 = 200_000_000_000; // 200 SUI
 const DEFAULT_FAUCET_PORT: u16 = 9123;
 
+const DEFAULT_CONSISTENT_STORE_PORT: u16 = 9124;
 const DEFAULT_GRAPHQL_PORT: u16 = 9125;
-
-const DEFAULT_INDEXER_PORT: u16 = 9124;
 
 #[derive(Args)]
 pub struct RpcArgs {
     /// Start an indexer with default host and port: 0.0.0.0:9124. This flag accepts also a port,
     /// a host, or both (e.g., 0.0.0.0:9124).
+    ///
     /// When providing a specific value, please use the = sign between the flag and value:
-    /// `--with-indexer=6124` or `--with-indexer=0.0.0.0`, or `--with-indexer=0.0.0.0:9124`
-    /// The indexer will be started in writer mode and reader mode.
+    /// `--with-indexer=9124` or `--with-indexer=0.0.0.0`, or `--with-indexer=0.0.0.0:9124`
     #[clap(long,
             default_missing_value = "0.0.0.0:9124",
             num_args = 0..=1,
@@ -117,12 +116,29 @@ pub struct RpcArgs {
         )]
     with_indexer: Option<String>,
 
+    /// Start a Consistent Store with default host and port: 0.0.0.0:9124. This flag accepts also a
+    /// port, a host, or both (e.g., 0.0.0.0:9124).
+    ///
+    /// When providing a specific value, please use the = sign between the flag and value:
+    /// `--with-consistent-store=9124` or `--with-consistent-store=0.0.0.0`, or `--with-consistent-store=0.0.0.0:9124`
+    /// The Consistent Store will be automatically enabled when `--with-graphql` is set.
+    #[clap(
+            long,
+            default_missing_value = "0.0.0.0:9124",
+            num_args = 0..=1,
+            require_equals = true,
+            value_name = "CONSISTENT_STORE_HOST_PORT"
+        )]
+    with_consistent_store: Option<String>,
+
     /// Start a GraphQL server with default host and port: 0.0.0.0:9125. This flag accepts also a
     /// port, a host, or both (e.g., 0.0.0.0:9125).
+    ///
     /// When providing a specific value, please use the = sign between the flag and value:
-    /// `--with-graphql=6124` or `--with-graphql=0.0.0.0`, or `--with-graphql=0.0.0.0:9125`
-    /// Note that GraphQL requires a running indexer, which will be enabled by default if the
-    /// `--with-indexer` flag is not set.
+    /// `--with-graphql=9125` or `--with-graphql=0.0.0.0`, or `--with-graphql=0.0.0.0:9125`
+    ///
+    /// Note that GraphQL requires a running indexer and consistent store, which will be enabled
+    /// by default even if those flags are not set.
     #[clap(
             long,
             default_missing_value = "0.0.0.0:9125",
@@ -157,6 +173,7 @@ impl RpcArgs {
     pub fn for_testing() -> Self {
         Self {
             with_indexer: None,
+            with_consistent_store: None,
             with_graphql: None,
             pg_port: 5432,
             pg_host: "localhost".to_string(),
@@ -862,6 +879,7 @@ async fn start(
 
     let RpcArgs {
         mut with_indexer,
+        mut with_consistent_store,
         with_graphql,
         pg_port,
         pg_host,
@@ -869,6 +887,11 @@ async fn start(
         pg_user,
         pg_password,
     } = rpc_args;
+
+    // Automatically enable consistent store if GraphQL is enabled
+    if with_graphql.is_some() && with_consistent_store.is_none() {
+        with_consistent_store = Some("0.0.0.0:9124".to_string());
+    }
 
     let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
 
@@ -1051,11 +1074,7 @@ async fn start(
     let cancel = CancellationToken::new();
     let mut rpc_services = vec![];
 
-    let pipelines = if let Some(input) = with_indexer {
-        let address = parse_host_port(input, DEFAULT_INDEXER_PORT)
-            .context("Invalid indexer host and port")?;
-        info!("Starting the indexer at {address}");
-
+    let pipelines = if let Some(_) = with_indexer {
         let client_args = ClientArgs {
             local_ingestion_path: data_ingestion_dir.clone(),
             ..Default::default()
@@ -1086,30 +1105,22 @@ async fn start(
         vec![]
     };
 
-    if let Some(input) = with_graphql {
-        let address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
-            .context("Invalid graphql host and port")?;
-
-        let consistent_port = address.port() + 1;
-        let consistent_listen_address = SocketAddr::new(address.ip(), consistent_port);
+    let consistent_store_url = if let Some(input) = with_consistent_store {
+        let address = parse_host_port(input, DEFAULT_CONSISTENT_STORE_PORT)
+            .context("Invalid consistent store host and port")?;
 
         let client_args = ClientArgs {
             local_ingestion_path: data_ingestion_dir.clone(),
             ..Default::default()
         };
 
-        let database_url = Url::parse(&pg_address).context("Invalid database URL")?;
-
-        let rocksdb_dir = mysten_common::tempdir()?.keep();
-        let rocksdb_path = rocksdb_dir.join("rocksdb");
-
         let consistent_args = ConsistentArgs {
-            rpc_listen_address: consistent_listen_address,
+            rpc_listen_address: address,
             ..Default::default()
         };
 
         let handle = start_consistent_store(
-            rocksdb_path,
+            config_dir.join("consistent_store"),
             IndexerArgs::default(),
             client_args,
             consistent_args,
@@ -1122,7 +1133,17 @@ async fn start(
         .context("Failed to start Consistent Store")?;
         rpc_services.push(handle);
 
-        info!("Consistent Store started at {consistent_listen_address}");
+        info!("Consistent Store started at {address}");
+        Some(format!("http://{address}"))
+    } else {
+        None
+    };
+
+    if let Some(input) = with_graphql {
+        let address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
+            .context("Invalid graphql host and port")?;
+
+        let database_url = Url::parse(&pg_address).context("Invalid database URL")?;
 
         let graphql_args = GraphQlArgs {
             rpc_listen_address: address,
@@ -1130,10 +1151,11 @@ async fn start(
         };
 
         let consistent_reader_args = ConsistentReaderArgs {
-            consistent_store_url: Some(
-                Url::parse(&format!("http://{}", consistent_listen_address))
-                    .context("Failed to parse consistent store URL")?,
-            ),
+            consistent_store_url: consistent_store_url
+                .as_ref()
+                .map(|url| Url::parse(url))
+                .transpose()
+                .context("Failed to parse consistent store URL")?,
             ..Default::default()
         };
 
