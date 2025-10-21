@@ -27,6 +27,7 @@ use std::{
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
     base_types::{FullObjectID, SequenceNumber},
+    effects::TransactionEffects,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::{InputKey, ObjectStore},
@@ -554,6 +555,14 @@ impl ExecutionScheduler {
                 .metrics
                 .transaction_manager_num_executing_certificates
                 .get()) as usize
+    }
+
+    pub fn check_requires_retry_later(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        effects: &TransactionEffects,
+    ) -> bool {
+        false
     }
 
     #[cfg(test)]

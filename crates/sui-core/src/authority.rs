@@ -1982,8 +1982,7 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
-        #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
+        let (inner_temp_store, _, effects, timings, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 &tracking_store,
                 protocol_config,
@@ -2007,6 +2006,13 @@ impl AuthorityState {
                 tx_digest,
                 &mut None,
             );
+
+        if self
+            .execution_scheduler
+            .check_requires_retry_later(certificate, &effects)
+        {
+            return ExecutionOutput::RetryLater;
+        }
 
         if let Some(expected_effects_digest) = expected_effects_digest {
             if effects.digest() != expected_effects_digest {
