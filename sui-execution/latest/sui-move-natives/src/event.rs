@@ -3,7 +3,9 @@
 
 use crate::{
     abstract_size, get_extension, get_extension_mut, legacy_test_cost,
-    object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
+    object_runtime::{
+        object_store::CacheInfo, MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime,
+    },
     NativesCostTable,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
