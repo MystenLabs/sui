@@ -619,6 +619,14 @@ pub fn most_recent_id_shared(
     let specified_ty = get_specified_ty(ty_args);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+    
+    // Try to populate fork inventories for shared objects (will load objects from storage on-demand)
+    try_populate_fork_inventories_for_shared(
+        context,
+        &specified_ty,
+        specified_obj_ty.clone(),
+    )?;
+
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
@@ -957,6 +965,64 @@ fn try_populate_fork_inventories_for_address(
                     .address_inventories
                     .entry(account)
                     .or_default()
+                    .entry(specified_obj_ty.clone()) // Use specified_obj_ty, not obj_type
+                    .or_default()
+                    .insert(obj_id);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// Try to populate inventories for shared objects by scanning fork objects
+// This is called when test code asks for "most recent" shared object
+fn try_populate_fork_inventories_for_shared(
+    context: &mut NativeContext,
+    _specified_ty: &Type,
+    specified_obj_ty: MoveObjectType,
+) -> PartialVMResult<()> {
+    // Check if we already have shared objects for this type
+    {
+        let object_runtime: &ObjectRuntime = get_extension!(context)?;
+        if object_runtime
+            .test_inventories
+            .shared_inventory
+            .contains_key(&specified_obj_ty)
+        {
+            return Ok(()); // Already populated
+        }
+    }
+
+    // Get fork objects from global storage
+    let fork_objects = get_fork_loaded_objects();
+    if fork_objects.is_empty() {
+        return Ok(());
+    }
+
+    // Get layout for the requested type
+    let type_tag = TypeTag::from(specified_obj_ty.clone());
+    let layout = match context.type_tag_to_layout_for_test_scenario_only(&type_tag) {
+        Ok(Some(l)) => l,
+        _ => return Ok(()), // Type not available yet
+    };
+
+    // Filter fork objects for shared objects of this type, then deserialize and add to inventory
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    let inventories = &mut object_runtime.test_inventories;
+
+    for (obj_id, obj_type, owner, bcs_bytes) in fork_objects {
+        // Check if types match, allowing for package address differences
+        let type_matches = types_match_ignoring_package_address(&obj_type, &specified_obj_ty);
+        let owner_is_shared = matches!(owner, Owner::Shared { .. });
+
+        if type_matches && owner_is_shared {
+            if let Some(value) = Value::simple_deserialize(&bcs_bytes, &layout) {
+                inventories.objects.insert(obj_id, value);
+                // IMPORTANT: Store using the REQUESTED type (with 0x0 address for test packages),
+                // not the actual deployed type, so test code can find it
+                inventories
+                    .shared_inventory
                     .entry(specified_obj_ty.clone()) // Use specified_obj_ty, not obj_type
                     .or_default()
                     .insert(obj_id);
