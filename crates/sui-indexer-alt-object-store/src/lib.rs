@@ -185,9 +185,10 @@ impl Connection for ObjectStoreConnection {
         };
 
         if let Some(current) = current_watermark
-            && current.checkpoint_hi_inclusive >= new_watermark.checkpoint_hi_inclusive {
-                return Ok(false);
-            }
+            && current.checkpoint_hi_inclusive >= new_watermark.checkpoint_hi_inclusive
+        {
+            return Ok(false);
+        }
 
         let json_bytes = serde_json::to_vec(&new_watermark)?;
         let payload: PutPayload = Bytes::from(json_bytes).into();
