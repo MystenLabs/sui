@@ -129,11 +129,11 @@ impl From<Error> for ErrorObjectOwned {
             },
             Error::NameServiceError(err) => match err {
                 NameServiceError::ExceedsMaxLength { .. }
-                | NameServiceError::InvalidHyphens { .. }
+                | NameServiceError::InvalidHyphens
                 | NameServiceError::InvalidLength { .. }
-                | NameServiceError::InvalidUnderscore { .. }
-                | NameServiceError::LabelsEmpty { .. }
-                | NameServiceError::InvalidSeparator { .. } => invalid_params(err),
+                | NameServiceError::InvalidUnderscore
+                | NameServiceError::LabelsEmpty
+                | NameServiceError::InvalidSeparator => invalid_params(err),
                 _ => failed(err),
             },
             Error::SuiRpcInputError(err) => invalid_params(err),

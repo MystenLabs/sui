@@ -596,9 +596,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             .data
             .try_as_package()
             .unwrap()
-            .serialized_module_map()
-            .iter()
-            .map(|(_, published_module_bytes)| MaybeNamedCompiledModule {
+            .serialized_module_map().values().map(|published_module_bytes| MaybeNamedCompiledModule {
                 named_address: named_addr_opt,
                 module: CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
                 source_map: None,
@@ -1271,9 +1269,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         let obj = self.get_object(&id, version)?;
                         let package = obj.data.try_as_package().map(|package| {
                             package
-                                .serialized_module_map()
-                                .iter()
-                                .map(|(_, published_module_bytes)| {
+                                .serialized_module_map().values().map(|published_module_bytes| {
                                     let module = CompiledModule::deserialize_with_defaults(
                                         published_module_bytes,
                                     )
@@ -1826,7 +1822,7 @@ impl SuiTestAdapter {
         accumulators_written.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         match effects.status() {
-            ExecutionStatus::Success { .. } => {
+            ExecutionStatus::Success => {
                 let events = self
                     .executor
                     .query_tx_events_asc(digest, *QUERY_MAX_RESULT_LIMIT)

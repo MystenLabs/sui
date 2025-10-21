@@ -1487,7 +1487,7 @@ impl AuthorityStore {
                         match db_result {
                             Ok((object_key, object)) => {
                                 object_scanned += 1;
-                                if object_scanned % 100000 == 0 {
+                                if object_scanned.is_multiple_of(100000) {
                                     info!(
                                         "[Re-accumulate] Task {}: object scanned: {}",
                                         index, object_scanned,

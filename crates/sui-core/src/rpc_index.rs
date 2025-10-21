@@ -317,9 +317,9 @@ struct IndexStoreTables {
     ///
     /// A few uses for this singleton:
     /// - determining if the DB has been initialized (as some tables will still be empty post
-    ///     initialization)
+    ///   initialization)
     /// - version of the DB. Everytime a new table or schema is changed the version number needs to
-    ///     be incremented.
+    ///   be incremented.
     meta: DBMap<(), MetadataInfo>,
 
     /// Table used to track watermark for the highest indexed checkpoint
@@ -1250,7 +1250,7 @@ impl RpcIndexStore {
                             let buffer_count = (cf_memory_budget / buffer_size)
                                 .clamp(2, target_buffer_count)
                                 as i32;
-                            debug!("Calculated buffer_size: {} bytes, buffer_count: {} (based on {} CPUs)", 
+                            debug!("Calculated buffer_size: {} bytes, buffer_count: {} (based on {} CPUs)",
                                 buffer_size, buffer_count, target_buffer_count);
                             (buffer_size, buffer_count)
                         }
@@ -1275,7 +1275,7 @@ impl RpcIndexStore {
                         let half_buffer = buffer_size / 2;
                         let default_limit = 1 << 27; // 128MB
                         let limit = half_buffer.min(default_limit);
-                        debug!("Calculated batch_size_limit: {} bytes (min of half_buffer={} and default_limit={})", 
+                        debug!("Calculated batch_size_limit: {} bytes (min of half_buffer={} and default_limit={})",
                             limit, half_buffer, default_limit);
                         limit
                     };

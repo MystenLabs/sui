@@ -133,7 +133,7 @@ impl Executor {
             .into_data();
 
         assert!(
-            matches!(effects.status(), ExecutionStatus::Success { .. }),
+            matches!(effects.status(), ExecutionStatus::Success),
             "{:?}",
             effects.status()
         );

@@ -90,7 +90,7 @@ fn live_object_set_index_task<T: LiveObjectIndexer>(
         .filter_map(LiveObject::to_normal)
     {
         object_scanned += 1;
-        if object_scanned % 2_000_000 == 0 {
+        if object_scanned.is_multiple_of(2_000_000) {
             info!(
                 "[Index] Task {}: object scanned: {}",
                 task_id, object_scanned

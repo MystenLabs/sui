@@ -433,19 +433,16 @@ impl LoadedBridgeCliConfig {
         } else {
             None
         };
-        let (eth_key, sui_key) = {
-            if eth_key.is_none() {
-                let sui_key = sui_key.unwrap();
+        let (eth_key, sui_key) = match (eth_key, sui_key) {
+            (None, Some(sui_key)) => {
                 if !matches!(sui_key, SuiKeyPair::Secp256k1(_)) {
                     return Err(anyhow!("Eth key must be an ECDSA key"));
                 }
                 (sui_key.copy(), sui_key)
-            } else if sui_key.is_none() {
-                let eth_key = eth_key.unwrap();
-                (eth_key.copy(), eth_key)
-            } else {
-                (eth_key.unwrap(), sui_key.unwrap())
             }
+            (Some(eth_key), None) => (eth_key.copy(), eth_key),
+            (Some(eth_key), Some(sui_key)) => (eth_key, sui_key),
+            (None, None) => unreachable!(),
         };
 
         let provider = Arc::new(

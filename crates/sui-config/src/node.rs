@@ -1406,6 +1406,7 @@ impl Genesis {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 enum GenesisLocation {
     InPlace {
         genesis: genesis::Genesis,

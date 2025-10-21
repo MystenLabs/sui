@@ -265,7 +265,7 @@ impl StateSyncConfig {
 /// AccessType info is shared in the discovery process.
 /// * If the node marks itself as Public, other nodes may try to connect to it.
 /// * If the node marks itself as Private, only nodes that have it in
-///     their `allowlisted_peers` or `seed_peers` will try to connect to it.
+///   their `allowlisted_peers` or `seed_peers` will try to connect to it.
 /// * If not set, defaults to Public.
 ///
 /// AccessType is useful when a network of nodes want to stay private. To achieve this,

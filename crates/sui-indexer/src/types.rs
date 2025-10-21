@@ -645,10 +645,8 @@ impl From<SuiTransactionBlockResponseWithOptions> for SuiTransactionBlockRespons
         SuiTransactionBlockResponse {
             digest: response.digest,
             transaction: options.show_input.then_some(response.transaction).flatten(),
-            raw_transaction: options
-                .show_raw_input
-                .then_some(response.raw_transaction)
-                .unwrap_or_default(),
+            raw_transaction: if options
+                .show_raw_input { response.raw_transaction } else { Default::default() },
             effects: options.show_effects.then_some(response.effects).flatten(),
             events: options.show_events.then_some(response.events).flatten(),
             object_changes: options
@@ -663,10 +661,8 @@ impl From<SuiTransactionBlockResponseWithOptions> for SuiTransactionBlockRespons
             confirmed_local_execution: response.confirmed_local_execution,
             checkpoint: response.checkpoint,
             errors: vec![],
-            raw_effects: options
-                .show_raw_effects
-                .then_some(response.raw_effects)
-                .unwrap_or_default(),
+            raw_effects: if options
+                .show_raw_effects { response.raw_effects } else { Default::default() },
         }
     }
 }
