@@ -10,10 +10,11 @@ use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Constant;
 use bytes::Bytes;
+use prost::Message;
 use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
-use sui_storage::blob::Blob;
+use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
 use tracing::debug;
 use tracing::error;
 use tracing::warn;
@@ -27,7 +28,6 @@ use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
-use crate::types::full_checkpoint_content::CheckpointData;
 
 /// Wait at most this long between retries for transient errors.
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
@@ -262,14 +262,31 @@ impl IngestionClient {
                 Ok::<Checkpoint, backoff::Error<IngestionError>>(match fetch_data {
                     FetchData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
-                        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).map_err(|e| {
+
+                        let decompressed = zstd::decode_all(&bytes[..]).map_err(|e| {
                             self.metrics.inc_retry(
                                 checkpoint,
-                                "deserialization",
-                                IngestionError::DeserializationError(checkpoint, e),
+                                "decompression",
+                                IngestionError::DeserializationError(checkpoint, e.into()),
                             )
                         })?;
-                        checkpoint.into()
+
+                        let proto_checkpoint =
+                            ProtoCheckpoint::decode(&decompressed[..]).map_err(|e| {
+                                self.metrics.inc_retry(
+                                    checkpoint,
+                                    "deserialization",
+                                    IngestionError::DeserializationError(checkpoint, e.into()),
+                                )
+                            })?;
+
+                        Checkpoint::try_from(&proto_checkpoint).map_err(|e| {
+                            self.metrics.inc_retry(
+                                checkpoint,
+                                "proto_conversion",
+                                IngestionError::DeserializationError(checkpoint, e.into()),
+                            )
+                        })?
                     }
                     FetchData::Checkpoint(data) => {
                         // We are not recording size metric for Checkpoint data (from RPC client).
@@ -409,11 +426,9 @@ mod tests {
     async fn test_fetch_checkpoint_success() {
         let (client, mock) = setup_test();
 
-        // Create test data using test_checkpoint
-        let bytes = test_checkpoint_data(1);
-        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
-        mock.checkpoints
-            .insert(1, FetchData::Checkpoint(checkpoint.into()));
+        // Create test data - now returns zstd-compressed protobuf
+        let bytes = Bytes::from(test_checkpoint_data(1));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes));
 
         // Fetch and verify
         let result = client.fetch(1).await.unwrap();
@@ -434,12 +449,10 @@ mod tests {
         let (client, mock) = setup_test();
 
         // Create test data using test_checkpoint
-        let bytes = test_checkpoint_data(1);
-        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        let bytes = Bytes::from(test_checkpoint_data(1));
 
         // Add checkpoint to mock with 2 transient failures
-        mock.checkpoints
-            .insert(1, FetchData::Checkpoint(checkpoint.clone().into()));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes));
         mock.transient_failures.insert(1, 2);
 
         // Fetch and verify it succeeds after retries
@@ -459,13 +472,11 @@ mod tests {
     async fn test_wait_for_checkpoint_with_retry() {
         let (client, mock) = setup_test();
 
-        // Create test data using test_checkpoint
-        let bytes = test_checkpoint_data(1);
-        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        // Create test data - now returns zstd-compressed protobuf
+        let bytes = Bytes::from(test_checkpoint_data(1));
 
         // Add checkpoint to mock with 1 not_found failures
-        mock.checkpoints
-            .insert(1, FetchData::Checkpoint(checkpoint.into()));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes));
         mock.not_found_failures.insert(1, 1);
 
         // Wait for checkpoint with short retry interval
@@ -482,12 +493,10 @@ mod tests {
         let (client, mock) = setup_test();
 
         // Create test data using test_checkpoint
-        let bytes = test_checkpoint_data(1);
-        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        let bytes = Bytes::from(test_checkpoint_data(1));
 
         // Add checkpoint to mock with no failures - data should be available immediately
-        mock.checkpoints
-            .insert(1, FetchData::Checkpoint(checkpoint.into()));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes));
 
         // Wait for checkpoint with short retry interval
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
