@@ -280,7 +280,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
                         SuiErrorKind::DynamicFieldReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
-                        )).into()
+                        ))
                     },
                 )?;
             Ok(SuiSystemState::SimTestV1(result))
@@ -293,7 +293,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
                         SuiErrorKind::DynamicFieldReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
-                        )).into()
+                        ))
                     },
                 )?;
             Ok(SuiSystemState::SimTestShallowV2(result))
@@ -306,7 +306,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
                         SuiErrorKind::DynamicFieldReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
-                        )).into()
+                        ))
                     },
                 )?;
             Ok(SuiSystemState::SimTestDeepV2(result))
@@ -373,7 +373,6 @@ where
                             "Failed to load inner validator from the wrapper: {:?}",
                             err
                         ))
-                        .into()
                     })?;
             Ok(validator.into_sui_validator_summary())
         }
