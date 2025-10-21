@@ -164,9 +164,12 @@ impl TreasuryCap {
 
     /// Create a TreasuryCap from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
-        bcs::from_bytes(content).map_err(|err| SuiErrorKind::ObjectDeserializationError {
-            error: format!("Unable to deserialize TreasuryCap object: {}", err),
-        }.into())
+        bcs::from_bytes(content).map_err(|err| {
+            SuiErrorKind::ObjectDeserializationError {
+                error: format!("Unable to deserialize TreasuryCap object: {}", err),
+            }
+            .into()
+        })
     }
 
     pub fn type_(type_param: StructTag) -> StructTag {
@@ -205,7 +208,8 @@ impl TryFrom<Object> for TreasuryCap {
 
         Err(SuiErrorKind::TypeError {
             error: format!("Object type is not a TreasuryCap: {:?}", object),
-        }.into())
+        }
+        .into())
     }
 }
 
@@ -235,9 +239,12 @@ impl CoinMetadata {
 
     /// Create a coin from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
-        bcs::from_bytes(content).map_err(|err| SuiErrorKind::ObjectDeserializationError {
-            error: format!("Unable to deserialize CoinMetadata object: {}", err),
-        }.into())
+        bcs::from_bytes(content).map_err(|err| {
+            SuiErrorKind::ObjectDeserializationError {
+                error: format!("Unable to deserialize CoinMetadata object: {}", err),
+            }
+            .into()
+        })
     }
 
     pub fn type_(type_param: StructTag) -> StructTag {
@@ -283,7 +290,8 @@ impl TryFrom<&Object> for CoinMetadata {
 
         Err(SuiErrorKind::TypeError {
             error: format!("Object type is not a CoinMetadata: {:?}", object),
-        }.into())
+        }
+        .into())
     }
 }
 
@@ -307,12 +315,15 @@ impl RegulatedCoinMetadata {
 
     /// Create a coin from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
-        bcs::from_bytes(content).map_err(|err| SuiErrorKind::ObjectDeserializationError {
-            error: format!(
-                "Unable to deserialize RegulatedCoinMetadata object: {}",
-                err
-            ),
-        }.into())
+        bcs::from_bytes(content).map_err(|err| {
+            SuiErrorKind::ObjectDeserializationError {
+                error: format!(
+                    "Unable to deserialize RegulatedCoinMetadata object: {}",
+                    err
+                ),
+            }
+            .into()
+        })
     }
 
     pub fn type_(type_param: StructTag) -> StructTag {
@@ -358,6 +369,7 @@ impl TryFrom<&Object> for RegulatedCoinMetadata {
 
         Err(SuiErrorKind::TypeError {
             error: format!("Object type is not a RegulatedCoinMetadata: {:?}", object),
-        }.into())
+        }
+        .into())
     }
 }

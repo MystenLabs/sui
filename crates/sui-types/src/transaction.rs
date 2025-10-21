@@ -2811,9 +2811,12 @@ impl SenderSignedData {
     }
 
     pub fn serialized_size(&self) -> SuiResult<usize> {
-        bcs::serialized_size(self).map_err(|e| SuiErrorKind::TransactionSerializationError {
-            error: e.to_string(),
-        }.into())
+        bcs::serialized_size(self).map_err(|e| {
+            SuiErrorKind::TransactionSerializationError {
+                error: e.to_string(),
+            }
+            .into()
+        })
     }
 
     fn check_user_signature_protocol_compatibility(&self, config: &ProtocolConfig) -> SuiResult {
@@ -2825,7 +2828,8 @@ impl SenderSignedData {
                             error: UserInputError::Unsupported(
                                 "upgraded multisig format not enabled on this network".to_string(),
                             ),
-                        }.into());
+                        }
+                        .into());
                     }
                 }
                 GenericSignature::ZkLoginAuthenticator(_) => {
@@ -2834,7 +2838,8 @@ impl SenderSignedData {
                             error: UserInputError::Unsupported(
                                 "zklogin is not enabled on this network".to_string(),
                             ),
-                        }.into());
+                        }
+                        .into());
                     }
                 }
                 GenericSignature::PasskeyAuthenticator(_) => {
@@ -2843,7 +2848,8 @@ impl SenderSignedData {
                             error: UserInputError::Unsupported(
                                 "passkey is not enabled on this network".to_string(),
                             ),
-                        }.into());
+                        }
+                        .into());
                     }
                 }
                 GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
@@ -2870,7 +2876,8 @@ impl SenderSignedData {
                 error: UserInputError::Unsupported(
                     "SenderSignedData must not contain system transaction".to_string()
                 )
-            }.into()
+            }
+            .into()
         );
 
         // Checks to see if the transaction has expired

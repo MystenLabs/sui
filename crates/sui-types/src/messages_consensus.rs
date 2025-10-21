@@ -55,10 +55,13 @@ pub struct ConsensusPosition {
 impl ConsensusPosition {
     pub fn into_raw(self) -> Result<Bytes, SuiError> {
         bcs::to_bytes(&self)
-            .map_err(|e| SuiErrorKind::GrpcMessageSerializeError {
-                type_info: "ConsensusPosition".to_string(),
-                error: e.to_string(),
-            }.into())
+            .map_err(|e| {
+                SuiErrorKind::GrpcMessageSerializeError {
+                    type_info: "ConsensusPosition".to_string(),
+                    error: e.to_string(),
+                }
+                .into()
+            })
             .map(Bytes::from)
     }
 
@@ -77,10 +80,13 @@ impl TryFrom<&[u8]> for ConsensusPosition {
     type Error = SuiError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        bcs::from_bytes(bytes).map_err(|e| SuiErrorKind::GrpcMessageDeserializeError {
-            type_info: "ConsensusPosition".to_string(),
-            error: e.to_string(),
-        }.into())
+        bcs::from_bytes(bytes).map_err(|e| {
+            SuiErrorKind::GrpcMessageDeserializeError {
+                type_info: "ConsensusPosition".to_string(),
+                error: e.to_string(),
+            }
+            .into()
+        })
     }
 }
 
