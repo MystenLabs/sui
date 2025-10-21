@@ -20,6 +20,9 @@ use std::ops::Mul;
 
 pub const NON_CANONICAL_INPUT: u64 = 0;
 pub const NOT_SUPPORTED_ERROR: u64 = 1;
+pub const TOO_MANY_INPUTS: u64 = 2;
+
+pub const MAX_POSEIDON_INPUTS: u64 = 16;
 
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(get_extension!(context, ObjectRuntime)?
@@ -76,6 +79,10 @@ pub fn poseidon_bn254_internal(
     let length = inputs
         .len(&Type::Vector(Box::new(Type::U8)))?
         .value_as::<u64>()?;
+
+    if length > MAX_POSEIDON_INPUTS {
+        return Ok(NativeResult::err(context.gas_used(), TOO_MANY_INPUTS));
+    }
 
     // Charge the msg dependent costs
     native_charge_gas_early_exit!(
