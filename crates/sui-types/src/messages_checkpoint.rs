@@ -748,7 +748,10 @@ impl CheckpointContents {
 
     pub fn inner(&self) -> CheckpointContentsView<'_> {
         match self {
-            Self::V1(c) => CheckpointContentsView::V1(&c.transactions),
+            Self::V1(c) => CheckpointContentsView::V1 {
+                transactions: &c.transactions,
+                user_signatures: &c.user_signatures,
+            },
             Self::V2(c) => CheckpointContentsView::V2(&c.transactions),
         }
     }
@@ -774,14 +777,17 @@ impl CheckpointContents {
 
 // Enables slice-style access to CheckpointContents tx digests without extra clones.
 pub enum CheckpointContentsView<'a> {
-    V1(&'a [ExecutionDigests]),
+    V1 {
+        transactions: &'a [ExecutionDigests],
+        user_signatures: &'a [Vec<GenericSignature>],
+    },
     V2(&'a [CheckpointTransactionContents]),
 }
 
 impl CheckpointContentsView<'_> {
     pub fn len(&self) -> usize {
         match self {
-            Self::V1(v) => v.len(),
+            Self::V1 { transactions, .. } => transactions.len(),
             Self::V2(v) => v.len(),
         }
     }
@@ -790,21 +796,39 @@ impl CheckpointContentsView<'_> {
         self.len() == 0
     }
 
-    pub fn get(&self, index: usize) -> Option<&ExecutionDigests> {
+    pub fn get_digests(&self, index: usize) -> Option<&ExecutionDigests> {
         match self {
-            Self::V1(v) => v.get(index),
+            Self::V1 { transactions, .. } => transactions.get(index),
             Self::V2(v) => v.get(index).map(|t| &t.digest),
         }
     }
 
-    pub fn first(&self) -> Option<&ExecutionDigests> {
-        self.get(0)
+    pub fn first_digests(&self) -> Option<&ExecutionDigests> {
+        self.get_digests(0)
     }
 
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &ExecutionDigests> + ExactSizeIterator {
+    pub fn digests_iter(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = &ExecutionDigests> + ExactSizeIterator {
         match self {
-            Self::V1(v) => itertools::Either::Left(v.iter()),
+            Self::V1 { transactions, .. } => itertools::Either::Left(transactions.iter()),
             Self::V2(v) => itertools::Either::Right(v.iter().map(|t| &t.digest)),
+        }
+    }
+
+    /// Returns the user_signatures for a transaction at the given index along with
+    /// the version of the AddressAliases object that was used to verify it.
+    pub fn user_signatures(
+        &self,
+        index: usize,
+    ) -> Option<Vec<(GenericSignature, Option<SequenceNumber>)>> {
+        match self {
+            Self::V1 {
+                user_signatures, ..
+            } => user_signatures
+                .get(index)
+                .map(|sigs| sigs.iter().map(|sig| (sig.clone(), None)).collect()),
+            Self::V2(v) => v.get(index).map(|t| t.user_signatures.clone()),
         }
     }
 }
@@ -814,7 +838,7 @@ impl std::ops::Index<usize> for CheckpointContentsView<'_> {
 
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            Self::V1(v) => &v[index],
+            Self::V1 { transactions, .. } => &transactions[index],
             Self::V2(v) => &v[index].digest,
         }
     }
