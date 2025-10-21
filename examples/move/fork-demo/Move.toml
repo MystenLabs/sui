@@ -6,4 +6,4 @@ edition = "2024.beta"
 Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
 
 [addresses]
-fork_demo = "0x0"
+fork_demo = "0xca8639cf24619475af9350606ad12403dbdf3333546dbee62e1e5544c3fdbfb7"

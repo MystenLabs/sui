@@ -306,7 +306,52 @@ impl Inner<'_> {
                 None => None,
             };
 
-            e.insert(obj_opt);
+            // If object not found in storage, try to get it from fork loaded objects
+            let final_obj = if obj_opt.is_none() {
+                use sui_types::fork_test_support::get_fork_loaded_objects;
+                use sui_types::object::Owner;
+                
+                let fork_objects = get_fork_loaded_objects();
+                let mut found_obj = None;
+                
+                for (obj_id, obj_type, owner, bcs_bytes) in fork_objects {
+                    if obj_id == child {
+                        if let Owner::ObjectOwner(parent_id) = owner {
+                            let parent_as_sui_addr = parent.into();
+                            if parent_id == parent_as_sui_addr {
+                                // Create the Object directly from fork data
+                                // Safety: has_public_transfer is determined by the type stored in fork data
+                                match unsafe { MoveObject::new_from_execution(
+                                    obj_type.clone(),
+                                    true,  // has_public_transfer - assume true for fork objects
+                                    parents_root_version,  // Use parent's version for the child
+                                    bcs_bytes.clone(),
+                                    &self.protocol_config,
+                                    false,  // not a system mutation
+                                ) } {
+                                    Ok(move_obj) => {
+                                        let obj = Object::new_move(
+                                            move_obj,
+                                            owner,
+                                            sui_types::base_types::TransactionDigest::ZERO,
+                                        );
+                                        found_obj = Some(obj);
+                                    }
+                                    Err(_) => {
+                                        // If creation fails, continue looking
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                found_obj
+            } else {
+                obj_opt
+            };
+            
+            e.insert(final_obj);
             CacheInfo::Loaded(num_bytes_opt)
         } else {
             CacheInfo::CachedObject

@@ -100,6 +100,16 @@ module fork_demo::fork_tests {
         let s = &scenario;
 
         let demo_state = s.take_shared<DEMO_STATE>();
+        
+        // Verify the parent object state was correctly loaded from testnet
+        let current_counter = demo_coin::get_demo_counter(&demo_state);
+        assert!(current_counter == 1, 6); // Counter should be 1 after add_demo_dynamic was called
+        
+        // The dynamic field should be automatically loaded and accessible
+        let has_field = demo_coin::has_demo_dynamic(&demo_state, 0);
+        assert!(has_field, 7); // Dynamic field should be accessible from fork
+        
+        // Access the dynamic field that was created on testnet
         let demo_dynamic = demo_coin::borrow_demo_dynamic(&demo_state, 0);
         assert!(demo_coin::get_demo_dynamic_counter(demo_dynamic) == 0, 5);
 

@@ -463,9 +463,30 @@ pub fn has_child_object(
 
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
+    
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
-    let (cache_info, has_child) = object_runtime.child_object_exists(parent, child_id)?;
+    let (cache_info, mut has_child) = object_runtime.child_object_exists(parent, child_id)?;
     charge_cache_or_load_gas!(context, cache_info);
+    
+    // If not found in normal storage, check fork loaded objects
+    if !has_child {
+        // Try to get fork objects from fork_test_support module
+        use sui_types::fork_test_support::get_fork_loaded_objects;
+        use sui_types::object::Owner;
+        
+        let fork_objects = get_fork_loaded_objects();
+        for (obj_id, _obj_type, owner, _bcs_bytes) in fork_objects {
+            if let Owner::ObjectOwner(parent_id) = owner {
+                // Convert parent_id (SuiAddress) to ObjectID for comparison
+                let parent_as_sui_addr = parent.into();
+                if parent_id == parent_as_sui_addr && obj_id == child_id {
+                    has_child = true;
+                    break;
+                }
+            }
+        }
+    }
+    
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::bool(has_child)],

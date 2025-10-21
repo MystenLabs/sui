@@ -128,18 +128,14 @@ pub fn run_move_unit_tests(
                         obj.owner.clone(),
                         move_obj.contents().to_vec(),
                     ));
+                    
+                    // Debug: Print information about loaded objects
+                    println!("Stored fork object: {} (type: {}, owner: {:?})", 
+                        obj_id, move_obj.type_(), obj.owner);
                 }
             }
             set_fork_loaded_objects(fork_objects);
         }
-
-        // Insert objects into the test store (thread-local storage)
-        TEST_STORE_INNER.with(|store| {
-            let mut store_mut = store.borrow_mut();
-            for obj in storage.objects().values() {
-                store_mut.insert_object(obj.clone());
-            }
-        });
     }
 
     let config = config

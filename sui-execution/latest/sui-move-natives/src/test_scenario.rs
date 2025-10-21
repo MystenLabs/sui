@@ -588,6 +588,15 @@ pub fn take_shared_by_id(
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+    
+    // Try to load object from storage if not in inventory (for fork testing)
+    try_load_object_from_storage(
+        context,
+        id,
+        specified_obj_ty.clone(),
+        Owner::Shared { initial_shared_version: SequenceNumber::new() },
+    )?;
+    
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
@@ -827,6 +836,9 @@ fn try_load_object_from_storage(
     specified_obj_ty: MoveObjectType,
     expected_owner: Owner,
 ) -> PartialVMResult<()> {
+    // Always try to populate child object inventories from fork loaded objects
+    try_populate_fork_inventories_for_child_objects(context)?;
+    
     // Check if object is already in inventory
     {
         let object_runtime: &ObjectRuntime = get_extension!(context)?;
@@ -1028,6 +1040,49 @@ fn try_populate_fork_inventories_for_shared(
                     .insert(obj_id);
             }
         }
+    }
+
+    Ok(())
+}
+
+// Try to populate inventories for child objects (dynamic fields) by scanning fork objects
+// This is called when dynamic field native functions try to access child objects
+fn try_populate_fork_inventories_for_child_objects(
+    context: &mut NativeContext,
+) -> PartialVMResult<()> {
+    // Get fork objects from global storage
+    let fork_objects = get_fork_loaded_objects();
+    
+    if fork_objects.is_empty() {
+        return Ok(());
+    }
+
+    // Process child objects and collect them
+    let mut child_objects_to_insert = Vec::new();
+    
+    for (obj_id, obj_type, owner, bcs_bytes) in fork_objects {
+        // Only process objects owned by other objects (dynamic fields)
+        if let Owner::ObjectOwner(_parent_id) = owner {
+            // Get layout for this object type
+            let type_tag = TypeTag::from(obj_type.clone());
+            
+            match context.type_tag_to_layout_for_test_scenario_only(&type_tag) {
+                Ok(Some(layout)) => {
+                    if let Some(value) = Value::simple_deserialize(&bcs_bytes, &layout) {
+                        child_objects_to_insert.push((obj_id, _parent_id, value));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Insert all child objects into the object runtime's inventories
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    
+    for (obj_id, _parent_id, value) in child_objects_to_insert {
+        // Add to test inventories for general object access
+        object_runtime.test_inventories.objects.insert(obj_id, value);
     }
 
     Ok(())

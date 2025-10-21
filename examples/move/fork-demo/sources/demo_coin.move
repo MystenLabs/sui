@@ -65,6 +65,15 @@ module fork_demo::demo_coin {
         df::borrow<u64, DEMO_DYNAMIC>(&demo_state.id, key)
     }
 
+    public fun has_demo_dynamic(demo_state: &DEMO_STATE, key: u64): bool {
+        df::exists_<u64>(&demo_state.id, key)
+    }
+
+    // Helper function for testing - reset counter (use carefully!)
+    public fun reset_demo_counter(demo_state: &mut DEMO_STATE, new_value: u64) {
+        demo_state.counter = new_value;
+    }
+
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
         init(DEMO_COIN {}, ctx);
