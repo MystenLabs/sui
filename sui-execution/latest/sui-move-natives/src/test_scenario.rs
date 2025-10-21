@@ -971,7 +971,7 @@ fn try_populate_fork_inventories_for_address(
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
 
-    for (obj_id, obj_type, owner, bcs_bytes) in fork_objects {
+    for (obj_id, obj_type, owner, _version, bcs_bytes) in fork_objects {
         // Check if types match, allowing for package address differences
         // (test code uses 0x0, but deployed objects have actual package address)
         let type_matches = types_match_ignoring_package_address(&obj_type, &specified_obj_ty);
@@ -1032,7 +1032,7 @@ fn try_populate_fork_inventories_for_shared(
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
 
-    for (obj_id, obj_type, owner, bcs_bytes) in fork_objects {
+    for (obj_id, obj_type, owner, _version, bcs_bytes) in fork_objects {
         // Check if types match, allowing for package address differences
         let type_matches = types_match_ignoring_package_address(&obj_type, &specified_obj_ty);
         let owner_is_shared = matches!(owner, Owner::Shared { .. });
@@ -1069,7 +1069,7 @@ fn try_populate_fork_inventories_for_child_objects(
     // Process child objects and collect them
     let mut child_objects_to_insert = Vec::new();
     
-    for (obj_id, obj_type, owner, bcs_bytes) in fork_objects {
+    for (obj_id, obj_type, owner, _version, bcs_bytes) in fork_objects {
         // Only process objects owned by other objects (dynamic fields)
         if let Owner::ObjectOwner(_parent_id) = owner {
             // Get layout for this object type

@@ -7,10 +7,10 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::Path;
 use std::str::FromStr;
+use sui_json_rpc_types::{SuiMoveStruct, SuiMoveValue, SuiParsedData};
 use sui_protocol_config::ProtocolConfig;
-use sui_sdk::rpc_types::SuiObjectDataOptions;
+use sui_sdk::rpc_types::{SuiObjectDataOptions};
 use sui_sdk::rpc_types::SuiRawData;
 use sui_sdk::SuiClientBuilder;
 use sui_types::{
@@ -232,11 +232,30 @@ impl ForkStateLoader {
                             .with_bcs()
                             .with_owner()
                             .with_type()
+                            .with_content()  // Add content to extract internal UIDs
                             .with_previous_transaction(),
                     )
                     .await
                 {
                     Ok(response) => {
+                        // Extract internal UIDs from object content and fetch their dynamic fields
+                        if let Some(ref obj_data) = response.data {
+                            if let Some(ref content) = obj_data.content {
+                                // Extract UIDs from the object's fields
+                                let internal_uids = self.extract_uids_from_content(content);
+                                for uid in internal_uids {
+                                    // Fetch dynamic fields for each internal UID
+                                    if let Ok(dynamic_fields) = self.fetch_dynamic_fields(client, uid).await {
+                                        for field_id in dynamic_fields {
+                                            if !processed_ids.contains(&field_id) && !all_object_ids.contains(&field_id) {
+                                                all_object_ids.insert(field_id);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
                         // Try to convert via bcs deserialization
                         if let Some(obj_data) = response.data {
                             if let Some(SuiRawData::MoveObject(move_obj_rpc)) = obj_data.bcs {
@@ -338,6 +357,62 @@ impl ForkStateLoader {
         }
         
         Ok(field_ids)
+    }
+
+    /// Extract all UID values from an object's content (recursively search for UID fields)
+    fn extract_uids_from_content(&self, content: &SuiParsedData) -> Vec<ObjectID> {
+        let mut uids = Vec::new();
+        
+        match content {
+            SuiParsedData::MoveObject(move_obj) => {
+                // Recursively search for UID fields in the object's fields
+                self.extract_uids_from_move_struct(&move_obj.fields, &mut uids);
+            }
+            _ => {}
+        }
+        
+        uids
+    }
+    
+    /// Recursively extract UIDs from a SuiMoveStruct
+    fn extract_uids_from_move_struct(&self, move_struct: &SuiMoveStruct, uids: &mut Vec<ObjectID>) {
+        match move_struct {
+            SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
+                for (_, field_value) in fields {
+                    self.extract_uids_from_move_value(field_value, uids);
+                }
+            }
+            SuiMoveStruct::Runtime(values) => {
+                for value in values {
+                    self.extract_uids_from_move_value(value, uids);
+                }
+            }
+        }
+    }
+    
+    /// Recursively extract UIDs from a SuiMoveValue
+    fn extract_uids_from_move_value(&self, value: &SuiMoveValue, uids: &mut Vec<ObjectID>) {
+        match value {
+            SuiMoveValue::UID { id } => {
+                // Found a UID! Add it to our list
+                uids.push(*id);
+            }
+            SuiMoveValue::Struct(move_struct) => {
+                // Recursively search the struct
+                self.extract_uids_from_move_struct(move_struct, uids);
+            }
+            SuiMoveValue::Vector(vec) => {
+                for item in vec {
+                    self.extract_uids_from_move_value(item, uids);
+                }
+            }
+            SuiMoveValue::Option(opt) => {
+                if let Some(inner) = opt.as_ref() {
+                    self.extract_uids_from_move_value(inner, uids);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Fetch all objects owned by a given address

@@ -475,7 +475,7 @@ pub fn has_child_object(
         use sui_types::object::Owner;
         
         let fork_objects = get_fork_loaded_objects();
-        for (obj_id, _obj_type, owner, _bcs_bytes) in fork_objects {
+        for (obj_id, _obj_type, owner, _version, _bcs_bytes) in fork_objects {
             if let Owner::ObjectOwner(parent_id) = owner {
                 // Convert parent_id (SuiAddress) to ObjectID for comparison
                 let parent_as_sui_addr = parent.into();

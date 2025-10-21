@@ -121,17 +121,18 @@ pub fn run_move_unit_tests(
             let mut fork_objects = Vec::new();
             for (obj_id, obj) in storage.objects() {
                 if let Some(move_obj) = obj.data.try_as_move() {
-                    // Store object metadata including BCS bytes for later deserialization
+                    // Store object metadata including BCS bytes and version for later deserialization
                     fork_objects.push((
                         *obj_id,
                         move_obj.type_().clone(),
                         obj.owner.clone(),
+                        obj.version(),  // Add version!
                         move_obj.contents().to_vec(),
                     ));
                     
                     // Debug: Print information about loaded objects
-                    println!("Stored fork object: {} (type: {}, owner: {:?})", 
-                        obj_id, move_obj.type_(), obj.owner);
+                    println!("Stored fork object: {} (type: {}, owner: {:?}, version: {})", 
+                        obj_id, move_obj.type_(), obj.owner, obj.version());
                 }
             }
             set_fork_loaded_objects(fork_objects);

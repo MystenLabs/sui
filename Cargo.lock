@@ -15459,6 +15459,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
+ "sui-json-rpc-types",
  "sui-macros",
  "sui-move-build",
  "sui-move-natives-latest",

@@ -5,13 +5,13 @@
 //! This module provides thread-safe global storage for fork-loaded objects that
 //! can be accessed from both sui-move and sui-move-natives crates.
 
-use crate::base_types::{MoveObjectType, ObjectID};
+use crate::base_types::{MoveObjectType, ObjectID, SequenceNumber};
 use crate::object::Owner;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
-/// Represents a fork-loaded object: (ObjectID, MoveObjectType, Owner, BCS bytes).
-pub type ForkLoadedObject = (ObjectID, MoveObjectType, Owner, Vec<u8>);
+/// Represents a fork-loaded object: (ObjectID, MoveObjectType, Owner, Version, BCS bytes).
+pub type ForkLoadedObject = (ObjectID, MoveObjectType, Owner, SequenceNumber, Vec<u8>);
 
 /// Global storage for fork-loaded objects that works across threads.
 static FORK_LOADED_OBJECTS: Lazy<Mutex<Vec<ForkLoadedObject>>> =
