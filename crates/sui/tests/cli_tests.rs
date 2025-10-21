@@ -17,7 +17,7 @@ use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildCo
 use serde_json::json;
 use sui::client_commands::{GasDataArgs, PaymentArgs, TxProcessingArgs};
 use sui::client_ptb::ptb::PTB;
-use sui::sui_commands::IndexerArgs;
+use sui::sui_commands::RpcArgs;
 use sui_keys::key_identity::KeyIdentity;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::SuiClient;
@@ -344,7 +344,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         epoch_duration_ms: None,
         no_full_node: false,
         committee_size: None,
-        indexer_feature_args: IndexerArgs::for_testing(),
+        rpc_args: RpcArgs::for_testing(),
     }
     .execute()
     .await;
