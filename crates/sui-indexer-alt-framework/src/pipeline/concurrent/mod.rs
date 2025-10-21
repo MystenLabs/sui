@@ -10,7 +10,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
-    metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint, FieldCount,
+    metrics::IndexerMetrics,
+    store::{BatchStrategy, Store, StoreTypes},
+    types::full_checkpoint_content::Checkpoint,
 };
 
 use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
@@ -46,8 +48,10 @@ mod reader_watermark;
 /// build up, the collector will stop accepting new checkpoints, which will eventually propagate
 /// back to the ingestion service.
 #[async_trait]
-pub trait Handler: Processor<Value: FieldCount> {
+pub trait Handler: Processor {
     type Store: Store;
+    /// The batch type produced by the store's BatchStrategy.
+    type Batch: Send + Sync;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
@@ -60,11 +64,11 @@ pub trait Handler: Processor<Value: FieldCount> {
     /// checkpoints -- the size of these pipeline's batches will be dominated by watermark updates.
     const MAX_WATERMARK_UPDATES: usize = 10_000;
 
-    /// Take a chunk of values and commit them to the database, returning the number of rows
-    /// affected.
+    /// Take a batch and commit it to the database, returning the number of rows affected.
     async fn commit<'a>(
-        values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        &self,
+        batch: &Self::Batch,
+        conn: &mut <Self::Store as StoreTypes>::Connection<'a>,
     ) -> anyhow::Result<usize>;
 
     /// Clean up data between checkpoints `_from` and `_to_exclusive` (exclusive) in the database, returning
@@ -73,7 +77,7 @@ pub trait Handler: Processor<Value: FieldCount> {
         &self,
         _from: u64,
         _to_exclusive: u64,
-        _conn: &mut <Self::Store as Store>::Connection<'a>,
+        _conn: &mut <Self::Store as StoreTypes>::Connection<'a>,
     ) -> anyhow::Result<usize> {
         Ok(0)
     }
@@ -114,8 +118,8 @@ pub struct PrunerConfig {
 /// Values inside each batch may or may not be from the same checkpoint. Values in the same
 /// checkpoint can also be split across multiple batches.
 struct BatchedRows<H: Handler> {
-    /// The rows to write
-    values: Vec<H::Value>,
+    /// The batch strategy that owns the accumulated rows
+    strategy: <H::Store as StoreTypes>::BatchStrategy<H::Value>,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
 }
@@ -131,23 +135,23 @@ impl PrunerConfig {
 }
 
 impl<H: Handler> BatchedRows<H> {
-    fn new() -> Self {
+    fn new(store: &H::Store) -> Self
+    where
+        H::Value: Send + Sync,
+        <H::Store as StoreTypes>::BatchStrategy<H::Value>: BatchStrategy<H::Value>,
+    {
         Self {
-            values: vec![],
+            strategy: store.new_batch_strategy::<H::Value>(),
             watermark: vec![],
         }
     }
 
     /// Number of rows in this batch.
-    fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    /// The batch is full if it has more than enough values to write to the database, or more than
-    /// enough watermarks to update.
-    fn is_full(&self) -> bool {
-        self.values.len() >= max_chunk_rows::<H>()
-            || self.watermark.len() >= H::MAX_WATERMARK_UPDATES
+    fn len(&self) -> usize
+    where
+        <H::Store as StoreTypes>::BatchStrategy<H::Value>: BatchStrategy<H::Value>,
+    {
+        BatchStrategy::len(&self.strategy)
     }
 }
 
@@ -192,7 +196,10 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> JoinHandle<()>
+where
+    <H::Store as StoreTypes>::BatchStrategy<H::Value>: BatchStrategy<H::Value, Batch = H::Batch>,
+{
     info!(
         pipeline = H::NAME,
         "Starting pipeline with config: {:?}", config
@@ -229,11 +236,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config.clone(),
         collector_rx,
         collector_tx,
+        store.clone(),
         metrics.clone(),
         cancel.clone(),
     );
 
     let committer = committer::<H>(
+        handler.clone(),
         committer_config.clone(),
         skip_watermark,
         committer_rx,
@@ -274,14 +283,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner_cancel.cancel();
         let _ = futures::join!(reader_watermark, pruner);
     })
-}
-
-const fn max_chunk_rows<H: Handler>() -> usize {
-    if H::Value::FIELD_COUNT == 0 {
-        i16::MAX as usize
-    } else {
-        i16::MAX as usize / H::Value::FIELD_COUNT
-    }
 }
 
 #[cfg(test)]
@@ -342,14 +343,18 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+        type Batch = Vec<Self::Value>;
+
         const MIN_EAGER_ROWS: usize = 1000; // High value to disable eager batching
         const MAX_PENDING_ROWS: usize = 4; // Small value to trigger back pressure quickly
         const MAX_WATERMARK_UPDATES: usize = 1; // Each batch will have 1 checkpoint for an ease of testing.
 
         async fn commit<'a>(
-            values: &[Self::Value],
+            &self,
+            batch: &Self::Batch,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
+            let values = batch.as_slice();
             // Group values by checkpoint
             let mut grouped: std::collections::HashMap<u64, Vec<u64>> =
                 std::collections::HashMap::new();

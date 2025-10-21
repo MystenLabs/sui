@@ -153,16 +153,14 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
 mod tests {
     use std::sync::Arc;
 
-    use sui_indexer_alt_framework::{
-        pipeline::Processor,
-        types::{full_checkpoint_content::Checkpoint, object::Object},
-    };
+    use sui_indexer_alt_framework::{pipeline::Processor, types::object::Object};
 
     use crate::{
         db::{tests::wm, Db},
         restore::Restore,
         store::Connection,
     };
+    use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 
     use super::*;
 

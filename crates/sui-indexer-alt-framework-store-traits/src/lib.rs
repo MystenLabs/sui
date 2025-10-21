@@ -6,6 +6,127 @@ use chrono::{DateTime, Utc};
 use scoped_futures::ScopedBoxFuture;
 use std::time::Duration;
 
+pub use sui_field_count::FieldCount;
+
+/// Strategy for determining when a batch of values is full and should be committed.
+/// Different store types can implement different strategies (e.g., row count, payload size).
+///
+/// The strategy owns the accumulated batch of values and maintains any necessary state
+/// for efficient capacity tracking (e.g., running totals for payload size).
+///
+/// The input type `V` is decoupled from the output `Batch` type, allowing
+/// strategies to aggregate individual items into different batch representations.
+///
+/// Implementation requirements:
+/// - `take_from` MUST return 0 when the batch cannot accept any more values
+pub trait BatchStrategy<V>: Send {
+    /// The output batch type that is committed to the Store.
+    type Batch;
+
+    /// Creates a new empty batch strategy with the given configuration.
+    fn new<C: Clone + Send + Sync>(config: &C) -> Self;
+
+    /// Extends the batch by taking as many items as will fit from the source Vec.
+    /// Returns the number of items taken (0 if the batch is full).
+    ///
+    /// This is the core operation that determines batching behavior. Implementations should:
+    /// - Check remaining capacity
+    /// - Return 0 immediately if no values can fit
+    /// - Take as many values as will fit within the batch's capacity limits
+    /// - Remove items from the source Vec using `drain()` or `split_off()`
+    fn take_from(&mut self, source: &mut Vec<V>) -> usize;
+
+    /// Consumes the strategy and returns the accumulated batch.
+    fn into_batch(self) -> Self::Batch;
+
+    /// Returns the number of items currently in the batch.
+    fn len(&self) -> usize;
+
+    /// Returns true if the batch contains no items.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns true if the batch is full.
+    fn is_ready(&self) -> bool;
+}
+
+/// Batch strategy that limits batch size based on row count.
+/// Used by stores that have parameter count limits (e.g., PostgreSQL's i16::MAX limit).
+/// Capacity is measured in parameter slots, where each row consumes FIELD_COUNT slots.
+pub struct RowCountBatchStrategy<V> {
+    values: Vec<V>,
+}
+
+impl<V: FieldCount> RowCountBatchStrategy<V> {
+    /// Returns the maximum number of rows that can fit in a batch.
+    /// For RowCountBatchStrategy, this is i16::MAX / FIELD_COUNT.
+    pub const fn max_rows() -> usize {
+        if V::FIELD_COUNT == 0 {
+            i16::MAX as usize
+        } else {
+            i16::MAX as usize / V::FIELD_COUNT
+        }
+    }
+}
+
+/// Configuration for RowCountBatchStrategy. Currently empty but can be extended
+/// in the future with parameters like max_batch_size_override.
+#[derive(Clone, Debug)]
+pub struct RowCountBatchConfig;
+
+impl<V: FieldCount + Send> BatchStrategy<V> for RowCountBatchStrategy<V> {
+    type Batch = Vec<V>;
+
+    fn new<C: Clone + Send + Sync>(_config: &C) -> Self {
+        Self { values: Vec::new() }
+    }
+
+    fn take_from(&mut self, source: &mut Vec<V>) -> usize {
+        let max_params = i16::MAX as usize;
+        let used_params = self.values.len() * V::FIELD_COUNT;
+        let capacity_left = max_params.saturating_sub(used_params);
+
+        if capacity_left < V::FIELD_COUNT {
+            return 0;
+        }
+
+        let max_rows = capacity_left / V::FIELD_COUNT;
+        let to_take = max_rows.min(source.len());
+
+        if to_take == 0 {
+            return 0;
+        }
+
+        if to_take == source.len() {
+            let taken = std::mem::take(source);
+            self.values.extend(taken);
+        } else {
+            let mut remainder = source.split_off(to_take);
+            std::mem::swap(source, &mut remainder);
+            self.values.extend(remainder);
+        }
+        to_take
+    }
+
+    fn into_batch(self) -> Vec<V> {
+        self.values
+    }
+
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn is_ready(&self) -> bool {
+        let max_params = i16::MAX as usize;
+        let used_params = self.values.len() * V::FIELD_COUNT;
+        let capacity_left = max_params.saturating_sub(used_params);
+
+        // Full if we can't fit another row
+        capacity_left < V::FIELD_COUNT
+    }
+}
+
 /// Represents a database connection that can be used by the indexer framework to manage watermark
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
@@ -71,17 +192,46 @@ pub trait Connection: Send {
     ) -> anyhow::Result<bool>;
 }
 
+/// Type declarations for store implementations. This trait defines the associated types without
+/// imposing store-specific bounds on the value type V. Each store can specify its own bounds
+/// in the `Store` trait methods.
+///
+/// This separation allows different store implementations to have different requirements on V:
+/// - PostgreSQL uses RowCountBatchStrategy which requires FieldCount to stay under parameter limits
+/// - ObjectStore uses SingleRowBatchStrategy which only requires Send
+/// - Future stores (e.g., Walrus) can require different bounds (e.g., PayloadSize)
+pub trait StoreTypes: Send + Sync + 'static + Clone {
+    type Connection<'c>: Connection
+    where
+        Self: 'c;
+
+    /// The batch strategy type for this store. Store implementations can add their own bounds
+    /// on V when implementing this associated type (e.g., PostgreSQL requires FieldCount).
+    type BatchStrategy<V>;
+
+    /// Configuration type. This allows stores to inject configuration parameters when creating
+    /// batch strategies.
+    type Config: Clone + Send + Sync;
+}
+
 /// A storage-agnostic interface that provides database connections for both watermark management
 /// and arbitrary writes. The indexer framework accepts this `Store` implementation to manage
 /// watermarks operations through its associated `Connection` type. This store is also passed to the
 /// pipeline handlers to perform arbitrary writes to the store.
 #[async_trait]
-pub trait Store: Send + Sync + 'static + Clone {
-    type Connection<'c>: Connection
-    where
-        Self: 'c;
-
+pub trait Store: StoreTypes {
     async fn connect<'c>(&'c self) -> Result<Self::Connection<'c>, anyhow::Error>;
+
+    /// Returns the configuration for a store.
+    fn config(&self) -> &Self::Config;
+
+    /// Creates a new batch strategy instance.
+    fn new_batch_strategy<V>(&self) -> Self::BatchStrategy<V>
+    where
+        Self::BatchStrategy<V>: BatchStrategy<V>,
+    {
+        Self::BatchStrategy::<V>::new(self.config())
+    }
 }
 
 /// Extends the Store trait with transactional capabilities, to be used within the framework for

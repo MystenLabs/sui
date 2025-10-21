@@ -17,7 +17,7 @@ use sui_bridge_schema::schema::token_transfer;
 use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Db;
-use sui_indexer_alt_framework::store::Store;
+use sui_indexer_alt_framework::store::StoreTypes;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
@@ -155,12 +155,15 @@ impl Processor for TokenTransferHandler {
 #[async_trait]
 impl Handler for TokenTransferHandler {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
+
     async fn commit<'a>(
-        values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        &self,
+        batch: &Self::Batch,
+        conn: &mut <Self::Store as StoreTypes>::Connection<'a>,
     ) -> anyhow::Result<usize> {
         Ok(diesel::insert_into(token_transfer::table)
-            .values(values)
+            .values(batch)
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)

@@ -18,7 +18,7 @@ use crate::model::StoredWatermark;
 use crate::schema::watermarks;
 use crate::{Connection, Db};
 
-pub use sui_indexer_alt_framework_store_traits::Store;
+pub use sui_indexer_alt_framework_store_traits::{RowCountBatchStrategy, Store};
 
 #[async_trait]
 impl store::Connection for Connection<'_> {
@@ -173,12 +173,20 @@ impl store::Connection for Connection<'_> {
     }
 }
 
+impl store::StoreTypes for Db {
+    type Connection<'c> = Connection<'c>;
+    type BatchStrategy<V> = RowCountBatchStrategy<V>;
+    type Config = ();
+}
+
 #[async_trait]
 impl store::Store for Db {
-    type Connection<'c> = Connection<'c>;
-
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
         Ok(Connection(self.0.get().await?))
+    }
+
+    fn config(&self) -> &Self::Config {
+        &()
     }
 }
 
