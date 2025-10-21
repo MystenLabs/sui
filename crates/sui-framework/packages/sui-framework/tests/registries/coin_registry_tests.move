@@ -534,8 +534,8 @@ fun try_borrow_twice() {
 fun cannot_return_different_metadata() {
     let mut test = test_scenario::begin(@0x0);
     let mut registry = coin_registry::create_coin_data_registry_for_testing(test.ctx());
-    let (builder, t_cap) = new_builder().build_dynamic(&mut registry, test.ctx());
-    let metadata_cap = builder.finalize(test.ctx());
+    let (builder, _t_cap) = new_builder().build_dynamic(&mut registry, test.ctx());
+    let _metadata_cap = builder.finalize(test.ctx());
 
     test.next_tx(@10);
     let mut currency = test.take_shared<Currency<TestDynamic>>();

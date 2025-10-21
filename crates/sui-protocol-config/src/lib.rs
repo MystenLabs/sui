@@ -4110,9 +4110,7 @@ impl ProtocolConfig {
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
                 }
-                100 => {
-                    // Framework update to disable deleting legacy CoinMetadata.
-                }
+                100 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
