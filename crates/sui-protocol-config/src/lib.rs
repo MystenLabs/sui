@@ -4159,16 +4159,16 @@ impl ProtocolConfig {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
-
-                    if chain != Chain::Mainnet {
-                        cfg.feature_flags.enable_poseidon = true;
-                    }
                 }
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
                     cfg.feature_flags.create_root_accumulator_object = true;
                 }
-                100 => {}
+                100 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_poseidon = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
