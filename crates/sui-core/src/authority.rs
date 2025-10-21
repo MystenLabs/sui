@@ -12,6 +12,7 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::SchedulingSource;
+use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
@@ -802,8 +803,9 @@ pub struct ExecutionEnv {
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
     /// The source of the scheduling of the transaction.
     pub scheduling_source: SchedulingSource,
-    /// Status of the balance withdraw scheduling of the transaction.
-    pub withdraw_status: BalanceWithdrawStatus,
+    /// Status of the balance withdraw scheduling of the transaction,
+    /// including both address and object balance withdraws.
+    pub balance_withdraw_status: BalanceWithdrawStatus,
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
@@ -815,7 +817,7 @@ impl Default for ExecutionEnv {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
             scheduling_source: SchedulingSource::NonFastPath,
-            withdraw_status: BalanceWithdrawStatus::NoWithdraw,
+            balance_withdraw_status: BalanceWithdrawStatus::Unknown,
             barrier_dependencies: Default::default(),
         }
     }
@@ -844,13 +846,8 @@ impl ExecutionEnv {
         self
     }
 
-    pub fn with_sufficient_balance(mut self) -> Self {
-        self.withdraw_status = BalanceWithdrawStatus::SufficientBalance;
-        self
-    }
-
     pub fn with_insufficient_balance(mut self) -> Self {
-        self.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
+        self.balance_withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
         self
     }
 
@@ -1763,7 +1760,7 @@ impl AuthorityState {
         &self,
         tx_lock: &CertLockGuard,
         certificate: &VerifiedExecutableTransaction,
-        assigned_shared_object_versions: AssignedVersions,
+        assigned_shared_object_versions: &AssignedVersions,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<InputObjects> {
         let _scope = monitored_scope("Execution::load_input_objects");
@@ -1776,7 +1773,7 @@ impl AuthorityState {
             &certificate.key(),
             tx_lock,
             input_objects,
-            &assigned_shared_object_versions,
+            assigned_shared_object_versions,
             epoch_store.epoch(),
         )
     }
@@ -1871,7 +1868,7 @@ impl AuthorityState {
         let input_objects = match self.read_objects_for_execution(
             tx_guard.as_lock_guard(),
             certificate,
-            execution_env.assigned_versions,
+            &execution_env.assigned_versions,
             epoch_store,
         ) {
             Ok(objects) => objects,
@@ -1907,7 +1904,7 @@ impl AuthorityState {
             certificate,
             input_objects,
             expected_effects_digest,
-            execution_env.withdraw_status,
+            execution_env,
             epoch_store,
         )
     }
@@ -2020,7 +2017,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
-        withdraw_status: BalanceWithdrawStatus,
+        execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> ExecutionOutput<(
         TransactionOutputs,
@@ -2062,7 +2059,7 @@ impl AuthorityState {
             &tx_digest,
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
-            &withdraw_status,
+            &execution_env.balance_withdraw_status,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2096,6 +2093,13 @@ impl AuthorityState {
                 tx_digest,
                 &mut None,
             );
+
+        if !self
+            .execution_scheduler
+            .should_commit_object_balance_withdraws(certificate, &effects, &execution_env)
+        {
+            return ExecutionOutput::RetryLater;
+        }
 
         if let Some(expected_effects_digest) = expected_effects_digest
             && effects.digest() != expected_effects_digest
@@ -2232,7 +2236,7 @@ impl AuthorityState {
                 certificate,
                 input_objects,
                 None,
-                BalanceWithdrawStatus::NoWithdraw,
+                ExecutionEnv::default(),
                 epoch_store,
             )
             .unwrap();
@@ -2376,7 +2380,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::Unknown,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2584,7 +2588,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::Unknown,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2829,7 +2833,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::Unknown,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -3910,7 +3914,7 @@ impl AuthorityState {
         Ok(new_epoch_store)
     }
 
-    pub async fn settle_transactions_for_testing(
+    pub async fn settle_accumulator_for_testing(
         &self,
         ckpt_seq: CheckpointSequenceNumber,
         effects: &[TransactionEffects],
@@ -3921,6 +3925,7 @@ impl AuthorityState {
             ckpt_seq,
             0,
         );
+        let balance_changes = builder.collect_accumulator_changes();
         let epoch_store = self.epoch_store_for_testing();
         let epoch = epoch_store.epoch();
         let (settlements, barrier) = builder.build_tx(
@@ -3978,12 +3983,17 @@ impl AuthorityState {
             .next()
             .unwrap()
             .1;
+        let next_accumulator_version = assigned_versions.accumulator_version.unwrap().next();
         let env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
         let (effects, _) = self
             .try_execute_immediately(&barrier, env, &epoch_store)
             .await
             .unwrap();
         assert!(effects.status().is_ok());
+        self.execution_scheduler.settle_balances(BalanceSettlement {
+            balance_changes,
+            next_accumulator_version,
+        });
     }
 
     /// Advance the epoch store to the next epoch for testing only.
@@ -6045,7 +6055,7 @@ impl AuthorityState {
         let input_objects = self.read_objects_for_execution(
             &tx_lock,
             &executable_tx,
-            assigned_versions,
+            &assigned_versions,
             epoch_store,
         )?;
 
@@ -6055,7 +6065,7 @@ impl AuthorityState {
                 &executable_tx,
                 input_objects,
                 None,
-                BalanceWithdrawStatus::NoWithdraw,
+                ExecutionEnv::default(),
                 epoch_store,
             )
             .unwrap();

@@ -337,7 +337,12 @@ pub mod checked {
                 let is_insufficient_balance_error = execution_result
                     .as_ref()
                     .err()
-                    .map(|err| matches!(err.kind(), sui_types::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw))
+                    .map(|err| {
+                        matches!(
+                            err.kind(),
+                            sui_types::execution_status::ExecutionFailureStatus::InsufficientFunds
+                        )
+                    })
                     .unwrap_or(false);
 
                 // If we don't have enough balance to withdraw, don't charge for gas

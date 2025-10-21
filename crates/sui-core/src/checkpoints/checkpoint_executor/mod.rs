@@ -876,8 +876,8 @@ impl CheckpointExecutor {
                             .with_barrier_dependencies(barrier_deps);
 
                         // Check if the expected effects indicate insufficient balance
-                        if let ExecutionStatus::Failure {
-                            error: ExecutionFailureStatus::InsufficientBalanceForWithdraw,
+                        if let &ExecutionStatus::Failure {
+                            error: ExecutionFailureStatus::InsufficientFunds,
                             ..
                         } = effects.status()
                         {
