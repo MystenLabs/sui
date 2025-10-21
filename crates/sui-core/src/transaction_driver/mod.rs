@@ -444,12 +444,21 @@ where
 }
 
 // Chooses the percentage of transactions to be driven by TransactionDriver.
-pub fn choose_transaction_driver_percentage() -> u8 {
+pub fn choose_transaction_driver_percentage(
+    chain_id: Option<sui_types::digests::ChainIdentifier>,
+) -> u8 {
     if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
         if let Ok(tx_driver_percentage) = v.parse::<u8>() {
             if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
                 return tx_driver_percentage;
             }
+        }
+    }
+
+    if let Some(chain_identifier) = chain_id {
+        if chain_identifier.chain() == sui_protocol_config::Chain::Unknown {
+            // Kep test coverage for QD.
+            return 50;
         }
     }
 

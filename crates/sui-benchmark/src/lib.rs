@@ -281,7 +281,7 @@ impl LocalValidatorAggregatorProxy {
             .with_registry(registry)
             .build_network_clients();
         let committee = genesis.committee().unwrap();
-        let td_percentage = choose_transaction_driver_percentage();
+        let td_percentage = choose_transaction_driver_percentage(None);
         Self::new_impl(
             aggregator,
             registry,
