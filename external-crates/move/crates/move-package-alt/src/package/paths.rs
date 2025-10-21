@@ -127,7 +127,7 @@ impl PackagePath {
 
     /// Acquire an exclusive lock for the files in this package
     pub(crate) fn lock(&self) -> FileResult<PackageSystemLock> {
-        Ok(PackageSystemLock::new_for_project(self.path())?)
+        self.0.lock()
     }
 
     /// Parse and return the manifest file, failing if it doesn't exist or isn't correctly
@@ -223,6 +223,11 @@ impl OutputPath {
         }
     }
 
+    /// Acquire an exclusive lock for the files in this package
+    pub(crate) fn lock(&self) -> FileResult<PackageSystemLock> {
+        Ok(PackageSystemLock::new_for_project(self.path())?)
+    }
+
     fn path(&self) -> &Path {
         &self.0
     }
@@ -247,10 +252,9 @@ impl OutputPath {
 
     /// Read the contents of the lockfile from the output directory
     #[cfg(test)]
-    pub async fn dump_lockfile(&self) -> ParsedLockfile {
-        let mtx = PackageSystemLock::new().unwrap();
+    pub async fn dump_lockfile(&self, mtx: &PackageSystemLock) -> ParsedLockfile {
         PackagePath(self.clone())
-            .read_lockfile(&mtx)
+            .read_lockfile(mtx)
             .unwrap()
             .unwrap()
             .1
@@ -258,10 +262,12 @@ impl OutputPath {
 
     /// Read the contents of the pubfile from the output directory
     #[cfg(test)]
-    pub async fn dump_pubfile<F: MoveFlavor>(&self) -> ParsedPublishedFile<F> {
-        let mtx = PackageSystemLock::new().unwrap();
+    pub async fn dump_pubfile<F: MoveFlavor>(
+        &self,
+        mtx: &PackageSystemLock,
+    ) -> ParsedPublishedFile<F> {
         PackagePath(self.clone())
-            .read_pubfile(&mtx)
+            .read_pubfile(mtx)
             .unwrap()
             .unwrap()
             .1
@@ -406,8 +412,8 @@ mod tests {
         )
         .unwrap();
 
-        let mtx = PackageSystemLock::new().unwrap();
         let path = PackagePath::new(tempdir.path().to_path_buf()).unwrap();
+        let mtx = path.lock().unwrap();
         let error = path.read_manifest(&mtx).unwrap_err().to_string();
         assert_snapshot!(error.replace(tempdir.path().to_string_lossy().as_ref(), "<TEMPDIR>"),
             @r###"

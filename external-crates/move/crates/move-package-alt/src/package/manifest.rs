@@ -133,9 +133,7 @@ mod tests {
     use test_log::test;
 
     use crate::{
-        flavor::vanilla::default_environment,
-        package::{package_lock::PackageSystemLock, paths::PackagePath},
-        schema::PackageName,
+        flavor::vanilla::default_environment, package::paths::PackagePath, schema::PackageName,
     };
 
     use super::Manifest;
@@ -151,7 +149,7 @@ mod tests {
 
         Ok(Manifest::read_from_file(
             &package_path,
-            &PackageSystemLock::new()?,
+            &package_path.lock()?,
         )?)
     }
 

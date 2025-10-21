@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::git::get_cache_path;
 
@@ -28,6 +28,7 @@ pub enum LockError {
 
 pub type LockResult<T> = Result<T, LockError>;
 
+#[derive(Debug)]
 pub struct PackageSystemLock {
     file: File,
 }
@@ -60,6 +61,7 @@ impl PackageSystemLock {
     }
 
     fn new_for_path(path: &Path, should_truncate: bool) -> std::io::Result<Self> {
+        debug!("acquiring lock for {path:?}");
         let lock = OpenOptions::new()
             .truncate(should_truncate)
             .write(true)
