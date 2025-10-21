@@ -13,11 +13,13 @@ use anyhow::{anyhow, bail, ensure, Context};
 use clap::*;
 use colored::Colorize;
 use fastcrypto::traits::KeyPair;
+use futures::future;
 use move_analyzer::analyzer;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_compiler::editions::Flavor;
 use move_package::BuildConfig;
 use mysten_common::tempdir;
+use prometheus::Registry;
 use rand::rngs::OsRng;
 use std::collections::BTreeMap;
 use std::io::{stdout, Write};
@@ -26,6 +28,7 @@ use std::num::NonZeroUsize;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use std::{fs, io};
 use sui_bridge::config::BridgeCommitteeConfig;
 use sui_bridge::metrics::BridgeMetrics;
@@ -46,6 +49,8 @@ use sui_move::summary::PackageSummaryMetadata;
 use sui_sdk::apis::ReadApi;
 use sui_sdk::SuiClient;
 use sui_types::move_package::MovePackage;
+use tokio::time::interval;
+use tokio_util::sync::CancellationToken;
 
 use move_core_types::account_address::AccountAddress;
 use serde_json::json;
@@ -780,7 +785,7 @@ impl SuiCommand {
                     let signed_tx = context.sign_transaction(&tx).await;
                     tasks.push(context.execute_transaction_must_succeed(signed_tx));
                 }
-                futures::future::join_all(tasks).await;
+                future::join_all(tasks).await;
                 Ok(())
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
@@ -1016,8 +1021,8 @@ async fn start(
         swarm_builder = swarm_builder.with_data_ingestion_dir(dir.clone());
     }
 
-    let mut fullnode_url = sui_config::node::default_json_rpc_address();
-    fullnode_url.set_port(fullnode_rpc_port);
+    let mut fullnode_rpc_address = sui_config::node::default_json_rpc_address();
+    fullnode_rpc_address.set_port(fullnode_rpc_port);
 
     if no_full_node {
         swarm_builder = swarm_builder.with_fullnode_count(0);
@@ -1029,7 +1034,7 @@ async fn start(
 
         swarm_builder = swarm_builder
             .with_fullnode_count(1)
-            .with_fullnode_rpc_addr(fullnode_url)
+            .with_fullnode_rpc_addr(fullnode_rpc_address)
             .with_fullnode_rpc_config(rpc_config);
     }
 
@@ -1039,14 +1044,17 @@ async fn start(
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     info!("Cluster started");
 
-    // the indexer requires a fullnode url with protocol specified
-    let fullnode_url_str = format!("http://{}", fullnode_url);
-    info!("Fullnode URL: {}", fullnode_url_str);
+    let fullnode_rpc_url = format!("http://{fullnode_rpc_address}");
+    info!("Fullnode RPC URL: {fullnode_rpc_url}");
+
+    let prometheus_registry = Registry::new();
+    let cancel = CancellationToken::new();
+    let mut rpc_services = vec![];
 
     let pipelines = if let Some(input) = with_indexer {
-        let indexer_address = parse_host_port(input, DEFAULT_INDEXER_PORT)
+        let address = parse_host_port(input, DEFAULT_INDEXER_PORT)
             .context("Invalid indexer host and port")?;
-        info!("Starting the indexer-alt service at {indexer_address}");
+        info!("Starting the indexer at {address}");
 
         let client_args = ClientArgs {
             local_ingestion_path: data_ingestion_dir.clone(),
@@ -1062,30 +1070,28 @@ async fn start(
             client_args,
             IndexerConfig::for_test(),
             None,
-            &prometheus::Registry::new(),
-            tokio_util::sync::CancellationToken::new(),
+            &prometheus_registry,
+            cancel.child_token(),
         )
         .await
         .context("Failed to setup indexer")?;
 
         let pipelines = indexer.pipelines().map(|s| s.to_string()).collect();
+        let handle = indexer.run().await.context("Failed to start indexer")?;
+        rpc_services.push(handle);
 
-        let _indexer_handle = indexer.run().await.context("Failed to start indexer")?;
-
-        info!("Indexer-alt started with pipelines: {pipelines:?}");
+        info!("Indexer started with pipelines: {pipelines:?}");
         pipelines
     } else {
         vec![]
     };
 
     if let Some(input) = with_graphql {
-        let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
+        let address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
             .context("Invalid graphql host and port")?;
 
-        info!("Starting the GraphQL service at {graphql_address}");
-
-        let consistent_port = graphql_address.port() + 1;
-        let consistent_listen_address = SocketAddr::new(graphql_address.ip(), consistent_port);
+        let consistent_port = address.port() + 1;
+        let consistent_listen_address = SocketAddr::new(address.ip(), consistent_port);
 
         let client_args = ClientArgs {
             local_ingestion_path: data_ingestion_dir.clone(),
@@ -1102,23 +1108,24 @@ async fn start(
             ..Default::default()
         };
 
-        let _consistent_store_handle = start_consistent_store(
+        let handle = start_consistent_store(
             rocksdb_path,
             IndexerArgs::default(),
             client_args,
             consistent_args,
             "0.0.0",
             ConsistentConfig::for_test(),
-            &prometheus::Registry::new(),
-            tokio_util::sync::CancellationToken::new(),
+            &prometheus_registry,
+            cancel.child_token(),
         )
         .await
         .context("Failed to start Consistent Store")?;
+        rpc_services.push(handle);
 
         info!("Consistent Store started at {consistent_listen_address}");
 
         let graphql_args = GraphQlArgs {
-            rpc_listen_address: graphql_address,
+            rpc_listen_address: address,
             no_ide: false,
         };
 
@@ -1131,10 +1138,10 @@ async fn start(
         };
 
         let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: Some(fullnode_url_str.clone()),
+            fullnode_rpc_url: Some(fullnode_rpc_url.clone()),
         };
 
-        let _graphql_handle = start_graphql(
+        let handle = start_graphql(
             Some(database_url),
             None,
             fullnode_args,
@@ -1146,13 +1153,14 @@ async fn start(
             "0.0.0",
             GraphQlConfig::default(),
             pipelines,
-            &prometheus::Registry::new(),
-            tokio_util::sync::CancellationToken::new(),
+            &prometheus_registry,
+            cancel.child_token(),
         )
         .await
         .context("Failed to start GraphQL server")?;
+        rpc_services.push(handle);
 
-        info!("GraphQL started at {graphql_address}");
+        info!("GraphQL started at {address}");
     }
 
     if let Some(input) = with_faucet {
@@ -1187,7 +1195,7 @@ async fn start(
                 external_keys: None,
                 envs: vec![SuiEnv {
                     alias: "localnet".to_string(),
-                    rpc: fullnode_url_str,
+                    rpc: fullnode_rpc_url,
                     ws: None,
                     basic_auth: None,
                 }],
@@ -1213,26 +1221,37 @@ async fn start(
         start_faucet(app_state).await?;
     }
 
-    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
-    let mut unhealthy_cnt = 0;
+    // Run health check loop until Ctrl+C or failure
+    let mut interval = interval(Duration::from_secs(3));
+    let mut unhealthy = 0;
+
     loop {
-        for node in swarm.validator_nodes() {
-            if let Err(err) = node.health_check(true).await {
-                unhealthy_cnt += 1;
-                if unhealthy_cnt > 3 {
-                    // The network could temporarily go down during reconfiguration.
-                    // If we detect a failed validator 3 times in a row, give up.
-                    return Err(err.into());
-                }
-                // Break the inner loop so that we could retry latter.
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                info!("Received Ctrl+C, shutting down...");
                 break;
-            } else {
-                unhealthy_cnt = 0;
             }
+            _ = interval.tick() => {}
         }
 
-        interval.tick().await;
+        for node in swarm.validator_nodes() {
+            let Err(e) = node.health_check(true).await else {
+                unhealthy = 0;
+                break;
+            };
+
+            unhealthy += 1;
+            if unhealthy > 3 {
+                return Err(e.into());
+            }
+        }
     }
+
+    // Trigger cancellation to shut down all RPC services, and wait for all services to exit
+    // cleanly.
+    cancel.cancel();
+    future::join_all(rpc_services).await;
+    Ok(())
 }
 
 async fn genesis(
