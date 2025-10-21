@@ -333,7 +333,7 @@ pub enum SuiObjectResponseError {
 }
 
 /// Custom error type for Sui.
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Error, Hash)]
 #[error(transparent)]
 pub struct SuiError(#[from] pub Box<SuiErrorKind>);
 
@@ -1034,6 +1034,12 @@ impl Ord for SuiError {
 impl PartialOrd for SuiError {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl std::fmt::Debug for SuiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_inner().fmt(f)
     }
 }
 
