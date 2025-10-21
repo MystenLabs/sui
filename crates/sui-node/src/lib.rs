@@ -176,6 +176,7 @@ pub struct P2pComponents {
 #[cfg(msim)]
 mod simulator {
     use std::sync::atomic::AtomicBool;
+    use sui_types::error::SuiErrorKind;
 
     use super::*;
     pub(super) struct SimState {
@@ -210,7 +211,7 @@ mod simulator {
             &OIDCProvider::Twitch,
             true,
         )
-        .map_err(|_| SuiErrorKind::JWKRetrievalError)
+        .map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 
     thread_local! {
