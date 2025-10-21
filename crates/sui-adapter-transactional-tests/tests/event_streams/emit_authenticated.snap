@@ -1,29 +1,29 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 14 tasks
+processed 17 tasks
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-24:
+task 1, lines 9-40:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 4909600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6726000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 26:
+task 2, line 42:
 //# run test::event_streams::emit_event --sender A --args 10
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
-accumulators_written: fake(2,0)
+accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 28:
+task 3, line 44:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 30-32:
+task 4, lines 46-48:
 //# view-object 2,0
 Owner: Object ID: ( _ )
 Version: 2
@@ -38,25 +38,25 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     },
     value: sui::accumulator_settlement::EventStreamHead {
         mmr: vector[
-            4193026669056199291450104767150632880306003562460839240305371365647191074687u256,
+            36718762836038749483911618894483252056258001312774157117231216905683206178845u256,
         ],
         checkpoint_seq: 0u64,
         num_events: 1u64,
     },
 }
 
-task 5, line 33:
+task 5, line 49:
 //# run test::event_streams::emit_event --sender A --args 20
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
-accumulators_written: fake(2,0)
+accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, line 35:
+task 6, line 51:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 7, lines 37-39:
+task 7, lines 53-55:
 //# view-object 2,0
 Owner: Object ID: ( _ )
 Version: 3
@@ -72,25 +72,25 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     value: sui::accumulator_settlement::EventStreamHead {
         mmr: vector[
             0u256,
-            30846744035052286657552953986461737471750793996831124219056452182152320131448u256,
+            67998662762320576095236000139360036679882218866274734549366888244673606350052u256,
         ],
         checkpoint_seq: 0u64,
         num_events: 2u64,
     },
 }
 
-task 8, line 40:
+task 8, line 56:
 //# run test::event_streams::emit_event --sender A --args 30
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [30, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
-accumulators_written: fake(2,0)
+accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9, line 42:
+task 9, line 58:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 10, lines 44-46:
+task 10, lines 60-62:
 //# view-object 2,0
 Owner: Object ID: ( _ )
 Version: 4
@@ -105,26 +105,26 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
     },
     value: sui::accumulator_settlement::EventStreamHead {
         mmr: vector[
-            78861809677164882054823137344180686699290590906500210896214226297690064751198u256,
-            30846744035052286657552953986461737471750793996831124219056452182152320131448u256,
+            44013142847778404897735158578815903523617935852224288248509183951931607346632u256,
+            67998662762320576095236000139360036679882218866274734549366888244673606350052u256,
         ],
         checkpoint_seq: 0u64,
         num_events: 3u64,
     },
 }
 
-task 11, line 47:
+task 11, line 63:
 //# run test::event_streams::emit_event --sender A --args 40
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [40, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
-accumulators_written: fake(2,0)
+accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 12, line 49:
+task 12, line 65:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 13, lines 51-54:
+task 13, lines 67-69:
 //# view-object 2,0
 Owner: Object ID: ( _ )
 Version: 5
@@ -141,9 +141,45 @@ Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settl
         mmr: vector[
             0u256,
             0u256,
-            44733504676794955300345824432333292615069762451917052580225461614383895087790u256,
+            101448272263138651697661631904547756635571669141724902098625390989883571051436u256,
         ],
         checkpoint_seq: 0u64,
         num_events: 4u64,
+    },
+}
+
+task 14, line 70:
+//# run test::event_streams::mint_and_emit --sender A --args 50
+events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [50, 0, 0, 0, 0, 0, 0, 0] }
+created: object(14,0)
+mutated: object(0,0)
+accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 2416800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15, line 72:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 16, lines 74-77:
+//# view-object 2,0
+Owner: Object ID: ( _ )
+Version: 6
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
+        address: test,
+    },
+    value: sui::accumulator_settlement::EventStreamHead {
+        mmr: vector[
+            101689671407052876157123493131431349696447578073856488262054782527660038647423u256,
+            0u256,
+            101448272263138651697661631904547756635571669141724902098625390989883571051436u256,
+        ],
+        checkpoint_seq: 0u64,
+        num_events: 5u64,
     },
 }
