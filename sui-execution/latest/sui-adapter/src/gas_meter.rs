@@ -243,13 +243,12 @@ impl GasMeter for SuiGasMeter<'_> {
         // We read the reference so we are decreasing the size of the stack by the size of the
         // reference, and adding to it the size of the value that has been read from that
         // reference.
-        self.0.charge(
-            1,
-            1,
-            1,
-            abstract_memory_size(self.0, ref_val).into(),
-            REFERENCE_SIZE.into(),
-        )
+        let size = if reweight_read_ref(self.0.gas_model_version) {
+            abstract_memory_size_with_traversal(self.0, ref_val)
+        } else {
+            abstract_memory_size(self.0, ref_val)
+        };
+        self.0.charge(1, 1, 1, size.into(), REFERENCE_SIZE.into())
     }
 
     fn charge_write_ref(
@@ -389,6 +388,11 @@ fn abstract_memory_size_with_traversal(
 
 fn enable_traverse_refs(gas_model_version: u64) -> bool {
     gas_model_version > 9
+}
+
+fn reweight_read_ref(gas_model_version: u64) -> bool {
+    // Reweighting `ReadRef` is only done in gas model versions 10 and above.
+    gas_model_version > 10
 }
 
 fn reweight_move_loc(gas_model_version: u64) -> bool {
