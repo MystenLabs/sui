@@ -5,7 +5,11 @@
 module fork_demo::fork_tests {
     use sui::coin::{Self, Coin};
     use sui::test_scenario as ts;
-    use fork_demo::demo_coin::{Self, DEMO_COIN};
+    use sui::clock::{Self, Clock};
+    use sui::dynamic_field::{Self as df};
+    use sui::dynamic_object_field::{Self as dof};
+    use fork_demo::demo_coin::{Self, DEMO_COIN, DEMO_STATE, DEMO_DYNAMIC};
+    use std::debug;
 
     const ADMIN: address = @0xAD;
     const USER1: address = @0x1111111111111111111111111111111111111111111111111111111111111111;
@@ -67,6 +71,39 @@ module fork_demo::fork_tests {
         assert!(balance > 0, 2);
         ts::return_to_sender(&scenario, coin);
 
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_check_demo_state_on_fork_state() {
+        let scenario = ts::begin(USER1);
+        let s = &scenario;
+        let demo_state = s.take_shared<DEMO_STATE>();
+        assert!(demo_coin::get_demo_counter(&demo_state) == 1, 3);
+        ts::return_shared(demo_state);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_load_sui_system_shared_object_from_fork() {
+        let scenario = ts::begin(USER1);
+        let s = &scenario;
+        let clock = s.take_shared<Clock>();
+        assert!(clock.timestamp_ms() > 0, 4);
+        ts::return_shared(clock);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_borrow_dynamic_field_from_fork() {
+        let scenario = ts::begin(USER1);
+        let s = &scenario;
+
+        let demo_state = s.take_shared<DEMO_STATE>();
+        let demo_dynamic = demo_coin::borrow_demo_dynamic(&demo_state, 0);
+        assert!(demo_coin::get_demo_dynamic_counter(demo_dynamic) == 0, 5);
+
+        ts::return_shared(demo_state);
         ts::end(scenario);
     }
 }
