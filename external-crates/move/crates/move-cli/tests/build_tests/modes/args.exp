@@ -56,10 +56,10 @@ error[E02001]: duplicate declaration, item, or annotation
    ┌─ ./sources/foo.move:14:12
    │
  9 │ public fun bar() {
-   │            --- Alias previously defined here
+   │            --- Module member or alias previously defined here
    ·
 14 │ public fun bar() {
-   │            ^^^ Duplicate module member or alias 'bar'. Top level names in a namespace must be unique
+   │            ^^^ Duplicate module member 'bar'. Top level names in a namespace must be unique
 
 Command `build`:
 BUILDING foo
