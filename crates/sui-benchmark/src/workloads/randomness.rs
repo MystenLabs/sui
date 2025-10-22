@@ -14,13 +14,15 @@ use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::crypto::get_key_pair;
+use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::object::Owner;
-use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     transaction::Transaction,
 };
+use sui_types::{Identifier, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tracing::{error, info};
 
 /// The max amount of gas units needed for a payload.
@@ -29,6 +31,8 @@ pub const MAX_GAS_IN_UNIT: u64 = 1_000_000_000;
 #[derive(Debug)]
 pub struct RandomnessTestPayload {
     package_id: ObjectID,
+    counter_id: ObjectID,
+    counter_initial_shared_version: SequenceNumber,
     randomness_initial_shared_version: SequenceNumber,
     gas: Gas,
     system_state_observer: Arc<SystemStateObserver>,
@@ -54,8 +58,39 @@ impl Payload for RandomnessTestPayload {
             .state
             .borrow()
             .reference_gas_price;
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .move_call(
+                self.package_id,
+                Identifier::new("counter").unwrap(),
+                Identifier::new("increment").unwrap(),
+                vec![],
+                vec![CallArg::Object(ObjectArg::SharedObject {
+                    id: self.counter_id,
+                    initial_shared_version: self.counter_initial_shared_version,
+                    mutability: SharedObjectMutability::Mutable,
+                })],
+            )
+            .unwrap();
+        builder
+            .move_call(
+                self.package_id,
+                Identifier::new("random").unwrap(),
+                Identifier::new("new").unwrap(),
+                vec![],
+                vec![CallArg::Object(ObjectArg::SharedObject {
+                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    initial_shared_version: self.randomness_initial_shared_version,
+                    mutability: SharedObjectMutability::Immutable,
+                })],
+            )
+            .unwrap();
+
+        let tx = builder.finish();
+
         TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp)
-            .call_emit_random(self.package_id, self.randomness_initial_shared_version)
+            .programmable(tx)
             .build_and_sign(self.gas.2.as_ref())
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
@@ -110,12 +145,20 @@ impl RandomnessWorkloadBuilder {
 #[async_trait]
 impl WorkloadBuilder<dyn Payload> for RandomnessWorkloadBuilder {
     async fn generate_coin_config_for_init(&self) -> Vec<GasCoinConfig> {
-        let (address, keypair) = get_key_pair();
-        vec![GasCoinConfig {
-            amount: MAX_GAS_FOR_TESTING,
-            address,
-            keypair: Arc::new(keypair),
-        }]
+        let (address, keypair) = get_key_pair::<AccountKeyPair>();
+        let keypair = Arc::new(keypair);
+        vec![
+            GasCoinConfig {
+                amount: MAX_GAS_FOR_TESTING,
+                address,
+                keypair: keypair.clone(),
+            },
+            GasCoinConfig {
+                amount: MAX_GAS_FOR_TESTING,
+                address,
+                keypair,
+            },
+        ]
     }
     async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
         let mut configs = vec![];
@@ -138,6 +181,8 @@ impl WorkloadBuilder<dyn Payload> for RandomnessWorkloadBuilder {
     ) -> Box<dyn Workload<dyn Payload>> {
         Box::<dyn Workload<dyn Payload>>::from(Box::new(RandomnessWorkload {
             basics_package_id: None,
+            counter_id: None,
+            counter_initial_shared_version: None,
             randomness_initial_shared_version: None,
             init_gas,
             payload_gas,
@@ -148,6 +193,8 @@ impl WorkloadBuilder<dyn Payload> for RandomnessWorkloadBuilder {
 #[derive(Debug)]
 pub struct RandomnessWorkload {
     pub basics_package_id: Option<ObjectID>,
+    pub counter_id: Option<ObjectID>,
+    pub counter_initial_shared_version: Option<SequenceNumber>,
     pub randomness_initial_shared_version: Option<SequenceNumber>,
     pub init_gas: Vec<Gas>,
     pub payload_gas: Vec<Gas>,
@@ -169,6 +216,11 @@ impl Workload<dyn Payload> for RandomnessWorkload {
             .first()
             .expect("Not enough gas to initialize randomness workload");
 
+        let counter_gas = self
+            .init_gas
+            .get(1)
+            .expect("Not enough gas to initialize randomness workload");
+
         // Publish basics package
         if self.basics_package_id.is_none() {
             info!("Publishing basics package");
@@ -178,6 +230,23 @@ impl Workload<dyn Payload> for RandomnessWorkload {
                     .0,
             );
             info!("Basics package id {:?}", self.basics_package_id);
+        }
+
+        // Create counter
+        if self.counter_id.is_none() {
+            let transaction = TestTransactionBuilder::new(counter_gas.1, counter_gas.0, gas_price)
+                .call_counter_create(self.basics_package_id.unwrap())
+                .build_and_sign(counter_gas.2.as_ref());
+            let (obj_ref, owner) = proxy
+                .execute_transaction_block(transaction)
+                .await
+                .1
+                .unwrap()
+                .created()[0]
+                .clone();
+            self.counter_id = Some(obj_ref.0);
+            self.counter_initial_shared_version = owner.start_version();
+            info!("Counter id {:?}", self.counter_id);
         }
 
         // Get randomness shared object initial version
@@ -204,6 +273,8 @@ impl Workload<dyn Payload> for RandomnessWorkload {
         for g in self.payload_gas.iter() {
             shared_payloads.push(Box::new(RandomnessTestPayload {
                 package_id: self.basics_package_id.unwrap(),
+                counter_id: self.counter_id.unwrap(),
+                counter_initial_shared_version: self.counter_initial_shared_version.unwrap(),
                 randomness_initial_shared_version: self.randomness_initial_shared_version.unwrap(),
                 gas: g.clone(),
                 system_state_observer: system_state_observer.clone(),

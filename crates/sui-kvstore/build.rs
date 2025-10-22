@@ -22,5 +22,6 @@ fn main() {
         .build_client(true)
         .build_server(false)
         .out_dir(&out_dir)
-        .compile_fds(fds).unwrap();
+        .compile_fds(fds)
+        .unwrap();
 }

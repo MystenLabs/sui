@@ -31,6 +31,7 @@ use crate::{
     },
     Node,
 };
+use anyhow::{Error, Result};
 use std::{
     collections::BTreeMap,
     sync::{
@@ -195,7 +196,7 @@ impl TransactionStore for InMemoryStore {
     fn transaction_data_and_effects(
         &self,
         tx_digest: &str,
-    ) -> Result<Option<TransactionInfo>, anyhow::Error> {
+    ) -> Result<Option<TransactionInfo>, Error> {
         let inner = self.0.read().unwrap();
         if let Some(cached) = inner.transaction_cache.get(tx_digest) {
             inner.metrics.txn_hit.fetch_add(1, Ordering::Relaxed);
@@ -207,7 +208,7 @@ impl TransactionStore for InMemoryStore {
 }
 
 impl EpochStore for InMemoryStore {
-    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, anyhow::Error> {
+    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error> {
         let inner = self.0.read().unwrap();
         if let Some(cached) = inner.epoch_data_cache.get(&epoch) {
             inner.metrics.epoch_hit.fetch_add(1, Ordering::Relaxed);
@@ -217,7 +218,7 @@ impl EpochStore for InMemoryStore {
         Ok(None)
     }
 
-    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, anyhow::Error> {
+    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
         match self.epoch_info(epoch) {
             Ok(Some(epoch_data)) => {
                 let inner = self.0.read().unwrap();
@@ -242,7 +243,7 @@ impl EpochStore for InMemoryStore {
 }
 
 impl ObjectStore for InMemoryStore {
-    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let mut results = Vec::with_capacity(keys.len());
         let inner = self.0.read().unwrap();
 
@@ -320,7 +321,7 @@ impl TransactionStoreWriter for InMemoryStore {
         &self,
         tx_digest: &str,
         transaction_info: TransactionInfo,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         self.0
             .write()
             .unwrap()
@@ -331,7 +332,7 @@ impl TransactionStoreWriter for InMemoryStore {
 }
 
 impl EpochStoreWriter for InMemoryStore {
-    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), anyhow::Error> {
+    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error> {
         self.0
             .write()
             .unwrap()
@@ -347,7 +348,7 @@ impl ObjectStoreWriter for InMemoryStore {
         key: &ObjectKey,
         object: Object,
         actual_version: u64,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         let mut inner = self.0.write().unwrap();
 
         // Always store the object at its actual version
@@ -379,13 +380,13 @@ impl ObjectStoreWriter for InMemoryStore {
 }
 
 impl SetupStore for InMemoryStore {
-    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, anyhow::Error> {
+    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, Error> {
         Ok(None)
     }
 }
 
 impl StoreSummary for InMemoryStore {
-    fn summary<W: std::io::Write>(&self, w: &mut W) -> anyhow::Result<()> {
+    fn summary<W: std::io::Write>(&self, w: &mut W) -> Result<()> {
         let stats = self.cache_stats();
         let inner = self.0.read().unwrap();
         let m = &inner.metrics;

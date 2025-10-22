@@ -130,8 +130,6 @@ mod test {
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
-            // Disable TransactionDriver in chain configide override tests.
-            .transaction_driver_percentage(0)
             .build()
             .await
             .into();
@@ -724,18 +722,6 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
-    async fn test_simulated_load_mysticeti_fastpath() {
-        if sui_simulator::has_mainnet_protocol_config_override() {
-            return;
-        }
-
-        std::env::set_var("TRANSACTION_DRIVER", "100");
-
-        let test_cluster = build_test_cluster(4, 30_000, 1).await;
-        test_simulated_load(test_cluster, 120).await;
-    }
-
-    #[sim_test(config = "test_config()")]
     async fn test_data_ingestion_pipeline() {
         let path = nondeterministic!(TempDir::new().unwrap()).keep();
         let test_cluster = Arc::new(
@@ -881,8 +867,6 @@ mod test {
                 )
                 .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
                 .with_stake_subsidy_start_epoch(10)
-                // Disable TransactionDriver in upgrade compatibility tests.
-                .transaction_driver_percentage(0)
                 .build()
                 .await,
         );
@@ -1192,7 +1176,6 @@ mod test {
                     &genesis,
                     &registry,
                     &test_cluster.fullnode_handle.rpc_url,
-                    test_cluster.transaction_driver_percentage(),
                 )
                 .await,
             )

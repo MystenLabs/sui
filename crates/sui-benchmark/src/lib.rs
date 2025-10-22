@@ -276,21 +276,12 @@ impl LocalValidatorAggregatorProxy {
         genesis: &Genesis,
         registry: &Registry,
         reconfig_fullnode_rpc_url: &str,
-        transaction_driver_percentage: Option<u8>,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
             .build_network_clients();
         let committee = genesis.committee().unwrap();
-
-        let td_percentage = if let Some(tx_driver_percentage) = transaction_driver_percentage {
-            tx_driver_percentage
-        } else {
-            // We don't need to gate transaction driver for benchmark since we
-            // are not running it on mainnet.
-            choose_transaction_driver_percentage(None)
-        };
-
+        let td_percentage = choose_transaction_driver_percentage(None);
         Self::new_impl(
             aggregator,
             registry,

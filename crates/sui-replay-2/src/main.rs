@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{anyhow, Result};
 use clap::*;
 use core::panic;
 use std::str::FromStr;
@@ -15,7 +16,7 @@ use sui_types::base_types::ObjectID;
 bin_version::bin_version!();
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
@@ -32,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
                 node,
             } => {
                 let object_id = ObjectID::from_str(package_id)
-                    .map_err(|e| anyhow::anyhow!("Invalid package ID: {}", e))?;
+                    .map_err(|e| anyhow!("Invalid package ID: {}", e))?;
 
                 rebuild_package(
                     node.clone(),
@@ -49,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
                 node,
             } => {
                 let object_id = ObjectID::from_str(package_id)
-                    .map_err(|e| anyhow::anyhow!("Invalid package ID: {}", e))?;
+                    .map_err(|e| anyhow!("Invalid package ID: {}", e))?;
 
                 extract_package(node.clone(), object_id, output_path.clone())?;
 
@@ -61,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
                 node,
             } => {
                 let object_id = ObjectID::from_str(package_id)
-                    .map_err(|e| anyhow::anyhow!("Invalid package ID: {}", e))?;
+                    .map_err(|e| anyhow!("Invalid package ID: {}", e))?;
 
                 overwrite_package(node.clone(), object_id, package_path.clone())?;
 

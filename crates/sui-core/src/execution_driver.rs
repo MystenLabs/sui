@@ -7,7 +7,7 @@ use mysten_common::{fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_macros::fail_point_async;
-use sui_types::error::SuiErrorKind;
+use sui_types::execution::ExecutionOutput;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot, Semaphore};
 use tracing::{error_span, info, trace, warn, Instrument};
 
@@ -121,20 +121,27 @@ pub async fn execution_process(
                 &certificate,
                 execution_env,
                 &epoch_store_clone,
-            ).await.map_err(|e| e.into_inner()) {
-                Err(SuiErrorKind::ValidatorHaltedAtEpochEnd) => {
-                    warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
-                    return;
+            ).await {
+                ExecutionOutput::Success(_) => {
+                    authority
+                        .metrics
+                        .execution_driver_executed_transactions
+                        .inc();
                 }
-                Err(e) => {
+                ExecutionOutput::EpochEnded => {
+                    warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
+                }
+                ExecutionOutput::Fatal(e) => {
                     fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
                 }
-                _ => (),
+                ExecutionOutput::RetryLater => {
+                    // Transaction will be retried later and auto-rescheduled, so we ignore it here
+                    authority
+                        .metrics
+                        .execution_driver_paused_transactions
+                        .inc();
+                }
             }
-            authority
-                .metrics
-                .execution_driver_executed_transactions
-                .inc();
         }.instrument(error_span!("execution_driver", tx_digest = ?digest))));
     }
 }

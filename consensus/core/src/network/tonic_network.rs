@@ -82,15 +82,11 @@ impl TonicClient {
             .channel_pool
             .get_channel(self.network_keypair.clone(), peer, timeout)
             .await?;
-        let mut client = ConsensusServiceClient::new(channel)
+        let client = ConsensusServiceClient::new(channel)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit);
-
-        if self.context.protocol_config.consensus_zstd_compression() {
-            client = client
-                .send_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Zstd);
-        }
+            .max_decoding_message_size(config.message_size_limit)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
         Ok(client)
     }
 }
@@ -756,15 +752,11 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 )
             });
 
-        let mut consensus_service_server = ConsensusServiceServer::new(service)
+        let consensus_service_server = ConsensusServiceServer::new(service)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit);
-
-        if self.context.protocol_config.consensus_zstd_compression() {
-            consensus_service_server = consensus_service_server
-                .send_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Zstd);
-        }
+            .max_decoding_message_size(config.message_size_limit)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
 
         let consensus_service = tonic::service::Routes::new(consensus_service_server)
             .into_axum_router()
