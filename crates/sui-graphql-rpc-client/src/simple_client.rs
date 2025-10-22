@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ClientError;
+use reqwest::Response;
 use reqwest::header;
 use reqwest::header::HeaderValue;
-use reqwest::Response;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use sui_graphql_rpc_headers::LIMITS_HEADER;

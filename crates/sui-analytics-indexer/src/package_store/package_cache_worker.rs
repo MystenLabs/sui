@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{package_store::PackageCache, Worker};
+use crate::{Worker, package_store::PackageCache};
 
 pub const PACKAGE_CACHE_WORKER_NAME: &str = "package_cache_manager";
 

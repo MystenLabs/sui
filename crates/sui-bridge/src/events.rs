@@ -21,6 +21,8 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_json_rpc_types::SuiEvent;
+use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
 use sui_types::bridge::MoveTypeBridgeMessageKey;
@@ -30,8 +32,6 @@ use sui_types::collection_types::VecMap;
 use sui_types::crypto::ToFromBytes;
 use sui_types::digests::TransactionDigest;
 use sui_types::parse_sui_type_tag;
-use sui_types::TypeTag;
-use sui_types::BRIDGE_PACKAGE_ID;
 
 // `TokendDepositedEvent` emitted in bridge.move
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -445,6 +445,7 @@ pub mod tests {
     use ethers::types::Address as EthAddress;
     use sui_json_rpc_types::BcsEvent;
     use sui_json_rpc_types::SuiEvent;
+    use sui_types::Identifier;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
     use sui_types::bridge::BridgeChainId;
@@ -452,7 +453,6 @@ pub mod tests {
     use sui_types::crypto::get_key_pair;
     use sui_types::digests::TransactionDigest;
     use sui_types::event::EventID;
-    use sui_types::Identifier;
 
     /// Returns a test SuiEvent and corresponding BridgeAction
     pub fn get_test_sui_event_and_action(identifier: Identifier) -> (SuiEvent, BridgeAction) {

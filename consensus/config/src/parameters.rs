@@ -153,28 +153,16 @@ impl Parameters {
     }
 
     pub(crate) fn default_round_prober_interval_ms() -> u64 {
-        if cfg!(msim) {
-            1000
-        } else {
-            5000
-        }
+        if cfg!(msim) { 1000 } else { 5000 }
     }
 
     pub(crate) fn default_round_prober_request_timeout_ms() -> u64 {
-        if cfg!(msim) {
-            800
-        } else {
-            4000
-        }
+        if cfg!(msim) { 800 } else { 4000 }
     }
 
     pub(crate) fn default_propagation_delay_stop_proposal_threshold() -> u32 {
         // Propagation delay is usually 0 round in production.
-        if cfg!(msim) {
-            2
-        } else {
-            5
-        }
+        if cfg!(msim) { 2 } else { 5 }
     }
 
     pub(crate) fn default_dag_state_cached_rounds() -> u32 {

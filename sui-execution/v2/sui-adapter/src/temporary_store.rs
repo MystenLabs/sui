@@ -16,8 +16,10 @@ use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
-use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
+use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, is_system_package};
 use sui_types::{
+    TypeTag,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiResult},
@@ -26,9 +28,7 @@ use sui_types::{
     object::Owner,
     storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
     transaction::InputObjects,
-    TypeTag,
 };
-use sui_types::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
@@ -76,17 +76,19 @@ impl<'backing> TemporaryStore<'backing> {
         #[cfg(debug_assertions)]
         {
             // Ensure that input objects and receiving objects must not overlap.
-            assert!(objects
-                .keys()
-                .collect::<HashSet<_>>()
-                .intersection(
-                    &receiving_objects
-                        .iter()
-                        .map(|oref| &oref.0)
-                        .collect::<HashSet<_>>()
-                )
-                .next()
-                .is_none());
+            assert!(
+                objects
+                    .keys()
+                    .collect::<HashSet<_>>()
+                    .intersection(
+                        &receiving_objects
+                            .iter()
+                            .map(|oref| &oref.0)
+                            .collect::<HashSet<_>>()
+                    )
+                    .next()
+                    .is_none()
+            );
         }
         Self {
             store,
@@ -1128,14 +1130,18 @@ impl ChildObjectResolver for TemporaryStore<'_> {
     ) -> SuiResult<Option<Object>> {
         // You should never be able to try and receive an object after deleting it or writing it in the same
         // transaction since `Receiving` doesn't have copy.
-        debug_assert!(!self
-            .execution_results
-            .written_objects
-            .contains_key(receiving_object_id));
-        debug_assert!(!self
-            .execution_results
-            .deleted_object_ids
-            .contains(receiving_object_id));
+        debug_assert!(
+            !self
+                .execution_results
+                .written_objects
+                .contains_key(receiving_object_id)
+        );
+        debug_assert!(
+            !self
+                .execution_results
+                .deleted_object_ids
+                .contains(receiving_object_id)
+        );
         self.store.get_object_received_at_version(
             owner,
             receiving_object_id,

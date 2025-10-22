@@ -5,16 +5,16 @@ use std::collections::BTreeMap;
 
 use move_core_types::{ident_str, language_storage::StructTag, u256::U256};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    consistent_service_client::ConsistentServiceClient, ListObjectsByTypeRequest,
+    ListObjectsByTypeRequest, consistent_service_client::ConsistentServiceClient,
 };
-use sui_indexer_alt_e2e_tests::{find, FullCluster};
+use sui_indexer_alt_e2e_tests::{FullCluster, find};
 use sui_types::{
+    SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     base_types::{ObjectRef, SuiAddress},
     crypto::get_account_key_pair,
     effects::TransactionEffectsAPI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Transaction, TransactionData},
-    TypeTag, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 /// 5 SUI gas budget

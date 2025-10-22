@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::FileCompression;
 use crate::reader::StateSnapshotReaderV1;
 use crate::writer::StateSnapshotWriterV1;
-use crate::FileCompression;
 use fastcrypto::hash::MultisetHash;
 use futures::future::AbortHandle;
 use indicatif::MultiProgress;

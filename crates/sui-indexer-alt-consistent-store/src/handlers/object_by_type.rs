@@ -5,13 +5,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sui_indexer_alt_framework::{
-    pipeline::{sequential, Processor},
+    pipeline::{Processor, sequential},
     types::{base_types::VersionDigest, full_checkpoint_content::CheckpointData, object::Object},
 };
 
 use crate::{
     restore::Restore,
-    schema::{object_by_type::Key, Schema},
+    schema::{Schema, object_by_type::Key},
     store::{Connection, Store},
 };
 

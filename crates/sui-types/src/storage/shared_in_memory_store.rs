@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::error::Result;
 use super::ObjectStore;
+use super::error::Result;
 use crate::base_types::{EpochId, ExecutionData, TransactionDigest};
 use crate::committee::Committee;
 use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
@@ -456,7 +456,7 @@ impl SingleCheckpointSharedInMemoryStore {
         contents: VerifiedCheckpointContents,
         committee: Committee,
     ) {
-        let mut locked = self.0 .0.write().unwrap();
+        let mut locked = self.0.0.write().unwrap();
         locked.insert_genesis_state(checkpoint, contents, committee);
     }
 }
@@ -555,7 +555,7 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
 impl WriteStore for SingleCheckpointSharedInMemoryStore {
     fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<()> {
         {
-            let mut locked = self.0 .0.write().unwrap();
+            let mut locked = self.0.0.write().unwrap();
             locked.checkpoints.clear();
             locked.sequence_number_to_digest.clear();
         }
@@ -579,7 +579,7 @@ impl WriteStore for SingleCheckpointSharedInMemoryStore {
         contents: VerifiedCheckpointContents,
     ) -> Result<()> {
         {
-            let mut locked = self.0 .0.write().unwrap();
+            let mut locked = self.0.0.write().unwrap();
             locked.transactions.clear();
             locked.effects.clear();
             locked.contents_digest_to_sequence_number.clear();

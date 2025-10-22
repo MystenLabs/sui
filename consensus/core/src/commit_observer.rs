@@ -8,8 +8,9 @@ use tokio::time::Instant;
 use tracing::info;
 
 use crate::{
+    CommitConsumerArgs, CommittedSubDag,
     block::{BlockAPI, VerifiedBlock},
-    commit::{load_committed_subdag_from_store, CommitAPI},
+    commit::{CommitAPI, load_committed_subdag_from_store},
     commit_finalizer::{CommitFinalizer, CommitFinalizerHandle},
     context::Context,
     dag_state::DagState,
@@ -18,7 +19,6 @@ use crate::{
     linearizer::Linearizer,
     storage::Store,
     transaction_certifier::TransactionCertifier,
-    CommitConsumerArgs, CommittedSubDag,
 };
 
 /// Role of CommitObserver
@@ -151,7 +151,9 @@ impl CommitObserver {
 
         let last_commit_index = last_commit.index();
         if last_commit_index == replay_after_commit_index {
-            info!("Nothing to recover for commit observer - replay is requested immediately after last commit index {last_commit_index}");
+            info!(
+                "Nothing to recover for commit observer - replay is requested immediately after last commit index {last_commit_index}"
+            );
             return;
         }
         assert!(last_commit_index > replay_after_commit_index);
@@ -310,15 +312,15 @@ impl CommitObserver {
 mod tests {
     use consensus_config::AuthorityIndex;
     use consensus_types::block::BlockRef;
-    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
+    use mysten_metrics::monitored_mpsc::{UnboundedReceiver, unbounded_channel};
     use parking_lot::RwLock;
     use rstest::rstest;
     use tokio::time::timeout;
 
     use super::*;
     use crate::{
-        context::Context, dag_state::DagState, linearizer::median_timestamp_by_stake,
-        storage::mem_store::MemStore, test_dag_builder::DagBuilder, CommitIndex,
+        CommitIndex, context::Context, dag_state::DagState, linearizer::median_timestamp_by_stake,
+        storage::mem_store::MemStore, test_dag_builder::DagBuilder,
     };
 
     #[rstest]

@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{
+    Context, InputObject, Object,
     connection::{Connection, CursorType, Edge},
     dataloader::DataLoader,
-    Context, InputObject, Object,
 };
-use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, sql_types::Bool};
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_reader::{
     packages::{
@@ -37,7 +37,7 @@ use crate::{
         type_filter::TypeInput,
         uint53::UInt53,
     },
-    error::{bad_user_input, upcast, RpcError},
+    error::{RpcError, bad_user_input, upcast},
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
@@ -50,7 +50,7 @@ use super::{
     object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{CTransaction, Transaction, filter::TransactionFilter},
     type_origin::TypeOrigin,
 };
 

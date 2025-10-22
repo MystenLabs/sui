@@ -5,13 +5,13 @@ use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Client;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
-use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
+use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
 use sui_indexer_alt_graphql::{
-    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
+    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
@@ -19,8 +19,8 @@ use sui_indexer_alt_reader::{
 };
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_pg_db::{
-    temp::{get_available_port, TempDb},
     DbArgs,
+    temp::{TempDb, get_available_port},
 };
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::gas_coin::GasCoin;
@@ -960,13 +960,15 @@ async fn test_package_resolver_finds_newly_published_package() {
 
     // Verify the 'value' field is of type NestedObject
     assert_eq!(fields[1].name, "value");
-    assert!(fields[1]
-        .layout
-        .pointer("/struct/type")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .contains("::resolver_test::NestedObject"));
+    assert!(
+        fields[1]
+            .layout
+            .pointer("/struct/type")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("::resolver_test::NestedObject")
+    );
 
     graphql_cluster.stopped().await;
 }

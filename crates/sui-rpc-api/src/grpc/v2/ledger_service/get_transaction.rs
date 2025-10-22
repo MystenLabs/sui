@@ -229,10 +229,10 @@ fn transaction_to_response(
 }
 
 pub(crate) fn render_clever_error(service: &RpcService, effects: &mut TransactionEffects) {
-    use sui_rpc::proto::sui::rpc::v2::clever_error;
-    use sui_rpc::proto::sui::rpc::v2::execution_error::ErrorDetails;
     use sui_rpc::proto::sui::rpc::v2::CleverError;
     use sui_rpc::proto::sui::rpc::v2::MoveAbort;
+    use sui_rpc::proto::sui::rpc::v2::clever_error;
+    use sui_rpc::proto::sui::rpc::v2::execution_error::ErrorDetails;
 
     let Some(move_abort) = effects
         .status

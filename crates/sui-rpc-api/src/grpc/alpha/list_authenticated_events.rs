@@ -3,11 +3,11 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
+use crate::RpcError;
+use crate::RpcService;
 use crate::grpc::alpha::event_service_proto::{
     AuthenticatedEvent, ListAuthenticatedEventsRequest, ListAuthenticatedEventsResponse,
 };
-use crate::RpcError;
-use crate::RpcService;
 use bytes::Bytes;
 use prost::Message;
 use std::str::FromStr;

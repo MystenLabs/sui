@@ -9,8 +9,8 @@
 //!
 //! This module is private to the `DataStore` and packcaged in its own module for convenience.
 
-use crate::{replay_interface::EpochData, DataStore};
-use anyhow::{anyhow, Context, Error};
+use crate::{DataStore, replay_interface::EpochData};
+use anyhow::{Context, Error, anyhow};
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
 

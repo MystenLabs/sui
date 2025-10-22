@@ -3,8 +3,8 @@
 
 use std::{
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
     },
     time::{SystemTime, UNIX_EPOCH},
 };

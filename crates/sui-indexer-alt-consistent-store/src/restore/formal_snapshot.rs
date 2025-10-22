@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, ensure, Context as _};
+use anyhow::{Context as _, bail, ensure};
 use bytes::Bytes;
 use object_store::{
     aws::AmazonS3Builder, azure::MicrosoftAzureBuilder, gcp::GoogleCloudStorageBuilder,

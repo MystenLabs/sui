@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, Context, Object};
+use async_graphql::{Context, Object, connection::Connection};
 
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
@@ -24,12 +24,12 @@ use crate::{
 };
 
 use super::{
-    checkpoint::filter::{checkpoint_bounds, cp_by_epoch, cp_unfiltered, CheckpointFilter},
+    checkpoint::filter::{CheckpointFilter, checkpoint_bounds, cp_by_epoch, cp_unfiltered},
     epoch::Epoch,
     gas::GasCostSummary,
     transaction::{
-        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
         CTransaction, Transaction,
+        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
     },
     validator_aggregated_signature::ValidatorAggregatedSignature,
 };

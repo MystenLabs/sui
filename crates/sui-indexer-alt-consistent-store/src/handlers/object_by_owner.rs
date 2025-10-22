@@ -5,14 +5,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sui_indexer_alt_framework::{
-    pipeline::{sequential, Processor},
+    pipeline::{Processor, sequential},
     types::{base_types::VersionDigest, full_checkpoint_content::CheckpointData, object::Object},
 };
 
 use crate::store::{Connection, Store};
 use crate::{
     restore::Restore,
-    schema::{object_by_owner::Key, Schema},
+    schema::{Schema, object_by_owner::Key},
 };
 
 use super::{checkpoint_input_objects, checkpoint_output_objects};

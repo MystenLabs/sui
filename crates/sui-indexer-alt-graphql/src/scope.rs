@@ -12,7 +12,7 @@ use async_graphql::Context;
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
-use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore, Resolver};
+use sui_package_resolver::{Package, PackageStore, Resolver, error::Error as PackageResolverError};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     object::Object as NativeObject,

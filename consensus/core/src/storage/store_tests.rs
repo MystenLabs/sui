@@ -6,7 +6,7 @@ use consensus_types::block::{BlockDigest, BlockRef};
 use rstest::rstest;
 use tempfile::TempDir;
 
-use super::{mem_store::MemStore, rocksdb_store::RocksDBStore, Store, WriteBatch};
+use super::{Store, WriteBatch, mem_store::MemStore, rocksdb_store::RocksDBStore};
 use crate::{
     block::{TestBlock, VerifiedBlock},
     commit::{CommitDigest, TrustedCommit},

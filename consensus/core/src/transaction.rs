@@ -4,10 +4,10 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use consensus_config::Epoch;
 use consensus_types::block::{
-    BlockRef, Round, TransactionIndex, NUM_RESERVED_TRANSACTION_INDICES, PING_TRANSACTION_INDEX,
+    BlockRef, NUM_RESERVED_TRANSACTION_INDICES, PING_TRANSACTION_INDEX, Round, TransactionIndex,
 };
 use mysten_common::debug_fatal;
-use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
+use mysten_metrics::monitored_mpsc::{Receiver, Sender, channel};
 use parking_lot::Mutex;
 use tap::TapFallible;
 use thiserror::Error;
@@ -149,7 +149,10 @@ impl TransactionConsumer {
 
         if let Some(t) = self.pending_transactions.take() {
             if let Some(pending_transactions) = handle_txs(t) {
-                debug_fatal!("Previously pending transaction(s) should fit into an empty block! Dropping: {:?}", pending_transactions.transactions);
+                debug_fatal!(
+                    "Previously pending transaction(s) should fit into an empty block! Dropping: {:?}",
+                    pending_transactions.transactions
+                );
             }
         }
 
@@ -436,10 +439,10 @@ mod tests {
 
     use consensus_config::AuthorityIndex;
     use consensus_types::block::{
-        BlockDigest, BlockRef, TransactionIndex, NUM_RESERVED_TRANSACTION_INDICES,
-        PING_TRANSACTION_INDEX,
+        BlockDigest, BlockRef, NUM_RESERVED_TRANSACTION_INDICES, PING_TRANSACTION_INDEX,
+        TransactionIndex,
     };
-    use futures::{stream::FuturesUnordered, StreamExt};
+    use futures::{StreamExt, stream::FuturesUnordered};
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::timeout;
 

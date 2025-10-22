@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry, Histogram,
-    IntCounterVec,
+    Histogram, IntCounterVec, register_histogram_with_registry,
+    register_int_counter_vec_with_registry,
 };
 
 pub struct LimitsMetrics {

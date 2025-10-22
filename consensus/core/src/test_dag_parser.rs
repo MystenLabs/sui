@@ -6,13 +6,13 @@ use std::{collections::HashSet, sync::Arc};
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
 use nom::{
+    IResult,
     branch::alt,
-    bytes::complete::{tag, take_while1, take_while_m_n},
+    bytes::complete::{tag, take_while_m_n, take_while1},
     character::complete::{char, digit1, multispace0, multispace1, space0, space1},
     combinator::{map_res, opt},
     multi::{many0, separated_list0},
     sequence::{delimited, preceded, terminated, tuple},
-    IResult,
 };
 
 use crate::{block::Slot, context::Context, test_dag_builder::DagBuilder};

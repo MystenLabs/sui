@@ -557,7 +557,7 @@ fn pop_id(args: &mut VecDeque<Value>) -> PartialVMResult<ObjectID> {
         None => {
             return Err(PartialVMError::new(
                 StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ))
+            ));
         }
         Some(v) => v,
     };

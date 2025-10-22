@@ -6,7 +6,7 @@ use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiErrorKind, SuiResult};
 use crate::signature::GenericSignature;
 use crate::sui_serde::{Readable, SuiBitmap};
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use derive_more::{AsMut, AsRef, From};
 pub use enum_dispatch::enum_dispatch;
 use eyre::eyre;
@@ -37,13 +37,13 @@ pub use fastcrypto::traits::{
 };
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
-use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
+use rand::rngs::{OsRng, StdRng};
 use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::ser::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_with::{serde_as, Bytes};
+use serde_with::{Bytes, serde_as};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -437,7 +437,7 @@ pub struct ConciseAuthorityPublicKeyBytesRef<'a>(&'a AuthorityPublicKeyBytes);
 
 impl Debug for ConciseAuthorityPublicKeyBytesRef<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
+        let s = Hex::encode(self.0.0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
     }
 }
@@ -454,7 +454,7 @@ pub struct ConciseAuthorityPublicKeyBytes(AuthorityPublicKeyBytes);
 
 impl Debug for ConciseAuthorityPublicKeyBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
+        let s = Hex::encode(self.0.0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
     }
 }

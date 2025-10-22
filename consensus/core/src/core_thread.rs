@@ -5,15 +5,15 @@ use std::{
     collections::BTreeSet,
     fmt::Debug,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
 };
 
 use async_trait::async_trait;
 use consensus_types::block::{BlockRef, Round};
 use mysten_metrics::{
-    monitored_mpsc::{channel, Receiver, Sender, WeakSender},
+    monitored_mpsc::{Receiver, Sender, WeakSender, channel},
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
@@ -22,6 +22,7 @@ use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
 use crate::{
+    BlockAPI as _,
     block::VerifiedBlock,
     commit::CertifiedCommits,
     context::Context,
@@ -29,7 +30,6 @@ use crate::{
     core_thread::CoreError::Shutdown,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    BlockAPI as _,
 };
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
@@ -62,7 +62,7 @@ pub enum CoreError {
 #[async_trait]
 pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn add_blocks(&self, blocks: Vec<VerifiedBlock>)
-        -> Result<BTreeSet<BlockRef>, CoreError>;
+    -> Result<BTreeSet<BlockRef>, CoreError>;
 
     async fn check_block_refs(
         &self,
@@ -459,6 +459,7 @@ mod test {
 
     use super::*;
     use crate::{
+        CommitConsumerArgs,
         block_manager::BlockManager,
         commit_observer::CommitObserver,
         context::Context,
@@ -469,7 +470,6 @@ mod test {
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
         transaction_certifier::TransactionCertifier,
-        CommitConsumerArgs,
     };
 
     #[tokio::test]

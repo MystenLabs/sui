@@ -12,9 +12,9 @@ use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc::proto::sui::rpc::v2::signature_verification_service_server::SignatureVerificationService;
 use sui_rpc::proto::sui::rpc::v2::VerifySignatureRequest;
 use sui_rpc::proto::sui::rpc::v2::VerifySignatureResponse;
+use sui_rpc::proto::sui::rpc::v2::signature_verification_service_server::SignatureVerificationService;
 
 #[tonic::async_trait]
 impl SignatureVerificationService for RpcService {
@@ -101,7 +101,7 @@ fn verify_signature(
                     return Err(RpcError::new(
                         tonic::Code::Internal,
                         "unknown signature scheme",
-                    ))
+                    ));
                 }
             },
             sui_sdk_types::UserSignature::Multisig(multisig) => {
@@ -121,7 +121,7 @@ fn verify_signature(
                 return Err(RpcError::new(
                     tonic::Code::Internal,
                     "unknown signature scheme",
-                ))
+                ));
             }
         };
 

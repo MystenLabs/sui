@@ -7,10 +7,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use client::Client;
 use fastcrypto::encoding::{Base64, Encoding};
-use query::{limits, packages, SuiAddress, UInt53};
+use query::{SuiAddress, UInt53, limits, packages};
 use sui_types::object::Object;
 use tracing::info;
 

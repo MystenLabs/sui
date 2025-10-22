@@ -13,7 +13,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 
 use crate::{
     context::Context,
-    error::{invalid_params, InternalContext},
+    error::{InternalContext, invalid_params},
 };
 
 use super::rpc_module::RpcModule;

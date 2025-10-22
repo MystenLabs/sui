@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::Base64;
-use futures::stream;
 use futures::StreamExt;
+use futures::stream;
 use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 use std::collections::BTreeMap;
@@ -16,8 +16,8 @@ use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::ZkLoginIntentScope;
 use sui_json_rpc_types::ZkLoginVerifyResult;
 
-use crate::error::{Error, SuiRpcResult};
 use crate::RpcClient;
+use crate::error::{Error, SuiRpcResult};
 use sui_json_rpc_api::{
     CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient,
     WriteApiClient,

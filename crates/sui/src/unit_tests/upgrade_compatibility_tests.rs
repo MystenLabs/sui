@@ -6,10 +6,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::upgrade_compatibility::{compare_packages, missing_module_diag, FormattedField};
+use crate::upgrade_compatibility::{FormattedField, compare_packages, missing_module_diag};
 
-use move_binary_format::normalized::{Field, Type};
 use move_binary_format::CompiledModule;
+use move_binary_format::normalized::{Field, Type};
 use move_command_line_common::files::FileHash;
 use move_compiler::diagnostics::report_diagnostics_to_buffer;
 use move_compiler::shared::files::{FileName, FilesSourceText};
@@ -169,28 +169,32 @@ fn test_version_mismatch() {
 fn test_friend_link_ok() {
     let (pkg_v1, pkg_v2, path) = get_packages("friend_linking");
     // upgrade compatibility ignores friend linking
-    assert!(compare_packages(
-        AccountAddress::ZERO,
-        pkg_v1,
-        pkg_v2,
-        path,
-        UpgradePolicy::Compatible
-    )
-    .is_ok());
+    assert!(
+        compare_packages(
+            AccountAddress::ZERO,
+            pkg_v1,
+            pkg_v2,
+            path,
+            UpgradePolicy::Compatible
+        )
+        .is_ok()
+    );
 }
 
 #[test]
 fn test_entry_linking_ok() {
     let (pkg_v1, pkg_v2, path) = get_packages("entry_linking");
     // upgrade compatibility ignores entry linking
-    assert!(compare_packages(
-        AccountAddress::ZERO,
-        pkg_v1,
-        pkg_v2,
-        path,
-        UpgradePolicy::Compatible
-    )
-    .is_ok());
+    assert!(
+        compare_packages(
+            AccountAddress::ZERO,
+            pkg_v1,
+            pkg_v2,
+            path,
+            UpgradePolicy::Compatible
+        )
+        .is_ok()
+    );
 }
 
 #[test]

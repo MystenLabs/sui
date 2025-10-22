@@ -3,21 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{
-    make_authority_clients_with_timeout_config, make_network_authority_clients_with_network_config,
-    AuthorityAPI, NetworkAuthorityClient,
+    AuthorityAPI, NetworkAuthorityClient, make_authority_clients_with_timeout_config,
+    make_network_authority_clients_with_network_config,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 #[cfg(test)]
 use crate::test_authority_clients::MockAuthorityApi;
 use futures::StreamExt;
-use mysten_metrics::{spawn_monitored_task, GaugeGuard, MonitorCancellation};
+use mysten_metrics::{GaugeGuard, MonitorCancellation, spawn_monitored_task};
 use std::convert::AsRef;
 use std::net::SocketAddr;
-use sui_authority_aggregation::quorum_map_then_reduce_with_timeout;
 use sui_authority_aggregation::ReduceOutput;
+use sui_authority_aggregation::quorum_map_then_reduce_with_timeout;
 use sui_config::genesis::Genesis;
 use sui_network::{
-    default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
+    DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC, default_mysten_network_config,
 };
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
@@ -34,14 +34,14 @@ use sui_types::{
     transaction::*,
 };
 use thiserror::Error;
-use tracing::{debug, error, instrument, trace, trace_span, warn, Instrument};
+use tracing::{Instrument, debug, error, instrument, trace, trace_span, warn};
 
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    Histogram, IntCounter, IntCounterVec, IntGauge, Registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::string::ToString;
@@ -203,7 +203,7 @@ impl AuthAggMetrics {
 pub enum AggregatorProcessTransactionError {
     #[error(
         "Failed to execute transaction on a quorum of validators due to non-retryable errors. Validator errors: {:?}",
-        errors,
+        errors
     )]
     FatalTransaction { errors: GroupedErrors },
 
@@ -216,7 +216,7 @@ pub enum AggregatorProcessTransactionError {
     #[error(
         "Failed to execute transaction on a quorum of validators due to conflicting transactions. Locked objects: {:?}. Validator errors: {:?}",
         conflicting_tx_digests,
-        errors,
+        errors
     )]
     FatalConflictingTransaction {
         errors: GroupedErrors,
@@ -1482,7 +1482,10 @@ where
                                 && state.output_objects.is_none())
                         {
                             metrics.quorum_reached_without_requested_objects.inc();
-                            debug!(?tx_digest, "Quorum Reached but requested input/output objects were not returned");
+                            debug!(
+                                ?tx_digest,
+                                "Quorum Reached but requested input/output objects were not returned"
+                            );
                         }
 
                         ct.verify(&committee).map(|ct| {

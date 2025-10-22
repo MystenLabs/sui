@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoint::{read_checkpoint, read_checkpoint_list, CheckpointsList};
+use crate::checkpoint::{CheckpointsList, read_checkpoint, read_checkpoint_list};
 use crate::committee::extract_new_committee_info;
 use crate::config::Config;
 use crate::object_store::SuiObjectStore;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::sync::Arc;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponseOptions};
@@ -333,24 +333,30 @@ mod tests {
         // Change committee
         committee.epoch += 10;
 
-        assert!(extract_verified_effects_and_events(
-            &full_checkpoint,
-            &committee,
-            TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zi6cMVA9t4WhWk").unwrap(),
-        )
-        .is_err());
+        assert!(
+            extract_verified_effects_and_events(
+                &full_checkpoint,
+                &committee,
+                TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zi6cMVA9t4WhWk")
+                    .unwrap(),
+            )
+            .is_err()
+        );
     }
 
     #[tokio::test]
     async fn test_checkpoint_no_transaction() {
         let (committee, full_checkpoint) = read_data().await;
 
-        assert!(extract_verified_effects_and_events(
-            &full_checkpoint,
-            &committee,
-            TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
-        )
-        .is_err());
+        assert!(
+            extract_verified_effects_and_events(
+                &full_checkpoint,
+                &committee,
+                TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk")
+                    .unwrap(),
+            )
+            .is_err()
+        );
     }
 
     #[tokio::test]
@@ -361,12 +367,15 @@ mod tests {
         let random_contents = FullCheckpointContents::random_for_testing();
         full_checkpoint.checkpoint_contents = random_contents.checkpoint_contents();
 
-        assert!(extract_verified_effects_and_events(
-            &full_checkpoint,
-            &committee,
-            TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
-        )
-        .is_err());
+        assert!(
+            extract_verified_effects_and_events(
+                &full_checkpoint,
+                &committee,
+                TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk")
+                    .unwrap(),
+            )
+            .is_err()
+        );
     }
 
     #[tokio::test]
@@ -386,11 +395,14 @@ mod tests {
             }
         }
 
-        assert!(extract_verified_effects_and_events(
-            &full_checkpoint,
-            &committee,
-            TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
-        )
-        .is_err());
+        assert!(
+            extract_verified_effects_and_events(
+                &full_checkpoint,
+                &committee,
+                TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk")
+                    .unwrap(),
+            )
+            .is_err()
+        );
     }
 }

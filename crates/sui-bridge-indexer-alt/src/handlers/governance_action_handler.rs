@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::handlers::{is_bridge_txn, BRIDGE, COMMITTEE, LIMITER, TREASURY};
+use crate::handlers::{BRIDGE, COMMITTEE, LIMITER, TREASURY, is_bridge_txn};
 use crate::metrics::BridgeIndexerMetrics;
 use crate::struct_tag;
 use async_trait::async_trait;
@@ -15,12 +15,12 @@ use sui_bridge::events::{
 };
 use sui_bridge_schema::models::{BridgeDataSource, GovernanceAction};
 use sui_bridge_schema::schema;
-use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
 use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
+use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
 use tracing::info;
 
 const UPDATE_ROUTE_LIMIT_EVENT: &IdentStr = ident_str!("UpdateRouteLimitEvent");

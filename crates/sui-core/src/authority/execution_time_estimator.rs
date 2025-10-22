@@ -14,15 +14,15 @@ use serde::{Deserialize, Serialize};
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
 use super::weighted_moving_average::WeightedMovingAverage;
 use crate::consensus_adapter::SubmitToConsensus;
-use governor::{clock::MonotonicClock, Quota, RateLimiter};
+use governor::{Quota, RateLimiter, clock::MonotonicClock};
 use itertools::Itertools;
 use lru::LruCache;
 #[cfg(not(msim))]
 use mysten_common::in_antithesis;
 use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-use rand::{random, rngs, thread_rng, Rng, SeedableRng};
-use simple_moving_average::{SingleSumSMA, SMA};
+use rand::{Rng, SeedableRng, random, rngs, thread_rng};
+use simple_moving_average::{SMA, SingleSumSMA};
 use sui_config::node::ExecutionTimeObserverConfig;
 use sui_protocol_config::{ExecutionTimeEstimateParams, PerObjectCongestionControlMode};
 use sui_types::{
@@ -184,7 +184,9 @@ impl ExecutionTimeObserver {
             .protocol_config()
             .per_object_congestion_control_mode()
         else {
-            info!("ExecutionTimeObserver disabled because per-object congestion control mode is not ExecutionTimeEstimate");
+            info!(
+                "ExecutionTimeObserver disabled because per-object congestion control mode is not ExecutionTimeEstimate"
+            );
             return;
         };
 
@@ -244,7 +246,9 @@ impl ExecutionTimeObserver {
             .protocol_config()
             .per_object_congestion_control_mode()
         else {
-            panic!("tried to construct test ExecutionTimeObserver when congestion control mode is not ExecutionTimeEstimate");
+            panic!(
+                "tried to construct test ExecutionTimeObserver when congestion control mode is not ExecutionTimeEstimate"
+            );
         };
         Self {
             epoch_store: Arc::downgrade(&epoch_store),
@@ -1301,12 +1305,14 @@ mod tests {
         // First observation - should not share due to low utilization
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
         observer.record_local_observations(&ptb, &timings, Duration::from_secs(2), 1);
-        assert!(observer
-            .local_observations
-            .get(&key)
-            .unwrap()
-            .last_shared
-            .is_none());
+        assert!(
+            observer
+                .local_observations
+                .get(&key)
+                .unwrap()
+                .last_shared
+                .is_none()
+        );
 
         // Second observation - no time has passed, so now utilization is high; should share upward change
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
@@ -1444,12 +1450,14 @@ mod tests {
         // First observation - should not share due to low utilization
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
         observer.record_local_observations(&ptb, &timings, Duration::from_secs(1), 1);
-        assert!(observer
-            .local_observations
-            .get(&key)
-            .unwrap()
-            .last_shared
-            .is_none());
+        assert!(
+            observer
+                .local_observations
+                .get(&key)
+                .unwrap()
+                .last_shared
+                .is_none()
+        );
 
         // Second observation - no time has passed, so now utilization is high; should share upward change
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(2))];

@@ -122,7 +122,8 @@ impl SharedObjectCongestionTracker {
         allowed_txn_cost_overage_burst_per_object_in_commit: u64,
     ) -> Self {
         assert!(
-            allowed_txn_cost_overage_burst_per_object_in_commit <= max_txn_cost_overage_per_object_in_commit,
+            allowed_txn_cost_overage_burst_per_object_in_commit
+                <= max_txn_cost_overage_per_object_in_commit,
             "burst limit must be <= absolute limit; allowed_txn_cost_overage_burst_per_object_in_commit = {allowed_txn_cost_overage_burst_per_object_in_commit}, max_txn_cost_overage_per_object_in_commit = {max_txn_cost_overage_per_object_in_commit}"
         );
 
@@ -414,11 +415,11 @@ mod object_cost_tests {
     use std::time::Duration;
     use sui_protocol_config::ExecutionTimeEstimateParams;
     use sui_test_transaction_builder::TestTransactionBuilder;
-    use sui_types::base_types::{random_object_ref, SequenceNumber};
-    use sui_types::crypto::{get_key_pair, AccountKeyPair};
+    use sui_types::Identifier;
+    use sui_types::base_types::{SequenceNumber, random_object_ref};
+    use sui_types::crypto::{AccountKeyPair, get_key_pair};
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, VerifiedTransaction};
-    use sui_types::Identifier;
 
     fn construct_shared_input_objects(objects: &[(ObjectID, bool)]) -> Vec<SharedInputObject> {
         objects
@@ -697,22 +698,24 @@ mod object_cost_tests {
         // the cap should prevent the transaction from being deferred.
         for mutable in [true, false].iter() {
             let tx = build_transaction(&[(shared_obj_1, *mutable)], tx_gas_budget);
-            assert!(shared_object_congestion_tracker
-                .should_defer_due_to_object_congestion(
-                    shared_object_congestion_tracker.get_tx_cost(
-                        Some(&execution_time_estimator),
+            assert!(
+                shared_object_congestion_tracker
+                    .should_defer_due_to_object_congestion(
+                        shared_object_congestion_tracker.get_tx_cost(
+                            Some(&execution_time_estimator),
+                            &tx,
+                            &mut IndirectStateObserver::new(),
+                        ),
                         &tx,
-                        &mut IndirectStateObserver::new(),
-                    ),
-                    &tx,
-                    &HashMap::new(),
-                    &ConsensusCommitInfo::new_for_congestion_test(
-                        0,
-                        0,
-                        Duration::from_micros(1_500),
-                    ),
-                )
-                .is_none());
+                        &HashMap::new(),
+                        &ConsensusCommitInfo::new_for_congestion_test(
+                            0,
+                            0,
+                            Duration::from_micros(1_500),
+                        ),
+                    )
+                    .is_none()
+            );
         }
 
         // Transactions touching both objects should be deferred, with object 0 as the congested object.
@@ -1027,22 +1030,24 @@ mod object_cost_tests {
         // Read/write to object 1 should go through even though the budget is exceeded.
         for mutable in [true, false].iter() {
             let tx = build_transaction(&[(shared_obj_1, *mutable)], tx_gas_budget);
-            assert!(shared_object_congestion_tracker
-                .should_defer_due_to_object_congestion(
-                    shared_object_congestion_tracker.get_tx_cost(
-                        Some(&execution_time_estimator),
+            assert!(
+                shared_object_congestion_tracker
+                    .should_defer_due_to_object_congestion(
+                        shared_object_congestion_tracker.get_tx_cost(
+                            Some(&execution_time_estimator),
+                            &tx,
+                            &mut IndirectStateObserver::new(),
+                        ),
                         &tx,
-                        &mut IndirectStateObserver::new(),
-                    ),
-                    &tx,
-                    &HashMap::new(),
-                    &ConsensusCommitInfo::new_for_congestion_test(
-                        0,
-                        0,
-                        Duration::from_micros(10_000_000)
-                    ),
-                )
-                .is_none());
+                        &HashMap::new(),
+                        &ConsensusCommitInfo::new_for_congestion_test(
+                            0,
+                            0,
+                            Duration::from_micros(10_000_000)
+                        ),
+                    )
+                    .is_none()
+            );
         }
 
         // Transactions touching both objects should be deferred, with object 0 as the congested object.
@@ -1234,22 +1239,24 @@ mod object_cost_tests {
         // even before the cost of this tx is considered.
         for mutable in [true, false].iter() {
             let tx = build_transaction(&[(shared_obj_1, *mutable)], tx_gas_budget);
-            assert!(shared_object_congestion_tracker
-                .should_defer_due_to_object_congestion(
-                    shared_object_congestion_tracker.get_tx_cost(
-                        Some(&execution_time_estimator),
+            assert!(
+                shared_object_congestion_tracker
+                    .should_defer_due_to_object_congestion(
+                        shared_object_congestion_tracker.get_tx_cost(
+                            Some(&execution_time_estimator),
+                            &tx,
+                            &mut IndirectStateObserver::new(),
+                        ),
                         &tx,
-                        &mut IndirectStateObserver::new(),
-                    ),
-                    &tx,
-                    &HashMap::new(),
-                    &ConsensusCommitInfo::new_for_congestion_test(
-                        0,
-                        0,
-                        Duration::from_micros(10_000_000)
-                    ),
-                )
-                .is_none());
+                        &HashMap::new(),
+                        &ConsensusCommitInfo::new_for_congestion_test(
+                            0,
+                            0,
+                            Duration::from_micros(10_000_000)
+                        ),
+                    )
+                    .is_none()
+            );
         }
 
         // Transactions touching both objects should be deferred, with object 0 as the congested object.
@@ -1678,14 +1685,16 @@ mod object_cost_tests {
             &tx,
             &mut IndirectStateObserver::new(),
         );
-        assert!(shared_object_congestion_tracker
-            .should_defer_due_to_object_congestion(
-                tx_cost,
-                &tx,
-                &HashMap::new(),
-                &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::ZERO),
-            )
-            .is_none());
+        assert!(
+            shared_object_congestion_tracker
+                .should_defer_due_to_object_congestion(
+                    tx_cost,
+                    &tx,
+                    &HashMap::new(),
+                    &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::ZERO),
+                )
+                .is_none()
+        );
 
         // Verify max cost after bumping is limited by the absolute cap.
         shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, &tx);

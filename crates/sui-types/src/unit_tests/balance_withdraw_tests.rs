@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     accumulator_root::AccumulatorValue,
-    base_types::{random_object_ref, SuiAddress},
+    base_types::{SuiAddress, random_object_ref},
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{FundsWithdrawalArg, TransactionData, TransactionDataAPI, WithdrawalTypeArg},

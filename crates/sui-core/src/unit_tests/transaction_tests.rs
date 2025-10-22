@@ -6,9 +6,9 @@ use crate::mock_consensus::with_block_status;
 use consensus_core::BlockStatus;
 use consensus_types::block::BlockRef;
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
-use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
+use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, ZkLoginInputs, parse_jwks};
 use move_core_types::ident_str;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
@@ -17,8 +17,8 @@ use sui_types::messages_grpc::HandleSoftBundleCertificatesRequestV3;
 use sui_types::utils::get_one_zklogin_inputs;
 use sui_types::{
     authenticator_state::ActiveJwk,
-    base_types::{dbg_addr, FullObjectRef},
-    crypto::{get_key_pair, AccountKeyPair, Signature, SuiKeyPair},
+    base_types::{FullObjectRef, dbg_addr},
+    crypto::{AccountKeyPair, Signature, SuiKeyPair, get_key_pair},
     error::UserInputError,
     messages_consensus::ConsensusDeterminedVersionAssignments,
     multisig::{MultiSig, MultiSigPublicKey},
@@ -35,8 +35,8 @@ use crate::authority::authority_test_utils::send_batch_consensus_no_execution;
 use crate::authority::authority_tests::{call_move_, create_gas_objects, publish_object_basics};
 use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 
 use sui_macros::sim_test;
 macro_rules! assert_matches {
@@ -626,10 +626,12 @@ async fn test_zklogin_transfer_with_large_address_seed() {
     )
     .await;
 
-    assert!(client
-        .handle_transaction(tx, Some(make_socket_addr()))
-        .await
-        .is_err());
+    assert!(
+        client
+            .handle_transaction(tx, Some(make_socket_addr()))
+            .await
+            .is_err()
+    );
 }
 
 #[sim_test]
@@ -743,10 +745,12 @@ async fn zklogin_test_caching_scenarios() {
     )
     .await;
 
-    assert!(client
-        .handle_transaction(txn3, Some(socket_addr))
-        .await
-        .is_ok());
+    assert!(
+        client
+            .handle_transaction(txn3, Some(socket_addr))
+            .await
+            .is_ok()
+    );
 
     assert_eq!(
         epoch_store
@@ -773,10 +777,12 @@ async fn zklogin_test_caching_scenarios() {
         multisig_pk.clone(),
     )
     .await;
-    assert!(client
-        .handle_transaction(multisig_txn, Some(socket_addr))
-        .await
-        .is_ok());
+    assert!(
+        client
+            .handle_transaction(multisig_txn, Some(socket_addr))
+            .await
+            .is_ok()
+    );
 
     assert_eq!(
         epoch_store
@@ -973,10 +979,12 @@ async fn do_zklogin_transaction_test(
 
     post_sign_mutations(&mut transfer_transaction);
 
-    assert!(client
-        .handle_transaction(transfer_transaction, Some(make_socket_addr()))
-        .await
-        .is_err());
+    assert!(
+        client
+            .handle_transaction(transfer_transaction, Some(make_socket_addr()))
+            .await
+            .is_err()
+    );
 
     assert_eq!(
         epoch_store
@@ -995,14 +1003,16 @@ async fn do_zklogin_transaction_test(
 async fn check_locks(authority_state: Arc<AuthorityState>, object_ids: Vec<ObjectID>) {
     for object_id in object_ids {
         let object = authority_state.get_object(&object_id).await.unwrap();
-        assert!(authority_state
-            .get_transaction_lock(
-                &object.compute_object_reference(),
-                &authority_state.epoch_store_for_testing()
-            )
-            .await
-            .unwrap()
-            .is_none());
+        assert!(
+            authority_state
+                .get_transaction_lock(
+                    &object.compute_object_reference(),
+                    &authority_state.epoch_store_for_testing()
+                )
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 }
 
@@ -1444,11 +1454,12 @@ async fn test_oversized_txn() {
         .handle_transaction(txn, Some(make_socket_addr()))
         .await;
     // The txn should be rejected due to its size.
-    assert!(res
-        .err()
-        .unwrap()
-        .to_string()
-        .contains("serialized transaction size exceeded maximum"));
+    assert!(
+        res.err()
+            .unwrap()
+            .to_string()
+            .contains("serialized transaction size exceeded maximum")
+    );
 }
 
 #[tokio::test]
@@ -1725,7 +1736,7 @@ async fn test_handle_soft_bundle_certificates() {
         .await
         .unwrap();
         effects.status().unwrap();
-        let shared_object_id = effects.created()[0].0 .0;
+        let shared_object_id = effects.created()[0].0.0;
         authority.get_object(&shared_object_id).await.unwrap()
     };
     let initial_shared_version = shared_object.version();
@@ -1826,9 +1837,12 @@ async fn test_handle_soft_bundle_certificates() {
     let mut expected_object_version = initial_shared_version;
     for response in responses {
         let input_objects = response.input_objects.unwrap();
-        assert!(input_objects
-            .iter()
-            .any(|obj| obj.id() == shared_object.id() && obj.version() == expected_object_version));
+        assert!(
+            input_objects
+                .iter()
+                .any(|obj| obj.id() == shared_object.id()
+                    && obj.version() == expected_object_version)
+        );
 
         let output_objects = response.output_objects.unwrap();
         let output_object = output_objects
@@ -1885,7 +1899,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
         .await
         .unwrap();
         effects.status().unwrap();
-        let shared_object_id = effects.created()[0].0 .0;
+        let shared_object_id = effects.created()[0].0.0;
         authority.get_object(&shared_object_id).await.unwrap()
     };
     let initial_shared_version = shared_object.version();
@@ -2341,11 +2355,12 @@ fn test_gas_payment_limit_check() {
     // 1 < 1 is false
     protocol_config.set_correct_gas_payment_limit_check_for_testing(false);
     protocol_config.set_max_gas_payment_objects_for_testing(1);
-    assert!(data
-        .validity_check(&protocol_config)
-        .unwrap_err()
-        .to_string()
-        .contains("maximum number of gas payment objects"));
+    assert!(
+        data.validity_check(&protocol_config)
+            .unwrap_err()
+            .to_string()
+            .contains("maximum number of gas payment objects")
+    );
 
     // 1 < 2 is true
     protocol_config.set_correct_gas_payment_limit_check_for_testing(false);

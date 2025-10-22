@@ -13,7 +13,7 @@ use sui_types::{
 };
 
 use crate::ProgrammableTransactionBuilder;
-use crate::{convert_move_call_args, workloads::Gas, BenchMoveCallArg, ExecutionEffects};
+use crate::{BenchMoveCallArg, ExecutionEffects, convert_move_call_args, workloads::Gas};
 use sui_types::transaction::Command;
 
 /// A Sui account and all of the objects it owns

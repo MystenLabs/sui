@@ -7,14 +7,14 @@ use derive_syn_parse::Parse;
 use itertools::Itertools;
 use proc_macro2::{Ident, TokenTree};
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, Paren};
 use syn::{
-    parse, parse_macro_input, Attribute, GenericArgument, LitStr, PatType, Path, PathArguments,
-    Token, TraitItem, Type,
+    Attribute, GenericArgument, LitStr, PatType, Path, PathArguments, Token, TraitItem, Type,
+    parse, parse_macro_input,
 };
 use unescape::unescape;
 

@@ -6,8 +6,8 @@ use prometheus::Registry;
 use anyhow::Result;
 use clap::*;
 use std::env;
-use sui_security_watchdog::scheduler::SchedulerService;
 use sui_security_watchdog::SecurityWatchdogConfig;
+use sui_security_watchdog::scheduler::SchedulerService;
 
 #[tokio::main]
 async fn main() -> Result<()> {

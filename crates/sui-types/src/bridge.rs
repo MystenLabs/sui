@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::SUI_BRIDGE_OBJECT_ID;
 use crate::base_types::ObjectID;
 use crate::base_types::SequenceNumber;
 use crate::collection_types::LinkedTableNode;
-use crate::dynamic_field::{get_dynamic_field_from_store, Field};
+use crate::dynamic_field::{Field, get_dynamic_field_from_store};
 use crate::error::{SuiError, SuiErrorKind, SuiResult};
 use crate::object::Owner;
 use crate::storage::ObjectStore;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::versioned::Versioned;
-use crate::SUI_BRIDGE_OBJECT_ID;
 use crate::{
     base_types::SuiAddress,
     collection_types::{Bag, LinkedTable, VecMap},

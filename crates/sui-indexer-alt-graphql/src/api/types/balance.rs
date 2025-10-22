@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{
-    connection::{Connection, CursorType, Edge},
     Context, SimpleObject,
+    connection::{Connection, CursorType, Edge},
 };
 use sui_indexer_alt_reader::consistent_reader::{self, ConsistentReader};
-use sui_types::{base_types::SuiAddress, TypeTag};
+use sui_types::{TypeTag, base_types::SuiAddress};
 
 use crate::{
     api::scalars::{big_int::BigInt, cursor},
-    error::{bad_user_input, feature_unavailable, RpcError},
+    error::{RpcError, bad_user_input, feature_unavailable},
     pagination::Page,
     scope::Scope,
 };
@@ -38,7 +38,9 @@ pub(crate) enum Error {
     #[error("Checkpoint {0} in the future")]
     Future(u64),
 
-    #[error("Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.")]
+    #[error(
+        "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances."
+    )]
     RootVersionOwnership,
 }
 

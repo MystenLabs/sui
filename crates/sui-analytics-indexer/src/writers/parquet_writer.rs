@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{AnalyticsWriter, FileFormat, FileType, ParquetSchema, ParquetValue};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use arrow_array::{
-    builder::{ArrayBuilder, BooleanBuilder, GenericStringBuilder, Int64Builder, UInt64Builder},
     ArrayRef, RecordBatch,
+    builder::{ArrayBuilder, BooleanBuilder, GenericStringBuilder, Int64Builder, UInt64Builder},
 };
 use serde::Serialize;
-use std::fs::{create_dir_all, remove_file, File};
+use std::fs::{File, create_dir_all, remove_file};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

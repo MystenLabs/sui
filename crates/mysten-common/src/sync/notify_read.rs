@@ -3,25 +3,25 @@
 
 use crate::debug_fatal;
 
-use futures::future::{join_all, Either};
+use futures::future::{Either, join_all};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::sync::oneshot;
-use tokio::time::interval_at;
 use tokio::time::Instant;
+use tokio::time::interval_at;
 use tracing::warn;
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;

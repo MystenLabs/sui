@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::object_runtime::ObjectRuntime;
-use crate::{get_extension, NativesCostTable};
+use crate::{NativesCostTable, get_extension};
 use fastcrypto_zkp::bn254::poseidon::poseidon_bytes;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;

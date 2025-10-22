@@ -3,4 +3,4 @@
 
 pub mod server;
 
-pub use server::{Server, ServerBuilder, SUI_TLS_SERVER_NAME};
+pub use server::{SUI_TLS_SERVER_NAME, Server, ServerBuilder};

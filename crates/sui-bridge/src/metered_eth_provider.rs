@@ -3,7 +3,7 @@
 
 use crate::metrics::BridgeMetrics;
 use ethers::providers::{Http, HttpClientError, JsonRpcClient, Provider};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use std::sync::Arc;
 use url::{ParseError, Url};

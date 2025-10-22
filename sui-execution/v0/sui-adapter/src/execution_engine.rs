@@ -13,7 +13,7 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use std::sync::Arc;
-    use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
+    use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
@@ -36,17 +36,17 @@ mod checked {
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result_legacy;
-    use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
+    use sui_types::sui_system_state::{ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, AdvanceEpochParams};
     use sui_types::transaction::CheckedInputObjects;
     use sui_types::transaction::{
         Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
         TransactionKind,
     };
     use sui_types::{
+        SUI_FRAMEWORK_ADDRESS,
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
-        SUI_FRAMEWORK_ADDRESS,
     };
     use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
     use tracing::{info, instrument, trace, warn};
@@ -376,8 +376,8 @@ mod checked {
                 }
             }
         } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
-          // we're in the non-production dev inspect mode which allows us to violate conservation
-          // === end SUI conservation checks ===
+        // we're in the non-production dev inspect mode which allows us to violate conservation
+        // === end SUI conservation checks ===
         (cost_summary, result)
     }
 
@@ -672,11 +672,11 @@ mod checked {
 
         if result.is_err() {
             tracing::error!(
-            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
-            result.as_ref().err(),
-            temporary_store.objects(),
-            change_epoch,
-        );
+                "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
+                result.as_ref().err(),
+                temporary_store.objects(),
+                change_epoch,
+            );
             temporary_store.drop_writes();
             // Must reset the storage rebate since we are re-executing.
             gas_charger.reset_storage_cost_and_rebate();

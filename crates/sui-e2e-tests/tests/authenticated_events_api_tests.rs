@@ -5,8 +5,8 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::proto::sui::rpc::v2::Event;
-use sui_rpc_api::grpc::alpha::event_service_proto::event_service_client::EventServiceClient;
 use sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsRequest;
+use sui_rpc_api::grpc::alpha::event_service_proto::event_service_client::EventServiceClient;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::TransactionData;
@@ -229,9 +229,11 @@ async fn authenticated_events_disabled_test() {
 
     let error = result.unwrap_err();
     assert_eq!(error.code(), tonic::Code::Unimplemented);
-    assert!(error
-        .message()
-        .contains("Authenticated events indexing is disabled"));
+    assert!(
+        error
+            .message()
+            .contains("Authenticated events indexing is disabled")
+    );
 }
 
 #[sim_test]

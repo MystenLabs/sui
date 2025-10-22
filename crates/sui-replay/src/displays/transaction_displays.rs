@@ -12,11 +12,11 @@ use sui_types::execution::ExecutionResult;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction::CallArg::Pure;
 use sui_types::transaction::{
-    write_sep, Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
+    Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, write_sep,
 };
 use tabled::{
     builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+    settings::{Panel as TablePanel, Style as TableStyle, style::HorizontalLine},
 };
 
 pub struct FullPTB {

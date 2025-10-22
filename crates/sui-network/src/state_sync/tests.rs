@@ -16,14 +16,14 @@ use std::{collections::HashMap, time::Duration};
 use sui_config::node::ArchiveReaderConfig;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
-use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
+use sui_swarm_config::test_utils::{CommitteeFixture, empty_contents};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     messages_checkpoint::CheckpointDigest,
     storage::{ReadStore, SharedInMemoryStore, WriteStore},
 };
 use tempfile::tempdir;
-use tokio::time::{timeout, Instant};
+use tokio::time::{Instant, timeout};
 
 #[tokio::test]
 async fn server_push_checkpoint() {

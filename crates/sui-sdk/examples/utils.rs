@@ -6,7 +6,7 @@ use std::{str::FromStr, time::Duration};
 use anyhow::bail;
 use futures::{future, stream::StreamExt};
 use sui_config::{
-    sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME,
+    Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME, sui_config_dir,
 };
 use sui_json_rpc_types::{Coin, SuiObjectDataOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, GenerateOptions};
@@ -27,7 +27,7 @@ use sui_sdk::types::{
     transaction::{Argument, Command, Transaction, TransactionData},
 };
 
-use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
+use sui_sdk::{SuiClient, SuiClientBuilder, rpc_types::SuiTransactionBlockResponseOptions};
 
 #[derive(serde::Deserialize)]
 struct FaucetResponse {

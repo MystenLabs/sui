@@ -16,11 +16,11 @@ use crate::supported_protocol_versions::{
 use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
-use consensus_types::block::{BlockRef, TransactionIndex, PING_TRANSACTION_INDEX};
+use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;
-use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -750,7 +750,9 @@ impl ConsensusTransaction {
                 )))
             }
             ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
-                unreachable!("there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External")
+                unreachable!(
+                    "there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External"
+                )
             }
             ConsensusTransactionKind::RandomnessDkgMessage(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgMessage(*authority)

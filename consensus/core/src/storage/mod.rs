@@ -13,10 +13,10 @@ use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
 
 use crate::{
+    CommitIndex,
     block::VerifiedBlock,
     commit::{CommitInfo, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
-    CommitIndex,
 };
 
 /// A common interface for consensus storage.

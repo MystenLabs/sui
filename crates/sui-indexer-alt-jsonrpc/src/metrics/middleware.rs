@@ -12,9 +12,9 @@ use std::{
 };
 
 use jsonrpsee::{
-    server::middleware::rpc::RpcServiceT,
-    types::{error::INTERNAL_ERROR_CODE, Request},
     MethodResponse,
+    server::middleware::rpc::RpcServiceT,
+    types::{Request, error::INTERNAL_ERROR_CODE},
 };
 use pin_project::{pin_project, pinned_drop};
 use prometheus::{HistogramTimer, IntCounterVec};

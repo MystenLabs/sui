@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::Config;
 use crate::certificate_deny_config::CertificateDenyConfig;
 use crate::genesis;
 use crate::object_storage_config::ObjectStoreConfig;
@@ -7,7 +8,6 @@ use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
 use crate::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use crate::verifier_signing_config::VerifierSigningConfig;
-use crate::Config;
 use anyhow::Result;
 use consensus_config::Parameters as ConsensusParameters;
 use mysten_common::fatal;
@@ -33,7 +33,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::supported_protocol_versions::{Chain, SupportedProtocolVersions};
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
-use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, get_key_pair_from_rng};
 use sui_types::multiaddr::Multiaddr;
 use tracing::info;
 
@@ -1583,7 +1583,7 @@ where
                 return Err(D::Error::custom(format!(
                     "Failed to read credential for key '{}': {}",
                     key, e
-                )))
+                )));
             }
         }
     }
@@ -1596,9 +1596,9 @@ mod tests {
     use std::path::PathBuf;
 
     use fastcrypto::traits::KeyPair;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{SeedableRng, rngs::StdRng};
     use sui_keys::keypair_file::{write_authority_keypair_to_file, write_keypair_to_file};
-    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair};
+    use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 
     use super::{Genesis, StateArchiveConfig};
     use crate::NodeConfig;

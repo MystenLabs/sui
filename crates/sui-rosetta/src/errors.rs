@@ -4,13 +4,13 @@
 use axum::extract::rejection::JsonRejection;
 use std::fmt::Debug;
 
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use fastcrypto::error::FastCryptoError;
 use serde::Serialize;
 use serde::Serializer;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 

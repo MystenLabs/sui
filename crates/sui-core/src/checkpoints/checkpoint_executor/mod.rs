@@ -308,7 +308,9 @@ impl CheckpointExecutor {
                 "CheckpointExecutor::wait_for_previous_checkpoints",
             );
 
-            info!("Reached end of epoch checkpoint, waiting for all previous checkpoints to be executed");
+            info!(
+                "Reached end of epoch checkpoint, waiting for all previous checkpoints to be executed"
+            );
             self.checkpoint_store
                 .notify_read_executed_checkpoint(sequence_number - 1)
                 .await;
@@ -381,7 +383,10 @@ impl CheckpointExecutor {
         // (RandomnessManager/RandomnessReporter is only present on validators.)
         if let Some(randomness_reporter) = self.epoch_store.randomness_reporter() {
             for round in randomness_rounds {
-                debug!(?round, "notifying RandomnessReporter that randomness update was executed in checkpoint");
+                debug!(
+                    ?round,
+                    "notifying RandomnessReporter that randomness update was executed in checkpoint"
+                );
                 randomness_reporter
                     .notify_randomness_in_checkpoint(round)
                     .expect("epoch cannot have ended");

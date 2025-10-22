@@ -10,9 +10,9 @@ use crate::rpc_index::RpcIndexStore;
 use anyhow::Result;
 use bytes::Bytes;
 use futures::future::try_join_all;
-use object_store::path::Path;
 use object_store::DynObjectStore;
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use object_store::path::Path;
+use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -302,7 +302,10 @@ impl DBCheckpointHandler {
                     let snapshot_completed_marker =
                         local_db_path.join(STATE_SNAPSHOT_COMPLETED_MARKER);
                     if !snapshot_completed_marker.exists() {
-                        info!("DB checkpoint upload for epoch {} to wait until state snasphot uploaded", *epoch);
+                        info!(
+                            "DB checkpoint upload for epoch {} to wait until state snasphot uploaded",
+                            *epoch
+                        );
                         continue;
                     }
                 }
@@ -451,9 +454,11 @@ mod tests {
         assert!(remote_epoch0_checkpoint.join("file2").exists());
         assert!(remote_epoch0_checkpoint.join("data").join("file3").exists());
         assert!(remote_epoch0_checkpoint.join(SUCCESS_MARKER).exists());
-        assert!(local_epoch0_checkpoint
-            .join(UPLOAD_COMPLETED_MARKER)
-            .exists());
+        assert!(
+            local_epoch0_checkpoint
+                .join(UPLOAD_COMPLETED_MARKER)
+                .exists()
+        );
 
         // Drop an extra gc marker meant only for gc to trigger
         let test_marker = local_epoch0_checkpoint.join(TEST_MARKER);
@@ -519,9 +524,11 @@ mod tests {
         assert!(remote_epoch0_checkpoint.join("file2").exists());
         assert!(remote_epoch0_checkpoint.join("data").join("file3").exists());
         assert!(remote_epoch0_checkpoint.join(SUCCESS_MARKER).exists());
-        assert!(local_epoch0_checkpoint
-            .join(UPLOAD_COMPLETED_MARKER)
-            .exists());
+        assert!(
+            local_epoch0_checkpoint
+                .join(UPLOAD_COMPLETED_MARKER)
+                .exists()
+        );
 
         // Add a new db checkpoint to the local checkpoint directory
         let local_epoch1_checkpoint = checkpoint_dir_path.join("epoch_1");
@@ -553,18 +560,22 @@ mod tests {
         assert!(remote_epoch0_checkpoint.join("file2").exists());
         assert!(remote_epoch0_checkpoint.join("data").join("file3").exists());
         assert!(remote_epoch0_checkpoint.join(SUCCESS_MARKER).exists());
-        assert!(local_epoch0_checkpoint
-            .join(UPLOAD_COMPLETED_MARKER)
-            .exists());
+        assert!(
+            local_epoch0_checkpoint
+                .join(UPLOAD_COMPLETED_MARKER)
+                .exists()
+        );
 
         let remote_epoch1_checkpoint = remote_checkpoint_dir_path.join("epoch_1");
         assert!(remote_epoch1_checkpoint.join("file1").exists());
         assert!(remote_epoch1_checkpoint.join("file2").exists());
         assert!(remote_epoch1_checkpoint.join("data").join("file3").exists());
         assert!(remote_epoch1_checkpoint.join(SUCCESS_MARKER).exists());
-        assert!(local_epoch1_checkpoint
-            .join(UPLOAD_COMPLETED_MARKER)
-            .exists());
+        assert!(
+            local_epoch1_checkpoint
+                .join(UPLOAD_COMPLETED_MARKER)
+                .exists()
+        );
 
         // Drop an extra gc marker meant only for gc to trigger
         let test_marker = local_epoch0_checkpoint.join(TEST_MARKER);

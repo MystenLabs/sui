@@ -6,7 +6,7 @@ use crate::committee::EpochId;
 use crate::error::SuiErrorKind;
 use crate::inner_temporary_store::WrittenObjects;
 use crate::storage::{
-    get_module, get_module_by_id, load_package_object_from_object_store, PackageObject,
+    PackageObject, get_module, get_module_by_id, load_package_object_from_object_store,
 };
 use crate::transaction::TransactionDataAPI;
 use crate::transaction::{InputObjectKind, InputObjects, ObjectReadResult, Transaction};

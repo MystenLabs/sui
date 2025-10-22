@@ -4,12 +4,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use consensus_types::block::{BlockRef, TransactionIndex, PING_TRANSACTION_INDEX};
+use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::EpochId;
-use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
 use sui_types::digests::TransactionEffectsDigest;
 use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::error::{SuiErrorKind, UserInputError};
@@ -22,7 +22,7 @@ use sui_types::transaction::VerifiedTransaction;
 use sui_types::utils::to_sender_signed_transaction;
 
 use crate::authority::consensus_tx_status_cache::{
-    ConsensusTxStatus, CONSENSUS_STATUS_RETENTION_ROUNDS,
+    CONSENSUS_STATUS_RETENTION_ROUNDS, ConsensusTxStatus,
 };
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
@@ -608,7 +608,9 @@ async fn test_wait_for_effects_expired() {
 async fn test_wait_for_effects_ping() {
     let test_context = TestContext::new().await;
 
-    println!("Case 1. Send a FastPath ping request. The end point should wait until the block is certified via MFP (we assume the ping transaction is in the block).");
+    println!(
+        "Case 1. Send a FastPath ping request. The end point should wait until the block is certified via MFP (we assume the ping transaction is in the block)."
+    );
     {
         let tx_position = ConsensusPosition {
             epoch: EpochId::MIN,
@@ -650,7 +652,9 @@ async fn test_wait_for_effects_ping() {
         }
     }
 
-    println!("Case 2. Send a Consensus ping request. The end point should wait for the transaction is finalised via Consensus.");
+    println!(
+        "Case 2. Send a Consensus ping request. The end point should wait for the transaction is finalised via Consensus."
+    );
     {
         let mut block = BlockRef::MIN;
         block.round = 5;
@@ -701,7 +705,9 @@ async fn test_wait_for_effects_ping() {
         }
     }
 
-    println!("Case 3. Send a Consensus ping request but the corresponding block gets garbage collected and never committed.");
+    println!(
+        "Case 3. Send a Consensus ping request but the corresponding block gets garbage collected and never committed."
+    );
     {
         let mut block = BlockRef::MIN;
         block.round = 10;

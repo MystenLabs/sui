@@ -153,13 +153,11 @@ impl From<Error> for ErrorObjectOwned {
             },
             Error::QuorumDriverError(err) => {
                 match err {
-                    QuorumDriverError::InvalidUserSignature(err) => {
-                        ErrorObject::owned(
-                            TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
-                            format!("Invalid user signature: {err}"),
-                            None::<()>,
-                        )
-                    }
+                    QuorumDriverError::InvalidUserSignature(err) => ErrorObject::owned(
+                        TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
+                        format!("Invalid user signature: {err}"),
+                        None::<()>,
+                    ),
                     QuorumDriverError::TxAlreadyFinalizedWithDifferentUserSignatures => {
                         ErrorObject::owned(
                             TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
@@ -190,7 +188,8 @@ impl From<Error> for ErrorObjectOwned {
                                 .iter()
                                 .sorted_by(|(_, (_, a)), (_, (_, b))| b.cmp(a))
                                 .map(|(digest, (o, stake))| {
-                                    let objects = o.iter()
+                                    let objects = o
+                                        .iter()
                                         .map(|(_, obj_ref)| format!("    - {}", obj_ref.0))
                                         .join("\n");
 
@@ -238,7 +237,9 @@ impl From<Error> for ErrorObjectOwned {
                                     // So, we take an easier route and consider them non-retryable
                                     // at all. Combining this with the sorting above, clients will
                                     // see the dominant error first.
-                                    SuiErrorKind::UserInputError { error } => Some(error.to_string()),
+                                    SuiErrorKind::UserInputError { error } => {
+                                        Some(error.to_string())
+                                    }
                                     _ => {
                                         if err.is_retryable().0 {
                                             None
@@ -261,7 +262,10 @@ impl From<Error> for ErrorObjectOwned {
                             error_list.push(format!("- {}", err));
                         }
 
-                        let error_msg = format!("Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n{}", error_list.join("\n"));
+                        let error_msg = format!(
+                            "Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n{}",
+                            error_list.join("\n")
+                        );
 
                         ErrorObject::owned(
                             TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
@@ -269,13 +273,11 @@ impl From<Error> for ErrorObjectOwned {
                             None::<()>,
                         )
                     }
-                    QuorumDriverError::QuorumDriverInternalError(_) => {
-                        ErrorObject::owned(
-                            INTERNAL_ERROR_CODE,
-                            "Internal error occurred while executing transaction.",
-                            None::<()>,
-                        )
-                    }
+                    QuorumDriverError::QuorumDriverInternalError(_) => ErrorObject::owned(
+                        INTERNAL_ERROR_CODE,
+                        "Internal error occurred while executing transaction.",
+                        None::<()>,
+                    ),
                     QuorumDriverError::SystemOverload { .. }
                     | QuorumDriverError::SystemOverloadRetryAfter { .. } => {
                         ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>)
@@ -284,16 +286,14 @@ impl From<Error> for ErrorObjectOwned {
                         let code = match category {
                             ErrorCategory::Internal => INTERNAL_ERROR_CODE,
                             ErrorCategory::Aborted => TRANSIENT_ERROR_CODE,
-                            ErrorCategory::InvalidTransaction => TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
+                            ErrorCategory::InvalidTransaction => {
+                                TRANSACTION_EXECUTION_CLIENT_ERROR_CODE
+                            }
                             ErrorCategory::LockConflict => TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
                             ErrorCategory::ValidatorOverloaded => TRANSIENT_ERROR_CODE,
                             ErrorCategory::Unavailable => INTERNAL_ERROR_CODE,
                         };
-                        ErrorObject::owned(
-                            code,
-                            details,
-                            None::<()>,
-                        )
+                        ErrorObject::owned(code, details, None::<()>)
                     }
                     QuorumDriverError::PendingExecutionInTransactionOrchestrator => {
                         // TODO(fastpath): Remove once traffic is 100% TD
@@ -324,7 +324,9 @@ pub enum SuiRpcInputError {
     #[error("{0}")]
     GenericInvalid(String),
 
-    #[error("request_type` must set to `None` or `WaitForLocalExecution` if effects is required in the response")]
+    #[error(
+        "request_type` must set to `None` or `WaitForLocalExecution` if effects is required in the response"
+    )]
     InvalidExecuteTransactionRequestType,
 
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
@@ -574,8 +576,9 @@ mod tests {
                 Error::QuorumDriverError(quorum_driver_error).into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
-            let expected_message =
-                expect!["Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n- Balance of gas object 10 is lower than the needed amount: 100\n- Object ID 0x0000000000000000000000000000000000000000000000000000000000000000 Version 0x0 Digest 11111111111111111111111111111111 is not available for consumption, current version: 0xa"];
+            let expected_message = expect![
+                "Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n- Balance of gas object 10 is lower than the needed amount: 100\n- Object ID 0x0000000000000000000000000000000000000000000000000000000000000000 Version 0x0 Digest 11111111111111111111111111111111 is not available for consumption, current version: 0xa"
+            ];
             expected_message.assert_eq(error_object.message());
         }
 
@@ -606,8 +609,9 @@ mod tests {
                 Error::QuorumDriverError(quorum_driver_error).into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
-            let expected_message =
-                expect!["Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n- Could not find the referenced object 0x0000000000000000000000000000000000000000000000000000000000000000 at version None"];
+            let expected_message = expect![
+                "Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n- Could not find the referenced object 0x0000000000000000000000000000000000000000000000000000000000000000 at version None"
+            ];
             expected_message.assert_eq(error_object.message());
         }
 
@@ -640,7 +644,9 @@ mod tests {
                 Error::QuorumDriverError(quorum_driver_error).into();
             let expected_code = expect!["-32050"];
             expected_code.assert_eq(&error_object.code().to_string());
-            let expected_message = expect!["Transaction is not processed because 10 of validators by stake are overloaded with certificates pending execution."];
+            let expected_message = expect![
+                "Transaction is not processed because 10 of validators by stake are overloaded with certificates pending execution."
+            ];
             expected_message.assert_eq(error_object.message());
         }
     }

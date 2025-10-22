@@ -8,11 +8,11 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
-use futures::{stream::FuturesUnordered, StreamExt as _};
+use futures::{StreamExt as _, stream::FuturesUnordered};
 use tokio::{
     sync::broadcast,
     task::JoinSet,
-    time::{error::Elapsed, sleep_until, timeout, Instant},
+    time::{Instant, error::Elapsed, sleep_until, timeout},
 };
 use tracing::{trace, warn};
 

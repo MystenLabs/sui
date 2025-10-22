@@ -13,7 +13,7 @@ use sui_types::{
     error::ExecutionErrorKind,
     execution_status::PackageUpgradeError,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
-    object::{Data, Object, OBJECT_START_VERSION},
+    object::{Data, OBJECT_START_VERSION, Object},
 };
 
 macro_rules! type_origin_table {

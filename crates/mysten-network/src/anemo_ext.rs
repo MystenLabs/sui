@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anemo::codegen::BoxError;
-use anemo::codegen::BoxFuture;
-use anemo::codegen::Service;
-use anemo::types::PeerEvent;
 use anemo::Network;
 use anemo::PeerId;
 use anemo::Request;
 use anemo::Response;
+use anemo::codegen::BoxError;
+use anemo::codegen::BoxFuture;
+use anemo::codegen::Service;
+use anemo::types::PeerEvent;
 use bytes::Bytes;
-use futures::future::OptionFuture;
 use futures::FutureExt;
+use futures::future::OptionFuture;
 use std::time::Instant;
 
 pub trait NetworkExt {

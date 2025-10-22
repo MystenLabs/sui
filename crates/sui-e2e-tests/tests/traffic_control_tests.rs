@@ -10,10 +10,10 @@ use jsonrpsee::{core::client::ClientT, rpc_params};
 use std::fs::File;
 use std::num::NonZeroUsize;
 use std::time::Duration;
-use sui_core::authority_client::make_network_authority_clients_with_network_config;
 use sui_core::authority_client::AuthorityAPI;
+use sui_core::authority_client::make_network_authority_clients_with_network_config;
 use sui_core::traffic_controller::{
-    nodefw_test_server::NodeFwTestServer, TrafficController, TrafficSim,
+    TrafficController, TrafficSim, nodefw_test_server::NodeFwTestServer,
 };
 use sui_json_rpc_types::{
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -263,8 +263,8 @@ async fn test_validator_traffic_control_error_blocked() -> Result<(), anyhow::Er
 }
 
 #[tokio::test]
-async fn test_validator_traffic_control_error_blocked_with_policy_reconfig(
-) -> Result<(), anyhow::Error> {
+async fn test_validator_traffic_control_error_blocked_with_policy_reconfig()
+-> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let n = 5;
     let policy_config = PolicyConfig {

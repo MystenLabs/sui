@@ -21,15 +21,15 @@ mod checked {
         TransactionDataAPI, TransactionKind,
     };
     use sui_types::{
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+        SUI_RANDOMNESS_STATE_OBJECT_ID,
+    };
+    use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
         error::SuiError,
         fp_bail, fp_ensure,
         gas::SuiGasStatus,
         object::{Object, Owner},
-    };
-    use sui_types::{
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-        SUI_RANDOMNESS_STATE_OBJECT_ID,
     };
     use tracing::error;
     use tracing::instrument;
@@ -284,36 +284,45 @@ mod checked {
 
                 match object.owner {
                     Owner::AddressOwner(_) => {
-                        debug_assert!(false,
+                        debug_assert!(
+                            false,
                             "Receiving object {:?} is invalid but we expect it should be valid. {:?}",
-                            (*object_id, *version, *object_id), object
+                            (*object_id, *version, *object_id),
+                            object
                         );
                         error!(
                             "Receiving object {:?} is invalid but we expect it should be valid. {:?}",
-                            (*object_id, *version, *object_id), object
+                            (*object_id, *version, *object_id),
+                            object
                         );
                         // We should never get here, but if for some reason we do just default to
                         // object not found and reject signing the transaction.
-                        fp_bail!(UserInputError::ObjectNotFound {
-                            object_id: *object_id,
-                            version: Some(*version),
-                        }
-                        .into())
+                        fp_bail!(
+                            UserInputError::ObjectNotFound {
+                                object_id: *object_id,
+                                version: Some(*version),
+                            }
+                            .into()
+                        )
                     }
                     Owner::ObjectOwner(owner) => {
-                        fp_bail!(UserInputError::InvalidChildObjectArgument {
-                            child_id: object.id(),
-                            parent_id: owner.into(),
-                        }
-                        .into())
+                        fp_bail!(
+                            UserInputError::InvalidChildObjectArgument {
+                                child_id: object.id(),
+                                parent_id: owner.into(),
+                            }
+                            .into()
+                        )
                     }
                     Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
                         fp_bail!(UserInputError::NotSharedObjectError.into())
                     }
-                    Owner::Immutable => fp_bail!(UserInputError::MutableParameterExpected {
-                        object_id: *object_id
-                    }
-                    .into()),
+                    Owner::Immutable => fp_bail!(
+                        UserInputError::MutableParameterExpected {
+                            object_id: *object_id
+                        }
+                        .into()
+                    ),
                 };
             }
 
@@ -469,11 +478,13 @@ mod checked {
                     Owner::AddressOwner(actual_owner) => {
                         // Check the owner is correct.
                         fp_ensure!(
-                        owner == &actual_owner,
-                        UserInputError::IncorrectUserSignature {
-                            error: format!("Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"),
-                        }
-                    );
+                            owner == &actual_owner,
+                            UserInputError::IncorrectUserSignature {
+                                error: format!(
+                                    "Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"
+                                ),
+                            }
+                        );
                     }
                     Owner::ObjectOwner(owner) => {
                         return Err(UserInputError::InvalidChildObjectArgument {
@@ -565,7 +576,9 @@ mod checked {
                         fp_ensure!(
                             owner == actual_owner,
                             UserInputError::IncorrectUserSignature {
-                                error: format!("Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"),
+                                error: format!(
+                                    "Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"
+                                ),
                             }
                         )
                     }

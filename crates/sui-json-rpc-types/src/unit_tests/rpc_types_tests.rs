@@ -14,7 +14,7 @@ use sui_types::base_types::{ObjectDigest, SequenceNumber};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{MoveObject, Owner};
-use sui_types::{parse_sui_struct_tag, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, parse_sui_struct_tag};
 
 use crate::{ObjectChange, SuiMoveStruct, SuiMoveValue};
 

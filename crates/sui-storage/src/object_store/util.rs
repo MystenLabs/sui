@@ -4,7 +4,7 @@
 use crate::object_store::{
     ObjectStoreDeleteExt, ObjectStoreGetExt, ObjectStoreListExt, ObjectStorePutExt,
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use backoff::future::retry;
 use bytes::Bytes;
 use futures::StreamExt;
@@ -357,7 +357,9 @@ pub async fn find_missing_epochs_dirs(
             }
             Err(_) => {
                 // Probably a transient error
-                warn!("Failed while trying to read success marker in db checkpoint for epoch: {epoch_num}");
+                warn!(
+                    "Failed while trying to read success marker in db checkpoint for epoch: {epoch_num}"
+                );
             }
             Ok(_) => {
                 // Nothing to do
@@ -412,7 +414,7 @@ pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
 #[cfg(test)]
 mod tests {
     use crate::object_store::util::{
-        copy_recursively, delete_recursively, write_snapshot_manifest, MANIFEST_FILENAME,
+        MANIFEST_FILENAME, copy_recursively, delete_recursively, write_snapshot_manifest,
     };
     use object_store::path::Path;
     use std::fs;
@@ -461,11 +463,13 @@ mod tests {
         assert!(output_path.join("child").exists());
         assert!(output_path.join("child").join("file1").exists());
         assert!(output_path.join("child").join("grand_child").exists());
-        assert!(output_path
-            .join("child")
-            .join("grand_child")
-            .join("file2")
-            .exists());
+        assert!(
+            output_path
+                .join("child")
+                .join("grand_child")
+                .join("file2")
+                .exists()
+        );
         let content = fs::read_to_string(output_path.join("child").join("file1"))?;
         assert_eq!(content, "Lorem ipsum");
         let content =
@@ -539,11 +543,13 @@ mod tests {
         .await?;
 
         assert!(!input_path.join("child").join("file1").exists());
-        assert!(!input_path
-            .join("child")
-            .join("grand_child")
-            .join("file2")
-            .exists());
+        assert!(
+            !input_path
+                .join("child")
+                .join("grand_child")
+                .join("file2")
+                .exists()
+        );
         Ok(())
     }
 }

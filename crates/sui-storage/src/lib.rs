@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use crate::blob::BlobIter;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::{Buf, Bytes};
 use fastcrypto::hash::{HashFunction, Sha3_256};
@@ -16,8 +16,8 @@ use std::fs::File;
 use std::io::{BufReader, Read, Write};
 use std::ops::Range;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{fs, io};
 use sui_types::committee::Committee;
 use sui_types::messages_checkpoint::{

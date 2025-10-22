@@ -3,8 +3,8 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use diesel::{dsl::sql, BoolExpressionMethods, ExpressionMethods};
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, dsl::sql};
+use diesel_async::{AsyncConnection, RunQueryDsl, scoped_futures::ScopedFutureExt};
 use dotenvy::dotenv;
 use mysten_service::metrics::start_basic_prometheus_server;
 use prometheus::Registry;
@@ -18,11 +18,10 @@ use tokio::sync::oneshot;
 use tracing::info;
 
 use suins_indexer::{
-    get_connection_pool,
-    indexer::{format_update_field_query, format_update_subdomain_wrapper_query, SuinsIndexer},
+    PgConnectionPool, get_connection_pool,
+    indexer::{SuinsIndexer, format_update_field_query, format_update_subdomain_wrapper_query},
     models::VerifiedDomain,
     schema::domains,
-    PgConnectionPool,
 };
 
 struct SuinsIndexerWorker {

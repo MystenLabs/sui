@@ -59,14 +59,16 @@ async fn execute_transaction(
         .to_owned();
 
     // Assert that the txn was successful
-    assert!(transaction
-        .effects
-        .as_ref()
-        .unwrap()
-        .status
-        .as_ref()
-        .unwrap()
-        .success());
+    assert!(
+        transaction
+            .effects
+            .as_ref()
+            .unwrap()
+            .status
+            .as_ref()
+            .unwrap()
+            .success()
+    );
 
     transaction
 }

@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use move_cli::base;
 use shared_crypto::intent::Intent;
@@ -25,7 +25,7 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
     Command, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
 };
-use sui_types::{Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID};
+use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag};
 
 use tracing::debug;
 
@@ -118,7 +118,9 @@ pub async fn select_gas(
             });
         }
     }
-    Err(anyhow!("Cannot find gas coin for signer address [{signer_addr}] with amount sufficient for the required gas amount [{budget}]."))
+    Err(anyhow!(
+        "Cannot find gas coin for signer address [{signer_addr}] with amount sufficient for the required gas amount [{budget}]."
+    ))
 }
 
 #[derive(Debug, Clone)]

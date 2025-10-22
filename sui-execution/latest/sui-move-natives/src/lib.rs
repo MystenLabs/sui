@@ -1346,7 +1346,7 @@ pub(crate) fn get_tag_and_layouts(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
     let Some(layout) = context.type_to_type_layout(ty)? else {

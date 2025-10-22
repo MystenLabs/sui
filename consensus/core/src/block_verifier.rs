@@ -6,11 +6,11 @@ use consensus_types::block::{BlockRef, TransactionIndex};
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-    block::{genesis_blocks, BlockAPI, SignedBlock, GENESIS_ROUND},
+    VerifiedBlock,
+    block::{BlockAPI, GENESIS_ROUND, SignedBlock, genesis_blocks},
     context::Context,
     error::{ConsensusError, ConsensusResult},
     transaction::TransactionVerifier,
-    VerifiedBlock,
 };
 
 pub(crate) trait BlockVerifier: Send + Sync + 'static {

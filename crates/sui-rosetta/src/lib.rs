@@ -15,7 +15,7 @@ use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use sui_sdk::{SuiClient, SUI_COIN_TYPE};
+use sui_sdk::{SUI_COIN_TYPE, SuiClient};
 
 use crate::errors::Error;
 use crate::errors::Error::MissingMetadata;

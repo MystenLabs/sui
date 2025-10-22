@@ -31,18 +31,18 @@ use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::bridge::BRIDGE_MODULE_NAME;
 use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::{
+    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
     authenticator_state::AUTHENTICATOR_STATE_MODULE_NAME,
     clock::CLOCK_MODULE_NAME,
     error::{ExecutionError, VMMVerifierErrorSubStatusCode},
     id::OBJECT_MODULE_NAME,
     randomness_state::RANDOMNESS_MODULE_NAME,
     sui_system_state::SUI_SYSTEM_MODULE_NAME,
-    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
 use crate::{
-    check_for_verifier_timeout, to_verification_timeout_error, verification_failure,
-    TEST_SCENARIO_MODULE_NAME,
+    TEST_SCENARIO_MODULE_NAME, check_for_verifier_timeout, to_verification_timeout_error,
+    verification_failure,
 };
 pub(crate) const JOIN_BASE_COST: u128 = 10;
 pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;

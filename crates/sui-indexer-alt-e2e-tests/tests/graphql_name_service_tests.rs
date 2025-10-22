@@ -3,12 +3,12 @@
 
 use std::{path::PathBuf, time::Duration};
 
-use anyhow::{ensure, Context as _};
+use anyhow::{Context as _, ensure};
 use move_core_types::ident_str;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use simulacrum::Simulacrum;
-use sui_indexer_alt_e2e_tests::{find, FullCluster, OffchainClusterConfig};
+use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find};
 use sui_indexer_alt_graphql::config::RpcConfig;
 use sui_indexer_alt_jsonrpc::config::NameServiceConfig;
 use sui_move_build::BuildConfig;

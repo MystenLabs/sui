@@ -9,12 +9,12 @@ use std::{
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
-use futures::{stream::FuturesUnordered, StreamExt as _};
+use futures::{StreamExt as _, stream::FuturesUnordered};
 use itertools::Itertools as _;
 use mysten_common::debug_fatal;
 use mysten_metrics::{
     monitored_future,
-    monitored_mpsc::{channel, Receiver, Sender},
+    monitored_mpsc::{Receiver, Sender, channel},
     monitored_scope,
 };
 use parking_lot::{Mutex, RwLock};
@@ -25,15 +25,12 @@ use tokio::{
     runtime::Handle,
     sync::{mpsc::error::TrySendError, oneshot},
     task::{JoinError, JoinSet},
-    time::{sleep, sleep_until, timeout, Instant},
+    time::{Instant, sleep, sleep_until, timeout},
 };
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
-    authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher,
-    transaction_certifier::TransactionCertifier,
-};
-use crate::{
+    BlockAPI,
     block::{SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit_vote_monitor::CommitVoteMonitor,
@@ -41,7 +38,10 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
-    BlockAPI,
+};
+use crate::{
+    authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher,
+    transaction_certifier::TransactionCertifier,
 };
 
 /// The number of concurrent fetch blocks requests per authority
@@ -895,13 +895,28 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         self.fetch_blocks_scheduler_task
             .spawn(monitored_future!(async move {
                 let _scope = monitored_scope("FetchMissingBlocksScheduler");
-                context.metrics.node_metrics.fetch_blocks_scheduler_inflight.inc();
+                context
+                    .metrics
+                    .node_metrics
+                    .fetch_blocks_scheduler_inflight
+                    .inc();
                 let total_requested = missing_blocks.len();
 
                 fail_point_async!("consensus-delay");
                 // Fetch blocks from peers
-                let results = Self::fetch_blocks_from_authorities(context.clone(), blocks_to_fetch.clone(), network_client, missing_blocks, dag_state).await;
-                context.metrics.node_metrics.fetch_blocks_scheduler_inflight.dec();
+                let results = Self::fetch_blocks_from_authorities(
+                    context.clone(),
+                    blocks_to_fetch.clone(),
+                    network_client,
+                    missing_blocks,
+                    dag_state,
+                )
+                .await;
+                context
+                    .metrics
+                    .node_metrics
+                    .fetch_blocks_scheduler_inflight
+                    .dec();
                 if results.is_empty() {
                     return;
                 }
@@ -911,13 +926,39 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 for (blocks_guard, fetched_blocks, peer) in results {
                     total_fetched += fetched_blocks.len();
 
-                    if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, blocks_guard, core_dispatcher.clone(), block_verifier.clone(), transaction_certifier.clone(), commit_vote_monitor.clone(), context.clone(), commands_sender.clone(), "periodic").await {
-                        warn!("Error occurred while processing fetched blocks from peer {peer}: {err}");
-                        context.metrics.node_metrics.synchronizer_process_fetched_failures.with_label_values(&[&context.committee.authority(peer).hostname, "periodic"]).inc();
+                    if let Err(err) = Self::process_fetched_blocks(
+                        fetched_blocks,
+                        peer,
+                        blocks_guard,
+                        core_dispatcher.clone(),
+                        block_verifier.clone(),
+                        transaction_certifier.clone(),
+                        commit_vote_monitor.clone(),
+                        context.clone(),
+                        commands_sender.clone(),
+                        "periodic",
+                    )
+                    .await
+                    {
+                        warn!(
+                            "Error occurred while processing fetched blocks from peer {peer}: {err}"
+                        );
+                        context
+                            .metrics
+                            .node_metrics
+                            .synchronizer_process_fetched_failures
+                            .with_label_values(&[
+                                &context.committee.authority(peer).hostname,
+                                "periodic",
+                            ])
+                            .inc();
                     }
                 }
 
-                debug!("Total blocks requested to fetch: {}, total fetched: {}", total_requested, total_fetched);
+                debug!(
+                    "Total blocks requested to fetch: {}, total fetched: {}",
+                    total_requested, total_fetched
+                );
             }));
         Ok(())
     }
@@ -1135,10 +1176,7 @@ mod tests {
 
     use crate::commit::{CommitVote, TrustedCommit};
     use crate::{
-        authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
-        transaction_certifier::TransactionCertifier,
-    };
-    use crate::{
+        CommitDigest, CommitIndex,
         block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
@@ -1150,9 +1188,12 @@ mod tests {
         network::{BlockStream, NetworkClient},
         storage::mem_store::MemStore,
         synchronizer::{
-            InflightBlocksMap, Synchronizer, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
+            FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT, InflightBlocksMap, Synchronizer,
         },
-        CommitDigest, CommitIndex,
+    };
+    use crate::{
+        authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
+        transaction_certifier::TransactionCertifier,
     };
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
@@ -1555,11 +1596,13 @@ mod tests {
         assert_eq!(added_blocks, expected_blocks);
 
         // AND missing blocks should have been consumed by the stub
-        assert!(core_dispatcher
-            .get_missing_blocks()
-            .await
-            .unwrap()
-            .is_empty());
+        assert!(
+            core_dispatcher
+                .get_missing_blocks()
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

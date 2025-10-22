@@ -6,7 +6,7 @@ use std::str::FromStr;
 use diesel::prelude::*;
 
 use crate::{
-    handlers::{pruner::PrunableTable, CommitterWatermark},
+    handlers::{CommitterWatermark, pruner::PrunableTable},
     schema::watermarks::{self},
 };
 

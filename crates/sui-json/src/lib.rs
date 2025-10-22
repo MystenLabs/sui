@@ -21,19 +21,19 @@ use move_core_types::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Number, Value as JsonValue};
+use serde_json::{Number, Value as JsonValue, json};
 
+use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::base_types::{
-    is_primitive_type_tag, move_ascii_str_layout, move_utf8_str_layout, ObjectID, SuiAddress,
-    TxContext, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
-    STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME,
-    STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME,
+    ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, STD_ASCII_MODULE_NAME,
+    STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME,
+    STD_UTF8_STRUCT_NAME, SuiAddress, TxContext, TxContextKind, is_primitive_type_tag,
+    move_ascii_str_layout, move_utf8_str_layout,
 };
 use sui_types::id::{self, ID, RESOLVED_SUI_ID};
 use sui_types::move_package::MovePackage;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transfer::RESOLVED_RECEIVING_STRUCT;
-use sui_types::MOVE_STDLIB_ADDRESS;
 
 const HEX_PREFIX: &str = "0x";
 
@@ -286,7 +286,8 @@ impl SuiJsonValue {
             {
                 if struct_layout.fields.len() != 1 {
                     bail!(
-                        "Cannot convert string arg {s} to {} which is expected to be a struct with one field", struct_layout.type_
+                        "Cannot convert string arg {s} to {} which is expected to be a struct with one field",
+                        struct_layout.type_
                     );
                 };
                 let addr = SuiAddress::from_str(s)?;
@@ -536,7 +537,7 @@ fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), 
                 return Err(SuiJsonValueError::new(
                     v,
                     SuiJsonValueErrorKind::ValueTypeNotAllowed,
-                ))
+                ));
             }
         };
 

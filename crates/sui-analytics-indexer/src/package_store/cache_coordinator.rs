@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Arc,
+    atomic::{AtomicU64, Ordering},
 };
 
 use tokio::sync::watch;
@@ -32,7 +32,9 @@ impl CacheReadyCoordinator {
             let _ = self.tx.send_replace(checkpoint);
         } else {
             // Should never happen since concurrency is set to 1.
-            panic!("Package cache coordinator saw checkpoints out of order. Previous: {prev}. Current: {checkpoint}");
+            panic!(
+                "Package cache coordinator saw checkpoints out of order. Previous: {prev}. Current: {checkpoint}"
+            );
         }
     }
 

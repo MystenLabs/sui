@@ -3,7 +3,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields};
+use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
 #[proc_macro_derive(SerializeParquet)]
 pub fn schema_derive(input: TokenStream) -> TokenStream {

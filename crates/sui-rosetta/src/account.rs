@@ -4,10 +4,10 @@
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
-use futures::{future::join_all, StreamExt};
+use futures::{StreamExt, future::join_all};
 
 use sui_sdk::rpc_types::StakeStatus;
-use sui_sdk::{SuiClient, SUI_COIN_TYPE};
+use sui_sdk::{SUI_COIN_TYPE, SuiClient};
 use sui_types::base_types::SuiAddress;
 use tracing::info;
 
@@ -97,7 +97,7 @@ async fn get_balances(
                     return Err(Error::InvalidInput(format!(
                         "{:?}",
                         currency.metadata.coin_type
-                    )))
+                    )));
                 }
             }
         }

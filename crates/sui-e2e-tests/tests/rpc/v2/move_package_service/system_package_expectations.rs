@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_rpc::proto::sui::rpc::v2::{
+    Ability, DatatypeDescriptor, FunctionDescriptor, Module, Package,
     datatype_descriptor::DatatypeKind, function_descriptor::Visibility, open_signature,
-    open_signature_body, Ability, DatatypeDescriptor, FunctionDescriptor, Module, Package,
+    open_signature_body,
 };
 
 pub fn validate_system_package(package: &Package) {

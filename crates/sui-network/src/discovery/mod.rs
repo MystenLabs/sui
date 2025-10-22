@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anemo::types::PeerInfo;
-use anemo::{types::PeerEvent, Network, Peer, PeerId, Request, Response};
+use anemo::{Network, Peer, PeerId, Request, Response, types::PeerEvent};
 use fastcrypto::ed25519::{Ed25519PublicKey, Ed25519Signature};
 use futures::StreamExt;
 use mysten_common::debug_fatal;

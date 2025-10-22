@@ -39,7 +39,7 @@ use transaction_submitter::*;
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
-    quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    quorum_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
     validator_client_monitor::{
         OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
@@ -204,7 +204,12 @@ where
                         );
                     }
                     Err(err) => {
-                        tracing::info!("Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}", tx_type.as_str(), display_name, err);
+                        tracing::info!(
+                            "Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}",
+                            tx_type.as_str(),
+                            display_name,
+                            err
+                        );
                     }
                 }
             };
@@ -293,7 +298,11 @@ where
                                 .transaction_retries
                                 .with_label_values(&["failure", tx_type.as_str(), ping_label])
                                 .observe(attempts as f64);
-                            tracing::info!("Failed to finalize transaction with non-retriable error after {} attempts: {}", attempts, e);
+                            tracing::info!(
+                                "Failed to finalize transaction with non-retriable error after {} attempts: {}",
+                                attempts,
+                                e
+                            );
                             return Err(e);
                         }
                         tracing::info!(
@@ -374,7 +383,10 @@ where
             .await?;
         if let SubmitTxResult::Rejected { error } = &submit_txn_result {
             return Err(TransactionDriverError::ClientInternal {
-                error: format!("SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}", error),
+                error: format!(
+                    "SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}",
+                    error
+                ),
             });
         }
 

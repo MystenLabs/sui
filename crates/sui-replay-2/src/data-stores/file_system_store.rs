@@ -56,21 +56,21 @@
 //! it learns the concrete versions.
 
 use crate::{
+    Node,
     replay_interface::{
         EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter,
         SetupStore, StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter,
         VersionQuery,
     },
-    Node,
 };
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{Context, Error, Result, anyhow};
 use std::{
     collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicU64, Ordering},
         RwLock,
+        atomic::{AtomicU64, Ordering},
     },
 };
 use sui_types::{

@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::SuiAddress;
 use crate::ObjectID;
+use crate::base_types::SuiAddress;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
@@ -199,7 +199,9 @@ pub enum ExecutionFailureStatus {
     #[error("The shared object operation is not allowed.")]
     SharedObjectOperationNotAllowed,
 
-    #[error("Certificate cannot be executed due to a dependency on a deleted shared object or an object that was transferred out of consensus")]
+    #[error(
+        "Certificate cannot be executed due to a dependency on a deleted shared object or an object that was transferred out of consensus"
+    )]
     InputObjectDeleted,
 
     #[error("Certificate is cancelled due to congestion on shared objects: {congested_objects}")]

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object_runtime::{get_all_uids, LocalProtocolConfig};
+use crate::object_runtime::{LocalProtocolConfig, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
@@ -11,10 +11,10 @@ use move_vm_types::{
     values::{GlobalValue, StructRef, Value},
 };
 use std::{
-    collections::{btree_map, BTreeMap},
+    collections::{BTreeMap, btree_map},
     sync::Arc,
 };
-use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed};
+use sui_protocol_config::{LimitThresholdCrossed, check_limit_by_meter};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
     committee::EpochId,
@@ -135,7 +135,7 @@ impl Inner<'_> {
                             "Mismatched object type for {child}. \
                                 Expected a Move object but found a Move package"
                         ),
-                    ))
+                    ));
                 }
                 Data::Move(mo @ MoveObject { .. }) => Some((mo, loaded_metadata)),
             }
@@ -199,7 +199,7 @@ impl Inner<'_> {
                                 "Mismatched object type for {child}. \
                                 Expected a Move object but found a Move package"
                             ),
-                        ))
+                        ));
                     }
                     Data::Move(_) => Some(object),
                 }
@@ -256,7 +256,7 @@ impl Inner<'_> {
                     child_ty.clone(),
                     child_move_type,
                     GlobalValue::none(),
-                )))
+                )));
             }
             Some(obj) => obj,
         };
@@ -280,7 +280,7 @@ impl Inner<'_> {
                 Err(e) => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                         format!("Object {child} did not deserialize to a struct Value. Error: {e}"),
-                    ))
+                    ));
                 }
             };
         // Find all UIDs inside of the value and update the object parent maps
@@ -322,7 +322,7 @@ fn deserialize_move_object(
                 PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
                     format!("Failed to deserialize object {child_id} with type {child_move_type}",),
                 ),
-            )
+            );
         }
     };
     Ok(ObjectResult::Loaded((

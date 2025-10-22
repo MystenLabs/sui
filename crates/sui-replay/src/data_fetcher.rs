@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::ReplayEngineError;
 use crate::types::EPOCH_CHANGE_STRUCT_TAG;
+use crate::types::ReplayEngineError;
 use async_trait::async_trait;
 use futures::future::join_all;
 use lru::LruCache;

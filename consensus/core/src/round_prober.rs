@@ -26,8 +26,8 @@ use parking_lot::RwLock;
 use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
-    context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
-    network::NetworkClient, round_tracker::PeerRoundTracker, BlockAPI as _,
+    BlockAPI as _, context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
+    network::NetworkClient, round_tracker::PeerRoundTracker,
 };
 
 // Handle to control the RoundProber loop and read latest round gaps.
@@ -224,6 +224,7 @@ mod test {
     use parking_lot::RwLock;
 
     use crate::{
+        TestBlock, VerifiedBlock,
         commit::{CertifiedCommits, CommitRange},
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -233,7 +234,6 @@ mod test {
         round_prober::RoundProber,
         round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
-        TestBlock, VerifiedBlock,
     };
 
     struct FakeThreadDispatcher {

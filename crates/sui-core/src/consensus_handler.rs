@@ -13,7 +13,7 @@ use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor, CommitIndex};
 use consensus_types::block::TransactionIndex;
-use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use itertools::Itertools as _;
 use lru::LruCache;
 use mysten_common::{
@@ -52,10 +52,11 @@ use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     authority::{
+        AuthorityMetrics, AuthorityState, ExecutionEnv,
         authority_per_epoch_store::{
-            consensus_quarantine::ConsensusCommitOutput, AuthorityPerEpochStore,
-            CancelConsensusCertificateReason, ConsensusStats, ConsensusStatsAPI, ExecutionIndices,
-            ExecutionIndicesWithStats,
+            AuthorityPerEpochStore, CancelConsensusCertificateReason, ConsensusStats,
+            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStats,
+            consensus_quarantine::ConsensusCommitOutput,
         },
         backpressure::{BackpressureManager, BackpressureSubscriber},
         consensus_tx_status_cache::ConsensusTxStatus,
@@ -63,15 +64,14 @@ use crate::{
         execution_time_estimator::ExecutionTimeEstimator,
         shared_object_congestion_tracker::SharedObjectCongestionTracker,
         shared_object_version_manager::{AssignedTxAndVersions, Schedulable, SharedObjVerManager},
-        transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason},
-        AuthorityMetrics, AuthorityState, ExecutionEnv,
+        transaction_deferral::{DeferralKey, DeferralReason, transaction_deferral_within_limit},
     },
     checkpoints::{
         CheckpointService, CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo,
     },
     consensus_adapter::ConsensusAdapter,
     consensus_throughput_calculator::ConsensusThroughputCalculator,
-    consensus_types::consensus_output_api::{parse_block_transactions, ConsensusCommitAPI},
+    consensus_types::consensus_output_api::{ConsensusCommitAPI, parse_block_transactions},
     epoch::{
         randomness::{DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
@@ -80,7 +80,7 @@ use crate::{
     execution_scheduler::{ExecutionScheduler, SchedulingSource},
     post_consensus_tx_reorder::PostConsensusTxReorder,
     scoring_decision::update_low_scoring_authorities,
-    traffic_controller::{policies::TrafficTally, TrafficController},
+    traffic_controller::{TrafficController, policies::TrafficTally},
 };
 
 pub struct ConsensusHandlerInitializer {
@@ -748,10 +748,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// Any state computed here must be a pure function of the commits observed, it cannot depend on any
     /// state recorded in the epoch db.
     fn handle_prior_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
-        assert!(self
-            .epoch_store
-            .protocol_config()
-            .record_additional_state_digest_in_prologue());
+        assert!(
+            self.epoch_store
+                .protocol_config()
+                .record_additional_state_digest_in_prologue()
+        );
         let protocol_config = self.epoch_store.protocol_config();
         let epoch_start_time = self
             .epoch_store
@@ -1447,11 +1448,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                         // Cancel the transaction that has been deferred for too long.
                         debug!(
-                                "Cancelling consensus transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
-                                transaction.digest(),
-                                deferral_key,
-                                congested_objects
-                            );
+                            "Cancelling consensus transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
+                            transaction.digest(),
+                            deferral_key,
+                            congested_objects
+                        );
                         cancelled_txns.insert(
                             *transaction.digest(),
                             CancelConsensusCertificateReason::CongestionOnObjects(
@@ -1656,7 +1657,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         } in execution_time_observations
         {
             let Some(estimator) = execution_time_estimator.as_mut() else {
-                error!("dropping ExecutionTimeObservation from possibly-Byzantine authority {authority:?} sent when ExecutionTimeEstimate mode is not enabled");
+                error!(
+                    "dropping ExecutionTimeObservation from possibly-Byzantine authority {authority:?} sent when ExecutionTimeEstimate mode is not enabled"
+                );
                 continue;
             };
             let authority_index = self
@@ -1861,8 +1864,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         } else {
             debug!(
                 "Blocking end of epoch on deferred transactions, from previous commits?={}, from this commit?={}",
-                previous_commits_have_deferred_txns,
-                commit_has_deferred_txns,
+                previous_commits_have_deferred_txns, commit_has_deferred_txns,
             );
         }
 
@@ -2580,10 +2582,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // An honest validator should not send a new transaction after EndOfPublish. Whether the
                         // transaction is duplicate or not, we filter it out here.
                         warn!(
-                                "Ignoring consensus transaction {:?} from authority {:?}, which already sent EndOfPublish message to consensus",
-                                author_name.concise(),
-                                parsed.transaction.key(),
-                            );
+                            "Ignoring consensus transaction {:?} from authority {:?}, which already sent EndOfPublish message to consensus",
+                            author_name.concise(),
+                            parsed.transaction.key(),
+                        );
                         continue;
                     }
                 }
@@ -3395,7 +3397,7 @@ mod tests {
     };
     use sui_types::{
         base_types::ExecutionDigests,
-        base_types::{random_object_ref, AuthorityName, FullObjectRef, ObjectID, SuiAddress},
+        base_types::{AuthorityName, FullObjectRef, ObjectID, SuiAddress, random_object_ref},
         committee::Committee,
         crypto::deterministic_random_account_key,
         gas::GasCostSummary,
@@ -3964,12 +3966,16 @@ mod tests {
         // V2 distinct digests: both must be processed. If these were collapsed to one CheckpointSeq num, only one would process.
         let v2_key_a = SK::External(CK::CheckpointSignatureV2(state.name, 42, v2_digest_a));
         let v2_key_b = SK::External(CK::CheckpointSignatureV2(state.name, 42, v2_digest_b));
-        assert!(epoch_store
-            .is_consensus_message_processed(&v2_key_a)
-            .unwrap());
-        assert!(epoch_store
-            .is_consensus_message_processed(&v2_key_b)
-            .unwrap());
+        assert!(
+            epoch_store
+                .is_consensus_message_processed(&v2_key_a)
+                .unwrap()
+        );
+        assert!(
+            epoch_store
+                .is_consensus_message_processed(&v2_key_b)
+                .unwrap()
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -4101,7 +4107,9 @@ mod tests {
         // Check that mismatched authority transactions were NOT processed (filtered out by verify_consensus_transaction)
         let mismatched_eop_key = SK::External(CK::EndOfPublish(wrong_authority));
         assert!(
-            !epoch_store.is_consensus_message_processed(&mismatched_eop_key).unwrap(),
+            !epoch_store
+                .is_consensus_message_processed(&mismatched_eop_key)
+                .unwrap(),
             "Mismatched EndOfPublish should NOT have been processed (filtered by verify_consensus_transaction)"
         );
 
@@ -4111,7 +4119,9 @@ mod tests {
             mismatched_checkpoint_digest,
         ));
         assert!(
-            !epoch_store.is_consensus_message_processed(&mismatched_checkpoint_key).unwrap(),
+            !epoch_store
+                .is_consensus_message_processed(&mismatched_checkpoint_key)
+                .unwrap(),
             "Mismatched CheckpointSignature should NOT have been processed (filtered by verify_consensus_transaction)"
         );
     }

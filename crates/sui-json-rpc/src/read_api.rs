@@ -7,16 +7,16 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use backoff::future::retry;
 use fastcrypto::encoding::Base64;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::join_all;
 use im::hashmap::HashMap as ImHashMap;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
-use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use jsonrpsee::core::RpcResult;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
@@ -35,8 +35,8 @@ use mysten_metrics::add_server_timing;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{
-    validate_limit, JsonRpcMetrics, ReadApiOpenRpc, ReadApiServer, QUERY_MAX_RESULT_LIMIT,
-    QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+    JsonRpcMetrics, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS, ReadApiOpenRpc,
+    ReadApiServer, validate_limit,
 };
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
@@ -62,15 +62,15 @@ use sui_types::transaction::{Transaction, TransactionData};
 
 use crate::authority_state::{StateRead, StateReadError, StateReadResult};
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
+use crate::{ObjectProvider, with_tracing};
 use crate::{
-    get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
+    ObjectProviderCache, SuiRpcModule, get_balance_changes_from_effect, get_object_changes,
 };
-use crate::{with_tracing, ObjectProvider};
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::ToFromBytes;
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::ZkLoginVerifyResult;
-use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
+use sui_types::authenticator_state::{ActiveJwk, get_authenticator_state};
 
 /// A field access in a  Display string cannot exceed this level of nesting.
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
@@ -373,8 +373,8 @@ impl ReadApi {
             .await
             .map_err(|e| {
                 Error::UnexpectedError(format!(
-                "Retrieving events with retry failed for transaction digests {digests:?}: {e:?}"
-            ))
+                    "Retrieving events with retry failed for transaction digests {digests:?}: {e:?}"
+                ))
             })?
             .into_iter();
 
@@ -390,7 +390,9 @@ impl ReadApi {
                                 Some(to_sui_transaction_events(self, cache_entry.digest, ev)?)
                         }
                         None | Some(None) => {
-                            error!("Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}");
+                            error!(
+                                "Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}"
+                            );
                             cache_entry.errors.push(format!(
                                 "Failed to fetch events with event digest {events_digest:?}",
                             ))

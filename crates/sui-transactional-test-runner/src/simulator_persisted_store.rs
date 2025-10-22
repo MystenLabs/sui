@@ -26,8 +26,8 @@ use sui_types::{
     },
     object::{Object, Owner},
     storage::{
-        load_package_object_from_object_store, BackingPackageStore, ChildObjectResolver,
-        ObjectStore, PackageObject, ParentSync,
+        BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject, ParentSync,
+        load_package_object_from_object_store,
     },
     transaction::VerifiedTransaction,
 };
@@ -711,7 +711,7 @@ impl Clone for PersistedStoreInnerReadOnlyWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{SeedableRng, rngs::StdRng};
 
     #[tokio::test]
     async fn deterministic_genesis() {

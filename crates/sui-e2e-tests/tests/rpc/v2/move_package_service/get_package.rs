@@ -3,7 +3,7 @@
 
 use sui_macros::sim_test;
 use sui_rpc::proto::sui::rpc::v2::{
-    move_package_service_client::MovePackageServiceClient, GetPackageRequest,
+    GetPackageRequest, move_package_service_client::MovePackageServiceClient,
 };
 use test_cluster::TestClusterBuilder;
 

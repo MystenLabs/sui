@@ -5,15 +5,15 @@ use std::{
     error::Error,
     path::Path,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
 
 use anyhow::Context;
-use reqwest::{header::HeaderName, Client};
-use serde_json::{json, Value};
+use reqwest::{Client, header::HeaderName};
+use serde_json::{Value, json};
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, Merge, PipelineLayer, PrunerLayer};
 use sui_indexer_alt_e2e_tests::{OffchainCluster, OffchainClusterConfig};
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -21,7 +21,7 @@ use sui_transactional_test_runner::{
     create_adapter,
     offchain_state::{OffchainStateReader, TestResponse},
     run_tasks_with_adapter,
-    test_adapter::{OffChainConfig, SuiTestAdapter, PRE_COMPILED},
+    test_adapter::{OffChainConfig, PRE_COMPILED, SuiTestAdapter},
 };
 use tokio::join;
 use tokio_util::sync::CancellationToken;
@@ -56,7 +56,9 @@ impl OffchainStateReader for OffchainReader {
     }
 
     async fn wait_for_pruned_checkpoint(&self, _: u64, _: Duration) {
-        unimplemented!("Waiting for pruned checkpoints is not supported in these tests (add it if you need it)");
+        unimplemented!(
+            "Waiting for pruned checkpoints is not supported in these tests (add it if you need it)"
+        );
     }
 
     async fn execute_graphql(

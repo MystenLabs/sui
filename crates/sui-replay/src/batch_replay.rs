@@ -3,13 +3,13 @@
 
 use crate::replay::{ExecutionSandboxState, LocalExec};
 use crate::types::ReplayEngineError;
-use futures::future::join_all;
 use futures::FutureExt;
+use futures::future::join_all;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::base_types::TransactionDigest;
 use tokio::time::Instant;

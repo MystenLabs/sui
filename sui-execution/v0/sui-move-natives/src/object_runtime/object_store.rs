@@ -11,10 +11,10 @@ use move_vm_types::{
     values::{GlobalValue, StructRef, Value},
 };
 use std::{
-    collections::{btree_map, BTreeMap},
+    collections::{BTreeMap, btree_map},
     sync::Arc,
 };
-use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed};
+use sui_protocol_config::{LimitThresholdCrossed, check_limit_by_meter};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
     error::VMMemoryLimitExceededSubStatusCode,
@@ -135,7 +135,7 @@ impl Inner<'_> {
                                 "Mismatched object type for {child}. \
                                 Expected a Move object but found a Move package"
                             ),
-                        ))
+                        ));
                     }
                     Data::Move(_) => Some(object),
                 }
@@ -187,7 +187,7 @@ impl Inner<'_> {
                     child_ty.clone(),
                     child_move_type,
                     GlobalValue::none(),
-                )))
+                )));
             }
             Some(obj) => obj,
         };
@@ -211,7 +211,7 @@ impl Inner<'_> {
                 Err(e) => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                         format!("Object {child} did not deserialize to a struct Value. Error: {e}"),
-                    ))
+                    ));
                 }
             };
         // Find all UIDs inside of the value and update the object parent maps

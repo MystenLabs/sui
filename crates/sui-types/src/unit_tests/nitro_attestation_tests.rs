@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use crate::error::SuiErrorKind;
 use crate::nitro_attestation::NitroAttestationVerifyError;
 
-use super::{parse_nitro_attestation, verify_nitro_attestation};
 use super::{AttestationDocument, CoseSign1};
+use super::{parse_nitro_attestation, verify_nitro_attestation};
 use ciborium::value::Value;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;

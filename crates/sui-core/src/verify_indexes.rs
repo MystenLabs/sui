@@ -5,7 +5,7 @@ use std::sync::Weak;
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::jsonrpc_index::{CoinIndexKey2, CoinInfo, IndexStore};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use sui_types::{base_types::ObjectInfo, object::Owner};
 use tracing::info;
 use typed_store::traits::Map;
@@ -61,7 +61,9 @@ pub fn verify_indexes(store: &dyn GlobalStateHashStore, indexes: Arc<IndexStore>
         })?;
 
         if calculated_info != info {
-            bail!("owner_index: entry {key:?} is different: expected {calculated_info:?} found {info:?}");
+            bail!(
+                "owner_index: entry {key:?} is different: expected {calculated_info:?} found {info:?}"
+            );
         }
     }
 
@@ -81,7 +83,9 @@ pub fn verify_indexes(store: &dyn GlobalStateHashStore, indexes: Arc<IndexStore>
         })?;
 
         if calculated_info != info {
-            bail!("coin_index: entry {key:?} is different: expected {calculated_info:?} found {info:?}");
+            bail!(
+                "coin_index: entry {key:?} is different: expected {calculated_info:?} found {info:?}"
+            );
         }
     }
     tracing::info!("Coin index is good");

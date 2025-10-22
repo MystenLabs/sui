@@ -150,7 +150,7 @@ pub(crate) fn try_construct_object(
             return Err(SuiErrorKind::Storage(
                 "corrupted field: inconsistent object representation".to_string(),
             )
-            .into())
+            .into());
         }
     };
 

@@ -672,7 +672,7 @@ mod tests {
     use fastcrypto::error::FastCryptoError;
 
     use crate::{
-        block::{genesis_blocks, BlockAPI, SignedBlock, TestBlock},
+        block::{BlockAPI, SignedBlock, TestBlock, genesis_blocks},
         context::Context,
         error::ConsensusError,
     };

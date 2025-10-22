@@ -8,16 +8,16 @@ use serde_json::json;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
-use sui_rosetta::operations::Operations;
 use sui_rosetta::CoinMetadataCache;
+use sui_rosetta::operations::Operations;
 use test_cluster::TestClusterBuilder;
 
-use super::rosetta_client::{start_rosetta_test_server, RosettaError};
+use super::rosetta_client::{RosettaError, start_rosetta_test_server};
 
 #[allow(dead_code)]
 #[path = "../custom_coins/test_coin_utils.rs"]
 mod test_coin_utils;
-use test_coin_utils::{init_package, mint, TEST_COIN_DECIMALS};
+use test_coin_utils::{TEST_COIN_DECIMALS, init_package, mint};
 
 #[tokio::test]
 async fn test_pay_custom_coin_with_multiple_coins() -> anyhow::Result<()> {

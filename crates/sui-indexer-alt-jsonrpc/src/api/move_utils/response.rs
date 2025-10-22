@@ -8,11 +8,11 @@ use sui_json_rpc_types::{
     SuiMoveVisibility,
 };
 use sui_package_resolver::{FunctionDef, OpenSignature, OpenSignatureBody, Reference};
-use sui_types::{base_types::ObjectID, Identifier};
+use sui_types::{Identifier, base_types::ObjectID};
 
 use crate::{
     context::Context,
-    error::{invalid_params, RpcError},
+    error::{RpcError, invalid_params},
 };
 
 use super::error::Error;

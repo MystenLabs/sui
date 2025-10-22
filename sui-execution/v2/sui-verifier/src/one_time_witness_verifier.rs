@@ -22,13 +22,13 @@ use move_binary_format::file_format::{
 use move_core_types::{ident_str, language_storage::ModuleId};
 use sui_types::bridge::BRIDGE_SUPPORTED_ASSET;
 use sui_types::{
+    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS,
     base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     error::ExecutionError,
-    move_package::{is_test_fun, FnInfoMap},
-    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    move_package::{FnInfoMap, is_test_fun},
 };
 
-use crate::{verification_failure, INIT_FN_NAME};
+use crate::{INIT_FN_NAME, verification_failure};
 
 pub fn verify_module(
     module: &CompiledModule,

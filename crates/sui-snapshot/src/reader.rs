@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FileMetadata, FileType, Manifest, MAGIC_BYTES, MANIFEST_FILE_MAGIC, OBJECT_FILE_MAGIC,
+    FileMetadata, FileType, MAGIC_BYTES, MANIFEST_FILE_MAGIC, Manifest, OBJECT_FILE_MAGIC,
     OBJECT_ID_BYTES, OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC, SEQUENCE_NUM_BYTES, SHA3_BYTES,
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::{Buf, Bytes};
 use fastcrypto::hash::MultisetHash;
@@ -21,12 +21,12 @@ use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 use sui_config::object_storage_config::ObjectStoreConfig;
-use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_core::authority::AuthorityStore;
+use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::http::HttpDownloaderBuilder;

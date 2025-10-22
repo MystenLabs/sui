@@ -5,12 +5,12 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::error::ObjectNotFoundError;
-use crate::reader::StateReader;
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use crate::error::ObjectNotFoundError;
+use crate::reader::StateReader;
 use bytes::Bytes;
 use move_binary_format::normalized;
 use sui_protocol_config::ProtocolConfig;
@@ -258,7 +258,7 @@ fn resolve_object_reference_with_object(
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 format!("object {object_id} is not Immutable or AddressOwned"),
-            ))
+            ));
         }
     }
 
@@ -433,7 +433,7 @@ fn resolve_arg(
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 "invalid unresolved input argument",
-            ))
+            ));
         }
     }
     .pipe(Ok)

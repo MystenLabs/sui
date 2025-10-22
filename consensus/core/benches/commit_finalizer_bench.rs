@@ -7,7 +7,7 @@ use consensus_core::{
     CommitFinalizer, CommittedSubDag, Context, DagBuilder, DagState, Linearizer, MemStore,
     TransactionCertifier,
 };
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
+use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
 use mysten_metrics::monitored_mpsc;
 use parking_lot::{Mutex, RwLock};
 

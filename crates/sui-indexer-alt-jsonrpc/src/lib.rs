@@ -17,8 +17,8 @@ use api::transactions::{QueryTransactions, Transactions};
 use api::write::Write;
 use config::RpcConfig;
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
-use metrics::middleware::MetricsLayer;
 use metrics::RpcMetrics;
+use metrics::middleware::MetricsLayer;
 use prometheus::Registry;
 use serde_json::json;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
@@ -315,7 +315,9 @@ pub async fn start_rpc(
         )?)?;
         rpc.add_module(Write::new(fullnode_rpc_url, context.config().node.clone())?)?;
     } else {
-        warn!("No fullnode rpc url provided, DelegationCoins, DelegationGovernance, and Write modules will not be added.");
+        warn!(
+            "No fullnode rpc url provided, DelegationCoins, DelegationGovernance, and Write modules will not be added."
+        );
     }
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
@@ -338,7 +340,7 @@ mod tests {
 
     use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::METHOD_NOT_FOUND_CODE};
     use reqwest::Client;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use sui_open_rpc::Module;
     use sui_open_rpc_macros::open_rpc;
     use sui_pg_db::temp::get_available_port;

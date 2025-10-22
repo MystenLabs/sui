@@ -276,10 +276,10 @@ mod test {
     use consensus_types::block::{BlockDigest, BlockRef};
 
     use crate::{
+        TestBlock, VerifiedBlock,
         block::ExtendedBlock,
         context::Context,
-        round_tracker::{compute_quorum_round, PeerRoundTracker},
-        TestBlock, VerifiedBlock,
+        round_tracker::{PeerRoundTracker, compute_quorum_round},
     };
 
     #[tokio::test]

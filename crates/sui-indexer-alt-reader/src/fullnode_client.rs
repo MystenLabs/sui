@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use prometheus::Registry;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;

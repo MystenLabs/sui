@@ -4,8 +4,8 @@
 use lru::LruCache;
 use parking_lot::RwLock;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    Histogram, IntCounter, IntGauge, Registry, register_histogram_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry,
 };
 use std::collections::BTreeSet;
 use std::net::IpAddr;

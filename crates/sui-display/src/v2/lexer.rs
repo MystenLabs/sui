@@ -384,8 +384,8 @@ fn is_valid_decimal_byte(b: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use insta::assert_snapshot;
     use Lexeme as L;
+    use insta::assert_snapshot;
 
     fn lexemes(src: &str) -> String {
         Lexer::new(src)

@@ -5,6 +5,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
 
+use crate::SUI_SYSTEM_ADDRESS;
 use crate::balance::Balance;
 use crate::base_types::ObjectID;
 use crate::committee::EpochId;
@@ -12,7 +13,6 @@ use crate::error::{SuiError, SuiErrorKind};
 use crate::gas_coin::MIST_PER_SUI;
 use crate::id::{ID, UID};
 use crate::object::{Data, Object};
-use crate::SUI_SYSTEM_ADDRESS;
 use serde::Deserialize;
 use serde::Serialize;
 

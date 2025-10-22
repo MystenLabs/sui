@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::CoinMetadataCache;
 use crate::operations::Operations;
 use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
-use crate::CoinMetadataCache;
 use anyhow::anyhow;
 use futures::StreamExt;
 use move_core_types::identifier::Identifier;
@@ -24,22 +24,22 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_move_build::BuildConfig;
+use sui_sdk::SuiClient;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse,
 };
-use sui_sdk::SuiClient;
+use sui_types::TypeTag;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
-use sui_types::gas_coin::{GasCoin, GAS};
+use sui_types::gas_coin::{GAS, GasCoin};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
-    CallArg, InputObjectKind, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
-    TransactionDataAPI, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    CallArg, InputObjectKind, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
-    TEST_ONLY_GAS_UNIT_FOR_STAKING, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    TEST_ONLY_GAS_UNIT_FOR_STAKING, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
+    TransactionDataAPI, TransactionKind,
 };
-use sui_types::TypeTag;
 use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
@@ -731,9 +731,11 @@ async fn test_transaction(
                 }
             })
             .collect::<Vec<_>>();
-        vec![get_random_sui(client, sender, input_objects)
-            .await
-            .object_ref()]
+        vec![
+            get_random_sui(client, sender, input_objects)
+                .await
+                .object_ref(),
+        ]
     };
 
     let data = TransactionData::new_with_gas_coins(

@@ -12,8 +12,8 @@ use crate::{
     base_types::ObjectID,
     object::{Object, Owner},
 };
-use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
+use move_binary_format::binary_config::BinaryConfig;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use std::collections::BTreeMap;

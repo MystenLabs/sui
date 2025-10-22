@@ -4,12 +4,12 @@
 use std::sync::Arc;
 
 use diesel::prelude::ConnectionError;
+use diesel_async::RunQueryDsl;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::PoolError;
 use diesel_async::pooled_connection::bb8::Pool;
 use diesel_async::pooled_connection::bb8::PooledConnection;
 use diesel_async::pooled_connection::bb8::RunError;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use diesel_async::pooled_connection::PoolError;
-use diesel_async::RunQueryDsl;
 use diesel_async::{AsyncConnection, AsyncPgConnection};
 use futures::FutureExt;
 use url::Url;

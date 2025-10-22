@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use async_trait::async_trait;
 use diesel::dsl::now;
 use diesel::{ExpressionMethods, TextExpressionMethods};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
-use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
+use diesel_async::scoped_futures::ScopedFutureExt;
 use sui_indexer_builder::progress::ProgressSavingPolicy;
 use sui_types::base_types::ObjectID;
 use sui_types::transaction::{Command, TransactionDataAPI};
@@ -16,7 +16,7 @@ use tracing::info;
 
 use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
 use sui_indexer_builder::sui_datasource::CheckpointTxnData;
-use sui_indexer_builder::{Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT};
+use sui_indexer_builder::{LIVE_TASK_TARGET_CHECKPOINT, Task, Tasks};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;

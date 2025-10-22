@@ -209,7 +209,7 @@ where
 mod tests {
     use std::{collections::HashSet, str::FromStr};
 
-    use ethers::types::{Log, U256, U64};
+    use ethers::types::{Log, U64, U256};
     use prometheus::Registry;
     use tokio::sync::mpsc::error::TryRecvError;
 

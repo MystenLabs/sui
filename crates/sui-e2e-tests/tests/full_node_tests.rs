@@ -23,14 +23,14 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_test_transaction_builder::{
-    batch_make_transfer_transactions, create_nft, delete_nft, increment_counter,
-    publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
-    TestTransactionBuilder,
+    TestTransactionBuilder, batch_make_transfer_transactions, create_nft, delete_nft,
+    increment_counter, publish_basics_package, publish_basics_package_and_make_counter,
+    publish_nfts_package,
 };
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{FullObjectRef, ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
-use sui_types::crypto::{get_key_pair, SuiKeyPair};
+use sui_types::crypto::{SuiKeyPair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::message_envelope::Message;
@@ -40,15 +40,15 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::{ExecuteTransactionRequestType, ExecuteTransactionRequestV3};
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::{
-    CallArg, GasData, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    CallArg, GasData, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    TransactionData, TransactionKind,
 };
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
 use test_cluster::TestClusterBuilder;
 use tokio::sync::RwLock;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use tracing::info;
 
 #[sim_test]
@@ -1242,10 +1242,12 @@ async fn test_access_old_object_pruned() {
                     )
                     .await;
                 // Make sure the old version of the object is already pruned.
-                assert!(state
-                    .database_for_testing()
-                    .get_object_by_key(&gas_object.0, gas_object.1)
-                    .is_none());
+                assert!(
+                    state
+                        .database_for_testing()
+                        .get_object_by_key(&gas_object.0, gas_object.1)
+                        .is_none()
+                );
                 let epoch_store = state.epoch_store_for_testing();
                 assert_eq!(
                     state
@@ -1268,13 +1270,15 @@ async fn test_access_old_object_pruned() {
 
     // Check that fullnode would return the same error.
     let result = test_cluster.wallet.execute_transaction_may_fail(tx).await;
-    assert!(result.unwrap_err().to_string().contains(
-        &UserInputError::ObjectVersionUnavailableForConsumption {
-            provided_obj_ref: gas_object,
-            current_version: new_gas_version,
-        }
-        .to_string()
-    ))
+    assert!(
+        result.unwrap_err().to_string().contains(
+            &UserInputError::ObjectVersionUnavailableForConsumption {
+                provided_obj_ref: gas_object,
+                current_version: new_gas_version,
+            }
+            .to_string()
+        )
+    )
 }
 
 async fn transfer_coin(
@@ -1345,11 +1349,13 @@ async fn test_full_node_run_with_range_checkpoint() -> Result<(), anyhow::Error>
     }));
 
     // we dont want transaction orchestrator enabled when run_with_range != None
-    assert!(test_cluster
-        .fullnode_handle
-        .sui_node
-        .with(|node| node.transaction_orchestrator())
-        .is_none());
+    assert!(
+        test_cluster
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.transaction_orchestrator())
+            .is_none()
+    );
     Ok(())
 }
 
@@ -1373,26 +1379,32 @@ async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
     // ensure we end up at epoch + 1
     // this is because we execute the target epoch, reconfigure, and then send shutdown signal at
     // epoch + 1
-    assert!(test_cluster
-        .fullnode_handle
-        .sui_node
-        .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1));
+    assert!(
+        test_cluster
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1)
+    );
 
     // epoch duration is 10s for testing, lets sleep long enough that epoch would normally progress
     tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
 
     // ensure we are still at epoch + 1
-    assert!(test_cluster
-        .fullnode_handle
-        .sui_node
-        .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1));
+    assert!(
+        test_cluster
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1)
+    );
 
     // we dont want transaction orchestrator enabled when run_with_range != None
-    assert!(test_cluster
-        .fullnode_handle
-        .sui_node
-        .with(|node| node.transaction_orchestrator())
-        .is_none());
+    assert!(
+        test_cluster
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.transaction_orchestrator())
+            .is_none()
+    );
 
     Ok(())
 }

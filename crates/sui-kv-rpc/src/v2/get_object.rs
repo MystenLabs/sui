@@ -9,8 +9,8 @@ use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, GetObjectResponse, GetObjectResult};
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_api::{
-    grpc::v2::ledger_service::validate_get_object_requests, ErrorReason, ObjectNotFoundError,
-    RpcError,
+    ErrorReason, ObjectNotFoundError, RpcError,
+    grpc::v2::ledger_service::validate_get_object_requests,
 };
 use sui_types::storage::ObjectKey;
 

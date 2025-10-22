@@ -11,8 +11,8 @@ use sui_rpc::proto::sui::rpc::v2::{
     TransactionEffects, TransactionEvents, UserSignature,
 };
 use sui_rpc_api::{
-    proto::google::rpc::bad_request::FieldViolation, proto::timestamp_ms_to_proto, ErrorReason,
-    RpcError, TransactionNotFoundError,
+    ErrorReason, RpcError, TransactionNotFoundError,
+    proto::google::rpc::bad_request::FieldViolation, proto::timestamp_ms_to_proto,
 };
 use sui_types::base_types::TransactionDigest;
 

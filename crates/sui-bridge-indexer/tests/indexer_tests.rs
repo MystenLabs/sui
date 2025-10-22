@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::associations::HasTable;
 use diesel::QueryDsl;
+use diesel::associations::HasTable;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use std::time::Duration;
 use sui_bridge::e2e_tests::test_utils::{
-    initiate_bridge_eth_to_sui, BridgeTestCluster, BridgeTestClusterBuilder,
+    BridgeTestCluster, BridgeTestClusterBuilder, initiate_bridge_eth_to_sui,
 };
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::create_sui_indexer;
@@ -15,7 +15,7 @@ use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::get_connection_pool;
 use sui_bridge_indexer::storage::PgBridgePersistent;
 use sui_bridge_schema::models::{GovernanceAction, TokenTransfer, TokenTransferStatus};
-use sui_bridge_schema::{schema, MIGRATIONS};
+use sui_bridge_schema::{MIGRATIONS, schema};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer::database::Connection;
 use sui_indexer_builder::indexer_builder::IndexerProgressStore;

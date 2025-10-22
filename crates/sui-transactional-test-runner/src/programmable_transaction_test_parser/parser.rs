@@ -20,7 +20,7 @@ use crate::programmable_transaction_test_parser::token::{
 };
 
 use super::token::CommandToken;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 /// A small parser used for parsing programmable transaction commands for transactional tests
 pub struct CommandParser<

@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::Worker;
 use crate::progress_store::{
     ExecutorProgress, ProgressStore, ProgressStoreWrapper, ShimProgressStore,
 };
 use crate::reader::CheckpointReader;
 use crate::worker_pool::WorkerPool;
-use crate::Worker;
 use crate::{DataIngestionMetrics, ReaderOptions};
 use anyhow::Result;
 use futures::Future;

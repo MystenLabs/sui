@@ -17,7 +17,7 @@ use crate::{
         },
         types::lookups::CheckpointBounds,
     },
-    error::{feature_unavailable, RpcError},
+    error::{RpcError, feature_unavailable},
     pagination::Page,
 };
 
@@ -58,7 +58,7 @@ impl EventFilter {
             (Some(_), Some(_)) => {
                 return Err(feature_unavailable(
                     "Filtering by both emitting module and event type is not supported",
-                ))
+                ));
             }
             (Some(_), None) => query!("ev_emit_mod"),
             (None, _) => query!("ev_struct_inst"),

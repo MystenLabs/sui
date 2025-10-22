@@ -12,8 +12,8 @@ use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::SchedulingSource;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
-use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::traffic_controller::TrafficController;
+use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
 use arc_swap::{ArcSwap, Guard};
@@ -23,18 +23,18 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::hash::MultisetHash;
 use itertools::Itertools;
-use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
+use move_binary_format::binary_config::BinaryConfig;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
 use mysten_common::fatal;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
+    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -58,21 +58,21 @@ use std::{
     sync::Arc,
     vec,
 };
-use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
+use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
-use sui_types::execution_params::get_early_execution_error;
 use sui_types::execution_params::BalanceWithdrawStatus;
 use sui_types::execution_params::ExecutionOrEarlyError;
+use sui_types::execution_params::get_early_execution_error;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
-use sui_types::layout_resolver::into_struct_layout;
 use sui_types::layout_resolver::LayoutResolver;
+use sui_types::layout_resolver::into_struct_layout;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ChildObjectResolver;
@@ -84,8 +84,8 @@ use sui_types::traffic_control::{
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
 use tap::TapFallible;
-use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::RwLock;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -114,7 +114,7 @@ use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValue
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
-use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
+use sui_types::crypto::{AuthoritySignInfo, Signer, default_hash};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
@@ -141,24 +141,24 @@ use sui_types::messages_grpc::{
     ObjectInfoResponse, TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
-use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
+use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
 use sui_types::storage::{
     BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
 };
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
 use sui_types::supported_protocol_versions::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::{
+    SUI_SYSTEM_ADDRESS,
     base_types::*,
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     object::{Object, ObjectRead},
     transaction::*,
-    SUI_SYSTEM_ADDRESS,
 };
-use sui_types::{is_system_package, TypeTag};
+use sui_types::{TypeTag, is_system_package};
 use typed_store::TypedStoreError;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
@@ -180,14 +180,14 @@ use crate::global_state_hasher::{GlobalStateHashStore, GlobalStateHasher, Wrappe
 use crate::metrics::LatencyObserver;
 use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::overload_monitor::{overload_monitor_accept_tx, AuthorityOverloadInfo};
+use crate::overload_monitor::{AuthorityOverloadInfo, overload_monitor_accept_tx};
 use crate::stake_aggregator::StakeAggregator;
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 
 #[cfg(msim)]
 pub use crate::checkpoints::checkpoint_executor::utils::{
-    init_checkpoint_timeout_config, CheckpointTimeoutConfig,
+    CheckpointTimeoutConfig, init_checkpoint_timeout_config,
 };
 
 use crate::authority::authority_store_tables::AuthorityPrunerTables;
@@ -2981,13 +2981,19 @@ impl AuthorityState {
             // For mutated objects, retrieve old owner and delete old index if there is a owner change.
             if let WriteKind::Mutate = kind {
                 let Some(old_version) = modified_at_version.get(id) else {
-                    panic!("tx_digest={:?}, error processing object owner index, cannot find modified at version for mutated object [{id}].", tx_digest);
+                    panic!(
+                        "tx_digest={:?}, error processing object owner index, cannot find modified at version for mutated object [{id}].",
+                        tx_digest
+                    );
                 };
                 // When we process the index, the latest object hasn't been written yet so
                 // the old object must be present.
                 let Some(old_object) = self.get_object_store().get_object_by_key(id, *old_version)
                 else {
-                    panic!("tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}", tx_digest, id, old_version);
+                    panic!(
+                        "tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}",
+                        tx_digest, id, old_version
+                    );
                 };
                 if old_object.owner != owner {
                     match old_object.owner {
@@ -3009,7 +3015,15 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
+                    assert_eq!(
+                        new_object.version(),
+                        oref.1,
+                        "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}",
+                        tx_digest,
+                        id,
+                        new_object.version(),
+                        oref.1
+                    );
 
                     let type_ = new_object
                         .type_()
@@ -3032,7 +3046,15 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
+                    assert_eq!(
+                        new_object.version(),
+                        oref.1,
+                        "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}",
+                        tx_digest,
+                        id,
+                        new_object.version(),
+                        oref.1
+                    );
 
                     let Some(df_info) = self
                         .try_create_dynamic_field_info(new_object, written, layout_resolver.as_mut())
@@ -4669,7 +4691,7 @@ impl AuthorityState {
                         "'Any' queries are not supported by the fullnode.".to_string(),
                     ),
                 }
-                .into())
+                .into());
             }
         };
 
@@ -6064,9 +6086,13 @@ impl RandomnessRoundReceiver {
                 Err(_) => {
                     if cfg!(debug_assertions) {
                         // Crash on randomness update execution timeout in debug builds.
-                        panic!("randomness state update transaction execution timed out at epoch {epoch}, round {round}");
+                        panic!(
+                            "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
+                        );
                     }
-                    warn!("randomness state update transaction execution timed out at epoch {epoch}, round {round}");
+                    warn!(
+                        "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
+                    );
                     // Continue waiting as long as necessary in non-debug builds.
                     authority_state
                         .get_transaction_cache_reader()
@@ -6080,9 +6106,13 @@ impl RandomnessRoundReceiver {
 
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
-                fatal!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
+                fatal!(
+                    "failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}"
+                );
             }
-            debug!("successfully executed randomness state update transaction at epoch {epoch}, round {round}");
+            debug!(
+                "successfully executed randomness state update transaction at epoch {epoch}, round {round}"
+            );
         });
     }
 }

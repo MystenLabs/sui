@@ -4,13 +4,13 @@
 use std::time::Duration;
 
 use crate::Indexer;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::types::{
     full_checkpoint_content::CheckpointData,
-    sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
+    sui_system_state::{SuiSystemStateTrait, get_sui_system_state},
     transaction::{TransactionDataAPI, TransactionKind},
 };
 use sui_indexer_alt_schema::{

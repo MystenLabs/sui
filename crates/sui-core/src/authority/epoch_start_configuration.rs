@@ -218,22 +218,27 @@ impl EpochStartConfiguration {
         // We only need to implement this function for the latest version.
         // When a new version is introduced, this function should be updated.
         match self {
-            Self::V9(config) => {
-                Self::V9(EpochStartConfigurationV9 {
-                    system_state: config.system_state.new_at_next_epoch_for_testing(),
-                    epoch_digest: config.epoch_digest,
-                    flags: config.flags.clone(),
-                    authenticator_obj_initial_shared_version: config.authenticator_obj_initial_shared_version,
-                    randomness_obj_initial_shared_version: config.randomness_obj_initial_shared_version,
-                    coin_deny_list_obj_initial_shared_version: config.coin_deny_list_obj_initial_shared_version,
-                    bridge_obj_initial_shared_version: config.bridge_obj_initial_shared_version,
-                    bridge_committee_initiated: config.bridge_committee_initiated,
-                    accumulator_root_obj_initial_shared_version: config.accumulator_root_obj_initial_shared_version,
-                    coin_registry_obj_initial_shared_version: config.coin_registry_obj_initial_shared_version,
-                    display_registry_obj_initial_shared_version: config.display_registry_obj_initial_shared_version,
-                })
-            }
-            _ => panic!("This function is only implemented for the latest version of EpochStartConfiguration"),
+            Self::V9(config) => Self::V9(EpochStartConfigurationV9 {
+                system_state: config.system_state.new_at_next_epoch_for_testing(),
+                epoch_digest: config.epoch_digest,
+                flags: config.flags.clone(),
+                authenticator_obj_initial_shared_version: config
+                    .authenticator_obj_initial_shared_version,
+                randomness_obj_initial_shared_version: config.randomness_obj_initial_shared_version,
+                coin_deny_list_obj_initial_shared_version: config
+                    .coin_deny_list_obj_initial_shared_version,
+                bridge_obj_initial_shared_version: config.bridge_obj_initial_shared_version,
+                bridge_committee_initiated: config.bridge_committee_initiated,
+                accumulator_root_obj_initial_shared_version: config
+                    .accumulator_root_obj_initial_shared_version,
+                coin_registry_obj_initial_shared_version: config
+                    .coin_registry_obj_initial_shared_version,
+                display_registry_obj_initial_shared_version: config
+                    .display_registry_obj_initial_shared_version,
+            }),
+            _ => panic!(
+                "This function is only implemented for the latest version of EpochStartConfiguration"
+            ),
         }
     }
 

@@ -247,7 +247,7 @@ impl ProofContentsVerifier for OCSProof {
 
                 let expected_artifacts_digest =
                     CheckpointArtifactsDigest::from_artifact_digests(vec![
-                        self.get_artifact_digest()
+                        self.get_artifact_digest(),
                     ])
                     .map_err(|e| ProofError::GeneralError(e.to_string()))?;
 

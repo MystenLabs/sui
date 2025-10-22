@@ -4,11 +4,11 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{concurrent::Handler, Processor},
+    pipeline::{Processor, concurrent::Handler},
     postgres::{Connection, Db},
     types::{
         event::SystemEpochInfoEvent,
@@ -162,7 +162,7 @@ mod tests {
     use anyhow::Result;
     use sui_indexer_alt_framework::types::test_checkpoint_data_builder::AdvanceEpochConfig;
     use sui_indexer_alt_framework::{
-        types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
+        Indexer, types::test_checkpoint_data_builder::TestCheckpointDataBuilder,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 

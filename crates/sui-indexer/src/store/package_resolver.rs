@@ -11,7 +11,7 @@ use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use move_core_types::account_address::AccountAddress;
-use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore};
+use sui_package_resolver::{Package, PackageStore, error::Error as PackageResolverError};
 use sui_types::object::Object;
 
 /// A package resolver that reads packages from the database.

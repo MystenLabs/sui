@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{eth_sui_bridge, EthSuiBridge};
+use crate::abi::{EthSuiBridge, eth_sui_bridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::e2e_tests::test_utils::TestClusterWrapperBuilder;
 use crate::e2e_tests::test_utils::{
-    get_signatures, initiate_bridge_erc20_to_sui, initiate_bridge_eth_to_sui,
-    initiate_bridge_sui_to_eth, send_eth_tx_and_get_tx_receipt, BridgeTestClusterBuilder,
+    BridgeTestClusterBuilder, get_signatures, initiate_bridge_erc20_to_sui,
+    initiate_bridge_eth_to_sui, initiate_bridge_sui_to_eth, send_eth_tx_and_get_tx_receipt,
 };
 use crate::eth_transaction_builder::build_eth_transaction;
 use crate::events::{
@@ -26,7 +26,7 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_types::bridge::{
-    get_bridge, BridgeChainId, BridgeTokenMetadata, BridgeTrait, TOKEN_ID_ETH,
+    BridgeChainId, BridgeTokenMetadata, BridgeTrait, TOKEN_ID_ETH, get_bridge,
 };
 use tracing::info;
 

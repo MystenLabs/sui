@@ -8,20 +8,20 @@
 //! This is useful to avoid unbounded memory growth when replaying many transactions.
 
 use crate::{
+    Node,
     replay_interface::{
         EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter,
         SetupStore, StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter,
         VersionQuery,
     },
-    Node,
 };
 use anyhow::{Error, Result};
 use lru::LruCache;
 use std::{
     num::NonZeroUsize,
     sync::{
-        atomic::{AtomicU64, Ordering},
         RwLock,
+        atomic::{AtomicU64, Ordering},
     },
 };
 use sui_types::{

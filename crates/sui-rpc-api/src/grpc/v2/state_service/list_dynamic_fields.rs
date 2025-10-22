@@ -11,13 +11,13 @@ use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc::proto::sui::rpc::v2::dynamic_field::DynamicFieldKind;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::DynamicField;
 use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsResponse;
 use sui_rpc::proto::sui::rpc::v2::Object;
+use sui_rpc::proto::sui::rpc::v2::dynamic_field::DynamicFieldKind;
 use sui_sdk_types::Address;
 use sui_types::base_types::ObjectID;
 
@@ -185,8 +185,8 @@ fn load_dynamic_field(
     read_mask: &FieldMaskTree,
     message: &mut DynamicField,
 ) -> Result<(), anyhow::Error> {
-    use sui_types::dynamic_field::visitor as DFV;
     use sui_types::dynamic_field::DynamicFieldType;
+    use sui_types::dynamic_field::visitor as DFV;
 
     let Some(field_object) = service.reader.inner().get_object(field_id) else {
         return Ok(());
@@ -218,7 +218,7 @@ fn load_dynamic_field(
             return Err(anyhow::anyhow!(
                 "unable to load layout for type `{:?}`",
                 move_object.type_()
-            ))
+            ));
         }
         Err(e) => {
             return Err(anyhow::anyhow!(

@@ -7,11 +7,12 @@ use std::{
 };
 
 use async_graphql::{
+    Response, ServerError, ServerResult, ValidationResult, Variables,
     extensions::{
         Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextRequest, NextValidation,
     },
     parser::types::ExecutableDocument,
-    value, Response, ServerError, ServerResult, ValidationResult, Variables,
+    value,
 };
 use headers::ContentLength;
 
@@ -213,7 +214,7 @@ impl Extension for QueryLimitsCheckerExt {
 mod tests {
     use std::collections::BTreeMap;
 
-    use async_graphql::{connection::Connection, EmptySubscription, Object, Request, Schema};
+    use async_graphql::{EmptySubscription, Object, Request, Schema, connection::Connection};
     use async_graphql_value::ConstValue;
     use axum::http::HeaderValue;
     use insta::{assert_json_snapshot, assert_snapshot};

@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::NativesCostTable;
-use fastcrypto::vrf::ecvrf::{ECVRFProof, ECVRFPublicKey};
 use fastcrypto::vrf::VRFProof;
+use fastcrypto::vrf::ecvrf::{ECVRFProof, ECVRFPublicKey};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};

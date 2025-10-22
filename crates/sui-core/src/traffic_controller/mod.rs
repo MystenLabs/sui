@@ -30,7 +30,7 @@ use sui_types::traffic_control::{
     PolicyConfig, PolicyType, RemoteFirewallConfig, TrafficControlReconfigParams, Weight,
 };
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc};
 use tracing::{debug, error, info, trace, warn};
 
 pub const METRICS_INTERVAL_SECS: u64 = 2;
@@ -594,8 +594,7 @@ async fn handle_error_tally(
     }
     trace!(
         "Handling error_type {:?} from client {:?}",
-        error_type,
-        tally.direct,
+        error_type, tally.direct,
     );
     metrics
         .tally_error_types

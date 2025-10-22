@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{workloads::ExpectedFailureType, ExecutionEffects};
+use crate::{ExecutionEffects, workloads::ExpectedFailureType};
 use std::fmt::Display;
 use sui_types::transaction::Transaction;
 

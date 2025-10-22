@@ -6,17 +6,18 @@ use move_core_types::language_storage::StructTag;
 use serde::Deserialize;
 use serde_json::json;
 use sui_indexer_alt_e2e_tests::{
+    FullCluster,
     coin_registry::{self, LegacyCoinOutputs},
-    find, FullCluster,
+    find,
 };
 use sui_types::{
+    Identifier, SUI_COIN_REGISTRY_ADDRESS,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     coin::{CoinMetadata, TreasuryCap},
     deny_list_v2::DenyCapV2,
     digests::ObjectDigest,
     effects::TransactionEffectsAPI,
     object::Owner,
-    Identifier, SUI_COIN_REGISTRY_ADDRESS,
 };
 
 const METADATA_QUERY: &str = r#"

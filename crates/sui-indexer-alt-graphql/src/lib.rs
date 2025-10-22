@@ -8,21 +8,21 @@ use api::types::{
     address::IAddressable, move_datatype::IMoveDatatype, move_object::IMoveObject, object::IObject,
 };
 use async_graphql::{
-    extensions::ExtensionFactory, http::GraphiQLSource, EmptySubscription, ObjectType, Schema,
-    SchemaBuilder, SubscriptionType,
+    EmptySubscription, ObjectType, Schema, SchemaBuilder, SubscriptionType,
+    extensions::ExtensionFactory, http::GraphiQLSource,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
+    Extension, Router,
     extract::{ConnectInfo, MatchedPath},
     http::Method,
     response::Html,
-    routing::{get, post, MethodRouter},
-    Extension, Router,
+    routing::{MethodRouter, get, post},
 };
 use axum_extra::TypedHeader;
 use config::RpcConfig;
 use extensions::{
-    query_limits::{show_usage::ShowUsage, QueryLimitsChecker},
+    query_limits::{QueryLimitsChecker, show_usage::ShowUsage},
     timeout::Timeout,
 };
 use headers::ContentLength;

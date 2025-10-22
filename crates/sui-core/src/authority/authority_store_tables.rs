@@ -14,14 +14,14 @@ use sui_types::storage::{FullObjectKey, MarkerValue};
 use tracing::error;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{
-    default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
-    MetricConf,
+    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
+    read_size_from_env,
 };
 use typed_store::traits::Map;
 
 use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_types::{
-    get_store_object, try_construct_object, StoreObject, StoreObjectValue, StoreObjectWrapper,
+    StoreObject, StoreObjectValue, StoreObjectWrapper, get_store_object, try_construct_object,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store::rocksdb::compaction_filter::Decision;
@@ -215,8 +215,8 @@ impl AuthorityPerpetualTables {
         use crate::authority::authority_store_pruner::apply_relocation_filter;
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, default_mutex_count, default_value_cache_size, Bytes,
-            Decision, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            Bytes, Decision, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            default_cells_per_mutex, default_mutex_count, default_value_cache_size,
         };
         let mutexes = default_mutex_count() * 2;
         let value_cache_size = default_value_cache_size();

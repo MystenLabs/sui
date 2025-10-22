@@ -18,8 +18,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use serde_with::serde_as;
 
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
@@ -124,7 +124,9 @@ impl SuiObjectResponse {
                     digest: _,
                 }),
             ) => Ok(*object_id),
-            _ => Err(anyhow!("Could not get object_id, something went wrong with SuiObjectResponse construction.")),
+            _ => Err(anyhow!(
+                "Could not get object_id, something went wrong with SuiObjectResponse construction."
+            )),
         }
     }
 
@@ -700,7 +702,7 @@ pub trait SuiData: Sized {
     type ObjectType;
     type PackageType;
     fn try_from_object(object: MoveObject, layout: MoveStructLayout)
-        -> Result<Self, anyhow::Error>;
+    -> Result<Self, anyhow::Error>;
     fn try_from_package(package: MovePackage) -> Result<Self, anyhow::Error>;
     fn try_as_move(&self) -> Option<&Self::ObjectType>;
     fn try_into_move(self) -> Option<Self::ObjectType>;
@@ -884,7 +886,7 @@ impl SuiParsedData {
 
 pub trait SuiMoveObject: Sized {
     fn try_from_layout(object: MoveObject, layout: MoveStructLayout)
-        -> Result<Self, anyhow::Error>;
+    -> Result<Self, anyhow::Error>;
 
     fn try_from(o: MoveObject, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
         let layout = o.get_layout(resolver)?;

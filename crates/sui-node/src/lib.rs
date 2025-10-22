@@ -7,9 +7,9 @@ use anemo_tower::callback::CallbackLayer;
 use anemo_tower::trace::DefaultMakeSpan;
 use anemo_tower::trace::DefaultOnFailure;
 use anemo_tower::trace::TraceLayer;
-use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
+use anyhow::anyhow;
 use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
@@ -25,6 +25,8 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use sui_core::authority::ExecutionEnv;
+use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::authority_store_tables::{
     AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
 };
@@ -32,8 +34,6 @@ use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
 use sui_core::authority::shared_object_version_manager::Schedulable;
-use sui_core::authority::ExecutionEnv;
-use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
@@ -47,9 +47,9 @@ use sui_core::storage::RestReadStore;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
-use sui_rpc_api::subscription::SubscriptionService;
 use sui_rpc_api::RpcMetrics;
 use sui_rpc_api::ServerVersion;
+use sui_rpc_api::subscription::SubscriptionService;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::{
@@ -62,15 +62,15 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedCertificate;
 use tap::tap::TapFallible;
 use tokio::sync::oneshot;
-use tokio::sync::{broadcast, mpsc, watch, Mutex};
+use tokio::sync::{Mutex, broadcast, mpsc, watch};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
+use tracing::{Instrument, error_span, info};
 use tracing::{debug, error, warn};
-use tracing::{error_span, info, Instrument};
 
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
-use mysten_metrics::{spawn_monitored_task, RegistryService};
+use mysten_metrics::{RegistryService, spawn_monitored_task};
 use mysten_service::server_timing::server_timing_middleware;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
@@ -114,6 +114,7 @@ use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
 };
+use sui_json_rpc::JsonRpcServerBuilder;
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::governance_api::GovernanceReadApi;
 use sui_json_rpc::indexer_api::IndexerApi;
@@ -121,7 +122,6 @@ use sui_json_rpc::move_utils::MoveUtils;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
-use sui_json_rpc::JsonRpcServerBuilder;
 use sui_macros::fail_point;
 use sui_macros::{fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
@@ -141,14 +141,14 @@ use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthorityCapabilitiesV1, ConsensusTransaction,
+    AuthorityCapabilitiesV1, ConsensusTransaction, check_total_jwk_size,
 };
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
-use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
+use typed_store::rocks::default_db_options;
 
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
@@ -2367,7 +2367,9 @@ impl SuiNode {
                 );
                 Err(anyhow::anyhow!(
                     "Transaction fork detected! tx_digest: {:?}, expected_effects: {:?}, actual_effects: {:?}",
-                    tx_digest, expected_effects_digest, actual_effects_digest
+                    tx_digest,
+                    expected_effects_digest,
+                    actual_effects_digest
                 ))
             }
         }
@@ -2724,10 +2726,11 @@ mod tests {
         )
         .await;
         assert!(r.is_err());
-        assert!(r
-            .unwrap_err()
-            .to_string()
-            .contains("Checkpoint fork detected"));
+        assert!(
+            r.unwrap_err()
+                .to_string()
+                .contains("Checkpoint fork detected")
+        );
 
         let mut checkpoint_overrides = BTreeMap::new();
         checkpoint_overrides.insert(seq_num, digest.to_string());
@@ -2744,10 +2747,12 @@ mod tests {
         )
         .await;
         assert!(r.is_ok());
-        assert!(checkpoint_store
-            .get_checkpoint_fork_detected()
-            .unwrap()
-            .is_none());
+        assert!(
+            checkpoint_store
+                .get_checkpoint_fork_detected()
+                .unwrap()
+                .is_none()
+        );
 
         // ---------- Transaction fork path ----------
         let tx_digest = TransactionDigest::random();
@@ -2770,10 +2775,11 @@ mod tests {
         )
         .await;
         assert!(r.is_err());
-        assert!(r
-            .unwrap_err()
-            .to_string()
-            .contains("Transaction fork detected"));
+        assert!(
+            r.unwrap_err()
+                .to_string()
+                .contains("Transaction fork detected")
+        );
 
         let mut transaction_overrides = BTreeMap::new();
         transaction_overrides.insert(tx_digest.to_string(), actual_effects.to_string());
@@ -2790,9 +2796,11 @@ mod tests {
         )
         .await;
         assert!(r.is_ok());
-        assert!(checkpoint_store
-            .get_transaction_fork_detected()
-            .unwrap()
-            .is_none());
+        assert!(
+            checkpoint_store
+                .get_transaction_fork_detected()
+                .unwrap()
+                .is_none()
+        );
     }
 }

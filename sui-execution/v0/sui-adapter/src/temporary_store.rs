@@ -12,8 +12,10 @@ use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, DenyListResult, PackageObject};
-use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
+use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, is_system_package};
 use sui_types::{
+    TypeTag,
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
         VersionDigest,
@@ -27,9 +29,7 @@ use sui_types::{
         BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage, WriteKind,
     },
     transaction::InputObjects,
-    TypeTag,
 };
-use sui_types::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
@@ -340,10 +340,11 @@ impl<'backing> TemporaryStore<'backing> {
                 )
             }));
         } else {
-            debug_assert!(self
-                .deleted
-                .iter()
-                .all(|(_, kind)| { !matches!(kind, DeleteKindWithOldVersion::UnwrapThenDelete) }));
+            debug_assert!(
+                self.deleted.iter().all(|(_, kind)| {
+                    !matches!(kind, DeleteKindWithOldVersion::UnwrapThenDelete)
+                })
+            );
         }
     }
 
@@ -395,7 +396,9 @@ impl<'backing> TemporaryStore<'backing> {
                 // In addition, gas objects should never be immutable, so gas smashing
                 // should not allow us to delete immutable objects
                 let digest = self.tx_digest;
-                panic!("Internal invariant violation in tx {digest}: Deleting immutable object {id}, delete kind {kind:?}")
+                panic!(
+                    "Internal invariant violation in tx {digest}: Deleting immutable object {id}, delete kind {kind:?}"
+                )
             }
         }
 
@@ -467,7 +470,7 @@ impl<'backing> TemporaryStore<'backing> {
     pub fn written_objects_size(&self) -> usize {
         self.written
             .iter()
-            .fold(0, |sum, obj| sum + obj.1 .0.object_size_for_gas_metering())
+            .fold(0, |sum, obj| sum + obj.1.0.object_size_for_gas_metering())
     }
 
     /// If there are unmetered storage rebate (due to system transaction), we put them into
@@ -564,7 +567,10 @@ impl TemporaryStore<'_> {
                             unreachable!("Should already be in authenticated_objs")
                         }
                         Owner::Immutable => {
-                            assert!(is_epoch_change, "Immutable objects cannot be written, except for Sui Framework/Move stdlib upgrades at epoch change boundaries");
+                            assert!(
+                                is_epoch_change,
+                                "Immutable objects cannot be written, except for Sui Framework/Move stdlib upgrades at epoch change boundaries"
+                            );
                             // Note: this assumes that the only immutable objects an epoch change tx can update are system packages,
                             // but in principle we could allow others.
                             assert!(
@@ -916,11 +922,10 @@ impl TemporaryStore<'_> {
                 total_output_sui += epoch_rebates;
             }
             if total_input_sui != total_output_sui {
-                return Err(ExecutionError::invariant_violation(
-                format!("SUI conservation failed: input={}, output={}, this transaction either mints or burns SUI",
-                total_input_sui,
-                total_output_sui))
-            );
+                return Err(ExecutionError::invariant_violation(format!(
+                    "SUI conservation failed: input={}, output={}, this transaction either mints or burns SUI",
+                    total_input_sui, total_output_sui
+                )));
             }
         }
 

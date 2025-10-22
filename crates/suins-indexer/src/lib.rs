@@ -9,12 +9,12 @@ use dotenvy::dotenv;
 use std::env;
 
 use diesel::{ConnectionError, ConnectionResult};
-use diesel_async::pooled_connection::bb8::Pool;
+use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::ManagerConfig;
-use diesel_async::AsyncPgConnection;
-use futures_util::future::BoxFuture;
+use diesel_async::pooled_connection::bb8::Pool;
 use futures_util::FutureExt;
+use futures_util::future::BoxFuture;
 use std::time::Duration;
 
 pub type PgConnectionPool =

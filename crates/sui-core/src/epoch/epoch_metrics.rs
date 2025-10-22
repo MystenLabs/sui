@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_counter_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, CounterVec, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    CounterVec, IntCounter, IntCounterVec, IntGauge, Registry, register_counter_vec_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry,
 };
 use std::sync::Arc;
 

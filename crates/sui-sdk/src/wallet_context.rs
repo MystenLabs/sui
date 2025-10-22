@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use crate::SuiClient;
+use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use anyhow::{anyhow, ensure};
 use futures::future;
 use shared_crypto::intent::Intent;

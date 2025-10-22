@@ -5,6 +5,7 @@ use p256::pkcs8::DecodePublicKey;
 use passkey_authenticator::{Authenticator, UserCheck, UserValidationMethod};
 use passkey_client::Client;
 use passkey_types::{
+    Bytes, Passkey,
     ctap2::{Aaguid, Ctap2Error},
     rand::random_vec,
     webauthn::{
@@ -13,7 +14,6 @@ use passkey_types::{
         PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
         PublicKeyCredentialUserEntity, UserVerificationRequirement,
     },
-    Bytes, Passkey,
 };
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::SocketAddr;
@@ -28,7 +28,7 @@ use sui_types::transaction::Transaction;
 use sui_types::{
     base_types::SuiAddress,
     crypto::{PublicKey, SignatureScheme},
-    passkey_authenticator::{to_signing_message, PasskeyAuthenticator},
+    passkey_authenticator::{PasskeyAuthenticator, to_signing_message},
     transaction::TransactionData,
 };
 use test_cluster::TestCluster;

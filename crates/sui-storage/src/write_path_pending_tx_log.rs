@@ -15,8 +15,8 @@ use sui_types::crypto::EmptySignInfo;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
-use typed_store::rocks::MetricConf;
 use typed_store::DBMapUtils;
+use typed_store::rocks::MetricConf;
 use typed_store::{rocks::DBMap, traits::Map};
 
 #[derive(DBMapUtils)]
@@ -101,15 +101,19 @@ mod tests {
         let pending_txes = WritePathPendingTransactionLog::new(temp_dir.path().to_path_buf());
         let tx = VerifiedTransaction::new_unchecked(create_fake_transaction());
         let tx_digest = *tx.digest();
-        assert!(pending_txes
-            .write_pending_transaction_maybe(&tx)
-            .await
-            .unwrap());
+        assert!(
+            pending_txes
+                .write_pending_transaction_maybe(&tx)
+                .await
+                .unwrap()
+        );
         // The second write will return false
-        assert!(!pending_txes
-            .write_pending_transaction_maybe(&tx)
-            .await
-            .unwrap());
+        assert!(
+            !pending_txes
+                .write_pending_transaction_maybe(&tx)
+                .await
+                .unwrap()
+        );
 
         let loaded_txes = pending_txes.load_all_pending_transactions()?;
         assert_eq!(vec![tx], loaded_txes);
@@ -126,10 +130,12 @@ mod tests {
             .map(|_| VerifiedTransaction::new_unchecked(create_fake_transaction()))
             .collect();
         for tx in txes.iter().take(10) {
-            assert!(pending_txes
-                .write_pending_transaction_maybe(tx)
-                .await
-                .unwrap());
+            assert!(
+                pending_txes
+                    .write_pending_transaction_maybe(tx)
+                    .await
+                    .unwrap()
+            );
         }
         let loaded_tx_digests: HashSet<_> = pending_txes
             .load_all_pending_transactions()?

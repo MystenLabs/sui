@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{AccountKeyPair, get_key_pair},
     effects::TransactionEffects,
     error::SuiErrorKind,
     execution_status::{CommandArgumentError, ExecutionFailureStatus},
@@ -14,24 +14,24 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::FullObjectKey,
     transaction::{
-        ProgrammableTransaction, SharedObjectMutability, Transaction,
-        TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        ProgrammableTransaction, SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        Transaction,
     },
 };
 
 use crate::authority::{
-    authority_test_utils::execute_sequenced_certificate_to_effects,
-    shared_object_version_manager::AssignedVersions, ExecutionEnv,
+    ExecutionEnv, authority_test_utils::execute_sequenced_certificate_to_effects,
+    shared_object_version_manager::AssignedVersions,
 };
 use crate::{
     authority::{
+        AuthorityState,
         authority_tests::{
             build_programmable_transaction, certify_shared_obj_transaction_no_execution,
             enqueue_all_and_execute_all, execute_programmable_transaction,
         },
         move_integration_tests::build_and_publish_test_package,
         test_authority_builder::TestAuthorityBuilder,
-        AuthorityState,
     },
     move_call,
 };
@@ -1533,15 +1533,17 @@ async fn test_delete_with_shared_after_mutate_enqueued() {
     assert!(delete_effects.status().is_ok());
     let deleted_obj_ver = delete_effects.deleted()[0].1;
 
-    assert!(user_1
-        .object_exists_in_marker_table(
-            FullObjectKey::new(
-                FullObjectID::new(shared_obj_id, Some(initial_shared_version)),
-                deleted_obj_ver
-            ),
-            0
-        )
-        .is_some());
+    assert!(
+        user_1
+            .object_exists_in_marker_table(
+                FullObjectKey::new(
+                    FullObjectID::new(shared_obj_id, Some(initial_shared_version)),
+                    deleted_obj_ver
+                ),
+                0
+            )
+            .is_some()
+    );
 
     let mutate_effects = res.get(1).unwrap();
     assert!(mutate_effects.status().is_ok());

@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_ADDRESS,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_event::AccumulatorEvent,
     balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::{Digest, TransactionDigest},
     dynamic_field::{
-        serialize_dynamic_field, DynamicFieldKey, DynamicFieldObject, Field,
-        UnboundedDynamicFieldID, DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
+        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME, DynamicFieldKey,
+        DynamicFieldObject, Field, UnboundedDynamicFieldID, serialize_dynamic_field,
     },
     error::{SuiError, SuiErrorKind, SuiResult},
     object::{MoveObject, Object, Owner},
     storage::{ChildObjectResolver, ObjectStore},
-    MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_ADDRESS,
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use move_core_types::{
     ident_str,
@@ -22,7 +22,7 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     u256::U256,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
 pub const ACCUMULATOR_SETTLEMENT_MODULE: &IdentStr = ident_str!("accumulator_settlement");

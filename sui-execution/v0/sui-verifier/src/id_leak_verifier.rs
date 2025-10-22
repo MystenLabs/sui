@@ -29,11 +29,11 @@ use move_core_types::{
 };
 use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::{
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
     clock::CLOCK_MODULE_NAME,
     error::{ExecutionError, VMMVerifierErrorSubStatusCode},
     id::OBJECT_MODULE_NAME,
     sui_system_state::SUI_SYSTEM_MODULE_NAME,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
 #[cfg(msim)]
@@ -43,8 +43,8 @@ use sui_types::{
 };
 
 use crate::{
-    check_for_verifier_timeout, to_verification_timeout_error, verification_failure,
-    TEST_SCENARIO_MODULE_NAME,
+    TEST_SCENARIO_MODULE_NAME, check_for_verifier_timeout, to_verification_timeout_error,
+    verification_failure,
 };
 pub(crate) const JOIN_BASE_COST: u128 = 10;
 pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;

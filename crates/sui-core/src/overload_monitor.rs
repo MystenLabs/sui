@@ -5,8 +5,8 @@ use crate::authority::AuthorityState;
 use mysten_metrics::monitored_scope;
 use std::cmp::{max, min};
 use std::hash::Hasher;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Weak;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use sui_config::node::AuthorityOverloadConfig;
@@ -249,10 +249,12 @@ pub fn overload_monitor_accept_tx(
     if should_reject_tx(load_shedding_percentage, tx_digest, temporal_seed) {
         // TODO: using `SEED_UPDATE_DURATION_SECS` is a safe suggestion that the time based seed
         // is definitely different by then. However, a shorter suggestion may be available.
-        fp_bail!(SuiErrorKind::ValidatorOverloadedRetryAfter {
-            retry_after_secs: SEED_UPDATE_DURATION_SECS
-        }
-        .into());
+        fp_bail!(
+            SuiErrorKind::ValidatorOverloadedRetryAfter {
+                retry_after_secs: SEED_UPDATE_DURATION_SECS
+            }
+            .into()
+        );
     }
     Ok(())
 }
@@ -264,17 +266,17 @@ mod tests {
 
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use rand::{
-        rngs::{OsRng, StdRng},
         Rng, SeedableRng,
+        rngs::{OsRng, StdRng},
     };
     use std::sync::Arc;
     use sui_macros::sim_test;
-    use tokio::sync::mpsc::unbounded_channel;
     use tokio::sync::mpsc::UnboundedReceiver;
     use tokio::sync::mpsc::UnboundedSender;
+    use tokio::sync::mpsc::unbounded_channel;
     use tokio::sync::oneshot;
     use tokio::task::JoinHandle;
-    use tokio::time::{interval, Instant, MissedTickBehavior};
+    use tokio::time::{Instant, MissedTickBehavior, interval};
 
     #[test]
     pub fn test_authority_overload_info() {

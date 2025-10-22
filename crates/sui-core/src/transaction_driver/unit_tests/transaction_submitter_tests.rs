@@ -5,8 +5,8 @@ use crate::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::AuthorityAPI,
     transaction_driver::{
-        error::TransactionDriverError, metrics::TransactionDriverMetrics,
-        transaction_submitter::TransactionSubmitter, SubmitTransactionOptions,
+        SubmitTransactionOptions, error::TransactionDriverError, metrics::TransactionDriverMetrics,
+        transaction_submitter::TransactionSubmitter,
     },
     validator_client_monitor::ValidatorClientMonitor,
 };
@@ -16,12 +16,12 @@ use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex as StdMutex,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 use sui_types::{
-    base_types::{random_object_ref, AuthorityName},
+    base_types::{AuthorityName, random_object_ref},
     committee::Committee,
     digests::TransactionDigest,
     error::{SuiError, SuiErrorKind, UserInputError},
@@ -40,7 +40,7 @@ use sui_types::{
     sui_system_state::SuiSystemState,
     transaction::{CertifiedTransaction, Transaction},
 };
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 // Mock AuthorityAPI for testing transaction submission.
 #[derive(Clone)]
@@ -236,7 +236,7 @@ fn create_test_authority_aggregator_with_rgp(
 
 fn create_test_submit_request(gas_price: u64) -> SubmitTxRequest {
     use sui_test_transaction_builder::TestTransactionBuilder;
-    use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+    use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
 
     let (sender, keypair): (_, AccountKeyPair) = get_account_key_pair();
     let gas_object_ref = random_object_ref();

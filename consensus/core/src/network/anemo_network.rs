@@ -9,9 +9,9 @@ use std::{
 };
 
 use anemo::{
-    rpc::Status,
-    types::{response::StatusCode, PeerInfo},
     PeerId, Response,
+    rpc::Status,
+    types::{PeerInfo, response::StatusCode},
 };
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
@@ -29,6 +29,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, warn};
 
 use super::{
+    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
     anemo_gen::{
         consensus_rpc_client::ConsensusRpcClient,
         consensus_rpc_server::{ConsensusRpc, ConsensusRpcServer},
@@ -36,14 +37,13 @@ use super::{
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle},
     epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY},
     metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
-    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
+    CommitIndex,
     block::VerifiedBlock,
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
-    CommitIndex,
 };
 
 /// Implements Anemo RPC client for Consensus.

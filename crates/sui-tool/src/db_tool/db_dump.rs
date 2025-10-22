@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Ok};
+use anyhow::{Ok, anyhow};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
 use prometheus::Registry;
@@ -13,8 +13,8 @@ use strum_macros::EnumString;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics, PrunerWatermarks,
-    EPOCH_DURATION_MS_FOR_TESTING,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
+    PrunerWatermarks,
 };
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
@@ -24,7 +24,7 @@ use sui_core::jsonrpc_index::IndexStoreTables;
 use sui_core::rpc_index::RpcIndexStore;
 use sui_types::base_types::{EpochId, ObjectID};
 use tracing::info;
-use typed_store::rocks::{default_db_options, MetricConf};
+use typed_store::rocks::{MetricConf, default_db_options};
 use typed_store::rocksdb::MultiThreaded;
 use typed_store::traits::{Map, TableSummary};
 
@@ -317,7 +317,7 @@ mod test {
     use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 
-    use crate::db_tool::db_dump::{dump_table, list_tables, StoreName};
+    use crate::db_tool::db_dump::{StoreName, dump_table, list_tables};
 
     #[tokio::test]
     async fn db_dump_population() -> Result<(), anyhow::Error> {

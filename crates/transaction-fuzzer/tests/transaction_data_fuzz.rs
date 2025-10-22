@@ -9,7 +9,7 @@ use transaction_fuzzer::account_universe::AccountCurrent;
 use transaction_fuzzer::account_universe::AccountData;
 
 use transaction_fuzzer::{
-    executor::{assert_is_acceptable_result, Executor},
+    executor::{Executor, assert_is_acceptable_result},
     transaction_data_gen::transaction_data_gen,
 };
 

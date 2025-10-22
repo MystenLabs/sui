@@ -10,7 +10,7 @@ use parking_lot::RwLock;
 
 use crate::{
     block::{BlockAPI, VerifiedBlock},
-    commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
+    commit::{Commit, CommittedSubDag, TrustedCommit, sort_sub_dag_blocks},
     context::Context,
     dag_state::DagState,
 };
@@ -339,13 +339,13 @@ mod tests {
 
     use super::*;
     use crate::{
+        CommitIndex, TestBlock,
         commit::{CommitAPI as _, CommitDigest, DEFAULT_WAVE_LENGTH},
         context::Context,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
-        CommitIndex, TestBlock,
     };
 
     #[rstest]

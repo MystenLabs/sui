@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use camino::Utf8Path;
 use clap::Parser;
-use nexlint::{prelude::*, NexLintContext};
+use nexlint::{NexLintContext, prelude::*};
 use nexlint_lints::{
     content::*,
     package::*,

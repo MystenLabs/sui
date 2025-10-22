@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
-use crate::mock_account::{batch_create_account_and_gas, Account};
+use crate::mock_account::{Account, batch_create_account_and_gas};
 use crate::mock_storage::InMemoryObjectStore;
 use crate::single_node::SingleValidator;
 use crate::tx_generator::SharedObjectCreateTxGenerator;
 use crate::tx_generator::{RootObjectCreateTxGenerator, TxGenerator};
 use crate::workload::Workload;
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 use std::sync::Arc;

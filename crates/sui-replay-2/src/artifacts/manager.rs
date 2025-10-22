@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::artifacts::{MoveCallInfo, ReplayCacheSummary};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use move_trace_format::format::{MoveTrace, MoveTraceReader};
 use std::{
     io::Write,

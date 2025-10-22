@@ -39,9 +39,9 @@ mod tests {
     use crate::prom_to_mimir::tests::*;
 
     use crate::{admin::CertKeyPair, config::RemoteWriteConfig, peers::SuiNodeProvider};
+    use axum::Router;
     use axum::http::StatusCode;
     use axum::routing::post;
-    use axum::Router;
     use prometheus::Encoder;
     use prometheus::PROTOBUF_FORMAT;
     use protobuf::RepeatedField;

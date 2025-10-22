@@ -11,8 +11,8 @@ use bincode::Options;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use once_cell::sync::Lazy;
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    IntCounter, IntGauge, Registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry,
 };
 #[cfg(tidehunter)]
 use serde::de::DeserializeOwned;
@@ -38,8 +38,8 @@ use sui_types::{
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
-use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::rocksdb::LiveFile;
+use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::{Map, TypedStoreError};
 
 static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
@@ -837,7 +837,10 @@ impl AuthorityStorePruner {
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
         {
-            warn!("Using objects pruner with num_epochs_to_retain = {} can lead to performance issues", pruning_config.num_epochs_to_retain);
+            warn!(
+                "Using objects pruner with num_epochs_to_retain = {} can lead to performance issues",
+                pruning_config.num_epochs_to_retain
+            );
             if is_validator {
                 warn!("Resetting to aggressive pruner.");
                 pruning_config.num_epochs_to_retain = 0;
@@ -975,7 +978,7 @@ mod tests {
     use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
     use crate::authority::authority_store_types::{
-        get_store_object, StoreObject, StoreObjectWrapper,
+        StoreObject, StoreObjectWrapper, get_store_object,
     };
     use prometheus::Registry;
     use sui_types::base_types::ObjectDigest;
@@ -986,8 +989,8 @@ mod tests {
         object::Object,
         storage::ObjectKey,
     };
-    use typed_store::rocks::{default_db_options, DBMap, MetricConf, ReadWriteOptions};
     use typed_store::Map;
+    use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions, default_db_options};
 
     use super::AuthorityStorePruner;
 

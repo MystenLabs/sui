@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
 use gcp_auth::{Token, TokenProvider};
 use http::{HeaderValue, Request, Response};
@@ -25,23 +25,23 @@ use sui_types::{
     storage::{EpochInfo, ObjectKey},
 };
 use tonic::{
+    Streaming,
     body::Body,
     codegen::Service,
     transport::{Certificate, Channel, ClientTlsConfig},
-    Streaming,
 };
 use tracing::error;
 
 use super::proto::bigtable::v2::{
-    row_filter::{Chain, Filter},
     RowFilter,
+    row_filter::{Chain, Filter},
 };
 use crate::bigtable::metrics::KvMetrics;
 use crate::bigtable::proto::bigtable::v2::{
-    bigtable_client::BigtableClient as BigtableInternalClient, mutate_rows_request::Entry,
+    MutateRowsRequest, MutateRowsResponse, Mutation, ReadRowsRequest, RequestStats, RowRange,
+    RowSet, bigtable_client::BigtableClient as BigtableInternalClient, mutate_rows_request::Entry,
     mutation, mutation::SetCell, read_rows_response::cell_chunk::RowStatus,
-    request_stats::StatsView, row_range::EndKey, MutateRowsRequest, MutateRowsResponse, Mutation,
-    ReadRowsRequest, RequestStats, RowRange, RowSet,
+    request_stats::StatsView, row_range::EndKey,
 };
 use crate::{
     Checkpoint, KeyValueStoreReader, KeyValueStoreWriter, TransactionData, TransactionEventsData,

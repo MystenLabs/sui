@@ -19,7 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use sui_types::digests::TransactionDigest;
 use tap::TapFallible;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use tracing::info;
 
 use super::governance_verifier::GovernanceVerifier;
@@ -352,7 +352,7 @@ mod tests {
     use super::*;
     use crate::{
         eth_mock_provider::EthMockProvider,
-        events::{init_all_struct_tags, MoveTokenDepositedEvent, SuiToEthTokenBridgeV1},
+        events::{MoveTokenDepositedEvent, SuiToEthTokenBridgeV1, init_all_struct_tags},
         sui_mock_client::SuiMockClient,
         test_utils::{
             get_test_log_and_action, get_test_sui_to_eth_bridge_action, mock_last_finalized_block,
@@ -378,10 +378,12 @@ mod tests {
         // Test `get_cache_entry` creates a new entry if not exist
         let sui_tx_digest = TransactionDigest::random();
         let sui_event_idx = 42;
-        assert!(sui_signer_with_cache
-            .get_testing_only((sui_tx_digest, sui_event_idx))
-            .await
-            .is_none());
+        assert!(
+            sui_signer_with_cache
+                .get_testing_only((sui_tx_digest, sui_event_idx))
+                .await
+                .is_none()
+        );
         let entry = sui_signer_with_cache
             .get_cache_entry((sui_tx_digest, sui_event_idx))
             .await;
@@ -517,10 +519,12 @@ mod tests {
         // Test `get_cache_entry` creates a new entry if not exist
         let eth_tx_hash = TxHash::random();
         let eth_event_idx = 42;
-        assert!(eth_signer_with_cache
-            .get_testing_only((eth_tx_hash, eth_event_idx))
-            .await
-            .is_none());
+        assert!(
+            eth_signer_with_cache
+                .get_testing_only((eth_tx_hash, eth_event_idx))
+                .await
+                .is_none()
+        );
         let entry = eth_signer_with_cache
             .get_cache_entry((eth_tx_hash, eth_event_idx))
             .await;

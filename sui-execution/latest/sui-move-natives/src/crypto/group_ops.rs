@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::object_runtime::ObjectRuntime;
-use crate::{get_extension, NativesCostTable};
+use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::{
-    bls12381 as bls, FromTrustedByteArray, GroupElement, HashToGroupElement, MultiScalarMul,
-    Pairing,
+    FromTrustedByteArray, GroupElement, HashToGroupElement, MultiScalarMul, Pairing,
+    bls12381 as bls,
 };
 use fastcrypto::serde_helpers::ToFromByteArray;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};

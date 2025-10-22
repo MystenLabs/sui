@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::ObjectNotFoundError;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
+use crate::error::ObjectNotFoundError;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;

@@ -15,7 +15,7 @@ use mysten_metrics::spawn_monitored_task;
 use mysten_network::anemo_ext::NetworkExt;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{btree_map::BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet, btree_map::BTreeMap},
     ops::Bound,
     sync::Arc,
     time::{self, Duration},
@@ -556,7 +556,9 @@ impl RandomnessEventLoop {
             .any(|(a, b)| a != *b)
         {
             let received_share_ids = partial_sigs.iter().map(|s| s.index).collect::<Vec<_>>();
-            warn!("received partial sigs with wrong share ids: expected {expected_share_ids:?}, received {received_share_ids:?}");
+            warn!(
+                "received partial sigs with wrong share ids: expected {expected_share_ids:?}, received {received_share_ids:?}"
+            );
             return;
         }
 
@@ -583,7 +585,9 @@ impl RandomnessEventLoop {
             // to complete the signature, local shared object versions are not set until consensus
             // finishes processing the corresponding commit. This function will be called again
             // after maybe_start_pending_tasks begins this round locally.
-            debug!("waiting to aggregate randomness partial signatures until local consensus catches up");
+            debug!(
+                "waiting to aggregate randomness partial signatures until local consensus catches up"
+            );
             return;
         }
 
@@ -674,8 +678,13 @@ impl RandomnessEventLoop {
             if let Err(e) =
                 ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
             {
-                error!("error while verifying randomness partial signatures after removing invalid partials: {e:?}");
-                debug_assert!(false, "error while verifying randomness partial signatures after removing invalid partials");
+                error!(
+                    "error while verifying randomness partial signatures after removing invalid partials: {e:?}"
+                );
+                debug_assert!(
+                    false,
+                    "error while verifying randomness partial signatures after removing invalid partials"
+                );
                 return;
             }
         }
@@ -793,7 +802,10 @@ impl RandomnessEventLoop {
         let max_ignored_shares = (self.config.max_ignored_peer_weight_factor()
             * (dkg_output.nodes.total_weight() as f64)) as usize;
         if self.blocked_share_id_count + peer_shares.len() > max_ignored_shares {
-            warn!("ignoring byzantine peer {peer_id:?} with {} shares would exceed max ignored peer weight {max_ignored_shares}", peer_shares.len());
+            warn!(
+                "ignoring byzantine peer {peer_id:?} with {} shares would exceed max ignored peer weight {max_ignored_shares}",
+                peer_shares.len()
+            );
             return;
         }
 
@@ -1005,7 +1017,7 @@ impl RandomnessEventLoop {
                 // Recording multiples of 100 so tests can match on the log message.
                 "RandomnessEventLoop randomness generation backlog: over {} rounds are pending (oldest is {:?})",
                 (num_rounds_pending / 100) * 100,
-                highest_completed_round+1,
+                highest_completed_round + 1,
             );
         }
         self.metrics.set_num_rounds_pending(num_rounds_pending);

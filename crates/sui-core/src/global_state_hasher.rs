@@ -4,7 +4,7 @@
 use itertools::Itertools;
 use mysten_common::fatal;
 use mysten_metrics::monitored_scope;
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
 use serde::Serialize;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
@@ -94,7 +94,9 @@ impl GlobalStateHashStore for InMemoryStorage {
         _object_id: &ObjectID,
         _version: VersionNumber,
     ) -> SuiResult<Option<ObjectRef>> {
-        unreachable!("get_object_ref_prior_to_key is only called by accumulate_effects_v1, while InMemoryStorage is used by testing and genesis only, which always uses latest protocol ")
+        unreachable!(
+            "get_object_ref_prior_to_key is only called by accumulate_effects_v1, while InMemoryStorage is used by testing and genesis only, which always uses latest protocol "
+        )
     }
 
     fn get_root_state_hash_for_epoch(

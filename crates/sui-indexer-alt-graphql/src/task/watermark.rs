@@ -7,16 +7,16 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, bail, ensure, Context as _};
+use anyhow::{Context as _, anyhow, bail, ensure};
 use chrono::{DateTime, Utc};
 use diesel::{
-    sql_types::{BigInt, Text},
     QueryableByName,
+    sql_types::{BigInt, Text},
 };
 use futures::future::OptionFuture;
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableReader,
-    consistent_reader::{self, proto::AvailableRangeResponse, ConsistentReader},
+    consistent_reader::{self, ConsistentReader, proto::AvailableRangeResponse},
     pg_reader::PgReader,
 };
 use sui_sql_macro::query;

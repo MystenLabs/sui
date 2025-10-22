@@ -291,7 +291,7 @@ impl CoseSign1 {
             Some(_) => {
                 return Err(NitroAttestationVerifyError::InvalidCoseSign1(
                     "invalid tag".to_string(),
-                ))
+                ));
             }
         }
 
@@ -435,7 +435,7 @@ impl AttestationDocument {
                 return Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
                     "expected map, got {:?}",
                     document_data
-                )))
+                )));
             }
         };
         Ok(document_map)

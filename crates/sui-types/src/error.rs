@@ -170,7 +170,9 @@ pub enum UserInputError {
     #[error("Gas object does not have enough balance to cover minimal gas spend")]
     InsufficientBalanceToCoverMinimalGas,
 
-    #[error("Could not find the referenced object {object_id} as the asked version {asked_version:?} is higher than the latest {latest_version:?}")]
+    #[error(
+        "Could not find the referenced object {object_id} as the asked version {asked_version:?} is higher than the latest {latest_version:?}"
+    )]
     ObjectSequenceNumberTooHigh {
         object_id: ObjectID,
         asked_version: SequenceNumber,
@@ -185,13 +187,17 @@ pub enum UserInputError {
     #[error("Empty input coins for Pay related transaction")]
     EmptyInputCoins,
 
-    #[error("SUI payment transactions use first input coin for gas payment, but found a different gas object")]
+    #[error(
+        "SUI payment transactions use first input coin for gas payment, but found a different gas object"
+    )]
     UnexpectedGasPaymentObject,
 
     #[error("Wrong initial version given for shared object")]
     SharedObjectStartingVersionMismatch,
 
-    #[error("Attempt to transfer object {object_id} that does not have public transfer. Object transfer must be done instead using a distinct Move function call")]
+    #[error(
+        "Attempt to transfer object {object_id} that does not have public transfer. Object transfer must be done instead using a distinct Move function call"
+    )]
     TransferObjectWithoutPublicTransferError { object_id: ObjectID },
 
     #[error(
@@ -256,7 +262,7 @@ pub enum UserInputError {
     #[error("Number of transactions ({size}) exceeds the maximum allowed ({limit}) in a batch")]
     TooManyTransactionsInBatch { size: usize, limit: u64 },
     #[error(
-        "Total transactions size ({size}) bytes exceeds the maximum allowed ({limit}) bytes in a Soft Bundle",
+        "Total transactions size ({size}) bytes exceeds the maximum allowed ({limit}) bytes in a Soft Bundle"
     )]
     TotalTransactionSizeTooLargeInBatch { size: usize, limit: u64 },
     #[error("Transaction {digest} in Soft Bundle contains no shared objects")]
@@ -266,7 +272,7 @@ pub enum UserInputError {
     #[error("At least one certificate in Soft Bundle has already been processed")]
     CertificateAlreadyProcessed,
     #[error(
-        "Gas price for transaction {digest} in Soft Bundle mismatch: want {expected}, have {actual}",
+        "Gas price for transaction {digest} in Soft Bundle mismatch: want {expected}, have {actual}"
     )]
     GasPriceMismatchError {
         digest: TransactionDigest,
@@ -357,14 +363,18 @@ pub enum SuiErrorKind {
     #[error("There are too many transactions pending in consensus")]
     TooManyTransactionsPendingConsensus,
 
-    #[error("Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}")]
+    #[error(
+        "Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}"
+    )]
     TooManyTransactionsPendingOnObject {
         object_id: ObjectID,
         queue_len: usize,
         threshold: usize,
     },
 
-    #[error("Input {object_id} has a transaction {txn_age_sec} seconds old pending, above threshold of {threshold} seconds")]
+    #[error(
+        "Input {object_id} has a transaction {txn_age_sec} seconds old pending, above threshold of {threshold} seconds"
+    )]
     TooOldTransactionPendingOnObject {
         object_id: ObjectID,
         txn_age_sec: u64,
@@ -386,7 +396,11 @@ pub enum SuiErrorKind {
     SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
-    #[error("Value was not signed by a known authority. signer: {:?}, index: {:?}, committee: {committee}", signer, index)]
+    #[error(
+        "Value was not signed by a known authority. signer: {:?}, index: {:?}, committee: {committee}",
+        signer,
+        index
+    )]
     UnknownSigner {
         signer: Option<String>,
         index: Option<u32>,
@@ -483,7 +497,9 @@ pub enum SuiErrorKind {
         obj_ref: ObjectRef,
         pending_transaction: TransactionDigest,
     },
-    #[error("Objects {obj_refs:?} are already locked by a transaction from a future epoch {locked_epoch:?}), attempt to override with a transaction from epoch {new_epoch:?}")]
+    #[error(
+        "Objects {obj_refs:?} are already locked by a transaction from a future epoch {locked_epoch:?}), attempt to override with a transaction from epoch {new_epoch:?}"
+    )]
     ObjectLockedAtFutureEpoch {
         obj_refs: Vec<ObjectRef>,
         locked_epoch: EpochId,
@@ -678,7 +694,9 @@ pub enum SuiErrorKind {
     #[error("Storage error: {0}")]
     Storage(String),
 
-    #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_secs} seconds.")]
+    #[error(
+        "Validator cannot handle the request at the moment. Please retry after at least {retry_after_secs} seconds."
+    )]
     ValidatorOverloadedRetryAfter { retry_after_secs: u64 },
 
     #[error("Too many requests")]

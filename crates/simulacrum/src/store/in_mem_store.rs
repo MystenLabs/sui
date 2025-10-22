@@ -7,7 +7,7 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
 use sui_types::error::SuiErrorKind;
-use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObject};
+use sui_types::storage::{PackageObject, get_module, load_package_object_from_object_store};
 use sui_types::{
     base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},

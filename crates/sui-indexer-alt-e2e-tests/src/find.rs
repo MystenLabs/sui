@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     effects::{TransactionEffects, TransactionEffectsAPI},

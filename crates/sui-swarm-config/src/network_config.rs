@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use sui_config::{genesis, Config, NodeConfig};
+use sui_config::{Config, NodeConfig, genesis};
 use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::multiaddr::Multiaddr;

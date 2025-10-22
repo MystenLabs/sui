@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account_universe::{run_and_assert_universe, AUTransactionGen, AccountUniverseGen},
+    account_universe::{AUTransactionGen, AccountUniverseGen, run_and_assert_universe},
     executor::Executor,
 };
 
