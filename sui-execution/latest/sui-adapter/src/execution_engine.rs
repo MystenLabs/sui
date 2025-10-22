@@ -19,6 +19,7 @@ mod checked {
     use std::fs::File;
     use std::io::BufWriter;
     use std::sync::Mutex;
+    use similar::TextDiff;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
@@ -68,6 +69,7 @@ mod checked {
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+    use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::gas::{GasCostSummary, GasUsageReport};
     use sui_types::id::UID;
