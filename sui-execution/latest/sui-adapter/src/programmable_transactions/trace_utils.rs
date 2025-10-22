@@ -346,9 +346,10 @@ pub fn add_move_value_info_from_value(
     value: &Value,
 ) -> Result<(), ExecutionError> {
     if trace_builder_opt.is_some()
-        && let Some(move_value_info) = move_value_info_from_value(context, type_, value)? {
-            move_values.push(move_value_info);
-        }
+        && let Some(move_value_info) = move_value_info_from_value(context, type_, value)?
+    {
+        move_values.push(move_value_info);
+    }
     Ok(())
 }
 

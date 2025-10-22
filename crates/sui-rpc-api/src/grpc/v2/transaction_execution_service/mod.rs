@@ -138,13 +138,17 @@ pub async fn execute_transaction(
         let input_objects = input_objects.unwrap_or_default();
         let output_objects = output_objects.unwrap_or_default();
 
-        let balance_changes = if read_mask
-            .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) { {
+        let balance_changes = if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
+        {
+            {
                 derive_balance_changes(&effects, &input_objects, &output_objects)
                     .into_iter()
                     .map(Into::into)
                     .collect()
-            } } else { Default::default() };
+            }
+        } else {
+            Default::default()
+        };
 
         let input_objects = input_objects
             .into_iter()

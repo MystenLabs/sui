@@ -213,12 +213,16 @@ impl Storage {
             .chain(
                 self.package_cache
                     .lock()
-                    .expect("Unable to lock").values().cloned(),
+                    .expect("Unable to lock")
+                    .values()
+                    .cloned(),
             )
             .chain(
                 self.object_version_cache
                     .lock()
-                    .expect("Unable to lock").values().cloned(),
+                    .expect("Unable to lock")
+                    .values()
+                    .cloned(),
             )
             .collect::<Vec<_>>()
     }

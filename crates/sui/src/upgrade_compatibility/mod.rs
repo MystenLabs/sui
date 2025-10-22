@@ -1047,8 +1047,7 @@ fn compatibility_diag_from_error(
         } => {
             file_format_version_downgrade_diag(old_version, new_version, compiled_unit_with_source)
         }
-        UpgradeCompatibilityModeError::FriendNew
-        | UpgradeCompatibilityModeError::FriendMissing => {
+        UpgradeCompatibilityModeError::FriendNew | UpgradeCompatibilityModeError::FriendMissing => {
             friend_link_diag(compiled_unit_with_source)
         }
     }

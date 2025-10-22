@@ -65,11 +65,12 @@ fn check_signature<Mode: ExecutionMode>(
         return_type: &T::Type,
     ) -> Result<(), ExecutionError> {
         if let Type::Reference(_, _) = return_type
-            && !Mode::allow_arbitrary_values() {
-                return Err(ExecutionError::from_kind(
-                    ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
-                ));
-            }
+            && !Mode::allow_arbitrary_values()
+        {
+            return Err(ExecutionError::from_kind(
+                ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
+            ));
+        }
         Ok(())
     }
 

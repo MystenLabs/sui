@@ -596,7 +596,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             .data
             .try_as_package()
             .unwrap()
-            .serialized_module_map().values().map(|published_module_bytes| MaybeNamedCompiledModule {
+            .serialized_module_map()
+            .values()
+            .map(|published_module_bytes| MaybeNamedCompiledModule {
                 named_address: named_addr_opt,
                 module: CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
                 source_map: None,
@@ -1269,7 +1271,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         let obj = self.get_object(&id, version)?;
                         let package = obj.data.try_as_package().map(|package| {
                             package
-                                .serialized_module_map().values().map(|published_module_bytes| {
+                                .serialized_module_map()
+                                .values()
+                                .map(|published_module_bytes| {
                                     let module = CompiledModule::deserialize_with_defaults(
                                         published_module_bytes,
                                     )
