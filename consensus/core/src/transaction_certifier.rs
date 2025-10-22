@@ -5,16 +5,14 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use consensus_config::Stake;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
-use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
-    BlockAPI as _, CertifiedBlock, CertifiedBlocksOutput, CommitIndex, VerifiedBlock,
+    BlockAPI as _, CertifiedBlock, CertifiedBlocksOutput, VerifiedBlock,
     block::{BlockTransactionVotes, GENESIS_ROUND},
     block_verifier::BlockVerifier,
-    commit::CommitAPI,
     context::Context,
     dag_state::DagState,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
@@ -50,6 +48,8 @@ use crate::{
 pub struct TransactionCertifier {
     // The state of blocks being voted on and certified.
     certifier_state: Arc<RwLock<CertifierState>>,
+    // Verify transactions during recovery.
+    block_verifier: Arc<dyn BlockVerifier>,
     // The state of the DAG.
     dag_state: Arc<RwLock<DagState>>,
     // An unbounded channel to output certified blocks to Sui consensus block handler.
@@ -59,72 +59,38 @@ pub struct TransactionCertifier {
 impl TransactionCertifier {
     pub fn new(
         context: Arc<Context>,
+        block_verifier: Arc<dyn BlockVerifier>,
         dag_state: Arc<RwLock<DagState>>,
         certified_blocks_sender: UnboundedSender<CertifiedBlocksOutput>,
     ) -> Self {
         Self {
             certifier_state: Arc::new(RwLock::new(CertifierState::new(context))),
+            block_verifier,
             dag_state,
             certified_blocks_sender,
         }
     }
 
-    /// Recovers from DB own votes on not-yet-included blocks and peers' reject votes on
-    /// un-finalized transactions.
+    /// Recovers all blocks from DB after the given round.
     ///
-    /// Own votes are not stored persistently, so blocks which have not been included in
-    /// proposed blocks are verified and voted again.
-    ///
-    /// Reject votes for un-finalized transactions need to be recovered from all blocks after
-    /// the GC round of last commit processed by the commit consumer. Without this, during
-    /// transaction finalization of recovered commits, reject votes will be missing for some blocks.
-    pub(crate) fn recover(
-        &self,
-        block_verifier: &impl BlockVerifier,
-        last_processed_commit_index: CommitIndex,
-    ) {
-        let mut certifier_state = self.certifier_state.write();
-        let context = certifier_state.context.clone();
+    /// This is useful for initializing the certifier state
+    /// for future commits and block proposals.
+    pub(crate) fn recover_blocks_after_round(&self, after_round: Round) {
+        let context = self.certifier_state.read().context.clone();
         if !context.protocol_config.mysticeti_fastpath() {
             info!("Skipping certifier recovery in non-mysticeti fast path mode");
             return;
         }
 
-        let dag_state = self.dag_state.read();
-        let store = dag_state.store().clone();
+        let store = self.dag_state.read().store().clone();
 
-        // Reads the last processed commit to determine where recovery starts. It can be None when
-        // consensus starts in a new epoch.
-        let last_processed_commit = store
-            .scan_commits((last_processed_commit_index..=last_processed_commit_index).into())
-            .unwrap()
-            .pop();
-
-        // Recovers the GC round for certifier state.
-        let certifier_gc_round = if let Some(last_processed_commit) = last_processed_commit {
-            dag_state.calculate_gc_round(last_processed_commit.round())
-        } else {
-            GENESIS_ROUND
-        };
-        let dag_state_gc_round = dag_state.gc_round();
-        assert!(
-            certifier_gc_round <= dag_state_gc_round,
-            "Certifier should use an earlier GC round than DagState but {} > {}",
-            certifier_gc_round,
-            dag_state_gc_round
-        );
-        certifier_state.update_gc_round(certifier_gc_round);
-
-        // Starts recovery from the GC round computed from the last processed commit.
-        // All blocks from later commits must have rounds >= recovery_start_round.
-        let recovery_start_round = certifier_gc_round + 1;
+        let recovery_start_round = after_round + 1;
         info!(
             "Recovering certifier state from round {}",
             recovery_start_round,
         );
 
-        let authorities = certifier_state
-            .context
+        let authorities = context
             .committee
             .authorities()
             .map(|(index, _)| index)
@@ -134,31 +100,44 @@ impl TransactionCertifier {
                 .scan_blocks_by_author(authority_index, recovery_start_round)
                 .unwrap();
             info!(
-                "Recovering {} blocks for authority {}",
+                "Recovering and voting on {} blocks for authority {} {}",
                 blocks.len(),
+                authority_index,
                 context.committee.authority(authority_index).hostname
             );
-            let voted_blocks = blocks
-                .into_iter()
-                .map(|b| {
-                    if b.round() <= dag_state_gc_round || dag_state.is_hard_linked(&b.reference()) {
-                        // Own votes are unnecessary for blocks already included in own blocks,
-                        // or outside of local DAG GC bound.
-                        (b, vec![])
-                    } else {
-                        // Own votes are needed for blocks not yet included in own blocks. They will be
-                        // added to proposed blocks together.
-                        let reject_transaction_votes =
-                            block_verifier.vote(&b).unwrap_or_else(|e| {
-                                panic!("Failed to vote on block during recovery: {}", e)
-                            });
-                        (b, reject_transaction_votes)
-                    }
-                })
-                .collect::<Vec<_>>();
-            let certified_blocks = certifier_state.add_voted_blocks(voted_blocks);
-            self.send_certified_blocks(certified_blocks);
+            self.recover_and_vote_on_blocks(blocks);
         }
+    }
+
+    /// Recovers and votes on the given blocks.
+    ///
+    /// The recovery processes peers' reject votes contained in the input blocks.
+    /// and potentially votes on the input blocks as well..
+    ///
+    /// Because own votes on blocks are not stored, so blocks are voted on if they can be included in
+    /// a future proposed block.
+    pub(crate) fn recover_and_vote_on_blocks(&self, blocks: Vec<VerifiedBlock>) {
+        let dag_state = self.dag_state.read();
+        let voted_blocks = blocks
+            .into_iter()
+            .map(|b| {
+                if b.round() <= dag_state.gc_round() || dag_state.is_hard_linked(&b.reference()) {
+                    // Own votes are unnecessary for blocks already included in own blocks,
+                    // or outside of local DAG GC bound.
+                    (b, vec![])
+                } else {
+                    // Own votes are needed for blocks not yet included in own blocks. They will be
+                    // added to proposed blocks together.
+                    let reject_transaction_votes =
+                        self.block_verifier.vote(&b).unwrap_or_else(|e| {
+                            panic!("Failed to vote on block during recovery: {}", e)
+                        });
+                    (b, reject_transaction_votes)
+                }
+            })
+            .collect::<Vec<_>>();
+        self.certifier_state.write().add_voted_blocks(voted_blocks);
+        // Do not send certified blocks to the fastpath output channel during recovery.
     }
 
     /// Stores own reject votes on input blocks, and aggregates reject votes from the input blocks.
@@ -300,7 +279,7 @@ impl CertifierState {
         reject_txn_votes: Vec<TransactionIndex>,
     ) -> Vec<CertifiedBlock> {
         if voted_block.round() <= self.gc_round {
-            // Ignore the block and own votes, since they are outside of GC bound.
+            // Ignore the block and own votes, since they are outside of certifier GC bound.
             return vec![];
         }
 
@@ -379,6 +358,11 @@ impl CertifierState {
             // commit finalization, which advances the GC round of the certifier.
             return vec![];
         }
+        debug!(
+            "Adding proposed block {}; gc round: {}",
+            proposed_block.reference(),
+            self.gc_round
+        );
 
         // Vote entry for the proposed block must exist.
         assert!(
@@ -390,6 +374,8 @@ impl CertifierState {
         let now = self.context.clock.timestamp_utc_ms();
 
         // Certify transactions based on the accept votes from the proposed block's parents.
+        // Some ancestor blocks may not be found, because either they have been GC'ed due to timing
+        // issues or they were not recovered. It is ok to skip certifying blocks, which are best effort.
         let mut certified_blocks = vec![];
         for voting_ancestor in proposed_block.ancestors() {
             // Votes are limited to 1 round before the proposed block.
@@ -397,7 +383,13 @@ impl CertifierState {
                 continue;
             }
             let Some(voting_info) = self.votes.get(voting_ancestor) else {
-                debug_fatal!(
+                self.context
+                    .metrics
+                    .node_metrics
+                    .certifier_missing_ancestor_during_certification
+                    .with_label_values(&["voting_info_not_found"])
+                    .inc();
+                debug!(
                     "Proposed block {}: voting info not found for ancestor {}",
                     proposed_block.reference(),
                     voting_ancestor
@@ -405,7 +397,13 @@ impl CertifierState {
                 continue;
             };
             let Some(voting_block) = voting_info.block.clone() else {
-                debug_fatal!(
+                self.context
+                    .metrics
+                    .node_metrics
+                    .certifier_missing_ancestor_during_certification
+                    .with_label_values(&["voting_block_not_found"])
+                    .inc();
+                debug!(
                     "Proposed block {}: voting block not found for ancestor {}",
                     proposed_block.reference(),
                     voting_ancestor
@@ -418,7 +416,17 @@ impl CertifierState {
                     continue;
                 }
                 let Some(target_vote_info) = self.votes.get_mut(target_ancestor) else {
-                    debug_fatal!("voting info not found for ancestor {}", target_ancestor);
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .certifier_missing_ancestor_during_certification
+                        .with_label_values(&["target_vote_info_not_found"])
+                        .inc();
+                    debug!(
+                        "Proposed block {}: target voting info not found for ancestor {}",
+                        proposed_block.reference(),
+                        target_ancestor
+                    );
                     continue;
                 };
                 target_vote_info
