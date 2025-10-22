@@ -14,6 +14,7 @@ use std::{
 };
 use sui_config::node::ArchiveReaderConfig;
 use sui_config::p2p::StateSyncConfig;
+use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::WriteStore;
 use tap::Pipe;
@@ -27,16 +28,18 @@ pub struct Builder<S> {
     config: Option<StateSyncConfig>,
     metrics: Option<Metrics>,
     archive_config: Option<ArchiveReaderConfig>,
+    genesis_checkpoint_digest: CheckpointDigest,
 }
 
 impl Builder<()> {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new(genesis_checkpoint_digest: CheckpointDigest) -> Self {
         Self {
             store: None,
             config: None,
             metrics: None,
             archive_config: None,
+            genesis_checkpoint_digest,
         }
     }
 }
@@ -48,6 +51,7 @@ impl<S> Builder<S> {
             config: self.config,
             metrics: self.metrics,
             archive_config: self.archive_config,
+            genesis_checkpoint_digest: self.genesis_checkpoint_digest,
         }
     }
 
@@ -125,6 +129,7 @@ where
             config,
             metrics,
             archive_config,
+            genesis_checkpoint_digest,
         } = self;
         let store = store.unwrap();
         let config = config.unwrap_or_default();
@@ -165,6 +170,7 @@ where
                 checkpoint_event_sender,
                 metrics,
                 archive_config,
+                genesis_checkpoint_digest,
             },
             server,
         )
@@ -181,6 +187,7 @@ pub struct UnstartedStateSync<S> {
     pub(super) checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     pub(super) metrics: Metrics,
     pub(super) archive_config: Option<ArchiveReaderConfig>,
+    pub(super) genesis_checkpoint_digest: CheckpointDigest,
 }
 
 impl<S> UnstartedStateSync<S>
@@ -198,6 +205,7 @@ where
             checkpoint_event_sender,
             metrics,
             archive_config,
+            genesis_checkpoint_digest,
         } = self;
 
         (
@@ -216,6 +224,7 @@ where
                 metrics,
                 sync_checkpoint_from_archive_task: None,
                 archive_config,
+                genesis_checkpoint_digest,
             },
             handle,
         )
