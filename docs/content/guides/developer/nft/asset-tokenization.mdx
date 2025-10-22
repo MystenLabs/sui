@@ -3,37 +3,37 @@ title: Asset Tokenization
 description: Learn how to tokenize assets on the Sui blockchain. Asset tokenization refers to the process of representing real-world assets, such as real estate, art, commodities, stocks, or other valuable assets, as digital tokens on the blockchain network.
 ---
 
-Asset tokenization represents real-world assets, such as real estate, art, commodities, stocks, or other valuable assets, as digital tokens on the blockchain network. This process converts the ownership or rights of an asset into digital tokens, which the blockchain records and manages.
+Asset tokenization refers to the process of representing real-world assets, such as real estate, art, commodities, stocks, or other valuable assets, as digital tokens on the blockchain network. This involves converting the ownership or rights of an asset into digital tokens, which are then recorded and managed on the blockchain.
 
 ## High-level overview
 
-The concept divides high-value assets into smaller, more affordable units, representing ownership or a fraction of the asset.
+The concept is to divide high-value assets into smaller, more affordable units, representing ownership or a fraction of the asset.
 
 This strategy enables wider participation from investors who might want to mitigate risk by investing in a portion of a digital asset rather than being the sole owner, thereby expanding accessibility to a broader range of investors.
 
-This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155) multi-token standard with additional functionality. This makes it a suitable choice for Solidity-based use cases that you might want to implement on Sui.
+This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155) multi-token standard with additional functionality. This makes it a suitable choice for Solidity based use cases that you might want to implement on Sui.
 
 - **Asset creation**
 
-  Each asset fractionalizes into a total supply, with each fraction represented as either a non-fungible token (NFT) or fungible token (FT) type collectible. This ensures that each individual fraction maintains a balance equal to or greater than 1, and when combined, all fractions collectively reach the total supply of the asset.
+  Each asset is fractionalized into a total supply, with each fraction represented as either a non-fungible token (NFT) or fungible token (FT) type collectible. This ensures that each individual fraction maintains a balance equal to or greater than 1, and when combined, all fractions collectively reach the total supply of the asset.
 
-  Besides the total supply, each asset contains various other fields such as name, description, and more. These fields collectively form the metadata for the asset, and they remain consistent across all fractions of the asset.
+  Besides the total supply, each asset is defined by various other fields such as name, description, and more. These fields collectively form the metadata for the asset, and they remain consistent across all fractions of the asset.
 
 - **NFTs vs FTs distinction**
 
-  Each time you mint a tokenized asset, you can create it with new metadata. If you incorporate new metadata, the tokenized asset becomes unique, transforming it into an NFT. In this case, its balance is limited to 1, signifying that only a single instance of this asset exists.
+  Each time a tokenized asset is minted, the system can create it with new metadata. If new metadata is incorporated, the tokenized asset becomes unique, transforming it into an NFT. In this case, its balance is limited to 1, signifying that only a single instance of this asset exists.
 
-  If you provide no additional metadata, the system categorizes the tokenized asset as an FT, allowing its balance to exceed 1, enabling multiple identical instances of the asset to exist.
+  If no additional metadata exists, the system categorizes the tokenized asset as an FT, allowing its balance to exceed 1, enabling multiple identical instances of the asset to exist.
 
-  FTs can merge (join) among themselves or split when the balance is greater than 1. This functionality allows for the aggregation or division of units of the token, offering flexibility in handling varying quantities as needed.
+  FTs possess the capability to merge (join) among themselves or be split when the balance is greater than 1. This functionality allows for the aggregation or division of units of the token, offering flexibility in handling varying quantities as needed.
 
-  All the collectibles of tokenized assets, whether NFTs or FTs, when combined, can amount to the maximum total supply of the asset.
+  As previously mentioned, all the collectibles of tokenized assets, whether NFTs or FTs, when combined, can amount to the maximum total supply of the asset.
 
 - **Burnability**
 
-  When you create the asset, you can define whether the fractions of the asset are eligible for removal or destruction from circulation. Removing or destroying assets from circulation is called burning.
+  When you create the asset, you can define whether the fractions of the asset are eligible for removal or destruction from circulation. The process of removing or destroying assets is called burning.
 
-  If you designate a tokenized asset as burnable, burning a fraction causes the circulating supply to decrease by the balance of the burnt item. The total supply, however, remains constant, allowing you to mint the burned fractions again if needed, thus maintaining the predetermined total supply of the asset.
+  If a tokenized asset is burnable, then burning a fraction causes the circulating supply to decrease by the balance of the burnt item. The total supply, however, remains constant, allowing you to mint the burned fractions again if needed, thus maintaining the predetermined total supply of the asset.
 
 ## Move packages
 
@@ -45,7 +45,7 @@ As with all smart contracts on Sui, Move provides the logic that powers asset to
 
 This reference implementation uses the [Kiosk standard](../../../standards/kiosk.mdx) to ensure that tokenized assets operate within their defined policy. Use the implementation as presented to have marketable tokenized assets that support rules like royalties, commissions, and so on.
 
-If using Kiosk is not a requirement, then you can exclude the unlock module and some of the proxy's methods related to transfer policies.
+If Kiosk is not a requirement, then you can exclude the unlock module and some of the proxy's methods related to transfer policies.
 
 :::
 
@@ -57,13 +57,13 @@ Select a module to view its details:
 
 The `tokenized_asset` module operates in a manner similar to the `coin` library.
 
-When it receives a new One-Time Witness type, it creates a unique representation of a fractional asset. This module employs similar implementations to some methods found in the `Coin` module. It encompasses functionalities pertinent to asset tokenization, including new asset creation, minting, splitting, joining, and burning. See [One-Time Witness](https://move-book.com/programmability/one-time-witness.html) in The Move Book for more information.
+When it receives a new One-Time Witness type, it creates a unique representation of a fractional asset. This module employs similar implementations to some methods found in the `Coin` module. It encompasses functionalities pertinent to asset tokenization, including new asset creation, minting, splitting, joining, and burning. See [One Time Witness](https://move-book.com/programmability/one-time-witness.html) in The Move Book for more information.
 
 **Structs**
 
 - `AssetCap`
 
-  The system generates an `AssetCap` for each new asset represented as a fractional NFT. In most scenarios, you should create it as an owned object, which you can then transfer to the platform's administrator for access-restricted method invocation.
+  Generate an `AssetCap` for each new asset represented as a fractional NFT. In most scenarios, create it as an owned object, which you can then transfer to the platform's administrator for access-restricted method invocation.
 
   ```rust
   struct AssetCap<phantom T> {
@@ -99,7 +99,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
 - `TokenizedAsset`
 
-  The system mints the `TokenizedAsset` with a specified balance that is less than or equal to the remaining supply. If the `VecMap` of an asset contains values, indicating multiple unique entries, the system considers it an NFT. Conversely, if the `VecMap` of an asset contains no values, indicating an absence of individual entries, the system considers it an FT.
+  The `TokenizedAsset` is minted with a specified balance that is less than or equal to the remaining supply. If the `VecMap` of an asset is populated with values, indicating multiple unique entries, it is considered an NFT. Conversely, if the `VecMap` of an asset is not populated, indicating an absence of individual entries, it is considered an FT.
 
   ```rust
   struct TokenizedAsset<phantom T> has key, store {
@@ -126,7 +126,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
 - `init`
 
-  This function creates a `PlatformCap` and sends it to the sender.
+  This function creates a `PlatformCap` and transfers it to the transaction sender.
 
   ```rust
   fun init(ctx: &mut TxContext) {}
@@ -134,7 +134,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
 - `new_asset`
 
-  This function creates a fresh representation of an asset, defining its crucial attributes. Upon execution, it returns 2 distinct objects: the `AssetCap` and `AssetMetadata`. These objects encapsulate the necessary information and characteristics defining the asset within the system.
+  This function holds the responsibility of creating a fresh representation of an asset, defining its crucial attributes. Upon execution, it returns 2 distinct objects: the `AssetCap` and `AssetMetadata`. These objects encapsulate the necessary information and characteristics defining the asset within the system.
 
   ```rust
   public fun new_asset<T: drop>(
@@ -151,7 +151,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
 - `mint`
 
-  The function mints a tokenized asset. If you introduce new metadata during this process, the resulting tokenized asset becomes unique, creating an NFT with a balance set to 1. Alternatively, if you add no new metadata, the system classifies the tokenized asset as an FT, permitting its balance to surpass 1, as specified by a provided argument. Upon execution, the function returns the tokenized asset object.
+  The function performs the minting of a tokenized asset. If new metadata is introduced during this process, the tokenized asset becomes unique, resulting in the creation of an NFT with a balance set to 1. Alternatively, if no new metadata is added, the system classifies the tokenized asset as an FT, permitting its balance to surpass 1, as specified by a provided argument. Upon execution, the function returns the tokenized asset object.
 
   ```rust
   public fun mint<T>(
@@ -165,11 +165,11 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
 - `split`
 
-  This function receives a tokenized asset of the FT type with a balance greater than 1, along with a value less than the object's balance, and performs a split operation on the tokenized asset. The operation divides the existing tokenized asset into 2 separate tokenized assets. The newly created tokenized asset has a balance equal to the given value, while the balance of the provided object is reduced by the specified value. Upon completion, the function returns the newly created tokenized asset. This function does not accept or operate on tokenized assets of the NFT type.
+  This function receives a tokenized asset of the FT type and a balance greater than 1, along with a value less than the object's balance, and performs a split operation on the tokenized asset. The operation divides the existing tokenized asset into 2 separate tokenized assets. The newly created tokenized asset has a balance equal to the given value, while the balance of the provided object is reduced by the specified value. Upon completion, the function returns the newly created tokenized asset. This function does not accept or operate on tokenized assets of the NFT type.
 
   ```rust
   public fun split<T>(
-          tokenized_asset: &mut TokenizedAsset<T>,
+          self: &mut TokenizedAsset<T>,
           split_amount: u64,
           ctx: &mut TxContext
       ): TokenizedAsset<T> {}
@@ -177,632 +177,421 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
 - `join`
 
-  This function receives 2 tokenized assets with the same non-unique metadata—meaning both are of the FT type—and performs a merge. During this process, the first tokenized asset object absorbs the balance of the second tokenized asset object, and the second object is subsequently deleted. The final balance of the first tokenized asset object equals the sum of both balances.
+  This function receives 2 tokenized assets of the FT type and performs a join operation, merging them into 1. The function increases the balance of the first tokenized asset by adding the balance of the second tokenized asset to it, and then destroys the second tokenized asset. This function does not accept or operate on tokenized assets of the NFT type.
 
   ```rust
-  public fun join<T>(
-          tokenized_asset: &mut TokenizedAsset<T>,
-          other_tokenized_asset: TokenizedAsset<T>,
-      ) {}
+  public fun join<T>(self: &mut TokenizedAsset<T>, other: TokenizedAsset<T>) {}
   ```
 
 - `burn`
 
-  This function receives a tokenized asset, reduces the circulating supply by the burned balance, and subsequently deletes the object.
+  This function receives a tokenized asset and performs the burning operation, consuming the object and removing it from circulation. As a result, the current circulating supply decreases by the balance of the burned tokenized asset. However, the total supply remains unaffected and constant. If the asset fractions were configured as burnable during creation, you can later mint the burned balance and restore it to circulation. This function can operate on both NFT and FT types.
 
   ```rust
-  public fun burn<T>(cap: &mut AssetCap<T>, tokenized_asset: TokenizedAsset<T>) {}
+  public fun burn<T>(cap: &mut AssetCap<T>, tokenized_asset: TokenizedAsset<T>): u64 {}
   ```
 
-**Display**
+- `total_supply`
 
-Use the [`Sui Object Display standard`](../../../standards/display.mdx) to update and set the display for tokenized assets.
-
-Because the `TokenizedAsset` object contains a field that accommodates the addition of new metadata, this results in dynamic values that can change when you mint an NFT.
-
-To properly leverage the `Display` standard for these objects, establish clear display guidelines for each field of the `TokenizedAsset`, including its name, description, and so on. Additionally, include the display for each unique metadata by using the following format: `{metadata.<metadata-key>}`. This notation ensures that the correct value for each metadata key dynamically displays whenever you mint an NFT.
-
-**Example display establishment snippet:**
-
-```rust
-let mut display = display::new<TokenizedAsset<EXAMPLE>>(&pub, ctx);
-display.add(
-    b"name".to_string(),
-    b"{metadata.name}".to_string(),
-);
-display.add(
-    b"description".to_string(),
-    b"{metadata.description}".to_string(),
-);
-display.add(
-    b"image_url".to_string(),
-    b"{metadata.image_url}".to_string(),
-);
-display.add(
-    b"link".to_string(),
-    b"https://sui.io/".to_string(),
-);
-display.add(
-    b"project_url".to_string(),
-    b"https://sui.io/".to_string(),
-);
-display.add(
-    b"creator".to_string(),
-    b"Unknown".to_string(),
-);
-display.update_version();
-```
-
-</TabItem>
-
-<TabItem label="unlock" value="unlock">
-
-The `unlock` module manages unlocking tokenized assets from the kiosk and the corresponding hotpotato return pattern associated with this action.
-
-**Structs**
-
-- `Unlock`
-
-  The `Unlock` struct represents a Hot Potato pattern object that you must consume by utilizing the `prove_unlock` function.
+  This function returns the maximum supply of the asset.
 
   ```rust
-  struct Unlock {
-      // the ID of the tokenized asset
-      item_id: ID,
-  }
+  public fun total_supply<T>(cap: &AssetCap<T>): u64 {}
   ```
 
-**Functions**
+- `supply`
 
-- `unlock`
-
-  This function receives an `AssetCap` and unlocks the specified tokenized asset item from the provided kiosk. An `Unlock` hot potato is then returned, requiring subsequent consumption through the `prove_unlock` function. This effectively ensures that the function does not rely on adding any rules to the kiosk. Instead, it enforces the presence of the `AssetCap`, guaranteeing access control on who can unlock the items.
+  This function returns the current circulating supply of the asset.
 
   ```rust
-  public fun unlock<T>(
-          _cap: &AssetCap<T>,
-          kiosk: &mut Kiosk,
-          kiosk_cap: &KioskOwnerCap,
-          _policy: &TransferPolicy<TokenizedAsset<T>>,
-          item_id: ID,
-          _ctx: &mut TxContext
-      ): (TokenizedAsset<T>, Unlock) {}
+  public fun supply<T>(cap: &AssetCap<T>): u64 {}
   ```
 
-- `prove_unlock`
+- `balance`
 
-  This function consumes an Unlock hot potato to validate the unlock process, ensuring that the item is not taken out of the kiosk improperly and is instead returned.
+  This function returns the balance of a tokenized asset.
 
   ```rust
-  public fun prove_unlock<T>(
-          kiosk: &mut Kiosk,
-          tokenized_asset: TokenizedAsset<T>,
-          unlock: Unlock,
-      ) {}
+  public fun balance<T>(tokenized_asset: &TokenizedAsset<T>): u64 {}
+  ```
+
+- `is_nft`
+
+  This function returns `true` if a tokenized asset is an NFT, `false` otherwise.
+
+  ```rust
+  public fun is_nft<T>(tokenized_asset: &TokenizedAsset<T>): bool {}
   ```
 
 </TabItem>
 
 <TabItem label="proxy" value="proxy">
 
-The `proxy` module simplifies interaction with the kiosk.
+The `proxy` module provides an interface allowing interaction with the asset tokenization functionality while adhering to the constraints of the Kiosk standard and transfer policy rules.
+
+This module allows kiosk owners to place their tokenized assets inside a kiosk and lock them if they wish to sell or transfer them. Otherwise, if not used with a kiosk, the owner is free to perform any available function from the `tokenized_asset` module without any restrictions.
 
 **Functions**
 
-- `mint_and_place`
+- `burn_in_kiosk`
 
-  This function accepts an `AssetCap` and mints a tokenized asset, subsequently depositing it into the provided kiosk.
+  This function performs the burning operation of the asset within a kiosk. Provide the kiosk and its corresponding `KioskOwnerCap`, along with the tokenized asset `ID` to burn and the `AssetCap` object for this asset type. Upon execution, the function destroys the tokenized asset, reducing the current circulating supply by the balance of the burned tokenized asset. This function can operate on both NFT and FT types.
 
   ```rust
-  public fun mint_and_place<T>(
-          cap: &mut AssetCap<T>,
+  public fun burn_in_kiosk<T>(
           kiosk: &mut Kiosk,
-          keys: vector<String>,
-          values: vector<String>,
-          value: u64,
+          cap: &KioskOwnerCap,
+          asset_cap: &mut AssetCap<T>,
+          tokenized_asset_id: ID,
+          policy: &TransferPolicy<TokenizedAsset<T>>,
           ctx: &mut TxContext
       ) {}
   ```
 
-- `list_and_lock`
+- `list_with_purchase_cap`
 
-  This function accepts an `AssetCap` and lists the specified tokenized asset item for sale, subsequently locking it within the provided kiosk.
+  This function offers the same functionality as `kiosk::list_with_purchase_cap`.
 
   ```rust
-  public fun list_and_lock<T>(
-          _cap: &AssetCap<T>,
+  public fun list_with_purchase_cap<T>(
           kiosk: &mut Kiosk,
-          kiosk_cap: &KioskOwnerCap,
-          _policy: &TransferPolicy<TokenizedAsset<T>>,
+          cap: &KioskOwnerCap,
           item_id: ID,
-          price: u64,
+          min_price: u64,
           ctx: &mut TxContext
-      ) {}
+      ): PurchaseCap<TokenizedAsset<T>> {}
   ```
 
-- `delist_and_unlock`
+- `purchase_with_cap`
 
-  This function accepts an `AssetCap` and removes the specified tokenized asset item from the listing, subsequently unlocking it within the provided kiosk.
+  This function offers the same functionality as `kiosk::purchase_with_cap`.
 
   ```rust
-  public fun delist_and_unlock<T>(
-          _cap: &AssetCap<T>,
+  public fun purchase_with_cap<T>(
           kiosk: &mut Kiosk,
-          kiosk_cap: &KioskOwnerCap,
-          _policy: &TransferPolicy<TokenizedAsset<T>>,
-          item_id: ID,
-          ctx: &mut TxContext
-      ) {}
+          purchase_cap: PurchaseCap<TokenizedAsset<T>>,
+          payment: Coin<SUI>,
+      ): (TokenizedAsset<T>, TransferRequest<TokenizedAsset<T>>) {}
   ```
 
-- `lock`
+- `return_purchase_cap`
 
-  This function accepts an `AssetCap` and locks the specified tokenized asset item within the provided kiosk.
+  This function offers the same functionality as `kiosk::return_purchase_cap`.
 
   ```rust
-  public fun lock<T>(
-          _cap: &AssetCap<T>,
+  public fun return_purchase_cap<T>(
           kiosk: &mut Kiosk,
-          kiosk_cap: &KioskOwnerCap,
-          _policy: &TransferPolicy<TokenizedAsset<T>>,
-          item: TokenizedAsset<T>,
-          _ctx: &mut TxContext
+          purchase_cap: PurchaseCap<TokenizedAsset<T>>,
       ) {}
   ```
 
 - `join_in_kiosk`
 
-  This function receives an `AssetCap` and merges 2 tokenized assets with the same non-unique metadata by unlocking the items from the kiosk, joining them, and returning them to the kiosk.
+  This function performs the join operation inside a kiosk, similar to `join` from the `tokenized_asset` module. Provide the kiosk and its corresponding `KioskOwnerCap`, along with the 2 tokenized assets IDs to join and the `TransferPolicy` object for this asset type. The function increases the balance of the first tokenized asset by adding the balance of the second tokenized asset to it, and then destroys the second tokenized asset. This function can only operate on tokenized assets of the FT type.
 
   ```rust
   public fun join_in_kiosk<T>(
-          cap: &AssetCap<T>,
           kiosk: &mut Kiosk,
-          kiosk_cap: &KioskOwnerCap,
+          cap: &KioskOwnerCap,
+          tokenized_asset_id_1: ID,
+          tokenized_asset_id_2: ID,
           policy: &TransferPolicy<TokenizedAsset<T>>,
-          item_id: ID,
-          other_item_id: ID,
           ctx: &mut TxContext
       ) {}
   ```
 
-- `burn_in_kiosk`
+- `split_in_kiosk`
 
-  This function receives an `AssetCap`, unlocks the item from the kiosk, and burns it.
+  This function performs the split operation inside a kiosk, similar to `split` from the `tokenized_asset` module. Provide the kiosk and its corresponding `KioskOwnerCap`, the tokenized asset `ID` to split, the desired split amount, and the `TransferPolicy` object for this asset type. The function reduces the provided tokenized asset balance by the split amount, creates a new tokenized asset with a balance equal to the split amount, places it in the kiosk, and locks it. This function can only operate on tokenized assets of the FT type.
 
   ```rust
-  public fun burn_in_kiosk<T>(
-          cap: &mut AssetCap<T>,
+  public fun split_in_kiosk<T>(
           kiosk: &mut Kiosk,
-          kiosk_cap: &KioskOwnerCap,
+          cap: &KioskOwnerCap,
+          tokenized_asset_id: ID,
+          split_amount: u64,
           policy: &TransferPolicy<TokenizedAsset<T>>,
-          item_id: ID,
           ctx: &mut TxContext
       ) {}
   ```
 
 </TabItem>
 
-<TabItem label="witness" value="witness">
+<TabItem label="unlock" value="unlock">
 
-The `witness` module serves as a template for creating distinct one-time witness types representing different tokenized assets.
+The `unlock` module defines the unlock rule, which allows an NFT or FT tokenized asset to be taken from the kiosk (unlocked). This situation might occur when the owner intends to join 2 FTs, burn an FT or NFT, or split an FT. Such situations require the asset to be unlocked first in order to proceed.
 
-**Structs**
-
-- `WITNESS`
-
-  The `WITNESS` struct represents the One-Time Witness.
-
-  ```rust
-  struct WITNESS has drop {}
-  ```
-
-- `AssetDataInfo`
-
-  The `AssetDataInfo` struct contains the necessary information required to initialize and populate the fields of an asset.
-
-  ```rust
-  struct AssetDataInfo has drop {
-      total_supply: u64,
-      symbol: ascii::String,
-      name: String,
-      description: String,
-      icon_url: Option<Url>,
-      burnable: bool,
-  }
-  ```
+However, this is permitted only for the asset's kiosk owner and the policy administrator.
 
 **Functions**
 
-- `init`
+- `unlock`
 
-  This function accepts a One-Time Witness and generates the necessary `AssetCap` and `AssetMetadata` objects for the asset using the provided information from the contract's deployment and subsequently transfers them to the caller.
-
-  ```rust
-  fun init(witness: WITNESS, ctx: &mut TxContext) {}
-  ```
-
-- `get_asset_info`
-
-  This function returns the asset information.
+  This function allows the kiosk owner to unlock their tokenized assets when using a protected transfer policy. The owner can perform certain actions like burn, join, and split inside the kiosk because the proxy module allows it. However, to unlock an item in general, the owner needs to use this function with the `ProtectedTP` object, which represents a capability object that permits unlocking tokenized assets from the kiosk.
 
   ```rust
-  fun get_asset_info(): AssetDataInfo {}
-  ```
-
-</TabItem>
-
-<TabItem label="genesis" value="genesis">
-
-The `genesis` module initiates a tokenized representation of the WITNESS module by combining the tokenized asset package bytecode with the witness bytecode.
-
-Genesis is necessary because it is only possible to get the witness module (or any module for that matter) bytecode by publishing an empty package with no dependencies. Otherwise, the Sui network attempts to verify the package dependencies during the publishing process, leading to failed publish attempts.
-
-The idea is to split the `asset_tokenization` package into 2 units, a template (consisting of the `tokenized_asset`, `unlock`, and `proxy` modules) and a witness (consisting of the `witness` module). Publish the template using a regular Move package, and publish the witness using the `genesis` module as an empty package with no dependencies. Subsequently, this enables you to obtain the bytecode for the witness module, which you can then inject into the `genesis` module.
-
-The `genesis` module then publishes the 2 combined modules (template and witness), thereby creating and deploying the tokenized asset with the one-time witness. This technique efficiently enables the deployment of a new asset multiple times, saving you time and bypassing the need to redeploy the entire package for each distinct asset type while simultaneously resolving the witness circular dependency issue inherent during package deployment.
-
-**Functions**
-
-- `genesis`
-
-  This function handles the deployment of the tokenized asset. It uses the witness bytecode in conjunction with the tokenized asset modules, publishes the resulting package, and transfers the generated `AssetCap` and `AssetMetadata` objects to the caller.
-
-  ```rust
-  public fun genesis(platform_cap: &PlatformCap, ctx: &mut TxContext) {}
+  public fun unlock<T>(
+          tokenized_asset: TokenizedAsset<T>,
+          transfer_request: TransferRequest<TokenizedAsset<T>>,
+          protected_tp: &ProtectedTP<TokenizedAsset<T>>,
+          _ctx: &mut TxContext
+      ): TokenizedAsset<T> {}
   ```
 
 </TabItem>
 
 </Tabs>
 
-### `transfer_policy_utils` package
+:::tip
 
-Sui kiosks use [transfer policies](../../../standards/kiosk/kiosk-apps/transfer-policy.mdx) to enforce that any asset adheres to their defined rules. You can add several types of rules to a transfer policy.
-
-Rules ensure that any transfer of an asset from one kiosk to another or any purchase of an asset listed on a kiosk must comply with the established regulations; otherwise, the buyer cannot complete the transaction.
-
-An example of a rule is a royalty enforcement rule. This rule mandates the payment of a fee with each purchase of the tokenized asset.
-
-To integrate these rules, you need a package that facilitates the addition or removal of specific rules to a policy. This package also establishes an interface for utilizing these policy rules, streamlining the process of rule modification and enhancing the overall governance of the asset transactions.
-
-#### `transfer_policy_utils` package functions
-
-The `transfer_policy_utils` package provides functionality to add rules related to the kiosk. The module facilitates the initial creation of a transfer policy and the subsequent addition or removal of supported rules as needed.
-
-**Functions**
-
-- `new_policy`
-
-  This function generates the transfer policy and returns it to the caller. You should transfer the transfer policy and its corresponding `TransferPolicyCap` to the specified addresses.
-
-  ```rust
-  public fun new_policy<T>(pub: &Publisher, ctx: &mut TxContext): (TransferPolicy<T>, TransferPolicyCap<T>) {}
-  ```
-
-- `add_floor_price_rule`
-
-  This function adds a floor price rule to the transfer policy. This mandates that any transaction be valued at a minimum of the specified floor price to proceed.
-
-  ```rust
-  public fun add_floor_price_rule<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>, floor_price: u64) {}
-  ```
-
-- `remove_floor_price_rule`
-
-  This function removes the floor price rule from the transfer policy.
-
-  ```rust
-  public fun remove_floor_price_rule<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {}
-  ```
-
-- `add_lock_rule`
-
-  This function adds the lock rule to the transfer policy. This enforces that tokenized assets reside locked within a kiosk. This implies that any attempt to unlock the tokenized asset or retrieve it from the kiosk fails the transaction unless an authorized entity unlocks the item.
-
-  ```rust
-  public fun add_lock_rule<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {}
-  ```
-
-- `remove_lock_rule`
-
-  This function removes the lock rule from the transfer policy.
-
-  ```rust
-  public fun remove_lock_rule<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {}
-  ```
-
-- `add_royalty_rule`
-
-  This function adds the royalty rule to the transfer policy. This mandates the payment of a specified fee with each purchase or transfer of the tokenized asset.
-
-  ```rust
-  public fun add_royalty_rule<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>, amount_bp: u16, min_amount: u64) {}
-  ```
-
-- `remove_royalty_rule`
-
-  This function removes the royalty rule from the transfer policy.
-
-  ```rust
-  public fun remove_royalty_rule<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {}
-  ```
-
-- `add_personal_kiosk_rule`
-
-  This function adds the personal kiosk rule to the transfer policy, mandating that all tokenized asset purchases use a personal kiosk.
-
-  ```rust
-  public fun add_personal_kiosk_rule<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {}
-  ```
-
-- `remove_personal_kiosk_rule`
-
-  This function removes the personal kiosk rule from the transfer policy.
-
-  ```rust
-  public fun remove_personal_kiosk_rule<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {}
-  ```
-
-The functions mentioned above only manage rule addition or removal. However, to complete a purchase request, you must validate these rules to confirm all conditions were met during the transaction.
-
-To validate the rules during the purchase transaction, use the kiosk SDK, which includes purchase methods that account for all rule validations, ensuring a complete and successful transaction. For more information, see [SDK](https://sdk.mystenlabs.com/kiosk).
-
-**Example purchase using SDK:**
-
-```rust
-const kioskClient = new KioskClient({
-	client: suiClient,
-	network: Network.TESTNET,
-});
-
-const tx = new Transaction();
-
-// the personal kiosk we're purchasing to (target).
-const personalKioskCap = tx.object('personalKioskCapId');
-// Attempt a purchase.
-kioskClient.purchaseAndResolvePolicies({
-	tx,
-	itemIds: [purchaseItemId],
-	itemType: type,
-	price: purchasePrice,
-	sellerKiosks: [purchaseKiosk],
-	buyerKiosk: personalKiosk,
-	buyerKioskCap: personalKioskCap,
-	// the policy to be resolved (should include the added rules).
-	policyId: 'policyId',
-});
-```
-
-### Wallet Standard
-
-Besides using the Sui SDK, leverage the Wallet Standard to sign and execute programmable transaction blocks in the user's wallet interface. Then, retrieve the executed transaction effects as a response to display the relevant information to the user.
-
-For more information on this integration, see [Sui dApp Kit and Wallet Kit](https://sdk.mystenlabs.com/dapp-kit) and the [Wallet Standard](../../../standards/wallet-standard.mdx).
-
-## Setting up the project
-
-To set up the project, first clone the `asset_tokenization` package and `transfer_policy_utils` package:
-
-```sh
-git clone git@github.com:MystenLabs/asset-tokenization.git
-```
-
-After cloning the repository, set up the .env file that holds the information for the 2 parties interacting with the smart contract. This involves the platform admin (the one who published the contract and holds the `PlatformCap` object), and a user who interacts with the newly tokenized asset.
-
-To configure the environment variables, modify the existing `.env.example` file. Rename the file to `.env` and populate its fields with the appropriate information. The file is pre-configured with values like RPC URLs, faucet URLs, and package IDs for Devnet, Testnet, and Mainnet. These values should remain unchanged. However, the user fields require input with the mnemonics of the 2 parties, allowing them to sign transactions on the Sui network. Begin by entering the mnemonics for the platform administrator and a user account. Subsequently, update the remaining empty fields during the setup process. This requires the execution of various transactions, which yield objects that you save to the .env file.
-
-## Deploying the smart contract
-
-Now, proceed with deploying both packages. This process occurs through the Sui CLI but you also can complete it using the `setup` project as demonstrated in the [TypeScript](#typescript) section.
-
-### Asset tokenization
-
-Deploy the template, which consists of the `tokenized_asset`, `unlock`, and `proxy` modules.
-
-#### Template
-
-For this, deploy an empty package with no dependencies to publish the template and acquire its bytecode. During the publishing process, the Move compiler adds the bytecode for the template dependencies, which is later removed from the final bytes used for genesis creation.
-
-Here's how to publish an empty witness package using Sui CLI.
-
-First, go to the witness directory:
-
-```sh
-cd move/asset_tokenization/witness
-```
-
-Then use the Sui CLI to publish:
-
-```sh
-sui client publish --gas-budget 100000000
-```
-
-Upon successful deployment, save the `packageId` to the .env file. From the resulting created objects, find `UpgradeCap` and save its `objectId` to the .env file. Retain the `UpgradeCap` `objectId` - the template needs this later for dependency injection. The `digest` for the transaction also proves useful for bytecode retrieval later on.
-
-#### Witness
-
-For this, deploy an empty package with no dependencies to publish the witness module and retrieve its bytecode. First, go to the template directory:
-
-```sh
-cd ..
-cd move/asset_tokenization/template
-```
-
-Then use the Sui CLI to publish:
-
-```sh
-sui client publish --gas-budget 100000000
-```
-
-Upon successful deployment, you don't need to save the `packageId`. From the created objects, find `UpgradeCap` and save its `objectId` to the .env file. Retain the transaction `digest` for bytecode retrieval later on.
-
-#### Bytecode manipulation
-
-Now that you have both packages published, retrieve their corresponding bytecodes.
-
-This process involves some bytecode manipulation to remove the package dependencies, specifically targeting the address to remove.
-
-To obtain the bytecode, follow these steps:
-
-1. Fetch the specific transaction data using the `digest` and the RPC URL.
-
-   ```sh
-   curl --location --request POST '$RPC_URL' \
-   --header 'Content-Type: application/json' \
-   --data-raw '{
-     "jsonrpc": "2.0",
-     "id": 1,
-     "method": "sui_getTransactionBlock",
-     "params": [
-       "$TRANSACTION_DIGEST",
-       {
-         "showInput": false,
-         "showRawInput": false,
-         "showEffects": false,
-         "showEvents": false,
-         "showObjectChanges": false,
-         "showBalanceChanges": false,
-         "showRawEffects": false
-       }
-     ]
-   }' | json_pp
-   ```
-
-   Replace `$RPC_URL` with the URL link of the RPC, and `$TRANSACTION_DIGEST` with the transaction digest.
-
-1. Parse the JSON response to extract the bytecode located in the `transaction.data.transaction.inputs` array. The bytecode exists as a string array. Copy this array.
-1. Use a text editor to find and replace any dependencies' addresses in the bytecode. For the template, this includes instances of `0x1` and `0x2`. For the witness, this is represented by `0x1` and the template's package address. Replace these addresses with `0x0000000000000000000000000000000000000000000000000000000000000000`.
-1. Use the modified bytecode to create the genesis modules.
-
-#### Genesis
-
-Now, you can construct the genesis modules. Inject the bytecodes for the witness and template into the genesis module, creating the module bytes to deploy as a tokenized asset.
-
-First, go to the genesis directory:
-
-```sh
-cd ..
-cd move/asset_tokenization/genesis
-```
-
-Then open the `genesis.move` file and replace the existing genesis constants with the new values (the modified bytecodes from the previous steps).
-
-- `TEMPLATE_BYTECODE` represents the template package bytes.
-
-  Example:
-
-  ```rust
-  const TEMPLATE_BYTECODE: vector<vector<u8>> = vector[
-      x"...PUT THE PACKAGE BYTES FOR THE TEMPLATE HERE...",
-      x"...PUT THE PACKAGE BYTES FOR THE TEMPLATE HERE...",
-      x"...PUT THE PACKAGE BYTES FOR THE TEMPLATE HERE..."
-  ];
-  ```
-
-- `WITNESS_BYTECODE` represents the witness package bytes.
-
-  Example:
-
-  ```rust
-  const WITNESS_BYTECODE: vector<u8> = x"...PUT THE PACKAGE BYTES FOR THE WITNESS HERE...";
-  ```
-
-After placing the modified bytes, publish the genesis package. This essentially deploys the tokenized asset.
-
-```sh
-sui client publish --gas-budget 100000000
-```
-
-Upon successful deployment, save the `packageId` to the .env file. Retain the `PlatformCap` from the created objects and save its `objectId` to the .env file. This object grants access to certain admin-related actions. Preserve the genesis `packageId` as this is the package address required in the dependency array when creating the tokenized asset later.
-
-### Transfer policy utils
-
-You can deploy the `transfer_policy_utils` package similarly. Go into the directory and then utilize the Sui CLI to publish the package.
-
-```sh
-cd ..
-cd transfer_policy_utils
-sui client publish --gas-budget 100000000
-```
-
-Upon deployment, save the `packageId` to the .env file as `TRANSFER_POLICY_PACKAGE_ADDRESS`.
-
-You have successfully deployed the `asset_tokenization` and `transfer_policy_utils` packages on the Sui network.
-
-## Setup
-
-After successfully deploying both packages (asset tokenization and transfer policy utils) to a Sui network, use the scripts contained in the `setup` directory to complete your deployment.
-
-:::info
-
-The necessary smart contract has been deployed on Devnet, Testnet, and Mainnet. Find the appropriate addresses already entered in the .env file under the fields `PACKAGE_ADDRESS` and `GENESIS_PACKAGE_ADDRESS`. You do not need to deploy the smart contracts. All you need to do is run the genesis script (see [Deploy the asset](#deploy-the-asset)), which deploys your tokenized asset.
+For more information about the `asset_tokenization` package, see the annotated source code for each module: [tokenized_asset.move](https://github.com/MystenLabs/asset-tokenization/blob/main/move/asset_tokenization/sources/tokenized_asset.move), [proxy.move](https://github.com/MystenLabs/asset-tokenization/blob/main/move/asset_tokenization/sources/proxy.move), and [unlock.move](https://github.com/MystenLabs/asset-tokenization/blob/main/move/asset_tokenization/sources/unlock.move).
 
 :::
 
-Begin by going into the setup directory:
+### Deploying `asset_tokenization` package
 
-```sh
-cd ..
-cd setup
+The `asset_tokenization` package does not require any modifications before deploying. You can deploy the package directly on the desired Sui network using `sui client publish`. For more information on packages, see [Build and Test Packages](../../../developer/sui-101/building-ptb.mdx).
+
+Capture the package address from the publish response to use it in constructing the deployer package later.
+
+### `deployer` package
+
+In the `deployer` package, define the template for representing the asset that you want to tokenize. In the typical definition, instantiate a new representation of an asset using a One-Time Witness pattern. This involves utilizing a one-time-use type that guarantees a specific operation or initialization occurs only once within the contract, typically employed in scenarios where unique asset creation or initialization is crucial. See [One Time Witness](https://move-book.com/programmability/one-time-witness.html) in The Move Book for more information.
+
+**Modules**
+
+This package includes 2 modules, `template` and `genesis`. The template module is the blueprint to instantiate each new representation of a tokenized asset, which occurs through calls to the genesis module. The genesis module contains the logic that performs bytecode manipulation to instantiate template modules.
+
+- `template`
+
+  The `template` module provides the structure to tokenize different assets. For each distinct asset you tokenize, you must instantiate the template module through the genesis module. Achieve this by invoking the `create_type` function defined within the genesis module, which, in turn, dynamically instantiates the `template` module. This process establishes a new and distinct instance of the template module for each asset you tokenize. See [Bytecode manipulation](#bytecode-manipulation) for more information.
+
+  The template module encompasses the following components:
+
+  **Structs**
+
+  - `TEMPLATE`
+
+    As mentioned earlier, the One-Time Witness pattern demands the `TEMPLATE` struct to have only the `drop` ability and a single instance. The execution of a unique instance occurs right after the instantiation of this module. Consequently, we gain the assurance that the struct `TEMPLATE` serves as a witness, enabling the creation of a unique asset representation.
+
+  - `TemplateEvent`
+
+    The `TemplateEvent` is triggered upon creation of a new asset representation, making it straightforward to observe the transaction where this event occurred. It contains the `AssetCap` object ID and the `AssetMetadata` object ID associated with the newly created asset, providing you with the IDs of these objects, which are essential for subsequent interactions with the asset.
+
+  **Functions**
+
+  - `init`
+
+    The `init` function operates similar to `new_asset` from the `tokenized_asset` module. During the execution of the `init` function, it spawns an instance of the `AssetCap` and `AssetMetadata` objects. Each distinct asset you tokenize corresponds to unique instances of these objects.
+
+    In the `init` function, you can access distinct parameters to supply to the function. For example, modify the field values the struct accepts, such as `total_supply`, `burnable`, `name`, `description`, and `icon_url`, by supplying different values to the function. These modifications alter the behavior and appearance of each newly instantiated module, resulting in unique instances of the asset template.
+
+    For example:
+
+    ```rust
+    fun init(otw: TEMPLATE, ctx: &mut TxContext) {
+            let (asset_cap, metadata) = tokenized_asset::new_asset(
+                otw,
+                1000,
+                ascii::string(b"SYMBOL"),
+                string::utf8(b"NAME"),
+                string::utf8(b"DESCRIPTION"),
+                option::none(),
+                false,
+                ctx
+            );
+
+            let asset_cap_id = object::id(&asset_cap);
+            let metadata_id = object::id(&metadata);
+
+            event::emit(TemplateEvent {
+                asset_cap: asset_cap_id,
+                metadata: metadata_id,
+            });
+
+            transfer::public_transfer(asset_cap, tx_context::sender(ctx));
+            transfer::public_share_object(metadata);
+        }
+    ```
+
+- `genesis`
+
+  The genesis module contains the logic that performs the bytecode manipulation on the `template` module and publishes it, resulting in the instantiation of a module. The outcome is a module representing a distinct asset for tokenization, identifiable by its unique type.
+
+  **Functions**
+
+  - `create_type`
+
+    The `create_type` function forms the foundation of the deployer package, orchestrating the bytecode manipulation process.
+
+    When you invoke this function from the client side (TypeScript), it instantiates a module by taking bytes of the `template` module (and the Move standard library module `ascii`) and substituting `TEMPLATE` with the given name (the first argument). Finally, it publishes the module, essentially creating a module with a user-defined type representing a distinct tokenized asset.
+
+    ```rust
+    /// Create a new type by mangling the TEMPLATE module and publish it as a package to the chain.
+    /// - `name` is the new name of the TEMPLATE type (struct). It will be used to replace
+    ///   all instances of "TEMPLATE" in the module bytecode
+    /// - `modules` are the bytecode of the TEMPLATE and dependencies (must match the REPLACEABLE definition - the ASCII module)
+    /// - `deps` are the dependencies to use for the new package (ex. `std`, `sui` and `asset_tokenization`)
+    public fun create_type(
+            _: &PlatformCap,
+            name: String,
+            mut modules: vector<vector<u8>>,
+            mut deps: vector<address>,
+            ctx: &mut TxContext
+        ) {
+
+            let name_bytes = name.into_bytes();
+
+            assert!(modules.length() == 2, EInvalidModulesLength);
+            assert!(name_bytes.length() <= TEMPLATE_LENGTH, ETypeNameTooLong);
+
+            // dependencies should be in order: [std, sui, asset_tokenization]
+            deps.push_back(@std);
+            deps.push_back(@sui);
+            deps.push_back(@asset_tokenization);
+
+            while (name_bytes.length() < TEMPLATE_LENGTH) {
+                name_bytes.push_back(PADDING);
+            };
+
+            // replace the "TEMPLATE" with `name_bytes` in both modules (template and ascii module)
+            let mut i = 0;
+            while (i < modules.length()) {
+                replace(&mut modules[i], &name_bytes);
+                i = i + 1;
+            };
+
+            sui::package::claim_and_keep(sui::package::publish(ticket(modules, deps), ctx), ctx);
+        }
+    ```
+
+    In the comment section of the `create_type` function, you can observe the anticipated inputs and their descriptions. When examining the function's structure, make note of the bytecode manipulation components responsible for substituting the `TEMPLATE` string with the desired name to tokenize.
+
+  To gain a deeper understanding of the logic, refer to the source code for this [module](https://github.com/MystenLabs/asset-tokenization/blob/main/move/deployer/sources/genesis.move).
+
+#### Bytecode manipulation
+
+The bytecode manipulation technique uses the `std::string::bytes` function to replace `TEMPLATE` occurrences in both the template module and the ascii module (dependency of the template module) with the asset name you specify. This manipulation occurs when you call the `create_type` function from the `genesis` module. After the substitution, the function publishes the modified package to the network.
+
+This is particularly useful for instantiating multiple similar modules with slight variations (the asset name) when representing different types of tokenized assets, eliminating the need to define a new module manually for each variation. Although this topic is much more complex, this is a high-level overview.
+
+### Deploying `deployer` package
+
+After deploying the `asset_tokenization` package, you need to update the [Move.toml](https://github.com/MystenLabs/asset-tokenization/blob/main/move/deployer/Move.toml) file in the deployer package to point the dependencies to the `asset_tokenization` package's address you captured when it was published. If you didn't capture the package address when you published it, you can also use a network explorer to locate it.
+
+Next, deploy the `deployer` package using `sui client publish`. Capture the package address from the publish response to use it in constructing the template package later.
+
+## TypeScript setup
+
+The TypeScript portion of the setup establishes a local project along with a set of predefined functions. These functions streamline the interaction process with the `asset_tokenization` and `deployer` packages, facilitating testing and usage procedures.
+
+Clone the [Asset Tokenization](https://github.com/MystenLabs/asset-tokenization) repository or download the project's setup portion and store it in a directory of your preference. Next, navigate into the setup directory and install the dependencies and the executable commands:
+
+```bash
+$ cd setup
+$ npm install
+$ npm run call --help
 ```
 
-### Install Dependencies
+These commands prepare the project for execution and interaction with the smart contracts you deployed earlier.
 
-Install the necessary dependencies for the project using npm. You can utilize yarn or pnpm as an alternative, if desired.
+### Template files
 
-```sh
-npm install
+The template module and its dependencies are stored as template files to be used when instantiating a new asset type through bytecode manipulation. Each template file contains a module's bytecode.
+
+Template files are located in the [`setup/templates`](https://github.com/MystenLabs/asset-tokenization/tree/main/setup/templates) directory and you can use the following command to regenerate them to support your deployed contracts after you deploy the `asset_tokenization` package and update dependencies in the `deployer` package:
+
+```bash
+$ npm run generate-templates
 ```
 
-### Deploy the asset
+### `.env` file
 
-Deploy the tokenized asset representation on the selected Sui network. Run the genesis script to initiate this process.
+The [`.env.example`](https://github.com/MystenLabs/asset-tokenization/blob/main/setup/.env.example) file outlines the variables that the setup relies on. At a minimum, you need to set values for the first 4 environment variables to use most of the predefined functions.
 
-```sh
-npm run call genesis
+```text
+DEPLOYER_PACKAGE=<>
+ASSET_TOKENIZATION_PACKAGE=<>
+PLATFORM_CAP=<>
+PRIVATE_KEY=<>
+ASSET_CAP=<>
+ASSET_METADATA=<>
+ASSET_TYPE=<>
+KIOSK_ID=<>
+TRANSFER_POLICY=<>
+PROTECTED_TP=<>
+TOKENIZED_ASSET=<>
+FT1=<>
+FT2=<>
 ```
 
-Upon execution, the transaction supplies the address where the tokenized asset has been deployed. Copy the `packageId` and save it to the .env file. Retain the `PlatformCap` `objectId` and `AssetCap` `objectId` to populate the respective fields in your .env file. These fields enable access control to the subsequent functions that require them.
+In a console or terminal located in the setup directory, create an `.env` file from the template by executing:
 
-Congratulations. You have successfully established a fresh tokenized asset on the Sui network.
-
-Find your newly deployed tokenized asset on the chosen Sui network. Go to the explorer in your web browser and search for the object using its `AssetMetadata` `objectId`, which you can find in the transaction displayed in the console.
-
-### Create a publisher
-
-If you want to configure and control the display properties of the tokenized assets, you need a publisher to provide as the owner. Find the claim methods in the [Sui framework](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/package.move#L108). Typically, the initial module of every package transfers a `Publisher` object to the sender, which you can then link with the tokenized asset's `Display` object. However, for security reasons, you cannot use the `Publisher` created by the genesis contract, as its usage grants unintended access for upgrades. Therefore, if you need a `Publisher`, use the deploy script.
-
-```sh
-npm run call deploy
+```bash
+$ cp .env.example .env
 ```
 
-In this example, the deploy script specifically targets the deployment of the witness module. The deploy script can accept an argument of a `sources` directory that it compiles and publishes. The template includes a default `sources/sample_module` directory that you can use to test deployment. The template automatically connects the necessary dependencies to the default `sources` directory.
+Populate the first 4 environment variables, which are the minimum requirements to start interacting with the deployed contracts.
 
-If you want to deploy any additional package from a different directory (besides `sources/sample_module`), change the file path in the `deploy.ts` file.
+- `DEPLOYER_PACKAGE`: Package address of the deployed `deployer` package.
+- `ASSET_TOKENIZATION_PACKAGE`: Package address of the deployed `asset_tokenization` package.
+- `PLATFORM_CAP`: Object ID of `PlatformCap`, which you can capture from the transaction digest from publishing the `asset_tokenization` package. If you don't have the transaction digest, you can find the `PlatformCap` object ID with the [`sui client objects`](../../../references/cli/client.mdx#sui-client-objects) CLI command or in a Sui network explorer, like [Sui Explorer](https://suiscan.xyz/mainnet/home).
+- `PRIVATE_KEY`: The private key from a wallet you own, granting you access to interact with the blockchain. Convert the private key from base64 to hex format using any online tool or programmatically. Store the hex encoded private key in this field. Never share your private key.
 
-If you completed the previous section [Deploy the asset](#deploy-the-asset), then you already have the `UpgradeCap` ready for this step. The `deploy.ts` script leverages the `upgradeCap` field from the .env file to upgrade the package and subsequently transfer this `UpgradeCap` back to the sender. Preserve this `UpgradeCap` `objectId` as you might need it for future upgrades.
+Use the remaining environment variables in the `.env` file as placeholders to capture and store IDs from the results of the predefined functions, which allows you to streamline the process of running the scripts and interacting with your tokenized assets. See the specific function for more information about where to find a specific ID.
 
-**Code snippet:**
+The `.env` file is never pushed to GitHub through the `.gitignore`, so your information stays secure.
 
-```rust
+### Deploying template package
+
+To begin the tokenization process, you must create a module that represents the new asset for tokenization by instantiating the template module. Use the predefined function `deployTemplate` to create and publish a package with the asset name you provide. Supply the desired asset name and execute the command from the setup directory:
+
+```bash
+npm run call deploy-template ASSET1
+```
+
+This command instantiates a template module with the provided asset name, performs bytecode manipulation, and publishes the resulting package to the network. The console response provides details about the published package. Look for the asset type and store it in the `.env` file (`ASSET_TYPE`). Additionally, capture the `AssetCap` and `AssetMetadata` object IDs from the `TemplateEvent` emitted in the console and store them in the corresponding fields within the `.env` file (`ASSET_CAP` and `ASSET_METADATA`).
+
+Now you have the necessary object IDs stored in the `.env` file and can begin using the predefined functions for your asset.
+
+For reference, the `deployTemplate` file is located in the [`setup/src/functions`](https://github.com/MystenLabs/asset-tokenization/tree/main/setup/src/functions) directory. Examine this file to observe how template files are incorporated into the function. The following code snippet illustrates this point:
+
+```typescript
 ...
-const packageId = tx.upgrade({
-    modules,
-    dependencies,
-    package: normalizeStructTag(genesis_package_id).address,
-    ticket: upgradeCap,
+  const tx = new Transaction();
+
+  // Get bytecodes of the template and dependencies
+  const template = readFileSync("./templates/template", {
+    encoding: "base64",
   });
-  const modules = [
-    ...(compiledModulesAndDependencies?.modules! ?? []),
-  ];
-  const dependencies = [
-    normalizeSuiObjectId('0x1'),
-    normalizeSuiObjectId('0x2'),
-    normalizeSuiObjectId(
-      packageId,
-    ),
-  ];
+
+  const ascii = readFileSync("./templates/ascii", { encoding: "base64" });
+
+  const modules = [template, ascii];
+
+  const [upgradeCap] = tx.moveCall({
+    target: `${packageId}::genesis::create_type`,
+    arguments: [
+      tx.object(platformCap),
+      tx.pure(bcs.string().serialize(assetName).toBytes()),
+      tx.pure(bcs.vector(bcs.vector(bcs.U8)).serialize(modules).toBytes()),
+      tx.pure(
+        bcs
+          .vector(bcs.Address)
+          .serialize([
+            normalizeSuiObjectId(assetTokenizationPackage),
+            normalizeSuiObjectId(packageId),
+          ])
+          .toBytes()
+      ),
+      tx.pure(
+        bcs
+          .vector(bcs.Address)
+          .serialize([normalizeSuiObjectId(packageId)])
+          .toBytes()
+      ),
+    ],
+  });
 
   tx.transferObjects(
     [upgradeCap],
@@ -817,19 +606,19 @@ As mentioned in the [Bytecode manipulation](#bytecode-manipulation) section, the
 
 Now, you can begin interacting with the deployed smart contract and your tokenized asset.
 
-In a terminal or console within the project's setup directory, use the following commands:
+In a terminal or console within the project's setup directory, utilize the following commands:
 
 - **Create Transfer Policy**
 
   First, create a `TransferPolicy` and a `ProtectedTP` with the following command:
 
   ```sh
-  npm run call create-tp
+  $ npm run call create-tp
   ```
 
   After executing the command, the console displays the effects of the transaction.
 
-  Search the transaction digest on a Sui network explorer to locate the created objects. Subsequently, select and save the `TransferPolicy ID` and the `ProtectedTP ID` from these objects into the respective fields within your .env file.
+  By searching the transaction digest on a Sui network explorer, you can locate the created objects. Subsequently, select and save the `TransferPolicy ID` and the `ProtectedTP ID` from these objects into the respective fields within your .env file.
 
 - **Add Rules**
 
@@ -851,13 +640,13 @@ In a terminal or console within the project's setup directory, use the following
           // .removePersonalKioskRule()
   ```
 
-  Run the command `npm run call tp-rules` to add the rules to your transfer policy.
+  By running the command `npm run call tp-rules`, the rules are added to your transfer policy.
 
   Now, investors can trade the fractions of your asset according to the rules you've set.
 
 - **Select Kiosk**
 
-  You must place the tokenized assets within a kiosk if you want marketable assets. Subsequently, you can list and sell them to other users. Lock the objects in the kiosk to prevent any future unauthorized usage outside the defined policy that you set.
+  You must place the tokenized assets within a kiosk if marketable assets are desired. Subsequently, you can list and sell them to other users. Lock the objects in the kiosk to prevent any future unauthorized usage outside the defined policy that you set.
 
   Best practices recommend a single, comprehensive kiosk for all operations. However, this might not always be the case. Therefore, this project requires the use of only 1 personal kiosk to ensure consistency and better management, even if you own multiple kiosks.
 
@@ -869,7 +658,7 @@ In a terminal or console within the project's setup directory, use the following
 
   In the project's file `mint.ts`, found in the directory `setup/src/functions`, you can edit the code to mint the desired type (NFT/FT) and balance for your asset.
 
-  As mentioned earlier, if you provide additional metadata, the system treats the tokenized asset as an NFT with a value of 1. However, if you provide no extra metadata, the system regards the tokenized asset as an FT, and you have the flexibility to select its balance, which can exceed 1.
+  As previously mentioned, if additional metadata is provided, the tokenized asset is treated as an NFT with a value of 1. However, if there is no extra metadata, the tokenized asset is regarded as an FT, and you have the flexibility to select its balance, which can exceed 1.
 
   Here is an example from the code that needs modification:
 
@@ -900,19 +689,19 @@ In a terminal or console within the project's setup directory, use the following
   }
   ```
 
-  Execute the command `npm run call mint` to mint a new tokenized asset. You can save the object's `ID` in the .env file for future reference.
+  Upon executing the command `npm run call mint`, a new tokenized asset is minted. You can save the object's `ID` in the .env file for future reference.
 
 - **Lock**
 
-  Lock the objects within the kiosk to prevent any unauthorized usage beyond the established policy.
+  Locking the objects within the kiosk is crucial to prevent any unauthorized usage beyond the established policy.
 
-  Execute the command `npm run call lock` to secure your newly minted tokenized asset within your kiosk.
+  Upon executing the command `npm run call lock`, your newly minted tokenized asset is secured within your kiosk.
 
   Before running the command, make sure that the field `TOKENIZED_ASSET` within your `.env` file is populated with the object you intend to lock.
 
 - **Mint and Lock**
 
-  Execute the command `npm run call mint-lock` to perform both the mint and lock functions sequentially, ensuring the system creates the minted asset and immediately locks it within the kiosk.
+  Executing the command `npm run call mint-lock` performs both the mint and lock functions sequentially, ensuring the minted asset is created and immediately locked within the kiosk.
 
 - **List**
 
@@ -933,11 +722,11 @@ In a terminal or console within the project's setup directory, use the following
       .finalize();
   ```
 
-  Run the command `npm run call list` to list your tokenized asset and make it available for sale.
+  By running the command `npm run call list`, your tokenized asset is listed and made available for sale.
 
 - **Purchase**
 
-  When you intend to purchase an item, it needs to be listed for sale. After you select the item to buy, modify the following snippet of code found in the file `purchaseItem.ts`, located in the `setup/src/functions` directory.
+  When a user intends to purchase an item, it needs to be listed for sale. After the user selects the item to buy, they are required to modify the following snippet of code found in the file `purchaseItem.ts`, located in the `setup/src/functions` directory.
 
   ```rust
   const item = {
@@ -948,24 +737,24 @@ In a terminal or console within the project's setup directory, use the following
   };
   ```
 
-  Apart from specifying the item and its type, you must set the specific price and the seller's kiosk ID to execute the purchase transaction successfully, accomplished by running `npm run call purchase`.
+  Apart from specifying the item and its type, the buyer must set the specific price and the seller's kiosk ID to execute the purchase transaction successfully, accomplished by running `npm run call purchase`.
 
 - **Join**
 
-  When you execute the command `npm run call join`, the system merges 2 specified tokenized assets of the FT type together. Before running the command, make sure that the fields `FT1` and `FT2` within your `.env` file are populated with the objects you intend to merge.
+  When you execute the command `npm run call join`, 2 specified tokenized assets of the FT type are merged together. Before running the command, make sure that the fields `FT1` and `FT2` within your `.env` file are populated with the objects you intend to merge.
 
 - **Burn**
 
-  When you intend to burn a tokenized asset, execute the command `npm run call burn`. Following this action, the system destroys the specified asset. Before running the command, make sure that the field `TOKENIZED_ASSET` within your `.env` file is populated with the object you intend to burn.
+  When you intend to burn a tokenized asset, execute the command `npm run call burn`. Following this action, the specified asset is destroyed. Before running the command, make sure that the field `TOKENIZED_ASSET` within your `.env` file is populated with the object you intend to burn.
 
 - **Get Balance**
 
-  Execute the command `npm run call get-balance` to retrieve the balance value associated with the specified tokenized asset.
+  By executing the command `npm run call get-balance`, you can retrieve the balance value associated with the specified tokenized asset.
 
 - **Get Supply**
 
-  Execute the command `npm run call get-supply` to retrieve the value representing the current circulating supply of the asset.
+  By executing the command `npm run call get-supply`, you can retrieve the value representing the current circulating supply of the asset.
 
 - **Get Total Supply**
 
-  Execute the command `npm run call get-total-supply` to retrieve the value representing the total supply of the asset.
+  By executing the command `npm run call get-total-supply`, you can retrieve the value representing the current circulating supply of the asset.
