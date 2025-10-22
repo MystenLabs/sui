@@ -2,11 +2,9 @@ const { ExecutionResultKind } = require('../../out/runtime');
 
 let action = (runtime) => {
     let res = '';
-    // keep stepping to get abort state
-    runtime.step(false);
-    runtime.step(false);
-    err = runtime.step(false);
+    // continue to the end of the program to get an error
+    err = runtime.continue();
     res += ExecutionResultKind[err.kind] + ": " + err.msg;
     return res;
 };
-run_spec(__dirname, action);
+run_spec_replay(__dirname, action);
