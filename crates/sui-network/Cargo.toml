@@ -15,6 +15,7 @@ anemo-tower.workspace = true
 governor.workspace = true
 serde.workspace = true
 tonic.workspace = true
+tonic-prost.workspace = true
 dashmap.workspace = true
 tower.workspace = true
 shared-crypto.workspace = true
