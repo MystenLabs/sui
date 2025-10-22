@@ -8,10 +8,10 @@ use move_core_types::{
 };
 use move_vm_types::values::{GlobalValue, StructRef, Value};
 use std::{
-    collections::{BTreeMap, btree_map},
+    collections::{btree_map, BTreeMap},
     sync::Arc,
 };
-use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
+use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
     committee::EpochId,
@@ -29,10 +29,15 @@ pub(super) struct ChildObject {
     pub(super) fingerprint: ObjectFingerprint,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum CacheInfo {
-    Cached,
-    #[allow(dead_code)]
-    Loaded(usize),
+    /// Only the object was cached, the value was not loaded into the VM
+    CachedObject,
+    /// Both the object and the value were cached
+    CachedValue,
+    /// The value was loaded from storage, and the number of BCS bytes loaded
+    /// (which is None if the object was not found)
+    Loaded(Option<usize>),
 }
 
 pub(crate) type CacheMetadata<T> = (CacheInfo, T);
@@ -192,14 +197,14 @@ impl Inner<'_> {
         owner: ObjectID,
         child: ObjectID,
         version: SequenceNumber,
-    ) -> PartialVMResult<LoadedWithMetadataResult<CacheMetadata<MoveObject>>> {
+    ) -> PartialVMResult<CacheMetadata<LoadedWithMetadataResult<MoveObject>>> {
         let child_opt = self
             .resolver
             .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
             .map_err(|msg| {
                 PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
             })?;
-        let obj_opt = if let Some(object) = child_opt {
+        let (cache_info, obj_opt) = if let Some(object) = child_opt {
             // guard against bugs in `receive_object_at_version`: if it returns a child object such that
             // C.parent != parent, we raise an invariant violation since that should be checked by
             // `receive_object_at_version`.
@@ -242,15 +247,15 @@ impl Inner<'_> {
                         ),
                     ));
                 }
-                Data::Move(mo @ MoveObject { .. }) => Some((
-                    (CacheInfo::Loaded(mo.contents().len()), mo),
-                    loaded_metadata,
-                )),
+                Data::Move(mo @ MoveObject { .. }) => (
+                    CacheInfo::Loaded(Some(mo.contents().len())),
+                    Some((mo, loaded_metadata)),
+                ),
             }
         } else {
-            None
+            (CacheInfo::Loaded(None), None)
         };
-        Ok(obj_opt)
+        Ok((cache_info, obj_opt))
     }
 
     #[allow(clippy::map_entry)]
@@ -258,16 +263,14 @@ impl Inner<'_> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-    ) -> PartialVMResult<Option<CacheMetadata<&MoveObject>>> {
+    ) -> PartialVMResult<CacheMetadata<Option<&MoveObject>>> {
         let cached_objects_count = self.cached_objects.len() as u64;
         let parents_root_version = self.root_version.get(&parent).copied();
         let had_parent_root_version = parents_root_version.is_some();
         // if not found, it must be new so it won't have any child objects, thus
         // we can return SequenceNumber(0) as no child object will be found
         let parents_root_version = parents_root_version.unwrap_or(SequenceNumber::new());
-        let mut cached = true;
-        if let btree_map::Entry::Vacant(e) = self.cached_objects.entry(child) {
-            cached = false;
+        let cache_info = if let btree_map::Entry::Vacant(e) = self.cached_objects.entry(child) {
             let obj_opt = fetch_child_object_unbounded!(
                 self,
                 parent,
@@ -294,26 +297,28 @@ impl Inner<'_> {
                             as u64,
                     ));
             };
+            let num_bytes_opt = match &obj_opt {
+                Some(obj) => {
+                    // unwrap safe because we only insert Move objects
+                    let move_obj = obj.data.try_as_move().unwrap();
+                    Some(move_obj.contents().len())
+                }
+                None => None,
+            };
 
             e.insert(obj_opt);
-        }
-        Ok(self
+            CacheInfo::Loaded(num_bytes_opt)
+        } else {
+            CacheInfo::CachedObject
+        };
+        // unwraps are safe because it must be inserted and we only insert Move objects
+        let move_obj_opt = self
             .cached_objects
             .get(&child)
             .unwrap()
             .as_ref()
-            .map(|obj| {
-                let move_obj = obj
-                    .data
-                    .try_as_move()
-                    // unwrap safe because we only insert Move objects
-                    .unwrap();
-                if cached {
-                    (CacheInfo::Cached, move_obj)
-                } else {
-                    (CacheInfo::Loaded(move_obj.contents().len()), move_obj)
-                }
-            }))
+            .map(|obj| obj.data.try_as_move().unwrap());
+        Ok((cache_info, move_obj_opt))
     }
 
     fn fetch_object_impl(
@@ -458,7 +463,7 @@ impl<'a> ChildObjectStore<'a> {
         child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<LoadedWithMetadataResult<ObjectResult<CacheMetadata<Value>>>> {
-        let Some(((cache_info, obj), obj_meta)) =
+        let (cache_info, Some((obj, obj_meta))) =
             self.inner
                 .receive_object_from_store(parent, child, child_version)?
         else {
@@ -496,14 +501,15 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-    ) -> PartialVMResult<bool> {
+    ) -> PartialVMResult<CacheMetadata<bool>> {
         if let Some(child_object) = self.store.get(&child) {
-            return child_object.value.exists();
+            return child_object
+                .value
+                .exists()
+                .map(|exists| (CacheInfo::CachedValue, exists));
         }
-        Ok(self
-            .inner
-            .get_or_fetch_object_from_store(parent, child)?
-            .is_some())
+        let (cache_info, obj_opt) = self.inner.get_or_fetch_object_from_store(parent, child)?;
+        Ok((cache_info, obj_opt.is_some()))
     }
 
     pub(super) fn object_exists_and_has_type(
@@ -515,15 +521,15 @@ impl<'a> ChildObjectStore<'a> {
         if let Some(child_object) = self.store.get(&child) {
             // exists and has same type
             return Ok((
-                CacheInfo::Cached,
+                CacheInfo::CachedValue,
                 child_object.value.exists()? && &child_object.ty == child_move_type,
             ));
         }
-        Ok(self
-            .inner
-            .get_or_fetch_object_from_store(parent, child)?
-            .map(|(cache_info, move_obj)| (cache_info, move_obj.type_() == child_move_type))
-            .unwrap_or((CacheInfo::Cached, false)))
+        let (cache_info, obj_opt) = self.inner.get_or_fetch_object_from_store(parent, child)?;
+        Ok((
+            cache_info,
+            obj_opt.is_some_and(|obj| obj.type_() == child_move_type),
+        ))
     }
 
     pub(super) fn get_or_fetch_object(
@@ -590,7 +596,7 @@ impl<'a> ChildObjectStore<'a> {
                 if child_object.ty != child_move_type {
                     return Ok(ObjectResult::MismatchedType);
                 }
-                (CacheInfo::Cached, child_object)
+                (CacheInfo::CachedValue, child_object)
             }
         };
         Ok(ObjectResult::Loaded((cache_info, child_object)))

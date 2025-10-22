@@ -1,4 +1,4 @@
-FROM rust:1.85-bullseye AS builder
+FROM rust:1.90-bullseye AS builder
 ARG PROFILE=release
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
@@ -13,7 +13,7 @@ COPY external-crates external-crates
 
 RUN cargo build --profile ${PROFILE} --bin stress
 
-FROM rust:1.85-bullseye
+FROM rust:1.90-bullseye
 ARG PROFILE=release
 ARG GIT_REVISION
 COPY --from=builder /sui/target/${PROFILE}/stress /usr/local/bin
