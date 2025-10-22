@@ -12,35 +12,32 @@ use move_symbol_pool::Symbol;
 //     path::{Path, PathBuf},
 //     process::Command,
 // };
-
-// use anyhow::{anyhow, bail, ensure, Context};
+//
+// use anyhow::{anyhow, bail, ensure};
 // use colored::Colorize;
 // use move_binary_format::CompiledModule;
 // use move_bytecode_source_map::utils::source_map_from_file;
 // use move_command_line_common::{
-// env::MOVE_HOME,
-// files::{
-// extension_equals, find_filenames, DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION,
-// MOVE_EXTENSION,
-// },
+//     env::MOVE_HOME,
+//     files::{
+//         extension_equals, find_filenames, DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION,
+//         MOVE_EXTENSION,
+//     },
 // };
 // use move_compiler::{
 //     compiled_unit::NamedCompiledModule,
 //     editions::{Edition, Flavor},
 //     shared::{files::FileName, NumericalAddress},
 // };
-
-// use move_package::{
-//     compilation::{
-//         compiled_package::CompiledUnitWithSource, package_layout::CompiledPackageLayout,
-//     },
-//     lock_file::schema::{Header, ToolchainVersion},
-//     source_package::{layout::SourcePackageLayout, parsed_manifest::PackageName},
-// };
-// use move_package_alt::{
-//     layout::{CompiledPackageLayout, SourcePackageLayout},
-//     schema::PackageName,
-// };
+//
+// // use move_package::{
+// //     compilation::{
+// //         compiled_package::CompiledUnitWithSource, package_layout::CompiledPackageLayout,
+// //     },
+// //     lock_file::schema::{Header, ToolchainVersion},
+// //     source_package::{layout::SourcePackageLayout, parsed_manifest::PackageName},
+// // };
+// use move_package_alt::{layout::{CompiledPackageLayout, SourcePackageLayout}, schema::PackageName};
 // use move_package_compiling::compiled_package::CompiledUnitWithSource;
 // use move_symbol_pool::Symbol;
 // use tar::{Archive, Header};
@@ -96,11 +93,11 @@ use move_symbol_pool::Symbol;
 //         flavor: Flavor::Sui,
 //     }
 // }
-
-/// Ensures `compiled_units` are compiled with the right compiler version, based on
-/// Move.lock contents. This works by detecting if a compiled unit requires a prior compiler version:
-/// - If so, download the compiler, recompile the unit, and return that unit in the result.
-/// - If not, simply keep the current compiled unit.
+//
+// /// Ensures `compiled_units` are compiled with the right compiler version, based on
+// /// Move.lock contents. This works by detecting if a compiled unit requires a prior compiler version:
+// /// - If so, download the compiler, recompile the unit, and return that unit in the result.
+// /// - If not, simply keep the current compiled unit.
 #[allow(clippy::ptr_arg)] // TODO: remove this
 pub(crate) fn units_for_toolchain(
     _compiled_units: &Vec<(Symbol, CompiledUnitWithSource)>,

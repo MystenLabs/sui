@@ -1,12 +1,15 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
+// // Copyright (c) Mysten Labs, Inc.
+// // SPDX-License-Identifier: Apache-2.0
+//
 // TODO: pkg-alt FAILING TEST
 // use expect_test::expect;
 // use move_core_types::account_address::AccountAddress;
 // use std::collections::HashMap;
 // use std::{fs, io, path::Path};
 // use std::{path::PathBuf, str};
+// use sui_json_rpc_types::{
+//     get_new_package_obj_from_response, get_new_package_upgrade_cap_from_response,
+// };
 // use sui_move_build::{BuildConfig, CompiledPackage};
 // use sui_sdk::wallet_context::WalletContext;
 // use sui_test_transaction_builder::{make_publish_transaction, make_publish_transaction_with_deps};
@@ -667,7 +670,6 @@
 //     Ok(())
 // }
 //
-<<<<<<< HEAD
 // #[tokio::test]
 // #[ignore] // TODO: DVX-786
 // async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
@@ -687,6 +689,8 @@
 //         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
 //
 //         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+=======
+>>>>>>> 91b4844ff4 (Fix)
 //         BuildConfig::new_for_testing().build(&pkg_path).unwrap();
 //
 //         fs::remove_dir_all(pkg_path.join("sources"))?;
@@ -728,7 +732,7 @@
 //
 //     Ok(())
 // }
-=======
+//
 // // #[tokio::test]
 // // #[ignore] // TODO: DVX-786
 // // async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
@@ -788,7 +792,6 @@
 // //
 // //     Ok(())
 // // }
->>>>>>> fdf1b37c96 (Fix tests. Fix linter test and code)
 //
 // /// Compile the package at absolute path `package`.
 // fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
@@ -824,11 +827,7 @@
 //     let with_unpublished_deps = false;
 //     let package_bytes = package.get_package_bytes(with_unpublished_deps);
 //     let package_digest = package.get_package_digest(with_unpublished_deps).to_vec();
-<<<<<<< HEAD
 //     let package_deps = package.dependency_ids.published.into_values().collect();
-=======
-//     let package_deps = package.get_published_dependencies_ids();
->>>>>>> fdf1b37c96 (Fix tests. Fix linter test and code)
 //
 //     upgrade_package_with_wallet(
 //         context,
