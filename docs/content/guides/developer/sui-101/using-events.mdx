@@ -334,7 +334,7 @@ The [TypeScript SDK](https://sdk.mystenlabs.com/typedoc/modules/_mysten_sui.grap
 
 ## Monitoring events
 
-Firing events is not very useful in a vacuum. You also need the ability to respond to those events. There are two methods from which to choose when you need to monitor on-chain events:
+Firing events is not very useful in a vacuum. You also need the ability to respond to those events. There are 2 methods from which to choose when you need to monitor on-chain events:
 - Incorporate a [custom indexer](/guides/developer/advanced/custom-indexer.mdx) to take advantage of Sui's micro-data ingestion framework.
 - Poll the Sui network on a schedule to query events.
 
@@ -342,7 +342,7 @@ Using a custom indexer provides a near-real time monitoring of events, so is mos
 
 ### Poll events {#poll-events}
 
-To monitor events, you need a database to store checkpoint data. The [Trustless Swap](../app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events. 
+To monitor events, you need a database to store checkpoint data. The [Trustless Swap](/guides/developer/app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events. 
 
 <details>
 

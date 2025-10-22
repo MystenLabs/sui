@@ -60,7 +60,7 @@ client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
 
 Inputs are how you provide external values to PTBs. For example, defining an amount of Sui to transfer, or which object to pass into a Move call, or a shared object.
 
-There are currently two ways to define inputs:
+There are currently 2 ways to define inputs:
 
 - For objects: the `tx.object(objectId)` function is used to construct an input that contains an object reference.
 - For pure values: the `tx.pure(type, value)` function is used to construct an input for a non-object input.
@@ -70,7 +70,7 @@ There are currently two ways to define inputs:
 
 ## Available transactions
 
-Sui supports following transaction commands:
+Sui supports the following transaction commands:
 
 - `tx.splitCoins(coin, amounts)`: Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent transactions.
   - Example: `tx.splitCoins(tx.gas, [tx.pure.u64(100), tx.pure.u64(200)])`
@@ -150,7 +150,7 @@ const tx = Transaction.from(bytes);
 
 ## Building offline
 
-In the event that you want to build a PTB offline (as in with no `provider` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which is used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
+If you want to build a PTB offline (as in with no `provider` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which is used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
 
 ```ts
 import { Inputs } from '@mysten/sui/transactions';
@@ -173,7 +173,7 @@ The new transaction builder comes with default behavior for all gas logic, inclu
 
 ### Gas price
 
-By default, the gas price is set to the reference gas price of the network. You can also explicitly set the gas price of the PTB by calling `setGasPrice` on the transaction builder.
+By default, the SDK sets the gas price to the reference gas price of the network. You can also explicitly set the gas price of the PTB by calling `setGasPrice` on the transaction builder.
 
 ```ts
 tx.setGasPrice(gasPrice);
@@ -181,11 +181,11 @@ tx.setGasPrice(gasPrice);
 
 ### Budget
 
-By default, the gas budget is automatically derived by executing a dry-run of the PTB beforehand. The dry run gas consumption is then used to determine a balance for the transaction. You can override this behavior by explicitly setting a gas budget for the transaction, by calling `setGasBudget` on the transaction builder.
+By default, the SDK automatically derives the gas budget by executing a dry-run of the PTB beforehand. The SDK then uses the dry run gas consumption to determine a balance for the transaction. You can override this behavior by explicitly setting a gas budget for the transaction, by calling `setGasBudget` on the transaction builder.
 
 :::info
 
-The gas budget is represented in Sui, and should take the gas price of the PTB into account.
+Sui represents the gas budget in Sui, and you should take the gas price of the PTB into account.
 
 :::
 
@@ -195,9 +195,9 @@ tx.setGasBudget(gasBudgetAmount);
 
 ### Gas payment
 
-By default, the gas payment is automatically determined by the SDK. The SDK selects all coins at the provided address that are not used as inputs in the PTB.
+By default, the SDK automatically determines the gas payment. The SDK selects all coins at the provided address that are not used as inputs in the PTB.
 
-The list of coins used as gas payment will be merged down into a single gas coin before executing the PTB, and all but one of the gas objects will be deleted. The gas coin at the 0-index will be the coin that all others are merged into.
+The SDK merges the list of coins used as gas payment down into a single gas coin before executing the PTB, and deletes all but 1 of the gas objects. The gas coin at the 0-index is the coin that all others are merged into.
 
 ```ts
 // NOTE: You need to ensure that the coins do not overlap with any
@@ -209,9 +209,9 @@ Gas coins should be objects containing the coins objectId, version, and digest (
 
 ### dApp / Wallet integration
 
-The Wallet Standard interface has been updated to support the `Transaction` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dApps into wallets is expected to provide a `Transaction` class. This PTB class can then be serialized and sent to your wallet for execution.
+The Wallet Standard interface now supports the `Transaction` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dApps into wallets must provide a `Transaction` class. You can then serialize this PTB class and send it to your wallet for execution.
 
-To serialize a PTB for sending to a wallet, Sui recommends using the `tx.serialize()` function, which returns an opaque string representation of the PTB that can be passed from the Wallet Standard dApp context to your wallet. This can then be converted back into a `Transaction` using `Transaction.from()`.
+To serialize a PTB for sending to a wallet, Sui recommends using the `tx.serialize()` function, which returns an opaque string representation of the PTB that can be passed from the Wallet Standard dApp context to your wallet. You can then convert this back into a `Transaction` using `Transaction.from()`.
 
 :::tip
 
