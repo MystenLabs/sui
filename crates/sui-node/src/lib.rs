@@ -1093,12 +1093,13 @@ impl SuiNode {
         randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
         prometheus_registry: &Registry,
     ) -> Result<P2pComponents> {
-        let (state_sync, state_sync_server) = state_sync::Builder::new()
-            .config(config.p2p_config.state_sync.clone().unwrap_or_default())
-            .store(state_sync_store)
-            .archive_config(config.archive_reader_config())
-            .with_metrics(prometheus_registry)
-            .build();
+        let (state_sync, state_sync_server) =
+            state_sync::Builder::new(config.genesis()?.checkpoint().digest().clone())
+                .config(config.p2p_config.state_sync.clone().unwrap_or_default())
+                .store(state_sync_store)
+                .archive_config(config.archive_reader_config())
+                .with_metrics(prometheus_registry)
+                .build();
 
         let (discovery, discovery_server) = discovery::Builder::new(trusted_peer_change_rx)
             .config(config.p2p_config.clone())

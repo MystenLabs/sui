@@ -380,6 +380,7 @@ struct StateSyncEventLoop<S> {
 
     sync_checkpoint_from_archive_task: Option<AbortHandle>,
     archive_config: Option<ArchiveReaderConfig>,
+    genesis_checkpoint_digest: CheckpointDigest,
 }
 
 impl<S> StateSyncEventLoop<S>
@@ -630,13 +631,8 @@ where
 
     fn spawn_get_latest_from_peer(&mut self, peer_id: PeerId) {
         if let Some(peer) = self.network.peer(peer_id) {
-            let genesis_checkpoint_digest = *self
-                .store
-                .get_checkpoint_by_sequence_number(0)
-                .expect("store should contain genesis checkpoint")
-                .digest();
             let task = get_latest_from_peer(
-                genesis_checkpoint_digest,
+                self.genesis_checkpoint_digest,
                 peer,
                 self.peer_heights.clone(),
                 self.config.timeout(),

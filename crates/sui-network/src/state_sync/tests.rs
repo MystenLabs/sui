@@ -45,7 +45,9 @@ async fn server_push_checkpoint() {
             ..
         },
         server,
-    ) = Builder::new().store(store).build_internal();
+    ) = Builder::new(ordered_checkpoints.first().unwrap().digest().clone())
+        .store(store)
+        .build_internal();
     let peer_id = PeerId([9; 32]); // fake PeerId
 
     peer_heights.write().unwrap().peers.insert(
@@ -102,7 +104,7 @@ async fn server_get_checkpoint() {
     let (ordered_checkpoints, _, _sequence_number_to_digest, _checkpoints) =
         committee.make_empty_checkpoints(3, None);
 
-    let (builder, server) = Builder::new()
+    let (builder, server) = Builder::new(ordered_checkpoints.first().unwrap().digest().clone())
         .store(SharedInMemoryStore::default())
         .build_internal();
 
@@ -185,12 +187,17 @@ async fn isolated_sync_job() {
     // build mock data
     let (ordered_checkpoints, _, sequence_number_to_digest, checkpoints) =
         committee.make_empty_checkpoints(100, None);
+    let genesis_digest = ordered_checkpoints.first().unwrap().digest().clone();
 
     // Build and connect two nodes
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let (builder, server) = Builder::new(genesis_digest.clone())
+        .store(SharedInMemoryStore::default())
+        .build();
     let network_1 = build_network(|router| router.add_rpc_service(server));
     let (mut event_loop_1, _handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let (builder, server) = Builder::new(genesis_digest)
+        .store(SharedInMemoryStore::default())
+        .build();
     let network_2 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone());
     network_1.connect(network_2.local_addr()).await.unwrap();
@@ -294,13 +301,16 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
     };
     // Build and connect two nodes where Node 1 will be given access to an archive store
     // Node 2 will prune older checkpoints, so Node 1 is forced to backfill from the archive
-    let (builder, server) = Builder::new()
+    let genesis_digest = ordered_checkpoints.first().unwrap().digest().clone();
+    let (builder, server) = Builder::new(genesis_digest.clone())
         .store(SharedInMemoryStore::default())
         .archive_config(Some(archive_reader_config))
         .build();
     let network_1 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_1, _handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let (builder, server) = Builder::new(genesis_digest)
+        .store(SharedInMemoryStore::default())
+        .build();
     let network_2 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone());
     network_1.connect(network_2.local_addr()).await.unwrap();
@@ -415,11 +425,16 @@ async fn sync_with_checkpoints_being_inserted() {
     let (ordered_checkpoints, _contents, sequence_number_to_digest, checkpoints) =
         committee.make_empty_checkpoints(4, None);
 
+    let genesis_digest = ordered_checkpoints.first().unwrap().digest().clone();
     // Build and connect two nodes
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let (builder, server) = Builder::new(genesis_digest)
+        .store(SharedInMemoryStore::default())
+        .build();
     let network_1 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_1, handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let (builder, server) = Builder::new(genesis_digest)
+        .store(SharedInMemoryStore::default())
+        .build();
     let network_2 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_2, handle_2) = builder.build(network_2.clone());
     network_1.connect(network_2.local_addr()).await.unwrap();
@@ -550,10 +565,15 @@ async fn sync_with_checkpoints_watermark() {
         .unwrap()
         .sequence_number();
     // Build and connect two nodes
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let genesis_digest = ordered_checkpoints.first().unwrap().digest().clone();
+    let (builder, server) = Builder::new(genesis_digest.clone())
+        .store(SharedInMemoryStore::default())
+        .build();
     let network_1 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_1, handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let (builder, server) = Builder::new(genesis_digest.clone())
+        .store(SharedInMemoryStore::default())
+        .build();
     let network_2 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_2, handle_2) = builder.build(network_2.clone());
 
@@ -716,7 +736,9 @@ async fn sync_with_checkpoints_watermark() {
     );
 
     // Add Peer 3
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let (builder, server) = Builder::new(genesis_digest.clone())
+        .store(SharedInMemoryStore::default())
+        .build();
     let network_3 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_3, handle_3) = builder.build(network_3.clone());
 
@@ -829,7 +851,9 @@ async fn sync_with_checkpoints_watermark() {
         .set_lowest_available_checkpoint(a_very_high_checkpoint_seq);
 
     // Start Peer 4
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let (builder, server) = Builder::new(genesis_digest)
+        .store(SharedInMemoryStore::default())
+        .build();
     let network_4 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_4, handle_4) = builder.build(network_4.clone());
 
