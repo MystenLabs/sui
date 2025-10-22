@@ -25,7 +25,7 @@ mod checked {
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
-    use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
+    use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
@@ -41,7 +41,7 @@ mod checked {
     use sui_types::storage::BackingStore;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result_legacy;
-    use sui_types::sui_system_state::{ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, AdvanceEpochParams};
+    use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::CheckedInputObjects;
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
@@ -49,11 +49,11 @@ mod checked {
         TransactionKind,
     };
     use sui_types::{
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
-        SUI_SYSTEM_PACKAGE_ID,
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
     };
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
@@ -398,7 +398,7 @@ mod checked {
                 }
             }
         } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
-        // we're in the non-production dev inspect mode which allows us to violate conservation
+          // we're in the non-production dev inspect mode which allows us to violate conservation
         result
     }
 
@@ -475,7 +475,7 @@ mod checked {
                             max_size: lim as u64,
                         },
                         "Written objects size crossed hard limit",
-                    ));
+                    ))
                 }
             };
         }
@@ -622,14 +622,10 @@ mod checked {
                             builder = setup_authenticator_state_expire(builder, expire);
                         }
                         EndOfEpochTransactionKind::RandomnessStateCreate => {
-                            panic!(
-                                "EndOfEpochTransactionKind::RandomnessStateCreate should not exist in v1"
-                            );
+                            panic!("EndOfEpochTransactionKind::RandomnessStateCreate should not exist in v1");
                         }
                         EndOfEpochTransactionKind::DenyListStateCreate => {
-                            panic!(
-                                "EndOfEpochTransactionKind::CoinDenyListStateCreate should not exist in v1"
-                            );
+                            panic!("EndOfEpochTransactionKind::CoinDenyListStateCreate should not exist in v1");
                         }
                         EndOfEpochTransactionKind::BridgeStateCreate(_) => {
                             panic!(
@@ -637,35 +633,23 @@ mod checked {
                             );
                         }
                         EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
-                            panic!(
-                                "EndOfEpochTransactionKind::BridgeCommitteeInit should not exist in v1"
-                            );
+                            panic!("EndOfEpochTransactionKind::BridgeCommitteeInit should not exist in v1");
                         }
                         EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
-                            panic!(
-                                "EndOfEpochTransactionKind::StoreExecutionTimeEstimates should not exist in v1"
-                            );
+                            panic!("EndOfEpochTransactionKind::StoreExecutionTimeEstimates should not exist in v1");
                         }
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
-                            panic!(
-                                "EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v1"
-                            );
+                            panic!("EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v1");
                         }
                         EndOfEpochTransactionKind::CoinRegistryCreate => {
-                            panic!(
-                                "EndOfEpochTransactionKind::CoinRegistryCreate should not exist in v1"
-                            );
+                            panic!("EndOfEpochTransactionKind::CoinRegistryCreate should not exist in v1");
                         }
                         EndOfEpochTransactionKind::DisplayRegistryCreate => {
-                            panic!(
-                                "EndOfEpochTransactionKind::DisplayRegistryCreate should not exist in v1"
-                            );
+                            panic!("EndOfEpochTransactionKind::DisplayRegistryCreate should not exist in v1");
                         }
                     }
                 }
-                unreachable!(
-                    "EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list"
-                )
+                unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
             }
             TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
                 setup_authenticator_state_update(
@@ -862,11 +846,11 @@ mod checked {
 
         if result.is_err() {
             tracing::error!(
-                "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
-                result.as_ref().err(),
-                temporary_store.objects(),
-                change_epoch,
-            );
+            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
+            result.as_ref().err(),
+            temporary_store.objects(),
+            change_epoch,
+        );
             temporary_store.drop_writes();
             // Must reset the storage rebate since we are re-executing.
             gas_charger.reset_storage_cost_and_rebate();

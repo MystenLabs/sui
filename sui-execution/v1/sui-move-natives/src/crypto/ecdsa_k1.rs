@@ -5,7 +5,7 @@ use fastcrypto::{
     error::FastCryptoError,
     hash::{Keccak256, Sha256},
     secp256k1::{
-        Secp256k1PublicKey, Secp256k1Signature, recoverable::Secp256k1RecoverableSignature,
+        recoverable::Secp256k1RecoverableSignature, Secp256k1PublicKey, Secp256k1Signature,
     },
     traits::{RecoverableSignature, ToFromBytes},
 };

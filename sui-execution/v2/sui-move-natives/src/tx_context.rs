@@ -11,7 +11,7 @@ use smallvec::smallvec;
 use std::{collections::VecDeque, convert::TryFrom};
 use sui_types::base_types::{ObjectID, TransactionDigest};
 
-use crate::{NativesCostTable, object_runtime::ObjectRuntime};
+use crate::{object_runtime::ObjectRuntime, NativesCostTable};
 
 #[derive(Clone)]
 pub struct TxContextDeriveIdCostParams {

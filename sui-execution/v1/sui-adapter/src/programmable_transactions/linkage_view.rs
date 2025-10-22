@@ -3,7 +3,7 @@
 
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry},
+    collections::{hash_map::Entry, BTreeMap, HashMap, HashSet},
     str::FromStr,
 };
 
@@ -14,7 +14,7 @@ use move_core_types::{
     language_storage::ModuleId,
     resolver::{LinkageResolver, ModuleResolver},
 };
-use sui_types::storage::{PackageObject, get_module};
+use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, SuiError, SuiResult},

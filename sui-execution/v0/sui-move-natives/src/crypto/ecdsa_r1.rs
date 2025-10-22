@@ -6,7 +6,7 @@ use fastcrypto::hash::{Keccak256, Sha256};
 use fastcrypto::traits::RecoverableSignature;
 use fastcrypto::{
     secp256r1::{
-        Secp256r1PublicKey, Secp256r1Signature, recoverable::Secp256r1RecoverableSignature,
+        recoverable::Secp256r1RecoverableSignature, Secp256r1PublicKey, Secp256r1Signature,
     },
     traits::ToFromBytes,
 };
