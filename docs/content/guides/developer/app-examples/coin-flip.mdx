@@ -1,7 +1,7 @@
 ---
 title: Coin Flip
 description: Learn Sui through a coin flip dApp that covers the full end-to-end flow of building a Sui Move module and connecting it to a React Sui dApp.
-keywords: [ react app, react dApp, react example, on-chain randomness, randomness, shared objects, one-time witness, assets, address-owned objects, events, storage rebates, gas sponsorship, enoki, example app, example dApp ]
+keywords: [ react app, react dApp, react example, on-chain randomness, shared objects, one-time witness, assets, address-owned objects, events, storage rebates, gas sponsorship, enoki, example app, example dApp ]
 ---
 
 This example walks you through building a Coin Flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This Coin Flip dApp utilizes Sui's native on-chain randomness to create a provably fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
@@ -30,7 +30,7 @@ Source code location for the complete dApp (smart contracts and frontend):
 - **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](../sui-101/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
 - **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics.mdx#storage-fund-rewards).
 - **Gas sponsorship:** The guide demonstrates how to use [Enoki](https://docs.enoki.mystenlabs.com/) for transaction sponsorship, enabling gas-free experiences for end users.
-- **Type-safe Move bindings:** The guide shows you how to use [@mysten/codegen](https://sdk.mystenlabs.com/typescript/codegen) to auto-generate TypeScript bindings from your Move contracts, ensuring type safety across your full-stack application.
+- **Type-safe Move bindings:** The guide shows you how to use [@mysten/codegen](https://www.npmjs.com/package/@mysten/codegen) to auto-generate TypeScript bindings from your Move contracts, ensuring type safety across your full-stack application.
 
 
 ## Smart contracts {#smart-contracts}
