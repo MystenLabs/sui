@@ -211,7 +211,7 @@ fn parse_source_manifest(
             // We create a normalized legacy name, to make sure we can always use a package
             // as an Identifier.
             let normalized_legacy_name =
-                normalize_legacy_name_to_identifier(metadata.legacy_name.as_str())?;
+                normalize_legacy_name_to_identifier(metadata.legacy_name.as_str());
 
             let legacy_publications =
                 load_legacy_lockfile(&path.path().join("Move.lock"))?.unwrap_or_default();
@@ -332,15 +332,34 @@ pub fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
 
 /// Given a "legacy" string, we produce an Identifier that is as "consistent"
 /// as possible.
-fn normalize_legacy_name_to_identifier(name: &str) -> Result<Identifier> {
-    // We could also, potentially, hash the String into a valid identifier,
-    // but these cases are super rare so "readability" is probably better for us.
-    Identifier::new(name.replace("-", "__").replace(" ", "____")).map_err(|_| {
-        anyhow!(
-            "Failed to convert legacy name {} to a normalized identifier",
-            name
-        )
-    })
+fn normalize_legacy_name_to_identifier(name: &str) -> Identifier {
+    // rules for `Identifier`:
+    //  - all characters must be a-z, A-z, 0-9, or `_`
+    //  - first character is not a digit
+    //  - entire string is not `_`
+    //  - string is non-empty
+
+    let mut result = String::new();
+
+    for c in name.chars() {
+        let c = if matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9') {
+            c
+        } else {
+            '_'
+        };
+
+        result.push(c);
+    }
+
+    if result == "" || result == "_" {
+        return Identifier::new("__").expect("__ is a valid identifier");
+    }
+
+    if matches!(result.chars().next().unwrap(), '0'..='9') {
+        result.insert(0, '_');
+    }
+
+    Identifier::new(result).expect("tranformed string is a valid identifier")
 }
 
 fn parse_dependencies(
@@ -352,7 +371,7 @@ fn parse_dependencies(
             let mut deps = BTreeMap::new();
 
             for (dep_name, dep) in table.into_iter() {
-                let dep_name_ident = normalize_legacy_name_to_identifier(&dep_name)?;
+                let dep_name_ident = normalize_legacy_name_to_identifier(&dep_name);
                 let dep = parse_dependency(dep, mode)?;
                 deps.insert(dep_name_ident, dep);
             }
@@ -835,13 +854,15 @@ mod tests {
     fn normalize_legacy_names() {
         let names = vec![
             ("foo", "foo"),
-            ("foo-bar", "foo__bar"),
-            ("foo bar", "foo____bar"),
+            ("foo-bar", "foo_bar"),
+            ("foo bar", "foo_bar"),
             ("is_normal", "is_normal"),
+            ("0x1234", "_0x1234"),
+            ("UNO!", "UNO_"),
         ];
 
         for (name, expected) in names {
-            let identifier = normalize_legacy_name_to_identifier(name).unwrap();
+            let identifier = normalize_legacy_name_to_identifier(name);
             assert_eq!(identifier.to_string(), expected);
         }
     }

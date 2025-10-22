@@ -23,8 +23,11 @@ pub struct LegacyData {
     /// things after parsing
     pub legacy_name: String,
 
-    /// The `legacy_name` transformed into a normalized name from the parser.
-    /// This is helpful for `rename-from` validation.
+    /// In the modern world, package names must be identifiers, the entries in the `dependencies`
+    /// table must also be identifiers, and these should match. Therefore in the modern world we
+    /// associate identifiers with edges. In the legacy world, these things need not be
+    /// identifiers, but we still parse into the modern format, so we must manufacture identifiers;
+    /// this is an identifier computed from the legacy_name.
     pub normalized_legacy_name: Identifier,
 
     /// These addresses should store all addresses that were part of the package.
