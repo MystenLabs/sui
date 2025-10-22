@@ -2906,15 +2906,15 @@ impl SenderSignedData {
                     .into());
                 }
 
-                if let Some(min) = min_epoch {
-                    if context.epoch < *min {
-                        return Err(SuiErrorKind::TransactionExpired.into());
-                    }
+                if let Some(min) = min_epoch
+                    && context.epoch < *min
+                {
+                    return Err(SuiErrorKind::TransactionExpired.into());
                 }
-                if let Some(max) = max_epoch {
-                    if context.epoch > *max {
-                        return Err(SuiErrorKind::TransactionExpired.into());
-                    }
+                if let Some(max) = max_epoch
+                    && context.epoch > *max
+                {
+                    return Err(SuiErrorKind::TransactionExpired.into());
                 }
             }
         }
