@@ -13,7 +13,7 @@
 
 use crate::{
     replay_interface::{EpochStore, ObjectKey, ObjectStore, VersionQuery},
-    replay_txn::{get_input_objects_for_replay, ReplayTransaction},
+    replay_txn::ReplayTransaction,
 };
 use anyhow::{anyhow, Context, Error};
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
@@ -42,6 +42,7 @@ use sui_types::{
 use tracing::{debug, debug_span, trace};
 
 // Executor for the replay. Created and used by `ReplayTransaction`.
+#[derive(Clone)]
 pub struct ReplayExecutor {
     protocol_config: ProtocolConfig,
     executor: Arc<dyn Executor + Send + Sync>,
@@ -82,18 +83,20 @@ pub fn execute_transaction_to_effects(
     // TODO: Hook up...
     let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
 
+    let epoch = txn.epoch();
+    let digest = txn.digest();
+    let checkpoint = txn.checkpoint();
+    let _span = debug_span!("execute_tx", %digest, epoch, checkpoint).entered();
+    let input_objects = txn.get_input_objects_for_replay()?;
     let ReplayTransaction {
         digest,
-        checkpoint,
+        checkpoint: _,
         txn_data,
         effects: expected_effects,
         executor,
         object_cache,
     } = txn;
 
-    let epoch = expected_effects.executed_epoch();
-    let _span = debug_span!("execute_tx", %digest, epoch, checkpoint).entered();
-    let input_objects = get_input_objects_for_replay(&txn_data, &digest, &object_cache)?;
     let protocol_config = &executor.protocol_config;
     let epoch_data = epoch_store
         .epoch_info(epoch)?
