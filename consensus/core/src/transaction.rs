@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use consensus_config::Epoch;
 use consensus_types::block::{
@@ -40,19 +46,7 @@ pub(crate) struct TransactionsGuard {
     )>,
 }
 
-/// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
-/// The transactions are submitted to a channel which is shared between the TransactionConsumer and the TransactionClient
-/// and are pulled every time the `next` method is called.
-pub(crate) struct TransactionConsumer {
-    tx_receiver: Receiver<TransactionsGuard>,
-    max_transactions_in_block_bytes: u64,
-    max_num_transactions_in_block: u64,
-    pending_transactions: Option<TransactionsGuard>,
-    block_status_subscribers: Arc<Mutex<BTreeMap<BlockRef, Vec<oneshot::Sender<BlockStatus>>>>>,
-}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
-#[allow(unused)]
 pub enum BlockStatus {
     /// The block has been sequenced as part of a committed sub dag. That means that any transaction that has been included in the block
     /// has been committed as well.
@@ -72,8 +66,24 @@ pub enum LimitReached {
     AllTransactionsIncluded,
 }
 
+/// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
+/// The transactions are submitted to a channel which is shared between the TransactionConsumer and the TransactionClient
+/// and are pulled every time the `next` method is called.
+pub(crate) struct TransactionConsumer {
+    tx_receiver: Receiver<TransactionsGuard>,
+    inflight: Arc<AtomicUsize>,
+    max_transactions_in_block_bytes: u64,
+    max_num_transactions_in_block: u64,
+    pending_transactions: Option<TransactionsGuard>,
+    block_status_subscribers: Arc<Mutex<BTreeMap<BlockRef, Vec<oneshot::Sender<BlockStatus>>>>>,
+}
+
 impl TransactionConsumer {
-    pub(crate) fn new(tx_receiver: Receiver<TransactionsGuard>, context: Arc<Context>) -> Self {
+    pub(crate) fn new(
+        context: Arc<Context>,
+        tx_receiver: Receiver<TransactionsGuard>,
+        inflight: Arc<AtomicUsize>,
+    ) -> Self {
         // max_num_transactions_in_block - 1 is the max possible transaction index in a block.
         // TransactionIndex::MAX is reserved for the ping transaction.
         // Indexes down to TransactionIndex::MAX - 8 are also reserved for future use.
@@ -90,6 +100,7 @@ impl TransactionConsumer {
 
         Self {
             tx_receiver,
+            inflight,
             max_transactions_in_block_bytes: context
                 .protocol_config
                 .max_transactions_in_block_bytes(),
@@ -163,6 +174,9 @@ impl TransactionConsumer {
             }
         }
 
+        self.inflight
+            .fetch_sub(transactions.len(), Ordering::AcqRel);
+
         let block_status_subscribers = self.block_status_subscribers.clone();
         (
             transactions,
@@ -215,6 +229,19 @@ impl TransactionConsumer {
         }
     }
 
+    pub(crate) fn inflight(&self) -> usize {
+        self.inflight.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn max_transactions_in_block(&self) -> u64 {
+        self.max_num_transactions_in_block
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_inflight_for_testing(&self, value: usize) {
+        self.inflight.store(value, Ordering::Relaxed);
+    }
+
     #[cfg(test)]
     pub(crate) fn subscribe_for_block_status_testing(
         &self,
@@ -246,6 +273,7 @@ impl TransactionConsumer {
 pub struct TransactionClient {
     context: Arc<Context>,
     sender: Sender<TransactionsGuard>,
+    inflight: Arc<AtomicUsize>,
     max_transaction_size: u64,
     max_transactions_in_block_bytes: u64,
     max_transactions_in_block_count: u64,
@@ -267,30 +295,30 @@ pub enum ClientError {
 }
 
 impl TransactionClient {
-    pub(crate) fn new(context: Arc<Context>) -> (Self, Receiver<TransactionsGuard>) {
+    pub(crate) fn new(context: Arc<Context>) -> (Self, TransactionConsumer) {
         Self::new_with_max_pending_transactions(context, MAX_PENDING_TRANSACTIONS)
     }
 
     fn new_with_max_pending_transactions(
         context: Arc<Context>,
         max_pending_transactions: usize,
-    ) -> (Self, Receiver<TransactionsGuard>) {
+    ) -> (Self, TransactionConsumer) {
         let (sender, receiver) = channel("consensus_input", max_pending_transactions);
-        (
-            Self {
-                sender,
-                max_transaction_size: context.protocol_config.max_transaction_size_bytes(),
-
-                max_transactions_in_block_bytes: context
-                    .protocol_config
-                    .max_transactions_in_block_bytes(),
-                max_transactions_in_block_count: context
-                    .protocol_config
-                    .max_num_transactions_in_block(),
-                context: context.clone(),
-            },
-            receiver,
-        )
+        let inflight = Arc::new(AtomicUsize::new(0));
+        let client = Self {
+            sender,
+            inflight: inflight.clone(),
+            max_transaction_size: context.protocol_config.max_transaction_size_bytes(),
+            max_transactions_in_block_bytes: context
+                .protocol_config
+                .max_transactions_in_block_bytes(),
+            max_transactions_in_block_count: context
+                .protocol_config
+                .max_num_transactions_in_block(),
+            context: context.clone(),
+        };
+        let consumer = TransactionConsumer::new(context, receiver, inflight);
+        (client, consumer)
     }
 
     /// Returns the current epoch of this client.
@@ -370,6 +398,7 @@ impl TransactionClient {
             }
         }
 
+        let n = transactions.len();
         let t = TransactionsGuard {
             transactions: transactions.into_iter().map(Transaction::new).collect(),
             included_in_block_ack: included_in_block_ack_send,
@@ -377,8 +406,10 @@ impl TransactionClient {
         self.sender
             .send(t)
             .await
-            .tap_err(|e| error!("Submit transactions failed with {:?}", e))
+            .tap_err(|e| error!("Submit transactions failed with {}", e))
             .map_err(|e| ClientError::ConsensusShuttingDown(e.to_string()))?;
+        self.inflight.fetch_add(n, Ordering::AcqRel);
+
         Ok(included_in_block_ack_receive)
     }
 }
@@ -447,7 +478,7 @@ mod tests {
     use crate::{
         block_verifier::SignedBlockVerifier,
         context::Context,
-        transaction::{BlockStatus, LimitReached, TransactionClient, TransactionConsumer},
+        transaction::{BlockStatus, LimitReached, TransactionClient},
     };
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -459,9 +490,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         // submit asynchronously the transactions and keep the waiters
         let mut included_in_block_waiters = FuturesUnordered::new();
         for i in 0..3 {
@@ -512,9 +541,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         // submit the transactions and include 2 of each on a new block
         let mut included_in_block_waiters = FuturesUnordered::new();
         for i in 1..=10 {
@@ -590,9 +617,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         // submit some transactions
         for i in 0..10 {
             let transaction =
@@ -648,8 +673,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         let mut all_receivers = Vec::new();
         // submit a few transactions individually.
         for i in 0..10 {
@@ -772,8 +796,7 @@ mod tests {
             });
 
             let context = Arc::new(Context::new_for_test(4).0);
-            let (client, tx_receiver) = TransactionClient::new(context.clone());
-            let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+            let (client, mut consumer) = TransactionClient::new(context.clone());
             let mut all_receivers = Vec::new();
 
             // create enough transactions
@@ -815,8 +838,7 @@ mod tests {
             });
 
             let context = Arc::new(Context::new_for_test(4).0);
-            let (client, tx_receiver) = TransactionClient::new(context.clone());
-            let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
+            let (client, mut consumer) = TransactionClient::new(context.clone());
             let mut all_receivers = Vec::new();
 
             let max_transactions_in_block_bytes =
@@ -874,9 +896,7 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
+        let (client, mut consumer) = TransactionClient::new(context.clone());
         let w_no_transactions = client
             .submit_no_wait(vec![])
             .await
@@ -929,12 +949,10 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new_with_max_pending_transactions(
+        let (client, mut consumer) = TransactionClient::new_with_max_pending_transactions(
             context.clone(),
             MAX_PENDING_TRANSACTIONS,
         );
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
         // Add 10 more transactions than the max number of transactions in a block.
         for i in 0..MAX_NUM_TRANSACTIONS_IN_BLOCK + 10 {
             println!("Submitting transaction {i}");
