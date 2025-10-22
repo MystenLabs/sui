@@ -101,6 +101,7 @@ async fn test_accumulators_root_created() {
     });
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
             ProtocolVersion::MAX.as_u64(),
             ProtocolVersion::MAX_ALLOWED.as_u64(),
