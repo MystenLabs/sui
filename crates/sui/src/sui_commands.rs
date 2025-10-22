@@ -77,6 +77,7 @@ use sui_move_build::{
     implicit_deps, BuildConfig as SuiBuildConfig, SuiPackageHooks,
 };
 use sui_package_management::system_package_versions::latest_system_packages;
+use sui_pg_db::temp::{get_available_port, LocalDatabase};
 use sui_pg_db::DbArgs;
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
@@ -103,17 +104,10 @@ const DEFAULT_GRAPHQL_PORT: u16 = 9125;
 
 #[derive(Args)]
 pub struct RpcArgs {
-    /// Start an indexer with the given PostgreSQL database URL.
-    ///
-    /// If no URL is provided, defaults to postgres://postgres:postgrespw@localhost:5432/sui_indexer
-    #[clap(
-        long,
-        default_missing_value = "postgres://postgres:postgrespw@localhost:5432/sui_indexer",
-        num_args = 0..=1,
-        require_equals = true,
-        value_name = "INDEXER_DATABASE_URL"
-    )]
-    with_indexer: Option<Url>,
+    /// Start an indexer with a local PostgreSQL database.
+    /// The database will be created/opened in the network's configuration directory.
+    #[clap(long)]
+    with_indexer: bool,
 
     /// Start a Consistent Store with default host and port: 0.0.0.0:9124. This flag accepts also a
     /// port, a host, or both (e.g., 0.0.0.0:9124).
@@ -151,7 +145,7 @@ pub struct RpcArgs {
 impl RpcArgs {
     pub fn for_testing() -> Self {
         Self {
-            with_indexer: None,
+            with_indexer: false,
             with_consistent_store: None,
             with_graphql: None,
         }
@@ -862,15 +856,9 @@ async fn start(
         with_consistent_store = Some("0.0.0.0:9124".to_string());
     }
 
-    // Enable indexer if GraphQL is enabled or --with-indexer is explicitly provided
-    let database_url = if with_graphql.is_some() && with_indexer.is_none() {
-        // GraphQL requires indexer, use default database URL
-        Some(Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer").unwrap())
-    } else {
-        with_indexer
-    };
-
-    if database_url.is_some() {
+    // Automatically enable indexer if GraphQL is enabled
+    let with_indexer = with_indexer || with_graphql.is_some();
+    if with_indexer {
         ensure!(
             !no_full_node,
             "Cannot start the indexer without a fullnode."
@@ -1007,7 +995,7 @@ async fn start(
     // the indexer requires to set the fullnode's data ingestion directory
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
-    if database_url.is_some() && data_ingestion_dir.is_none() {
+    if with_indexer && data_ingestion_dir.is_none() {
         data_ingestion_dir = Some(mysten_common::tempdir()?.keep())
     }
 
@@ -1045,6 +1033,28 @@ async fn start(
     let cancel = CancellationToken::new();
     let mut rpc_services = vec![];
 
+    // Start a local PostgreSQL database if needed
+    let database = if with_indexer {
+        let pg_dir = config_dir.join("indexer");
+        let port = get_available_port();
+
+        info!("Starting local PostgreSQL database at {pg_dir:?} on port {port}");
+
+        let db = if pg_dir.exists() {
+            LocalDatabase::new(pg_dir, port).context("Failed to start local PostgreSQL database")?
+        } else {
+            LocalDatabase::new_initdb(pg_dir, port)
+                .context("Failed to initialize and start local PostgreSQL database")?
+        };
+
+        info!("Local PostgreSQL database started at {}", db.url());
+        Some(db)
+    } else {
+        None
+    };
+
+    // Get the database URL from the local database
+    let database_url = database.as_ref().map(|db| db.url().clone());
     let pipelines = if let Some(ref db_url) = database_url {
         info!("Starting the indexer with database: {db_url}");
 
