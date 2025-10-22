@@ -3,19 +3,13 @@
 
 use crate::{
     balance::Balance,
-    base_types::{move_ascii_str_layout, move_utf8_str_layout, RESOLVED_STD_OPTION},
+    base_types::{move_ascii_str_layout, move_utf8_str_layout, url_layout, RESOLVED_STD_OPTION},
     id::{ID, UID},
-    object::option_visitor::{OptionVisitor, OptionVisitorError},
-    SUI_FRAMEWORK_ADDRESS,
+    object::option_visitor as OV,
 };
 use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value::{self as A, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
-    annotated_visitor::{self, StructDriver, ValueDriver, VariantDriver, VecDriver, Visitor},
-    ident_str,
-    identifier::IdentStr,
-    language_storage::{StructTag, TypeTag},
-    u256::U256,
+    account_address::AccountAddress, annotated_value as A, annotated_visitor as AV,
+    language_storage::TypeTag, u256::U256,
 };
 use prost_types::value::Kind;
 use prost_types::Struct;
@@ -45,7 +39,7 @@ struct ProtoVisitor<'a> {
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    Visitor(#[from] annotated_visitor::Error),
+    Visitor(#[from] AV::Error),
 
     #[error("Deserialized value too large")]
     OutOfBudget,
@@ -55,12 +49,6 @@ pub enum Error {
 
     #[error("Unexpected type")]
     UnexpectedType,
-}
-
-impl OptionVisitorError for Error {
-    fn unexpected_type() -> Self {
-        Error::UnexpectedType
-    }
 }
 
 impl ProtoVisitorBuilder {
@@ -139,51 +127,51 @@ impl<'a> ProtoVisitor<'a> {
     }
 }
 
-impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
+impl<'b, 'l> AV::Visitor<'b, 'l> for ProtoVisitor<'_> {
     type Value = Value;
     type Error = Error;
 
-    fn visit_u8(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u8) -> Result<Value, Error> {
+    fn visit_u8(&mut self, _: &AV::ValueDriver<'_, 'b, 'l>, value: u8) -> Result<Value, Error> {
         self.debit_value()?;
         Ok(Value::from(value))
     }
 
-    fn visit_u16(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u16) -> Result<Value, Error> {
+    fn visit_u16(&mut self, _: &AV::ValueDriver<'_, 'b, 'l>, value: u16) -> Result<Value, Error> {
         self.debit_value()?;
         Ok(Value::from(value))
     }
 
-    fn visit_u32(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u32) -> Result<Value, Error> {
+    fn visit_u32(&mut self, _: &AV::ValueDriver<'_, 'b, 'l>, value: u32) -> Result<Value, Error> {
         self.debit_value()?;
         Ok(Value::from(value))
     }
 
-    fn visit_u64(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u64) -> Result<Value, Error> {
+    fn visit_u64(&mut self, _: &AV::ValueDriver<'_, 'b, 'l>, value: u64) -> Result<Value, Error> {
         let value = value.to_string();
         self.debit_string_value(&value)?;
         Ok(Value::from(value))
     }
 
-    fn visit_u128(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u128) -> Result<Value, Error> {
+    fn visit_u128(&mut self, _: &AV::ValueDriver<'_, 'b, 'l>, value: u128) -> Result<Value, Error> {
         let value = value.to_string();
         self.debit_string_value(&value)?;
         Ok(Value::from(value))
     }
 
-    fn visit_u256(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: U256) -> Result<Value, Error> {
+    fn visit_u256(&mut self, _: &AV::ValueDriver<'_, 'b, 'l>, value: U256) -> Result<Value, Error> {
         let value = value.to_string();
         self.debit_string_value(&value)?;
         Ok(Value::from(value))
     }
 
-    fn visit_bool(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: bool) -> Result<Value, Error> {
+    fn visit_bool(&mut self, _: &AV::ValueDriver<'_, 'b, 'l>, value: bool) -> Result<Value, Error> {
         self.debit_value()?;
         Ok(Value::from(value))
     }
 
     fn visit_address(
         &mut self,
-        _: &ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
         value: AccountAddress,
     ) -> Result<Value, Error> {
         let value = value.to_canonical_string(true);
@@ -193,7 +181,7 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
 
     fn visit_signer(
         &mut self,
-        _: &ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
         value: AccountAddress,
     ) -> Result<Value, Error> {
         let value = value.to_canonical_string(true);
@@ -201,7 +189,7 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
         Ok(Value::from(value))
     }
 
-    fn visit_vector(&mut self, driver: &mut VecDriver<'_, 'b, 'l>) -> Result<Value, Error> {
+    fn visit_vector(&mut self, driver: &mut AV::VecDriver<'_, 'b, 'l>) -> Result<Value, Error> {
         let value = if driver.element_layout().is_type(&TypeTag::U8) {
             // Base64 encode arbitrary bytes
             use base64::{engine::general_purpose::STANDARD, Engine};
@@ -214,7 +202,7 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
                 self.debit_string_value(&b64)?;
                 Value::from(b64)
             } else {
-                return Err(Error::Visitor(annotated_visitor::Error::UnexpectedEof));
+                return Err(AV::Error::UnexpectedEof.into());
             }
         } else {
             let mut elems = vec![];
@@ -232,7 +220,7 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
         Ok(value)
     }
 
-    fn visit_struct(&mut self, driver: &mut StructDriver<'_, 'b, 'l>) -> Result<Value, Error> {
+    fn visit_struct(&mut self, driver: &mut AV::StructDriver<'_, 'b, 'l>) -> Result<Value, Error> {
         let ty = &driver.struct_layout().type_;
         let layout = driver.struct_layout();
 
@@ -269,11 +257,11 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
         } else if (&ty.address, ty.module.as_ref(), ty.name.as_ref()) == RESOLVED_STD_OPTION {
             // 0x1::option::Option
             self.debit_value()?;
-            match OptionVisitor(self).visit_struct(driver)? {
+            match OV::OptionVisitor(self).visit_struct(driver)? {
                 Some(value) => value,
                 None => Kind::NullValue(0).into(),
             }
-        } else if is_balance(layout) {
+        } else if Balance::is_balance_layout(layout) {
             // 0x2::balance::Balance
 
             let lo = driver.position();
@@ -306,7 +294,10 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
         Ok(value)
     }
 
-    fn visit_variant(&mut self, driver: &mut VariantDriver<'_, 'b, 'l>) -> Result<Value, Error> {
+    fn visit_variant(
+        &mut self,
+        driver: &mut AV::VariantDriver<'_, 'b, 'l>,
+    ) -> Result<Value, Error> {
         let mut map = Struct::default();
         self.debit_value()?;
 
@@ -330,52 +321,10 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
     }
 }
 
-pub const URL_MODULE_NAME: &IdentStr = ident_str!("url");
-pub const URL_STRUCT_NAME: &IdentStr = ident_str!("Url");
-
-pub fn url_layout() -> MoveStructLayout {
-    MoveStructLayout {
-        type_: StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: URL_MODULE_NAME.to_owned(),
-            name: URL_STRUCT_NAME.to_owned(),
-            type_params: vec![],
-        },
-        fields: vec![MoveFieldLayout::new(
-            ident_str!("url").to_owned(),
-            MoveTypeLayout::Struct(Box::new(move_ascii_str_layout())),
-        )],
+impl From<OV::Error> for Error {
+    fn from(OV::Error: OV::Error) -> Self {
+        Error::UnexpectedType
     }
-}
-
-pub fn is_balance(struct_layout: &MoveStructLayout) -> bool {
-    let ty = &struct_layout.type_;
-
-    if !Balance::is_balance(ty) {
-        return false;
-    }
-
-    if ty.type_params.len() != 1 {
-        return false;
-    }
-
-    if struct_layout.fields.len() != 1 {
-        return false;
-    }
-
-    let Some(field) = struct_layout.fields.first() else {
-        return false;
-    };
-
-    if field.name.as_str() != "value" {
-        return false;
-    }
-
-    if !matches!(field.layout, MoveTypeLayout::U64) {
-        return false;
-    }
-
-    true
 }
 
 #[cfg(test)]
