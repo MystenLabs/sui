@@ -24,9 +24,7 @@ use move_package_alt::{
 };
 use move_symbol_pool::Symbol;
 
-use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, package::RootPackage, schema::Environment,
-};
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage, schema::Environment};
 
 use crate::{
     build_plan::BuildPlan,
@@ -132,7 +130,7 @@ impl BuildConfig {
         path: &Path,
         env: &Environment,
         writer: &mut W,
-    ) -> PackageResult<CompiledPackage> {
+    ) -> anyhow::Result<CompiledPackage> {
         let root_pkg = RootPackage::<F>::load(path, env.clone(), self.mode_set()).await?;
         BuildPlan::create(&root_pkg, self)?.compile(writer, |compiler| compiler)
     }
@@ -144,7 +142,7 @@ impl BuildConfig {
         env: Environment,
         writer: &mut W,
         reader: &mut R,
-    ) -> PackageResult<()> {
+    ) -> anyhow::Result<()> {
         // we set test to migrate all the code
         self.test_mode = true;
         let root_pkg = RootPackage::<F>::load(path, env, self.mode_set()).await?;
@@ -159,7 +157,7 @@ impl BuildConfig {
         path: &Path,
         env: Environment,
         writer: &mut W,
-    ) -> PackageResult<source_model::Model> {
+    ) -> anyhow::Result<source_model::Model> {
         let root_pkg = RootPackage::<F>::load(path, env, self.mode_set()).await?;
         self.move_model_from_root_pkg(&root_pkg, writer).await
     }
@@ -168,7 +166,7 @@ impl BuildConfig {
         &self,
         root_pkg: &RootPackage<F>,
         writer: &mut W,
-    ) -> PackageResult<source_model::Model> {
+    ) -> anyhow::Result<source_model::Model> {
         model_builder::build(writer, root_pkg, self)
     }
 

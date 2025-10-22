@@ -32,8 +32,7 @@ use move_compiler::{
 };
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, graph::PackageInfo, package::RootPackage,
-    schema::Environment,
+    flavor::MoveFlavor, graph::PackageInfo, package::RootPackage, schema::Environment,
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -45,7 +44,7 @@ pub async fn compile_package<W: Write + Send, F: MoveFlavor>(
     build_config: &BuildConfig,
     env: &Environment,
     writer: &mut W,
-) -> PackageResult<CompiledPackage> {
+) -> anyhow::Result<CompiledPackage> {
     let root_pkg = RootPackage::<F>::load(path, env.clone(), build_config.mode_set()).await?;
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
@@ -54,7 +53,7 @@ pub fn compile_from_root_package<W: Write + Send, F: MoveFlavor>(
     root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
     writer: &mut W,
-) -> PackageResult<CompiledPackage> {
+) -> anyhow::Result<CompiledPackage> {
     BuildPlan::create(root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 

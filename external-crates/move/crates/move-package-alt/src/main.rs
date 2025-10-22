@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::{Parser, Subcommand};
-use move_package_alt::{
-    cli::{Build, New, UpdateDeps},
-    errors::PackageResult,
-};
+use move_package_alt::cli::{Build, New, UpdateDeps};
 
 #[derive(Debug, Parser, Clone)]
 #[command(version, about, long_about = None)]
@@ -26,28 +23,24 @@ pub enum Commands {
 }
 
 impl Commands {
-    pub async fn execute(&self) -> PackageResult<()> {
-        match self {
-            Commands::Build(b) => b.execute().await,
-            Commands::New(n) => n.execute(),
+    pub async fn execute(&self) -> anyhow::Result<()> {
+        Ok(match self {
+            Commands::Build(b) => b.execute().await?,
+            Commands::New(n) => n.execute()?,
             Commands::Test => todo!(),
-            Commands::UpdateDeps(u) => u.execute().await,
-        }
+            Commands::UpdateDeps(u) => u.execute().await?,
+        })
     }
 }
 
 impl Cli {
-    pub async fn execute(&self) -> PackageResult<()> {
-        self.command.execute().await
+    pub async fn execute(&self) -> anyhow::Result<()> {
+        Ok(self.command.execute().await?)
     }
 }
 
 #[tokio::main]
-async fn main() -> PackageResult<()> {
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let result = cli.execute().await;
-    if let Err(ref e) = result {
-        e.emit();
-    }
-    result
+    cli.execute().await
 }

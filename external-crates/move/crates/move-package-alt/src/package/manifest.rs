@@ -53,7 +53,7 @@ pub enum ManifestErrorKind {
     ParseError(#[from] toml_edit::de::Error),
 
     #[error(
-        "Dependency <TODO> must have a `git`, `local`, or `r` field in either the `[dependencies]` or the `[dep-replacements]` section"
+        "Dependency must have a `git`, `local`, or `r` field in either the `[dependencies]` or the `[dep-replacements]` section"
     )]
     NoDepInfo,
 }

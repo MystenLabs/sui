@@ -9,7 +9,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::errors::PackageResult;
 use crate::{package::layout::SourcePackageLayout, schema::PackageName};
 use anyhow::Context;
 use clap::Parser;
@@ -23,7 +22,7 @@ pub struct New {
 }
 
 impl New {
-    pub fn execute(&self) -> PackageResult<()> {
+    pub fn execute(&self) -> anyhow::Result<()> {
         let path = match self.path {
             Some(ref path) => path.join(self.name.to_string()),
             None => {

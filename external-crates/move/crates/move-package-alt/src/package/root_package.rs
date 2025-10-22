@@ -15,10 +15,10 @@ use crate::package::block_on;
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
     Environment, ModeName, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
-    Publication, RenderToml,
+    Publication,
 };
 use crate::{
-    errors::{FileHandle, PackageError, PackageResult},
+    errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     graph::PackageGraph,
     package::EnvironmentName,
@@ -69,7 +69,7 @@ pub enum LoadType {
         /// to `input_path`). This file will be written if the package is published (i.e. if
         /// [RootPackage::write_publish_data] is called). It does not have to exist a priori, but
         /// if it does, the addresses will be used.
-        ephemeral_file: PathBuf,
+        ephemeral_file: EphemeralPubfilePath,
     },
 }
 
@@ -120,12 +120,10 @@ impl PackageConfig {
 
 impl LoadType {
     /// return `Some(path)` if `self` is a valid ephemeral load, or None if it is a persistent load
-    fn ephemeral_file(&self) -> PackageResult<Option<EphemeralPubfilePath>> {
+    fn ephemeral_file(&self) -> Option<&EphemeralPubfilePath> {
         match self {
-            LoadType::Persistent { .. } => Ok(None),
-            LoadType::Ephemeral { ephemeral_file, .. } => {
-                Ok(Some(EphemeralPubfilePath::new(ephemeral_file)?))
-            }
+            LoadType::Persistent { .. } => None,
+            LoadType::Ephemeral { ephemeral_file, .. } => Some(ephemeral_file),
         }
     }
 }
@@ -184,12 +182,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         pubfile_path: impl AsRef<Path>,
         modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
+        let ephemeral_file = EphemeralPubfilePath::new(pubfile_path)?;
         let config = PackageConfig {
             input_path: root.as_ref().to_path_buf(),
             chain_id,
             load_type: LoadType::Ephemeral {
                 build_env,
-                ephemeral_file: pubfile_path.as_ref().to_path_buf(),
+                ephemeral_file,
             },
             output_path: root.as_ref().to_path_buf(),
             modes,
@@ -249,11 +248,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// This helps validate:
     /// 1. TODO: Fill this in! (deduplicate nodes etc)
-    async fn validate_and_construct(config: PackageConfig) -> PackageResult<Self> {
+    async fn validate_and_construct(mut config: PackageConfig) -> PackageResult<Self> {
         let input_path = PackagePath::new(config.input_path.clone())?;
         let mutex = input_path.lock()?;
 
-        let ephemeral_file = config.load_type.ephemeral_file()?;
+        let ephemeral_file = config.load_type.ephemeral_file().cloned();
         let output_path = OutputPath::new(config.output_path.clone())?;
 
         debug!(
@@ -262,7 +261,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         );
 
         debug!("getting ephemeral files");
-        let (env, ephemeral_pubs) = Self::get_env_and_ephemeral_file(&config).await?;
+        let (env, ephemeral_pubs) = Self::get_env_and_ephemeral_file(&mut config).await?;
 
         debug!("loading unfiltered graph");
         let unfiltered_graph = if config.force_repin {
@@ -309,9 +308,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// reading the ephemeral pubfile as well, so this function also returns a parsed pubfile if
     /// the load is ephemeral.
     async fn get_env_and_ephemeral_file(
-        config: &PackageConfig,
+        config: &mut PackageConfig,
     ) -> PackageResult<(Environment, Option<ParsedEphemeralPubs<F>>)> {
-        let result = match &config.load_type {
+        let result = match &mut config.load_type {
             LoadType::Persistent { env } => {
                 (Environment::new(env.clone(), config.chain_id.clone()), None)
             }
@@ -403,13 +402,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         if let Some(ephemeral_file) = &mut self.ephemeral_file {
             let mut pubs = ephemeral_file
-                .read_pubfile(&self.mutex)?
+                .read_pubfile()?
                 .map(|(_, pubs)| pubs)
                 .unwrap_or_default();
 
             // TODO: should we check build-env and chain-id again?
             pubs.published.insert(package_id, publish_data.into());
-            ephemeral_file.write_pubfile(&pubs, &self.mutex)?;
+            ephemeral_file.write_pubfile(&pubs)?;
         } else {
             let mut pubfile = self
                 .input_path
@@ -430,20 +429,21 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     fn load_ephemeral_pubfile(
         build_env: &Option<EnvironmentName>,
         chain_id: &EnvironmentID,
-        pubfile: impl AsRef<Path>,
+        pubfile: &mut EphemeralPubfilePath,
     ) -> PackageResult<ParsedEphemeralPubs<F>> {
-        if let Ok(file) = FileHandle::new(&pubfile) {
-            let parsed: ParsedEphemeralPubs<F> = toml_edit::de::from_str(file.source())?;
+        if let Some((file, parsed)) = pubfile.read_pubfile()? {
             if let Some(build_env) = build_env
                 && *build_env != parsed.build_env
             {
                 return Err(PackageError::EphemeralEnvMismatch {
+                    file,
                     file_build_env: parsed.build_env,
                     passed_build_env: build_env.clone(),
                 });
             }
             if *chain_id != parsed.chain_id {
                 return Err(PackageError::EphemeralChainMismatch {
+                    file,
                     file_chain_id: parsed.chain_id,
                     passed_chain_id: chain_id.clone(),
                 });
@@ -451,7 +451,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
             Ok(parsed)
         } else {
-            let file = pubfile.as_ref().to_path_buf();
             let Some(build_env) = build_env else {
                 return Err(PackageError::EphemeralNoBuildEnv);
             };
@@ -461,8 +460,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 chain_id: chain_id.clone(),
                 published: BTreeMap::new(),
             };
-            debug!("writing empty file {file:?}");
-            std::fs::write(&file, pubs.render_as_toml())?;
+
+            pubfile.write_pubfile(&pubs)?;
 
             Ok(pubs)
         }
@@ -514,7 +513,10 @@ mod tests {
             vanilla::{self, DEFAULT_ENV_NAME, default_environment},
         },
         graph::NamedAddress,
-        schema::{LockfileDependencyInfo, OriginalID, PackageID, PublishAddresses, PublishedID},
+        schema::{
+            LockfileDependencyInfo, OriginalID, PackageID, PublishAddresses, PublishedID,
+            RenderToml,
+        },
         test_utils::{
             self, basic_manifest_with_env,
             git::{self},

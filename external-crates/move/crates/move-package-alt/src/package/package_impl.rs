@@ -286,23 +286,26 @@ impl<F: MoveFlavor> Package<F> {
         if let Some(system_dependencies) = system_dependencies {
             // Only include the specified system dependencies.
             let all_flavor_deps = F::system_dependencies(env.id().to_string());
+            let valid = format!(
+                "[{}]",
+                all_flavor_deps
+                    .keys()
+                    .map(|k| k.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
 
             let mut result = BTreeMap::new();
 
-            for dep in &system_dependencies {
-                let name = PackageName::new(dep.clone())?;
+            for dep in system_dependencies {
+                let Ok(name) = PackageName::new(dep.clone()) else {
+                    return Err(PackageError::InvalidSystemDep { dep, valid });
+                };
+
                 if let Some(dep) = all_flavor_deps.get(&name) {
                     result.insert(name, dep.clone());
                 } else {
-                    return Err(PackageError::Generic(format!(
-                        "Invalid system dependency `{}`; the allowed system dependencies are: [{}]",
-                        dep,
-                        all_flavor_deps
-                            .keys()
-                            .map(|k| k.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )));
+                    return Err(PackageError::InvalidSystemDep { dep, valid });
                 }
             }
             return Ok(result);

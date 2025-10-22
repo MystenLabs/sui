@@ -307,10 +307,10 @@ impl EphemeralPubfilePath {
         &self.0
     }
 
+    // TODO: we should require a lock for the pubfile, which we hold between reading and writing
     pub fn write_pubfile<F: MoveFlavor>(
         &mut self,
         file: &ParsedEphemeralPubs<F>,
-        _mtx: &PackageSystemLock,
     ) -> FileResult<()> {
         render_file(self.path(), file)
     }
@@ -319,7 +319,6 @@ impl EphemeralPubfilePath {
     /// file exists and can't be read or parsed
     pub fn read_pubfile<F: MoveFlavor>(
         &self,
-        _mtx: &PackageSystemLock,
     ) -> FileResult<Option<(FileHandle, ParsedEphemeralPubs<F>)>> {
         parse_file(self.path())
     }

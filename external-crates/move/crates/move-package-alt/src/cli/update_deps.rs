@@ -4,10 +4,10 @@
 
 use std::path::PathBuf;
 
+use anyhow::bail;
 use clap::{ArgAction, Parser};
 
 use crate::{
-    errors::{PackageError, PackageResult},
     flavor::Vanilla,
     package::RootPackage,
     schema::{Environment, EnvironmentName, ModeName},
@@ -35,16 +35,13 @@ pub struct UpdateDeps {
 }
 
 impl UpdateDeps {
-    pub async fn execute(&self) -> PackageResult<()> {
+    pub async fn execute(&self) -> anyhow::Result<()> {
         let path = self.path.clone().unwrap_or(PathBuf::from("."));
 
         let envs = RootPackage::<Vanilla>::environments(&path)?;
 
         let Some(chain_id) = envs.get(&self.environment) else {
-            return Err(PackageError::Generic(format!(
-                "Environment {} not found",
-                self.environment
-            )));
+            bail!("Environment {} not found", self.environment);
         };
 
         let environment = Environment::new(self.environment.clone(), chain_id.clone());

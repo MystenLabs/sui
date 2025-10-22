@@ -21,10 +21,31 @@ use std::{
 
 use bimap::BiBTreeMap;
 use petgraph::graph::{DiGraph, NodeIndex};
+use thiserror::Error;
 use tokio::sync::OnceCell;
 use tracing::debug;
 
 use super::PackageGraph;
+
+#[derive(Error, Debug)]
+pub enum LockfileError {
+    #[error("Invalid lockfile: there are multiple root nodes in environment {env}")]
+    MultipleRootNodes { env: EnvironmentName },
+
+    #[error("Invalid lockfile: there is no root node")]
+    NoRootNode,
+
+    #[error(
+        "Invalid lockfile: package `{source_id}` has a dependency named `{dep_name}` in its manifest, but that dependency is not pinned in the lockfile"
+    )]
+    MissingDep {
+        source_id: PackageID,
+        dep_name: PackageName,
+    },
+
+    #[error("Invalid lockfile: package depends on a package with undefined ID `{target_id}`")]
+    UndefinedDep { target_id: PackageID },
+}
 
 struct PackageCache<F: MoveFlavor> {
     // TODO: better errors; I'm using Option for now because PackageResult doesn't have clone, but
@@ -102,17 +123,15 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             if dep.is_root() {
                 let old_root = root_index.replace(index);
                 if old_root.is_some() {
-                    return Err(PackageError::Generic(format!(
-                        "Invalid lockfile: there are multiple root nodes in environment {}",
-                        env.name()
-                    )));
+                    return Err(LockfileError::MultipleRootNodes {
+                        env: env.name().clone(),
+                    }
+                    .into());
                 }
             }
         }
 
-        let root_index = root_index.ok_or(PackageError::Generic(
-            "Invalid lockfile: there is no root node".into(),
-        ))?;
+        let root_index = root_index.ok_or(LockfileError::NoRootNode)?;
 
         debug!("loaded packages from lockfile: {package_ids:?}");
 
@@ -126,15 +145,17 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                 let target_id = source_pin
                     .deps
                     .get(dep_name)
-                    .ok_or(PackageError::Generic(format!(
-                        "Invalid lockfile: package `{source_id}` has a dependency named `{dep_name}` in its manifest, but that dependency is not pinned in the lockfile",
-                    )))?;
+                    .ok_or(LockfileError::MissingDep {
+                        source_id: source_id.clone(),
+                        dep_name: dep_name.clone(),
+                    })?;
 
-                let target_index = package_ids
-                    .get_by_left(target_id)
-                    .ok_or(PackageError::Generic(format!(
-                        "Invalid lockfile: package depends on a package with undefined ID `{target_id}`"
-                    )))?;
+                let target_index =
+                    package_ids
+                        .get_by_left(target_id)
+                        .ok_or(LockfileError::UndefinedDep {
+                            target_id: target_id.clone(),
+                        })?;
 
                 inner.add_edge(*source_index, *target_index, dep.clone());
             }
@@ -318,11 +339,10 @@ impl<F: MoveFlavor> PackageCache<F> {
                 cell.get_or_init(async || Some(node.clone())).await;
                 Ok(node)
             }
-            Err(e) => Err(PackageError::Generic(format!(
-                "Failed to load package from {}: {}",
-                dep.unfetched_path().display(),
-                e
-            ))),
+            Err(e) => Err(PackageError::DepError {
+                dep: dep.unfetched_path().display().to_string(),
+                err: Box::new(e),
+            }),
         }
     }
 }
