@@ -3675,7 +3675,6 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
     Ok(())
 }
 
-// TODO: pkg-alt FAILING TEST
 #[tokio::test]
 async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
     const LINTER_MSG: &str = "Total number of linter warnings suppressed: 5 (unique lints: 3)";
