@@ -334,18 +334,16 @@ impl Inner<'_> {
         // we copy the reference to the protocol config ahead of time for lifetime reasons
         let protocol_config = self.protocol_config;
         // retrieve the object from storage if it exists
-        let (cache_info, obj) = match self.get_or_fetch_object_from_store(parent, child)? {
-            None => {
-                return Ok(ObjectResult::Loaded((
-                    CacheInfo::Cached,
-                    (
-                        child_move_type.clone(),
-                        GlobalValue::none(),
-                        ObjectFingerprint::none(protocol_config),
-                    ),
-                )));
-            }
-            Some(obj) => obj,
+        let (cache_info, obj_opt) = self.get_or_fetch_object_from_store(parent, child)?;
+        let Some(obj) = obj_opt else {
+            return Ok(ObjectResult::Loaded((
+                cache_info,
+                (
+                    child_move_type.clone(),
+                    GlobalValue::none(),
+                    ObjectFingerprint::none(protocol_config),
+                ),
+            )));
         };
         // object exists, but the type does not match
         if obj.type_() != child_move_type {

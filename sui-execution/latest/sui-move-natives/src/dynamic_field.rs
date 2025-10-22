@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    NativesCostTable, NativesCostTable, abstract_size, charge_cache_or_load_gas, get_extension,
-    get_extension_mut, get_nested_struct_field, get_object_id,
+    NativesCostTable, abstract_size, charge_cache_or_load_gas, get_extension, get_extension_mut,
+    get_nested_struct_field, get_object_id,
     object_runtime::{
         ObjectRuntime,
         object_store::{CacheInfo, ObjectResult},
