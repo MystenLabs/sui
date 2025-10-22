@@ -4691,6 +4691,15 @@ impl AuthorityPerEpochStore {
                     ) {
                         ConsensusCertificateResult::Deferred(deferral_key)
                     } else {
+                        antithesis_sdk::assert_sometimes!(
+                            transaction.transaction_data().uses_randomness(),
+                            "cancelled randomness-using transaction (old handler)"
+                        );
+                        antithesis_sdk::assert_sometimes!(
+                            !transaction.transaction_data().uses_randomness(),
+                            "cancelled non-randomness-using transaction (old handler)"
+                        );
+
                         // Cancel the transaction that has been deferred for too long.
                         debug!(
                             "Cancelling consensus transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
