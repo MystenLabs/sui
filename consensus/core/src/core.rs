@@ -1422,9 +1422,12 @@ impl CoreTextFixture {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (blocks_sender, _blocks_receiver) =
             mysten_metrics::monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
-        transaction_certifier.recover(&NoopBlockVerifier, 0);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let block_receiver = signal_receivers.block_broadcast_receiver();
@@ -1553,8 +1556,12 @@ mod test {
         ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
 
         let (commit_consumer, _commit_receiver, _transaction_receiver) =
             CommitConsumerArgs::new(0, 0);
@@ -1576,9 +1583,13 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
-        transaction_certifier.recover(&NoopBlockVerifier, 0);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
+        transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
@@ -1687,8 +1698,12 @@ mod test {
         ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
 
         let (commit_consumer, _commit_receiver, _transaction_receiver) =
             CommitConsumerArgs::new(0, 0);
@@ -1710,9 +1725,13 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
-        transaction_certifier.recover(&NoopBlockVerifier, 0);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
+        transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
@@ -1791,8 +1810,12 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
@@ -2024,8 +2047,12 @@ mod test {
         ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
 
         let (commit_consumer, _commit_receiver, _transaction_receiver) =
             CommitConsumerArgs::new(0, 0);
@@ -2046,13 +2073,17 @@ mod test {
         assert!(last_commit.is_none());
         assert_eq!(dag_state.read().last_commit_index(), 0);
 
-        // Now spin up core
+        // Now recover Core and other components.
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
-        transaction_certifier.recover(&NoopBlockVerifier, 0);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
+        transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
@@ -2185,8 +2216,12 @@ mod test {
         ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
 
         let (commit_consumer, _commit_receiver, _transaction_receiver) =
             CommitConsumerArgs::new(0, 0);
@@ -2211,8 +2246,12 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
@@ -2276,8 +2315,12 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
@@ -2630,8 +2673,12 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
@@ -2927,8 +2974,12 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
@@ -3020,8 +3071,12 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
@@ -3091,8 +3146,12 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
@@ -3546,8 +3605,12 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 

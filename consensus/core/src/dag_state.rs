@@ -1233,7 +1233,6 @@ mod test {
         storage::{mem_store::MemStore, WriteBatch},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
-        CommitRange,
     };
 
     #[tokio::test]
@@ -2584,9 +2583,10 @@ mod test {
         // THEN the commit and rejected transactions should be written to storage
         let last_finalized_commit = store.read_last_finalized_commit().unwrap();
         assert_eq!(last_finalized_commit, Some(commit_ref));
-        let commits = store
-            .scan_finalized_commits(CommitRange::new(1..=1))
+        let stored_rejected_transactions = store
+            .read_rejected_transactions(commit_ref)
+            .unwrap()
             .unwrap();
-        assert_eq!(commits, vec![(commit_ref, rejected_transactions.clone())]);
+        assert_eq!(stored_rejected_transactions, rejected_transactions);
     }
 }
