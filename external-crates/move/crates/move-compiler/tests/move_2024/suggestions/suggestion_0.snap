@@ -5,8 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03005]: unbound unscoped name
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/suggestions/suggestion_0.move:3:25
   │
+2 │     fun fool() { }
+  │         ---- Similarly named defintion found here
 3 │     public fun call() { gool() }
-  │                         ^^^^ Unbound function 'gool' in current scope
+  │                         ^^^^
+  │                         │
+  │                         Could not resolve the name 'gool'
+  │                         Did you mean: 'fool'

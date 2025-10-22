@@ -974,7 +974,9 @@ impl<'outer, 'env> Context<'outer, 'env> {
                 match self.resolve_local(
                     n.loc,
                     NameResolution::UnboundUnscopedName,
-                    /* provide_suggestion */ false,
+                    // Provide a suggestion if this might be a lambda argument.
+                    /* provide_suggestion */
+                    n.value.as_str().starts_with("$"),
                     |n| {
                         if possibly_datatype_name {
                             format!("Unbound datatype or function '{}' in current scope", n)
@@ -1169,13 +1171,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
     fn resolve_term(&mut self, sp!(mloc, ma_): E::ModuleAccess) -> ResolvedTerm {
         match ma_ {
             E::ModuleAccess_::Name(name) if !is_constant_name(&name.value) => {
-                let name_starts_with_lowercase = name
-                    .value
-                    .as_str()
-                    .chars()
-                    .next()
-                    .map(|c| c.is_lowercase())
-                    .unwrap_or(false);
+                let name_starts_with_lowercase = name.value.as_str().starts_with(LOWERCASE_LETTERS);
                 match self.resolve_local(
                     mloc,
                     NameResolution::UnboundVariable,
@@ -1390,12 +1386,11 @@ impl<'outer, 'env> Context<'outer, 'env> {
             None => {
                 let msg = variable_msg(name);
                 let mut diag = diag!(code, (loc, msg));
-                if provide_suggestions {
-                    if let Some((suggestion, loc)) =
+                if provide_suggestions
+                    && let Some((suggestion, loc)) =
                         find_suggestion(&self.local_scopes, name.as_str())
-                    {
-                        add_suggestion(&mut diag, vloc, suggestion, Some(loc));
-                    }
+                {
+                    add_suggestion(&mut diag, vloc, suggestion, Some(loc));
                 }
                 self.add_diag(diag);
                 None

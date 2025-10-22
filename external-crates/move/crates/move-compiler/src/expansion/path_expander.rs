@@ -8,12 +8,13 @@ use crate::{
     editions::{Edition, FeatureGate, create_feature_error},
     expansion::{
         alias_map_builder::{
-            AliasEntry, AliasMapBuilder, LeadingAccessEntry, NameSpace, UnnecessaryAlias,
+            AliasEntry, AliasMapBuilder, LeadingAccessEntry, MemberEntry, NameSpace,
+            UnnecessaryAlias,
         },
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, ModuleIdent, ModuleIdent_},
         legacy_aliases,
-        name_validation::is_valid_datatype_or_constant_name,
+        name_validation::{ModuleMemberKind, is_valid_datatype_or_constant_name},
         translate::{
             DefnContext, ValueError, make_address, module_ident, top_level_address,
             top_level_address_opt, value_result,
@@ -250,6 +251,7 @@ macro_rules! access {
 }
 
 pub(crate) use access;
+use move_symbol_pool::Symbol;
 
 // -----------------------------------------------
 // Error Impls
@@ -609,6 +611,89 @@ const LEADING_ACCESS: &str = "an address or module";
 const ADDRESS_ACCESS: &str = "an address";
 const ALL_ACCESS: &str = "a module, module member, or address";
 
+fn make_leading_access_filter_fn(
+    chain_length: usize,
+    access: &Access,
+) -> impl Fn(&Symbol, &LeadingAccessEntry) -> bool + '_ {
+    fn filter_leading_access(
+        chain_length: usize,
+        access: &Access,
+        entry: &LeadingAccessEntry,
+    ) -> bool {
+        use LeadingAccessEntry as LA;
+        if chain_length == 0 {
+            // This should be unreachable.
+            return false;
+        }
+        // Depending on the chain length and access type, we filter suggestions based on the
+        // entry we found.
+        match (chain_length, access, entry) {
+            // TYPE PARAMETERS
+            // - Never suggest type params
+            (_, _, LA::TypeParam) => false,
+            // MODULE ACCESSES
+            // - If there is a valid module that would fit for a module, suggest that.
+            // - If the moodule has a leading address, suggest that.
+            // - Never suggest a member for a module access.
+            (_, Access::Module, LA::Module(_)) => true,
+            (n, Access::Module, LA::Address(_)) if n > 1 => true,
+            (_, Access::Module, LA::Member(_, _)) => false,
+            // OTHER ACCESSES
+            // For any other accesses:
+            // - Only suggest members on chain length 2, in case it was meant to be an enum.
+            // - Only suggest addresses or modules on chain length 2 or longer.
+            (2, _, LA::Member(_, _)) => true,
+            (_, _, LA::Member(_, _)) => false,
+            (0 | 1, _, LA::Address(_) | LA::Module(_)) => false,
+            (_, _, LA::Module(_)) => true,
+            (2, _, LA::Address(_)) => false,
+            (_, _, LA::Address(_)) => true,
+        }
+    }
+
+    move |name: &Symbol, kind: &LeadingAccessEntry| {
+        name != &ModuleName::SELF_NAME.into() && filter_leading_access(chain_length, access, kind)
+    }
+}
+
+fn make_module_member_filter_fn<'access>(
+    name: &Symbol,
+    access: &'access Access,
+) -> impl Fn(&Symbol, &MemberEntry) -> bool + 'access {
+    fn filter_module_member(access: &Access, entry: &MemberEntry) -> bool {
+        use ModuleMemberKind as K;
+        let kind = match entry {
+            // Bail on type parameters
+            MemberEntry::TypeParam => return false,
+            MemberEntry::Member(_, _, kind) => kind,
+        };
+        match (access, kind) {
+            // Never suggest for a term, as it may be a local.
+            (Access::Term, _) => false,
+            (Access::Type, K::Constant | K::Function) => false,
+            (Access::Type, K::Struct | K::Enum) => true,
+            (Access::ApplyNamed, K::Constant | K::Function | K::Enum) => false,
+            (Access::ApplyNamed, K::Struct) => true,
+            (Access::ApplyPositional, K::Function | K::Struct) => true,
+            (Access::ApplyPositional, K::Constant | K::Enum) => false,
+            (Access::Pattern, K::Constant | K::Struct) => true,
+            (Access::Pattern, K::Function | K::Enum) => false,
+            // Never suggest a member for a module, though this case should be unreachable.
+            (Access::Module, _) => false,
+        }
+    }
+
+    let name_is_uppercase = name.as_str().starts_with(UPPERCASE_LETTERS);
+
+    move |member_name: &Symbol, kind: &MemberEntry| {
+        let is_uppercase = member_name.as_str().starts_with(UPPERCASE_LETTERS);
+        if is_uppercase != name_is_uppercase {
+            return false;
+        }
+        filter_module_member(access, kind)
+    }
+}
+
 impl Move2024PathExpander {
     pub(super) fn new() -> Move2024PathExpander {
         Move2024PathExpander {
@@ -627,42 +712,6 @@ impl Move2024PathExpander {
         use AccessChainNameResult as NR;
         use P::LeadingNameAccess_ as LN;
 
-        fn filter_suggestion(
-            chain_length: usize,
-            access: &Access,
-            entry: &LeadingAccessEntry,
-        ) -> bool {
-            use LeadingAccessEntry as LA;
-            if chain_length == 0 {
-                // This should be unreachable.
-                return false;
-            }
-            // Depending on the chain length and access type, we filter suggestions based on the
-            // entry we found.
-            match (chain_length, access, entry) {
-                // TYPE PARAMETERS
-                // - Never suggest type params
-                (_, _, LA::TypeParam) => false,
-                // MODULE ACCESSES
-                // - If there is a valid module that would fit for a module, suggest that.
-                // - If the moodule has a leading address, suggest that.
-                // - Never suggest a member for a module access.
-                (_, Access::Module, LA::Module(_)) => true,
-                (n, Access::Module, LA::Address(_)) if n > 1 => true,
-                (_, Access::Module, LA::Member(_, _)) => false,
-                // OTHER ACCESSES
-                // For any other accesses:
-                // - Only suggest members on chain length 2, in case it was meant to be an enum.
-                // - Only suggest addresses or modules on chain length 2 or longer.
-                (2, _, LA::Member(_, _)) => true,
-                (_, _, LA::Member(_, _)) => false,
-                (0 | 1, _, LA::Address(_) | LA::Module(_)) => false,
-                (_, _, LA::Module(_)) => true,
-                (2, _, LA::Address(_)) => false,
-                (_, _, LA::Address(_)) => true,
-            }
-        }
-
         match name {
             LN::AnonymousAddress(address) => NR::Address(loc, E::Address::anonymous(loc, address)),
             LN::GlobalAddress(name) => {
@@ -680,20 +729,56 @@ impl Move2024PathExpander {
                     )
                 }
             }
-            LN::Name(name) => match self.resolve_name(context, NameSpace::LeadingAccess, name) {
-                result @ NR::UnresolvedName(_, _) => {
-                    let filter_fn =
-                        |kind: &LeadingAccessEntry| filter_suggestion(chain_length, access, kind);
-
-                    let Some(suggestion) = self.aliases.suggest_leading_access(filter_fn, &name)
-                    else {
-                        return NR::ResolutionFailure(Box::new(result), NF::UnresolvedAlias(name));
-                    };
-                    NR::ResolutionFailure(Box::new(result), NF::Suggestion(name, suggestion))
-                }
-                other => other,
-            },
+            LN::Name(name) => {
+                let result = self.resolve_name(context, NameSpace::LeadingAccess, name);
+                let NR::UnresolvedName(_, _) = result else {
+                    return result;
+                };
+                let Some(suggestion) = self.aliases.suggest_leading_access(
+                    make_leading_access_filter_fn(chain_length, access),
+                    &name,
+                ) else {
+                    return NR::ResolutionFailure(Box::new(result), NF::UnresolvedAlias(name));
+                };
+                NR::ResolutionFailure(Box::new(result), NF::Suggestion(name, suggestion))
+            }
         }
+    }
+
+    fn resolve_single(
+        &mut self,
+        context: &mut DefnContext,
+        namespace: NameSpace,
+        access: &Access,
+        name: Name,
+    ) -> AccessChainNameResult {
+        use AccessChainNameResult as NR;
+
+        let result = self.resolve_name(context, namespace, name);
+        let NR::UnresolvedName(_, _) = result else {
+            return result;
+        };
+        // We ignore macro arguments, since they produce really unusual and useless suggestions.
+        // We also ignore `_` as a name, since it is a special case and takes different error paths.
+        let name_str = name.value.as_str();
+        if name_str == "_" || name_str.starts_with("$") {
+            return result;
+        }
+        let suggestion_opt = match namespace {
+            NameSpace::ModuleMembers => self
+                .aliases
+                .suggest_module_member(make_module_member_filter_fn(&name.value, access), &name),
+            NameSpace::LeadingAccess => self
+                .aliases
+                .suggest_leading_access(make_leading_access_filter_fn(1, access), &name),
+        };
+        let Some(suggestion) = suggestion_opt else {
+            return result;
+        };
+        NR::ResolutionFailure(
+            Box::new(result),
+            AccessChainFailure::Suggestion(name, suggestion),
+        )
     }
 
     fn resolve_name(
@@ -841,7 +926,7 @@ impl Move2024PathExpander {
                 {
                     NR::UnresolvedName(name.loc, name)
                 } else {
-                    self.resolve_name(context, namespace, name)
+                    self.resolve_single(context, namespace, &access, name)
                 };
                 AccessChainResult {
                     result,
