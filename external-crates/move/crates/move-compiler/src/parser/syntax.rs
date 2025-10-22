@@ -111,7 +111,7 @@ macro_rules! with_stop_set {
         struct Restore(Rc<RefCell<TokenSet>>, TokenSet);
         impl Drop for Restore {
             fn drop(&mut self) {
-                *self.0.borrow_mut() = std::mem::replace(&mut self.1, TokenSet::new());
+                *self.0.borrow_mut() = std::mem::take(&mut self.1);
             }
         }
         let __restore = Restore(Rc::clone(&__ctx.stop_set), __old);
