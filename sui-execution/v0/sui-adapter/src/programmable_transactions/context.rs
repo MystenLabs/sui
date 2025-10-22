@@ -22,9 +22,9 @@ mod checked {
     use crate::programmable_transactions::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
     use crate::type_resolver::TypeTagResolver;
     use move_binary_format::{
+        CompiledModule,
         errors::{Location, VMError, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
-        CompiledModule,
     };
     use move_core_types::{
         account_address::AccountAddress,
@@ -33,7 +33,7 @@ mod checked {
     use move_vm_runtime::{move_vm::MoveVM, session::Session};
     use move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{
-        self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
+        self, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution_status::CommandArgumentError;
@@ -42,7 +42,7 @@ mod checked {
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
         coin::Coin,
-        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
+        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV1},
         metrics::LimitsMetrics,
@@ -580,7 +580,9 @@ mod checked {
                     ..
                 } = &object_metadata
                 else {
-                    unreachable!("Found non-input object metadata for input object when adding writes to input objects -- impossible in v0");
+                    unreachable!(
+                        "Found non-input object metadata for input object when adding writes to input objects -- impossible in v0"
+                    );
                 };
                 input_object_metadata.insert(object_metadata.id(), object_metadata.clone());
                 let Some(Value::Object(object_value)) = value else {
@@ -613,7 +615,7 @@ mod checked {
                                     result_idx: i as u16,
                                     secondary_idx: j as u16,
                                 }
-                                .into())
+                                .into());
                             }
                             Some(Value::Raw(RawValueType::Any, _)) => (),
                             Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
@@ -772,20 +774,26 @@ mod checked {
                 let delete_kind_with_seq = match delete_kind {
                     DeleteKind::Normal | DeleteKind::Wrap => {
                         let old_version = match input_object_metadata.get(&id) {
-                        Some(metadata) => {
-                            assert_invariant!(
-                                !matches!(metadata, InputObjectMetadata::InputObject { owner: Owner::Immutable, .. }),
-                                "Attempting to delete immutable object {id} via delete kind {delete_kind}"
-                            );
-                            metadata.version()
-                        }
-                        None => {
-                            match loaded_child_objects.get(&id) {
-                                Some(version) => *version,
-                                None => invariant_violation!("Deleted/wrapped object {id} must be either in input or loaded child objects")
+                            Some(metadata) => {
+                                assert_invariant!(
+                                    !matches!(
+                                        metadata,
+                                        InputObjectMetadata::InputObject {
+                                            owner: Owner::Immutable,
+                                            ..
+                                        }
+                                    ),
+                                    "Attempting to delete immutable object {id} via delete kind {delete_kind}"
+                                );
+                                metadata.version()
                             }
-                        }
-                    };
+                            None => match loaded_child_objects.get(&id) {
+                                Some(version) => *version,
+                                None => invariant_violation!(
+                                    "Deleted/wrapped object {id} must be either in input or loaded child objects"
+                                ),
+                            },
+                        };
                         if delete_kind == DeleteKind::Normal {
                             DeleteKindWithOldVersion::Normal(old_version)
                         } else {
@@ -1346,13 +1354,15 @@ mod checked {
             TypeTag::Struct(inner) => *inner,
             _ => invariant_violation!("Non struct type for object"),
         };
-        MoveObject::new_from_execution(
-            struct_tag.into(),
-            has_public_transfer,
-            old_obj_ver.unwrap_or_default(),
-            contents,
-            protocol_config,
-            /* system_mutation */ false,
-        )
+        unsafe {
+            MoveObject::new_from_execution(
+                struct_tag.into(),
+                has_public_transfer,
+                old_obj_ver.unwrap_or_default(),
+                contents,
+                protocol_config,
+                /* system_mutation */ false,
+            )
+        }
     }
 }

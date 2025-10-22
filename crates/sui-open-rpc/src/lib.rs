@@ -6,7 +6,7 @@ extern crate core;
 use std::collections::btree_map::Entry::Occupied;
 use std::collections::{BTreeMap, HashMap};
 
-use schemars::gen::{SchemaGenerator, SchemaSettings};
+use schemars::r#gen::{SchemaGenerator, SchemaSettings};
 use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

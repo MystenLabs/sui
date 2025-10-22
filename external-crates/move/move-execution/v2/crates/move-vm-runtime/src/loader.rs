@@ -8,14 +8,14 @@ use crate::{
     session::LoadedFunctionInstantiation,
 };
 use move_binary_format::{
-    errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
+    IndexKind,
+    errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
     file_format::{
         AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex,
         FieldInstantiationIndex, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
         FunctionInstantiationIndex, SignatureIndex, SignatureToken, StructDefInstantiationIndex,
         StructDefinitionIndex, StructFieldInformation, TableIndex, TypeParameterIndex,
     },
-    IndexKind,
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::{
@@ -36,7 +36,7 @@ use move_vm_types::{
 };
 use parking_lot::RwLock;
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, btree_map::Entry},
     fmt::Debug,
     hash::Hash,
     sync::Arc,
@@ -285,11 +285,11 @@ impl ModuleCache {
             .zip(self.structs.binaries.iter_mut().rev())
         {
             match Arc::get_mut(struct_type) {
-                Some(ref mut x) => match &mut x.datatype_info {
+                Some(x) => match &mut x.datatype_info {
                     Datatype::Enum(_) => {
                         unreachable!("enum types cannot be loaded into the cache in v2")
                     }
-                    Datatype::Struct(ref mut struct_type) => {
+                    Datatype::Struct(struct_type) => {
                         struct_type.fields = fields;
                     }
                 },

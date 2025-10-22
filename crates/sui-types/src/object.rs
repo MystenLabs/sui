@@ -15,8 +15,8 @@ use mysten_common::debug_fatal;
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::Bytes;
+use serde_with::serde_as;
 
 use crate::accumulator_root::AccumulatorValue;
 use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
@@ -100,7 +100,15 @@ impl MoveObject {
         } else {
             protocol_config.max_move_object_size()
         };
-        Self::new_from_execution_with_limit(type_, has_public_transfer, version, contents, bound)
+        unsafe {
+            Self::new_from_execution_with_limit(
+                type_,
+                has_public_transfer,
+                version,
+                contents,
+                bound,
+            )
+        }
     }
 
     /// # Safety
@@ -1293,7 +1301,11 @@ impl Display for PastObjectRead {
                 asked_version,
                 latest_version,
             } => {
-                write!(f, "PastObjectRead::VersionTooHigh ({:?}, asked sequence number {:?}, latest sequence number {:?})", object_id, asked_version, latest_version)
+                write!(
+                    f,
+                    "PastObjectRead::VersionTooHigh ({:?}, asked sequence number {:?}, latest sequence number {:?})",
+                    object_id, asked_version, latest_version
+                )
             }
         }
     }
@@ -1301,7 +1313,7 @@ impl Display for PastObjectRead {
 
 #[cfg(test)]
 mod tests {
-    use crate::object::{Object, Owner, OBJECT_START_VERSION};
+    use crate::object::{OBJECT_START_VERSION, Object, Owner};
     use crate::{
         base_types::{ObjectID, SuiAddress, TransactionDigest},
         gas_coin::GasCoin,
@@ -1331,7 +1343,10 @@ mod tests {
         );
 
         let objref = format!("{:?}", o.compute_object_reference());
-        assert_eq!(objref, "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)");
+        assert_eq!(
+            objref,
+            "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)"
+        );
     }
 
     #[test]

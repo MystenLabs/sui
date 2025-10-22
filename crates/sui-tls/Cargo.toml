@@ -4,7 +4,7 @@ version = "0.0.0"
 license = "Apache-2.0"
 authors = ["Brandon Williams <brandon@mystenlabs.com>"]
 description = "tools for rustls-based certificate generation and verification"
-edition = "2021"
+edition = "2024"
 publish = false
 
 [dependencies]

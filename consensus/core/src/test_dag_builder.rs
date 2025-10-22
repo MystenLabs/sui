@@ -10,16 +10,16 @@ use std::{
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use parking_lot::RwLock;
-use rand::{rngs::StdRng, seq::SliceRandom, thread_rng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom, thread_rng};
 
 use crate::{
-    block::{genesis_blocks, BlockAPI, BlockTransactionVotes, Slot, TestBlock, VerifiedBlock},
+    CommitRef, CommittedSubDag, Transaction,
+    block::{BlockAPI, BlockTransactionVotes, Slot, TestBlock, VerifiedBlock, genesis_blocks},
     commit::{CertifiedCommit, CommitDigest, TrustedCommit},
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
     linearizer::{BlockStoreAPI, Linearizer},
-    CommitRef, CommittedSubDag, Transaction,
 };
 
 /// DagBuilder API
@@ -547,7 +547,7 @@ impl<'a> LayerBuilder<'a> {
         self.rejected_transactions_seed = if let Some(seed) = seed {
             seed
         } else {
-            thread_rng().gen()
+            thread_rng().r#gen()
         };
         self
     }
@@ -627,7 +627,10 @@ impl<'a> LayerBuilder<'a> {
     }
 
     pub fn persist_layers(&self, dag_state: Arc<RwLock<DagState>>) {
-        assert!(!self.blocks.is_empty(), "Called to persist layers although no blocks have been created. Make sure you have called build before.");
+        assert!(
+            !self.blocks.is_empty(),
+            "Called to persist layers although no blocks have been created. Make sure you have called build before."
+        );
         dag_state.write().accept_blocks(self.blocks.clone());
     }
 

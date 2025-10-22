@@ -4,7 +4,7 @@
 
 use super::base_types::*;
 use crate::crypto::{
-    random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey, NetworkPublicKey,
+    AuthorityKeyPair, AuthorityPublicKey, NetworkPublicKey, random_committee_key_pairs_of_size,
 };
 use crate::error::{SuiErrorKind, SuiResult};
 use crate::multiaddr::Multiaddr;
@@ -167,11 +167,11 @@ impl Committee {
             .unwrap()
     }
 
-    fn choose_multiple_weighted<'a>(
+    fn choose_multiple_weighted<'a, T: Rng>(
         slice: &'a [(AuthorityName, StakeUnit)],
         count: usize,
-        rng: &mut impl Rng,
-    ) -> impl Iterator<Item = &'a AuthorityName> {
+        rng: &mut T,
+    ) -> impl Iterator<Item = &'a AuthorityName> + use<'a, T> {
         // unwrap is safe because we validate the committee composition in `new` above.
         // See https://docs.rs/rand/latest/rand/distributions/weighted/enum.WeightedError.html
         // for possible errors.
@@ -440,7 +440,7 @@ impl Display for CommitteeWithNetworkMetadata {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::crypto::{get_key_pair, AuthorityKeyPair};
+    use crate::crypto::{AuthorityKeyPair, get_key_pair};
     use fastcrypto::traits::KeyPair;
 
     #[test]
