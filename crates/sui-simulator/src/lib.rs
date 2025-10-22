@@ -171,7 +171,7 @@ pub mod random {
         thread_local! {
             // a random seed that is shared by the whole test process, so that equal `value`
             // inputs produce different outputs when the test seed changes
-            static SEED: u64 = thread_rng().gen();
+            static SEED: u64 = thread_rng().r#gen();
         }
 
         chance
