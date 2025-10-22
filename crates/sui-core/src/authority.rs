@@ -2786,7 +2786,7 @@ impl AuthorityState {
             .is_tx_already_executed(digest)
     }
 
-    #[instrument(level = "debug", skip_all, err)]
+    #[instrument(level = "debug", skip_all, err(level = "debug"))]
     fn index_tx(
         &self,
         indexes: &IndexStore,
@@ -3141,7 +3141,7 @@ impl AuthorityState {
         }))
     }
 
-    #[instrument(level = "trace", skip_all, err)]
+    #[instrument(level = "trace", skip_all, err(level = "debug"))]
     fn post_process_one_tx(
         &self,
         certificate: &VerifiedExecutableTransaction,

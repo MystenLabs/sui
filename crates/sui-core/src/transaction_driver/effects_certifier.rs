@@ -58,7 +58,7 @@ impl EffectsCertifier {
         Self { metrics }
     }
 
-    #[instrument(level = "error", skip_all, err)]
+    #[instrument(level = "error", skip_all, err(level = "debug"))]
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,

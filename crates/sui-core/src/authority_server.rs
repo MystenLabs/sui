@@ -1499,7 +1499,7 @@ impl ValidatorService {
         }
     }
 
-    #[instrument(level = "error", skip_all, err)]
+    #[instrument(level = "error", skip_all, err(level = "debug"))]
     async fn ping_response(
         &self,
         request: WaitForEffectsRequest,
@@ -1581,7 +1581,7 @@ impl ValidatorService {
         }
     }
 
-    #[instrument(level = "error", skip_all, err)]
+    #[instrument(level = "error", skip_all, err(level = "debug"))]
     async fn wait_for_fastpath_effects(
         &self,
         consensus_position: ConsensusPosition,
