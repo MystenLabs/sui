@@ -433,7 +433,13 @@ impl ExecutionScheduler {
                 Schedulable::Transaction(tx) => {
                     // Check if this transaction has withdraws based on the assigned versions
                     match env.assigned_versions.withdraw_type {
-                        WithdrawType::Withdraw(accumulator_version) => {
+                        WithdrawType::Withdraw => {
+                            let accumulator_version = env
+                                .assigned_versions
+                                .accumulator_version
+                                .expect(
+                                "accumulator_version must be set when withdraw_type is Withdraw",
+                            );
                             tx_with_withdraws.push((tx, accumulator_version, env));
                         }
                         WithdrawType::NonWithdraw => {
@@ -559,8 +565,8 @@ impl ExecutionScheduler {
 
     pub fn check_requires_retry_later(
         &self,
-        certificate: &VerifiedExecutableTransaction,
-        effects: &TransactionEffects,
+        _certificate: &VerifiedExecutableTransaction,
+        _effects: &TransactionEffects,
     ) -> bool {
         false
     }

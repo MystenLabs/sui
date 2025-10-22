@@ -32,7 +32,7 @@ pub struct SharedObjVerManager {}
 pub enum WithdrawType {
     #[default]
     NonWithdraw,
-    Withdraw(SequenceNumber), // Accumulator version for withdraw
+    Withdraw,
 }
 
 /// Version assignments for a single transaction
@@ -40,23 +40,27 @@ pub enum WithdrawType {
 pub struct AssignedVersions {
     pub shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
     pub withdraw_type: WithdrawType,
+    /// Accumulator version number when accumulator is enabled and transaction involves balance withdrawals
+    pub accumulator_version: Option<SequenceNumber>,
 }
 
 impl AssignedVersions {
     pub fn new(
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         withdraw_type: WithdrawType,
+        accumulator_version: Option<SequenceNumber>,
     ) -> Self {
         Self {
             shared_object_versions,
             withdraw_type,
+            accumulator_version,
         }
     }
 
     pub fn non_withdraw(
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
     ) -> Self {
-        Self::new(shared_object_versions, WithdrawType::NonWithdraw)
+        Self::new(shared_object_versions, WithdrawType::NonWithdraw, None)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ConsensusObjectSequenceKey, SequenceNumber)> {
@@ -321,7 +325,7 @@ impl SharedObjVerManager {
     ) -> AssignedVersions {
         let shared_input_objects: Vec<_> = assignable.shared_input_objects(epoch_store).collect();
 
-        let withdraw_type =
+        let (withdraw_type, accumulator_version) =
             assignable.as_tx().and_then(|tx| {
                 if tx.transaction_data().has_funds_withdrawals() {
                     let accumulator_initial_version = epoch_store
@@ -333,17 +337,16 @@ impl SharedObjVerManager {
                         .get(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_initial_version))
                         .expect("accumulator object must be in shared_input_next_versions when withdraws are enabled");
 
-                    Some(accumulator_version)
+                    Some((WithdrawType::Withdraw, Some(accumulator_version)))
                 } else {
                     None
                 }
             })
-            .map(WithdrawType::Withdraw)
-            .unwrap_or_default();
+            .unwrap_or((WithdrawType::NonWithdraw, None));
 
         if shared_input_objects.is_empty() {
             // No shared object used by this transaction. No need to assign versions.
-            return AssignedVersions::new(vec![], withdraw_type);
+            return AssignedVersions::new(vec![], withdraw_type, accumulator_version);
         }
 
         let tx_key = assignable.key();
@@ -462,7 +465,7 @@ impl SharedObjVerManager {
             "locking shared objects"
         );
 
-        AssignedVersions::new(assigned_versions, withdraw_type)
+        AssignedVersions::new(assigned_versions, withdraw_type, accumulator_version)
     }
 }
 
@@ -1104,7 +1107,8 @@ mod tests {
                         withdraw_key,
                         AssignedVersions {
                             shared_object_versions: vec![],
-                            withdraw_type: WithdrawType::Withdraw(acc_version),
+                            withdraw_type: WithdrawType::Withdraw,
+                            accumulator_version: Some(acc_version),
                         }
                     ),
                     (
@@ -1115,6 +1119,7 @@ mod tests {
                                 acc_version
                             )],
                             withdraw_type: WithdrawType::NonWithdraw,
+                            accumulator_version: None,
                         }
                     ),
                 ]),
@@ -1159,7 +1164,8 @@ mod tests {
                         withdraw_key1,
                         AssignedVersions {
                             shared_object_versions: vec![],
-                            withdraw_type: WithdrawType::Withdraw(acc_version),
+                            withdraw_type: WithdrawType::Withdraw,
+                            accumulator_version: Some(acc_version),
                         }
                     ),
                     (
@@ -1170,13 +1176,15 @@ mod tests {
                                 acc_version
                             )],
                             withdraw_type: WithdrawType::NonWithdraw,
+                            accumulator_version: None,
                         }
                     ),
                     (
                         withdraw_key2,
                         AssignedVersions {
                             shared_object_versions: vec![],
-                            withdraw_type: WithdrawType::Withdraw(acc_version.next()),
+                            withdraw_type: WithdrawType::Withdraw,
+                            accumulator_version: Some(acc_version.next()),
                         }
                     ),
                     (
@@ -1187,13 +1195,15 @@ mod tests {
                                 acc_version.next()
                             )],
                             withdraw_type: WithdrawType::NonWithdraw,
+                            accumulator_version: None,
                         }
                     ),
                     (
                         withdraw_key3,
                         AssignedVersions {
                             shared_object_versions: vec![],
-                            withdraw_type: WithdrawType::Withdraw(acc_version.next().next()),
+                            withdraw_type: WithdrawType::Withdraw,
+                            accumulator_version: Some(acc_version.next().next()),
                         }
                     ),
                     (
@@ -1204,6 +1214,7 @@ mod tests {
                                 acc_version.next().next()
                             )],
                             withdraw_type: WithdrawType::NonWithdraw,
+                            accumulator_version: None,
                         }
                     ),
                 ]),
@@ -1260,7 +1271,8 @@ mod tests {
                                 (shared_obj_id, shared_obj_version),
                                 shared_obj_version
                             )],
-                            withdraw_type: WithdrawType::Withdraw(acc_version),
+                            withdraw_type: WithdrawType::Withdraw,
+                            accumulator_version: Some(acc_version),
                         }
                     ),
                     (
@@ -1271,6 +1283,7 @@ mod tests {
                                 acc_version
                             )],
                             withdraw_type: WithdrawType::NonWithdraw,
+                            accumulator_version: None,
                         }
                     ),
                 ]),

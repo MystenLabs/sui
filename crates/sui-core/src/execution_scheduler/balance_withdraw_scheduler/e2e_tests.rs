@@ -136,7 +136,8 @@ impl TestEnv {
                 .iter()
                 .map(|tx| {
                     let mut env = ExecutionEnv::default();
-                    env.assigned_versions.withdraw_type = WithdrawType::Withdraw(version);
+                    env.assigned_versions.withdraw_type = WithdrawType::Withdraw;
+                    env.assigned_versions.accumulator_version = Some(version);
                     (Schedulable::Transaction(tx.clone()), env)
                 })
                 .collect(),
