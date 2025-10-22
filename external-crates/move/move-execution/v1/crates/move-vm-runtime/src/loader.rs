@@ -8,9 +8,8 @@ use crate::{
     session::LoadedFunctionInstantiation,
 };
 use move_binary_format::{
-    IndexKind,
     binary_config::BinaryConfig,
-    errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
+    errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex,
         FieldInstantiationIndex, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
@@ -18,6 +17,7 @@ use move_binary_format::{
         StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
         TypeParameterIndex,
     },
+    IndexKind,
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::{
@@ -287,11 +287,11 @@ impl ModuleCache {
             .zip(self.structs.binaries.iter_mut().rev())
         {
             match Arc::get_mut(struct_type) {
-                Some(x) => match &mut x.datatype_info {
+                Some(ref mut x) => match &mut x.datatype_info {
                     Datatype::Enum(_) => {
                         unreachable!("enum types cannot be loaded into the cache in v1")
                     }
-                    Datatype::Struct(struct_type) => {
+                    Datatype::Struct(ref mut struct_type) => {
                         struct_type.fields = fields;
                     }
                 },
