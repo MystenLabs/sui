@@ -23,5 +23,10 @@ sui-types.workspace = true
 telemetry-subscribers.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tonic = { version = "0.12.2", features = ["tls", "transport"] }
+tonic = { workspace = true, features = ["transport"] }
+tonic-prost.workspace = true
 tracing.workspace = true
+
+[build-dependencies]
+tonic-prost-build.workspace = true
+protox.workspace = true
