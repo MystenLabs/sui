@@ -65,7 +65,7 @@ pub enum PackageError {
     #[error(transparent)]
     FetchError(#[from] FetchError),
 
-    #[error("Invalid system dependency `{dep}`. The valid dependencies are `{valid}`")]
+    #[error("Invalid system dependency `{dep}`; the allowed system dependencies are: {valid}")]
     InvalidSystemDep { dep: String, valid: String },
 
     #[error("Error while loading dependency {dep}: {err}")]
@@ -98,8 +98,7 @@ pub enum PackageError {
     },
 
     #[error(
-        "Ephemeral publication file does not exist, so you must pass `--build-env <env>` to
-        indicate what environment it should be created for"
+        "Ephemeral publication file does not exist, so you must pass `--build-env <env>` to indicate what environment it should be created for"
     )]
     EphemeralNoBuildEnv,
 

@@ -152,7 +152,7 @@ async fn external_bad_schema() {
         .build();
 
     assert_snapshot!(scenario.root_package_err("root").await,
-        @"Failed to load package from <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (response was not serialized correctly)"
+        @"Error while loading dependency <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (response was not serialized correctly)"
     );
 }
 
@@ -176,7 +176,7 @@ async fn external_empty_output() {
         .build();
 
     assert_snapshot!(scenario.root_package_err("root").await,
-        @"Failed to load package from <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (response was not serialized correctly)"
+        @"Error while loading dependency <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (response was not serialized correctly)"
     );
 }
 
@@ -203,7 +203,7 @@ async fn external_errorcode() {
         .build();
 
     assert_snapshot!(scenario.root_package_err("root").await,
-        @"Failed to load package from <ROOT>/a: `mock-resolver` returned error code: exit status: 1"
+        @"Error while loading dependency <ROOT>/a: `mock-resolver` returned error code: exit status: 1"
     );
 }
 
@@ -234,7 +234,7 @@ async fn external_missing_keys() {
         .build();
 
     assert_snapshot!(scenario.root_package_err("root").await,
-        @"Failed to load package from <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (received wrong set of responses)"
+        @"Error while loading dependency <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (received wrong set of responses)"
     );
 }
 
@@ -258,7 +258,7 @@ async fn external_non_json() {
         .build();
 
     assert_snapshot!(scenario.root_package_err("root").await,
-        @"Failed to load package from <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (response was not serialized correctly)"
+        @"Error while loading dependency <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (response was not serialized correctly)"
     );
 }
 
@@ -282,7 +282,7 @@ async fn external_returns_external() {
         .build();
 
     assert_snapshot!(scenario.root_package_err("root").await,
-        @"Failed to load package from <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (response was not serialized correctly)"
+        @"Error while loading dependency <ROOT>/a: `mock-resolver` did not follow the external resolver protocol (response was not serialized correctly)"
     );
 }
 
@@ -305,6 +305,6 @@ async fn external_no_resolver() {
         .build();
 
     assert_snapshot!(scenario.root_package_err("root").await,
-        @"Failed to load package from <ROOT>/a: External resolver `abcdef` not found; ensure that it is installed and on your PATH"
+        @"Error while loading dependency <ROOT>/a: External resolver `abcdef` not found; ensure that it is installed and on your PATH"
     );
 }
