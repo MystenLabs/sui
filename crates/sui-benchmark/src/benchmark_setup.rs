@@ -73,7 +73,6 @@ impl BenchmarkSetup {
                     genesis,
                     registry,
                     reconfig_fullnode_rpc_url,
-                    None,
                 )
                 .await,
             )]

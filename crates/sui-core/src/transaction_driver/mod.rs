@@ -456,15 +456,14 @@ pub fn choose_transaction_driver_percentage(
     }
 
     if let Some(chain_identifier) = chain_id {
-        if chain_identifier.chain() == sui_protocol_config::Chain::Mainnet {
-            // Require explicit opt-in to TransactionDriver on mainnet,
-            // via the TRANSACTION_DRIVER environment variable.
-            return 0;
+        if chain_identifier.chain() == sui_protocol_config::Chain::Unknown {
+            // Kep test coverage for QD.
+            return 50;
         }
     }
 
-    // Default to 50% everywhere except mainnet
-    50
+    // Default to 100% everywhere
+    100
 }
 
 // Inner state of TransactionDriver.
