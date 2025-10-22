@@ -470,9 +470,10 @@ prometheus-http-query = { version = "0.8", default-features = false, features = 
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 proptest = "1.6.0"
 proptest-derive = "0.5"
-prost = "0.13"
-prost-build = "0.13"
-prost-types = "0.13.1"
+prost = "0.14.1"
+prost-build = "0.14.1"
+prost-types = "0.14.1"
+protox = "0.9"
 protobuf = { version = "2.28", features = ["with-bytes"] }
 quinn-proto = "0.11.7"
 quote = "1.0.23"
@@ -548,16 +549,18 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.13.1", features = [
+tonic = { version = "0.14.2", features = [
   "zstd",
   "transport",
   "tls-webpki-roots",
 ] }
-tonic-build = { version = "0.13.1", features = ["prost", "transport"] }
-tonic-health = "0.13.1"
-tonic-reflection = "0.13.1"
-tonic-web = "0.13.1"
-tonic-rustls = "0.2.0"
+tonic-build = "0.14.2"
+tonic-prost = "0.14.2"
+tonic-prost-build = "0.14.2"
+tonic-health = "0.14.2"
+tonic-reflection = "0.14.2"
+tonic-web = "0.14.2"
+tonic-rustls = "0.3.0"
 tower = { version = "0.5", features = [
   "full",
   "util",
@@ -662,9 +665,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c794
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5a8ac53819d0e6fb518f4e23879df19b832ff884", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5a8ac53819d0e6fb518f4e23879df19b832ff884", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5a8ac53819d0e6fb518f4e23879df19b832ff884" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5479149c424a17df7dddc3d03e6727baa59637fd", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5479149c424a17df7dddc3d03e6727baa59637fd", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5479149c424a17df7dddc3d03e6727baa59637fd" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

@@ -63,7 +63,7 @@ fn main() {
     let file_descriptors = protox::compile(proto_files, [sui_proto_dir, sui_rpc_proto_dir])
         .expect("failed to compile proto files");
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_client(true)
         .build_server(true)
         .type_attribute(".", "#[non_exhaustive]")
