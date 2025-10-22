@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/extensions/extend_address.move:1:1
+  │
+1 │ address a {
+  │ ^^^^^^^ 'address' blocks are deprecated. Use addresses directly in module definitions instead.
+2 │     module m { }
+  │            - Replace with 'a::m'
+  ·
+5 │     extend module m { }
+  │                   - Replace with 'a::m'

@@ -9,4 +9,6 @@ warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/extensions/invalid_annotations.move:6:3
   │
 6 │ #[allow(unreachable_code)]
-  │   ^^^^^^^^^^^^^^^^^^^^^^^ Non-'mode' attributes on module extensions are not supported and will be ignored
+  │   ^^^^^^^^^^^^^^^^^^^^^^^ Ignoring non-'mode' attribute 'allow' on module extension
+  │
+  = Only '#[mode(...)]' and '#[test_only]' are supported on module extensions
