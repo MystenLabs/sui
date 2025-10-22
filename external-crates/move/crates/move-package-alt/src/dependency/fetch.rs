@@ -25,11 +25,11 @@ pub struct FetchedDependency(pub(super) Dependency<Fetched>);
 
 #[derive(Error, Debug)]
 pub enum FetchError {
-    #[error(transparent)]
-    BadPackage(#[from] PackagePathError),
+    #[error("Failed to load dependency `{1}`: {0:?}")]
+    BadPackage(PackagePathError, String),
 
-    #[error(transparent)]
-    GitFailure(#[from] GitError),
+    #[error("Error while fetching `{1}`: {0:?}")]
+    GitFailure(GitError, String),
 }
 
 pub type FetchResult<T> = Result<T, FetchError>;
@@ -41,11 +41,15 @@ impl FetchedDependency {
     /// transformed into git dependencies
     pub async fn fetch(pinned: &Pinned) -> FetchResult<PackagePath> {
         let path = match &pinned {
-            Pinned::Git(dep) => dep.inner.fetch().await?,
+            Pinned::Git(dep) => dep
+                .inner
+                .fetch()
+                .await
+                .map_err(FetchError::from_git(pinned))?,
             _ => pinned.unfetched_path(),
         };
 
-        Ok(PackagePath::new(path)?)
+        PackagePath::new(path).map_err(FetchError::from_package(pinned))
     }
 }
 
@@ -65,5 +69,17 @@ impl LocalDepInfo {
             .expect("non-directory files have parents")
             .join(&self.local)
             .clean()
+    }
+}
+
+impl FetchError {
+    fn from_package(pinned: &Pinned) -> impl FnOnce(PackagePathError) -> Self {
+        let pin = format!("{pinned}");
+        |e| Self::BadPackage(e, pin)
+    }
+
+    fn from_git(pinned: &Pinned) -> impl FnOnce(GitError) -> Self {
+        let pin = format!("{pinned}");
+        |e| Self::GitFailure(e, pin)
     }
 }

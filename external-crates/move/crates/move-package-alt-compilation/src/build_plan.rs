@@ -4,6 +4,7 @@
 
 use std::{collections::BTreeSet, io::Write, path::Path};
 
+use anyhow::bail;
 use vfs::VfsPath;
 
 use crate::{
@@ -22,10 +23,7 @@ use move_compiler::{
     shared::{SaveFlag, SaveHook, files::MappedFiles},
 };
 use move_package_alt::{
-    errors::{PackageError, PackageResult},
-    flavor::MoveFlavor,
-    package::RootPackage,
-    schema::PackageName,
+    errors::PackageResult, flavor::MoveFlavor, package::RootPackage, schema::PackageName,
 };
 use move_symbol_pool::Symbol;
 
@@ -55,7 +53,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         self,
         writer: &mut W,
         modify_compiler: impl FnOnce(Compiler) -> Compiler,
-    ) -> PackageResult<CompiledPackage> {
+    ) -> anyhow::Result<CompiledPackage> {
         self.compile_with_driver(writer, |compiler| {
             modify_compiler(compiler).build_and_report()
         })
@@ -68,7 +66,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
             Compiler,
         )
             -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
-    ) -> PackageResult<CompiledPackage> {
+    ) -> anyhow::Result<CompiledPackage> {
         let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
         let compiled = build_all::<W, F>(
             writer,
@@ -97,7 +95,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         &self,
         writer: &mut W,
         modify_compiler: impl FnOnce(Compiler) -> Compiler,
-    ) -> PackageResult<CompiledPackage> {
+    ) -> anyhow::Result<CompiledPackage> {
         let mut diags = None;
         let res = self.compile_with_driver(writer, |compiler| {
             let (files, units_res) = modify_compiler(compiler).build()?;
@@ -122,17 +120,14 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         if let Some(diags) = diags
             && let Err(err) = std::io::stdout().write_all(&diags)
         {
-            return Err(PackageError::Generic(format!(
-                "Cannot output compiler diagnostics: {}",
-                err
-            )));
+            bail!("Cannot output compiler diagnostics: {}", err);
         }
         res
     }
 
     // Clean out old packages that are no longer used, or no longer used under the current
     // compilation flags
-    fn clean(&self, project_root: &Path, keep_paths: BTreeSet<PackageName>) -> PackageResult<()> {
+    fn clean(&self, project_root: &Path, keep_paths: BTreeSet<PackageName>) -> anyhow::Result<()> {
         // Compute the actual build directory based on install_dir configuration
         let build_root = shared::get_build_output_path(project_root, &self.build_config);
 

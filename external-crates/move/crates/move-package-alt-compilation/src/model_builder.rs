@@ -9,7 +9,7 @@ use crate::{
 };
 use move_compiler::shared::{SaveFlag, SaveHook};
 use move_model_2::source_model;
-use move_package_alt::{errors::PackageResult, flavor::MoveFlavor, package::RootPackage};
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
 use move_symbol_pool::Symbol;
 use std::io::Write;
 
@@ -22,7 +22,7 @@ pub fn build<W: Write + Send, F: MoveFlavor>(
     writer: &mut W,
     root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
-) -> PackageResult<source_model::Model> {
+) -> anyhow::Result<source_model::Model> {
     // TODO: does this also need to be `name_root` like in compilation?
     let root_package_name = Symbol::from(root_pkg.name().as_str());
     let build_named_addresses: BuildNamedAddresses =
