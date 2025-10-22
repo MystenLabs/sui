@@ -119,7 +119,7 @@ pub async fn execute_certificate_with_execution_error(
                 .unwrap()
         }
     } else {
-        AssignedVersions::non_withdraw(vec![])
+        AssignedVersions::new(vec![], None)
     };
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -448,7 +448,7 @@ pub async fn send_consensus(
         .into_iter()
         .next()
         .map(|(_, v)| v)
-        .unwrap_or_else(|| AssignedVersions::non_withdraw(vec![]));
+        .unwrap_or_else(|| AssignedVersions::new(vec![], None));
 
     let certs = vec![(
         VerifiedExecutableTransaction::new_from_certificate(cert.clone()),

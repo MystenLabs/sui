@@ -2494,10 +2494,11 @@ impl AuthorityPerEpochStore {
         &self,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
+        accumulator_version: Option<SequenceNumber>,
         cache_reader: &dyn ObjectCacheRead,
     ) -> SuiResult<AssignedVersions> {
         let assigned_versions = SharedObjVerManager::assign_versions_from_effects(
-            &[(certificate, effects)],
+            &[(certificate, effects, accumulator_version)],
             self,
             cache_reader,
         );

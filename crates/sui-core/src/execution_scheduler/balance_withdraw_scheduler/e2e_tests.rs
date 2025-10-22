@@ -31,8 +31,7 @@ use tokio::time::timeout;
 use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::{
     authority::{
-        AuthorityState, ExecutionEnv,
-        shared_object_version_manager::{Schedulable, WithdrawType},
+        AuthorityState, ExecutionEnv, shared_object_version_manager::Schedulable,
         test_authority_builder::TestAuthorityBuilder,
     },
     execution_scheduler::{ExecutionScheduler, PendingCertificate},
@@ -136,7 +135,7 @@ impl TestEnv {
                 .iter()
                 .map(|tx| {
                     let mut env = ExecutionEnv::default();
-                    env.assigned_versions.withdraw_type = WithdrawType::Withdraw(version);
+                    env.assigned_versions.accumulator_version = Some(version);
                     (Schedulable::Transaction(tx.clone()), env)
                 })
                 .collect(),
