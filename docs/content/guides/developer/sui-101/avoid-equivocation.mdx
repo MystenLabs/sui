@@ -49,7 +49,7 @@ The Sui SDK offers transaction executors to help process multiple transactions f
 
 ### `SerialTransactionExecutor`
 
-Use the `SerialTransactionExecutor` when you process transactions 1 after another. The executor grabs all the coins from the sender and combines them into a single coin that is used for all transactions.
+Use the `SerialTransactionExecutor` when you process transactions one after another. The executor grabs all the coins from the sender and combines them into a single coin that is used for all transactions.
 
 Using the `SerialTransactionExecutor` prevents `SequenceNumber` errors by handling the versioning of object inputs across a PTB.
 

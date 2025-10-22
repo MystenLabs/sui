@@ -15,7 +15,7 @@ There are 2 ways to use an object:
   - Mutable reference (`&mut`): You can alter the object (according to the API) but you can't destroy or transfer it.
   - Immutable reference (`&`): Further restricts the set of operations and the guarantees or invariants over the referenced object. You have read-only access to the object's data.
 
-Programmable transaction blocks (PTBs) do not currently allow the use of object references returned from 1 of its transaction commands. You can use input objects to the PTB, objects created by the PTB (like `MakeMoveVec`), or returned from a transaction command by value as references in subsequent transaction commands. If a transaction command returns a reference, however, you can't use that reference in any call, significantly limiting certain common patterns in Move.
+Programmable transaction blocks (PTBs) do not currently allow the use of object references returned from one of its transaction commands. You can use input objects to the PTB, objects created by the PTB (like `MakeMoveVec`), or returned from a transaction command by value as references in subsequent transaction commands. If a transaction command returns a reference, however, you can't use that reference in any call, significantly limiting certain common patterns in Move.
 
 ## The borrow module
 
