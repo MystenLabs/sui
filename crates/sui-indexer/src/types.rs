@@ -648,7 +648,7 @@ impl From<SuiTransactionBlockResponseWithOptions> for SuiTransactionBlockRespons
             raw_transaction: if options.show_raw_input {
                 response.raw_transaction
             } else {
-                Default::default()
+                vec![]
             },
             effects: options.show_effects.then_some(response.effects).flatten(),
             events: options.show_events.then_some(response.events).flatten(),
@@ -667,7 +667,7 @@ impl From<SuiTransactionBlockResponseWithOptions> for SuiTransactionBlockRespons
             raw_effects: if options.show_raw_effects {
                 response.raw_effects
             } else {
-                Default::default()
+                vec![]
             },
         }
     }

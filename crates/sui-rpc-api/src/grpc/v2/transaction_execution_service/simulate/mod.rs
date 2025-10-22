@@ -177,14 +177,12 @@ pub fn simulate_transaction(
 
         message.balance_changes =
             if submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
-                {
-                    derive_balance_changes_2(&effects, &objects)
-                        .into_iter()
-                        .map(Into::into)
-                        .collect()
-                }
+                derive_balance_changes_2(&effects, &objects)
+                    .into_iter()
+                    .map(Into::into)
+                    .collect()
             } else {
-                Default::default()
+                vec![]
             };
 
         message.effects = {

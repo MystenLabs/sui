@@ -140,14 +140,12 @@ pub async fn execute_transaction(
 
         let balance_changes = if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
         {
-            {
-                derive_balance_changes(&effects, &input_objects, &output_objects)
-                    .into_iter()
-                    .map(Into::into)
-                    .collect()
-            }
+            derive_balance_changes(&effects, &input_objects, &output_objects)
+                .into_iter()
+                .map(Into::into)
+                .collect()
         } else {
-            Default::default()
+            vec![]
         };
 
         let input_objects = input_objects
