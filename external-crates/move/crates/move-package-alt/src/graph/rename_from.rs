@@ -69,6 +69,7 @@ impl RenameError {
         // example: a contains `dep_name = { local = "b_path", rename=from = "b_name" }`
 
         // in example: path is "root -> a"
+        // TODO: DVX-1787
         let path = "<TODO>";
 
         // in example: source_name is "a"

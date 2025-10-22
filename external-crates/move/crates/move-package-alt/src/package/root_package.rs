@@ -53,6 +53,7 @@ pub struct PackageConfig {
     pub(crate) ignore_digests: bool,
     // TODO: The directory to use for the git cache (defaults to `~/.move`)
     // cache_dir: Option<PathBuf>,
+    // TODO: `--allow-dirty`
 }
 
 #[derive(Clone, Debug)]
@@ -1390,7 +1391,12 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .await;
 
-        assert_snapshot!(root.unwrap_err().to_string(), @"Ephemeral publication file has chain-id `not localnet`; it cannot be used to publish to chain with id `localnet`");
+        let message = root
+            .unwrap_err()
+            .to_string()
+            .replace(ephemeral.path().to_string_lossy().as_ref(), "<FILE>");
+
+        assert_snapshot!(message, @r###"Ephemeral publication file "<FILE>" has chain-id `not localnet`; it cannot be used to publish to chain with id `localnet`"###);
     }
 
     /// Loading an ephemeral package with a mismatched `build-env` fails
@@ -1419,7 +1425,12 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .await;
 
-        assert_snapshot!(root.unwrap_err().to_string(), @r###"Ephemeral publication file has `build-env = "not _test_env"`; it cannot be used to publish with `--build-env _test_env`"###);
+        let message = root
+            .unwrap_err()
+            .to_string()
+            .replace(ephemeral.path().to_string_lossy().as_ref(), "<FILE>");
+
+        assert_snapshot!(message, @r###"Ephemeral publication file "<FILE>" has `build-env = "not _test_env"`; it cannot be used to publish with `--build-env _test_env`"###);
     }
 
     /// Loading an ephemeral package with no `build-env` (either passed or in the file) fails
@@ -1441,7 +1452,12 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .await;
 
-        assert_snapshot!(root.unwrap_err().to_string(), @"Ephemeral publication file does not have a `build-env` so you must pass `--build-env <env>`");
+        let message = root
+            .unwrap_err()
+            .to_string()
+            .replace(ephemeral.to_string_lossy().as_ref(), "<FILE>");
+
+        assert_snapshot!(message, @"Ephemeral publication file does not exist, so you must pass `--build-env <env>` to indicate what environment it should be created for");
     }
 
     /// Loading an ephemeral package with an unrecognized `build-env` fails
@@ -1458,12 +1474,17 @@ pkg_b = { local = "../pkg_b" }"#,
             scenario.path_for("root"),
             Some("unknown environment".into()),
             "localnet".into(),
-            ephemeral,
+            ephemeral.clone(),
             vec![],
         )
         .await;
 
-        assert_snapshot!(root.unwrap_err().to_string(), @r###"Package `root` does not declare a `unknown environment` environment. The available environments are ["_test_env"]. Consider running with `--build-env _test_env`"###);
+        let message = root
+            .unwrap_err()
+            .to_string()
+            .replace(ephemeral.to_string_lossy().as_ref(), "<FILE>");
+
+        assert_snapshot!(message, @r###"Package `root` does not declare a `unknown environment` environment. The available environments are ["_test_env"]. Consider running with `--build-env _test_env`"###);
     }
 
     /// ```mermaid
