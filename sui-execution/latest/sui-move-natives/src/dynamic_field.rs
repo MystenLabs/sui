@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    abstract_size, charge_cache_or_load_gas, get_extension, get_extension_mut,
-    get_nested_struct_field, get_object_id,
+    NativesCostTable, NativesCostTable, abstract_size, charge_cache_or_load_gas, get_extension,
+    get_extension_mut, get_nested_struct_field, get_object_id,
     object_runtime::{
-        object_store::{CacheInfo, ObjectResult},
         ObjectRuntime,
+        object_store::{CacheInfo, ObjectResult},
     },
-    NativesCostTable, NativesCostTable,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
