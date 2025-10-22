@@ -1,9 +1,11 @@
-// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) Amber Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 module fork_demo::demo_coin {
     use sui::coin::{Self, TreasuryCap};
+    use sui::coin_registry;
     use sui::dynamic_field as df;
+    use std::string;
 
     public struct DEMO_COIN has drop {}
     public struct DEMO_STATE has key, store {
@@ -14,18 +16,19 @@ module fork_demo::demo_coin {
         counter: u64,
     }
 
-    #[allow(deprecated_usage)]
+    // #[allow(deprecated_usage)]
     fun init(witness: DEMO_COIN, ctx: &mut TxContext) {
-        let (treasury, metadata) = coin::create_currency(
+        let (currency_init, treasury) = coin_registry::new_currency_with_otw(
             witness,
             6,
-            b"DEMO",
-            b"Demo Coin",
-            b"A demo coin for testing fork functionality",
-            option::none(),
+            string::utf8(b"DEMO"),
+            string::utf8(b"Demo Coin"),
+            string::utf8(b"A demo coin for testing fork functionality"),
+            string::utf8(b""),
             ctx
         );
-        transfer::public_freeze_object(metadata);
+        let metadata_cap = coin_registry::finalize(currency_init, ctx);
+        transfer::public_freeze_object(metadata_cap);
         transfer::public_transfer(treasury, ctx.sender());
 
         let demo_state = DEMO_STATE {
