@@ -184,26 +184,15 @@ impl ExecutionScheduler {
         let input_object_kinds = tx_data
             .input_objects()
             .expect("input_objects() cannot fail");
-        let input_object_keys = epoch_store.get_input_object_keys(
-            &cert.key(),
-            &input_object_kinds,
-            &execution_env.assigned_versions,
-        );
+        let input_object_keys: Vec<_> = epoch_store
+            .get_input_object_keys(
+                &cert.key(),
+                &input_object_kinds,
+                &execution_env.assigned_versions,
+            )
+            .into_iter()
+            .collect();
 
-        if !execution_env.barrier_dependencies.is_empty() {
-            debug!(
-                "waiting for barrier dependencies to be executed: {:?}",
-                execution_env.barrier_dependencies
-            );
-            self.transaction_cache_read
-                .notify_read_executed_effects_digests(
-                    "wait_for_barrier_dependencies",
-                    &execution_env.barrier_dependencies,
-                )
-                .await;
-        }
-
-        let input_object_keys: Vec<_> = input_object_keys.into_iter().collect();
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()
             .into_iter()
@@ -253,6 +242,20 @@ impl ExecutionScheduler {
             .transaction_manager_num_enqueued_certificates
             .with_label_values(&["pending"])
             .inc();
+
+        if !execution_env.barrier_dependencies.is_empty() {
+            debug!(
+                "waiting for barrier dependencies to be executed: {:?}",
+                execution_env.barrier_dependencies
+            );
+            self.transaction_cache_read
+                .notify_read_executed_effects_digests(
+                    "wait_for_barrier_dependencies",
+                    &execution_env.barrier_dependencies,
+                )
+                .await;
+        }
+
         tokio::select! {
             _ = self.object_cache_read
                 .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, epoch)
