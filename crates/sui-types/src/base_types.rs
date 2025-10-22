@@ -1128,6 +1128,9 @@ pub const RESOLVED_TX_CONTEXT: (&AccountAddress, &IdentStr, &IdentStr) = (
     TX_CONTEXT_STRUCT_NAME,
 );
 
+pub const URL_MODULE_NAME: &IdentStr = ident_str!("url");
+pub const URL_STRUCT_NAME: &IdentStr = ident_str!("Url");
+
 pub fn move_ascii_str_layout() -> A::MoveStructLayout {
     A::MoveStructLayout {
         type_: StructTag {
@@ -1154,6 +1157,21 @@ pub fn move_utf8_str_layout() -> A::MoveStructLayout {
         fields: vec![A::MoveFieldLayout::new(
             ident_str!("bytes").into(),
             A::MoveTypeLayout::Vector(Box::new(A::MoveTypeLayout::U8)),
+        )],
+    }
+}
+
+pub fn url_layout() -> A::MoveStructLayout {
+    A::MoveStructLayout {
+        type_: StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: URL_MODULE_NAME.to_owned(),
+            name: URL_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        },
+        fields: vec![A::MoveFieldLayout::new(
+            ident_str!("url").to_owned(),
+            A::MoveTypeLayout::Struct(Box::new(move_ascii_str_layout())),
         )],
     }
 }
