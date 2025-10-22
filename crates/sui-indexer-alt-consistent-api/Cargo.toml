@@ -9,9 +9,9 @@ edition = "2021"
 [dependencies]
 tonic.workspace = true
 prost.workspace = true
-prost-types = "0.13.3"
+prost-types = "0.14.1"
 
 [dev-dependencies]
 protox = "0.7"
-tonic-build = "0.13"
+tonic-build = "0.14.2"
 walkdir.workspace = true
