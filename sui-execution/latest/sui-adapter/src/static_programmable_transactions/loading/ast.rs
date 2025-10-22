@@ -15,7 +15,6 @@ use std::rc::Rc;
 use sui_types::{
     Identifier, TypeTag,
     base_types::{ObjectID, ObjectRef, RESOLVED_TX_CONTEXT, SequenceNumber, TxContextKind},
-    transaction::SharedObjectMutability,
 };
 
 //**************************************************************************************************
@@ -64,16 +63,6 @@ pub enum ObjectMutability {
     Mutable,
     Immutable,
     NonExclusiveWrite,
-}
-
-impl From<SharedObjectMutability> for ObjectMutability {
-    fn from(mutability: SharedObjectMutability) -> Self {
-        match mutability {
-            SharedObjectMutability::Mutable => ObjectMutability::Mutable,
-            SharedObjectMutability::NonExclusiveWrite => ObjectMutability::NonExclusiveWrite,
-            SharedObjectMutability::Immutable => ObjectMutability::Immutable,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
