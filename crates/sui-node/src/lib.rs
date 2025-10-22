@@ -787,7 +787,7 @@ impl SuiNode {
             state
                 .try_execute_immediately(
                     &transaction,
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                    ExecutionEnv::new(SchedulingSource::CheckpointExecutor),
                     &epoch_store,
                 )
                 .instrument(span)
@@ -1637,13 +1637,13 @@ impl SuiNode {
                     {
                         pending_consensus_certificates.push((
                             Schedulable::Transaction(tx),
-                            ExecutionEnv::new().with_expected_effects_digest(fx_digest),
+                            ExecutionEnv::new(SchedulingSource::OldFastPath)
+                                .with_expected_effects_digest(fx_digest),
                         ));
                     } else {
                         additional_certs.push((
                             Schedulable::Transaction(tx),
-                            ExecutionEnv::new()
-                                .with_scheduling_source(SchedulingSource::NonFastPath),
+                            ExecutionEnv::new(SchedulingSource::OldFastPath),
                         ));
                     }
                 }

@@ -35,7 +35,7 @@ use crate::{
         test_authority_builder::TestAuthorityBuilder,
         AuthorityState, ExecutionEnv,
     },
-    execution_scheduler::{ExecutionScheduler, PendingCertificate},
+    execution_scheduler::{ExecutionScheduler, PendingCertificate, SchedulingSource},
 };
 
 struct TestEnv {
@@ -135,7 +135,7 @@ impl TestEnv {
             transactions
                 .iter()
                 .map(|tx| {
-                    let mut env = ExecutionEnv::default();
+                    let mut env = ExecutionEnv::new(SchedulingSource::Testing);
                     env.assigned_versions.withdraw_type = WithdrawType::Withdraw(version);
                     (Schedulable::Transaction(tx.clone()), env)
                 })

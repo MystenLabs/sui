@@ -24,7 +24,13 @@ pub struct PendingCertificateStats {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SchedulingSource {
     MysticetiFastPath,
-    NonFastPath,
+    /// QuorumDriver style fast path (deprecated soon)
+    OldFastPath,
+    CheckpointExecutor,
+    ConsensusCommit,
+    /// Used in tests or benchmarks, typically for synchronous executions, where we don't
+    /// care about any special behavior due to different scheduling sources.
+    Testing,
 }
 
 #[derive(Debug)]

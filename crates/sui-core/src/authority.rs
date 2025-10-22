@@ -804,25 +804,14 @@ pub struct ExecutionEnv {
     pub withdraw_status: BalanceWithdrawStatus,
 }
 
-impl Default for ExecutionEnv {
-    fn default() -> Self {
+impl ExecutionEnv {
+    pub fn new(scheduling_source: SchedulingSource) -> Self {
         Self {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
-            scheduling_source: SchedulingSource::NonFastPath,
+            scheduling_source,
             withdraw_status: BalanceWithdrawStatus::NoWithdraw,
         }
-    }
-}
-
-impl ExecutionEnv {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn with_scheduling_source(mut self, scheduling_source: SchedulingSource) -> Self {
-        self.scheduling_source = scheduling_source;
-        self
     }
 
     pub fn with_expected_effects_digest(
@@ -1406,23 +1395,7 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<TransactionEffects> {
-        self.wait_for_transaction_execution(
-            &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
-            epoch_store,
-        )
-        .await
-    }
-
-    /// Wait for a transaction to be executed.
-    /// For consensus transactions, it needs to be sequenced by the consensus.
-    /// For owned object transactions, this function will enqueue the transaction for execution.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn wait_for_transaction_execution(
-        &self,
-        transaction: &VerifiedExecutableTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<TransactionEffects> {
-        let _metrics_guard = if transaction.is_consensus_tx() {
+        let _metrics_guard = if certificate.is_consensus_tx() {
             self.metrics
                 .execute_certificate_latency_shared_object
                 .start_timer()
@@ -1435,14 +1408,16 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        if !transaction.is_consensus_tx() {
+        if !certificate.is_consensus_tx() {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
             self.execution_scheduler.enqueue(
                 vec![(
-                    Schedulable::Transaction(transaction.clone()),
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                    Schedulable::Transaction(VerifiedExecutableTransaction::new_from_certificate(
+                        certificate.clone(),
+                    )),
+                    ExecutionEnv::new(SchedulingSource::OldFastPath),
                 )],
                 epoch_store,
             );
@@ -1453,7 +1428,7 @@ impl AuthorityState {
         epoch_store
             .within_alive_epoch(self.notify_read_effects(
                 "AuthorityState::wait_for_transaction_execution",
-                *transaction.digest(),
+                *certificate.digest(),
             ))
             .await
             .map_err(|_| SuiErrorKind::EpochEnded(epoch_store.epoch()).into())

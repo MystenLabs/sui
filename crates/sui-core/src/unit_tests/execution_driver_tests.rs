@@ -13,6 +13,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_adapter::ConsensusAdapterMetrics;
 use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
+use crate::execution_scheduler::SchedulingSource;
 
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
@@ -435,7 +436,7 @@ async fn test_execution_with_dependencies() {
             Schedulable::Transaction(VerifiedExecutableTransaction::new_from_certificate(
                 cert.clone(),
             )),
-            ExecutionEnv::new().with_assigned_versions(assigned_versions),
+            ExecutionEnv::new(SchedulingSource::Testing).with_assigned_versions(assigned_versions),
         ));
     }
 
@@ -450,7 +451,7 @@ async fn test_execution_with_dependencies() {
         authorities[3].execution_scheduler().enqueue(
             vec![(
                 VerifiedExecutableTransaction::new_from_certificate(cert.clone()).into(),
-                ExecutionEnv::new(),
+                ExecutionEnv::new(SchedulingSource::Testing),
             )],
             &authorities[3].epoch_store_for_testing(),
         );

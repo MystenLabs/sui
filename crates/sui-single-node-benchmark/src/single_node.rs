@@ -124,7 +124,7 @@ impl SingleValidator {
             .get_validator()
             .try_execute_immediately(
                 &executable,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new(SchedulingSource::Testing),
                 &self.epoch_store,
             )
             .await
@@ -161,7 +161,8 @@ impl SingleValidator {
                 self.get_validator()
                     .try_execute_immediately(
                         &cert,
-                        ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
+                        ExecutionEnv::new(SchedulingSource::Testing)
+                            .with_assigned_versions(assigned_versions.clone()),
                         &self.epoch_store,
                     )
                     .await
@@ -177,7 +178,8 @@ impl SingleValidator {
                         vec![(
                             VerifiedExecutableTransaction::new_from_certificate(cert.clone())
                                 .into(),
-                            ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
+                            ExecutionEnv::new(SchedulingSource::Testing)
+                                .with_assigned_versions(assigned_versions.clone()),
                         )],
                         &self.epoch_store,
                     );

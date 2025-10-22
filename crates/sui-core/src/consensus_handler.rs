@@ -943,7 +943,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .output
             .record_consensus_commit_stats(self.last_consensus_stats.clone());
 
-        // DONE(commit-handler-rewrite): propogate deferral deletion to consensus output cache
+        // DONE(commit-handler-rewrite): propagate deferral deletion to consensus output cache
         self.record_deferral_deletion(&mut state);
 
         // DONE(commit-handler-rewrite): send consensus output to quarantine
@@ -1000,7 +1000,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.execution_scheduler_sender.send(
             schedulables,
             assigned_versions,
-            SchedulingSource::NonFastPath,
+            SchedulingSource::ConsensusCommit,
         );
 
         // DONE(commit-handler-rewrite): Check if we should send EndOfPublish after processing consensus commit
@@ -2316,7 +2316,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.execution_scheduler_sender.send(
             executable_transactions,
             assigned_versions,
-            SchedulingSource::NonFastPath,
+            SchedulingSource::ConsensusCommit,
         );
 
         // TODO(commit-handler-rewrite): Check if we should send EndOfPublish after processing consensus commit
@@ -2863,11 +2863,9 @@ impl ExecutionSchedulerSender {
                     let key = txn.key();
                     (
                         txn,
-                        ExecutionEnv::new()
-                            .with_scheduling_source(scheduling_source)
-                            .with_assigned_versions(
-                                assigned_versions.get(&key).cloned().unwrap_or_default(),
-                            ),
+                        ExecutionEnv::new(scheduling_source).with_assigned_versions(
+                            assigned_versions.get(&key).cloned().unwrap_or_default(),
+                        ),
                     )
                 })
                 .collect();

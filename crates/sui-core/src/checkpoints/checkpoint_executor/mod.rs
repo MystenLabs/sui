@@ -46,7 +46,7 @@ use tracing::{debug, info, instrument, warn};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::{AuthorityState, ExecutionEnv};
-use crate::execution_scheduler::ExecutionScheduler;
+use crate::execution_scheduler::{ExecutionScheduler, SchedulingSource};
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::{
     checkpoints::CheckpointStore,
@@ -797,7 +797,7 @@ impl CheckpointExecutor {
                             )
                             .expect("failed to acquire shared version assignments");
 
-                        let mut env = ExecutionEnv::new()
+                        let mut env = ExecutionEnv::new(SchedulingSource::CheckpointExecutor)
                             .with_assigned_versions(assigned_versions)
                             .with_expected_effects_digest(*expected_fx_digest);
 
@@ -872,7 +872,7 @@ impl CheckpointExecutor {
         self.execution_scheduler.enqueue_transactions(
             vec![(
                 change_epoch_tx.clone(),
-                ExecutionEnv::new()
+                ExecutionEnv::new(SchedulingSource::CheckpointExecutor)
                     .with_assigned_versions(assigned_versions)
                     .with_expected_effects_digest(change_epoch_fx.digest()),
             )],
