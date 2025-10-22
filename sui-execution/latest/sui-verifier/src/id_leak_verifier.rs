@@ -163,10 +163,7 @@ fn verify_id_leak(
         let initial_state = AbstractState::new(&function_context);
         let mut verifier = IDLeakAnalysis::new(module, &function_context);
         let function_to_verify = verifier.cur_function();
-        if FUNCTIONS_TO_SKIP
-            .iter()
-            .any(|to_skip| function_to_verify == *to_skip)
-        {
+        if FUNCTIONS_TO_SKIP.contains(&function_to_verify) {
             continue;
         }
         analyze_function(&function_context, meter, &mut verifier, initial_state).map_err(
@@ -332,10 +329,7 @@ fn call(
 
     let return_ = verifier.binary_view.signature_at(function_handle.return_);
     let function = verifier.resolve_function(function_handle);
-    if FRESH_ID_FUNCTIONS
-        .iter()
-        .any(|makes_fresh| function == *makes_fresh)
-    {
+    if FRESH_ID_FUNCTIONS.contains(&function) {
         if return_.0.len() != 1 {
             debug_assert!(false, "{:?} should have a single return value", function);
             return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)

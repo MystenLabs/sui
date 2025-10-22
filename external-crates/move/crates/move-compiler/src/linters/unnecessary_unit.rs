@@ -61,21 +61,19 @@ simple_visitor!(
             diag.add_note("For example 'if (cond) () else e' can be simplified to 'if (!cond) e'");
             self.add_diag(diag);
         }
-        if let Some(e_false) = e_false_opt {
-            if e_false.is_unit(&self.reporter) {
-                let u_msg = "Unnecessary 'else ()'.";
-                let if_msg = "An 'if' without an 'else' has an implicit 'else ()'. \
+        if let Some(e_false) = e_false_opt
+            && e_false.is_unit(&self.reporter)
+        {
+            let u_msg = "Unnecessary 'else ()'.";
+            let if_msg = "An 'if' without an 'else' has an implicit 'else ()'. \
                             Consider removing the 'else' branch";
-                let mut diag = diag!(
-                    StyleCodes::UnnecessaryUnit.diag_info(),
-                    (e_false.exp.loc, u_msg),
-                    (e.exp.loc, if_msg),
-                );
-                diag.add_note(
-                    "For example 'if (cond) e else ()' can be simplified to 'if (cond) e'",
-                );
-                self.add_diag(diag);
-            }
+            let mut diag = diag!(
+                StyleCodes::UnnecessaryUnit.diag_info(),
+                (e_false.exp.loc, u_msg),
+                (e.exp.loc, if_msg),
+            );
+            diag.add_note("For example 'if (cond) e else ()' can be simplified to 'if (cond) e'");
+            self.add_diag(diag);
         }
         false
     }

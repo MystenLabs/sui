@@ -146,12 +146,11 @@ impl DependencyCache {
                         ])
                         .stdin(Stdio::null())
                         .output()
+                        && let Ok(parsable_version) = String::from_utf8(rev.stdout)
                     {
-                        if let Ok(parsable_version) = String::from_utf8(rev.stdout) {
-                            // If it's exactly the same, then it's a git rev
-                            if parsable_version.trim().starts_with(git_rev.as_str()) {
-                                return Ok(());
-                            }
+                        // If it's exactly the same, then it's a git rev
+                        if parsable_version.trim().starts_with(git_rev.as_str()) {
+                            return Ok(());
                         }
                     }
 
@@ -166,14 +165,14 @@ impl DependencyCache {
                         .stdin(Stdio::null())
                         .output();
 
-                    if let Ok(tag) = tag {
-                        if let Ok(parsable_version) = String::from_utf8(tag.stdout) {
-                            // If it's exactly the same, then it's a git tag, for now tags won't be updated
-                            // Tags don't easily update locally and you can't use reset --hard to cleanup
-                            // any extra files
-                            if parsable_version.trim().starts_with(git_rev.as_str()) {
-                                return Ok(());
-                            }
+                    if let Ok(tag) = tag
+                        && let Ok(parsable_version) = String::from_utf8(tag.stdout)
+                    {
+                        // If it's exactly the same, then it's a git tag, for now tags won't be updated
+                        // Tags don't easily update locally and you can't use reset --hard to cleanup
+                        // any extra files
+                        if parsable_version.trim().starts_with(git_rev.as_str()) {
+                            return Ok(());
                         }
                     }
 

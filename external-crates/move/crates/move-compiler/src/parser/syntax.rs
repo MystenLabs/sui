@@ -812,30 +812,30 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
 
     let (mut is_macro, mut tys) =
         parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, ln.loc);
-    if let Some(loc) = &is_macro {
-        if !macros_allowed {
-            let msg = format!(
-                "Macro invocation are disallowed here. Expected {}",
-                item_description()
-            );
-            context.add_diag(diag!(Syntax::InvalidName, (*loc, msg)));
-            is_macro = None;
-        }
+    if let Some(loc) = &is_macro
+        && !macros_allowed
+    {
+        let msg = format!(
+            "Macro invocation are disallowed here. Expected {}",
+            item_description()
+        );
+        context.add_diag(diag!(Syntax::InvalidName, (*loc, msg)));
+        is_macro = None;
     }
-    if let Some(sp!(ty_loc, _)) = tys {
-        if !tyargs_allowed {
-            context.add_diag(diag!(
-                Syntax::InvalidName,
-                (
-                    ty_loc,
-                    format!(
-                        "Type arguments are disallowed here. Expected {}",
-                        item_description()
-                    )
+    if let Some(sp!(ty_loc, _)) = tys
+        && !tyargs_allowed
+    {
+        context.add_diag(diag!(
+            Syntax::InvalidName,
+            (
+                ty_loc,
+                format!(
+                    "Type arguments are disallowed here. Expected {}",
+                    item_description()
                 )
-            ));
-            tys = None;
-        }
+            )
+        ));
+        tys = None;
     }
 
     let ln = match ln {
@@ -901,29 +901,29 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
         };
         let (mut is_macro, mut tys) =
             parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc);
-        if let Some(loc) = &is_macro {
-            if !macros_allowed {
-                context.add_diag(diag!(
-                    Syntax::InvalidName,
-                    (
-                        *loc,
-                        format!("Cannot use macro invocation '!' in {}", item_description())
-                    )
-                ));
-                is_macro = None;
-            }
+        if let Some(loc) = &is_macro
+            && !macros_allowed
+        {
+            context.add_diag(diag!(
+                Syntax::InvalidName,
+                (
+                    *loc,
+                    format!("Cannot use macro invocation '!' in {}", item_description())
+                )
+            ));
+            is_macro = None;
         }
-        if let Some(sp!(ty_loc, _)) = tys {
-            if !tyargs_allowed {
-                context.add_diag(diag!(
-                    Syntax::InvalidName,
-                    (
-                        ty_loc,
-                        format!("Cannot use type arguments in {}", item_description())
-                    )
-                ));
-                tys = None;
-            }
+        if let Some(sp!(ty_loc, _)) = tys
+            && !tyargs_allowed
+        {
+            context.add_diag(diag!(
+                Syntax::InvalidName,
+                (
+                    ty_loc,
+                    format!("Cannot use type arguments in {}", item_description())
+                )
+            ));
+            tys = None;
         }
 
         path.push_path_entry(name, tys, is_macro)
@@ -4825,17 +4825,17 @@ fn parse_file_def(
         loop {
             let doc = match_doc_comments(context);
             let (module, next_mod_attributes) = parse_module(doc, attributes, context)?;
-            if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon) {
-                if let Some(prev) = defs.last() {
-                    let msg = "Cannot define a 'module' label form in a file with multiple modules";
-                    let mut diag = diag!(Declarations::InvalidModule, (module.name.loc(), msg));
-                    diag.add_secondary_label((prev.name_loc(), "Previous definition here"));
-                    diag.add_note(
-                        "Either move each 'module' label and definitions into its own file or \
+            if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon)
+                && let Some(prev) = defs.last()
+            {
+                let msg = "Cannot define a 'module' label form in a file with multiple modules";
+                let mut diag = diag!(Declarations::InvalidModule, (module.name.loc(), msg));
+                diag.add_secondary_label((prev.name_loc(), "Previous definition here"));
+                diag.add_note(
+                    "Either move each 'module' label and definitions into its own file or \
                             define each as 'module <name> { contents }'",
-                    );
-                    context.add_diag(diag);
-                }
+                );
+                context.add_diag(diag);
             }
             defs.push(Definition::Module(module));
             let Some(attrs) = next_mod_attributes else {

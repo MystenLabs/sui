@@ -10,6 +10,7 @@ use thiserror::Error;
 use typed_store_error::TypedStoreError;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, Error)]
+#[allow(dead_code)]
 pub(crate) struct RocksErrorDef {
     message: String,
 }
@@ -21,6 +22,7 @@ impl Display for RocksErrorDef {
 }
 
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug, Error)]
+#[allow(dead_code)]
 pub(crate) enum BincodeErrorDef {
     Io(String),
     InvalidUtf8Encoding(String),

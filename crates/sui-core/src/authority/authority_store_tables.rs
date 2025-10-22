@@ -82,9 +82,9 @@ pub struct AuthorityPerpetualTables {
     /// A map between the transaction digest of a certificate to the effects of its execution.
     /// We store effects into this table in two different cases:
     /// 1. When a transaction is synced through state_sync, we store the effects here. These effects
-    ///     are known to be final in the network, but may not have been executed locally yet.
+    ///    are known to be final in the network, but may not have been executed locally yet.
     /// 2. When the transaction is executed locally on this node, we store the effects here. This means that
-    ///     it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
+    ///    it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
     ///
     /// It's also possible for the effects to be reverted if the transaction didn't make it into the epoch.
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
@@ -459,7 +459,7 @@ impl AuthorityPerpetualTables {
         let StoreObject::Value(store_object) = store_object.migrate().into_inner() else {
             return Ok(None);
         };
-        Ok(Some(self.construct_object(object_key, store_object)?))
+        Ok(Some(self.construct_object(object_key, *store_object)?))
     }
 
     pub fn object_reference(
@@ -469,7 +469,7 @@ impl AuthorityPerpetualTables {
     ) -> Result<ObjectRef, SuiError> {
         let obj_ref = match store_object.migrate().into_inner() {
             StoreObject::Value(object) => self
-                .construct_object(object_key, object)?
+                .construct_object(object_key, *object)?
                 .compute_object_reference(),
             StoreObject::Deleted => (
                 object_key.0,
@@ -789,7 +789,7 @@ impl LiveSetIter<'_> {
             StoreObject::Value(object) => {
                 let object = self
                     .tables
-                    .construct_object(&object_key, object)
+                    .construct_object(&object_key, *object)
                     .expect("Constructing object from store cannot fail");
                 Some(LiveObject::Normal(object))
             }

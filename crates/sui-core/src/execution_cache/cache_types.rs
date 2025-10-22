@@ -118,12 +118,14 @@ impl<V> CachedVersionMap<V> {
 }
 
 // an iterator adapter that asserts that the wrapped iterator yields elements in order
+#[allow(dead_code)]
 pub(super) struct AssertOrdered<I: Iterator> {
     iter: I,
     last: Option<I::Item>,
 }
 
 impl<I: Iterator> AssertOrdered<I> {
+    #[allow(dead_code)]
     fn new(iter: I) -> Self {
         Self { iter, last: None }
     }

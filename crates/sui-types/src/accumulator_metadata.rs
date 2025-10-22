@@ -117,7 +117,7 @@ impl AccumulatorOwner {
         DynamicFieldKey(
             *self.balances.id.object_id(),
             key,
-            MetadataKey::get_type_tag(&[type_.clone()]),
+            MetadataKey::get_type_tag(std::slice::from_ref(type_)),
         )
         .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .exists(child_object_resolver)
@@ -133,7 +133,7 @@ impl AccumulatorOwner {
         DynamicFieldKey(
             *self.balances.id.object_id(),
             key,
-            MetadataKey::get_type_tag(&[type_.clone()]),
+            MetadataKey::get_type_tag(std::slice::from_ref(type_)),
         )
         .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .load_object(child_object_resolver)?

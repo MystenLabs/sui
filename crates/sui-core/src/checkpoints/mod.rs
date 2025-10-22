@@ -2912,6 +2912,7 @@ pub trait CheckpointServiceNotify {
     fn notify_checkpoint(&self) -> SuiResult;
 }
 
+#[allow(clippy::large_enum_variant)]
 enum CheckpointServiceState {
     Unstarted(
         (

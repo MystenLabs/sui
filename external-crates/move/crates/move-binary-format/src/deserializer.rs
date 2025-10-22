@@ -913,7 +913,7 @@ fn load_address_identifiers(
     addresses: &mut AddressIdentifierPool,
 ) -> BinaryLoaderResult<()> {
     let mut start = table.offset as usize;
-    if table.count as usize % AccountAddress::LENGTH != 0 {
+    if !(table.count as usize).is_multiple_of(AccountAddress::LENGTH) {
         return Err(PartialVMError::new(StatusCode::MALFORMED)
             .with_message("Bad Address Identifier pool size".to_string()));
     }

@@ -114,7 +114,7 @@ impl Worker for SuinsIndexerWorker {
 
         // every 1000 checkpoints, we will print the checkpoint sequence number
         // to the console to keep track of progress
-        if checkpoint_seq_number % 1000 == 0 {
+        if checkpoint_seq_number.is_multiple_of(1000) {
             info!("Checkpoint sequence number: {}", checkpoint_seq_number);
         }
         self.commit_to_db(&updates, &removals, checkpoint_seq_number)

@@ -41,7 +41,7 @@ pub mod error;
 
 // TODO Move to ServiceConfig
 
-const PACKAGE_CACHE_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1024) };
+const PACKAGE_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(1024).unwrap();
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -120,8 +120,8 @@ pub struct CleverError {
 /// These values are either:
 /// * `None` - No constant information is available, only a line number.
 /// * `Rendered` - The error is a complete error, with an error identifier and constant that can be
-///    rendered in a human-readable format (see in-line doc comments for exact types of values
-///    supported).
+///   rendered in a human-readable format (see in-line doc comments for exact types of values
+///   supported).
 /// * `Raw` - If there is an error constant value, but it is not a renderable type (e.g., a
 ///   `vector<address>`), then it is treated as opaque and the bytes are returned.
 #[derive(Clone, Debug)]

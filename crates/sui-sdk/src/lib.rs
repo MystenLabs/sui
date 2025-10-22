@@ -14,9 +14,9 @@
 //! * [EventApi] - provides event related functions functions to
 //! * [GovernanceApi] - provides functionality related to staking
 //! * [QuorumDriverApi] - provides functionality to execute a transaction
-//!     block and submit it to the fullnode(s)
+//!   block and submit it to the fullnode(s)
 //! * [ReadApi] - provides functions for retrieving data about different
-//!     objects and transactions
+//!   objects and transactions
 //! * <a href="../sui_transaction_builder/struct.TransactionBuilder.html" title="struct sui_transaction_builder::TransactionBuilder">TransactionBuilder</a> - provides functions for building transactions
 //!
 //! # Usage

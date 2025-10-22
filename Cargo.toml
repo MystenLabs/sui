@@ -590,7 +590,7 @@ tracing-subscriber = { version = "0.3.15", default-features = false, features = 
   "env-filter",
 ] }
 ttl_cache = "0.5.1"
-uint = "0.9.4"
+uint = "0.10.0"
 unescape = "0.1.0"
 ureq = "2.9.1"
 url = "2.3.1"

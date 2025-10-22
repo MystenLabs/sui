@@ -103,6 +103,7 @@ pub struct TransactionInfoRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum TransactionStatus {
     /// Signature over the transaction.
     Signed(AuthoritySignInfo),

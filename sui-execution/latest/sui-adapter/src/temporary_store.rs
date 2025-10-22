@@ -955,8 +955,8 @@ impl TemporaryStore<'_> {
     /// by `check_sui_conserved` above:
     ///
     /// * all SUI in input objects (including coins etc in the Move part of an object) should flow
-    ///    either to an output object, or be burned as part of computation fees or non-refundable
-    ///    storage rebate
+    ///   either to an output object, or be burned as part of computation fees or non-refundable
+    ///   storage rebate
     ///
     /// This function is intended to be called *after* we have charged for gas + applied the
     /// storage rebate to the gas object, but *before* we have updated object versions. The
@@ -1139,20 +1139,19 @@ impl BackingPackageStore for TemporaryStore<'_> {
         } else {
             self.store.get_package_object(package_id).inspect(|obj| {
                 // Track object but leave unchanged
-                if let Some(v) = obj {
-                    if !self
+                if let Some(v) = obj
+                    && !self
                         .runtime_packages_loaded_from_db
                         .read()
                         .contains_key(package_id)
-                    {
-                        // TODO: Can this lock ever block execution?
-                        // TODO: Another way to avoid the cost of maintaining this map is to not
-                        // enable it in normal runs, and if a fork is detected, rerun it with a flag
-                        // turned on and start populating this field.
-                        self.runtime_packages_loaded_from_db
-                            .write()
-                            .insert(*package_id, v.clone());
-                    }
+                {
+                    // TODO: Can this lock ever block execution?
+                    // TODO: Another way to avoid the cost of maintaining this map is to not
+                    // enable it in normal runs, and if a fork is detected, rerun it with a flag
+                    // turned on and start populating this field.
+                    self.runtime_packages_loaded_from_db
+                        .write()
+                        .insert(*package_id, v.clone());
                 }
             })
         }

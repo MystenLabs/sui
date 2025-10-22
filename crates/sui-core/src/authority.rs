@@ -5215,7 +5215,7 @@ impl AuthorityState {
                 let f = committee.total_votes() - committee.quorum_threshold();
 
                 // multiple by buffer_stake_bps / 10000, rounded up.
-                let buffer_stake = (f * buffer_stake_bps + 9999) / 10000;
+                let buffer_stake = (f * buffer_stake_bps).div_ceil(10000);
                 let effective_threshold = quorum_threshold + buffer_stake;
 
                 info!(
@@ -5302,7 +5302,7 @@ impl AuthorityState {
                 let f = committee.total_votes() - committee.quorum_threshold();
 
                 // multiple by buffer_stake_bps / 10000, rounded up.
-                let buffer_stake = (f * buffer_stake_bps + 9999) / 10000;
+                let buffer_stake = (f * buffer_stake_bps).div_ceil(10000);
                 let effective_threshold = quorum_threshold + buffer_stake;
 
                 info!(

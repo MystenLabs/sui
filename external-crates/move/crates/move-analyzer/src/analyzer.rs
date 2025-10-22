@@ -178,8 +178,8 @@ pub fn run(
     // to be available right after the client is initialized.
     if let Some(uri) = initialize_params.root_uri {
         let build_path = uri.to_file_path().unwrap();
-        if let Some(p) = SymbolicatorRunner::root_dir(&build_path) {
-            if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
+        if let Some(p) = SymbolicatorRunner::root_dir(&build_path)
+            && let Ok((Some(new_symbols), _)) = symbols::get_symbols(
                 Arc::new(Mutex::new(CachedPackages::new())),
                 ide_files_root.clone(),
                 p.as_path(),
@@ -187,10 +187,10 @@ pub fn run(
                 None,
                 implicit_deps.clone(),
                 flavor,
-            ) {
-                let mut old_symbols_map = symbols_map.lock().unwrap();
-                old_symbols_map.insert(p, new_symbols);
-            }
+            )
+        {
+            let mut old_symbols_map = symbols_map.lock().unwrap();
+            old_symbols_map.insert(p, new_symbols);
         }
     }
 

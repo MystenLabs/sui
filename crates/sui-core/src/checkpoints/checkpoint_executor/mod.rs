@@ -902,7 +902,7 @@ impl CheckpointExecutor {
         } else {
             assert_eq!(seq, 0);
         }
-        if seq % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
+        if seq.is_multiple_of(CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL) {
             info!("Finished syncing and executing checkpoint {}", seq);
         }
 

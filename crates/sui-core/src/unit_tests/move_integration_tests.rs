@@ -71,7 +71,7 @@ async fn test_object_wrapping_unwrapping() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -96,7 +96,7 @@ async fn test_object_wrapping_unwrapping() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -141,7 +141,7 @@ async fn test_object_wrapping_unwrapping() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -184,7 +184,7 @@ async fn test_object_wrapping_unwrapping() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -219,7 +219,7 @@ async fn test_object_wrapping_unwrapping() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -814,7 +814,7 @@ async fn test_entry_point_vector_empty() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -844,7 +844,7 @@ async fn test_entry_point_vector_empty() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -945,7 +945,7 @@ async fn test_entry_point_vector_primitive() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -983,7 +983,7 @@ async fn test_entry_point_vector() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1003,7 +1003,7 @@ async fn test_entry_point_vector() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1024,7 +1024,7 @@ async fn test_entry_point_vector() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1046,7 +1046,7 @@ async fn test_entry_point_vector() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1104,7 +1104,7 @@ async fn test_entry_point_vector_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1145,7 +1145,7 @@ async fn test_entry_point_vector_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1164,7 +1164,7 @@ async fn test_entry_point_vector_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1205,7 +1205,7 @@ async fn test_entry_point_vector_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1228,7 +1228,7 @@ async fn test_entry_point_vector_error() {
     .unwrap();
     // support shared objects in vectors
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1248,7 +1248,7 @@ async fn test_entry_point_vector_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1297,7 +1297,7 @@ async fn test_entry_point_vector_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1367,7 +1367,7 @@ async fn test_entry_point_vector_any() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1387,7 +1387,7 @@ async fn test_entry_point_vector_any() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1408,7 +1408,7 @@ async fn test_entry_point_vector_any() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1430,7 +1430,7 @@ async fn test_entry_point_vector_any() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1491,7 +1491,7 @@ async fn test_entry_point_vector_any_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1532,7 +1532,7 @@ async fn test_entry_point_vector_any_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1551,7 +1551,7 @@ async fn test_entry_point_vector_any_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1592,7 +1592,7 @@ async fn test_entry_point_vector_any_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1615,7 +1615,7 @@ async fn test_entry_point_vector_any_error() {
     .unwrap();
     // support shared objects in vectors
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1635,7 +1635,7 @@ async fn test_entry_point_vector_any_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -1684,7 +1684,7 @@ async fn test_entry_point_vector_any_error() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -2899,7 +2899,7 @@ pub async fn build_and_publish_test_package_with_upgrade_cap(
     .1
     .into_data();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );

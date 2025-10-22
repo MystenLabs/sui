@@ -1961,7 +1961,7 @@ async fn test_publish_module_with_unpublishable_magic() {
     };
     assert!(matches!(
         error,
-        ExecutionFailureStatus::VMVerificationOrDeserializationError { .. }
+        ExecutionFailureStatus::VMVerificationOrDeserializationError
     ));
 }
 
@@ -2007,7 +2007,7 @@ async fn test_publish_module_with_unpublishable_magic_swapped() {
         .await
         .unwrap()
         .1;
-    let ExecutionStatus::Success { .. } = signed_effects.status() else {
+    let ExecutionStatus::Success = signed_effects.status() else {
         panic!("expected transaction to succeed")
     };
 }
@@ -4016,7 +4016,7 @@ async fn test_iter_live_object_set() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -4037,7 +4037,7 @@ async fn test_iter_live_object_set() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -4068,7 +4068,7 @@ async fn test_iter_live_object_set() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -4094,7 +4094,7 @@ async fn test_iter_live_object_set() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );
@@ -4115,7 +4115,7 @@ async fn test_iter_live_object_set() {
     .await
     .unwrap();
     assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
+        matches!(effects.status(), ExecutionStatus::Success),
         "{:?}",
         effects.status()
     );

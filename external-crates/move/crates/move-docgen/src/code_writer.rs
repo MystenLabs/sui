@@ -4,7 +4,7 @@
 // TODO move this to docgen once this stabilizes
 
 use codespan::{ByteIndex, ByteOffset, RawIndex, RawOffset};
-use std::{cell::RefCell, collections::BTreeMap, ops::Deref};
+use std::collections::BTreeMap;
 
 /// A label which can be created at the code writers current output position to later insert
 /// code at this position.
@@ -21,8 +21,6 @@ pub struct CodeWriter {
     /// A map from label indices to the current position in output they are pointing to.
     label_map: BTreeMap<ByteIndex, ByteIndex>,
 }
-
-pub struct CodeWriterRefCell(pub RefCell<CodeWriter>);
 
 impl CodeWriter {
     /// Creates new code writer, with the given default location.
@@ -128,20 +126,5 @@ impl std::fmt::Write for CodeWriter {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.emit(s);
         Ok(())
-    }
-}
-
-impl std::fmt::Write for CodeWriterRefCell {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.0.borrow_mut().emit(s);
-        Ok(())
-    }
-}
-
-impl Deref for CodeWriterRefCell {
-    type Target = RefCell<CodeWriter>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }

@@ -520,7 +520,7 @@ mod tests {
         let id = shared_object.id();
         let init_shared_version = shared_object.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
-            .with_starting_objects(&[shared_object.clone()])
+            .with_starting_objects(std::slice::from_ref(&shared_object))
             .build()
             .await;
         let certs = vec![
@@ -863,7 +863,7 @@ mod tests {
         let id = shared_object.id();
         let init_shared_version = shared_object.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
-            .with_starting_objects(&[shared_object.clone()])
+            .with_starting_objects(std::slice::from_ref(&shared_object))
             .build()
             .await;
         let certs = vec![

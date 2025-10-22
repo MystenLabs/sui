@@ -1560,13 +1560,13 @@ mod checked {
             }
             Value::Receiving(_, _, assigned_type) => {
                 // If the type has been fixed, make sure the types match up
-                if let Some(assigned_type) = assigned_type {
-                    if assigned_type != param_ty {
-                        return Err(command_argument_error(
-                            CommandArgumentError::TypeMismatch,
-                            idx,
-                        ));
-                    }
+                if let Some(assigned_type) = assigned_type
+                    && assigned_type != param_ty
+                {
+                    return Err(command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        idx,
+                    ));
                 }
 
                 // Now make sure the param type is a struct instantiation of the receiving struct

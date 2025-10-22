@@ -2242,22 +2242,22 @@ fn report_visibility_error_(
         (call_loc, call_msg),
         (vis_loc, vis_msg),
     );
-    if context.env().test_mode() {
-        if let Some(case) = public_for_testing {
-            let (test_loc, test_msg) = match case {
-                PublicForTesting::Entry(entry_loc) => {
-                    let entry_msg = format!(
-                        "'{}' functions can be called in tests, \
+    if context.env().test_mode()
+        && let Some(case) = public_for_testing
+    {
+        let (test_loc, test_msg) = match case {
+            PublicForTesting::Entry(entry_loc) => {
+                let entry_msg = format!(
+                    "'{}' functions can be called in tests, \
                     but only from testing contexts, e.g. '#[{}]' or '#[{}]'",
-                        ENTRY_MODIFIER,
-                        TestingAttribute::TEST,
-                        ModeAttribute::TEST_ONLY,
-                    );
-                    (entry_loc, entry_msg)
-                }
-            };
-            diag.add_secondary_label((test_loc, test_msg))
-        }
+                    ENTRY_MODIFIER,
+                    TestingAttribute::TEST,
+                    ModeAttribute::TEST_ONLY,
+                );
+                (entry_loc, entry_msg)
+            }
+        };
+        diag.add_secondary_label((test_loc, test_msg))
     }
     if let Some(names) = context.expanding_macros_names() {
         let macro_s = if context.macro_expansion.len() > 1 {

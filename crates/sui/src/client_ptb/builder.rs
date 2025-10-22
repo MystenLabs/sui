@@ -512,10 +512,7 @@ impl<'a> PTBBuilder<'a> {
                 } else {
                     display_did_you_mean(find_did_you_means(
                         module_name.as_str(),
-                        package
-                            .serialized_module_map()
-                            .iter()
-                            .map(|(x, _)| x.as_str()),
+                        package.serialized_module_map().keys().map(|x| x.as_str()),
                     ))
                 };
                 let e = err!(*mloc, "{e}");

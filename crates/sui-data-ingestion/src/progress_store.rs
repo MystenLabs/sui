@@ -80,7 +80,7 @@ impl ProgressStore for DynamoDBProgressStore {
         task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<()> {
-        if self.is_backfill && checkpoint_number % 1000 != 0 {
+        if self.is_backfill && !checkpoint_number.is_multiple_of(1000) {
             return Ok(());
         }
         if task_name == "bigtable" {

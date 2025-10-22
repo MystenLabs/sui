@@ -933,10 +933,10 @@ impl<'a> ParsingAnalysisContext<'a> {
                     is_incomplete: _,
                 } = path;
                 self.root_path_entry_symbols(root);
-                if let Some(root_loc) = loc_start_to_lsp_position_opt(self.files, &root.name.loc) {
-                    if let P::LeadingNameAccess_::Name(n) = root.name.value {
-                        self.alias_lengths.insert(root_loc, n.value.len());
-                    }
+                if let Some(root_loc) = loc_start_to_lsp_position_opt(self.files, &root.name.loc)
+                    && let P::LeadingNameAccess_::Name(n) = root.name.value
+                {
+                    self.alias_lengths.insert(root_loc, n.value.len());
                 };
                 entries.iter().for_each(|entry| {
                     self.path_entry_symbols(entry);

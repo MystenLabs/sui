@@ -204,7 +204,7 @@ pub struct IndexStoreTables {
     ///
     /// A few uses for this singleton:
     /// - determining if the DB has been initialized (as some tables could still be empty post
-    ///     initialization)
+    ///   initialization)
     /// - version of each column family and their respective initialization status
     meta: DBMap<(), MetadataInfo>,
 

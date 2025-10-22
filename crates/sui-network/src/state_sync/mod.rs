@@ -1317,7 +1317,9 @@ async fn sync_checkpoint_contents<S>(
             ));
         }
 
-        if highest_synced.sequence_number() % checkpoint_content_download_concurrency as u64 == 0
+        if highest_synced
+            .sequence_number()
+            .is_multiple_of(checkpoint_content_download_concurrency as u64)
             || checkpoint_contents_tasks.is_empty()
         {
             // Periodically notify event loop to notify our peers that we've synced to a new checkpoint height

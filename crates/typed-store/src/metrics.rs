@@ -72,7 +72,9 @@ impl SamplingInterval {
     }
     pub fn sample(&self) -> bool {
         if self.once_every_duration.is_zero() {
-            self.counter.fetch_add(1, Ordering::Relaxed) % (self.after_num_ops + 1) == 0
+            self.counter
+                .fetch_add(1, Ordering::Relaxed)
+                .is_multiple_of(self.after_num_ops + 1)
         } else {
             self.counter.fetch_add(1, Ordering::Relaxed) == 0
         }

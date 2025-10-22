@@ -294,7 +294,7 @@ pub fn make_cert_with_large_committee(
     // assumes equal weighting.
     let len = committee.voting_rights.len();
     assert_eq!(len, key_pairs.len());
-    let count = (len * 2 + 2) / 3;
+    let count = (len * 2).div_ceil(3);
 
     let sigs: Vec<_> = key_pairs
         .iter()

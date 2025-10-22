@@ -1005,7 +1005,7 @@ impl SuiErrorKind {
             | SuiErrorKind::GrpcMessageSerializeError { .. }
             | SuiErrorKind::GrpcMessageDeserializeError { .. }
             | SuiErrorKind::ByzantineAuthoritySuspicion { .. }
-            | SuiErrorKind::InvalidTxKindInSoftBundle { .. }
+            | SuiErrorKind::InvalidTxKindInSoftBundle
             | SuiErrorKind::UnsupportedFeatureError { .. }
             | SuiErrorKind::InvalidRequest { .. } => ErrorCategory::Internal,
 
@@ -1017,7 +1017,7 @@ impl SuiErrorKind {
                 ErrorCategory::ValidatorOverloaded
             }
 
-            SuiErrorKind::TimeoutError { .. } => ErrorCategory::Unavailable,
+            SuiErrorKind::TimeoutError => ErrorCategory::Unavailable,
 
             // Other variants are assumed to be retriable with new transaction submissions.
             _ => ErrorCategory::Aborted,

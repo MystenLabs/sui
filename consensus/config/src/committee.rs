@@ -44,10 +44,10 @@ impl Committee {
             authorities.len()
         );
 
-        let total_stake = authorities.iter().map(|a| a.stake).sum();
+        let total_stake: Stake = authorities.iter().map(|a| a.stake).sum();
         assert_ne!(total_stake, 0, "Total stake cannot be zero!");
         let quorum_threshold = 2 * total_stake / 3 + 1;
-        let validity_threshold = (total_stake + 2) / 3;
+        let validity_threshold = total_stake / 3 + 1;
         Self {
             epoch,
             total_stake,
@@ -231,6 +231,6 @@ mod tests {
         // AND ensure thresholds are calculated correctly.
         assert_eq!(committee.total_stake(), 45);
         assert_eq!(committee.quorum_threshold(), 31);
-        assert_eq!(committee.validity_threshold(), 15);
+        assert_eq!(committee.validity_threshold(), 16);
     }
 }

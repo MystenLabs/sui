@@ -33,15 +33,10 @@ impl Params {
             PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => {
                 let estimated_commit_period = commit_info.estimated_commit_period();
                 let commit_period_micros = estimated_commit_period.as_micros() as u64;
-                let mut budget = commit_period_micros
-                    .checked_mul(params.target_utilization)
-                    .unwrap_or(u64::MAX)
-                    / 100;
+                let mut budget =
+                    commit_period_micros.saturating_mul(params.target_utilization) / 100;
                 if self.for_randomness {
-                    budget = budget
-                        .checked_mul(params.randomness_scalar)
-                        .unwrap_or(u64::MAX)
-                        / 100;
+                    budget = budget.saturating_mul(params.randomness_scalar) / 100;
                 }
                 budget
             }
@@ -56,10 +51,7 @@ impl Params {
             PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => {
                 let mut burst = params.allowed_txn_cost_overage_burst_limit_us;
                 if self.for_randomness {
-                    burst = burst
-                        .checked_mul(params.randomness_scalar)
-                        .unwrap_or(u64::MAX)
-                        / 100;
+                    burst = burst.saturating_mul(params.randomness_scalar) / 100;
                 }
                 burst
             }

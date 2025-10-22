@@ -1065,6 +1065,7 @@ impl SuiRawMovePackage {
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
+#[allow(clippy::large_enum_variant)]
 pub enum SuiPastObjectResponse {
     /// The object exists and is found with this version
     VersionFound(SuiObjectData),

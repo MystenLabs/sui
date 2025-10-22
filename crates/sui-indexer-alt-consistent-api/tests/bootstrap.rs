@@ -29,7 +29,7 @@ fn bootstrap() {
 
     let out_dir = root_dir.join("src").join("proto").join("generated");
 
-    let mut fds = protox::Compiler::new(&[proto_dir.clone()])
+    let mut fds = protox::Compiler::new(std::slice::from_ref(&proto_dir))
         .unwrap()
         .include_source_info(true)
         .include_imports(true)

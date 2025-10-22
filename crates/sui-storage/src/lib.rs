@@ -162,7 +162,7 @@ pub fn verify_checkpoint_with_committee(
     committee: Arc<Committee>,
     current: &VerifiedCheckpoint,
     checkpoint: CertifiedCheckpointSummary,
-) -> Result<VerifiedCheckpoint, CertifiedCheckpointSummary> {
+) -> Result<VerifiedCheckpoint, Box<CertifiedCheckpointSummary>> {
     assert_eq!(
         *checkpoint.sequence_number(),
         current.sequence_number().checked_add(1).unwrap()
@@ -177,7 +177,7 @@ pub fn verify_checkpoint_with_committee(
             checkpoint_previous_digest =? checkpoint.previous_digest,
             "checkpoint not on same chain"
         );
-        return Err(checkpoint);
+        return Err(Box::new(checkpoint));
     }
 
     let current_epoch = current.epoch();
@@ -191,7 +191,7 @@ pub fn verify_checkpoint_with_committee(
             current_epoch = current_epoch,
             "cannot verify checkpoint with too high of an epoch",
         );
-        return Err(checkpoint);
+        return Err(Box::new(checkpoint));
     }
 
     if checkpoint.epoch() == current_epoch.checked_add(1).unwrap()
@@ -205,7 +205,7 @@ pub fn verify_checkpoint_with_committee(
             "next checkpoint claims to be from the next epoch but the latest verified \
             checkpoint does not indicate that it is the last checkpoint of an epoch"
         );
-        return Err(checkpoint);
+        return Err(Box::new(checkpoint));
     }
 
     checkpoint
@@ -221,7 +221,7 @@ pub fn verify_checkpoint<S>(
     current: &VerifiedCheckpoint,
     store: S,
     checkpoint: CertifiedCheckpointSummary,
-) -> Result<VerifiedCheckpoint, CertifiedCheckpointSummary>
+) -> Result<VerifiedCheckpoint, Box<CertifiedCheckpointSummary>>
 where
     S: WriteStore,
 {

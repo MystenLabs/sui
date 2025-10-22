@@ -80,16 +80,14 @@ fn structure_loop(
     let seq = D::Structured::Seq(loop_body);
     graph.update_loop_info(loop_head);
     let mut result = D::Structured::Loop(Box::new(seq));
-    if let Some(succ_node) = succ_node {
-        if graph
+    if let Some(succ_node) = succ_node
+        && graph
             .dom_tree
             .get(loop_head)
             .all_children()
             .any(|child| child == succ_node)
-        {
-            result =
-                D::Structured::Seq(vec![result, structured_blocks.remove(&succ_node).unwrap()]);
-        }
+    {
+        result = D::Structured::Seq(vec![result, structured_blocks.remove(&succ_node).unwrap()]);
     }
     structured_blocks.insert(loop_head, result);
 }
@@ -400,17 +398,16 @@ fn structure_code_node(
         }
         D::Input::Code(_, code, next) => {
             let mut seq = vec![D::Structured::Block(code)];
-            if let Some(next) = next {
-                if graph
+            if let Some(next) = next
+                && graph
                     .dom_tree
                     .get(node_ndx)
                     .immediate_children()
                     .any(|node| node == next)
-                {
-                    let successor = structured_blocks.remove(&next).unwrap();
-                    graph.update_latch_nodes(node_ndx, next);
-                    seq.push(successor);
-                }
+            {
+                let successor = structured_blocks.remove(&next).unwrap();
+                graph.update_latch_nodes(node_ndx, next);
+                seq.push(successor);
             }
             flatten_sequence(D::Structured::Seq(seq))
         }

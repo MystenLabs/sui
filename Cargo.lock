@@ -4541,7 +4541,7 @@ dependencies = [
  "serde_json",
  "sha3 0.10.6",
  "thiserror 1.0.69",
- "uint",
+ "uint 0.9.5",
 ]
 
 [[package]]
@@ -4572,7 +4572,7 @@ dependencies = [
  "impl-serde 0.4.0",
  "primitive-types 0.12.2",
  "scale-info",
- "uint",
+ "uint 0.9.5",
 ]
 
 [[package]]
@@ -8066,7 +8066,7 @@ dependencies = [
  "serde_bytes",
  "serde_with",
  "thiserror 1.0.69",
- "uint",
+ "uint 0.9.5",
 ]
 
 [[package]]
@@ -10466,7 +10466,7 @@ dependencies = [
  "fixed-hash 0.7.0",
  "impl-codec 0.5.1",
  "impl-serde 0.3.2",
- "uint",
+ "uint 0.9.5",
 ]
 
 [[package]]
@@ -10480,7 +10480,7 @@ dependencies = [
  "impl-rlp",
  "impl-serde 0.4.0",
  "scale-info",
- "uint",
+ "uint 0.9.5",
 ]
 
 [[package]]
@@ -18477,7 +18477,7 @@ dependencies = [
  "typed-store-derive",
  "typed-store-error",
  "typed-store-workspace-hack",
- "uint",
+ "uint 0.10.0",
 ]
 
 [[package]]
@@ -18560,6 +18560,18 @@ name = "uint"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76f64bba2c53b04fcab63c01a7d7427eadc821e3bc48c34dc9ba29c501164b52"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "hex",
+ "static_assertions",
+]
+
+[[package]]
+name = "uint"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "909988d098b2f738727b161a106cfc7cab00c539c2687a8836f8e565976fb53e"
 dependencies = [
  "byteorder",
  "crunchy",

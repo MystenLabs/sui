@@ -576,9 +576,7 @@ impl Operations {
                 commands,
             } = &pt;
             return commands.iter().any(|command| match command {
-                SuiCommand::TransferObjects(objs, _) => {
-                    objs.iter().any(|&obj| obj == SuiArgument::GasCoin)
-                }
+                SuiCommand::TransferObjects(objs, _) => objs.contains(&SuiArgument::GasCoin),
                 _ => false,
             });
         }

@@ -2991,6 +2991,7 @@ pub struct SequencedConsensusTransaction {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum SequencedConsensusTransactionKind {
     External(ConsensusTransaction),
     System(VerifiedExecutableTransaction),
@@ -3015,6 +3016,7 @@ impl<'de> Deserialize<'de> for SequencedConsensusTransactionKind {
 // VerifiedExecutableTransaction, which is not serializable (by design). This wrapper allows us to
 // convert to a serializable format easily.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 enum SerializableSequencedConsensusTransactionKind {
     External(ConsensusTransaction),
     System(TrustedExecutableTransaction),

@@ -485,7 +485,7 @@ async fn access_clock_object_test() {
     let finish = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
+    assert!(matches!(effects.status(), ExecutionStatus::Success));
 
     assert_eq!(1, events.data.len());
     let event = events.data.first().unwrap();

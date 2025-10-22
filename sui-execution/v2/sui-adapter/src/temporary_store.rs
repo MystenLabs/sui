@@ -1052,8 +1052,8 @@ impl TemporaryStore<'_> {
     /// by `check_sui_conserved` above:
     ///
     /// * all SUI in input objects (including coins etc in the Move part of an object) should flow
-    ///    either to an output object, or be burned as part of computation fees or non-refundable
-    ///    storage rebate
+    ///   either to an output object, or be burned as part of computation fees or non-refundable
+    ///   storage rebate
     ///
     /// This function is intended to be called *after* we have charged for gas + applied the
     /// storage rebate to the gas object, but *before* we have updated object versions. The

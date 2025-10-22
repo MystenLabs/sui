@@ -175,15 +175,15 @@ pub fn simulate_transaction(
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
 
-        message.balance_changes = submask
-            .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-            .then(|| {
+        message.balance_changes =
+            if submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
                 derive_balance_changes_2(&effects, &objects)
                     .into_iter()
                     .map(Into::into)
                     .collect()
-            })
-            .unwrap_or_default();
+            } else {
+                vec![]
+            };
 
         message.effects = {
             let effects = sui_sdk_types::TransactionEffects::try_from(effects)?;
@@ -338,9 +338,9 @@ fn to_command_output(
 ///
 /// The estimated gas budget is computed as following:
 /// * the maximum between A and B, where:
-///     A = computation cost + GAS_SAFE_OVERHEAD * reference gas price
-///     B = computation cost + storage cost - storage rebate + GAS_SAFE_OVERHEAD * reference gas price
-///     overhead
+///   A = computation cost + GAS_SAFE_OVERHEAD * reference gas price
+///   B = computation cost + storage cost - storage rebate + GAS_SAFE_OVERHEAD * reference gas price
+///   overhead
 ///
 /// This gas estimate is computed similarly as in the TypeScript SDK
 fn estimate_gas_budget_from_gas_cost(

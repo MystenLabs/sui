@@ -56,10 +56,10 @@ simple_visitor!(
         fdef.attributes.is_test_or_test_only()
     },
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
-        if let T::UnannotatedExp_::ModuleCall(fun) = &exp.exp.value {
-            if is_freeze_function(fun) {
-                check_type_arguments(self, fun, exp.exp.loc);
-            }
+        if let T::UnannotatedExp_::ModuleCall(fun) = &exp.exp.value
+            && is_freeze_function(fun)
+        {
+            check_type_arguments(self, fun, exp.exp.loc);
         }
         false
     }

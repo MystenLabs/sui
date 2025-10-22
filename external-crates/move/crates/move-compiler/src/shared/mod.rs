@@ -820,7 +820,7 @@ impl Flags {
     }
 
     pub fn set_modes(self, value: Vec<Symbol>) -> Self {
-        let test = self.test || value.iter().any(|mode| *mode == symbol!("test"));
+        let test = self.test || value.contains(&symbol!("test"));
         Self {
             test,
             modes: value,
@@ -869,7 +869,7 @@ impl Flags {
     }
 
     pub fn mode(&self, mode: Symbol) -> bool {
-        self.modes.iter().any(|m| *m == mode)
+        self.modes.contains(&mode)
     }
 
     pub fn publishable(&self) -> bool {
@@ -1155,11 +1155,11 @@ impl SaveHook {
 ///
 /// * `$e` - The initial expression to start processing.
 /// * `$work_pat` - The pattern used to disassemble entries in the work queue. Note that the work
-///    queue may contain any arbitrary type (such as a tuple of a block and expression), so the
-///    work pattern is used to disassemble and bind component parts.
+///   queue may contain any arbitrary type (such as a tuple of a block and expression), so the
+///   work pattern is used to disassemble and bind component parts.
 /// * `$work_exp` - The actual expression to match on, as defined in the `$work_pat`.
 /// * `$binop_pat` - This is a pattern matched against the `$work_exp` that matches if and only if
-///    the `$work_exp` is in fact a binary operation expression.
+///   the `$work_exp` is in fact a binary operation expression.
 /// * `$bind_rhs` - This block is executed when `$work_exp` matches `$binop_pat`, with any pattern
 ///   binders from `$binop_pat` in scope. This block must return a 3-tuple consisting of the
 ///   left-hand side work queue entry, the `$optype` entry for the operand, and the right-hand side

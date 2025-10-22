@@ -40,9 +40,11 @@ fn test_bicliques() {
 
     // create take_and_return_references
     m.signatures.push(Signature(
-        std::iter::repeat(SignatureToken::Reference(Box::new(SignatureToken::U64)))
-            .take(NUM_LOCALS as usize)
-            .collect(),
+        std::iter::repeat_n(
+            SignatureToken::Reference(Box::new(SignatureToken::U64)),
+            NUM_LOCALS as usize,
+        )
+        .collect(),
     ));
     m.identifiers
         .push(Identifier::new("take_and_return_references").unwrap());
@@ -168,9 +170,11 @@ fn test_merge_state_large_graph() {
     });
 
     m.signatures.push(Signature(
-        std::iter::repeat(SignatureToken::Reference(Box::new(SignatureToken::U8)))
-            .take(N as usize)
-            .collect(),
+        std::iter::repeat_n(
+            SignatureToken::Reference(Box::new(SignatureToken::U8)),
+            N as usize,
+        )
+        .collect(),
     ));
 
     m.identifiers.push(Identifier::new("return_refs").unwrap());
@@ -298,9 +302,11 @@ fn test_merge_state() {
             SignatureToken::U8,
         ))]));
     m.signatures.push(Signature(
-        std::iter::repeat(SignatureToken::Reference(Box::new(SignatureToken::U8)))
-            .take(NUM_LOCALS as usize - 1)
-            .collect(),
+        std::iter::repeat_n(
+            SignatureToken::Reference(Box::new(SignatureToken::U8)),
+            NUM_LOCALS as usize - 1,
+        )
+        .collect(),
     ));
 
     for i in 0..NUM_FUNCTIONS {
@@ -381,7 +387,7 @@ fn test_copyloc_pop() {
     ]));
     // for VecImmBorrow
     m.signatures.push(Signature(
-        std::iter::repeat(SignatureToken::U8).take(1).collect(),
+        std::iter::repeat_n(SignatureToken::U8, 1).collect(),
     ));
     m.signatures
         .push(Signature(vec![SignatureToken::TypeParameter(0)]));
