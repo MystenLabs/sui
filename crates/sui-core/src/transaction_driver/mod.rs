@@ -346,7 +346,7 @@ where
         }
     }
 
-    #[instrument(level = "error", skip_all, err)]
+    #[instrument(level = "error", skip_all, err(level = "debug"))]
     async fn drive_transaction_once(
         &self,
         amplification_factor: u64,

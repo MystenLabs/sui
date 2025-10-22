@@ -116,19 +116,11 @@ impl BlockV1 {
     }
 
     fn genesis_block(context: &Context, author: AuthorityIndex) -> Self {
-        let timestamp_ms = if context
-            .protocol_config
-            .enforce_checkpoint_timestamp_monotonicity()
-        {
-            context.epoch_start_timestamp_ms
-        } else {
-            0
-        };
         Self {
             epoch: context.committee.epoch(),
             round: GENESIS_ROUND,
             author,
-            timestamp_ms,
+            timestamp_ms: context.epoch_start_timestamp_ms,
             ancestors: vec![],
             transactions: vec![],
             commit_votes: vec![],
@@ -223,19 +215,11 @@ impl BlockV2 {
     }
 
     fn genesis_block(context: &Context, author: AuthorityIndex) -> Self {
-        let timestamp_ms = if context
-            .protocol_config
-            .enforce_checkpoint_timestamp_monotonicity()
-        {
-            context.epoch_start_timestamp_ms
-        } else {
-            0
-        };
         Self {
             epoch: context.committee.epoch(),
             round: GENESIS_ROUND,
             author,
-            timestamp_ms,
+            timestamp_ms: context.epoch_start_timestamp_ms,
             ancestors: vec![],
             transactions: vec![],
             commit_votes: vec![],

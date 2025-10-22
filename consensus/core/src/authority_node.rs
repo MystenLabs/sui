@@ -151,7 +151,7 @@ where
     synchronizer: Arc<SynchronizerHandle>,
 
     commit_syncer_handle: CommitSyncerHandle,
-    round_prober_handle: Option<RoundProberHandle>,
+    round_prober_handle: RoundProberHandle,
     proposed_block_handler: JoinHandle<()>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
@@ -356,20 +356,14 @@ where
         )
         .start();
 
-        let round_prober_handle = if context.protocol_config.consensus_round_prober() {
-            Some(
-                RoundProber::new(
-                    context.clone(),
-                    core_dispatcher.clone(),
-                    round_tracker.clone(),
-                    dag_state.clone(),
-                    network_client.clone(),
-                )
-                .start(),
-            )
-        } else {
-            None
-        };
+        let round_prober_handle = RoundProber::new(
+            context.clone(),
+            core_dispatcher.clone(),
+            round_tracker.clone(),
+            dag_state.clone(),
+            network_client.clone(),
+        )
+        .start();
 
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
@@ -442,9 +436,7 @@ where
             );
         };
         self.commit_syncer_handle.stop().await;
-        if let Some(round_prober_handle) = self.round_prober_handle.take() {
-            round_prober_handle.stop().await;
-        }
+        self.round_prober_handle.stop().await;
         self.proposed_block_handler.abort();
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
