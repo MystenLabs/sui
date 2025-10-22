@@ -717,7 +717,7 @@ Successfully verified dependencies on-chain against source.
 
 You can also view a multitude of information and transactional effects.
 
-You should choose and store the `package ID` and the `registry ID` from the created objects in the respective fields within your .env file.
+You should choose and store the `package ID` and the `registry ID` from the created objects in the respective fields within your `.env` file.
 
 Afterward, it's necessary to modify the `Move.toml` file. Under the `[addresses]` section, replace `0x0` with the same `package ID`. Optionally, under the `[package]` section, add `published-at = <package ID>` (this step is not needed if you see a `Move.lock` file after running `sui client publish`).
 
@@ -762,7 +762,7 @@ Successfully verified dependencies on-chain against source.
 
 You can also view a multitude of information and transactional effects.
 
-You should choose and store the `package ID`, asset `metadata ID`, `asset cap ID` and the `Publisher ID` from the created objects in the respective fields within your .env file.
+You should choose and store the `package ID`, asset `metadata ID`, `asset cap ID` and the `Publisher ID` from the created objects in the respective fields within your `.env` file.
 
 ### Automatically
 
@@ -772,7 +772,7 @@ The process of automatic deployment for the template package refers to publishin
 - If a `Move.lock` file exists after running`sui client publish`, go on to the next step. If not, ensure that the `asset_tokenization/Move.toml` file has its `published-at` field uncommented and populated with the address of the latest package deployment.
 - Make any changes to the template fields by changing the input parameters of the `publishNewAsset` function.
 - Run `npm run publish-template`.
-- You should choose and store the _Template Package ID_, _asset metadata ID_, _asset cap ID_ and the _publisher ID_ from the created objects in the respective fields within your **.env** file.
+- You should choose and store the _Template Package ID_, _asset metadata ID_, _asset cap ID_ and the _publisher ID_ from the created objects in the respective fields within your **`.env`** file.
 
 For more details regarding this process, please consult the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
 
@@ -931,7 +931,7 @@ Now, you can begin interacting with the deployed smart contract and your tokeniz
 
 In a terminal or console within the project's setup directory, utilize the following commands:
 
-- **Create Transfer Policy**
+- **`create-tp`**
 
   First, create a `TransferPolicy` and a `ProtectedTP` with the following command:
 
@@ -941,9 +941,9 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   After executing the command, the console displays the effects of the transaction.
 
-  By searching the transaction digest on a Sui network explorer, you can locate the created objects. Subsequently, select and save the `TransferPolicy ID` and the `ProtectedTP ID` from these objects into the respective fields within your .env file.
+  By searching the transaction digest on a Sui network explorer, you can locate the created objects. Subsequently, select and save the `TransferPolicy ID` and the `ProtectedTP ID` from these objects into the respective fields within your `.env` file.
 
-- **Add Rules**
+- **Add rules**
 
   In the project's file `transferPolicyRules.ts` located in the directory `setup/src/functions`, you can modify the code to include the desired rules for your transfer policy.
 
@@ -967,7 +967,7 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   Now, investors can trade the fractions of your asset according to the rules you've set.
 
-- **Select Kiosk**
+- **`select-kiosk`**
 
   You must place the tokenized assets within a kiosk if marketable assets are desired. Subsequently, you can list and sell them to other users. Lock the objects in the kiosk to prevent any future unauthorized usage outside the defined policy that you set.
 
@@ -975,9 +975,9 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   To enforce this rule, execute the command `npm run call select-kiosk`. This provides you with the specific kiosk ID to use for this project.
 
-  Then, store the provided Kiosk ID in the appropriate field within your .env file.
+  Then, store the provided Kiosk ID in the appropriate field within your `.env` file.
 
-- **Mint**
+- **`mint`**
 
   In the project's file `mint.ts`, found in the directory `setup/src/functions`, you can edit the code to mint the desired type (NFT/FT) and balance for your asset.
 
@@ -1012,9 +1012,9 @@ In a terminal or console within the project's setup directory, utilize the follo
   }
   ```
 
-  Upon executing the command `npm run call mint`, a new tokenized asset is minted. You can save the object's `ID` in the .env file for future reference.
+  Upon executing the command `npm run call mint`, a new tokenized asset is minted. You can save the object's `ID` in the `.env` file for future reference.
 
-- **Lock**
+- **`lock`**
 
   Locking the objects within the kiosk is crucial to prevent any unauthorized usage beyond the established policy.
 
@@ -1022,11 +1022,11 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   Before running the command, make sure that the field `TOKENIZED_ASSET` within your `.env` file is populated with the object you intend to lock.
 
-- **Mint and Lock**
+- **`mint-lock`**
 
   Executing the command `npm run call mint-lock` performs both the mint and lock functions sequentially, ensuring the minted asset is created and immediately locked within the kiosk.
 
-- **List**
+- **`list`**
 
   Now that your tokenized asset is placed and locked within your kiosk, you can proceed to list it for sale.
 
@@ -1047,7 +1047,7 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   By running the command `npm run call list`, your tokenized asset is listed and made available for sale.
 
-- **Purchase**
+- **`purchase`**
 
   When a user intends to purchase an item, it needs to be listed for sale. After the user selects the item to buy, they are required to modify the following snippet of code found in the file `purchaseItem.ts`, located in the `setup/src/functions` directory.
 
@@ -1062,22 +1062,22 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   Apart from specifying the item and its type, the buyer must set the specific price and the seller's kiosk ID to execute the purchase transaction successfully, accomplished by running `npm run call purchase`.
 
-- **Join**
+- **`join`**
 
   When you execute the command `npm run call join`, 2 specified tokenized assets of the FT type are merged together. Before running the command, make sure that the fields `FT1` and `FT2` within your `.env` file are populated with the objects you intend to merge.
 
-- **Burn**
+- **`burn`**
 
   When you intend to burn a tokenized asset, execute the command `npm run call burn`. Following this action, the specified asset is destroyed. Before running the command, make sure that the field `TOKENIZED_ASSET` within your `.env` file is populated with the object you intend to burn.
 
-- **Get Balance**
+- **`get-balance`**
 
   By executing the command `npm run call get-balance`, you can retrieve the balance value associated with the specified tokenized asset.
 
-- **Get Supply**
+- **`get-supply`**
 
   By executing the command `npm run call get-supply`, you can retrieve the value representing the current circulating supply of the asset.
 
-- **Get Total Supply**
+- **`get-total-supply`**
 
   By executing the command `npm run call get-total-supply`, you can retrieve the value representing the current circulating supply of the asset.
