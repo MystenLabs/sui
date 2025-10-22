@@ -10726,19 +10726,6 @@ dependencies = [
 
 [[package]]
 name = "prost-reflect"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20ae544fca2892fd4b7e9ff26cba1090cedf1d4d95c2aded1af15d2f93f270b8"
-dependencies = [
- "logos 0.14.1",
- "miette",
- "once_cell",
- "prost 0.13.5",
- "prost-types 0.13.3",
-]
-
-[[package]]
-name = "prost-reflect"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89a3ac73ec9a9118131a4594c9d336631a07852220a1d0ae03ee36b04503a063"
@@ -10778,21 +10765,6 @@ dependencies = [
 
 [[package]]
 name = "protox"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "873f359bdecdfe6e353752f97cb9ee69368df55b16363ed2216da85e03232a58"
-dependencies = [
- "bytes",
- "miette",
- "prost 0.13.5",
- "prost-reflect 0.14.3",
- "prost-types 0.13.3",
- "protox-parse 0.7.0",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "protox"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8555716f64c546306ddf3383065dc40d4232609e79e0a4c50e94e87d54f30fb4"
@@ -10800,22 +10772,10 @@ dependencies = [
  "bytes",
  "miette",
  "prost 0.14.1",
- "prost-reflect 0.16.2",
+ "prost-reflect",
  "prost-types 0.14.1",
- "protox-parse 0.9.0",
+ "protox-parse",
  "thiserror 2.0.12",
-]
-
-[[package]]
-name = "protox-parse"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3a462d115462c080ae000c29a47f0b3985737e5d3a995fcdbcaa5c782068dde"
-dependencies = [
- "logos 0.14.1",
- "miette",
- "prost-types 0.13.3",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -14743,9 +14703,10 @@ version = "1.60.0"
 dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
- "protox 0.7.1",
+ "protox",
  "tonic 0.14.2",
- "tonic-build 0.14.2",
+ "tonic-prost",
+ "tonic-prost-build",
  "walkdir",
 ]
 
@@ -16166,7 +16127,7 @@ dependencies = [
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
- "protox 0.9.0",
+ "protox",
  "rand 0.8.5",
  "roaring",
  "serde",

@@ -473,6 +473,7 @@ proptest-derive = "0.5"
 prost = "0.14.1"
 prost-build = "0.14.1"
 prost-types = "0.14.1"
+protox = "0.9"
 protobuf = { version = "2.28", features = ["with-bytes"] }
 quinn-proto = "0.11.7"
 quote = "1.0.23"
@@ -553,8 +554,9 @@ tonic = { version = "0.14.2", features = [
   "transport",
   "tls-webpki-roots",
 ] }
+tonic-build = "0.14.2"
 tonic-prost = "0.14.2"
-tonic-build = { version = "0.14.2", features = ["transport"] }
+tonic-prost-build = "0.14.2"
 tonic-health = "0.14.2"
 tonic-reflection = "0.14.2"
 tonic-web = "0.14.2"
