@@ -68,6 +68,7 @@ fi
 
 # Extract all created shared objects from mint output
 SHARED_OBJECT_IDS=$(echo "$MINT_OUTPUT" | jq -r '.objectChanges[] | select(.type == "created" and (.owner | type == "object" and has("Shared"))) | .objectId' | tr '\n' ' ')
+SHARED_OBJECT_IDS="$SHARED_OBJECT_IDS 0x6"
 
 # Also extract shared objects from publish output if it exists
 PUBLISH_SHARED_IDS=""
@@ -118,22 +119,33 @@ else
     echo ""
 fi
 
-# Save object IDs to file
-cat > "$PROJECT_DIR/object_ids.txt" <<EOF
+# Save object IDs to TOML file
+cat > "$PROJECT_DIR/object_ids.toml" <<EOF
 # Object IDs for fork testing
-# Coin owned by USER1 ($USER1_ADDRESS)
-$COIN_OBJECT_ID
+
+# Specific object IDs to load
+objects = [
+    "$COIN_OBJECT_ID",  # Coin owned by USER1
 EOF
 
 # Add shared objects if any exist
 if [ -n "$SHARED_OBJECT_IDS" ]; then
-    echo "# Created shared objects" >> "$PROJECT_DIR/object_ids.txt"
     for SHARED_ID in $SHARED_OBJECT_IDS; do
         if [ -n "$SHARED_ID" ]; then
-            echo "$SHARED_ID" >> "$PROJECT_DIR/object_ids.txt"
+            echo "    \"$SHARED_ID\"," >> "$PROJECT_DIR/object_ids.toml"
         fi
     done
 fi
+
+# Close the objects array
+cat >> "$PROJECT_DIR/object_ids.toml" <<EOF
+]
+
+# User addresses - ALL owned objects will be automatically fetched
+addresses = [
+    "$USER1_ADDRESS",
+]
+EOF
 
 # Update config with test data
 CONFIG_UPDATE=$(jq --arg coinId "$COIN_OBJECT_ID" \
@@ -143,10 +155,8 @@ CONFIG_UPDATE=$(jq --arg coinId "$COIN_OBJECT_ID" \
    config.json)
 echo "$CONFIG_UPDATE" > config.json
 
-echo "Object IDs saved to object_ids.txt"
+echo "Object IDs saved to object_ids.toml"
 echo "Configuration updated in config.json"
 echo ""
 echo "Setup complete! You can now run fork tests with:"
-echo "  sui move test --fork-rpc-url $RPC_URL --object-id-file object_ids.txt"
-echo "Or with TOML format:"
 echo "  sui move test --fork-rpc-url $RPC_URL --object-id-file object_ids.toml"

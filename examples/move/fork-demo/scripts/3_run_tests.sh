@@ -31,12 +31,12 @@ fi
 echo ""
 
 # Test with fork (if config exists)
-if [ -f "config.json" ] && [ -f "object_ids.txt" ]; then
+if [ -f "config.json" ] && [ -f "object_ids.toml" ]; then
     echo -e "${GREEN}Test: Running tests WITH fork state${NC}"
     echo "RPC URL: $RPC_URL"
-    echo "Object IDs file: object_ids.txt"
+    echo "Object IDs file: object_ids.toml"
     echo ""
-    echo "Command: $SUI_BIN move test --fork-rpc-url $RPC_URL --object-id-file object_ids.txt"
+    echo "Command: $SUI_BIN move test --fork-rpc-url $RPC_URL --object-id-file object_ids.toml"
     echo ""
 
     # Add a small delay to ensure the transaction is finalized
@@ -46,12 +46,12 @@ if [ -f "config.json" ] && [ -f "object_ids.txt" ]; then
 
     "$SUI_BIN" move test \
         --fork-rpc-url "$RPC_URL" \
-        --object-id-file object_ids.txt
+        --object-id-file object_ids.toml
 
     echo ""
     echo -e "${GREEN}✓ Fork tests passed${NC}"
 else
-    echo -e "${YELLOW}Skipping fork test: config.json or object_ids.txt not found${NC}"
+    echo -e "${YELLOW}Skipping fork test: config.json or object_ids.toml not found${NC}"
     echo "Run scripts/1_deploy.sh and scripts/2_mint_and_setup.sh first"
 fi
 
