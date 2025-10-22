@@ -26,7 +26,6 @@ move-clippy = [
     "-Aclippy::question_mark",
     "-Aclippy::unnecessary_get_then_check",
     "-Aclippy::needless_borrows_for_generic_args",
-    "-Aclippy::doc_overindented_list_items",
 ]
 
 [build]

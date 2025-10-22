@@ -82,9 +82,9 @@ fn verify_fallthrough(
 ///
 ///  4. G can be reduced to a CFG containing just `s` through a sequence of the following two
 ///     operations:
-///      a. Delete a cyclic edge `v -> v`
-///      b. For an edge `e: u -> v` where `e` is the only incident edge to `v`, collapse `v` into `u`
-///         by deleting `e` and `v` and replacing all `v -> w` edges with `u -> w` edges.
+///     a. Delete a cyclic edge `v -> v`
+///     b. For an edge `e: u -> v` where `e` is the only incident edge to `v`, collapse `v` into `u`
+///        by deleting `e` and `v` and replacing all `v -> w` edges with `u -> w` edges.
 ///
 /// Reducibility means that a control-flow graph can be decomposed into a series of nested loops
 /// (strongly connected subgraphs), which leads to more predictable abstract interpretation
