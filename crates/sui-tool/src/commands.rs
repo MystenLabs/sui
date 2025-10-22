@@ -842,6 +842,13 @@ impl ToolCommand {
                 verbose,
                 max_retries,
             } => {
+                if no_sign_request {
+                    anyhow::bail!(
+                        "The --no-sign-request flag is no longer supported. \
+                        Please use S3 or GCS buckets with --snapshot-bucket-type and --snapshot-bucket instead. \
+                        For more information, see: https://docs.sui.io/guides/operator/snapshots#mysten-labs-managed-snapshots"
+                    );
+                }
                 if !verbose {
                     tracing_handle
                         .update_log("off")
