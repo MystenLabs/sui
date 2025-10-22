@@ -10,6 +10,7 @@
 //! This module is private to the `DataStore` and packcaged in its own module for convenience.
 
 use crate::{replay_interface::EpochData, DataStore};
+use anyhow::{anyhow, Context, Error};
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
 
@@ -23,7 +24,6 @@ mod schema {
 
 pub(crate) mod epoch_query {
     use super::*;
-    use anyhow::anyhow;
     use chrono::{DateTime as ChronoDateTime, Utc};
 
     #[derive(cynic::QueryVariables)]
@@ -58,7 +58,7 @@ pub(crate) mod epoch_query {
     pub(crate) async fn query(
         epoch_id: u64,
         data_store: &DataStore,
-    ) -> Result<Option<EpochData>, anyhow::Error> {
+    ) -> Result<Option<EpochData>, Error> {
         let query = Query::build(EpochDataArgs {
             epoch: Some(epoch_id),
         });
@@ -98,7 +98,6 @@ pub(crate) mod epoch_query {
 
 pub(crate) mod txn_query {
     use super::*;
-    use anyhow::Context;
     use sui_types::transaction::TransactionData;
 
     #[derive(cynic::Scalar, Debug, Clone)]
@@ -137,8 +136,7 @@ pub(crate) mod txn_query {
     pub(crate) async fn query(
         digest: String,
         data_store: &DataStore,
-    ) -> Result<Option<(TransactionData, sui_types::effects::TransactionEffects, u64)>, anyhow::Error>
-    {
+    ) -> Result<Option<(TransactionData, sui_types::effects::TransactionEffects, u64)>, Error> {
         let query = Query::build(TransactionDataArgs {
             digest: digest.clone(),
         });
@@ -156,7 +154,7 @@ pub(crate) mod txn_query {
                 &transaction
                     .transaction_bcs
                     .ok_or_else(|| {
-                        anyhow::anyhow!(format!(
+                        anyhow!(format!(
                             "Transaction data not available (None) for digest: {}",
                             digest
                         ),)
@@ -175,14 +173,12 @@ pub(crate) mod txn_query {
 
         let effect_frag = transaction
             .effects
-            .ok_or_else(|| anyhow::anyhow!("Missing effects in transaction data response"))?;
+            .ok_or_else(|| anyhow!("Missing effects in transaction data response"))?;
         let effects: sui_types::effects::TransactionEffects = bcs::from_bytes(
             &CryptoBase64::decode(
                 &effect_frag
                     .effects_bcs
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("Missing effects bcs in transaction data response")
-                    })?
+                    .ok_or_else(|| anyhow!("Missing effects bcs in transaction data response"))?
                     .0,
             )
             .context(format!(
@@ -197,7 +193,7 @@ pub(crate) mod txn_query {
 
         let checkpoint = effect_frag
             .checkpoint
-            .ok_or_else(|| anyhow::anyhow!("Missing checkpoint in transaction query response"))?
+            .ok_or_else(|| anyhow!("Missing checkpoint in transaction query response"))?
             .sequence_number;
 
         Ok(Some((txn_data, effects, checkpoint)))
@@ -259,7 +255,7 @@ pub(crate) mod object_query {
     pub(crate) async fn query(
         keys: &[replay_interface::ObjectKey],
         data_store: &DataStore,
-    ) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
+    ) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let mut keys = keys
             .iter()
             .cloned()
@@ -281,7 +277,7 @@ pub(crate) mod object_query {
             let list = if let Some(data) = response.data {
                 data.multi_get_objects
             } else {
-                return Err(anyhow::anyhow!(
+                return Err(anyhow!(
                     "Missing data in transaction query response. Errors: {:?}",
                     response.errors,
                 ));
@@ -293,16 +289,16 @@ pub(crate) mod object_query {
                     Some(frag) => {
                         let b64 = frag
                             .object_bcs
-                            .ok_or_else(|| anyhow::anyhow!("Object bcs is None for object"))?
+                            .ok_or_else(|| anyhow!("Object bcs is None for object"))?
                             .0;
                         let bytes = CryptoBase64::decode(&b64)?;
                         let obj: Object = bcs::from_bytes(&bytes)?;
                         let version = frag
                             .version
-                            .ok_or_else(|| anyhow::anyhow!("Object version is None for object"))?;
-                        Ok::<_, anyhow::Error>(Some((obj, version)))
+                            .ok_or_else(|| anyhow!("Object version is None for object"))?;
+                        Ok::<_, Error>(Some((obj, version)))
                     }
-                    None => Ok::<_, anyhow::Error>(None),
+                    None => Ok::<_, Error>(None),
                 })
                 .collect::<Result<Vec<Option<(Object, u64)>>, _>>()?;
             objects.extend(chunk);
@@ -339,11 +335,11 @@ pub(crate) mod chain_id_query {
         chain_identifier: Option<String>,
     }
 
-    pub(crate) async fn query(data_store: &DataStore) -> Result<String, anyhow::Error> {
+    pub(crate) async fn query(data_store: &DataStore) -> Result<String, Error> {
         let query = Query::build(());
         let response = data_store.run_query(&query).await?;
         let Some(chain_id) = response.data.and_then(|data| data.chain_identifier) else {
-            return Err(anyhow::anyhow!("Missing chain identifier"));
+            return Err(anyhow!("Missing chain identifier"));
         };
         Ok(chain_id)
     }

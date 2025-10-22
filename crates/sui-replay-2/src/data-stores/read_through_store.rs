@@ -5,6 +5,7 @@ use crate::replay_interface::{
     EpochData, EpochStore, ObjectKey, ObjectStore, ReadDataStore, ReadWriteDataStore, SetupStore,
     StoreSummary, TransactionInfo, TransactionStore,
 };
+use anyhow::{Error, Result};
 use sui_types::{object::Object, supported_protocol_versions::ProtocolConfig};
 
 /// A read-through store that composes a primary (cache) and a secondary (source) store.
@@ -39,7 +40,7 @@ where
     fn transaction_data_and_effects(
         &self,
         tx_digest: &str,
-    ) -> Result<Option<TransactionInfo>, anyhow::Error> {
+    ) -> Result<Option<TransactionInfo>, Error> {
         match self.primary.transaction_data_and_effects(tx_digest)? {
             Some(transaction_info) => Ok(Some(transaction_info)),
             None => self
@@ -58,7 +59,7 @@ where
     P: ReadWriteDataStore,
     S: ReadDataStore,
 {
-    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, anyhow::Error> {
+    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error> {
         match self.primary.epoch_info(epoch)? {
             Some(epoch_data) => Ok(Some(epoch_data)),
             None => match self.secondary.epoch_info(epoch)? {
@@ -71,7 +72,7 @@ where
         }
     }
 
-    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, anyhow::Error> {
+    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
         match self.primary.protocol_config(epoch)? {
             Some(config) => Ok(Some(config)),
             None => self.secondary.protocol_config(epoch),
@@ -84,7 +85,7 @@ where
     P: ReadWriteDataStore,
     S: ReadDataStore,
 {
-    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let cached_objects = self.primary.get_objects(keys)?;
 
         let mut keys_to_fetch = Vec::new();
@@ -127,7 +128,7 @@ where
     P: ReadWriteDataStore + StoreSummary,
     S: ReadDataStore + StoreSummary,
 {
-    fn summary<W: std::io::Write>(&self, w: &mut W) -> anyhow::Result<()> {
+    fn summary<W: std::io::Write>(&self, w: &mut W) -> Result<()> {
         self.primary.summary(w)?;
         self.secondary.summary(w)
     }
@@ -138,7 +139,7 @@ where
     P: ReadWriteDataStore + SetupStore,
     S: ReadDataStore + SetupStore,
 {
-    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, anyhow::Error> {
+    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, Error> {
         // Call setup on secondary and pass the return value to primary if not an error
         let chain_id = self.secondary.setup(None)?;
         if let Some(ref chain_id) = chain_id {

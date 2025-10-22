@@ -15,6 +15,7 @@ use crate::{
     },
     Node,
 };
+use anyhow::{Error, Result};
 use lru::LruCache;
 use std::{
     num::NonZeroUsize,
@@ -132,7 +133,7 @@ impl TransactionStore for LruMemoryStore {
     fn transaction_data_and_effects(
         &self,
         tx_digest: &str,
-    ) -> Result<Option<TransactionInfo>, anyhow::Error> {
+    ) -> Result<Option<TransactionInfo>, Error> {
         let mut inner = self.0.write().unwrap();
         let cached = inner.transaction_cache.get(tx_digest).cloned();
         if cached.is_some() {
@@ -145,7 +146,7 @@ impl TransactionStore for LruMemoryStore {
 }
 
 impl EpochStore for LruMemoryStore {
-    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, anyhow::Error> {
+    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error> {
         let mut inner = self.0.write().unwrap();
         let cached = inner.epoch_data_cache.get(&epoch).cloned();
         if cached.is_some() {
@@ -156,7 +157,7 @@ impl EpochStore for LruMemoryStore {
         Ok(cached)
     }
 
-    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, anyhow::Error> {
+    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
         match self.epoch_info(epoch) {
             Ok(Some(epoch_data)) => {
                 let inner = self.0.read().unwrap();
@@ -181,7 +182,7 @@ impl EpochStore for LruMemoryStore {
 }
 
 impl ObjectStore for LruMemoryStore {
-    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let mut results = Vec::with_capacity(keys.len());
         let mut inner = self.0.write().unwrap();
 
@@ -252,7 +253,7 @@ impl TransactionStoreWriter for LruMemoryStore {
         &self,
         tx_digest: &str,
         transaction_info: TransactionInfo,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         self.0
             .write()
             .unwrap()
@@ -263,7 +264,7 @@ impl TransactionStoreWriter for LruMemoryStore {
 }
 
 impl EpochStoreWriter for LruMemoryStore {
-    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), anyhow::Error> {
+    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error> {
         self.0
             .write()
             .unwrap()
@@ -279,7 +280,7 @@ impl ObjectStoreWriter for LruMemoryStore {
         key: &ObjectKey,
         object: Object,
         actual_version: u64,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         let mut inner = self.0.write().unwrap();
 
         // Always store the object at its actual version
@@ -307,13 +308,13 @@ impl ObjectStoreWriter for LruMemoryStore {
 }
 
 impl SetupStore for LruMemoryStore {
-    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, anyhow::Error> {
+    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, Error> {
         Ok(None)
     }
 }
 
 impl StoreSummary for LruMemoryStore {
-    fn summary<W: std::io::Write>(&self, w: &mut W) -> anyhow::Result<()> {
+    fn summary<W: std::io::Write>(&self, w: &mut W) -> Result<()> {
         let inner = self.0.read().unwrap();
         let m = &inner.metrics;
         let txn_hit = m.txn_hit.load(Ordering::Relaxed);
