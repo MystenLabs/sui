@@ -236,11 +236,11 @@ impl Workload<dyn Payload> for SlowWorkload {
                     }
                 }
             };
-            if let Some(tag) = obj.data.struct_tag() {
-                if tag.to_string().contains("::slow::Obj") {
-                    self.shared_obj_ref = o.0;
-                    break;
-                }
+            if let Some(tag) = obj.data.struct_tag()
+                && tag.to_string().contains("::slow::Obj")
+            {
+                self.shared_obj_ref = o.0;
+                break;
             }
         }
         assert!(

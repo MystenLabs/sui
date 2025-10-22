@@ -105,11 +105,9 @@ pub async fn fix_indexes(authority_state: Weak<AuthorityState>) -> Result<()> {
         if let Some(object) = state
             .get_object_store()
             .get_object(&coin_index_key.object_id)
+            && matches!(object.owner, Owner::AddressOwner(real_owner_id) | Owner::ObjectOwner(real_owner_id) if coin_index_key.owner == real_owner_id)
         {
-            if matches!(object.owner, Owner::AddressOwner(real_owner_id) | Owner::ObjectOwner(real_owner_id) if coin_index_key.owner == real_owner_id)
-            {
-                return false;
-            }
+            return false;
         }
         true
     };
@@ -134,23 +132,23 @@ pub async fn fix_indexes(authority_state: Weak<AuthorityState>) -> Result<()> {
     })
     .await??;
 
-    if let Some(authority) = authority_state.upgrade() {
-        if let Some(indexes) = &authority.indexes {
-            for chunk in candidates.chunks(100) {
-                let _locks = indexes
-                    .caches
-                    .locks
-                    .acquire_locks(chunk.iter().map(|key| key.owner));
-                let mut batch = vec![];
-                for key in chunk {
-                    if is_violation(key, &authority) {
-                        batch.push(key);
-                    }
+    if let Some(authority) = authority_state.upgrade()
+        && let Some(indexes) = &authority.indexes
+    {
+        for chunk in candidates.chunks(100) {
+            let _locks = indexes
+                .caches
+                .locks
+                .acquire_locks(chunk.iter().map(|key| key.owner));
+            let mut batch = vec![];
+            for key in chunk {
+                if is_violation(key, &authority) {
+                    batch.push(key);
                 }
-                let mut wb = indexes.tables().coin_index().batch();
-                wb.delete_batch(indexes.tables().coin_index(), batch)?;
-                wb.write()?;
             }
+            let mut wb = indexes.tables().coin_index().batch();
+            wb.delete_batch(indexes.tables().coin_index(), batch)?;
+            wb.write()?;
         }
     }
     tracing::info!("Finished fix for the coin index");

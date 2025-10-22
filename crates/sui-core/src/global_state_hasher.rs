@@ -520,10 +520,9 @@ impl GlobalStateHasher {
         if let Some((last_checkpoint_prev_epoch, prev_acc)) = self
             .store
             .get_root_state_hash_for_epoch(epoch_store.epoch() - 1)?
+            && last_checkpoint_prev_epoch == checkpoint_seq_num - 1
         {
-            if last_checkpoint_prev_epoch == checkpoint_seq_num - 1 {
-                return Ok(prev_acc);
-            }
+            return Ok(prev_acc);
         }
 
         fatal!(

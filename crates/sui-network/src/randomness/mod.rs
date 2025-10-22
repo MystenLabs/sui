@@ -401,13 +401,12 @@ impl RandomnessEventLoop {
             );
             return;
         }
-        if epoch == self.epoch {
-            if let Some(highest_completed_round) = self.highest_completed_round.get(&epoch) {
-                if round <= *highest_completed_round {
-                    info!("skipping sending partial sigs, we already have completed this round");
-                    return;
-                }
-            }
+        if epoch == self.epoch
+            && let Some(highest_completed_round) = self.highest_completed_round.get(&epoch)
+            && round <= *highest_completed_round
+        {
+            info!("skipping sending partial sigs, we already have completed this round");
+            return;
         }
 
         self.highest_requested_round
@@ -479,11 +478,11 @@ impl RandomnessEventLoop {
             return;
         }
         let highest_completed_round = self.highest_completed_round.get(&epoch).copied();
-        if let Some(highest_completed_round) = &highest_completed_round {
-            if *highest_completed_round >= round {
-                debug!("skipping received partial sigs, we already have completed this round");
-                return;
-            }
+        if let Some(highest_completed_round) = &highest_completed_round
+            && *highest_completed_round >= round
+        {
+            debug!("skipping received partial sigs, we already have completed this round");
+            return;
         }
 
         // If sigs are for a future epoch, we can't fully verify them without DKG output.
@@ -572,11 +571,11 @@ impl RandomnessEventLoop {
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
     fn maybe_aggregate_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
-        if let Some(highest_completed_round) = self.highest_completed_round.get(&epoch) {
-            if round <= *highest_completed_round {
-                info!("skipping aggregation for already-completed round");
-                return;
-            }
+        if let Some(highest_completed_round) = self.highest_completed_round.get(&epoch)
+            && round <= *highest_completed_round
+        {
+            info!("skipping aggregation for already-completed round");
+            return;
         }
 
         let highest_requested_round = self.highest_requested_round.get(&epoch);
@@ -719,11 +718,11 @@ impl RandomnessEventLoop {
             return;
         }
         let highest_completed_round = self.highest_completed_round.get(&epoch).copied();
-        if let Some(highest_completed_round) = &highest_completed_round {
-            if *highest_completed_round >= round {
-                debug!("skipping received full sig, we already have completed this round");
-                return;
-            }
+        if let Some(highest_completed_round) = &highest_completed_round
+            && *highest_completed_round >= round
+        {
+            debug!("skipping received full sig, we already have completed this round");
+            return;
         }
 
         let highest_requested_round = self.highest_requested_round.get(&epoch);
@@ -770,10 +769,10 @@ impl RandomnessEventLoop {
             Bound::Excluded((round + 1, PeerId([0; 32]))),
         ));
         self.metrics.record_completed_round(round);
-        if let Some(start_time) = self.round_request_time.get(&(epoch, round)) {
-            if let Some(metric) = self.metrics.round_generation_latency_metric() {
-                metric.observe(start_time.elapsed().as_secs_f64());
-            }
+        if let Some(start_time) = self.round_request_time.get(&(epoch, round))
+            && let Some(metric) = self.metrics.round_generation_latency_metric()
+        {
+            metric.observe(start_time.elapsed().as_secs_f64());
         }
 
         let sig_bytes = bcs::to_bytes(&sig).expect("signature serialization should not fail");

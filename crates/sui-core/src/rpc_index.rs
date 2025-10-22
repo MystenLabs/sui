@@ -702,16 +702,15 @@ impl IndexStoreTables {
         for acc in acc_events {
             if let Some(stream_id) =
                 sui_types::accumulator_root::stream_id_from_accumulator_event(&acc)
+                && let AccumulatorValue::EventDigest(idx, _d) = acc.write.value
             {
-                if let AccumulatorValue::EventDigest(idx, _d) = acc.write.value {
-                    let key = EventIndexKey {
-                        stream_id,
-                        checkpoint_seq,
-                        transaction_idx: tx_idx,
-                        event_index: idx as u32,
-                    };
-                    entries.push((key, ()));
-                }
+                let key = EventIndexKey {
+                    stream_id,
+                    checkpoint_seq,
+                    transaction_idx: tx_idx,
+                    event_index: idx as u32,
+                };
+                entries.push((key, ()));
             }
         }
 

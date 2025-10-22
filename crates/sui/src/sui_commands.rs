@@ -494,10 +494,10 @@ impl SuiCommand {
                     if let Some(env_override) = config.env {
                         context = context.with_env_override(env_override);
                     }
-                    if let Ok(client) = context.get_client().await {
-                        if let Err(e) = client.check_api_version() {
-                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                        }
+                    if let Ok(client) = context.get_client().await
+                        && let Err(e) = client.check_api_version()
+                    {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -518,10 +518,10 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path)?;
                 if let Some(cmd) = cmd {
-                    if let Ok(client) = context.get_client().await {
-                        if let Err(e) = client.check_api_version() {
-                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                        }
+                    if let Ok(client) = context.get_client().await
+                        && let Err(e) = client.check_api_version()
+                    {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -716,10 +716,10 @@ impl SuiCommand {
                 let config_path =
                     client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 let mut context = WalletContext::new(&config_path)?;
-                if let Ok(client) = context.get_client().await {
-                    if let Err(e) = client.check_api_version() {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                    }
+                if let Ok(client) = context.get_client().await
+                    && let Err(e) = client.check_api_version()
+                {
+                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
                 }
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.get_active_env()?.rpc;

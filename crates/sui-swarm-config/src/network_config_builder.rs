@@ -542,10 +542,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     builder =
                         builder.with_global_state_hash_v2_enabled(global_state_hash_v2_enabled);
                 }
-                if let Some(num_unpruned_validators) = self.num_unpruned_validators {
-                    if idx < num_unpruned_validators {
-                        builder = builder.with_unpruned_checkpoints();
-                    }
+                if let Some(num_unpruned_validators) = self.num_unpruned_validators
+                    && idx < num_unpruned_validators
+                {
+                    builder = builder.with_unpruned_checkpoints();
                 }
                 builder.build(validator, genesis.clone())
             })

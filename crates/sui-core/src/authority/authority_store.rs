@@ -541,12 +541,12 @@ impl AuthorityStore {
                 Some(ObjectKey(*object_id, prior_version)),
             )?;
 
-        if let Some((object_key, value)) = iterator.next().transpose()? {
-            if object_key.0 == *object_id {
-                return Ok(Some(
-                    self.perpetual_tables.object_reference(&object_key, value)?,
-                ));
-            }
+        if let Some((object_key, value)) = iterator.next().transpose()?
+            && object_key.0 == *object_id
+        {
+            return Ok(Some(
+                self.perpetual_tables.object_reference(&object_key, value)?,
+            ));
         }
         Ok(None)
     }

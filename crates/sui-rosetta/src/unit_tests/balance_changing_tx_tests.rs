@@ -683,17 +683,16 @@ fn find_module_object(
                 digest,
                 ..
             } = change
+                && type_pred(object_type)
             {
-                if type_pred(object_type) {
-                    return Some(OwnedObjectRef {
-                        owner: owner.clone(),
-                        reference: SuiObjectRef {
-                            object_id: *object_id,
-                            version: *version,
-                            digest: *digest,
-                        },
-                    });
-                }
+                return Some(OwnedObjectRef {
+                    owner: owner.clone(),
+                    reference: SuiObjectRef {
+                        object_id: *object_id,
+                        version: *version,
+                        digest: *digest,
+                    },
+                });
             };
             None
         })

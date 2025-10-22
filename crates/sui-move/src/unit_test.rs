@@ -107,10 +107,10 @@ pub fn run_move_unit_tests(
         &mut std::io::stdout(),
     );
     result.map(|(test_result, warning_diags)| {
-        if test_result == UnitTestResult::Success {
-            if let Some(diags) = warning_diags {
-                decorate_warnings(diags, None);
-            }
+        if test_result == UnitTestResult::Success
+            && let Some(diags) = warning_diags
+        {
+            decorate_warnings(diags, None);
         }
         test_result
     })

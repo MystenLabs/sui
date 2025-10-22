@@ -159,16 +159,16 @@ fn verify_signature(
             })
             .collect::<Result<HashMap<JwkId, Jwk>>>()?;
 
-        if jwks.is_empty() {
-            if let Some(authenticator_state) = service.reader.get_authenticator_state()? {
-                jwks.extend(
-                    authenticator_state
-                        .active_jwks
-                        .into_iter()
-                        .map(sui_sdk_types::ActiveJwk::from)
-                        .map(|active_jwk| (active_jwk.jwk_id, active_jwk.jwk)),
-                );
-            }
+        if jwks.is_empty()
+            && let Some(authenticator_state) = service.reader.get_authenticator_state()?
+        {
+            jwks.extend(
+                authenticator_state
+                    .active_jwks
+                    .into_iter()
+                    .map(sui_sdk_types::ActiveJwk::from)
+                    .map(|active_jwk| (active_jwk.jwk_id, active_jwk.jwk)),
+            );
         }
 
         jwks

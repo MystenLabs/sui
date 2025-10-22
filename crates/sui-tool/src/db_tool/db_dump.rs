@@ -169,20 +169,20 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> anyhow::Result<(usize, usi
 
     for item in iter {
         let (key, value) = item?;
-        if let StoreObject::Value(store_object) = value.migrate().into_inner() {
-            if let StoreData::Move(object) = store_object.data {
-                if object_id != key.0 {
-                    for (k, cnt) in data.iter() {
-                        total_bytes += k.len() * cnt;
-                        duplicated_bytes += k.len() * (cnt - 1);
-                        total_count += cnt;
-                        duplicate_count += cnt - 1;
-                    }
-                    object_id = key.0;
-                    data.clear();
+        if let StoreObject::Value(store_object) = value.migrate().into_inner()
+            && let StoreData::Move(object) = store_object.data
+        {
+            if object_id != key.0 {
+                for (k, cnt) in data.iter() {
+                    total_bytes += k.len() * cnt;
+                    duplicated_bytes += k.len() * (cnt - 1);
+                    total_count += cnt;
+                    duplicate_count += cnt - 1;
                 }
-                *data.entry(object.contents().to_vec()).or_default() += 1;
+                object_id = key.0;
+                data.clear();
             }
+            *data.entry(object.contents().to_vec()).or_default() += 1;
         }
     }
     Ok((total_count, duplicate_count, total_bytes, duplicated_bytes))

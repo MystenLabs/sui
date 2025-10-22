@@ -606,12 +606,12 @@ impl Operations {
     /// An entry is required for gas owner because the balance would be adjusted.
     fn add_missing_gas_owner(operations: &mut Vec<Operation>, gas_owner: SuiAddress) {
         if !operations.iter().any(|operation| {
-            if let Some(amount) = &operation.amount {
-                if let Some(account) = &operation.account {
-                    if account.address == gas_owner && amount.currency == *SUI {
-                        return true;
-                    }
-                }
+            if let Some(amount) = &operation.amount
+                && let Some(account) = &operation.account
+                && account.address == gas_owner
+                && amount.currency == *SUI
+            {
+                return true;
             }
             false
         }) {
@@ -827,10 +827,10 @@ impl Operations {
             .balance_changes
             .ok_or_else(|| anyhow!("Response balance changes should not be empty."))?
         {
-            if let Ok(currency) = cache.get_currency(&balance_change.coin_type).await {
-                if !currency.symbol.is_empty() {
-                    balance_changes.push((balance_change.clone(), currency));
-                }
+            if let Ok(currency) = cache.get_currency(&balance_change.coin_type).await
+                && !currency.symbol.is_empty()
+            {
+                balance_changes.push((balance_change.clone(), currency));
             }
         }
 
@@ -872,12 +872,11 @@ impl Operations {
                 |mut balances: HashMap<(SuiAddress, Currency), i128>, op| {
                     if let (Some(acc), Some(amount), Some(OperationStatus::Success)) =
                         (&op.account, &op.amount, &op.status)
+                        && op.type_ != OperationType::Gas
                     {
-                        if op.type_ != OperationType::Gas {
-                            *balances
-                                .entry((acc.address, amount.clone().currency))
-                                .or_default() += amount.value;
-                        }
+                        *balances
+                            .entry((acc.address, amount.clone().currency))
+                            .or_default() += amount.value;
                     }
                     balances
                 },

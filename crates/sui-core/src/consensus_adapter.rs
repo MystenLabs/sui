@@ -1195,15 +1195,14 @@ impl CheckConnection for ConnectionMonitorStatus {
             }
         };
 
-        let res = match self.connection_statuses.try_get(peer_id) {
+        match self.connection_statuses.try_get(peer_id) {
             TryResult::Present(c) => Some(c.value().clone()),
             TryResult::Absent => None,
             TryResult::Locked => {
                 // update is in progress, assume the status is still or becoming disconnected
                 Some(ConnectionStatus::Disconnected)
             }
-        };
-        res
+        }
     }
     fn update_mapping_for_epoch(
         &self,

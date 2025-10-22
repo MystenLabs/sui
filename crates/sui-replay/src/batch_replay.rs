@@ -119,14 +119,14 @@ async fn run_task(
             index, total_count, digest
         );
         let sandbox_persist_path = persist_path.map(|path| path.join(format!("{}.json", digest,)));
-        if let Some(p) = sandbox_persist_path.as_ref() {
-            if p.exists() {
-                info!(
-                    "Skipping transaction {:?} as it has been replayed before",
-                    digest
-                );
-                continue;
-            }
+        if let Some(p) = sandbox_persist_path.as_ref()
+            && p.exists()
+        {
+            info!(
+                "Skipping transaction {:?} as it has been replayed before",
+                digest
+            );
+            continue;
         }
         let async_func = execute_transaction(
             &mut executor,

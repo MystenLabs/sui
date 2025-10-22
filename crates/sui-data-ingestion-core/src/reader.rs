@@ -313,10 +313,10 @@ impl CheckpointReader {
         for entry in fs::read_dir(self.path.clone())? {
             let entry = entry?;
             let filename = entry.file_name();
-            if let Some(sequence_number) = Self::checkpoint_number_from_file_path(&filename) {
-                if sequence_number < watermark {
-                    fs::remove_file(entry.path())?;
-                }
+            if let Some(sequence_number) = Self::checkpoint_number_from_file_path(&filename)
+                && sequence_number < watermark
+            {
+                fs::remove_file(entry.path())?;
             }
         }
         Ok(())

@@ -474,13 +474,13 @@ pub(super) struct TPSEstimator {
 
 impl TPSEstimator {
     pub fn update(&mut self, now: Instant, transaction_count: u64) -> f64 {
-        if let Some(last_update) = self.last_update {
-            if now > last_update {
-                let delta_t = now.duration_since(last_update);
-                let delta_c = transaction_count - self.transaction_count;
-                let tps = delta_c as f64 / delta_t.as_secs_f64();
-                self.tps = self.tps * 0.9 + tps * 0.1;
-            }
+        if let Some(last_update) = self.last_update
+            && now > last_update
+        {
+            let delta_t = now.duration_since(last_update);
+            let delta_c = transaction_count - self.transaction_count;
+            let tps = delta_c as f64 / delta_t.as_secs_f64();
+            self.tps = self.tps * 0.9 + tps * 0.1;
         }
 
         self.last_update = Some(now);

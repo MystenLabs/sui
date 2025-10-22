@@ -1168,16 +1168,16 @@ impl AuthorityState {
         let signed = self.handle_transaction_impl(transaction, /* sign */ true, epoch_store);
         match signed {
             Ok(Some(s)) => {
-                if self.is_validator(epoch_store) {
-                    if let Some(validator_tx_finalizer) = &self.validator_tx_finalizer {
-                        let tx = s.clone();
-                        let validator_tx_finalizer = validator_tx_finalizer.clone();
-                        let cache_reader = self.get_transaction_cache_reader().clone();
-                        let epoch_store = epoch_store.clone();
-                        spawn_monitored_task!(epoch_store.within_alive_epoch(
-                            validator_tx_finalizer.track_signed_tx(cache_reader, &epoch_store, tx)
-                        ));
-                    }
+                if self.is_validator(epoch_store)
+                    && let Some(validator_tx_finalizer) = &self.validator_tx_finalizer
+                {
+                    let tx = s.clone();
+                    let validator_tx_finalizer = validator_tx_finalizer.clone();
+                    let cache_reader = self.get_transaction_cache_reader().clone();
+                    let epoch_store = epoch_store.clone();
+                    spawn_monitored_task!(epoch_store.within_alive_epoch(
+                        validator_tx_finalizer.track_signed_tx(cache_reader, &epoch_store, tx)
+                    ));
                 }
                 Ok(HandleTransactionResponse {
                     status: TransactionStatus::Signed(s.into_inner().into_sig()),
@@ -1503,16 +1503,16 @@ impl AuthorityState {
 
         let tx_digest = certificate.digest();
 
-        if let Some(fork_recovery) = &self.fork_recovery_state {
-            if let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest) {
-                warn!(
-                    ?tx_digest,
-                    original_digest = ?execution_env.expected_effects_digest,
-                    override_digest = ?override_digest,
-                    "Applying fork recovery override for transaction effects digest"
-                );
-                execution_env.expected_effects_digest = Some(override_digest);
-            }
+        if let Some(fork_recovery) = &self.fork_recovery_state
+            && let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest)
+        {
+            warn!(
+                ?tx_digest,
+                original_digest = ?execution_env.expected_effects_digest,
+                override_digest = ?override_digest,
+                "Applying fork recovery override for transaction effects digest"
+            );
+            execution_env.expected_effects_digest = Some(override_digest);
         }
 
         // prevent concurrent executions of the same tx.
@@ -2008,61 +2008,61 @@ impl AuthorityState {
                 &mut None,
             );
 
-        if let Some(expected_effects_digest) = expected_effects_digest {
-            if effects.digest() != expected_effects_digest {
-                // We dont want to mask the original error, so we log it and continue.
-                match self.debug_dump_transaction_state(
-                    &tx_digest,
-                    &effects,
-                    expected_effects_digest,
-                    &inner_temp_store,
-                    certificate,
-                    &self.config.state_debug_dump_config,
-                ) {
-                    Ok(out_path) => {
-                        info!(
-                            "Dumped node state for transaction {} to {}",
-                            tx_digest,
-                            out_path.as_path().display().to_string()
-                        );
-                    }
-                    Err(e) => {
-                        error!("Error dumping state for transaction {}: {e}", tx_digest);
-                    }
+        if let Some(expected_effects_digest) = expected_effects_digest
+            && effects.digest() != expected_effects_digest
+        {
+            // We dont want to mask the original error, so we log it and continue.
+            match self.debug_dump_transaction_state(
+                &tx_digest,
+                &effects,
+                expected_effects_digest,
+                &inner_temp_store,
+                certificate,
+                &self.config.state_debug_dump_config,
+            ) {
+                Ok(out_path) => {
+                    info!(
+                        "Dumped node state for transaction {} to {}",
+                        tx_digest,
+                        out_path.as_path().display().to_string()
+                    );
                 }
-                error!(
-                    ?tx_digest,
-                    ?expected_effects_digest,
-                    actual_effects = ?effects,
-                    "fork detected!"
-                );
-                if let Err(e) = self.checkpoint_store.record_transaction_fork_detected(
-                    tx_digest,
-                    expected_effects_digest,
-                    effects.digest(),
-                ) {
-                    error!("Failed to record transaction fork: {e}");
+                Err(e) => {
+                    error!("Error dumping state for transaction {}: {e}", tx_digest);
                 }
-
-                fail_point_if!("kill_transaction_fork_node", || {
-                    #[cfg(msim)]
-                    {
-                        tracing::error!(
-                            fatal = true,
-                            "Fork recovery test: killing node due to transaction effects fork for digest: {}",
-                            tx_digest
-                        );
-                        sui_simulator::task::shutdown_current_node();
-                    }
-                });
-
-                fatal!(
-                    "Transaction {} is expected to have effects digest {}, but got {}!",
-                    tx_digest,
-                    expected_effects_digest,
-                    effects.digest()
-                );
             }
+            error!(
+                ?tx_digest,
+                ?expected_effects_digest,
+                actual_effects = ?effects,
+                "fork detected!"
+            );
+            if let Err(e) = self.checkpoint_store.record_transaction_fork_detected(
+                tx_digest,
+                expected_effects_digest,
+                effects.digest(),
+            ) {
+                error!("Failed to record transaction fork: {e}");
+            }
+
+            fail_point_if!("kill_transaction_fork_node", || {
+                #[cfg(msim)]
+                {
+                    tracing::error!(
+                        fatal = true,
+                        "Fork recovery test: killing node due to transaction effects fork for digest: {}",
+                        tx_digest
+                    );
+                    sui_simulator::task::shutdown_current_node();
+                }
+            });
+
+            fatal!(
+                "Transaction {} is expected to have effects digest {}, but got {}!",
+                tx_digest,
+                expected_effects_digest,
+                effects.digest()
+            );
         }
 
         fail_point_arg!("simulate_fork_during_execution", |(
@@ -3783,24 +3783,18 @@ impl AuthorityState {
         );
         self.get_reconfig_api()
             .set_epoch_start_configuration(&epoch_start_configuration);
-        if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
-            if self
+        if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path
+            && self
                 .db_checkpoint_config
                 .perform_db_checkpoints_at_epoch_end
-            {
-                let checkpoint_indexes = self
-                    .db_checkpoint_config
-                    .perform_index_db_checkpoints_at_epoch_end
-                    .unwrap_or(false);
-                let current_epoch = cur_epoch_store.epoch();
-                let epoch_checkpoint_path =
-                    checkpoint_path.join(format!("epoch_{}", current_epoch));
-                self.checkpoint_all_dbs(
-                    &epoch_checkpoint_path,
-                    cur_epoch_store,
-                    checkpoint_indexes,
-                )?;
-            }
+        {
+            let checkpoint_indexes = self
+                .db_checkpoint_config
+                .perform_index_db_checkpoints_at_epoch_end
+                .unwrap_or(false);
+            let current_epoch = cur_epoch_store.epoch();
+            let epoch_checkpoint_path = checkpoint_path.join(format!("epoch_{}", current_epoch));
+            self.checkpoint_all_dbs(&epoch_checkpoint_path, cur_epoch_store, checkpoint_indexes)?;
         }
 
         self.get_reconfig_api()
@@ -3907,11 +3901,11 @@ impl AuthorityState {
             self.expensive_check_is_consistent_state(state_hasher, cur_epoch_store);
         }
 
-        if expensive_safety_check_config.enable_secondary_index_checks() {
-            if let Some(indexes) = self.indexes.clone() {
-                verify_indexes(self.get_global_state_hash_store().as_ref(), indexes)
-                    .expect("secondary indexes are inconsistent");
-            }
+        if expensive_safety_check_config.enable_secondary_index_checks()
+            && let Some(indexes) = self.indexes.clone()
+        {
+            verify_indexes(self.get_global_state_hash_store().as_ref(), indexes)
+                .expect("secondary indexes are inconsistent");
         }
     }
 
@@ -3992,10 +3986,8 @@ impl AuthorityState {
         self.committee_store
             .checkpoint_db(&checkpoint_path_tmp.join("epochs"))?;
 
-        if checkpoint_indexes {
-            if let Some(indexes) = self.indexes.as_ref() {
-                indexes.checkpoint_db(&checkpoint_path_tmp.join("indexes"))?;
-            }
+        if checkpoint_indexes && let Some(indexes) = self.indexes.as_ref() {
+            indexes.checkpoint_db(&checkpoint_path_tmp.join("indexes"))?;
         }
 
         fs::rename(checkpoint_path_tmp, checkpoint_path)
@@ -4939,15 +4931,12 @@ impl AuthorityState {
             if inner_temporary_store
                 .loaded_runtime_objects
                 .contains_key(&object_id)
-            {
-                if let Some(object) = self
+                && let Some(object) = self
                     .get_object_store()
                     .get_object_by_key(&object_id, version)
-                {
-                    if object.is_coin() {
-                        input_coin_objects.insert(object_id, object);
-                    }
-                }
+                && object.is_coin()
+            {
+                input_coin_objects.insert(object_id, object);
             }
         }
 

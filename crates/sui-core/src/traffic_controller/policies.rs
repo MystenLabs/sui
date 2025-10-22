@@ -195,11 +195,11 @@ impl TrafficSketch {
         let rate = rate as u64;
         if rate_heap.len() < capacity {
             rate_heap.push(Reverse((rate, ip_addr)));
-        } else if let Some(&Reverse((smallest_score, _))) = rate_heap.peek() {
-            if rate > smallest_score {
-                rate_heap.pop();
-                rate_heap.push(Reverse((rate, ip_addr)));
-            }
+        } else if let Some(&Reverse((smallest_score, _))) = rate_heap.peek()
+            && rate > smallest_score
+        {
+            rate_heap.pop();
+            rate_heap.push(Reverse((rate, ip_addr)));
         }
     }
 

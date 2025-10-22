@@ -770,11 +770,11 @@ fn compare_packages(
             Some(new_module) => {
                 let new_module_address_idx = new_module.self_handle().address;
                 let addrs = &mut new_module.address_identifiers;
-                if let Some(address_mut) = addrs.get_mut(new_module_address_idx.0 as usize) {
-                    if *address_mut == AccountAddress::ZERO {
-                        // if the new module address is zero, set it to the on-chain address
-                        *address_mut = package_id;
-                    }
+                if let Some(address_mut) = addrs.get_mut(new_module_address_idx.0 as usize)
+                    && *address_mut == AccountAddress::ZERO
+                {
+                    // if the new module address is zero, set it to the on-chain address
+                    *address_mut = package_id;
                 }
 
                 let compiled_unit_with_source = new_package

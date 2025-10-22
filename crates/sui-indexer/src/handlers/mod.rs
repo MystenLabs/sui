@@ -165,14 +165,14 @@ impl<T> CommonHandler<T> {
                 tuple_batch = vec![];
             }
 
-            if let Some(end_checkpoint) = end_checkpoint_opt {
-                if next_cp_to_process > end_checkpoint {
-                    tracing::info!(
-                        "Reached end checkpoint, stopping handler {}...",
-                        self.handler.name()
-                    );
-                    return Ok(());
-                }
+            if let Some(end_checkpoint) = end_checkpoint_opt
+                && next_cp_to_process > end_checkpoint
+            {
+                tracing::info!(
+                    "Reached end checkpoint, stopping handler {}...",
+                    self.handler.name()
+                );
+                return Ok(());
             }
         }
         Err(IndexerError::ChannelClosed(format!(

@@ -343,12 +343,11 @@ async fn find_package_object_id(
         let effect = kv_store.get_fx_by_tx_digest(publish_txn_digest).await?;
 
         for ((id, _, _), _) in effect.created() {
-            if let Ok(object_read) = state.get_object_read(&id) {
-                if let Ok(object) = object_read.into_object() {
-                    if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
-                        return Ok(id);
-                    }
-                }
+            if let Ok(object_read) = state.get_object_read(&id)
+                && let Ok(object) = object_read.into_object()
+                && matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag))
+            {
+                return Ok(id);
             }
         }
         Err(SuiRpcInputError::GenericNotFound(format!(

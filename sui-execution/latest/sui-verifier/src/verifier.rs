@@ -39,13 +39,13 @@ pub fn sui_verify_module_metered_check_timeout_only(
     verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
     // Checks if the error counts as a Sui verifier timeout
-    if let Err(error) = sui_verify_module_metered(module, fn_info_map, meter, verifier_config) {
-        if matches!(
+    if let Err(error) = sui_verify_module_metered(module, fn_info_map, meter, verifier_config)
+        && matches!(
             error.kind(),
             sui_types::execution_status::ExecutionFailureStatus::SuiMoveVerificationTimedout
-        ) {
-            return Err(error);
-        }
+        )
+    {
+        return Err(error);
     }
     // Any other scenario, including a non-timeout error counts as Ok
     Ok(())

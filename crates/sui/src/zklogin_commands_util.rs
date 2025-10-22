@@ -38,10 +38,10 @@ pub fn read_cli_line() -> Result<String, anyhow::Error> {
     let full_url = s.trim_end().to_string();
     let mut parsed_token = "";
     let re = Regex::new(r"id_token=([^&]+)").unwrap();
-    if let Some(captures) = re.captures(&full_url) {
-        if let Some(id_token) = captures.get(1) {
-            parsed_token = id_token.as_str();
-        }
+    if let Some(captures) = re.captures(&full_url)
+        && let Some(id_token) = captures.get(1)
+    {
+        parsed_token = id_token.as_str();
     }
     Ok(parsed_token.to_string())
 }

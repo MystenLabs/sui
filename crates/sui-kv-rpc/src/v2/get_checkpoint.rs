@@ -78,19 +78,18 @@ pub async fn get_checkpoint(
         );
     }
 
-    if read_mask.contains(Checkpoint::TRANSACTIONS_FIELD)
-        || read_mask.contains(Checkpoint::OBJECTS_FIELD)
+    if (read_mask.contains(Checkpoint::TRANSACTIONS_FIELD)
+        || read_mask.contains(Checkpoint::OBJECTS_FIELD))
+        && let Some(url) = checkpoint_bucket
     {
-        if let Some(url) = checkpoint_bucket {
-            let client = create_remote_store_client(url, vec![], 60)?;
-            let (checkpoint_data, _) =
-                CheckpointReader::fetch_from_object_store(&client, sequence_number).await?;
-            let checkpoint = sui_types::full_checkpoint_content::Checkpoint::from(
-                std::sync::Arc::into_inner(checkpoint_data).unwrap(),
-            );
+        let client = create_remote_store_client(url, vec![], 60)?;
+        let (checkpoint_data, _) =
+            CheckpointReader::fetch_from_object_store(&client, sequence_number).await?;
+        let checkpoint = sui_types::full_checkpoint_content::Checkpoint::from(
+            std::sync::Arc::into_inner(checkpoint_data).unwrap(),
+        );
 
-            message.merge(&checkpoint, &read_mask);
-        }
+        message.merge(&checkpoint, &read_mask);
     }
 
     Ok(GetCheckpointResponse::new(message))

@@ -274,7 +274,7 @@ impl SuiValidatorCommand {
     ) -> Result<SuiValidatorCommandResponse, anyhow::Error> {
         let sui_address = context.active_address()?;
 
-        let ret = Ok(match self {
+        Ok(match self {
             SuiValidatorCommand::MakeValidatorInfo {
                 name,
                 description,
@@ -668,8 +668,7 @@ impl SuiValidatorCommand {
                     }
                 }
             }
-        });
-        ret
+        })
     }
 }
 
@@ -679,13 +678,13 @@ fn check_address(
     print_unsigned_transaction_only: bool,
 ) -> Result<SuiAddress, anyhow::Error> {
     if !print_unsigned_transaction_only {
-        if let Some(validator_address) = validator_address {
-            if validator_address != active_address {
-                bail!(
-                    "`--validator-address` must be the same as the current active address: {}",
-                    active_address
-                );
-            }
+        if let Some(validator_address) = validator_address
+            && validator_address != active_address
+        {
+            bail!(
+                "`--validator-address` must be the same as the current active address: {}",
+                active_address
+            );
         }
         Ok(active_address)
     } else {

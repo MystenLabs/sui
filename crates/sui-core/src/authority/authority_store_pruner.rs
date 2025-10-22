@@ -383,17 +383,17 @@ impl AuthorityStorePruner {
                     .unwrap_or_default(),
             );
         }
-        if config.smooth {
-            if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints {
-                max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
-                    checkpoint_store,
-                    max_eligible_checkpoint,
-                    pruned_checkpoint_number,
-                    epoch_id,
-                    epoch_duration_ms,
-                    num_epochs_to_retain,
-                )?;
-            }
+        if config.smooth
+            && let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints
+        {
+            max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
+                checkpoint_store,
+                max_eligible_checkpoint,
+                pruned_checkpoint_number,
+                epoch_id,
+                epoch_duration_ms,
+                num_epochs_to_retain,
+            )?;
         }
         debug!("Max eligible checkpoint {}", max_eligible_checkpoint);
         Self::prune_for_eligible_epochs(
@@ -655,10 +655,10 @@ impl AuthorityStorePruner {
             {
                 continue;
             }
-            if let Some(candidate) = &sst_file_for_compaction {
-                if candidate.size > sst_file.size {
-                    continue;
-                }
+            if let Some(candidate) = &sst_file_for_compaction
+                && candidate.size > sst_file.size
+            {
+                continue;
             }
             sst_file_for_compaction = Some(sst_file);
         }
@@ -918,18 +918,18 @@ impl ObjectsCompactionFilter {
             .with_fixint_encoding()
             .deserialize(key)?;
         let object: StoreObjectWrapper = bcs::from_bytes(value)?;
-        if matches!(object.into_inner(), StoreObject::Value(_)) {
-            if let Some(db) = self.db.upgrade() {
-                match db.object_tombstones.get(&object_id)? {
-                    Some(gc_version) => {
-                        if version <= gc_version {
-                            self.metrics.key_removed.inc();
-                            return Ok(Decision::Remove);
-                        }
-                        self.metrics.key_kept.inc();
+        if matches!(object.into_inner(), StoreObject::Value(_))
+            && let Some(db) = self.db.upgrade()
+        {
+            match db.object_tombstones.get(&object_id)? {
+                Some(gc_version) => {
+                    if version <= gc_version {
+                        self.metrics.key_removed.inc();
+                        return Ok(Decision::Remove);
                     }
-                    None => self.metrics.key_not_found.inc(),
+                    self.metrics.key_kept.inc();
                 }
+                None => self.metrics.key_not_found.inc(),
             }
         }
         Ok(Decision::Keep)

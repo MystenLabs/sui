@@ -248,14 +248,14 @@ impl PTB {
             _ => anyhow::bail!("Internal error, unexpected response from PTB execution."),
         };
 
-        if let Some(effects) = transaction_response.effects.as_ref() {
-            if effects.status().is_err() {
-                return Err(anyhow!(
-                    "PTB execution {}. Transaction digest is: {}",
-                    Pretty(effects.status()),
-                    effects.transaction_digest()
-                ));
-            }
+        if let Some(effects) = transaction_response.effects.as_ref()
+            && effects.status().is_err()
+        {
+            return Err(anyhow!(
+                "PTB execution {}. Transaction digest is: {}",
+                Pretty(effects.status()),
+                effects.transaction_digest()
+            ));
         }
 
         let summary = {

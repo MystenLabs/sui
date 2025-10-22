@@ -77,13 +77,14 @@ pub(crate) async fn batch_get_objects(
     let objects = object_keys
         .into_iter()
         .map(|object_key| {
-            if let Some(obj) = objects_iter.peek() {
-                if object_key.0 == obj.id() && object_key.1 == obj.version() {
-                    let object = objects_iter.next().expect("invariant's checked above");
-                    let mut message = Object::default();
-                    message.merge(&object, &read_mask);
-                    return GetObjectResult::new_object(message);
-                }
+            if let Some(obj) = objects_iter.peek()
+                && object_key.0 == obj.id()
+                && object_key.1 == obj.version()
+            {
+                let object = objects_iter.next().expect("invariant's checked above");
+                let mut message = Object::default();
+                message.merge(&object, &read_mask);
+                return GetObjectResult::new_object(message);
             }
             let err: RpcError =
                 ObjectNotFoundError::new_with_version(object_key.0.into(), object_key.1.into())

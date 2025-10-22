@@ -2227,12 +2227,11 @@ impl AuthorityPerEpochStore {
                         } else {
                             // If we can't find a matching start version, treat the object as
                             // if it's absent.
-                            if self.protocol_config().reshare_at_same_initial_version() {
-                                if let Some(obj_start_version) = obj.owner().start_version() {
+                            if self.protocol_config().reshare_at_same_initial_version()
+                                && let Some(obj_start_version) = obj.owner().start_version() {
                                     assert!(*initial_version >= obj_start_version,
                                             "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
                                 }
-                            }
                             ((*id, *initial_version), *initial_version)
                         }
                     }
@@ -2858,14 +2857,14 @@ impl AuthorityPerEpochStore {
         let tables = self.tables()?;
 
         // Read-compare-write pattern assumes we are only called from the consensus handler task.
-        if let Some(cap) = tables.authority_capabilities.get(authority)? {
-            if cap.generation >= capabilities.generation {
-                debug!(
-                    "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
-                    capabilities, cap
-                );
-                return Ok(());
-            }
+        if let Some(cap) = tables.authority_capabilities.get(authority)?
+            && cap.generation >= capabilities.generation
+        {
+            debug!(
+                "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
+                capabilities, cap
+            );
+            return Ok(());
         }
         tables
             .authority_capabilities
@@ -2880,14 +2879,14 @@ impl AuthorityPerEpochStore {
         let tables = self.tables()?;
 
         // Read-compare-write pattern assumes we are only called from the consensus handler task.
-        if let Some(cap) = tables.authority_capabilities_v2.get(authority)? {
-            if cap.generation >= capabilities.generation {
-                debug!(
-                    "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
-                    capabilities, cap
-                );
-                return Ok(());
-            }
+        if let Some(cap) = tables.authority_capabilities_v2.get(authority)?
+            && cap.generation >= capabilities.generation
+        {
+            debug!(
+                "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
+                capabilities, cap
+            );
+            return Ok(());
         }
         tables
             .authority_capabilities_v2
@@ -4125,15 +4124,14 @@ impl AuthorityPerEpochStore {
             if !ignored {
                 output.record_consensus_message_processed(key.clone());
             }
-            if filter_roots {
-                if let Some(txn_key) =
+            if filter_roots
+                && let Some(txn_key) =
                     tx.0.transaction
                         .executable_transaction_digest()
                         .map(TransactionKey::Digest)
-                {
-                    non_randomness_roots.remove(&txn_key);
-                    randomness_roots.remove(&txn_key);
-                }
+            {
+                non_randomness_roots.remove(&txn_key);
+                randomness_roots.remove(&txn_key);
             }
         }
 
@@ -4170,28 +4168,26 @@ impl AuthorityPerEpochStore {
             shared_object_congestion_tracker.accumulated_debts(consensus_commit_info);
         let randomness_object_debts = shared_object_using_randomness_congestion_tracker
             .accumulated_debts(consensus_commit_info);
-        if let Some(tx_object_debts) = self.tx_object_debts.get() {
-            if let Err(e) = tx_object_debts.try_send(
+        if let Some(tx_object_debts) = self.tx_object_debts.get()
+            && let Err(e) = tx_object_debts.try_send(
                 object_debts
                     .iter()
                     .map(|(id, _)| *id)
                     .chain(randomness_object_debts.iter().map(|(id, _)| *id))
                     .collect(),
-            ) {
-                info!("failed to send updated object debts to ExecutionTimeObserver: {e:?}");
-            }
+            )
+        {
+            info!("failed to send updated object debts to ExecutionTimeObserver: {e:?}");
         }
         // TODO(commit-handler-rewrite): commit object debts to output
         output.set_congestion_control_object_debts(object_debts);
         output.set_congestion_control_randomness_object_debts(randomness_object_debts);
 
         // TODO(commit-handler-rewrite): [ssm] advance randomness state if needed
-        if randomness_state_updated {
-            if let Some(randomness_manager) = randomness_manager.as_mut() {
-                randomness_manager
-                    .advance_dkg(output, consensus_commit_info.round)
-                    .await?;
-            }
+        if randomness_state_updated && let Some(randomness_manager) = randomness_manager.as_mut() {
+            randomness_manager
+                .advance_dkg(output, consensus_commit_info.round)
+                .await?;
         }
 
         Ok((

@@ -40,10 +40,10 @@ impl RoundProberHandle {
     pub(crate) async fn stop(self) {
         let _ = self.shutdown_notify.notify();
         // Do not abort prober task, which waits for requests to be cancelled.
-        if let Err(e) = self.prober_task.await {
-            if e.is_panic() {
-                std::panic::resume_unwind(e.into_panic());
-            }
+        if let Err(e) = self.prober_task.await
+            && e.is_panic()
+        {
+            std::panic::resume_unwind(e.into_panic());
         }
     }
 }

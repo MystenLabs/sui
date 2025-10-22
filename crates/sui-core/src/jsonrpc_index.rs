@@ -1671,10 +1671,10 @@ impl IndexStore {
         }
         // cache miss, lookup in all balance cache
         let all_balance = self.caches.all_balances.get(&owner.clone());
-        if let Some(Ok(all_balance)) = all_balance {
-            if let Some(balance) = all_balance.get(&coin_type) {
-                return Ok(*balance);
-            }
+        if let Some(Ok(all_balance)) = all_balance
+            && let Some(balance) = all_balance.get(&coin_type)
+        {
+            return Ok(*balance);
         }
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();

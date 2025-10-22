@@ -354,12 +354,11 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let Some(SuiMoveValue::String(balance)) = fields.get("balance") {
-                    if let Ok(balance) = balance.parse::<u64>() {
-                        if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
-                            return Ok(GasCoin::new(*id, balance));
-                        }
-                    }
+                if let Some(SuiMoveValue::String(balance)) = fields.get("balance")
+                    && let Ok(balance) = balance.parse::<u64>()
+                    && let Some(SuiMoveValue::UID { id }) = fields.get("id")
+                {
+                    return Ok(GasCoin::new(*id, balance));
                 }
             }
             _ => {}

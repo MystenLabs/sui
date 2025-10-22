@@ -113,10 +113,10 @@ impl EventFilter {
 
     // Check if the Event matches sender, module, or type filters in EventFilter if they are provided.
     pub(crate) fn matches(&self, event: &NativeEvent) -> bool {
-        if let Some(sender) = &self.sender {
-            if sender != &SuiAddress::from(event.sender) {
-                return false;
-            }
+        if let Some(sender) = &self.sender
+            && sender != &SuiAddress::from(event.sender)
+        {
+            return false;
         }
 
         if let Some(module) = &self.module {
@@ -124,10 +124,10 @@ impl EventFilter {
                 return false;
             }
 
-            if let Some(module) = module.module() {
-                if module != event.transaction_module.as_str() {
-                    return false;
-                }
+            if let Some(module) = module.module()
+                && module != event.transaction_module.as_str()
+            {
+                return false;
             }
         }
 
@@ -136,22 +136,22 @@ impl EventFilter {
                 return false;
             }
 
-            if let Some(module) = type_.module() {
-                if module != event.type_.module.as_str() {
-                    return false;
-                }
+            if let Some(module) = type_.module()
+                && module != event.type_.module.as_str()
+            {
+                return false;
             }
 
-            if let Some(type_name) = type_.type_name() {
-                if type_name != event.type_.name.as_str() {
-                    return false;
-                }
+            if let Some(type_name) = type_.type_name()
+                && type_name != event.type_.name.as_str()
+            {
+                return false;
             }
 
-            if let Some(type_params) = type_.type_params() {
-                if type_params != event.type_.type_params.as_slice() {
-                    return false;
-                }
+            if let Some(type_params) = type_.type_params()
+                && type_params != event.type_.type_params.as_slice()
+            {
+                return false;
             }
         }
 

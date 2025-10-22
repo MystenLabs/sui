@@ -277,22 +277,22 @@ mod tests {
     impl IngestionClientTrait for MockIngestionClient {
         async fn fetch(&self, checkpoint: u64) -> FetchResult {
             // Check for not found failures
-            if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint) {
-                if *remaining > 0 {
-                    *remaining -= 1;
-                    return Err(FetchError::NotFound);
-                }
+            if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint)
+                && *remaining > 0
+            {
+                *remaining -= 1;
+                return Err(FetchError::NotFound);
             }
 
             // Check for transient failures
-            if let Some(mut remaining) = self.transient_failures.get_mut(&checkpoint) {
-                if *remaining > 0 {
-                    *remaining -= 1;
-                    return Err(FetchError::Transient {
-                        reason: "mock_transient_error",
-                        error: anyhow::anyhow!("Mock transient error"),
-                    });
-                }
+            if let Some(mut remaining) = self.transient_failures.get_mut(&checkpoint)
+                && *remaining > 0
+            {
+                *remaining -= 1;
+                return Err(FetchError::Transient {
+                    reason: "mock_transient_error",
+                    error: anyhow::anyhow!("Mock transient error"),
+                });
             }
 
             // Return the checkpoint data if it exists

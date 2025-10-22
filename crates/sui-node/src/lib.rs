@@ -801,14 +801,13 @@ impl SuiNode {
         if config
             .expensive_safety_check_config
             .enable_secondary_index_checks()
+            && let Some(indexes) = state.indexes.clone()
         {
-            if let Some(indexes) = state.indexes.clone() {
-                sui_core::verify_indexes::verify_indexes(
-                    state.get_global_state_hash_store().as_ref(),
-                    indexes,
-                )
-                .expect("secondary indexes are inconsistent");
-            }
+            sui_core::verify_indexes::verify_indexes(
+                state.get_global_state_hash_store().as_ref(),
+                indexes,
+            )
+            .expect("secondary indexes are inconsistent");
         }
 
         let (end_of_epoch_channel, end_of_epoch_receiver) =
@@ -1877,13 +1876,13 @@ impl SuiNode {
             #[cfg(not(msim))]
             debug_assert!(!latest_system_state.safe_mode());
 
-            if let Err(err) = self.end_of_epoch_channel.send(latest_system_state.clone()) {
-                if self.state.is_fullnode(&cur_epoch_store) {
-                    warn!(
-                        "Failed to send end of epoch notification to subscriber: {:?}",
-                        err
-                    );
-                }
+            if let Err(err) = self.end_of_epoch_channel.send(latest_system_state.clone())
+                && self.state.is_fullnode(&cur_epoch_store)
+            {
+                warn!(
+                    "Failed to send end of epoch notification to subscriber: {:?}",
+                    err
+                );
             }
 
             cur_epoch_store.record_is_safe_mode_metric(latest_system_state.safe_mode());
@@ -2236,16 +2235,15 @@ impl SuiNode {
 
         if let Some((checkpoint_seq, checkpoint_digest)) =
             checkpoint_store.get_checkpoint_fork_detected()?
+            && recovery.checkpoint_overrides.contains_key(&checkpoint_seq)
         {
-            if recovery.checkpoint_overrides.contains_key(&checkpoint_seq) {
-                info!(
-                    "Fork recovery enabled: clearing checkpoint fork at seq {} with digest {:?}",
-                    checkpoint_seq, checkpoint_digest
-                );
-                checkpoint_store
-                    .clear_checkpoint_fork_detected()
-                    .expect("Failed to clear checkpoint fork detected marker");
-            }
+            info!(
+                "Fork recovery enabled: clearing checkpoint fork at seq {} with digest {:?}",
+                checkpoint_seq, checkpoint_digest
+            );
+            checkpoint_store
+                .clear_checkpoint_fork_detected()
+                .expect("Failed to clear checkpoint fork detected marker");
         }
         Ok(())
     }
@@ -2258,19 +2256,18 @@ impl SuiNode {
             return Ok(());
         }
 
-        if let Some((tx_digest, _, _)) = checkpoint_store.get_transaction_fork_detected()? {
-            if recovery
+        if let Some((tx_digest, _, _)) = checkpoint_store.get_transaction_fork_detected()?
+            && recovery
                 .transaction_overrides
                 .contains_key(&tx_digest.to_string())
-            {
-                info!(
-                    "Fork recovery enabled: clearing transaction fork for tx {:?}",
-                    tx_digest
-                );
-                checkpoint_store
-                    .clear_transaction_fork_detected()
-                    .expect("Failed to clear transaction fork detected marker");
-            }
+        {
+            info!(
+                "Fork recovery enabled: clearing transaction fork for tx {:?}",
+                tx_digest
+            );
+            checkpoint_store
+                .clear_transaction_fork_detected()
+                .expect("Failed to clear transaction fork detected marker");
         }
         Ok(())
     }

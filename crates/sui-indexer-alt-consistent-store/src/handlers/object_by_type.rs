@@ -55,10 +55,9 @@ impl Processor for ObjectByType {
             if let Some(key_in) = input_objects
                 .get(&id)
                 .and_then(|(input, _)| Key::from_object(input))
+                && key_in != key_out
             {
-                if key_in != key_out {
-                    values.push(Value::Del(key_in));
-                }
+                values.push(Value::Del(key_in));
             }
 
             // The object is always put at its output location.

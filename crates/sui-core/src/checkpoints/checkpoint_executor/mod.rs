@@ -189,15 +189,14 @@ impl CheckpointExecutor {
             .get_highest_executed_checkpoint()
             .unwrap();
 
-        if let Some(highest_executed) = &highest_executed {
-            if self.epoch_store.epoch() == highest_executed.epoch()
-                && highest_executed.is_last_checkpoint_of_epoch()
-            {
-                // We can arrive at this point if we bump the highest_executed_checkpoint watermark, and then
-                // crash before completing reconfiguration.
-                info!(seq = ?highest_executed.sequence_number, "final checkpoint of epoch has already been executed");
-                return None;
-            }
+        if let Some(highest_executed) = &highest_executed
+            && self.epoch_store.epoch() == highest_executed.epoch()
+            && highest_executed.is_last_checkpoint_of_epoch()
+        {
+            // We can arrive at this point if we bump the highest_executed_checkpoint watermark, and then
+            // crash before completing reconfiguration.
+            info!(seq = ?highest_executed.sequence_number, "final checkpoint of epoch has already been executed");
+            return None;
         }
 
         Some(
@@ -969,10 +968,10 @@ impl CheckpointExecutor {
                 .expect("failed to update rpc_indexes");
         }
 
-        if let Some(sender) = &self.subscription_service_checkpoint_sender {
-            if let Err(e) = sender.send(checkpoint).await {
-                warn!("unable to send checkpoint to subscription service: {e}");
-            }
+        if let Some(sender) = &self.subscription_service_checkpoint_sender
+            && let Err(e) = sender.send(checkpoint).await
+        {
+            warn!("unable to send checkpoint to subscription service: {e}");
         }
     }
 

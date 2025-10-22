@@ -447,8 +447,8 @@ impl BridgeTestCluster {
         assert_success: bool,
     ) -> Vec<SuiEvent> {
         let txes = self.new_bridge_transactions(assert_success).await;
-        let events = txes
-            .iter()
+
+        txes.iter()
             .flat_map(|tx| {
                 tx.events
                     .as_ref()
@@ -458,8 +458,7 @@ impl BridgeTestCluster {
                     .filter(|e| event_types.contains(&e.type_))
                     .cloned()
             })
-            .collect();
-        events
+            .collect()
     }
 }
 

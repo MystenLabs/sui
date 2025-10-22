@@ -224,7 +224,8 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
             element
         } else {
             // element doesn't exist
-            let element = {
+
+            {
                 let mut map = self.lock_table[lock_idx].write();
                 map.entry(k)
                     .or_insert_with(|| {
@@ -232,8 +233,7 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
                         Arc::new(L::default())
                     })
                     .clone()
-            };
-            element
+            }
         }
     }
 

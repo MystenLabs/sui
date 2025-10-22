@@ -523,13 +523,12 @@ fn is_input_argument_receiving(
         if let (Command::MoveCall(move_call), Some(idx)) = (command, idx) {
             let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
 
-            if let normalized::Type::Datatype(dt) = &*arg_type {
-                if receiving_package == &dt.module.address
-                    && receiving_module == dt.module.name.as_ref()
-                    && receiving_struct == dt.name.as_ref()
-                {
-                    receiving = true;
-                }
+            if let normalized::Type::Datatype(dt) = &*arg_type
+                && receiving_package == &dt.module.address
+                && receiving_module == dt.module.name.as_ref()
+                && receiving_struct == dt.name.as_ref()
+            {
+                receiving = true;
             }
         }
 

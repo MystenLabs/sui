@@ -1167,13 +1167,13 @@ async fn orderbook(
         })?
         .map(|depth| if depth == 0 { 200 } else { depth });
 
-    if let Some(depth) = depth {
-        if depth == 1 {
-            return Err(DeepBookError::InternalError(
-                "Depth cannot be 1. Use a value greater than 1 or 0 for the entire orderbook"
-                    .to_string(),
-            ));
-        }
+    if let Some(depth) = depth
+        && depth == 1
+    {
+        return Err(DeepBookError::InternalError(
+            "Depth cannot be 1. Use a value greater than 1 or 0 for the entire orderbook"
+                .to_string(),
+        ));
     }
 
     let level = params
@@ -1184,12 +1184,12 @@ async fn orderbook(
             DeepBookError::InternalError("Level must be an integer between 1 and 2".to_string())
         })?;
 
-    if let Some(level) = level {
-        if !(1..=2).contains(&level) {
-            return Err(DeepBookError::InternalError(
-                "Level must be 1 or 2".to_string(),
-            ));
-        }
+    if let Some(level) = level
+        && !(1..=2).contains(&level)
+    {
+        return Err(DeepBookError::InternalError(
+            "Level must be 1 or 2".to_string(),
+        ));
     }
 
     let ticks_from_mid = match (depth, level) {

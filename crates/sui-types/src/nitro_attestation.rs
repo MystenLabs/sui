@@ -527,12 +527,12 @@ impl AttestationDocument {
             .and_then(|v| v.as_bytes())
             .map(|bytes| bytes.to_vec());
 
-        if let Some(data) = &user_data {
-            if data.len() > MAX_USER_DATA_LENGTH {
-                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                    "invalid user data".to_string(),
-                ));
-            }
+        if let Some(data) = &user_data
+            && data.len() > MAX_USER_DATA_LENGTH
+        {
+            return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid user data".to_string(),
+            ));
         }
 
         let nonce = document_map
@@ -540,12 +540,12 @@ impl AttestationDocument {
             .and_then(|v| v.as_bytes())
             .map(|bytes| bytes.to_vec());
 
-        if let Some(data) = &nonce {
-            if data.len() > MAX_USER_DATA_LENGTH {
-                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                    "invalid nonce".to_string(),
-                ));
-            }
+        if let Some(data) = &nonce
+            && data.len() > MAX_USER_DATA_LENGTH
+        {
+            return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid nonce".to_string(),
+            ));
         }
 
         let (pcr_vec, pcr_map) = document_map

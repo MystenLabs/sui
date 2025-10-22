@@ -393,10 +393,10 @@ impl<'a> PTBBuilder<'a> {
                 // externally-bound address (i.e., one coming in through the initial environment).
                 // This will also handle direct aliasing of addresses throughout the ptb.
                 // Note that we don't do this recursively so no need to worry about loops/cycles.
-                if let Some(addr) = self.addresses.get(i) {
-                    if let Some(a) = addr.address() {
-                        self.addresses.insert(ident, AddressData::AccountAddress(a));
-                    }
+                if let Some(addr) = self.addresses.get(i)
+                    && let Some(a) = addr.address()
+                {
+                    self.addresses.insert(ident, AddressData::AccountAddress(a));
                 }
             }
             // If we encounter a dotted string e.g., "foo.0" or "sui.io" or something like that

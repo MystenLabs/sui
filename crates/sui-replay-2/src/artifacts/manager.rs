@@ -311,16 +311,15 @@ impl ArtifactMember<'_, '_> {
     }
 
     pub fn try_remove_artifact(&self) -> Result<()> {
-        if self.manager.overrides_allowed {
-            if let Err(e) = std::fs::remove_file(&self.artifact_path) {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    bail!(
-                        "Failed to remove file {}: {:?}",
-                        self.artifact_path.display(),
-                        e
-                    );
-                }
-            }
+        if self.manager.overrides_allowed
+            && let Err(e) = std::fs::remove_file(&self.artifact_path)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            bail!(
+                "Failed to remove file {}: {:?}",
+                self.artifact_path.display(),
+                e
+            );
         }
         Ok(())
     }

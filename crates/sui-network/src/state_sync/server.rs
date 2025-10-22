@@ -69,10 +69,10 @@ where
 
         // If this checkpoint is higher than our highest verified checkpoint notify the
         // event loop to potentially sync it
-        if *checkpoint.sequence_number() > highest_verified_checkpoint {
-            if let Some(sender) = self.sender.upgrade() {
-                sender.send(StateSyncMessage::StartSyncJob).await.unwrap();
-            }
+        if *checkpoint.sequence_number() > highest_verified_checkpoint
+            && let Some(sender) = self.sender.upgrade()
+        {
+            sender.send(StateSyncMessage::StartSyncJob).await.unwrap();
         }
 
         Ok(Response::new(()))

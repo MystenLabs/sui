@@ -804,13 +804,12 @@ fn process_sui_event(
                 let shared_objects = &tx.input_objects;
                 let mut pool_id = "0x0".to_string();
                 for obj in shared_objects.iter() {
-                    if let Some(obj_type) = obj.data.type_() {
-                        if obj_type.module().to_string().eq("pool")
-                            && obj_type.address() == *package_id
-                        {
-                            pool_id = obj_type.address().to_string();
-                            break;
-                        }
+                    if let Some(obj_type) = obj.data.type_()
+                        && obj_type.module().to_string().eq("pool")
+                        && obj_type.address() == *package_id
+                    {
+                        pool_id = obj_type.address().to_string();
+                        break;
                     }
                 }
                 let txn_data = Some(ProcessedTxnData::TradeParamsUpdate(TradeParamsUpdate {

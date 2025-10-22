@@ -137,26 +137,19 @@ pub fn get_checkpoint(
 
                         if let Some(events_mask) =
                             submask.subtree(ExecutedTransaction::EVENTS_FIELD.name)
-                        {
-                            if let Some(event_mask) =
+                            && let Some(event_mask) =
                                 events_mask.subtree(TransactionEvents::EVENTS_FIELD.name)
-                            {
-                                if event_mask.contains(Event::JSON_FIELD.name) {
-                                    if let Some(events) = transaction.events.as_mut() {
-                                        if let Some(sdk_events) = &t.events {
-                                            for (message, event) in
-                                                events.events.iter_mut().zip(&sdk_events.data)
-                                            {
-                                                message.json = crate::grpc::v2::render_json(
-                                                    service,
-                                                    &event.type_,
-                                                    &event.contents,
-                                                )
-                                                .map(Box::new);
-                                            }
-                                        }
-                                    }
-                                }
+                            && event_mask.contains(Event::JSON_FIELD.name)
+                            && let Some(events) = transaction.events.as_mut()
+                            && let Some(sdk_events) = &t.events
+                        {
+                            for (message, event) in events.events.iter_mut().zip(&sdk_events.data) {
+                                message.json = crate::grpc::v2::render_json(
+                                    service,
+                                    &event.type_,
+                                    &event.contents,
+                                )
+                                .map(Box::new);
                             }
                         }
 

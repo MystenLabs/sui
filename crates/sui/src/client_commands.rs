@@ -977,8 +977,8 @@ impl SuiClientCommands {
                 )
                 .await?;
 
-                if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    if let Err(e) = sui_package_management::update_lock_file(
+                if let SuiClientCommandResult::TransactionBlock(ref response) = result
+                    && let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Upgrade,
                         build_config.install_dir,
@@ -986,14 +986,13 @@ impl SuiClientCommands {
                         response,
                     )
                     .await
-                    {
-                        eprintln!(
-                            "{} {e}",
-                            "Warning: Issue while updating `Move.lock` for published package."
-                                .bold()
-                                .yellow()
-                        )
-                    };
+                {
+                    eprintln!(
+                        "{} {e}",
+                        "Warning: Issue while updating `Move.lock` for published package."
+                            .bold()
+                            .yellow()
+                    )
                 };
                 result
             }
@@ -1090,8 +1089,8 @@ impl SuiClientCommands {
                 )
                 .await?;
 
-                if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    if let Err(e) = sui_package_management::update_lock_file(
+                if let SuiClientCommandResult::TransactionBlock(ref response) = result
+                    && let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Publish,
                         build_config.install_dir,
@@ -1099,14 +1098,13 @@ impl SuiClientCommands {
                         response,
                     )
                     .await
-                    {
-                        eprintln!(
-                            "{} {e}",
-                            "Warning: Issue while updating `Move.lock` for published package."
-                                .bold()
-                                .yellow()
-                        )
-                    };
+                {
+                    eprintln!(
+                        "{} {e}",
+                        "Warning: Issue while updating `Move.lock` for published package."
+                            .bold()
+                            .yellow()
+                    )
                 };
                 result
             }
@@ -2181,17 +2179,17 @@ pub(crate) async fn compile_package(
         }
     }
 
-    if !compiled_package.is_system_package() {
-        if let Some(already_published) = compiled_package.published_root_module() {
-            return Err(SuiErrorKind::ModulePublishFailure {
-                error: format!(
-                    "Modules must all have 0x0 as their addresses. \
+    if !compiled_package.is_system_package()
+        && let Some(already_published) = compiled_package.published_root_module()
+    {
+        return Err(SuiErrorKind::ModulePublishFailure {
+            error: format!(
+                "Modules must all have 0x0 as their addresses. \
                      Violated by module {:?}",
-                    already_published.self_id(),
-                ),
-            }
-            .into());
+                already_published.self_id(),
+            ),
         }
+        .into());
     }
     if with_unpublished_dependencies {
         compiled_package.verify_unpublished_dependencies(&dependencies.unpublished)?;
@@ -3338,17 +3336,17 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
                 .into(),
         ];
 
-        if let Some(gas_sponsor) = gas_sponsor {
-            if gas_sponsor != signer {
-                signatures.push(
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())
-                        .await?
-                        .into(),
-                );
-            }
+        if let Some(gas_sponsor) = gas_sponsor
+            && gas_sponsor != signer
+        {
+            signatures.push(
+                context
+                    .config
+                    .keystore
+                    .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())
+                    .await?
+                    .into(),
+            );
         }
 
         let sender_signed_data = SenderSignedData::new(tx_data, signatures);
@@ -3418,10 +3416,10 @@ pub(crate) async fn prerender_clever_errors(
     read_api: &ReadApi,
 ) {
     let SuiTransactionBlockEffects::V1(effects) = effects;
-    if let SuiExecutionStatus::Failure { error } = &mut effects.status {
-        if let Some(rendered) = render_clever_error_opt(error, read_api).await {
-            *error = rendered;
-        }
+    if let SuiExecutionStatus::Failure { error } = &mut effects.status
+        && let Some(rendered) = render_clever_error_opt(error, read_api).await
+    {
+        *error = rendered;
     }
 }
 

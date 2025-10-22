@@ -231,11 +231,10 @@ impl DBCheckpointHandler {
         loop {
             tokio::select! {
                 _now = gc_interval.tick() => {
-                    if let Ok(deleted) = self.garbage_collect_old_db_checkpoints().await {
-                        if !deleted.is_empty() {
+                    if let Ok(deleted) = self.garbage_collect_old_db_checkpoints().await
+                        && !deleted.is_empty() {
                             info!("Garbage collected local db checkpoints: {:?}", deleted);
                         }
-                    }
                 },
                  _ = recv.recv() => break,
             }

@@ -197,12 +197,12 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        if let Some(gas) = gas {
-            if input_coins.contains(&gas) {
-                return Err(anyhow!(
-                    "Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"
-                ));
-            }
+        if let Some(gas) = gas
+            && input_coins.contains(&gas)
+        {
+            return Err(anyhow!(
+                "Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"
+            ));
         }
 
         let coin_refs = self.input_refs(&input_coins).await?;

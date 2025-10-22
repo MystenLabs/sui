@@ -341,10 +341,10 @@ impl ReadApi {
             trace!("getting events");
             let mut non_empty_digests = vec![];
             for cache_entry in temp_response.values() {
-                if let Some(effects) = &cache_entry.effects {
-                    if effects.events_digest().is_some() {
-                        non_empty_digests.push(cache_entry.digest);
-                    }
+                if let Some(effects) = &cache_entry.effects
+                    && effects.events_digest().is_some()
+                {
+                    non_empty_digests.push(cache_entry.digest);
                 }
             }
             // fetch events from the DB with retry, retry each 0.5s for 3s
@@ -879,50 +879,45 @@ impl ReadApiServer for ReadApi {
 
             let object_cache =
                 ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
-            if opts.show_balance_changes {
-                if let Some(effects) = &temp_response.effects {
-                    let balance_changes = get_balance_changes_from_effect(
-                        &object_cache,
-                        effects,
-                        input_objects,
-                        None,
-                    )
-                    .await;
+            if opts.show_balance_changes
+                && let Some(effects) = &temp_response.effects
+            {
+                let balance_changes =
+                    get_balance_changes_from_effect(&object_cache, effects, input_objects, None)
+                        .await;
 
-                    if let Ok(balance_changes) = balance_changes {
-                        temp_response.balance_changes = Some(balance_changes);
-                    } else {
-                        temp_response.errors.push(format!(
-                            "Cannot retrieve balance changes: {}",
-                            balance_changes.unwrap_err()
-                        ));
-                    }
+                if let Ok(balance_changes) = balance_changes {
+                    temp_response.balance_changes = Some(balance_changes);
+                } else {
+                    temp_response.errors.push(format!(
+                        "Cannot retrieve balance changes: {}",
+                        balance_changes.unwrap_err()
+                    ));
                 }
             }
 
-            if opts.show_object_changes {
-                if let (Some(effects), Some(input)) =
+            if opts.show_object_changes
+                && let (Some(effects), Some(input)) =
                     (&temp_response.effects, &temp_response.transaction)
-                {
-                    let sender = input.data().intent_message().value.sender();
-                    let object_changes = get_object_changes(
-                        &object_cache,
-                        effects,
-                        sender,
-                        effects.modified_at_versions(),
-                        effects.all_changed_objects(),
-                        effects.all_removed_objects(),
-                    )
-                    .await;
+            {
+                let sender = input.data().intent_message().value.sender();
+                let object_changes = get_object_changes(
+                    &object_cache,
+                    effects,
+                    sender,
+                    effects.modified_at_versions(),
+                    effects.all_changed_objects(),
+                    effects.all_removed_objects(),
+                )
+                .await;
 
-                    if let Ok(object_changes) = object_changes {
-                        temp_response.object_changes = Some(object_changes);
-                    } else {
-                        temp_response.errors.push(format!(
-                            "Cannot retrieve object changes: {}",
-                            object_changes.unwrap_err()
-                        ));
-                    }
+                if let Ok(object_changes) = object_changes {
+                    temp_response.object_changes = Some(object_changes);
+                } else {
+                    temp_response.errors.push(format!(
+                        "Cannot retrieve object changes: {}",
+                        object_changes.unwrap_err()
+                    ));
                 }
             }
             let epoch_store = self.state.load_epoch_store_one_call_per_task();

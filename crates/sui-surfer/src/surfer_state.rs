@@ -302,10 +302,10 @@ impl SurferState {
                             return None;
                         }
                         let mut parameters = (*func.parameters).clone();
-                        if let Some(last_param) = parameters.last().as_ref() {
-                            if is_type_tx_context(last_param) {
-                                parameters.pop();
-                            }
+                        if let Some(last_param) = parameters.last().as_ref()
+                            && is_type_tx_context(last_param)
+                        {
+                            parameters.pop();
                         }
                         Some(EntryFunction {
                             package: package_id,

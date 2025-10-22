@@ -193,16 +193,17 @@ fn transaction_to_response(
         message.events = source.events.map(|events| {
             let mut message = TransactionEvents::merge_from(events.clone(), &submask);
 
-            if let Some(event_mask) = submask.subtree(TransactionEvents::EVENTS_FIELD.name) {
-                if event_mask.contains(Event::JSON_FIELD.name) {
-                    for (message, event) in message.events.iter_mut().zip(&events.0) {
-                        message.json = struct_tag_sdk_to_core(event.type_.clone()).ok().and_then(
-                            |struct_tag| {
+            if let Some(event_mask) = submask.subtree(TransactionEvents::EVENTS_FIELD.name)
+                && event_mask.contains(Event::JSON_FIELD.name)
+            {
+                for (message, event) in message.events.iter_mut().zip(&events.0) {
+                    message.json =
+                        struct_tag_sdk_to_core(event.type_.clone())
+                            .ok()
+                            .and_then(|struct_tag| {
                                 crate::grpc::v2::render_json(service, &struct_tag, &event.contents)
                                     .map(Box::new)
-                            },
-                        );
-                    }
+                            });
                 }
             }
 

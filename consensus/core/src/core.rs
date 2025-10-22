@@ -446,13 +446,13 @@ impl Core {
             .collect::<Vec<_>>();
 
         // Make sure that the first commit we find is the next one in line and there is no gap.
-        if let Some(commit) = commits.first() {
-            if commit.index() != last_commit_index + 1 {
-                return Err(ConsensusError::UnexpectedCertifiedCommitIndex {
-                    expected_commit_index: last_commit_index + 1,
-                    commit_index: commit.index(),
-                });
-            }
+        if let Some(commit) = commits.first()
+            && commit.index() != last_commit_index + 1
+        {
+            return Err(ConsensusError::UnexpectedCertifiedCommitIndex {
+                expected_commit_index: last_commit_index + 1,
+                commit_index: commit.index(),
+            });
         }
 
         Ok(commits)
@@ -1031,7 +1031,7 @@ impl Core {
             to_commit.iter().map(|c| c.leader().to_string()).join(",")
         );
 
-        let sequenced_leaders = to_commit
+        to_commit
             .into_iter()
             .map(|commit| {
                 let leader = commit.blocks().last().expect("Certified commit should have at least one block");
@@ -1041,9 +1041,7 @@ impl Core {
                 UniversalCommitter::update_metrics(&self.context, &leader, Decision::Certified);
                 (leader, commit)
             })
-            .collect::<Vec<_>>();
-
-        sequenced_leaders
+            .collect::<Vec<_>>()
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
@@ -1099,11 +1097,9 @@ impl Core {
                         }
                         if let Some(last_block_ref) =
                             self.last_included_ancestors[ancestor.author()]
-                        {
-                            if last_block_ref.round >= ancestor.round() {
+                            && last_block_ref.round >= ancestor.round() {
                                 return None;
                             }
-                        }
 
                         // We will never include equivocating ancestors so add them immediately
                         excluded_and_equivocating_ancestors.extend(equivocating_ancestors);

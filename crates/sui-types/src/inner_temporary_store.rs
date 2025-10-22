@@ -121,13 +121,13 @@ where
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
         let obj = self.temp_store.written.get(&ObjectID::from(*id.address()));
-        if let Some(o) = obj {
-            if let Some(p) = o.data.try_as_package() {
-                return Ok(Some(Arc::new(p.deserialize_module(
-                    &id.name().into(),
-                    &self.temp_store.binary_config,
-                )?)));
-            }
+        if let Some(o) = obj
+            && let Some(p) = o.data.try_as_package()
+        {
+            return Ok(Some(Arc::new(p.deserialize_module(
+                &id.name().into(),
+                &self.temp_store.binary_config,
+            )?)));
         }
         self.fallback.get_module_by_id(id)
     }

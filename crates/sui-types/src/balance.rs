@@ -66,11 +66,11 @@ impl Balance {
 
     /// If the given type is `Balance<T>`, return `Some(T)`.
     pub fn maybe_get_balance_type_param(ty: &TypeTag) -> Option<TypeTag> {
-        if let TypeTag::Struct(struct_tag) = ty {
-            if Self::is_balance(struct_tag) {
-                assert_eq!(struct_tag.type_params.len(), 1);
-                return Some(struct_tag.type_params[0].clone());
-            }
+        if let TypeTag::Struct(struct_tag) = ty
+            && Self::is_balance(struct_tag)
+        {
+            assert_eq!(struct_tag.type_params.len(), 1);
+            return Some(struct_tag.type_params[0].clone());
         }
         None
     }

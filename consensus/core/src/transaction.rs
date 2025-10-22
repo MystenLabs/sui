@@ -147,13 +147,13 @@ impl TransactionConsumer {
             None
         };
 
-        if let Some(t) = self.pending_transactions.take() {
-            if let Some(pending_transactions) = handle_txs(t) {
-                debug_fatal!(
-                    "Previously pending transaction(s) should fit into an empty block! Dropping: {:?}",
-                    pending_transactions.transactions
-                );
-            }
+        if let Some(t) = self.pending_transactions.take()
+            && let Some(pending_transactions) = handle_txs(t)
+        {
+            debug_fatal!(
+                "Previously pending transaction(s) should fit into an empty block! Dropping: {:?}",
+                pending_transactions.transactions
+            );
         }
 
         // Until we have reached the limit for the pull.

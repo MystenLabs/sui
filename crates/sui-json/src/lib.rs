@@ -141,17 +141,17 @@ impl SuiJsonValue {
         let json = if let Some(layout) = layout {
             // Try to convert Vec<u8> inputs into string
             fn try_parse_string(layout: &MoveTypeLayout, bytes: &[u8]) -> Option<String> {
-                if let MoveTypeLayout::Vector(t) = layout {
-                    if let MoveTypeLayout::U8 = **t {
-                        return bcs::from_bytes::<String>(bytes).ok();
-                    }
+                if let MoveTypeLayout::Vector(t) = layout
+                    && let MoveTypeLayout::U8 = **t
+                {
+                    return bcs::from_bytes::<String>(bytes).ok();
                 }
                 None
             }
             if let Some(s) = try_parse_string(layout, bytes) {
                 json!(s)
             } else {
-                let result = BoundedVisitor::deserialize_value(bytes, layout).map_or_else(
+                BoundedVisitor::deserialize_value(bytes, layout).map_or_else(
                     |_| {
                         // fallback to array[u8] if fail to convert to json.
                         JsonValue::Array(
@@ -172,8 +172,7 @@ impl SuiJsonValue {
                             )
                         })
                     },
-                );
-                result
+                )
             }
         } else {
             json!(bytes)
@@ -479,10 +478,11 @@ impl FromStr for SuiJsonValue {
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
         fn try_escape_array(s: &str) -> JsonValue {
             let s = s.trim();
-            if s.starts_with('[') && s.ends_with(']') {
-                if let Some(s) = s.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-                    return JsonValue::Array(s.split(',').map(try_escape_array).collect());
-                }
+            if s.starts_with('[')
+                && s.ends_with(']')
+                && let Some(s) = s.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
+            {
+                return JsonValue::Array(s.split(',').map(try_escape_array).collect());
             }
             json!(s)
         }

@@ -358,20 +358,20 @@ impl OnChainDataUploader {
         loop {
             read_interval.tick().await;
             let data_points = self.collect().await;
-            if !data_points.is_empty() {
-                if let Err(err) = self.upload(data_points).await {
-                    error!(
-                        "Upload failure: {err}. About to resting for {UPLOAD_FAILURE_RECOVER_SEC} sec."
-                    );
-                    tokio::time::sleep(Duration::from_secs(UPLOAD_FAILURE_RECOVER_SEC)).await;
-                    self.gas_obj_ref = get_gas_obj_ref(
-                        self.client.read_api(),
-                        self.gas_obj_ref.0,
-                        self.signer_address,
-                    )
-                    .await;
-                    error!("Updated gas object reference: {:?}", self.gas_obj_ref);
-                }
+            if !data_points.is_empty()
+                && let Err(err) = self.upload(data_points).await
+            {
+                error!(
+                    "Upload failure: {err}. About to resting for {UPLOAD_FAILURE_RECOVER_SEC} sec."
+                );
+                tokio::time::sleep(Duration::from_secs(UPLOAD_FAILURE_RECOVER_SEC)).await;
+                self.gas_obj_ref = get_gas_obj_ref(
+                    self.client.read_api(),
+                    self.gas_obj_ref.0,
+                    self.signer_address,
+                )
+                .await;
+                error!("Updated gas object reference: {:?}", self.gas_obj_ref);
             }
         }
     }

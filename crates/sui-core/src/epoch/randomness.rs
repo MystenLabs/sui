@@ -689,14 +689,13 @@ impl RandomnessManager {
             .get_randomness_last_round_timestamp()
             .expect("read should not fail");
 
-        if let Some(last_round_timestamp) = last_round_timestamp {
-            if commit_timestamp - last_round_timestamp
+        if let Some(last_round_timestamp) = last_round_timestamp
+            && commit_timestamp - last_round_timestamp
                 < epoch_store
                     .protocol_config()
                     .random_beacon_min_round_interval_ms()
-            {
-                return Ok(None);
-            }
+        {
+            return Ok(None);
         }
 
         let randomness_round = self.next_randomness_round;

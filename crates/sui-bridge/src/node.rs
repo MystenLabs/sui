@@ -241,15 +241,15 @@ async fn start_watchdog(
         observables.push(Box::new(balance));
     }
 
-    if let Some(watchdog_config) = watchdog_config {
-        if !watchdog_config.total_supplies.is_empty() {
-            let total_supplies = TotalSupplies::new(
-                Arc::new(sui_client.sui_client().clone()),
-                watchdog_config.total_supplies,
-                watchdog_metrics.total_supplies.clone(),
-            );
-            observables.push(Box::new(total_supplies));
-        }
+    if let Some(watchdog_config) = watchdog_config
+        && !watchdog_config.total_supplies.is_empty()
+    {
+        let total_supplies = TotalSupplies::new(
+            Arc::new(sui_client.sui_client().clone()),
+            watchdog_config.total_supplies,
+            watchdog_metrics.total_supplies.clone(),
+        );
+        observables.push(Box::new(total_supplies));
     }
 
     BridgeWatchDog::new(observables).run().await

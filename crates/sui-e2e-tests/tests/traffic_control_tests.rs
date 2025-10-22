@@ -253,10 +253,10 @@ async fn test_validator_traffic_control_error_blocked() -> Result<(), anyhow::Er
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..n {
         let response = auth_client.handle_transaction(tx.clone(), None).await;
-        if let Err(err) = response {
-            if err.to_string().contains("Too many requests") {
-                return Ok(());
-            }
+        if let Err(err) = response
+            && err.to_string().contains("Too many requests")
+        {
+            return Ok(());
         }
     }
     panic!("Expected error policy to trigger within {n} requests");
@@ -322,10 +322,10 @@ async fn test_validator_traffic_control_error_blocked_with_policy_reconfig()
     // If Node and TrafficController has not crashed, blocklist and policy freq state should still
     // be intact. A single additional erroneous request from the client should trigger enforcement.
     let response = auth_client.handle_transaction(tx.clone(), None).await;
-    if let Err(err) = response {
-        if err.to_string().contains("Too many requests") {
-            return Ok(());
-        }
+    if let Err(err) = response
+        && err.to_string().contains("Too many requests")
+    {
+        return Ok(());
     }
     panic!("Expected error policy to trigger on next requests after reconfiguration");
 }
@@ -512,10 +512,10 @@ async fn test_validator_traffic_control_error_delegated() -> Result<(), anyhow::
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..n {
         let response = auth_client.handle_transaction(tx.clone(), None).await;
-        if let Err(err) = response {
-            if err.to_string().contains("Too many requests") {
-                return Ok(());
-            }
+        if let Err(err) = response
+            && err.to_string().contains("Too many requests")
+        {
+            return Ok(());
         }
     }
     let fw_blocklist = server.list_addresses_rpc().await;

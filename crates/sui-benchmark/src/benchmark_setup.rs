@@ -134,10 +134,10 @@ impl BenchmarkSetup {
 
             for obj in genesis.objects().iter() {
                 let owner = &obj.owner;
-                if let Owner::AddressOwner(addr) = owner {
-                    if *addr == primary_gas_owner_addr.into() {
-                        genesis_gas_objects.push(obj.clone());
-                    }
+                if let Owner::AddressOwner(addr) = owner
+                    && *addr == primary_gas_owner_addr.into()
+                {
+                    genesis_gas_objects.push(obj.clone());
                 }
             }
 

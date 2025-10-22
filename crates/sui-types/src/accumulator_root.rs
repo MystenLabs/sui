@@ -232,13 +232,12 @@ impl AccumulatorValue {
 
 /// Extract stream id from an accumulator event if it targets sui::accumulator_settlement::EventStreamHead
 pub fn stream_id_from_accumulator_event(ev: &AccumulatorEvent) -> Option<SuiAddress> {
-    if let TypeTag::Struct(tag) = &ev.write.address.ty {
-        if tag.address == SUI_FRAMEWORK_ADDRESS
-            && tag.module.as_ident_str() == ACCUMULATOR_SETTLEMENT_MODULE
-            && tag.name.as_ident_str() == ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD
-        {
-            return Some(ev.write.address.address);
-        }
+    if let TypeTag::Struct(tag) = &ev.write.address.ty
+        && tag.address == SUI_FRAMEWORK_ADDRESS
+        && tag.module.as_ident_str() == ACCUMULATOR_SETTLEMENT_MODULE
+        && tag.name.as_ident_str() == ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD
+    {
+        return Some(ev.write.address.address);
     }
     None
 }
@@ -332,14 +331,13 @@ pub(crate) fn extract_balance_type_from_field(s: &StructTag) -> Option<TypeTag> 
         return None;
     }
 
-    if let TypeTag::Struct(key_struct) = &s.type_params[0] {
-        if key_struct.type_params.len() == 1 {
-            if let TypeTag::Struct(balance_struct) = &key_struct.type_params[0] {
-                if Balance::is_balance(balance_struct) && balance_struct.type_params.len() == 1 {
-                    return Some(balance_struct.type_params[0].clone());
-                }
-            }
-        }
+    if let TypeTag::Struct(key_struct) = &s.type_params[0]
+        && key_struct.type_params.len() == 1
+        && let TypeTag::Struct(balance_struct) = &key_struct.type_params[0]
+        && Balance::is_balance(balance_struct)
+        && balance_struct.type_params.len() == 1
+    {
+        return Some(balance_struct.type_params[0].clone());
     }
     None
 }

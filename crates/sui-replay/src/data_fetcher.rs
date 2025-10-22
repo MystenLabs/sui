@@ -684,10 +684,10 @@ impl From<NodeStateDump> for NodeStateDumpFetcher {
                 );
 
                 // Only most recent
-                if let Some(last_seen_obj) = latest_object_version_pool.get(&current_obj.id) {
-                    if current_obj.version <= last_seen_obj.version() {
-                        return;
-                    }
+                if let Some(last_seen_obj) = latest_object_version_pool.get(&current_obj.id)
+                    && current_obj.version <= last_seen_obj.version()
+                {
+                    return;
                 };
                 latest_object_version_pool.insert(current_obj.id, current_obj.object.clone());
             });

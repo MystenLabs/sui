@@ -171,15 +171,13 @@ impl LeaderSchedule {
             .map(|(index, authority)| (index, authority.stake as f32))
             .collect::<Vec<_>>();
 
-        let leader_index = *choices
+        *choices
             .choose_multiple_weighted(&mut rng, self.context.committee.size(), |item| item.1)
             .expect("Weighted choice error: stake values incorrect!")
             .skip(offset as usize)
             .map(|(index, _)| index)
             .next()
-            .unwrap();
-
-        leader_index
+            .unwrap()
     }
 
     /// Atomically updates the `LeaderSwapTable` with the new provided one. Any

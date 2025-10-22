@@ -188,18 +188,17 @@ pub async fn init_package(
             owner,
             ..
         } = change
+            && object_type.to_string().contains("2::coin::TreasuryCap")
         {
-            if object_type.to_string().contains("2::coin::TreasuryCap") {
-                let Owner::AddressOwner(owner) = owner else {
-                    return None;
-                };
-                let coin_tag = object_type.type_params.into_iter().next().unwrap();
-                return Some(InitRet {
-                    owner,
-                    treasury_cap: (object_id, version, digest),
-                    coin_tag,
-                });
-            }
+            let Owner::AddressOwner(owner) = owner else {
+                return None;
+            };
+            let coin_tag = object_type.type_params.into_iter().next().unwrap();
+            return Some(InitRet {
+                owner,
+                treasury_cap: (object_id, version, digest),
+                coin_tag,
+            });
         }
         None
     });

@@ -165,11 +165,10 @@ impl Broadcaster {
                 }
 
                 _ = retry_timer.tick() => {
-                    if requests.is_empty() {
-                        if let Some(block) = last_block.clone() {
+                    if requests.is_empty()
+                        && let Some(block) = last_block.clone() {
                             requests.push(send_block(network_client.clone(), peer, rtt_estimate, block));
                         }
-                    }
                 }
             };
 

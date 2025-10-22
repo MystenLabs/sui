@@ -481,7 +481,7 @@ pub enum CommandOutput {
 
 impl KeyToolCommand {
     pub async fn execute(self, keystore: &mut Keystore) -> Result<CommandOutput, anyhow::Error> {
-        let cmd_result = Ok(match self {
+        Ok(match self {
             KeyToolCommand::Alias {
                 old_alias,
                 new_alias,
@@ -1312,9 +1312,7 @@ impl KeyToolCommand {
                     _ => CommandOutput::Error("Not a zkLogin signature".to_string()),
                 }
             }
-        });
-
-        cmd_result
+        })
     }
 }
 

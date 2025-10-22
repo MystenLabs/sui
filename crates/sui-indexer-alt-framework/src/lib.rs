@@ -326,11 +326,11 @@ impl<S: Store> Indexer<S> {
             P::NAME,
         );
 
-        if let Some(enabled_pipelines) = &mut self.enabled_pipelines {
-            if !enabled_pipelines.remove(P::NAME) {
-                info!(pipeline = P::NAME, "Skipping");
-                return Ok(None);
-            }
+        if let Some(enabled_pipelines) = &mut self.enabled_pipelines
+            && !enabled_pipelines.remove(P::NAME)
+        {
+            info!(pipeline = P::NAME, "Skipping");
+            return Ok(None);
         }
 
         let mut conn = self

@@ -214,15 +214,15 @@ impl<S: Serialize + ParquetSchema + Send + Sync + 'static> AnalyticsProcessor<S>
             self.task_context.checkpoint_dir_path().to_path_buf(),
             &object_path,
         )?;
-        if file_path.exists() {
-            if let Ok(metadata) = fs::metadata(&file_path) {
-                let file_size = metadata.len();
-                self.task_context
-                    .metrics
-                    .file_size_bytes
-                    .with_label_values(&[self.name()])
-                    .observe(file_size as f64);
-            }
+        if file_path.exists()
+            && let Ok(metadata) = fs::metadata(&file_path)
+        {
+            let file_size = metadata.len();
+            self.task_context
+                .metrics
+                .file_size_bytes
+                .with_label_values(&[self.name()])
+                .observe(file_size as f64);
         };
         Ok(())
     }

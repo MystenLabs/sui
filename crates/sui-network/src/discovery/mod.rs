@@ -308,10 +308,10 @@ impl DiscoveryEventLoop {
 
         // Clean out the pending_dials
         self.pending_dials.retain(|_k, v| !v.is_finished());
-        if let Some(abort_handle) = &self.dial_seed_peers_task {
-            if abort_handle.is_finished() {
-                self.dial_seed_peers_task = None;
-            }
+        if let Some(abort_handle) = &self.dial_seed_peers_task
+            && abort_handle.is_finished()
+        {
+            self.dial_seed_peers_task = None;
         }
 
         // Spawn some dials

@@ -304,7 +304,8 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
     // at the checkpoint (mimic latest runtime behavior)
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         trace!("get_object({})", object_id);
-        let object = match self.object_cache.borrow().get(object_id) {
+
+        match self.object_cache.borrow().get(object_id) {
             Some(versions) => versions.last_key_value().map(|(_version, obj)| obj.clone()),
             None => {
                 let fetched_object = self
@@ -328,8 +329,7 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
 
                 Some(fetched_object)
             }
-        };
-        object
+        }
     }
 
     // Get an object by its ID and version

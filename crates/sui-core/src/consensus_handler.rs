@@ -1235,16 +1235,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let object_debts = shared_object_congestion_tracker.accumulated_debts(commit_info);
         let randomness_object_debts =
             shared_object_using_randomness_congestion_tracker.accumulated_debts(commit_info);
-        if let Some(tx_object_debts) = self.epoch_store.tx_object_debts.get() {
-            if let Err(e) = tx_object_debts.try_send(
+        if let Some(tx_object_debts) = self.epoch_store.tx_object_debts.get()
+            && let Err(e) = tx_object_debts.try_send(
                 object_debts
                     .iter()
                     .chain(randomness_object_debts.iter())
                     .map(|(id, _)| *id)
                     .collect(),
-            ) {
-                info!("failed to send updated object debts to ExecutionTimeObserver: {e:?}");
-            }
+            )
+        {
+            info!("failed to send updated object debts to ExecutionTimeObserver: {e:?}");
         }
 
         // DONE(commit-handler-rewrite): commit object debts to output
@@ -1973,14 +1973,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .protocol_config()
             .record_additional_state_digest_in_prologue()
         {
-            let commit_info = self.additional_consensus_state.observe_commit(
+            self.additional_consensus_state.observe_commit(
                 self.epoch_store.protocol_config(),
                 self.epoch_store
                     .epoch_start_config()
                     .epoch_start_timestamp_ms(),
                 &consensus_commit,
-            );
-            commit_info
+            )
         } else {
             self.additional_consensus_state
                 .stateless_commit_info(&self.epoch_store, &consensus_commit)
@@ -2134,37 +2133,36 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                     // Transaction has appeared in consensus output, we can increment the submission count
                     // for this tx for DoS protection.
-                    if self.epoch_store.protocol_config().mysticeti_fastpath() {
-                        if let ConsensusTransactionKind::UserTransaction(tx) =
+                    if self.epoch_store.protocol_config().mysticeti_fastpath()
+                        && let ConsensusTransactionKind::UserTransaction(tx) =
                             &parsed.transaction.kind
+                    {
+                        let digest = tx.digest();
+                        if let Some((spam_weight, submitter_client_addrs)) = self
+                            .epoch_store
+                            .submitted_transaction_cache
+                            .increment_submission_count(digest)
                         {
-                            let digest = tx.digest();
-                            if let Some((spam_weight, submitter_client_addrs)) = self
-                                .epoch_store
-                                .submitted_transaction_cache
-                                .increment_submission_count(digest)
-                            {
-                                if let Some(ref traffic_controller) = self.traffic_controller {
-                                    debug!(
-                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to {} client addresses",
-                                        submitter_client_addrs.len()
-                                    );
+                            if let Some(ref traffic_controller) = self.traffic_controller {
+                                debug!(
+                                    "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to {} client addresses",
+                                    submitter_client_addrs.len()
+                                );
 
-                                    // Apply spam weight to all client addresses that submitted this transaction
-                                    for addr in submitter_client_addrs {
-                                        traffic_controller.tally(TrafficTally::new(
-                                            Some(addr),
-                                            None,
-                                            None,
-                                            spam_weight.clone(),
-                                        ));
-                                    }
-                                } else {
-                                    warn!(
-                                        "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} for {} client addresses (traffic controller not configured)",
-                                        submitter_client_addrs.len()
-                                    );
+                                // Apply spam weight to all client addresses that submitted this transaction
+                                for addr in submitter_client_addrs {
+                                    traffic_controller.tally(TrafficTally::new(
+                                        Some(addr),
+                                        None,
+                                        None,
+                                        spam_weight.clone(),
+                                    ));
                                 }
+                            } else {
+                                warn!(
+                                    "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} for {} client addresses (traffic controller not configured)",
+                                    submitter_client_addrs.len()
+                                );
                             }
                         }
                     }
@@ -2401,36 +2399,35 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 // Transaction has appeared in consensus output, we can increment the submission count
                 // for this tx for DoS protection.
-                if self.epoch_store.protocol_config().mysticeti_fastpath() {
-                    if let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind
+                if self.epoch_store.protocol_config().mysticeti_fastpath()
+                    && let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind
+                {
+                    let digest = tx.digest();
+                    if let Some((spam_weight, submitter_client_addrs)) = self
+                        .epoch_store
+                        .submitted_transaction_cache
+                        .increment_submission_count(digest)
                     {
-                        let digest = tx.digest();
-                        if let Some((spam_weight, submitter_client_addrs)) = self
-                            .epoch_store
-                            .submitted_transaction_cache
-                            .increment_submission_count(digest)
-                        {
-                            if let Some(ref traffic_controller) = self.traffic_controller {
-                                debug!(
-                                    "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to {} client addresses",
-                                    submitter_client_addrs.len()
-                                );
+                        if let Some(ref traffic_controller) = self.traffic_controller {
+                            debug!(
+                                "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to {} client addresses",
+                                submitter_client_addrs.len()
+                            );
 
-                                // Apply spam weight to all client addresses that submitted this transaction
-                                for addr in submitter_client_addrs {
-                                    traffic_controller.tally(TrafficTally::new(
-                                        Some(addr),
-                                        None,
-                                        None,
-                                        spam_weight.clone(),
-                                    ));
-                                }
-                            } else {
-                                warn!(
-                                    "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} for {} client addresses (traffic controller not configured)",
-                                    submitter_client_addrs.len()
-                                );
+                            // Apply spam weight to all client addresses that submitted this transaction
+                            for addr in submitter_client_addrs {
+                                traffic_controller.tally(TrafficTally::new(
+                                    Some(addr),
+                                    None,
+                                    None,
+                                    spam_weight.clone(),
+                                ));
                             }
+                        } else {
+                            warn!(
+                                "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} for {} client addresses (traffic controller not configured)",
+                                submitter_client_addrs.len()
+                            );
                         }
                     }
                 }
@@ -2536,15 +2533,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // DONE(commit-handler-rewrite): ignore certs from wrong epoch
                 if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
                     &parsed.transaction.kind
+                    && certificate.epoch() != epoch
                 {
-                    if certificate.epoch() != epoch {
-                        debug!(
-                            "Certificate epoch ({:?}) doesn't match the current epoch ({:?})",
-                            certificate.epoch(),
-                            epoch
-                        );
-                        continue;
-                    }
+                    debug!(
+                        "Certificate epoch ({:?}) doesn't match the current epoch ({:?})",
+                        certificate.epoch(),
+                        epoch
+                    );
+                    continue;
                 }
 
                 // Handle deprecated messages

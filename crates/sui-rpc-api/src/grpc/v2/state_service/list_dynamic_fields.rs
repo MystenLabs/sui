@@ -60,13 +60,13 @@ pub fn list_dynamic_fields(
         .map(|token| decode_page_token(&token))
         .transpose()?;
 
-    if let Some(token) = &page_token {
-        if token.parent != parent {
-            return Err(FieldViolation::new("page_token")
-                .with_description("invalid page_token")
-                .with_reason(ErrorReason::FieldInvalid)
-                .into());
-        }
+    if let Some(token) = &page_token
+        && token.parent != parent
+    {
+        return Err(FieldViolation::new("page_token")
+            .with_description("invalid page_token")
+            .with_reason(ErrorReason::FieldInvalid)
+            .into());
     }
 
     let read_mask = {
@@ -156,11 +156,11 @@ fn get_dynamic_field(
         message.field_id = Some(field_id.to_canonical_string(true));
     }
 
-    if should_load_field(read_mask) {
-        if let Err(e) = load_dynamic_field(service, field_id, read_mask, &mut message) {
-            tracing::warn!("error loading dynamic object: {e}");
-            return None;
-        }
+    if should_load_field(read_mask)
+        && let Err(e) = load_dynamic_field(service, field_id, read_mask, &mut message)
+    {
+        tracing::warn!("error loading dynamic object: {e}");
+        return None;
     }
 
     Some(message)
