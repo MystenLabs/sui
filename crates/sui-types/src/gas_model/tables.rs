@@ -43,7 +43,7 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_sched
 ///
 /// Every client must use an instance of this type to interact with the Move VM.
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GasStatus {
     pub gas_model_version: u64,
     cost_table: CostTable,
