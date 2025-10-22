@@ -54,7 +54,7 @@ tonic-reflection.workspace = true
 tonic-web.workspace = true
 
 [build-dependencies]
-tonic-prost-build = "0.14.2"
-protox = "0.9"
+tonic-prost-build.workspace = true
+protox.workspace = true
 walkdir.workspace = true
 serde_json.workspace = true

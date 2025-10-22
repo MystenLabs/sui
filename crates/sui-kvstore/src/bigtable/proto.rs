@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::all)]
+#![allow(unused)]
+
 #[path = "proto"]
 pub mod bigtable {
     #[path = "google.bigtable.v2.rs"]
@@ -12,3 +14,6 @@ pub mod rpc;
 
 #[path = "proto/google.api.rs"]
 pub mod api;
+
+#[path = "proto/google.r#type.rs"]
+pub mod r#type;

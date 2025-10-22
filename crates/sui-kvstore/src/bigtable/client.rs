@@ -25,7 +25,7 @@ use sui_types::{
     storage::{EpochInfo, ObjectKey},
 };
 use tonic::{
-    body::BoxBody,
+    body::Body,
     codegen::Service,
     transport::{Certificate, Channel, ClientTlsConfig},
     Streaming,
@@ -636,7 +636,11 @@ impl BigTableClient {
                     })),
                 })
                 .collect();
-            entries.push(Entry { row_key, mutations });
+            entries.push(Entry {
+                row_key,
+                mutations,
+                idempotency: None,
+            });
         }
         let request = MutateRowsRequest {
             table_name: format!("{}{}", self.table_prefix, table_name),
@@ -808,8 +812,8 @@ impl BigTableClient {
     }
 }
 
-impl Service<Request<BoxBody>> for AuthChannel {
-    type Response = Response<BoxBody>;
+impl Service<Request<Body>> for AuthChannel {
+    type Response = Response<Body>;
     type Error = Box<dyn std::error::Error + Send + Sync>;
     #[allow(clippy::type_complexity)]
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -818,7 +822,7 @@ impl Service<Request<BoxBody>> for AuthChannel {
         self.channel.poll_ready(cx).map_err(Into::into)
     }
 
-    fn call(&mut self, mut request: Request<BoxBody>) -> Self::Future {
+    fn call(&mut self, mut request: Request<Body>) -> Self::Future {
         let cloned_channel = self.channel.clone();
         let cloned_token = self.token.clone();
         let mut inner = std::mem::replace(&mut self.channel, cloned_channel);
