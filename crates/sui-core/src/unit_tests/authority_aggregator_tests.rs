@@ -420,18 +420,19 @@ async fn test_map_reducer() {
         0usize,
         |_name, _client| {
             Box::pin(async move {
-                let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities {
+                let res: Result<usize, SuiError> = Err(SuiErrorKind::TooManyIncorrectAuthorities {
                     errors: vec![],
                     action: "".to_string(),
-                });
+                }
+                .into());
                 res
             })
         },
         |mut accumulated_state, _authority_name, _authority_weight, result| {
             Box::pin(async move {
                 assert!(matches!(
-                    result,
-                    Err(SuiError::TooManyIncorrectAuthorities { .. })
+                    result.map_err(|e| e.into_inner()),
+                    Err(SuiErrorKind::TooManyIncorrectAuthorities { .. })
                 ));
                 accumulated_state += 1;
                 ReduceOutput::Continue(accumulated_state)
@@ -739,7 +740,7 @@ async fn test_handle_certificate_response() {
     agg.committee = Arc::new(committee_1.clone());
 
     assert_resp_err(&agg, tx.clone().into(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
-        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
+        |e| matches!(e, SuiErrorKind::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
     ).await;
 
     set_cert_response_with_certified_tx(&mut clients, &authority_keys, &cert_epoch_0, 0);
@@ -764,7 +765,7 @@ async fn test_handle_certificate_response() {
         err,
         AggregatorProcessCertificateError::RetryableExecuteCertificate {
             retryable_errors, ..
-        } if retryable_errors.iter().any(|(error, _, _)| matches!(error, SuiError::WrongEpoch {
+        } if retryable_errors.iter().any(|(error, _, _)| matches!(error.as_inner(), SuiErrorKind::WrongEpoch {
             expected_epoch: 1, actual_epoch: 0
         }))
     );
@@ -793,17 +794,19 @@ async fn test_handle_transaction_response() {
         &sender_kp,
         666, // this is a dummy value which does not matter
     ));
-    let package_not_found_error = SuiError::UserInputError {
+    let package_not_found_error: SuiError = SuiErrorKind::UserInputError {
         error: UserInputError::DependentPackageNotFound {
             package_id: gas_object.0,
         },
-    };
-    let object_not_found_error = SuiError::UserInputError {
+    }
+    .into();
+    let object_not_found_error: SuiError = SuiErrorKind::UserInputError {
         error: UserInputError::ObjectNotFound {
             object_id: gas_object.0,
             version: Some(gas_object.1),
         },
-    };
+    }
+    .into();
 
     println!("Case 0 - Non-retryable Transaction (Unknown Error)");
     // Validators give invalid response because of the initial value set for their responses.
@@ -818,7 +821,7 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::FatalTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::Unknown(..)),
+        |e| matches!(e, SuiErrorKind::Unknown(..)),
     )
     .await;
 
@@ -846,7 +849,7 @@ async fn test_handle_transaction_response() {
     agg.committee = Arc::new(committee_1);
 
     assert_resp_err(&agg, tx.clone().into(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
-        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
+        |e| matches!(e, SuiErrorKind::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
     ).await;
 
     println!("Case 3 - Successful Cert Transaction");
@@ -891,7 +894,7 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::MissingCommitteeAtEpoch(e) if *e == 1),
+        |e| matches!(e, SuiErrorKind::MissingCommitteeAtEpoch(e) if *e == 1),
     )
     .await;
 
@@ -924,7 +927,7 @@ async fn test_handle_transaction_response() {
 
     // Err because either cert or signed effects is in epoch 0
     assert_resp_err(&agg, tx.clone().into(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
-        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
+        |e| matches!(e, SuiErrorKind::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
     ).await;
 
     set_tx_info_response_with_cert_and_effects(
@@ -972,8 +975,8 @@ async fn test_handle_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
-                    | SuiError::RpcError(..)
+                SuiErrorKind::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
+                    | SuiErrorKind::RpcError(..)
             )
         },
     )
@@ -1047,8 +1050,8 @@ async fn test_handle_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
-                    | SuiError::RpcError(..)
+                SuiErrorKind::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
+                    | SuiErrorKind::RpcError(..)
             )
         },
     )
@@ -1133,9 +1136,9 @@ async fn test_handle_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
-                    | SuiError::RpcError(..)
-                    | SuiError::ByzantineAuthoritySuspicion { .. }
+                SuiErrorKind::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
+                    | SuiErrorKind::RpcError(..)
+                    | SuiErrorKind::ByzantineAuthoritySuspicion { .. }
             )
         },
     )
@@ -1162,7 +1165,7 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::MissingCommitteeAtEpoch(e) if *e == 1),
+        |e| matches!(e, SuiErrorKind::MissingCommitteeAtEpoch(e) if *e == 1),
     )
     .await;
 
@@ -1176,7 +1179,7 @@ async fn test_handle_transaction_response() {
     assert_resp_err(
         &agg,
         tx.clone().into(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
-        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 0 && *actual_epoch == 1)
+        |e| matches!(e, SuiErrorKind::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 0 && *actual_epoch == 1)
     )
     .await;
 
@@ -1206,7 +1209,12 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UserInputError { .. } | SuiErrorKind::RpcError(..)
+            )
+        },
     )
     .await;
 
@@ -1229,7 +1237,12 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UserInputError { .. } | SuiErrorKind::RpcError(..)
+            )
+        },
     )
     .await;
 
@@ -1253,7 +1266,12 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UserInputError { .. } | SuiErrorKind::RpcError(..)
+            )
+        },
     )
     .await;
 
@@ -1266,7 +1284,7 @@ async fn test_handle_transaction_response() {
         clients
             .get_mut(name)
             .unwrap()
-            .set_tx_info_response_error(SuiError::EpochEnded(0));
+            .set_tx_info_response_error(SuiErrorKind::EpochEnded(0).into());
     }
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
     assert_resp_err(
@@ -1278,7 +1296,7 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::EpochEnded(0)),
+        |e| matches!(e, SuiErrorKind::EpochEnded(0)),
     )
     .await;
 
@@ -1291,7 +1309,7 @@ async fn test_handle_transaction_response() {
         clients
             .get_mut(name)
             .unwrap()
-            .set_tx_info_response_error(SuiError::EpochEnded(0));
+            .set_tx_info_response_error(SuiErrorKind::EpochEnded(0).into());
     }
 
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
@@ -1320,7 +1338,12 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UserInputError { .. } | SuiErrorKind::RpcError(..)
+            )
+        },
     )
     .await;
 
@@ -1343,7 +1366,12 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UserInputError { .. } | SuiErrorKind::RpcError(..)
+            )
+        },
     )
     .await;
 
@@ -1371,7 +1399,12 @@ async fn test_handle_transaction_response() {
                 AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
-        |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UserInputError { .. } | SuiErrorKind::RpcError(..)
+            )
+        },
     )
     .await;
 }
@@ -1398,21 +1431,24 @@ async fn test_handle_conflicting_transaction_response() {
         &sender_kp,
         666, // this is a dummy value which does not matter
     ));
-    let conflicting_error = SuiError::ObjectLockConflict {
+    let conflicting_error: SuiError = SuiErrorKind::ObjectLockConflict {
         obj_ref: conflicting_object,
         pending_transaction: *conflicting_tx2.digest(),
-    };
-    let retryable_error = SuiError::RpcError("RPC".into(), "Error".into());
-    let non_retryable_error = SuiError::ByzantineAuthoritySuspicion {
+    }
+    .into();
+    let retryable_error: SuiError = SuiErrorKind::RpcError("RPC".into(), "Error".into()).into();
+    let non_retryable_error: SuiError = SuiErrorKind::ByzantineAuthoritySuspicion {
         authority: authority_keys[0].0,
         reason: "Faulty".into(),
-    };
-    let object_not_found_error = SuiError::UserInputError {
+    }
+    .into();
+    let object_not_found_error: SuiError = SuiErrorKind::UserInputError {
         error: UserInputError::ObjectNotFound {
             object_id: conflicting_object.0,
             version: Some(conflicting_object.1),
         },
-    };
+    }
+    .into();
 
     println!("Case 0 - Retryable Transaction, >= f+1 good stake so ignore conflicting transaction");
     // >= f+1 good stake returned by other validators.
@@ -1440,7 +1476,7 @@ async fn test_handle_conflicting_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::ObjectLockConflict { .. } | SuiError::RpcError(..)
+                SuiErrorKind::ObjectLockConflict { .. } | SuiErrorKind::RpcError(..)
             )
         },
     )
@@ -1470,7 +1506,7 @@ async fn test_handle_conflicting_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::ObjectLockConflict { .. } | SuiError::RpcError(..)
+                SuiErrorKind::ObjectLockConflict { .. } | SuiErrorKind::RpcError(..)
             )
         },
     )
@@ -1502,7 +1538,7 @@ async fn test_handle_conflicting_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::ObjectLockConflict { .. } | SuiError::RpcError(..)
+                SuiErrorKind::ObjectLockConflict { .. } | SuiErrorKind::RpcError(..)
             )
         },
     )
@@ -1531,7 +1567,7 @@ async fn test_handle_conflicting_transaction_response() {
                 } if conflicting_tx_digests.contains_key(conflicting_tx2.digest())
             )
         },
-        |e| matches!(e, SuiError::ObjectLockConflict { .. }),
+        |e| matches!(e, SuiErrorKind::ObjectLockConflict { .. }),
     )
     .await;
 
@@ -1552,10 +1588,11 @@ async fn test_handle_conflicting_transaction_response() {
         &sender_kp,
         666, // this is a dummy value which does not matter
     );
-    let conflicting_error_2 = SuiError::ObjectLockConflict {
+    let conflicting_error_2: SuiError = SuiErrorKind::ObjectLockConflict {
         obj_ref: conflicting_object,
         pending_transaction: *conflicting_tx3.digest(),
-    };
+    }
+    .into();
     clients
         .get_mut(&authority_keys[2].0)
         .unwrap()
@@ -1582,7 +1619,8 @@ async fn test_handle_conflicting_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::ObjectLockConflict { .. } | SuiError::ByzantineAuthoritySuspicion { .. }
+                SuiErrorKind::ObjectLockConflict { .. }
+                    | SuiErrorKind::ByzantineAuthoritySuspicion { .. }
             )
         },
     )
@@ -1605,10 +1643,11 @@ async fn test_handle_conflicting_transaction_response() {
         &sender_kp,
         666, // this is a dummy value which does not matter
     );
-    let conflicting_error_2 = SuiError::ObjectLockConflict {
+    let conflicting_error_2: SuiError = SuiErrorKind::ObjectLockConflict {
         obj_ref: conflicting_object,
         pending_transaction: *conflicting_tx3.digest(),
-    };
+    }
+    .into();
     clients
         .get_mut(&authority_keys[2].0)
         .unwrap()
@@ -1636,7 +1675,7 @@ async fn test_handle_conflicting_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::ObjectLockConflict { .. } | SuiError::UserInputError { .. }
+                SuiErrorKind::ObjectLockConflict { .. } | SuiErrorKind::UserInputError { .. }
             )
         },
     )
@@ -1679,9 +1718,9 @@ async fn test_handle_conflicting_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::ObjectLockConflict { .. }
-                    | SuiError::UserInputError { .. }
-                    | SuiError::ByzantineAuthoritySuspicion { .. }
+                SuiErrorKind::ObjectLockConflict { .. }
+                    | SuiErrorKind::UserInputError { .. }
+                    | SuiErrorKind::ByzantineAuthoritySuspicion { .. }
             )
         },
     )
@@ -1774,7 +1813,7 @@ async fn test_handle_conflicting_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::MissingCommitteeAtEpoch(..) | SuiError::ObjectLockConflict { .. }
+                SuiErrorKind::MissingCommitteeAtEpoch(..) | SuiErrorKind::ObjectLockConflict { .. }
             )
         },
     )
@@ -1799,7 +1838,7 @@ async fn test_handle_conflicting_transaction_response() {
         |e| {
             matches!(
                 e,
-                SuiError::WrongEpoch { .. } | SuiError::ObjectLockConflict { .. }
+                SuiErrorKind::WrongEpoch { .. } | SuiErrorKind::ObjectLockConflict { .. }
             )
         },
     )
@@ -1828,11 +1867,11 @@ async fn test_handle_overload_response() {
         666, // this is a dummy value which does not matter
     );
 
-    let overload_error = SuiError::TooManyTransactionsPendingExecution {
+    let overload_error = SuiErrorKind::TooManyTransactionsPendingExecution {
         queue_len: 100,
         threshold: 100,
     };
-    let rpc_error = SuiError::RpcError("RPC".into(), "Error".into());
+    let rpc_error: SuiError = SuiErrorKind::RpcError("RPC".into(), "Error".into()).into();
 
     // Have 2f + 1 validators return the overload error and we should get the `SystemOverload` error.
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
@@ -1854,7 +1893,8 @@ async fn test_handle_overload_response() {
         |e| {
             matches!(
                 e,
-                SuiError::TooManyTransactionsPendingExecution { .. } | SuiError::RpcError(..)
+                SuiErrorKind::TooManyTransactionsPendingExecution { .. }
+                    | SuiErrorKind::RpcError(..)
             )
         },
     )
@@ -1881,14 +1921,15 @@ async fn test_handle_overload_response() {
         |e| {
             matches!(
                 e,
-                SuiError::TooManyTransactionsPendingExecution { .. } | SuiError::RpcError(..)
+                SuiErrorKind::TooManyTransactionsPendingExecution { .. }
+                    | SuiErrorKind::RpcError(..)
             )
         },
     )
     .await;
 }
 
-// Tests that authority aggregator can aggregate SuiError::ValidatorOverloadedRetryAfter into
+// Tests that authority aggregator can aggregate SuiErrorKind::ValidatorOverloadedRetryAfter into
 // AggregatorProcessTransactionError::SystemOverloadRetryAfter.
 #[tokio::test]
 async fn test_handle_overload_retry_response() {
@@ -1905,15 +1946,16 @@ async fn test_handle_overload_retry_response() {
         666, // this is a dummy value which does not matter
     );
 
-    let rpc_error = SuiError::RpcError("RPC".into(), "Error".into());
+    let rpc_error: SuiError = SuiErrorKind::RpcError("RPC".into(), "Error".into()).into();
 
     // Have all validators return the overload error and we should get the `SystemOverload` error.
     // Uses different retry_after_secs for each validator.
     for (index, (name, _)) in authority_keys.iter().enumerate() {
         clients.get_mut(name).unwrap().set_tx_info_response_error(
-            SuiError::ValidatorOverloadedRetryAfter {
+            SuiErrorKind::ValidatorOverloadedRetryAfter {
                 retry_after_secs: index as u64,
-            },
+            }
+            .into(),
         );
     }
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
@@ -1934,7 +1976,7 @@ async fn test_handle_overload_retry_response() {
         |e| {
             matches!(
                 e,
-                SuiError::ValidatorOverloadedRetryAfter { .. } | SuiError::RpcError(..)
+                SuiErrorKind::ValidatorOverloadedRetryAfter { .. } | SuiErrorKind::RpcError(..)
             )
         },
     )
@@ -1963,7 +2005,7 @@ async fn test_handle_overload_retry_response() {
         |e| {
             matches!(
                 e,
-                SuiError::ValidatorOverloadedRetryAfter { .. } | SuiError::RpcError(..)
+                SuiErrorKind::ValidatorOverloadedRetryAfter { .. } | SuiErrorKind::RpcError(..)
             )
         },
     )
@@ -1988,7 +2030,7 @@ async fn test_handle_overload_retry_response() {
         |e| {
             matches!(
                 e,
-                SuiError::ValidatorOverloadedRetryAfter { .. } | SuiError::RpcError(..)
+                SuiErrorKind::ValidatorOverloadedRetryAfter { .. } | SuiErrorKind::RpcError(..)
             )
         },
     )
@@ -2014,7 +2056,7 @@ async fn test_early_exit_with_too_many_conflicts() {
     set_tx_info_response_with_error(
         &mut clients,
         authority_keys.iter().take(1),
-        SuiError::ObjectLockConflict {
+        SuiErrorKind::ObjectLockConflict {
             obj_ref: random_object_ref(),
             pending_transaction: TransactionDigest::random(),
         },
@@ -2022,7 +2064,7 @@ async fn test_early_exit_with_too_many_conflicts() {
     set_tx_info_response_with_error(
         &mut clients,
         authority_keys.iter().skip(1).take(1),
-        SuiError::ObjectLockConflict {
+        SuiErrorKind::ObjectLockConflict {
             obj_ref: random_object_ref(),
             pending_transaction: TransactionDigest::random(),
         },
@@ -2030,7 +2072,7 @@ async fn test_early_exit_with_too_many_conflicts() {
     set_tx_info_response_with_error(
         &mut clients,
         authority_keys.iter().skip(2).take(1),
-        SuiError::ObjectLockConflict {
+        SuiErrorKind::ObjectLockConflict {
             obj_ref: random_object_ref(),
             pending_transaction: TransactionDigest::random(),
         },
@@ -2038,7 +2080,7 @@ async fn test_early_exit_with_too_many_conflicts() {
     set_tx_info_response_with_error(
         &mut clients,
         authority_keys.iter().skip(3).take(1),
-        SuiError::TooManyTransactionsPendingExecution {
+        SuiErrorKind::TooManyTransactionsPendingExecution {
             queue_len: 100,
             threshold: 100,
         },
@@ -2356,7 +2398,7 @@ async fn assert_resp_err<E, F>(
     sui_err_checker: F,
 ) where
     E: Fn(&AggregatorProcessTransactionError) -> bool,
-    F: Fn(&SuiError) -> bool,
+    F: Fn(&SuiErrorKind) -> bool,
 {
     match agg.process_transaction(tx, Some(make_socket_addr())).await {
         Err(received_agg_err) if agg_err_checker(&received_agg_err) => match received_agg_err {
@@ -2366,23 +2408,23 @@ async fn assert_resp_err<E, F>(
                 conflicting_tx_digests,
             } => {
                 assert!(!conflicting_tx_digests.is_empty());
-                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+                assert!(errors.iter().map(|e| e.0.as_inner()).all(sui_err_checker));
             }
 
             AggregatorProcessTransactionError::RetryableTransaction { errors } => {
-                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+                assert!(errors.iter().map(|e| e.0.as_inner()).all(sui_err_checker));
             }
 
             AggregatorProcessTransactionError::FatalTransaction { errors } => {
-                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+                assert!(errors.iter().map(|e| e.0.as_inner()).all(sui_err_checker));
             }
 
             AggregatorProcessTransactionError::SystemOverload { errors, .. } => {
-                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+                assert!(errors.iter().map(|e| e.0.as_inner()).all(sui_err_checker));
             }
 
             AggregatorProcessTransactionError::SystemOverloadRetryAfter { errors, .. } => {
-                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+                assert!(errors.iter().map(|e| e.0.as_inner()).all(sui_err_checker));
             }
         },
         Err(received_agg_err) => {
@@ -2453,15 +2495,16 @@ fn set_retryable_tx_info_response_error(
     clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
     authority_keys: &[(AuthorityName, AuthorityKeyPair)],
 ) {
-    let error = SuiError::RpcError("RPC".into(), "Error".into());
+    let error = SuiErrorKind::RpcError("RPC".into(), "Error".into());
     set_tx_info_response_with_error(clients, authority_keys.iter(), error);
 }
 
 fn set_tx_info_response_with_error<'a>(
     clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
     authority_keys: impl Iterator<Item = &'a (AuthorityName, AuthorityKeyPair)>,
-    error: SuiError,
+    error: impl Into<SuiError>,
 ) {
+    let error = error.into();
     for (name, _) in authority_keys {
         clients
             .get_mut(name)

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::SuiError;
+use crate::error::{SuiError, SuiErrorKind};
 use move_bytecode_utils::{layout::TypeLayoutBuilder, module_cache::GetModule};
 use move_core_types::{
     annotated_value as A,
@@ -21,7 +21,7 @@ pub fn get_layout_from_struct_tag(
 ) -> Result<A::MoveDatatypeLayout, SuiError> {
     let type_ = TypeTag::Struct(Box::new(struct_tag));
     let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
-        SuiError::ObjectSerializationError {
+        SuiErrorKind::ObjectSerializationError {
             error: e.to_string(),
         }
     })?;
@@ -39,8 +39,9 @@ pub fn get_layout_from_struct_tag(
 pub fn into_struct_layout(layout: A::MoveDatatypeLayout) -> Result<A::MoveStructLayout, SuiError> {
     match layout {
         A::MoveDatatypeLayout::Struct(s) => Ok(*s),
-        A::MoveDatatypeLayout::Enum(e) => Err(SuiError::ObjectSerializationError {
+        A::MoveDatatypeLayout::Enum(e) => Err(SuiErrorKind::ObjectSerializationError {
             error: format!("Expected struct layout but got an enum {e:?}"),
-        }),
+        }
+        .into()),
     }
 }

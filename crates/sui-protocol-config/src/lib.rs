@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 99;
+const MAX_PROTOCOL_VERSION: u64 = 100;
 
 // Record history of protocol version allocations here:
 //
@@ -272,6 +272,7 @@ const MAX_PROTOCOL_VERSION: u64 = 99;
 // Version 98: Add authenticated event streams support via emit_authenticated function.
 //             Add better error messages to the loader.
 // Version 99: Enable new commit handler.
+// Version 100: Framework update
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -286,7 +287,7 @@ impl ProtocolVersion {
     pub const MAX: Self = Self(MAX_PROTOCOL_VERSION);
 
     #[cfg(not(msim))]
-    const MAX_ALLOWED: Self = Self::MAX;
+    pub const MAX_ALLOWED: Self = Self::MAX;
 
     // We create one additional "fake" version in simulator builds so that we can test upgrades.
     #[cfg(msim)]
@@ -304,6 +305,10 @@ impl ProtocolVersion {
     // universally appropriate default value.
     pub fn max() -> Self {
         Self::MAX
+    }
+
+    pub fn prev(self) -> Self {
+        Self(self.0.checked_sub(1).unwrap())
     }
 }
 
@@ -751,6 +756,11 @@ struct FeatureFlags {
     // Enable accumulators
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
+
+    // If true, create the root accumulator object in the change epoch transaction.
+    // This must be enabled and shipped before `enable_accumulators` is set to true.
+    #[serde(skip_serializing_if = "is_false")]
+    create_root_accumulator_object: bool,
 
     // Enable authenticated event streams
     #[serde(skip_serializing_if = "is_false")]
@@ -1687,6 +1697,30 @@ pub struct ProtocolConfig {
     /// listed in `tx_digests`
     #[serde(skip_serializing_if = "Vec::is_empty")]
     aliased_addresses: Vec<AliasedAddress>,
+
+    /// The base charge for each command in a programmable transaction. This is a fixed cost to
+    /// account for the overhead of processing each command.
+    translation_per_command_base_charge: Option<u64>,
+
+    /// The base charge for each input in a programmable transaction regardless of if it is used or
+    /// not, or a pure/object/funds withdrawal input.
+    translation_per_input_base_charge: Option<u64>,
+
+    /// The base charge for each byte of pure input in a programmable transaction.
+    translation_pure_input_per_byte_charge: Option<u64>,
+
+    /// The multiplier for the number of type nodes when charging for type loading.
+    /// This is multiplied by the number of type nodes to get the total cost.
+    /// This should be a small number to avoid excessive gas costs for loading types.
+    translation_per_type_node_charge: Option<u64>,
+
+    /// The multiplier for the number of type references when charging for type checking and reference
+    /// checking.
+    translation_per_reference_node_charge: Option<u64>,
+
+    /// The metering step resolution for translation costs. This is the granularity at which we
+    /// step up the metering for translation costs.
+    translation_metering_step_resolution: Option<u64>,
 }
 
 /// An aliased address.
@@ -1960,6 +1994,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn create_root_accumulator_object(&self) -> bool {
+        self.feature_flags.create_root_accumulator_object
     }
 
     pub fn enable_address_balance_gas_payments(&self) -> bool {
@@ -2874,6 +2912,13 @@ impl ProtocolConfig {
             consensus_commit_rate_estimation_window_size: None,
 
             aliased_addresses: vec![],
+
+            translation_per_command_base_charge: None,
+            translation_per_input_base_charge: None,
+            translation_pure_input_per_byte_charge: None,
+            translation_per_type_node_charge: None,
+            translation_per_reference_node_charge: None,
+            translation_metering_step_resolution: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4118,6 +4163,12 @@ impl ProtocolConfig {
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
                 }
+                100 => {
+                    cfg.feature_flags.create_root_accumulator_object = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_poseidon = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4382,6 +4433,16 @@ impl ProtocolConfig {
 
     pub fn set_enable_ptb_execution_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_ptb_execution_v2 = val;
+        // Remove this and set these fields when we move this to be set for a specific protocol
+        // version.
+        if val {
+            self.translation_per_command_base_charge = Some(1);
+            self.translation_per_input_base_charge = Some(1);
+            self.translation_pure_input_per_byte_charge = Some(1);
+            self.translation_per_type_node_charge = Some(1);
+            self.translation_per_reference_node_charge = Some(1);
+            self.translation_metering_step_resolution = Some(1000);
+        }
     }
 
     pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
@@ -4398,7 +4459,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
-        self.feature_flags.allow_private_accumulator_entrypoints = true;
+    }
+
+    pub fn create_root_accumulator_object_for_testing(&mut self) {
+        self.feature_flags.create_root_accumulator_object = true;
     }
 
     pub fn enable_address_balance_gas_payments_for_testing(&mut self) {

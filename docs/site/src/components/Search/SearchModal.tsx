@@ -179,7 +179,7 @@ export default function MultiIndexSearchModal({
       url: "https://move-book.com/",
     },
     sui_sdks: { label: "SDK Docs", url: "https://sdk.mystenlabs.com" },
-    walrus_docs: { label: "Walrus Docs", url: "https://docs.walrus.app" },
+    walrus_docs: { label: "Walrus Docs", url: "https://docs.wal.app" },
   }[activeIndex];
 
   if (!isOpen) return null;

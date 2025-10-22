@@ -2106,7 +2106,10 @@ async fn test_conflicting_transactions() {
             (second.unwrap(), first.unwrap_err())
         };
 
-        assert!(matches!(err, SuiError::ObjectLockConflict { .. }));
+        assert!(matches!(
+            err.as_inner(),
+            SuiErrorKind::ObjectLockConflict { .. }
+        ));
 
         let object_info = authority_state
             .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
@@ -3631,7 +3634,6 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
     let add_effects = authority_state
         .try_execute_for_test(&add_cert, ExecutionEnv::new())
         .await
-        .unwrap()
         .0
         .into_message();
 
@@ -4982,8 +4984,7 @@ async fn test_shared_object_transaction_ok() {
             &certificate,
             ExecutionEnv::new().with_assigned_versions(assigned_versions),
         )
-        .await
-        .unwrap();
+        .await;
 
     // Ensure transaction effects are available.
     authority
@@ -5179,8 +5180,7 @@ async fn test_consensus_message_processed() {
                 &certificate,
                 ExecutionEnv::new().with_assigned_versions(assigned_versions),
             )
-            .await
-            .unwrap();
+            .await;
 
         // now, on authority2, we send 0 or 1 consensus messages, then we either sequence and execute via
         // effects or via handle_certificate_v2, then send 0 or 1 consensus messages.
@@ -5198,7 +5198,6 @@ async fn test_consensus_message_processed() {
                     ExecutionEnv::new().with_assigned_versions(assigned_versions2.unwrap()),
                 )
                 .await
-                .unwrap()
                 .0
                 .into_message()
         } else {
@@ -5215,8 +5214,7 @@ async fn test_consensus_message_processed() {
                     &certificate,
                     ExecutionEnv::new().with_assigned_versions(assigned_versions),
                 )
-                .await
-                .unwrap();
+                .await;
             authority2
                 .get_transaction_cache_reader()
                 .get_executed_effects(transaction_digest)
@@ -6164,7 +6162,7 @@ async fn test_publish_not_a_package_dependency() {
         .unwrap_err();
 
     assert_eq!(
-        SuiError::UserInputError {
+        SuiErrorKind::UserInputError {
             error: UserInputError::MoveObjectAsPackage {
                 object_id: SUI_SYSTEM_STATE_OBJECT_ID
             }
@@ -6739,12 +6737,10 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
     execution_env.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
 
     // Test that the transaction fails with InsufficientBalanceForWithdraw error
-    let result = state
+    let (effects, execution_error) = state
         .try_execute_immediately(&certificate, execution_env, &epoch_store)
         .await
         .unwrap();
-
-    let (effects, execution_error) = result;
 
     // Check that we got an execution error due to insufficient balance
     assert!(execution_error.is_some());

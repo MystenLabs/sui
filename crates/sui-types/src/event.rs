@@ -21,7 +21,8 @@ use serde_with::Bytes;
 
 use crate::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use crate::digests::Digest;
-use crate::error::{SuiError, SuiResult};
+use crate::error::SuiErrorKind;
+use crate::error::SuiResult;
 use crate::object::bounded_visitor::BoundedVisitor;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
@@ -132,9 +133,10 @@ impl Event {
         layout: MoveDatatypeLayout,
     ) -> SuiResult<MoveValue> {
         BoundedVisitor::deserialize_value(contents, &layout.into_layout()).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
+            .into()
         })
     }
 

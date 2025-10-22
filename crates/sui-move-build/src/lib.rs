@@ -43,7 +43,7 @@ use sui_package_alt::SuiFlavor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     is_system_package,
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     TypeTag, BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
@@ -211,9 +211,11 @@ impl BuildConfig {
             self.compile_package(root_pkg, &mut std::io::sink())
         };
 
-        let (package, fn_info) = result.map_err(|error| SuiError::ModuleBuildFailure {
-            // Use [Debug] formatting to capture [anyhow] error context
-            error: format!("{:?}", error),
+        let (package, fn_info) = result.map_err(|error| {
+            SuiError::from(SuiErrorKind::ModuleBuildFailure {
+                // Use [Debug] formatting to capture [anyhow] error context
+                error: format!("{:?}", error),
+            })
         })?;
 
         if self.run_bytecode_verifier {
@@ -260,7 +262,7 @@ fn verify_bytecode(package: &MoveCompiledPackage, fn_info: &FnInfoMap) -> SuiRes
 
     for m in compiled_modules.iter_modules() {
         move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
-            SuiError::ModuleVerificationFailure {
+            SuiErrorKind::ModuleVerificationFailure {
                 error: err.to_string(),
             }
         })?;
@@ -557,9 +559,10 @@ impl CompiledPackage {
                 .into(),
         );
 
-        Err(SuiError::ModulePublishFailure {
+        Err(SuiErrorKind::ModulePublishFailure {
             error: error_message.join("\n"),
-        })
+        }
+        .into())
     }
 
     pub fn get_published_dependencies_ids(&self) -> Vec<ObjectID> {

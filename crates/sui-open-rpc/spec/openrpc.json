@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "99",
+              "maxSupportedProtocolVersion": "100",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1329,6 +1329,7 @@
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
                 "correct_gas_payment_limit_check": false,
+                "create_root_accumulator_object": false,
                 "debug_fatal_on_move_invariant_violation": false,
                 "dependency_linkage_error": false,
                 "deprecate_global_storage_ops_during_deserialization": false,
@@ -1990,6 +1991,12 @@
                 "transfer_transfer_internal_cost_base": {
                   "u64": "52"
                 },
+                "translation_metering_step_resolution": null,
+                "translation_per_command_base_charge": null,
+                "translation_per_input_base_charge": null,
+                "translation_per_reference_node_charge": null,
+                "translation_per_type_node_charge": null,
+                "translation_pure_input_per_byte_charge": null,
                 "tx_context_derive_id_cost_base": {
                   "u64": "52"
                 },

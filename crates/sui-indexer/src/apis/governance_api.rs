@@ -196,7 +196,7 @@ pub async fn exchange_rates(
         .await?
     {
         let pool_id: sui_types::id::ID = bcs::from_bytes(&df.bcs_name).map_err(|e| {
-            sui_types::error::SuiError::ObjectDeserializationError {
+            sui_types::error::SuiErrorKind::ObjectDeserializationError {
                 error: e.to_string(),
             }
         })?;
@@ -225,9 +225,11 @@ pub async fn exchange_rates(
         {
             let dynamic_field = df
                 .to_dynamic_field::<EpochId, PoolTokenExchangeRate>()
-                .ok_or_else(|| sui_types::error::SuiError::ObjectDeserializationError {
-                    error: "dynamic field malformed".to_owned(),
-                })?;
+                .ok_or_else(
+                    || sui_types::error::SuiErrorKind::ObjectDeserializationError {
+                        error: "dynamic field malformed".to_owned(),
+                    },
+                )?;
 
             rates.push((dynamic_field.name, dynamic_field.value));
         }

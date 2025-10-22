@@ -129,7 +129,7 @@ pub async fn execute_certificate_with_execution_error(
             &certificate,
             ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
         )
-        .await?;
+        .await;
     let state_after =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
@@ -146,7 +146,7 @@ pub async fn execute_certificate_with_execution_error(
                 &certificate,
                 ExecutionEnv::new().with_assigned_versions(assigned_versions),
             )
-            .await?;
+            .await;
     }
     Ok((
         certificate.into_inner(),
@@ -408,7 +408,7 @@ pub async fn execute_sequenced_certificate_to_effects(
     authority: &AuthorityState,
     certificate: VerifiedCertificate,
     assigned_versions: AssignedVersions,
-) -> Result<(TransactionEffects, Option<ExecutionError>), SuiError> {
+) -> (TransactionEffects, Option<ExecutionError>) {
     let env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     authority.execution_scheduler.enqueue(
         vec![(
@@ -418,9 +418,9 @@ pub async fn execute_sequenced_certificate_to_effects(
         &authority.epoch_store_for_testing(),
     );
 
-    let (result, execution_error_opt) = authority.try_execute_for_test(&certificate, env).await?;
+    let (result, execution_error_opt) = authority.try_execute_for_test(&certificate, env).await;
     let effects = result.inner().data().clone();
-    Ok((effects, execution_error_opt))
+    (effects, execution_error_opt)
 }
 
 pub async fn send_consensus(

@@ -9,16 +9,13 @@ use crate::authority::{
 use move_binary_format::CompiledModule;
 use sui_types::{
     base_types::ObjectID,
-    error::UserInputError,
+    error::{SuiErrorKind, UserInputError},
     object::{Data, ObjectRead, Owner},
     transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     utils::to_sender_signed_transaction,
 };
 
-use sui_types::{
-    crypto::{get_key_pair, AccountKeyPair},
-    error::SuiError,
-};
+use sui_types::crypto::{get_key_pair, AccountKeyPair};
 
 use crate::authority::move_integration_tests::{
     build_multi_publish_txns, build_package, run_multi_txns,
@@ -117,7 +114,7 @@ async fn test_publish_empty_package() {
         .unwrap_err();
     assert_eq!(
         err,
-        SuiError::UserInputError {
+        SuiErrorKind::UserInputError {
             error: UserInputError::EmptyCommandInput
         }
     );
@@ -356,7 +353,7 @@ async fn test_publish_more_than_max_packages_error() {
         .unwrap_err();
     assert_eq!(
         err,
-        SuiError::UserInputError {
+        SuiErrorKind::UserInputError {
             error: UserInputError::MaxPublishCountExceeded {
                 max_publish_commands: max_pub_cmd,
                 publish_count: max_pub_cmd + 1,

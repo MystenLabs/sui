@@ -21,7 +21,7 @@ use sui_network::{
 };
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
-use sui_types::error::UserInputError;
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::quorum_driver_types::{GroupedErrors, QuorumDriverResponse};
@@ -356,10 +356,10 @@ impl ProcessTransactionState {
         weight: StakeUnit,
         err: &SuiError,
     ) {
-        if let SuiError::ObjectLockConflict {
+        if let SuiErrorKind::ObjectLockConflict {
             obj_ref,
             pending_transaction: transaction,
-        } = err
+        } = err.as_inner()
         {
             let (lock_records, total_stake) = self
                 .conflicting_tx_digests
@@ -385,7 +385,10 @@ impl ProcessTransactionState {
             .errors
             .iter()
             .filter_map(|(e, _, stake)| {
-                if matches!(e, SuiError::FailedToVerifyTxCertWithExecutedEffects { .. }) {
+                if matches!(
+                    e.as_inner(),
+                    SuiErrorKind::FailedToVerifyTxCertWithExecutedEffects { .. }
+                ) {
                     Some(stake)
                 } else {
                     None
@@ -911,7 +914,7 @@ where
     }
 
     fn record_rpc_error_maybe(metrics: Arc<AuthAggMetrics>, display_name: &str, error: &SuiError) {
-        if let SuiError::RpcError(_message, code) = error {
+        if let SuiErrorKind::RpcError(_message, code) = error.as_inner() {
             metrics
                 .total_rpc_err
                 .with_label_values(&[display_name, code.as_str()])
@@ -1048,9 +1051,10 @@ where
                 state.non_retryable_stake += bad_votes;
                 if bad_votes > 0 {
                     state.errors.push((
-                        SuiError::InvalidSignature {
+                        SuiErrorKind::InvalidSignature {
                             error: "Individual signature verification failed".to_string(),
-                        },
+                        }
+                        .into(),
                         bad_authorities,
                         bad_votes,
                     ));
@@ -1100,9 +1104,10 @@ where
                         state.non_retryable_stake += bad_votes;
                         if bad_votes > 0 {
                             state.errors.push((
-                                SuiError::InvalidSignature {
+                                SuiErrorKind::InvalidSignature {
                                     error: "Individual signature verification failed".to_string(),
-                                },
+                                }
+                                .into(),
                                 bad_authorities,
                                 bad_votes,
                             ));
@@ -1173,9 +1178,10 @@ where
             // TODO: Instead of pushing a new error, we should add more information about the non-quorum effects
             // in the final error if state is no longer retryable
             state.errors.push((
-                SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
+                SuiErrorKind::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
                     effects_map: non_quorum_effects,
-                },
+                }
+                .into(),
                 involved_validators,
                 total_stake,
             ));
@@ -1454,9 +1460,10 @@ where
                         state.non_retryable_stake += bad_votes;
                         if bad_votes > 0 {
                             state.non_retryable_errors.push((
-                                SuiError::InvalidSignature {
+                                SuiErrorKind::InvalidSignature {
                                     error: "Individual signature verification failed".to_string(),
-                                },
+                                }
+                                .into(),
                                 bad_authorities,
                                 bad_votes,
                             ));

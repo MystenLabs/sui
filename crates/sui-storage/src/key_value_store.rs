@@ -11,7 +11,7 @@ use std::time::Instant;
 use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
 use sui_types::digests::{CheckpointDigest, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
 };
@@ -244,7 +244,7 @@ impl TransactionKeyValueStore {
             .into_iter()
             .next()
             .flatten()
-            .ok_or(SuiError::TransactionNotFound { digest })
+            .ok_or(SuiErrorKind::TransactionNotFound { digest }.into())
     }
 
     /// Convenience method for fetching single digest, and returning an error if it's not found.
@@ -258,7 +258,7 @@ impl TransactionKeyValueStore {
             .into_iter()
             .next()
             .flatten()
-            .ok_or(SuiError::TransactionNotFound { digest })
+            .ok_or(SuiErrorKind::TransactionNotFound { digest }.into())
     }
 
     /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
@@ -272,9 +272,12 @@ impl TransactionKeyValueStore {
             .into_iter()
             .next()
             .flatten()
-            .ok_or(SuiError::UserInputError {
-                error: UserInputError::VerifiedCheckpointNotFound(checkpoint),
-            })
+            .ok_or(
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::VerifiedCheckpointNotFound(checkpoint),
+                }
+                .into(),
+            )
     }
 
     /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
@@ -288,9 +291,12 @@ impl TransactionKeyValueStore {
             .into_iter()
             .next()
             .flatten()
-            .ok_or(SuiError::UserInputError {
-                error: UserInputError::VerifiedCheckpointNotFound(checkpoint),
-            })
+            .ok_or(
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::VerifiedCheckpointNotFound(checkpoint),
+                }
+                .into(),
+            )
     }
 
     /// Convenience method for fetching single checkpoint, and returning an error if it's not found.
@@ -304,9 +310,15 @@ impl TransactionKeyValueStore {
             .into_iter()
             .next()
             .flatten()
-            .ok_or(SuiError::UserInputError {
-                error: UserInputError::VerifiedCheckpointDigestNotFound(format!("{:?}", digest)),
-            })
+            .ok_or(
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::VerifiedCheckpointDigestNotFound(format!(
+                        "{:?}",
+                        digest
+                    )),
+                }
+                .into(),
+            )
     }
 
     pub async fn deprecated_get_transaction_checkpoint(

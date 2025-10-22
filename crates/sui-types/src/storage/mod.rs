@@ -13,7 +13,7 @@ use crate::base_types::{
 };
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
-use crate::error::{ExecutionError, SuiError};
+use crate::error::{ExecutionError, SuiError, SuiErrorKind};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::full_checkpoint_content::ObjectSet;
 use crate::message_envelope::Message;
@@ -303,9 +303,10 @@ pub fn load_package_object_from_object_store(
     if let Some(obj) = &package {
         fp_ensure!(
             obj.is_package(),
-            SuiError::BadObjectType {
+            SuiErrorKind::BadObjectType {
                 error: format!("Package expected, Move object found: {package_id}"),
             }
+            .into()
         );
     }
     Ok(package.map(PackageObject::new))

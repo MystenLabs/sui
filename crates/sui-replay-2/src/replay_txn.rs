@@ -10,7 +10,7 @@
 //! `get_input_objects_for_replay` is used by the `execution.rs` module but could be moved
 //! in this module and saved in the `ReplayTransaction` instance.
 
-use crate::summary_metrics::{log_replay_metrics, tx_metrics_reset};
+use crate::summary_metrics::tx_metrics_reset;
 use crate::{
     artifacts::{Artifact, ArtifactManager},
     execution::{execute_transaction_to_effects, MoveCallInfo, ReplayCacheSummary, ReplayExecutor},
@@ -68,10 +68,9 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     data_store: &S,
     network: String,
     trace: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<u128> {
     let _span = info_span!("replay_tx", tx_digest = %tx_digest).entered();
     // load a `ReplayTransaction`
-    let total_t0 = Instant::now();
     tx_metrics_reset();
     let replay_txn = match ReplayTransaction::load(tx_digest, data_store, data_store, data_store) {
         Ok(replay_txn) => replay_txn,
@@ -106,9 +105,6 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
         output_dir = %artifact_manager.base_path.display(),
         "Executed transaction",
     );
-
-    let total_ms = total_t0.elapsed().as_millis();
-    log_replay_metrics(tx_digest, total_ms, exec_ms);
 
     artifact_manager
         .member(Artifact::TransactionData)
@@ -175,7 +171,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
         &context_and_effects.execution_effects,
     )?;
 
-    Ok(())
+    Ok(exec_ms)
 }
 
 fn verify_txn_and_save_effects(

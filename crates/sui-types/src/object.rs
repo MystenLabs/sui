@@ -22,7 +22,9 @@ use crate::accumulator_root::AccumulatorValue;
 use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
-use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
+use crate::error::{
+    ExecutionError, ExecutionErrorKind, SuiErrorKind, UserInputError, UserInputResult,
+};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::GAS;
 use crate::is_system_package;
@@ -41,6 +43,7 @@ use self::bounded_visitor::BoundedVisitor;
 
 mod balance_traversal;
 pub mod bounded_visitor;
+pub mod option_visitor;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
@@ -320,7 +323,7 @@ impl MoveObject {
     ) -> Result<MoveStructLayout, SuiError> {
         let type_ = TypeTag::Struct(Box::new(struct_tag));
         let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
         })?;
@@ -335,9 +338,10 @@ impl MoveObject {
     /// Convert `self` to the JSON representation dictated by `layout`.
     pub fn to_move_struct(&self, layout: &MoveStructLayout) -> Result<MoveStruct, SuiError> {
         BoundedVisitor::deserialize_struct(&self.contents, layout).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
+            .into()
         })
     }
 
@@ -388,7 +392,7 @@ impl MoveObject {
 
             let mut traversal = BalanceTraversal::default();
             MoveValue::visit_deserialize(&self.contents, &layout.into_layout(), &mut traversal)
-                .map_err(|e| SuiError::ObjectSerializationError {
+                .map_err(|e| SuiErrorKind::ObjectSerializationError {
                     error: e.to_string(),
                 })?;
 
@@ -513,7 +517,7 @@ impl Owner {
             Self::Shared { .. }
             | Self::Immutable
             | Self::ObjectOwner(_)
-            | Self::ConsensusAddressOwner { .. } => Err(SuiError::UnexpectedOwnerType),
+            | Self::ConsensusAddressOwner { .. } => Err(SuiErrorKind::UnexpectedOwnerType.into()),
         }
     }
 
@@ -525,7 +529,7 @@ impl Owner {
             Self::AddressOwner(address)
             | Self::ObjectOwner(address)
             | Self::ConsensusAddressOwner { owner: address, .. } => Ok(*address),
-            Self::Shared { .. } | Self::Immutable => Err(SuiError::UnexpectedOwnerType),
+            Self::Shared { .. } | Self::Immutable => Err(SuiErrorKind::UnexpectedOwnerType.into()),
         }
     }
 
@@ -964,14 +968,18 @@ impl ObjectInner {
     /// like this: `S<T>`.
     /// Returns the inner parameter type `T`.
     pub fn get_move_template_type(&self) -> SuiResult<TypeTag> {
-        let move_struct = self.data.struct_tag().ok_or_else(|| SuiError::TypeError {
-            error: "Object must be a Move object".to_owned(),
-        })?;
+        let move_struct = self
+            .data
+            .struct_tag()
+            .ok_or_else(|| SuiErrorKind::TypeError {
+                error: "Object must be a Move object".to_owned(),
+            })?;
         fp_ensure!(
             move_struct.type_params.len() == 1,
-            SuiError::TypeError {
+            SuiErrorKind::TypeError {
                 error: "Move object struct must have one type parameter".to_owned()
             }
+            .into()
         );
         // Index access safe due to checks above.
         let type_tag = move_struct.type_params[0].clone();

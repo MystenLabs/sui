@@ -11,7 +11,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::effects::TransactionEffectsAPI as _;
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message as _;
 use sui_types::messages_grpc::{
@@ -149,9 +149,10 @@ async fn test_submit_ping_request() {
             .submit_transaction(request)
             .await;
         assert!(response.is_err());
+        let error: SuiError = response.unwrap_err().into();
         assert!(matches!(
-            response.unwrap_err().into(),
-            SuiError::InvalidRequest { .. }
+            error.into_inner(),
+            SuiErrorKind::InvalidRequest { .. }
         ));
     }
 
@@ -361,14 +362,11 @@ async fn test_submit_transaction_gas_object_validation() {
     // with the Rejected variant.
     let response = test_context.client.submit_transaction(request, None).await;
     let result: SubmitTxResult = response.unwrap().results.first().unwrap().clone();
-    assert!(matches!(
-        result,
-        SubmitTxResult::Rejected {
-            error: SuiError::UserInputError {
-                error: UserInputError::ObjectNotFound { .. }
-            }
-        }
-    ));
+    assert!(
+        matches!(result, SubmitTxResult::Rejected { error } if matches!(error.as_inner(), SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectNotFound { .. }
+        }))
+    );
 }
 
 #[tokio::test]

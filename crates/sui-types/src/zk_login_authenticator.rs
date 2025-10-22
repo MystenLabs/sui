@@ -7,7 +7,7 @@ use crate::{
     base_types::{EpochId, SuiAddress},
     crypto::{DefaultHash, Signature, SignatureScheme, SuiSignature},
     digests::ZKLoginInputsDigest,
-    error::{SuiError, SuiResult},
+    error::{SuiErrorKind, SuiResult},
     signature::{AuthenticatorTrait, VerifyParams},
 };
 use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
@@ -129,25 +129,27 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         if let Some(delta) = max_epoch_upper_bound_delta {
             let max_epoch_upper_bound = epoch + delta;
             if self.get_max_epoch() > max_epoch_upper_bound {
-                return Err(SuiError::InvalidSignature {
+                return Err(SuiErrorKind::InvalidSignature {
                     error: format!(
                         "ZKLogin max epoch too large {}, current epoch {}, max accepted: {}",
                         self.get_max_epoch(),
                         epoch,
                         max_epoch_upper_bound
                     ),
-                });
+                }
+                .into());
             }
         }
         // 2. ensure that max epoch in signature is greater than the current epoch.
         if epoch > self.get_max_epoch() {
-            return Err(SuiError::InvalidSignature {
+            return Err(SuiErrorKind::InvalidSignature {
                 error: format!(
                     "ZKLogin expired at epoch {}, current epoch {}",
                     self.get_max_epoch(),
                     epoch
                 ),
-            });
+            }
+            .into());
         }
         Ok(())
     }
@@ -169,7 +171,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             if !aux_verify_data.verify_legacy_zklogin_address
                 || author != SuiAddress::try_from_padded(&self.inputs)?
             {
-                return Err(SuiError::InvalidAddress);
+                return Err(SuiErrorKind::InvalidAddress.into());
             }
         }
 
@@ -178,15 +180,16 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         if !aux_verify_data.supported_providers.is_empty()
             && !aux_verify_data.supported_providers.contains(
                 &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
-                    SuiError::InvalidSignature {
+                    SuiErrorKind::InvalidSignature {
                         error: "Unknown provider".to_string(),
                     }
                 })?,
             )
         {
-            return Err(SuiError::InvalidSignature {
+            return Err(SuiErrorKind::InvalidSignature {
                 error: format!("OIDC provider not supported: {}", self.inputs.get_iss()),
-            });
+            }
+            .into());
         }
 
         // Verify the ephemeral signature over the intent message of the transaction data.
@@ -210,8 +213,11 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
                 &aux_verify_data.oidc_provider_jwks,
                 &aux_verify_data.zk_login_env,
             )
-            .map_err(|e| SuiError::InvalidSignature {
-                error: e.to_string(),
+            .map_err(|e| {
+                SuiErrorKind::InvalidSignature {
+                    error: e.to_string(),
+                }
+                .into()
             });
             match res {
                 Ok(_) => {
@@ -237,8 +243,11 @@ fn verify_zklogin_inputs_wrapper(
         all_jwk,
         env,
     )
-    .map_err(|e| SuiError::InvalidSignature {
-        error: e.to_string(),
+    .map_err(|e| {
+        SuiErrorKind::InvalidSignature {
+            error: e.to_string(),
+        }
+        .into()
     })
 }
 

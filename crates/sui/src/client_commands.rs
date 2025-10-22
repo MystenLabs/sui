@@ -66,7 +66,7 @@ use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
-    error::SuiError,
+    error::SuiErrorKind,
     gas::GasCostSummary,
     gas_coin::GasCoin,
     message_envelope::Envelope,
@@ -889,12 +889,11 @@ impl SuiClientCommands {
                 build_config.root_as_zero = true;
 
                 check_protocol_version_and_warn(read_api).await?;
-                let package_path =
-                    package_path
-                        .canonicalize()
-                        .map_err(|e| SuiError::ModulePublishFailure {
-                            error: format!("Failed to canonicalize package path: {}", e),
-                        })?;
+                let package_path = package_path.canonicalize().map_err(|e| {
+                    SuiErrorKind::ModulePublishFailure {
+                        error: format!("Failed to canonicalize package path: {}", e),
+                    }
+                })?;
                 let active_env = context.get_active_env()?.alias.clone();
 
                 let mut root_pkg = load_root_pkg_for_publish_upgrade(
@@ -1026,7 +1025,7 @@ impl SuiClientCommands {
             }
             SuiClientCommands::Publish(args) => {
                 if args.build_config.test_mode {
-                    return Err(SuiError::ModulePublishFailure {
+                    return Err(SuiErrorKind::ModulePublishFailure {
                         error:
                             "The `publish` subcommand should not be used with the `--test` flag\n\
                             \n\
@@ -1057,7 +1056,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::TestPublish(args) => {
                 if args.publish_args.build_config.test_mode {
-                    return Err(SuiError::ModulePublishFailure {
+                    return Err(SuiErrorKind::ModulePublishFailure {
                         error:
                             "The `publish` subcommand should not be used with the `--test` flag\n\
                             \n\
@@ -2061,7 +2060,7 @@ pub(crate) async fn compile_package(
         .get_package_bytes(with_unpublished_deps)
         .is_empty()
     {
-        return Err(SuiError::ModulePublishFailure {
+        return Err(SuiErrorKind::ModulePublishFailure {
             error: "No modules found in the package".to_string(),
         }
         .into());
@@ -2117,7 +2116,7 @@ async fn compatibility_checks(
     {
         for module in compiled_package.get_modules_and_deps() {
             if module.version() < *min_version {
-                return Err(SuiError::ModulePublishFailure {
+                return Err(SuiErrorKind::ModulePublishFailure {
                     error: format!(
                         "Module {} has a version {} that is \
                      lower than the minimum version {min_version} supported by the chain.",
@@ -2142,22 +2141,22 @@ async fn compatibility_checks(
                 } else {
                     ""
                 };
-                return Err(SuiError::ModulePublishFailure {
-                error: format!(
-                    "Module {} has a version {} that is \
-                     higher than the maximum version {max_version} supported by the chain.{help_msg}",
-                    module.self_id(),
-                    module.version(),
-                ),
-            }
-            .into());
+                return Err(SuiErrorKind::ModulePublishFailure {
+                    error: format!(
+                        "Module {} has a version {} that is \
+                         higher than the maximum version {max_version} supported by the chain.{help_msg}",
+                        module.self_id(),
+                        module.version(),
+                    ),
+                }
+                .into());
             }
         }
     }
 
     if !compiled_package.is_system_package() {
         if let Some(already_published) = compiled_package.published_root_module() {
-            return Err(SuiError::ModulePublishFailure {
+            return Err(SuiErrorKind::ModulePublishFailure {
                 error: format!(
                     "Modules must all have 0x0 as their addresses. \
                  Violated by module {:?}",
@@ -3884,11 +3883,12 @@ async fn publish_command(
     let chain_id = read_api.get_chain_identifier().await?;
 
     check_protocol_version_and_warn(read_api).await?;
-    let package_path = package_path
-        .canonicalize()
-        .map_err(|e| SuiError::ModulePublishFailure {
-            error: format!("Failed to canonicalize package path: {}", e),
-        })?;
+    let package_path =
+        package_path
+            .canonicalize()
+            .map_err(|e| SuiErrorKind::ModulePublishFailure {
+                error: format!("Failed to canonicalize package path: {}", e),
+            })?;
 
     let compiled_package = compile_package(
         read_api,

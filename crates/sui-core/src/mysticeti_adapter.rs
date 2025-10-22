@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Duration};
 use arc_swap::{ArcSwapOption, Guard};
 use consensus_core::{ClientError, TransactionClient};
 use sui_types::{
-    error::{SuiError, SuiResult},
+    error::{SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
 };
 use tap::prelude::*;
@@ -113,7 +113,7 @@ impl ConsensusClient for LazyMysticetiClient {
                     }
                 };
             })
-            .map_err(|err| SuiError::FailedToSubmitToConsensus(err.to_string()))?;
+            .map_err(|err| SuiErrorKind::FailedToSubmitToConsensus(err.to_string()))?;
 
         let is_soft_bundle = transactions.len() > 1;
         let is_ping = transactions.is_empty();

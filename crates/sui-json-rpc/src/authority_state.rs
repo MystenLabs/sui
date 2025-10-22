@@ -26,7 +26,7 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::effects::TransactionEffects;
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
 use sui_types::event::EventID;
 use sui_types::governance::StakedSui;
 use sui_types::messages_checkpoint::{
@@ -452,11 +452,13 @@ impl StateRead for AuthorityState {
         Ok(tokio::task::spawn_blocking(move || {
             indexes
                 .as_ref()
-                .ok_or(SuiError::IndexStoreNotAvailable)?
+                .ok_or(SuiErrorKind::IndexStoreNotAvailable)?
                 .get_balance(owner, coin_type)
         })
         .await
-        .map_err(|e: JoinError| SuiError::ExecutionError(e.to_string()))??)
+        .map_err(|e: JoinError| {
+            SuiError(Box::new(SuiErrorKind::ExecutionError(e.to_string())))
+        })??)
     }
 
     async fn get_all_balance(
@@ -467,11 +469,13 @@ impl StateRead for AuthorityState {
         Ok(tokio::task::spawn_blocking(move || {
             indexes
                 .as_ref()
-                .ok_or(SuiError::IndexStoreNotAvailable)?
+                .ok_or(SuiErrorKind::IndexStoreNotAvailable)?
                 .get_all_balance(owner)
         })
         .await
-        .map_err(|e: JoinError| SuiError::ExecutionError(e.to_string()))??)
+        .map_err(|e: JoinError| {
+            SuiError(Box::new(SuiErrorKind::ExecutionError(e.to_string())))
+        })??)
     }
 
     fn get_verified_checkpoint_by_sequence_number(
@@ -608,12 +612,24 @@ pub enum StateReadInternalError {
     Anyhow(#[from] anyhow::Error),
 }
 
+impl From<SuiErrorKind> for StateReadInternalError {
+    fn from(e: SuiErrorKind) -> Self {
+        StateReadInternalError::SuiError(SuiError::from(e))
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum StateReadClientError {
     #[error(transparent)]
     SuiError(#[from] SuiError),
     #[error(transparent)]
     UserInputError(#[from] UserInputError),
+}
+
+impl From<SuiErrorKind> for StateReadClientError {
+    fn from(e: SuiErrorKind) -> Self {
+        StateReadClientError::SuiError(SuiError::from(e))
+    }
 }
 
 /// `StateReadError` is the error type for callers to work with.
@@ -631,16 +647,22 @@ pub enum StateReadError {
     Client(#[from] StateReadClientError),
 }
 
-impl From<SuiError> for StateReadError {
-    fn from(e: SuiError) -> Self {
+impl From<SuiErrorKind> for StateReadError {
+    fn from(e: SuiErrorKind) -> Self {
         match e {
-            SuiError::IndexStoreNotAvailable
-            | SuiError::TransactionNotFound { .. }
-            | SuiError::UnsupportedFeatureError { .. }
-            | SuiError::UserInputError { .. }
-            | SuiError::WrongMessageVersion { .. } => StateReadError::Client(e.into()),
+            SuiErrorKind::IndexStoreNotAvailable
+            | SuiErrorKind::TransactionNotFound { .. }
+            | SuiErrorKind::UnsupportedFeatureError { .. }
+            | SuiErrorKind::UserInputError { .. }
+            | SuiErrorKind::WrongMessageVersion { .. } => StateReadError::Client(e.into()),
             _ => StateReadError::Internal(e.into()),
         }
+    }
+}
+
+impl From<SuiError> for StateReadError {
+    fn from(e: SuiError) -> Self {
+        e.into_inner().into()
     }
 }
 

@@ -18,8 +18,6 @@ pub const BALANCE_MODULE_NAME: &IdentStr = ident_str!("balance");
 pub const BALANCE_STRUCT_NAME: &IdentStr = ident_str!("Balance");
 pub const BALANCE_CREATE_REWARDS_FUNCTION_NAME: &IdentStr = ident_str!("create_staking_rewards");
 pub const BALANCE_DESTROY_REBATES_FUNCTION_NAME: &IdentStr = ident_str!("destroy_storage_rebates");
-pub const SEND_TO_ACCOUNT_FUNCTION_NAME: &IdentStr = ident_str!("send_to_account");
-pub const WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME: &IdentStr = ident_str!("withdraw_from_account");
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
@@ -109,5 +107,36 @@ impl Balance {
                 MoveTypeLayout::U64,
             )],
         }
+    }
+
+    /// Check if a struct layout represents a `Balance<T>` type with the expected field structure.
+    pub fn is_balance_layout(struct_layout: &MoveStructLayout) -> bool {
+        let ty = &struct_layout.type_;
+
+        if !Self::is_balance(ty) {
+            return false;
+        }
+
+        if ty.type_params.len() != 1 {
+            return false;
+        }
+
+        if struct_layout.fields.len() != 1 {
+            return false;
+        }
+
+        let Some(field) = struct_layout.fields.first() else {
+            return false;
+        };
+
+        if field.name.as_str() != "value" {
+            return false;
+        }
+
+        if !matches!(field.layout, MoveTypeLayout::U64) {
+            return false;
+        }
+
+        true
     }
 }

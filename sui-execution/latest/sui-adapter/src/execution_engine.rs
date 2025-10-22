@@ -770,7 +770,7 @@ mod checked {
                             builder = setup_store_execution_time_estimates(builder, estimates);
                         }
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
-                            assert!(protocol_config.enable_accumulators());
+                            assert!(protocol_config.create_root_accumulator_object());
                             builder = setup_accumulator_root_create(builder);
                         }
                         EndOfEpochTransactionKind::CoinRegistryCreate => {

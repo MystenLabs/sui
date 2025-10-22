@@ -10,7 +10,7 @@ use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
-use sui_types::error::UserInputError;
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
@@ -190,13 +190,13 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     let addr3 = effects.created()[2].1.get_owner_address()?;
     let coin_val1 = *recipient_amount_map
         .get(&addr1)
-        .ok_or(SuiError::InvalidAddress)?;
+        .ok_or(SuiErrorKind::InvalidAddress)?;
     let coin_val2 = *recipient_amount_map
         .get(&addr2)
-        .ok_or(SuiError::InvalidAddress)?;
+        .ok_or(SuiErrorKind::InvalidAddress)?;
     let coin_val3 = *recipient_amount_map
         .get(&addr3)
-        .ok_or(SuiError::InvalidAddress)?;
+        .ok_or(SuiErrorKind::InvalidAddress)?;
     assert_eq!(GasCoin::try_from(&created_obj1)?.value(), coin_val1);
     assert_eq!(GasCoin::try_from(&created_obj2)?.value(), coin_val2);
     assert_eq!(GasCoin::try_from(&created_obj3)?.value(), coin_val3);
@@ -262,10 +262,10 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     let addr2 = effects.created()[1].1.get_owner_address()?;
     let coin_val1 = *recipient_amount_map
         .get(&addr1)
-        .ok_or(SuiError::InvalidAddress)?;
+        .ok_or(SuiErrorKind::InvalidAddress)?;
     let coin_val2 = *recipient_amount_map
         .get(&addr2)
-        .ok_or(SuiError::InvalidAddress)?;
+        .ok_or(SuiErrorKind::InvalidAddress)?;
     assert_eq!(GasCoin::try_from(&created_obj1)?.value(), coin_val1);
     assert_eq!(GasCoin::try_from(&created_obj2)?.value(), coin_val2);
     // make sure the first input coin still belongs to the sender,

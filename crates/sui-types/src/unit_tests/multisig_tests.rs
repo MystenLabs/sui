@@ -428,15 +428,17 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         Some(30),
         true,
     );
-    let res = multisig.verify_claims(
-        intent_msg,
-        multisig_address,
-        &aux_verify_data,
-        Arc::new(VerifiedDigestCache::new_empty()),
-    );
+    let res = multisig
+        .verify_claims(
+            intent_msg,
+            multisig_address,
+            &aux_verify_data,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .map_err(|e| e.into_inner());
     // since the zklogin inputs is crafted, it is expected that the proof verify failed, but all checks before passes.
     assert!(
-        matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
+        matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
     );
 
     // initialize zklogin pk (pk1_padd) with padded address seed
@@ -468,14 +470,16 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         multisig_pk_padded,
     );
 
-    let res = multisig_padded.verify_claims(
-        intent_msg_padded,
-        multisig_address_padded,
-        &aux_verify_data,
-        Arc::new(VerifiedDigestCache::new_empty()),
-    );
+    let res = multisig_padded
+        .verify_claims(
+            intent_msg_padded,
+            multisig_address_padded,
+            &aux_verify_data,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .map_err(|e| e.into_inner());
     assert!(
-        matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
+        matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
     );
 }
 

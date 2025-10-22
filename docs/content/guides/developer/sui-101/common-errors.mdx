@@ -1,0 +1,426 @@
+---
+title: Troubleshooting Common Errors
+description: Find solutions to common issues with addresses, transactions, and Move packages.
+keywords: [ address errors, package errors, system errors, transaction errors, troubleshooting ]
+---
+
+This page provides troubleshooting solutions to common errors.
+
+## Address errors 
+
+Errors in this section relate to Sui addresses.
+
+#### `Failed to build Move modules: Unresolved addresses found.`
+
+Indicates that you are trying to use a named address, such as `std` or similar, within your code or a dependency, but you have not assigned that address a value in the `Move.toml` file. 
+
+##### Solution
+
+Add an entry for each unresolved address to the `[addresses]` section of your `Move.toml` file. 
+
+```toml
+[addresses]
+std = "0x1"
+```
+
+**Resources**
+
+- [The Move Book: Manifests](https://move-book.com/concepts/manifest)
+
+---
+
+#### `Invalid Sui Address`
+
+Indicates that the address you provided does not conform to a valid Sui address format. Sui addresses must:
+
+- Be a 32-byte hex-encoded string.
+
+- Start with `0x` and only contain hexadecimal characters (0-9, a-f, A-F).
+
+##### Solution 
+
+Verify the address you provide starts with `0x`, is 64 hex digits long, and does not contain invalid characters.
+
+**Resources**
+
+- [Create a Sui Address](/guides/developer/getting-started/get-address.mdx)
+
+---
+
+## Move package errors 
+
+Errors in this section relate to Move packages.
+
+#### `Invalid URL: Invalid URL: relative URL without a base`
+
+This error occurs when the system interprets a URL string as a relative URL (`/path/to/file`), but your code expects an absolute URL (`https://example.com/path/to/file`). This error originates from the `sui::url` module that provides a `Url` struct and functions to interact with URLs. Move does not validate the format of a URL itself.
+
+##### Solution 
+
+Specify the full URL path, including `http://` or `https://`. 
+
+**Resources**
+
+- [`sui::url`](/references/framework/sui_sui/url.md)
+
+- [`sui::url` source code](https://github.com/MystenLabs/sui/blob/c5f8b33b8090d75b1922f1497916b4010d9140d7/crates/sui-framework/sources/url.move).
+
+---
+
+#### `Failed to build Move modules: Failed to resolve dependencies for package`
+
+Indicates that the system cannot find one or more of the dependencies you list in your Move package's `Move.toml` file. The system cannot find a dependency if:
+
+- Your path is incorrect, contains a typo, or does not exist.
+
+- Your manifest file does not exist.
+
+- You have not initialized it properly. 
+
+##### Solution
+
+Check your `Move.toml` and verify each dependency you list has the correct path, and each path contains a valid `Move.toml` file. Ensure there are no typos and that you have initialized all dependencies. 
+
+**Resources**
+
+- [The Move Book: Manifests](https://move-book.com/concepts/manifest)
+
+---
+
+#### `Duplicate module found: 0x0000000000000000000000000000000000000000000000000000000000000002::groth16`
+
+Indicates that you have defined two or more modules with the same name or address in your project or its dependencies. You must give each module a unique name and address combination. 
+
+##### Solution 
+
+Verify that your source files do not use the same module name or address twice. Check your package's dependencies to see if there is a duplicate name defined. Check if you have a conflicting address assignment in the `Move.toml` file. 
+
+**Resources**
+
+- [The Move Book: Modules](https://move-book.com/move-basics/module)
+
+---
+
+#### `Internal error occurred while processing request: Error resolving Move location: Linkage not found for package`
+
+Indicates that your environment or tooling cannot find a Move package at the specified address. Possible causes include:
+
+- You have not published the package to the network.
+
+- Your address is incorrect. 
+
+##### Solution 
+
+Verify the package exists on the network at the specified address.
+
+**Resources**
+
+- [Error definition](https://github.com/MystenLabs/sui/blob/63cbf0dc26d0f2329d3e0a03639e31ded9f93561/crates/sui-graphql-e2e-tests/tests/stable/errors/clever_errors.snap)
+
+---
+
+#### `Failed to build Move modules: Compilation error.`
+
+This is a generic error that indicates that something in your Move code violates the compiler's rules and therefore the compiler cannot compile your package into bytecode. 
+
+##### Solution 
+
+Some common reasons for this error include:
+
+- Unbound variable or module: Make sure you declare all modules and variables you reference in your package and they are in scope.
+
+- Duplicate declaration, item, or annotation: Ensure all functions, structs, and module names are unique within the namespace.
+
+- Invalid declaration: Always specify an address for a module to properly declare it.
+
+- Unbound type or member: You must define and import all types and members correctly.
+
+- Edition not specified: You must define an edition field in all `Move.toml` files: `edition = "2024"`.
+
+**Resources**
+
+- [Move Concepts](/concepts/sui-move-concepts.mdx)
+
+- [The Move Book](https://move-book.com/)
+
+---
+
+#### `Failed to publish the Move module(s), reason: Modules must all have 0x0 as their addresses.`
+
+Indicates that a module in your package does not have the address `0x0`. In Move, you must set all modules to have their self-address as `0x0` in the source code. When you publish the package, Sui automatically assigns it the correct address. 
+
+
+##### Solution 
+
+Remove any explicit address blocks from your Move source files. Do not wrap your modules in `address ... { ... }` blocks.
+
+**Resources**
+
+- [Error definition](https://github.com/MystenLabs/sui/blob/63cbf0dc26d0f2329d3e0a03639e31ded9f93561/crates/sui-adapter-transactional-tests/tests/sui/publish_module_non_zero_address.snap)
+
+---
+
+#### `The signer only expects one signature, not two`
+
+Indicates that a function you are calling in your Move module expects 1 signer argument, yet you provided 2. On Sui, the number of signer arguments in your function's signature must match the number of signers you provide. 
+
+##### Solution 
+
+Verify if you define your function as `fun main(s: signer)`, then you must provide only 1 signer. 
+
+If you want to use 2 signers, define your function as `fun main(s1: signer, s2: signer) { ... }`.
+
+**Resources**
+
+- [Error definition](https://github.com/MystenLabs/sui/blob/63cbf0dc26d0f2329d3e0a03639e31ded9f93561/external-crates/move/crates/bytecode-verifier-transactional-tests/tests/script_signature/signer_double_signer.snap)
+
+---
+
+
+#### `destroy_zero`
+
+Indicates that you are trying to destroy a resource that has a non-zero value. 
+
+##### Solution 
+
+Ensure the resource's value is zero. For coins or tokens, split or burn the value until it is zero.
+
+**Resources**
+
+- Learn more about [resource safety](/guides/developer/getting-started/hello-world.mdx#resource-safety).
+
+---
+
+
+## System errors
+
+Errors in this section relate to the system.
+
+##### `"Segmentation fault (core dumped)"`
+
+Indicates a low-level memory crash. This is not a Move error, but rather an error with a portion of the toolchain such as the Move compiler or a dependency. 
+
+##### Solution 
+
+In some situations, old or corrupted build files can cause this crash. Clean your build:
+
+```
+$ sui move clean 
+```
+
+In other scenarios, outdated or mismatched tooling versions might cause this error. Upgrade your tooling and verify that versions match. 
+
+**Resources**
+
+- [Install Sui](/guides/developer/getting-started/sui-install.mdx)
+
+---
+
+#### `Failed to build Move modules: Permission denied (os error 13).`
+
+This error means that Move cannot access the file or directory due to insufficient permissions. 
+
+##### Solution 
+
+Ensure your user account has the necessary read, write, or execute permissions for the target file or directory.
+
+On Unix and macOS systems, you can edit permissions with the `chmod` command:
+```
+$ chmod -R u+rw /path/to/project/files
+```
+
+This gives you read and write permissions to all files and subdirectories at the specified file path.
+
+**Resources**
+
+- [chmod](https://linux.die.net/man/1/chmod)
+
+---
+
+#### `sui move build` command hangs 
+
+This behavior often occurs when you run commands on Windows 11 machines. 
+
+##### Solution 
+
+Try using [Windows Subsystem for Linux](https://learn.microsoft.com/en-us/windows/wsl/install) on your Windows machine instead of running commands in a Windows-native terminal. 
+
+**Resources**
+
+- [Install Sui](/guides/developer/getting-started/sui-install.mdx)
+
+- [Install Linux on Windows](https://learn.microsoft.com/en-us/windows/wsl/install)
+
+---
+
+
+#### `Fetch failed error (cause: Header Timeout)`
+
+Indicates the network does not receive a response within a certain time period. This error is not specific to Sui.
+
+##### Solution 
+
+Retry the request or increase the timeout duration if you control the client. 
+
+---
+
+## Transaction errors 
+
+Errors in this section relate to transactions.
+
+#### `Requires a connection to the network. Current active network is [testnet/mainnet/devnet] but failed to connect to it.`
+
+This error occurs when the network is down, unreachable due to an unstable internet connection, or there is a misconfiguration in your Sui client configuration.
+
+##### Solution
+
+First determine your client's configured environments:
+
+```
+$ sui client envs
+```
+
+You see something similar to:
+
+```
+localnet => http://0.0.0.0:9000
+testnet => https://fullnode.testnet.sui.io:443 
+devnet => https://fullnode.devnet.sui.io:443 (active)
+```
+
+Then, try switching to another network:
+
+```
+$ sui client switch --env testnet
+```
+
+If this does not resolve the error, check your internet connection or restart your CLI client. 
+
+**Resources**
+
+- [Configure a Sui Client](/guides/developer/getting-started/configure-sui-client.mdx)
+
+---
+
+#### `Unable to process transaction. Dry run failed, could not automatically determine a budget: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }`
+
+This error occurs when a Move transaction does not have a `drop` ability, or you do not explicitly drop it. The Sui runtime system enforces resource safety that throws this error when you leave values unused at the end of a transaction. 
+
+##### Solution 
+
+In Sui Move packages, you must either transfer every value that does not have the `drop` ability to another address, explicitly destroy it, or use it as input for another function to consume. 
+
+**Resources**
+
+- Learn more about [resource safety](/guides/developer/getting-started/hello-world.mdx#resource-safety).
+
+--- 
+
+#### `Error executing transaction: VMVerificationOrDeserializationError in command 0`
+
+This is a generic error that indicates that your Move code fails either during bytecode verification or during deserialization. 
+
+##### Solution 
+
+Some common reasons for this error include:
+
+- `ZERO_SIZED_STRUCT`: You define a struct that has no fields. Add at least one field to the struct.
+
+- `FIELD_MISSING_TYPE_ABILITY`: Your struct is missing a required ability such as `key` or `store`. Ensure all fields have the necessary abilities. 
+
+- `UNKNOWN_VERSION`: Your module or enum uses a version or feature the system does not recognize. Ensure you are using supported features and the correct Sui toolchain version. 
+
+- `CONSTRAINT_NOT_SATISFIED`: Your struct or type parameter does not satisfy the required abilities. Add the required abilities to the struct or type.
+
+- `WRITEREF_WITHOUT_DROP_ABILITY`: Your code tries to write a reference to a type that does not have a drop ability. Add the drop ability to the type.
+
+**Resources**
+
+- [Error: `ZERO_SIZED_STRUCT`](https://github.com/MystenLabs/sui/blob/63cbf0dc26d0f2329d3e0a03639e31ded9f93561/crates/sui-verifier-transactional-tests/tests/one_time_witness/no_field.snap)
+
+- [Error: `FIELD_MISSING_TYPE_ABILITY`](https://github.com/MystenLabs/sui/blob/63cbf0dc26d0f2329d3e0a03639e31ded9f93561/crates/sui-verifier-transactional-tests/tests/struct_with_key/key_struct_with_drop.snap)
+
+- [Error: `CONSTRAINT_NOT_SATISFIED`](https://github.com/MystenLabs/sui/blob/63cbf0dc26d0f2329d3e0a03639e31ded9f93561/crates/sui-verifier-transactional-tests/tests/private_generics/receive_without_key.snap)
+
+---
+
+#### `Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction. Other transactions locking these objects`
+
+Indicates that your transaction is trying to use one or more Sui objects that another transaction already uses. When you use an object in a transaction, the system locks that object to prevent multiple, possibly conflicting modifications to an object. For DeFi objects, this prevents double-spending.
+
+##### Solution 
+
+Wait for other transactions to complete, then retry your transaction. If transactions are stuck or fail, you might need to wait for the next epoch before you can retry the transaction.
+
+Make sure your code does not use multiple objects simultaneously.
+
+**Resources**
+
+- [Signing and Sending Transactions](/guides/developer/sui-101/sign-and-send-txn.mdx)
+
+---
+
+#### `Failed to sign transaction by a quorum of validators because one or more of its objects is equivocated until the next epoch.`
+
+Indicates that an object you are trying to use is in an equivocated state, meaning the network cannot reach consensus about its state due to conflicting transactions. The system subsequently freezes the object and you cannot use it until the next epoch.
+
+##### Solution 
+
+Wait for the next epoch.
+
+**Resources**
+
+- [Avoiding Equivocation](/guides/developer/sui-101/avoid-equivocation.mdx)
+
+---
+
+#### `Unable to process transaction. Unexpected status code: 403`
+
+Indicates the Sui network responds to an RPC or API request with `HTTP 403: Forbidden` status. This might happen if an RPC provider:
+
+- Requires authentication and you do not provide any.
+
+- Has restricted your region or IP address.
+
+- Has rate limited you by sending too many requests in a given time period.
+
+##### Solution 
+
+Check for required API authentication and verify you are using a valid authentication method. Review the documentation to ensure you are following all requirements. 
+
+Check for rate limiting and try sending requests over a long period of time. 
+
+---
+
+
+#### `Failed to submit transaction: ErrorObject { code: ServerError(-32002), message: "Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again`
+
+Indicates the Sui network rejects a transaction due to invalid transaction inputs. 
+
+##### Solution 
+
+Ensure all objects you reference in your transaction:
+
+- Exist
+
+- Use the current version
+
+- Are not referenced twice
+
+- Do not exceed a protocol limit of maximum objects. 
+
+Verify you have a sufficient gas balance and that your transaction signature is valid.
+
+---
+
+#### `Unable to process transaction. No valid gas coins found for the transaction.`
+
+Indicates you do not have enough tokens to pay the transaction gas fee. 
+
+##### Solution 
+
+Obtain tokens.
+
+**Resources**
+
+- [Get SUI from Faucet](/guides/developer/getting-started/get-coins.mdx)

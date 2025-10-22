@@ -28,7 +28,7 @@ use sui_protocol_config::{ExecutionTimeEstimateParams, PerObjectCongestionContro
 use sui_types::{
     base_types::ObjectID,
     committee::Committee,
-    error::SuiError,
+    error::SuiErrorKind,
     execution::{ExecutionTimeObservationKey, ExecutionTiming},
     messages_consensus::{AuthorityIndex, ConsensusTransaction, ExecutionTimeObservation},
     transaction::{
@@ -591,7 +591,7 @@ impl ExecutionTimeObserver {
             &epoch_store,
             Duration::from_secs(5),
         ) {
-            if !matches!(e, SuiError::EpochEnded(_)) {
+            if !matches!(e.as_inner(), SuiErrorKind::EpochEnded(_)) {
                 epoch_store
                     .metrics
                     .epoch_execution_time_observations_dropped

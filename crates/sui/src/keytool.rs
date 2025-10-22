@@ -1154,6 +1154,14 @@ impl KeyToolCommand {
                     "https://trace.fan",
                     &jwt_randomness,
                 )?;
+                let url_16 = get_oidc_url(
+                    OIDCProvider::EveFrontier,
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "583ebc6d-abd8-4057-8c77-78405628e42d",
+                    "https://www.sui.io",
+                    &jwt_randomness,
+                )?;
                 // This is only for CLI testing. If frontend apps will be built, no need to add anything here.
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
@@ -1171,6 +1179,7 @@ impl KeyToolCommand {
                 println!("Visit URL (AWS - Ambrus): {url_13}");
                 println!("Visit URL (Arden): {url_14}");
                 println!("Visit URL (AWS - Trace): {url_15}");
+                println!("Visit URL (EveFrontier): {url_16}");
 
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
 

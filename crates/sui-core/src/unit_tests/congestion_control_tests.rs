@@ -361,8 +361,7 @@ async fn test_congestion_control_execution_cancellation() {
     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     let (effects_2, execution_error) = authority_state_2
         .try_execute_for_test(&cert, execution_env)
-        .await
-        .unwrap();
+        .await;
 
     // Should result in the same cancellation.
     assert_eq!(

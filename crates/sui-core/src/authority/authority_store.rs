@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
-use sui_types::error::UserInputError;
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -929,10 +929,11 @@ impl AuthorityStore {
                     info!(prev_tx_digest = ?previous_tx_digest,
                           cur_tx_digest = ?tx_digest,
                           "Cannot acquire lock: conflicting transaction!");
-                    return Err(SuiError::ObjectLockConflict {
+                    return Err(SuiErrorKind::ObjectLockConflict {
                         obj_ref: *obj_ref,
                         pending_transaction: *previous_tx_digest,
-                    });
+                    }
+                    .into());
                 }
             }
 
@@ -1034,7 +1035,7 @@ impl AuthorityStore {
     }
 
     /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
-    /// Returns SuiError::ObjectLockAlreadyInitialized if the lock already exists and is locked to a transaction
+    /// Returns SuiErrorKind::ObjectLockAlreadyInitialized if the lock already exists and is locked to a transaction
     fn initialize_live_object_markers_impl(
         &self,
         write_batch: &mut DBBatch,
@@ -1075,9 +1076,10 @@ impl AuthorityStore {
                     ?existing_live_object_markers,
                     "Cannot initialize live_object_markers because some exist already"
                 );
-                return Err(SuiError::ObjectLockAlreadyInitialized {
+                return Err(SuiErrorKind::ObjectLockAlreadyInitialized {
                     refs: existing_live_object_markers,
-                });
+                }
+                .into());
             }
         }
 

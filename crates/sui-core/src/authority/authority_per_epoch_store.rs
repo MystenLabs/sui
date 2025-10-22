@@ -48,7 +48,7 @@ use sui_types::crypto::{
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
@@ -1210,7 +1210,7 @@ impl AuthorityPerEpochStore {
     pub fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
         match self.tables.load_full() {
             Some(tables) => Ok(tables),
-            None => Err(SuiError::EpochEnded(self.epoch())),
+            None => Err(SuiErrorKind::EpochEnded(self.epoch()).into()),
         }
     }
 
@@ -1281,7 +1281,11 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn accumulators_enabled(&self) -> bool {
-        self.protocol_config().enable_accumulators() && self.accumulator_root_exists()
+        if !self.protocol_config().enable_accumulators() {
+            return false;
+        }
+        assert!(self.accumulator_root_exists());
+        true
     }
 
     pub fn coin_registry_exists(&self) -> bool {
@@ -1707,9 +1711,9 @@ impl AuthorityPerEpochStore {
         )
     }
 
-    pub fn acquire_tx_guard(&self, cert: &VerifiedExecutableTransaction) -> SuiResult<CertTxGuard> {
+    pub fn acquire_tx_guard(&self, cert: &VerifiedExecutableTransaction) -> CertTxGuard {
         let digest = cert.digest();
-        Ok(CertTxGuard(self.acquire_tx_lock(digest)))
+        CertTxGuard(self.acquire_tx_lock(digest))
     }
 
     /// Acquire the lock for a tx without writing to the WAL.
@@ -2045,7 +2049,7 @@ impl AuthorityPerEpochStore {
             Ok(tables) => tables,
             // After Epoch ends, it is no longer necessary to remove pending transactions
             // because the table will not be used anymore and be deleted eventually.
-            Err(SuiError::EpochEnded(_)) => return Ok(()),
+            Err(e) if matches!(e.as_inner(), SuiErrorKind::EpochEnded(_)) => return Ok(()),
             Err(e) => return Err(e),
         };
         let mut batch = tables.signed_effects_digests.batch();
@@ -2451,8 +2455,8 @@ impl AuthorityPerEpochStore {
             && self.randomness_state_enabled()
             && cert.transaction_data().uses_randomness()
         {
-            // TODO(commit-handler-rewrite): propogate original deferred_from_round when re-deferring
-            // DONE(commit-handler-rewrite): propogate original deferred_from_round when re-deferring
+            // TODO(commit-handler-rewrite): propagate original deferred_from_round when re-deferring
+            // DONE(commit-handler-rewrite): propagate original deferred_from_round when re-deferring
             // (TODO and DONE are in same place because this code is shared between old and new commit handler)
             let deferred_from_round = previously_deferred_tx_digests
                 .get(cert.digest())
@@ -3710,7 +3714,7 @@ impl AuthorityPerEpochStore {
         }
 
         {
-            // TODO(commit-handler-rewrite): propogate deferral deletion to consensus output cache
+            // TODO(commit-handler-rewrite): propagate deferral deletion to consensus output cache
             let mut deferred_transactions =
                 self.consensus_output_cache.deferred_transactions.lock();
             for deleted_deferred_key in output.get_deleted_deferred_txn_keys() {
@@ -4687,6 +4691,15 @@ impl AuthorityPerEpochStore {
                     ) {
                         ConsensusCertificateResult::Deferred(deferral_key)
                     } else {
+                        antithesis_sdk::assert_sometimes!(
+                            transaction.transaction_data().uses_randomness(),
+                            "cancelled randomness-using transaction (old handler)"
+                        );
+                        antithesis_sdk::assert_sometimes!(
+                            !transaction.transaction_data().uses_randomness(),
+                            "cancelled non-randomness-using transaction (old handler)"
+                        );
+
                         // Cancel the transaction that has been deferred for too long.
                         debug!(
                             "Cancelling consensus transaction {:?} with deferral key {:?} due to congestion on objects {:?}",

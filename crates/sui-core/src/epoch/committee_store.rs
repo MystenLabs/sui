@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use typed_store::rocks::{default_db_options, DBMap, DBOptions, MetricConf};
 use typed_store::rocksdb::Options;
 
@@ -115,7 +115,7 @@ impl CommitteeStore {
         Ok(match epoch {
             Some(epoch) => self
                 .get_committee(&epoch)?
-                .ok_or(SuiError::MissingCommitteeAtEpoch(epoch))
+                .ok_or(SuiErrorKind::MissingCommitteeAtEpoch(epoch))
                 .map(|c| Committee::clone(&*c))?,
             None => self.get_latest_committee()?,
         })
