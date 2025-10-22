@@ -29,8 +29,8 @@ use sui_types::{
 /// Error type for JSON visitor operations
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error(transparent)]
-    Option(#[from] OV::Error),
+    #[error("Unexpected type")]
+    UnexpectedType,
 
     #[error(transparent)]
     Visitor(#[from] AV::Error),
@@ -60,14 +60,9 @@ pub enum DeserializationError {
 pub struct JsonVisitor;
 
 impl JsonVisitor {
-    pub fn new() -> Self {
-        Self
-    }
-
     /// Deserialize BCS bytes as JSON using the provided type layout.
     pub fn deserialize_value(bytes: &[u8], layout: &MoveTypeLayout) -> anyhow::Result<Value> {
-        let mut visitor = Self::new();
-        Ok(MoveValue::visit_deserialize(bytes, layout, &mut visitor)?)
+        Ok(MoveValue::visit_deserialize(bytes, layout, &mut Self)?)
     }
 
     /// Deserialize BCS bytes as a JSON object representing a struct.
@@ -75,8 +70,7 @@ impl JsonVisitor {
         bytes: &[u8],
         layout: &move_core_types::annotated_value::MoveStructLayout,
     ) -> anyhow::Result<Value> {
-        let mut visitor = Self::new();
-        Ok(MoveStruct::visit_deserialize(bytes, layout, &mut visitor)?)
+        Ok(MoveStruct::visit_deserialize(bytes, layout, &mut Self)?)
     }
 
     /// Deserialize a single event to JSON using type resolution.
@@ -120,12 +114,6 @@ impl JsonVisitor {
             .iter()
             .map(|event| Self::deserialize_event(event, resolver));
         try_join_all(futures).await
-    }
-}
-
-impl Default for JsonVisitor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -317,6 +305,12 @@ impl<'b, 'l> AV::Visitor<'b, 'l> for JsonVisitor {
     }
 }
 
+impl From<OV::Error> for Error {
+    fn from(OV::Error: OV::Error) -> Self {
+        Error::UnexpectedType
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,8 +368,7 @@ mod tests {
     /// For simple cases, you can pass a Rust value that serializes to the expected BCS format
     fn to_json<T: serde::Serialize>(layout: MoveTypeLayout, data: T) -> serde_json::Value {
         let bcs = bcs::to_bytes(&data).unwrap();
-        let mut visitor = JsonVisitor::new();
-        MoveValue::visit_deserialize(&bcs, &layout, &mut visitor).unwrap()
+        MoveValue::visit_deserialize(&bcs, &layout, &mut JsonVisitor).unwrap()
     }
 
     #[test]

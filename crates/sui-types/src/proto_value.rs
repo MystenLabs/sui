@@ -236,7 +236,7 @@ impl<'b, 'l> AV::Visitor<'b, 'l> for ProtoVisitor<'_> {
 
             // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
             let bytes = &driver.bytes()[lo..hi];
-            let s: &str = bcs::from_bytes(bytes).map_err(|_| Error::UnexpectedType?;
+            let s: &str = bcs::from_bytes(bytes).map_err(|_| Error::UnexpectedType)?;
             self.debit_string_value(s)?;
             Value::from(s)
         } else if layout == &UID::layout() || layout == &ID::layout() {
