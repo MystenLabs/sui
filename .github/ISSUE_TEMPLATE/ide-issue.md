@@ -1,5 +1,5 @@
 ---
-name: Move IDE issue
+name: Move IDE Issue
 about: Create a new report for issues encountered running Move IDE
 title: Move IDE issue report'
 labels: move-ide
@@ -8,12 +8,12 @@ assignees: 'awelc'
 
 ## IDE Setup
 
-Fill this with the description of your setup:
+Describe your setup:
 * OS: <specify OS version>
 * IDE/editor: <specify IDE/editor version>
 * Move analyzer version: <specify `move-analyzer` version>
 
-When using Move VSCode [extension](https://marketplace.visualstudio.com/items?itemName=mysten.move) provide, make sure you are using the most recent version of VSCode (or equivalent editor, such as Cursor) and of the Move VSCode extension. Additionally, provide the content of the **Move Client** tab accessible by selecting **View** -> **Output** from the main menu and opening the appropriate tab from the drop down menu. The output should look similar to the following:
+When using Move VS Code [extension](https://marketplace.visualstudio.com/items?itemName=mysten.move), make sure to use the most recent version of both VS Code (or equivalent editor, such as Cursor) and the Move VS Code extension. Additionally, provide the content of the **Move Client** tab. To access this data, select **View** -> **Output** from the main menu and open the appropriate tab from the drop down menu. The output should look similar to the following:
 
 ``` shell
 INFO [10/21/2025, 10:16:14 AM]: mysten.move version 1.0.33
@@ -35,7 +35,7 @@ move-analyzer --version
 
 ## Steps to Reproduce Issue
 
-Fill this in with the concrete steps needed to reproduce the issue. Do your best here as it significantly increases the changes of the problem being addressed, but if the issues is not reproducible, skip this step and proceed to the following ones. When providing code in the reproduction steps, use the smallest buildable example that demonstrates the issue, removing any extraneous details.
+Provide the concrete steps needed to reproduce the issue. The more detail you provide, the better chance the problem can be addressed. If the issue is not reproducible, skip this step and proceed to the following ones. When providing code in the reproduction steps, use the smallest buildable example that demonstrates the issue, removing any extraneous details.
 
 e.g.
 1. Clone repository <repository>
@@ -57,11 +57,11 @@ Specify what the actual unexpected outcome was.
 e.g.
 No on-hover information was displayed when hovering over <construct> on line <line> in column <column>
 
-## Editor logs
+## Editor Logs
 
 Upon encountering and issue, capture `move-analyzer` logs that may help diagnosing the issue. 
 
-When using Move VScode extension, provide the content of the **Move** tab accessible by selecting **View** -> **Output** from the main menu and opening the appropriate tab from the drop down menu. Beginning of the log should look similar to the following:
+When using the Move VS Code extension, provide the content of the **Move** tab. To access this data, select **View** -> **Output** from the main menu and open the appropriate tab from the drop down menu. Beginning of the log should look similar to the following:
 
 ``` shell
 using standard allocator
@@ -106,4 +106,4 @@ get_symbols load complete
 symbolication finished
 ```
 
-When using a different editor, capture error output of the `move-analyzer` binary. We do not provide specific instructions here as they are particular to a given editor setup.
+When using a different editor, capture error output of the `move-analyzer` binary. Consult your editor's documentation to discover how to access this data.
