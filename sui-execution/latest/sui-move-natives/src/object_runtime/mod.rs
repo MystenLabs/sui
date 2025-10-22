@@ -386,7 +386,7 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-    ) -> PartialVMResult<bool> {
+    ) -> PartialVMResult<CacheMetadata<bool>> {
         self.child_object_store.object_exists(parent, child)
     }
 
