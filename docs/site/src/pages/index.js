@@ -44,7 +44,7 @@ export default function Home() {
         <div className="flex flex-row flex-wrap justify-center gap-2 max-w-[1066px] mx-auto">
           <HomeCard title="Developers">
             <Link
-              className={styles.cardLink}
+              className={`${styles.cardLink} plausible-event-name=homepage+start+button`}
               to="./guides/developer/getting-started"
             >
               Getting started
