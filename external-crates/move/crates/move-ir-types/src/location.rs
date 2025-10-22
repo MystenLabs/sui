@@ -83,6 +83,11 @@ impl Loc {
     pub fn overlaps(&self, other: &Loc) -> bool {
         self.file_hash == other.file_hash && !(self.end < other.start || other.end < self.start)
     }
+
+    /// Indicates whether this location is valid (i.e., not the invalid location)
+    pub fn is_valid(&self) -> bool {
+        self.file_hash != FileHash::empty()
+    }
 }
 
 impl PartialOrd for Loc {

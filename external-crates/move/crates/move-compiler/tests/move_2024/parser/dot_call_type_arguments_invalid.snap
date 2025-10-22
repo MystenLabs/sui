@@ -23,8 +23,13 @@ error[E04003]: built-in operation not supported
 error[E03009]: unbound variable
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:18
    │
+11 │         let c = Cup { value: 0 };
+   │             - Similarly named defintion found here
 12 │         c.uncup <u64> ();
-   │                  ^^^ Unbound variable 'u64'
+   │                  ^^^
+   │                  │
+   │                  Unbound variable 'u64'
+   │                  Did you mean: 'c'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:21

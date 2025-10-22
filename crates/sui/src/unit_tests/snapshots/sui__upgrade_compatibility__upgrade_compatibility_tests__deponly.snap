@@ -3,19 +3,19 @@ source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility
 expression: normalize_path(err.to_string())
 ---
 error[Compatibility E01010]: new declaration
-  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:18
+  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:8
   │
 4 │ module upgrades::upgrades {
-  │                  ^^^^^^^^ New unexpected enum 'NewEnum'.
+  │        ^^^^^^^^^^^^^^^^^^ New unexpected enum 'NewEnum'.
   │
   = Enums cannot be added during a 'dependency only' upgrade.
   = Remove the enum 'NewEnum' from its module.
 
 error[Compatibility E01010]: new declaration
-  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:18
+  ┌─ /fixtures/upgrade_errors/deponly_errors_v2/sources/UpgradeErrors.move:4:8
   │
 4 │ module upgrades::upgrades {
-  │                  ^^^^^^^^ New unexpected function 'new_function'.
+  │        ^^^^^^^^^^^^^^^^^^ New unexpected function 'new_function'.
   │
   = Functions cannot be added during a 'dependency only' upgrade.
   = Remove the function 'new_function' from its module.

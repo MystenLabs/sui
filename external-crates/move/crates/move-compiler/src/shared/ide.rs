@@ -250,7 +250,7 @@ impl
             .filter(|(symbol, _)| symbol.to_string() != UNIT_TEST_POISON_INJECTION_NAME.to_string())
         {
             match entry {
-                MemberEntry::Member(mident, name) => {
+                MemberEntry::Member(mident, name, _) => {
                     members
                         .entry((*mident, name.value))
                         .or_default()

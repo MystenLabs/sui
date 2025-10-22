@@ -657,6 +657,10 @@ impl ModuleIdent_ {
         };
         self_address.as_ref() == address.as_ref() && &self.module == module.as_ref()
     }
+
+    pub fn module_name(&self) -> &str {
+        self.module.0.value.as_str()
+    }
 }
 
 impl AbilitySet {

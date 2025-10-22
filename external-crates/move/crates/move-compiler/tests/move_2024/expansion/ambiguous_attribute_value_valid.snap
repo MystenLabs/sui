@@ -5,4 +5,14 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/ambiguous_attribute_value_valid.move:14:18
+   │
+ 3 │     use a::m;
+   │            - Similarly named defintion found here
+   ·
+14 │     #[ext(attr = x)]
+   │                  ^
+   │                  │
+   │                  Could not resolve the name 'x'
+   │                  Did you mean: 'm'

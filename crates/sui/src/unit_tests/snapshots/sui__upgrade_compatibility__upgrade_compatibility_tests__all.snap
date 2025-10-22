@@ -3,19 +3,19 @@ source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility
 expression: normalize_path(err.to_string())
 ---
 error[Compatibility E01001]: missing public declaration
-  ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:6:18
+  ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:6:8
   │
 6 │ module upgrades::upgrades {
-  │                  ^^^^^^^^ enum 'EnumToBeRemoved' is missing
+  │        ^^^^^^^^^^^^^^^^^^ enum 'EnumToBeRemoved' is missing
   │
   = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Add missing enum 'EnumToBeRemoved' back to the module 'upgrades'.
 
 error[Compatibility E01001]: missing public declaration
-  ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:6:18
+  ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:6:8
   │
 6 │ module upgrades::upgrades {
-  │                  ^^^^^^^^ struct 'StructToBeRemoved' is missing
+  │        ^^^^^^^^^^^^^^^^^^ struct 'StructToBeRemoved' is missing
   │
   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Add missing struct 'StructToBeRemoved' back to the module 'upgrades'.

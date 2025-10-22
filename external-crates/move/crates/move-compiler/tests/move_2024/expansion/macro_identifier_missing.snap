@@ -15,6 +15,14 @@ error[E02010]: invalid name
   │
   = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.
 
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:22
+  │
+2 │     macro fun foo<T>(x: u64, f: |u64|) {
+  │                      ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E02010]: invalid name
   ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:22
   │
@@ -24,6 +32,14 @@ error[E02010]: invalid name
   │     Declared 'macro' here
   │
   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:30
+  │
+2 │     macro fun foo<T>(x: u64, f: |u64|) {
+  │                              ^ Unused parameter 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E02010]: invalid name
   ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:30
@@ -35,10 +51,13 @@ error[E02010]: invalid name
   │
   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
 
-error[E04029]: invalid function call
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/expansion/macro_identifier_missing.move:3:9
   │
+2 │     macro fun foo<T>(x: u64, f: |u64|) {
+  │               --- Similarly named defintion found here
 3 │         f(x)
-  │         ^ Unexpected invocation of parameter or local 'f'. Non-syntax variables cannot be invoked as functions
-  │
-  = Only macro syntax variables, e.g. '$f', may be invoked as functions.
+  │         ^
+  │         │
+  │         Could not resolve the name 'f'
+  │         Did you mean: 'foo'

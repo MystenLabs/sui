@@ -18,7 +18,7 @@ public struct Option<Element> has copy, drop, store {
 -- test 1 -------------------
 use line: 8, use_ndx: 2
 Use: 'option', start: 26, end: 32
-Def: 'option', line: 4, def char: 12
+Def: 'std', line: 4, def char: 7
 TypeDef: no info
 On Hover:
 module option

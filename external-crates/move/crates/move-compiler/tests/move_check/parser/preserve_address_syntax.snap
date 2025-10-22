@@ -9,7 +9,10 @@ error[E03002]: unbound module
   ┌─ tests/move_check/parser/preserve_address_syntax.move:5:9
   │
 5 │         0x00042::M::foo();
-  │         ^^^^^^^^^^ Unbound module '0x42::M'
+  │         ^^^^^^^^^^
+  │         │
+  │         Unbound module '0x42::M'
+  │         Did you mean: '0x42::m'
 
 error[E03002]: unbound module
   ┌─ tests/move_check/parser/preserve_address_syntax.move:6:9

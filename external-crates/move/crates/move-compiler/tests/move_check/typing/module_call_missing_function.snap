@@ -8,8 +8,14 @@ info:
 error[E03003]: unbound module member
    ┌─ tests/move_check/typing/module_call_missing_function.move:13:9
    │
+10 │     fun foo(): u64 { 0 }
+   │         --- Similarly named defintion found here
+   ·
 13 │         Self::fooo();
-   │         ^^^^^^^^^^ Unbound function 'fooo' in current scope
+   │         ^^^^^^^^^^
+   │         │
+   │         Unbound function 'fooo' in current scope
+   │         Did you mean: 'foo'
 
 error[E03005]: unbound unscoped name
    ┌─ tests/move_check/typing/module_call_missing_function.move:14:9

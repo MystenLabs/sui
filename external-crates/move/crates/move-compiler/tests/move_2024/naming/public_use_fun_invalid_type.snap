@@ -30,7 +30,7 @@ error[E02017]: invalid 'use fun' declaration
    ┌─ tests/move_2024/naming/public_use_fun_invalid_type.move:29:5
    │
  2 │ module std::utilities {
-   │             --------- Type defined in another module here
+   │        -------------- Type defined in another module here
    ·
 29 │     public use fun std::utilities::u64_ex as u64.ex;
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

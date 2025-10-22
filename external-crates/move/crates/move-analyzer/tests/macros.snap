@@ -183,7 +183,7 @@ $T
 -- test 16 -------------------
 use line: 33, use_ndx: 0
 Use: 'macros', start: 16, end: 22
-Def: 'macros', line: 0, def char: 15
+Def: 'Macros', line: 0, def char: 7
 TypeDef: no info
 On Hover:
 module Macros::macros
@@ -314,7 +314,7 @@ ERROR: No use_line 22 in mod_symbols UseDefMap(
                 col_end: 23,
                 def_loc: Loc {
                     file_hash: "6c258978e645dea8faaf2f91e67b30b04a67c3d338d7ad7edb927a49a7291cae",
-                    start: 15,
+                    start: 7,
                     end: 23,
                 },
                 type_def_loc: None,
@@ -362,7 +362,7 @@ ERROR: No use_line 22 in mod_symbols UseDefMap(
                 col_end: 22,
                 def_loc: Loc {
                     file_hash: "6148171bd349df74f3ece996d9b5e08173125155fdeed36451c03a5a33616168",
-                    start: 15,
+                    start: 7,
                     end: 21,
                 },
                 type_def_loc: None,

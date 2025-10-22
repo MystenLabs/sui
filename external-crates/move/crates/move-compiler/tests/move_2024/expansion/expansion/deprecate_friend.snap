@@ -21,4 +21,7 @@ error[E03002]: unbound module
   ┌─ tests/move_2024/expansion/expansion/deprecate_friend.move:3:12
   │
 3 │     friend a::x;
-  │            ^^^^ Unbound module 'a::x'
+  │            ^^^^
+  │            │
+  │            Unbound module 'a::x'
+  │            Did you mean: 'a::n'
