@@ -5,7 +5,7 @@ use crate::{
     balance::Balance,
     base_types::{move_ascii_str_layout, move_utf8_str_layout, url_layout, RESOLVED_STD_OPTION},
     id::{ID, UID},
-    object::option_visitor::OptionVisitor,
+    object::option_visitor as OV,
 };
 use move_core_types::{
     account_address::AccountAddress, annotated_value as A, annotated_visitor as AV,
@@ -41,14 +41,14 @@ pub enum Error {
     #[error(transparent)]
     Visitor(#[from] AV::Error),
 
-    #[error(transparent)]
-    Option(#[from] crate::object::option_visitor::Error),
-
     #[error("Deserialized value too large")]
     OutOfBudget,
 
     #[error("Exceeded maximum depth")]
     TooNested,
+
+    #[error("Unexpected type")]
+    UnexpectedType,
 }
 
 impl ProtoVisitorBuilder {
@@ -236,7 +236,7 @@ impl<'b, 'l> AV::Visitor<'b, 'l> for ProtoVisitor<'_> {
 
             // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
             let bytes = &driver.bytes()[lo..hi];
-            let s: &str = bcs::from_bytes(bytes).map_err(|_| AV::Error::UnexpectedEof)?;
+            let s: &str = bcs::from_bytes(bytes).map_err(|_| Error::UnexpectedType?;
             self.debit_string_value(s)?;
             Value::from(s)
         } else if layout == &UID::layout() || layout == &ID::layout() {
@@ -249,7 +249,7 @@ impl<'b, 'l> AV::Visitor<'b, 'l> for ProtoVisitor<'_> {
             // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
             let bytes = &driver.bytes()[lo..hi];
             let id = AccountAddress::from_bytes(bytes)
-                .map_err(|_| AV::Error::UnexpectedEof)?
+                .map_err(|_| Error::UnexpectedType)?
                 .to_canonical_string(true);
 
             self.debit_string_value(&id)?;
@@ -257,7 +257,7 @@ impl<'b, 'l> AV::Visitor<'b, 'l> for ProtoVisitor<'_> {
         } else if (&ty.address, ty.module.as_ref(), ty.name.as_ref()) == RESOLVED_STD_OPTION {
             // 0x1::option::Option
             self.debit_value()?;
-            match OptionVisitor(self).visit_struct(driver)? {
+            match OV::OptionVisitor(self).visit_struct(driver)? {
                 Some(value) => value,
                 None => Kind::NullValue(0).into(),
             }
@@ -271,7 +271,7 @@ impl<'b, 'l> AV::Visitor<'b, 'l> for ProtoVisitor<'_> {
             // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
             let bytes = &driver.bytes()[lo..hi];
             let balance = bcs::from_bytes::<u64>(bytes)
-                .map_err(|_| AV::Error::UnexpectedEof)?
+                .map_err(|_| Error::UnexpectedType)?
                 .to_string();
             self.debit_string_value(&balance)?;
             Value::from(balance)
@@ -318,6 +318,12 @@ impl<'b, 'l> AV::Visitor<'b, 'l> for ProtoVisitor<'_> {
         }
 
         Ok(Value::from(Kind::StructValue(map)))
+    }
+}
+
+impl From<OV::Error> for Error {
+    fn from(OV::Error: OV::Error) -> Self {
+        Error::UnexpectedType
     }
 }
 
