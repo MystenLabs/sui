@@ -5,15 +5,15 @@ description: New features are becoming available to Move in 2024. These features
 
 New features for Move are becoming available in 2024, a part of the aptly titled "Move 2024" edition. Many of these changes are enhancements to the source language, affecting the compiler without requiring any changes to the binary representation published on chain.
 
-The primary goal of these changes is to make Move easier to write, and hopefully easier to read. The relatively few breaking changes introduced to the source language are to better position Move to handle future advancements.
+The primary goal of these changes is to make Move easier to write and hopefully easier to read. The relatively few breaking changes introduced to the source language are to better position Move to handle future advancements.
 
-Existing code will continue to compile, even with the addition of these new features. And because these features are opt-in, you can write your packages with the new features, even if your dependencies do not. Opting to take advantage of the new features in your current modules, however, does introduce some breaking changes.
+Existing code continues to compile, even with the addition of these new features. And because these features are opt-in, you can write your packages with the new features, even if your dependencies do not. Opting to take advantage of the new features in your current modules, however, does introduce some breaking changes.
 
 This document highlights some new features to try out and shows how to migrate your existing modules to use Move 2024.
 
 :::info
 
-Please, provide any feedback or report any issues you encounter via [GitHub](https://github.com/MystenLabs/sui/issues/new/choose), [Discord](https://discord.gg/Sui), or [Telegram](https://t.me/SuiTokenNetwork).
+Provide any feedback or report any issues you encounter through [GitHub](https://github.com/MystenLabs/sui/issues/new/choose), [Discord](https://discord.gg/Sui), or [Telegram](https://t.me/SuiTokenNetwork).
 
 :::
 
@@ -21,8 +21,8 @@ Please, provide any feedback or report any issues you encounter via [GitHub](htt
 
 To migrate a project to Move 2024 Beta:
 
-1. Delete your existing `Move.lock` file (if one exists) to make sure you're using the newest `sui-framework` version.
-1. Perform one of the following:
+1. Delete your existing `Move.lock` file (if it exists) to make sure you're using the newest `sui-framework` version.
+1. Perform 1 of the following:
    - Run `sui move migrate` in the root of your Move project. See [Automatic migration](#automatic-migration).
    - Alternatively, update your `Move.toml` file's `[package]` entry to include `edition = "2024.beta"`. If you do this, you might receive a number of new errors related to the [breaking changes](#breaking-changes).
 
@@ -34,13 +34,13 @@ After this is done, your console displays a diff of the changes the script inten
 
 ### Update IDE support
 
-Use the new [VSCode Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move) to get support for Move 2024 features. The new extension has a number of improvements over the original [move-analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), but if you would like to keep using the original one, be sure to rebuild and reinstall the `move-analyzer` binary to get 2024 support:
+Use the new [VSCode Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move) to get support for Move 2024 features. The new extension has a number of improvements over the original [move-analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), but if you would like to keep using the original, be sure to rebuild and reinstall the `move-analyzer` binary to get 2024 support:
 
 ```sh
 $ cargo install --git https://github.com/MystenLabs/sui.git move-analyzer
 ```
 
-See the getting started guide on [Move IDEs and plugins](../../../references/contribute/sui-environment.mdx#move-ides-and-plugins) for more information.
+See the getting started guide on [Move IDEs and plugins](/references/contribute/sui-environment.mdx#move-ides-and-plugins) for more information.
 
 ## New features
 
@@ -84,7 +84,7 @@ resolves to
 
 ### `public(package)` {#public-package}
 
-`friend` declarations, and the associated `public(friend)` visibility modifiers, are deprecated. In their place is the `public(package)` visibility modifier, which allows calling functions only within the same package where they are defined.
+`friend` declarations and the associated `public(friend)` visibility modifiers are deprecated. In their place is the `public(package)` visibility modifier, which allows calling functions only within the same package where they are defined.
 
 ### Positional fields
 
@@ -124,7 +124,7 @@ use sui::tx_context::{Self, TxContext};
 
 ### Automatic referencing in equality
 
-Equality operations, `==` and `!=`, now automatically borrow if one side is a reference and the other is not. For example,
+Equality operations, `==` and `!=`, now automatically borrow if 1 side is a reference and the other is not. For example,
 
 ```move
 fun check(x: u64, r: &u64): bool {
@@ -297,7 +297,7 @@ use sui_system::sui_system;
 #[expected_failure(abort_code = sui_system::validator_set::EInvalidCap)]
 ```
 
-Legacy Move would always treat a three-part name as an address(`sui_system`), module(`validator_set`), and module member (`EInvalidCap`). Move 2024 respects scope for `use`, so `sui_system` in the attribute resolves to the module, producing a name resolution error overall.
+Legacy Move always treats a 3-part name as an address(`sui_system`), module(`validator_set`), and module member (`EInvalidCap`). Move 2024 respects scope for `use`, so `sui_system` in the attribute resolves to the module, producing a name resolution error overall.
 
 To avoid cases where this is the intended behavior, Move 2024 introduces a prefix operation for global qualification. To use, you can rewrite this annotation as:
 
@@ -316,11 +316,5 @@ The beta release of Move 2024 comes with some powerful new features in addition 
 
 ### `alpha` and `beta` guidance
 
-- `beta` (specified via `edition = "2024.beta"`) is the recommended edition. It includes all the new
-  features mentioned above and all breaking changes. While there is the risk of breaking changes or
-  bugs in `beta`, you should feel comfortable using it in your projects. As new features are added
-  and tested, they will be included in the `beta` edition. The `beta` edition will end after _all_
-  features for the year have been added and finalized.
-- `alpha` (specified via `edition = "2024.alpha"`) will get new features and changes as they are
-  developed. Breaking changes to features in `alpha` should be expected. As such, take caution when
-  using`alpha` in your projects.
+- `beta` (specified through `edition = "2024.beta"`) is the recommended edition. It includes all the new features mentioned above and all breaking changes. While there is the risk of breaking changes or bugs in `beta`, you should feel comfortable using it in your projects. As new features are added and tested, they are included in the `beta` edition. The `beta` edition ends after all features for the year have been added and finalized.
+- `alpha` (specified through `edition = "2024.alpha"`) gets new features and changes as they are developed. Breaking changes to features in `alpha` should be expected. As such, take caution when using `alpha` in your projects.
