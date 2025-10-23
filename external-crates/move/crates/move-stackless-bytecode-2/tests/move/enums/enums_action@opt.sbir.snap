@@ -13,14 +13,14 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_6:
         reg_3 : &0x42::action::Action = Move(lcl_1)
-        UnpackVariant<Stop>(reg_3 : &0x42::action::Action)
+        UnpackVariantImmRef<Stop>(reg_3 : &0x42::action::Action)
         reg_4 : 0x42::action::Action = Move(lcl_2)
         UnpackVariant<Stop>(reg_4 : 0x42::action::Action)
         Jump(LBL_26)
 
       Label LBL_11:
         reg_5 : &0x42::action::Action = Move(lcl_1)
-        reg_6 : &u64, reg_7 : &u64 = UnpackVariant<MoveTo>(reg_5 : &0x42::action::Action)
+        reg_6 : &u64, reg_7 : &u64 = UnpackVariantImmRef<MoveTo>(reg_5 : &0x42::action::Action)
         Drop(reg_7 : &u64)
         Drop(reg_6 : &u64)
         reg_8 : 0x42::action::Action = Move(lcl_2)
@@ -31,7 +31,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_20:
         reg_11 : &0x42::action::Action = Move(lcl_1)
-        reg_12 : &u64 = UnpackVariant<ChangeSpeed>(reg_11 : &0x42::action::Action)
+        reg_12 : &u64 = UnpackVariantImmRef<ChangeSpeed>(reg_11 : &0x42::action::Action)
         Drop(reg_12 : &u64)
         reg_13 : 0x42::action::Action = Move(lcl_2)
         reg_14 : u64 = UnpackVariant<ChangeSpeed>(reg_13 : 0x42::action::Action)
@@ -55,24 +55,24 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
         reg_4 : &mut 0x42::action::Action = Move(lcl_3)
         Drop(reg_4 : &mut 0x42::action::Action)
         reg_5 : &0x42::action::Action = Move(lcl_2)
-        UnpackVariant<Stop>(reg_5 : &0x42::action::Action)
+        UnpackVariantImmRef<Stop>(reg_5 : &0x42::action::Action)
         Abort(Immediate(0u64))
 
       Label LBL_13:
         reg_7 : &mut 0x42::action::Action = Move(lcl_3)
         Drop(reg_7 : &mut 0x42::action::Action)
         reg_8 : &0x42::action::Action = Move(lcl_2)
-        reg_9 : &u64, reg_10 : &u64 = UnpackVariant<MoveTo>(reg_8 : &0x42::action::Action)
+        reg_9 : &u64, reg_10 : &u64 = UnpackVariantImmRef<MoveTo>(reg_8 : &0x42::action::Action)
         Drop(reg_10 : &u64)
         Drop(reg_9 : &u64)
         Abort(Immediate(0u64))
 
       Label LBL_21:
         reg_12 : &0x42::action::Action = Move(lcl_2)
-        reg_13 : &u64 = UnpackVariant<ChangeSpeed>(reg_12 : &0x42::action::Action)
+        reg_13 : &u64 = UnpackVariantImmRef<ChangeSpeed>(reg_12 : &0x42::action::Action)
         Drop(reg_13 : &u64)
         reg_14 : &mut 0x42::action::Action = Move(lcl_3)
-        reg_15 : &mut u64 = UnpackVariant<ChangeSpeed>(reg_14 : &mut 0x42::action::Action)
+        reg_15 : &mut u64 = UnpackVariantMutRef<ChangeSpeed>(reg_14 : &mut 0x42::action::Action)
         lcl_4 = reg_15 : &mut u64
         reg_16 : u64 = Move(lcl_1)
         reg_17 : &mut u64 = Move(lcl_4)
@@ -93,16 +93,16 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
         reg_3 : &0x42::action::Action = Move(lcl_3)
         Drop(reg_3 : &0x42::action::Action)
         reg_4 : &0x42::action::Action = Move(lcl_2)
-        UnpackVariant<Stop>(reg_4 : &0x42::action::Action)
+        UnpackVariantImmRef<Stop>(reg_4 : &0x42::action::Action)
         Abort(Immediate(0u64))
 
       Label LBL_12:
         reg_6 : &0x42::action::Action = Move(lcl_2)
-        reg_7 : &u64, reg_8 : &u64 = UnpackVariant<MoveTo>(reg_6 : &0x42::action::Action)
+        reg_7 : &u64, reg_8 : &u64 = UnpackVariantImmRef<MoveTo>(reg_6 : &0x42::action::Action)
         Drop(reg_8 : &u64)
         Drop(reg_7 : &u64)
         reg_9 : &0x42::action::Action = Move(lcl_3)
-        reg_10 : &u64, reg_11 : &u64 = UnpackVariant<MoveTo>(reg_9 : &0x42::action::Action)
+        reg_10 : &u64, reg_11 : &u64 = UnpackVariantImmRef<MoveTo>(reg_9 : &0x42::action::Action)
         Drop(reg_11 : &u64)
         reg_12 : u64 = ReadRef(reg_10 : &u64)
         lcl_1 = reg_12 : u64
@@ -110,10 +110,10 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_22:
         reg_13 : &0x42::action::Action = Move(lcl_2)
-        reg_14 : &u64 = UnpackVariant<ChangeSpeed>(reg_13 : &0x42::action::Action)
+        reg_14 : &u64 = UnpackVariantImmRef<ChangeSpeed>(reg_13 : &0x42::action::Action)
         Drop(reg_14 : &u64)
         reg_15 : &0x42::action::Action = Move(lcl_3)
-        reg_16 : &u64 = UnpackVariant<ChangeSpeed>(reg_15 : &0x42::action::Action)
+        reg_16 : &u64 = UnpackVariantImmRef<ChangeSpeed>(reg_15 : &0x42::action::Action)
         reg_17 : u64 = ReadRef(reg_16 : &u64)
         lcl_1 = reg_17 : u64
 
