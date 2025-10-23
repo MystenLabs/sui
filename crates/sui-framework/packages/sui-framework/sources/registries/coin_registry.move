@@ -30,9 +30,9 @@ const ECurrencyAlreadyExists: vector<u8> = b"Currency for this coin type already
 #[error(code = 3)]
 const EDenyListStateAlreadySet: vector<u8> =
     b"Cannot set the deny list state as it has already been set.";
-#[error(code = 4)]
-const EMetadataCapNotClaimed: vector<u8> =
-    b"Cannot delete legacy metadata before claiming the `MetadataCap`.";
+// #[error(code = 4)]
+// const EMetadataCapNotClaimed: vector<u8> =
+//     b"Cannot delete legacy metadata before claiming the `MetadataCap`.";
 /// Attempt to update `Currency` with legacy metadata after the `MetadataCap` has
 /// been claimed. Updates are only allowed if the `MetadataCap` has not yet been
 /// claimed or deleted.
@@ -457,14 +457,9 @@ public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &C
         legacy.get_icon_url().map!(|url| url.inner_url().to_string()).destroy_or!(b"".to_string());
 }
 
-/// Delete the legacy `CoinMetadata` object if the metadata cap for the new registry
-/// has already been claimed.
-///
-/// This function is only callable after there's "proof" that the author of the coin
-/// can manage the metadata using the registry system (so having a metadata cap claimed).
-public fun delete_migrated_legacy_metadata<T>(currency: &mut Currency<T>, legacy: CoinMetadata<T>) {
-    assert!(currency.is_metadata_cap_claimed(), EMetadataCapNotClaimed);
-    legacy.destroy_metadata();
+#[deprecated(note = b"Method disabled")]
+public fun delete_migrated_legacy_metadata<T>(_: &mut Currency<T>, _: CoinMetadata<T>) {
+    abort
 }
 
 /// Allow migrating the regulated state by access to `RegulatedCoinMetadata` frozen object.

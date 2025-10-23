@@ -571,16 +571,6 @@ Attempt to set the deny list state permissionlessly while it has already been se
 
 
 
-<a name="sui_coin_registry_EMetadataCapNotClaimed"></a>
-
-
-
-<pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EMetadataCapNotClaimed">EMetadataCapNotClaimed</a>: vector&lt;u8&gt; = b"Cannot delete legacy metadata before claiming the `<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>`.";
-</code></pre>
-
-
-
 <a name="sui_coin_registry_ECannotUpdateManagedMetadata"></a>
 
 Attempt to update <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> with legacy metadata after the <code><a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a></code> has
@@ -1325,14 +1315,9 @@ the <code><a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">Metada
 
 ## Function `delete_migrated_legacy_metadata`
 
-Delete the legacy <code>CoinMetadata</code> object if the metadata cap for the new registry
-has already been claimed.
-
-This function is only callable after there's "proof" that the author of the coin
-can manage the metadata using the registry system (so having a metadata cap claimed).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_delete_migrated_legacy_metadata">delete_migrated_legacy_metadata</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, legacy: <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_delete_migrated_legacy_metadata">delete_migrated_legacy_metadata</a>&lt;T&gt;(_: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, _: <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -1341,9 +1326,8 @@ can manage the metadata using the registry system (so having a metadata cap clai
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_delete_migrated_legacy_metadata">delete_migrated_legacy_metadata</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;, legacy: CoinMetadata&lt;T&gt;) {
-    <b>assert</b>!(currency.<a href="../sui/coin_registry.md#sui_coin_registry_is_metadata_cap_claimed">is_metadata_cap_claimed</a>(), <a href="../sui/coin_registry.md#sui_coin_registry_EMetadataCapNotClaimed">EMetadataCapNotClaimed</a>);
-    legacy.destroy_metadata();
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_delete_migrated_legacy_metadata">delete_migrated_legacy_metadata</a>&lt;T&gt;(_: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;, _: CoinMetadata&lt;T&gt;) {
+    <b>abort</b>
 }
 </code></pre>
 
