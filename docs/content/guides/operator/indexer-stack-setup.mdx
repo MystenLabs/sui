@@ -1,10 +1,12 @@
 ---
-title: GraphQL and General-purpose Indexer
+title: GraphQL and General-Purpose Indexer
 description: Setup instructions for running the indexer, consistent store, and GraphQL in production.
 keywords: [ indexer, consistent store, graphql, setup, dex ]
 ---
 
 <ImportContent source="indexer-graphql.mdx" mode="snippet" />
+
+See [GraphQL and General-Purpose Indexer](/concepts/graphql-indexer.mdx) for more information on the stack.
 
 ## Indexer setup
 
@@ -397,3 +399,15 @@ $ sui-indexer-alt-graphql rpc \
 - **CPU:** 8 cores
 - **Memory:** 32GB
 
+## Related links
+
+<RelatedLink to="/concepts/graphql-indexer" />
+<RelatedLink to="/concepts/graphql-rpc" />
+<RelatedLink to="/concepts/custom-indexing-framework" />
+<RelatedLink to="/concepts/custom-indexer/pipeline-architecture" />
+<RelatedLink to="/concepts/archival-store" />
+<RelatedLink to="/guides/developer/advanced/custom-indexer" />
+<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt" label="Sui Indexer Alt" desc="The `sui-indexer-alt` crate in the Sui repo." />
+<RelatedLink href="https://github.com/MystenLabs/mvr/tree/main/crates/mvr-indexer" label="Move Registry" desc="The indexer that the Move Registry (MVR) implements." />
+<RelatedLink href="https://github.com/MystenLabs/deepbookv3/tree/main/crates/indexer" label="DeepBook Indexer" desc="The indexer that DeepBook implements." />
+<RelatedLink href="/references/sui-api/sui-graphql/beta/reference" label="GraphQL Beta schema" desc="Schema documentation for GraphQL Beta" />
