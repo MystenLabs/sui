@@ -82,7 +82,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 L::InputArg::Object(L::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutability: convert_mutability(mutability),
+                    mutability: object_mutability(mutability),
                     kind,
                 }),
                 L::InputType::Fixed(ty),
@@ -95,7 +95,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
     })
 }
 
-fn convert_mutability(mutability: SharedObjectMutability) -> L::ObjectMutability {
+fn object_mutability(mutability: SharedObjectMutability) -> L::ObjectMutability {
     match mutability {
         SharedObjectMutability::Mutable => L::ObjectMutability::Mutable,
         SharedObjectMutability::NonExclusiveWrite => L::ObjectMutability::NonExclusiveWrite,
