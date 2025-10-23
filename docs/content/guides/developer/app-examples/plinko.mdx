@@ -642,7 +642,7 @@ The sponsorship flow is split into two backend API endpoints that work with the 
 
 The complete flow works as follows:
 
-1. **Frontend constructs transaction**: The UI builds a Programmable Transaction Block (PTB) with the necessary Move calls (e.g., `plinko::start_game`) and serializes it to TransactionKind bytes.
+1. **Frontend constructs transaction**: The UI builds a programmable transaction block (PTB) with the necessary Move calls (such as, `plinko::start_game`) and serializes it to `TransactionKind` bytes.
 
 2. **Request sponsorship**: The unsigned transaction bytes are sent to `/sponsor`, which returns sponsored unsigned bytes.
 
