@@ -23,10 +23,10 @@ $ sui-indexer-alt indexer \
     --remote-store-url REMOTE_STORE_URL
 ```
 
-| CLI param          | Description                                                                                                        |
-|--------------------|--------------------------------------------------------------------------------------------------------------------|
-| `CONFIG_FILE`      | Path to indexer configuration file.  |
-| `DATABASE_URL`     | Postgres database connection string. |
+| CLI param          | Description                                                                                                         |
+|--------------------|---------------------------------------------------------------------------------------------------------------------|
+| `CONFIG_FILE`      | Path to indexer configuration file.                                                                                 |
+| `DATABASE_URL`     | Postgres database connection string.                                                                                |
 | `REMOTE_STORE_URL` | Location of the checkpoint data to be indexed.<br/>[Data sources](/concepts/custom-indexing-framework#data-sources) |
 
 Example:
@@ -199,24 +199,24 @@ $ sui-indexer-alt indexer \
 
 **Total:** TBD
 
-| Pipeline              | Table                 | Approximate size (recommended config) |
-|-----------------------|-----------------------|--------------------------------------------|
-| `cp_sequence_numbers`   | `cp_sequence_numbers`   | TBD                                        |
-| `ev_emit_mod`           | `ev_emit_mod`           | TBD                                        |
-| `ev_struct_inst`        | `ev_struct_inst`        | TBD                                        |
-| `obj_versions`          | `obj_versions`          | TBD                                        |
-| `kv_epoch_ends`         | `kv_epoch_ends`         | TBD                                        |
-| `kv_epoch_starts`       | `kv_epoch_starts`       | TBD                                        |
-| `kv_feature_flags`      | `kv_feature_flags`      | TBD                                        |
-| `kv_packages`           | `kv_packages`           | TBD                                        |
-| `kv_protocol_configs`   | `kv_protocol_configs`   | TBD                                        |
-| `sum_displays`          | `sum_displays`          | TBD                                        |
-| `tx_affected_addresses` | `tx_affected_addresses` | TBD                                        |
-| `tx_affected_objects`   | `tx_affected_objects`   | TBD                                        |
-| `tx_balance_changes`    | `tx_balance_changes`    | TBD                                        |
-| `tx_digests`            | `tx_digests`            | TBD                                        |
-| `tx_calls`              | `tx_calls`              | TBD                                        |
-| `tx_kinds`              | `tx_kinds`              | TBD                                        |
+| Pipeline                | Table                   | Approximate size (recommended config) |
+|-------------------------|-------------------------|---------------------------------------|
+| `cp_sequence_numbers`   | `cp_sequence_numbers`   | TBD                                   |
+| `ev_emit_mod`           | `ev_emit_mod`           | TBD                                   |
+| `ev_struct_inst`        | `ev_struct_inst`        | TBD                                   |
+| `obj_versions`          | `obj_versions`          | TBD                                   |
+| `kv_epoch_ends`         | `kv_epoch_ends`         | TBD                                   |
+| `kv_epoch_starts`       | `kv_epoch_starts`       | TBD                                   |
+| `kv_feature_flags`      | `kv_feature_flags`      | TBD                                   |
+| `kv_packages`           | `kv_packages`           | TBD                                   |
+| `kv_protocol_configs`   | `kv_protocol_configs`   | TBD                                   |
+| `sum_displays`          | `sum_displays`          | TBD                                   |
+| `tx_affected_addresses` | `tx_affected_addresses` | TBD                                   |
+| `tx_affected_objects`   | `tx_affected_objects`   | TBD                                   |
+| `tx_balance_changes`    | `tx_balance_changes`    | TBD                                   |
+| `tx_digests`            | `tx_digests`            | TBD                                   |
+| `tx_calls`              | `tx_calls`              | TBD                                   |
+| `tx_kinds`              | `tx_kinds`              | TBD                                   |
 
 ## Consistent store setup
 
@@ -229,18 +229,18 @@ Restores one or more pipelines from checkpoint data in a GCS bucket.
 ```sh
 $ sui-indexer-alt-consistent-store restore \
     --database-path DATABASE_PATH \
-    --gcs GCS \
+    --http HTTP_ENDPOINT \
     --object-file-concurrency OBJECT_FILE_CONCURRENCY \
     --pipeline PIPELINE_NAME
     --remote-store-url REMOTE_STORE_URL \
 ```
 
-| CLI parameter                | Description                                                                                                        |
-|---------------------------|--------------------------------------------------------------------------------------------------------------------|
+| CLI parameter             | Description                                                                                                         |
+|---------------------------|---------------------------------------------------------------------------------------------------------------------|
 | `DATABASE_PATH`           | Path to RocksDB database.                                                                                           |
-| `GCS`                     | TBD                                                                                                                |
+| `HTTP_ENDPOINT`           | Path to formal snapshot API.                                                                                        |
 | `OBJECT_FILE_CONCURRENCY` | Path to indexer configuration file.                                                                                 |
-| `PIPELINE_NAME`           | Name of pipeline to restore. Can be set multiple times; once per pipeline.                                       |
+| `PIPELINE_NAME`           | Name of pipeline to restore. Can be set multiple times; once per pipeline.                                          |
 | `REMOTE_STORE_URL`        | Location of the checkpoint data to be indexed.<br/>[Data sources](/concepts/custom-indexing-framework#data-sources) |
 
 
@@ -249,7 +249,7 @@ Example:
 ```sh
 $ sui-indexer-alt-consistent-store restore \
     --database-path /path/to/rocksdb \
-    --gcs mysten-testnet-formal \
+    --http https://formal-snapshot.mainnet.sui.io \
     --object-file-concurrency 5 \
     --pipeline balances \
     --pipeline object_by_owner \
@@ -268,8 +268,8 @@ $ sui-indexer-alt-consistent-store run \
     --remote-store-url REMOTE_STORE_URL \
 ```
 
-| CLI param          | Description                                                                                                        |
-|--------------------|--------------------------------------------------------------------------------------------------------------------|
+| CLI param          | Description                                                                                                         |
+|--------------------|---------------------------------------------------------------------------------------------------------------------|
 | `CONFIG_FILE`      | Path to consistent store configuration file.                                                                        |
 | `DATABASE_PATH`    | Path to RocksDB database.                                                                                           |
 | `REMOTE_STORE_URL` | Location of the checkpoint data to be indexed.<br/>[Data sources](/concepts/custom-indexing-framework#data-sources) |
@@ -328,10 +328,10 @@ $ sui-indexer-alt-consistent-store run \
 **total:** TBD
 
 | Pipeline        | Table           | Approximate size (recommended config) |
-|-----------------|-----------------|--------------------------------------------|
-| balances        | balances        | TBD                                        |
-| object-by-owner | object-by-owner | TBD                                        |
-| object-by-type  | object-by-type  | TBD                                        |
+|-----------------|-----------------|---------------------------------------|
+| balances        | balances        | TBD                                   |
+| object-by-owner | object-by-owner | TBD                                   |
+| object-by-type  | object-by-type  | TBD                                   |
 
 ## GraphQL setup
 
@@ -351,14 +351,14 @@ $ sui-indexer-alt-graphql rpc \
     --fullnode-rpc-url FULLNODE_RPC_URL
 ```
 
-| CLI param              | Description                                                                        |
-|------------------------|------------------------------------------------------------------------------------|
-| `CONFIG_FILE`          | Path to GraphQL configuration file                                                 |
-| `INDEXER_CONFIG_FILE`  | Path to indexer configuration file<br/>Can be set multiple times; once per indexer |
-| `BIGTABLE_INSTANCE`    | GCP Bigtable instance                                                              |
-| `CONSISTENT_STORE_URL` | URL to [consistent store](#consistent-store-setup) API                             |
-| `DATABASE_URL`         | Postgres database connection string                                                |
-| `FULLNODE_RPC_URL`     | URL to fullnode RPC API                                                            |
+| CLI param              | Description                                                                          |
+|------------------------|--------------------------------------------------------------------------------------|
+| `CONFIG_FILE`          | Path to GraphQL configuration file.                                                  |
+| `INDEXER_CONFIG_FILE`  | Path to indexer configuration file.<br/>Can be set multiple times; once per indexer. |
+| `BIGTABLE_INSTANCE`    | GCP Bigtable instance.                                                               |
+| `CONSISTENT_STORE_URL` | URL to [consistent store](#consistent-store-setup) API.                              |
+| `DATABASE_URL`         | Postgres database connection string.                                                 |
+| `FULLNODE_RPC_URL`     | URL to fullnode RPC API.                                                             |
 
 
 Example:
@@ -381,8 +381,8 @@ $ sui-indexer-alt-graphql rpc \
 
 ### Run config recommendations
 
-| Config TOML                                                                                   | Description                       |
-|-----------------------------------------------------------------------------------------------|-----------------------------------|
+| Config TOML    | Description                        |
+|----------------|------------------------------------|
 | `graphql.toml` | Default GraphQL API configuration. |
 
 <details>
