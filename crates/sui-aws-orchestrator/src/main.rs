@@ -5,7 +5,7 @@ use std::{str::FromStr, time::Duration};
 
 use benchmark::{BenchmarkParametersGenerator, LoadType};
 use clap::Parser;
-use client::{aws::AwsClient, ServerProviderClient};
+use client::{ServerProviderClient, aws::AwsClient};
 use eyre::{Context, Result};
 use faults::FaultsType;
 use measurement::MeasurementsCollection;

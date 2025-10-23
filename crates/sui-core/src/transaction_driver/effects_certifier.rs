@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{join, stream::FuturesUnordered, StreamExt as _};
+use futures::{StreamExt as _, join, stream::FuturesUnordered};
 use mysten_common::debug_fatal;
 use sui_types::{
     base_types::{AuthorityName, ConciseableName as _},
@@ -23,7 +23,7 @@ use sui_types::{
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::time::{sleep, timeout};
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::strategy::{ExponentialBackoff, jitter};
 use tracing::instrument;
 
 use crate::{
@@ -32,13 +32,13 @@ use crate::{
     safe_client::SafeClient,
     status_aggregator::StatusAggregator,
     transaction_driver::{
+        QuorumTransactionResponse, SubmitTransactionOptions,
         error::{
-            aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
-            TransactionRequestError,
+            AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
+            aggregate_request_errors,
         },
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
-        QuorumTransactionResponse, SubmitTransactionOptions,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -366,7 +366,9 @@ impl EffectsCertifier {
                 }) => {
                     if fast_path {
                         if tx_type != TxType::SingleWriter {
-                            tracing::warn!("Fast path is only supported for single writer transactions, name={name}");
+                            tracing::warn!(
+                                "Fast path is only supported for single writer transactions, name={name}"
+                            );
                         } else {
                             fast_path_aggregator.insert(name, ());
                         }
@@ -382,7 +384,8 @@ impl EffectsCertifier {
                         for (other_digest, other_aggregator) in effects_digest_aggregators {
                             if other_digest != effects_digest && other_aggregator.total_votes() > 0
                             {
-                                tracing::warn!(?name,
+                                tracing::warn!(
+                                    ?name,
                                     "Effects digest inconsistency detected: quorum digest {effects_digest:?} (weight {quorum_weight}), other digest {other_digest:?} (weight {})",
                                     other_aggregator.total_votes()
                                 );

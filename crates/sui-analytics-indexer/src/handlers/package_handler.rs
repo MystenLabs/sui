@@ -6,9 +6,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
-use crate::tables::MovePackageEntry;
 use crate::FileType;
+use crate::handlers::{AnalyticsHandler, TransactionProcessor, process_transactions};
+use crate::tables::MovePackageEntry;
 
 #[derive(Clone)]
 pub struct PackageHandler {}

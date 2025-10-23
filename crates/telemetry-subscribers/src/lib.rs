@@ -5,29 +5,28 @@ use atomic_float::AtomicF64;
 use crossterm::tty::IsTty;
 use once_cell::sync::Lazy;
 use opentelemetry::{
-    trace::{Link, SamplingResult, SpanKind, TraceId, TracerProvider as _},
     Context, KeyValue,
+    trace::{Link, SamplingResult, SpanKind, TraceId, TracerProvider as _},
 };
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::Sampler;
 use opentelemetry_sdk::{
-    self, runtime,
+    self, Resource, runtime,
     trace::{BatchSpanProcessor, ShouldSample, TracerProvider},
-    Resource,
 };
 use span_latency_prom::PrometheusSpanLatencyLayer;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     env,
-    io::{stderr, Write},
+    io::{Write, stderr},
     str::FromStr,
-    sync::{atomic::Ordering, Arc, Mutex},
+    sync::{Arc, Mutex, atomic::Ordering},
 };
 use tracing::metadata::LevelFilter;
-use tracing::{error, info, Level};
+use tracing::{Level, error, info};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{filter, fmt, layer::SubscriberExt, reload, EnvFilter, Layer, Registry};
+use tracing_subscriber::{EnvFilter, Layer, Registry, filter, fmt, layer::SubscriberExt, reload};
 
 use crate::file_exporter::{CachedOpenFile, FileExporter};
 

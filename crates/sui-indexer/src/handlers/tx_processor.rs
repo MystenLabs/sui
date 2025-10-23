@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use sui_json_rpc::ObjectProvider;
 use sui_json_rpc::get_balance_changes_from_effect;
 use sui_json_rpc::get_object_changes;
-use sui_json_rpc::ObjectProvider;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionDigest;
@@ -177,7 +177,10 @@ impl ObjectProvider for TxChangesProcessor {
             }
         }
 
-        panic!("Object {} is not found in TxChangesProcessor as an ObjectProvider (fn find_object_lt_or_eq_version)", id);
+        panic!(
+            "Object {} is not found in TxChangesProcessor as an ObjectProvider (fn find_object_lt_or_eq_version)",
+            id
+        );
     }
 }
 

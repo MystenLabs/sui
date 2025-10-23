@@ -4,7 +4,7 @@
 use parking_lot::RwLock;
 use std::{
     cmp::Reverse,
-    collections::{hash_map::Entry, BinaryHeap, HashMap},
+    collections::{BinaryHeap, HashMap, hash_map::Entry},
     time::Duration,
 };
 use sui_config::node::AuthorityOverloadConfig;
@@ -102,12 +102,14 @@ impl OverloadTracker {
                     "Overload detected on object {:?} with {} pending transactions",
                     object_id, queue_len
                 );
-                fp_bail!(SuiErrorKind::TooManyTransactionsPendingOnObject {
-                    object_id: object_id.id(),
-                    queue_len,
-                    threshold: overload_config.max_transaction_manager_per_object_queue_length,
-                }
-                .into());
+                fp_bail!(
+                    SuiErrorKind::TooManyTransactionsPendingOnObject {
+                        object_id: object_id.id(),
+                        queue_len,
+                        threshold: overload_config.max_transaction_manager_per_object_queue_length,
+                    }
+                    .into()
+                );
             }
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
@@ -117,12 +119,14 @@ impl OverloadTracker {
                         object_id,
                         age.as_millis()
                     );
-                    fp_bail!(SuiErrorKind::TooOldTransactionPendingOnObject {
-                        object_id: object_id.id(),
-                        txn_age_sec: age.as_secs(),
-                        threshold: overload_config.max_txn_age_in_queue.as_secs(),
-                    }
-                    .into());
+                    fp_bail!(
+                        SuiErrorKind::TooOldTransactionPendingOnObject {
+                            object_id: object_id.id(),
+                            txn_age_sec: age.as_secs(),
+                            threshold: overload_config.max_txn_age_in_queue.as_secs(),
+                        }
+                        .into()
+                    );
                 }
             }
         }
@@ -186,7 +190,7 @@ impl TransactionQueue {
             // We compare the exact time of the entry, because there may be an
             // entry in the heap that was previously inserted and removed from
             // digests, and we want to ignore it. (see test_transaction_queue_remove_in_order)
-            if self.digests.get(&first.1) == Some(&first.0 .0) {
+            if self.digests.get(&first.1) == Some(&first.0.0) {
                 break;
             }
 

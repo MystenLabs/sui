@@ -8,6 +8,7 @@ use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_metadata::AccumulatorOwner,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
@@ -19,7 +20,6 @@ use sui_types::{
     storage::ChildObjectResolver,
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{Argument, Command, TransactionData, TransactionKind},
-    SUI_FRAMEWORK_PACKAGE_ID,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -112,9 +112,11 @@ async fn test_accumulators_root_created() {
     // accumulator root is not created yet.
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(!state
-            .load_epoch_store_one_call_per_task()
-            .accumulator_root_exists());
+        assert!(
+            !state
+                .load_epoch_store_one_call_per_task()
+                .accumulator_root_exists()
+        );
     });
 
     test_cluster.trigger_reconfiguration().await;
@@ -123,9 +125,11 @@ async fn test_accumulators_root_created() {
     // but we didn't upgrade to the next protocol version yet.
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(state
-            .load_epoch_store_one_call_per_task()
-            .accumulator_root_exists());
+        assert!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .accumulator_root_exists()
+        );
         assert_eq!(
             state
                 .load_epoch_store_one_call_per_task()
@@ -321,12 +325,14 @@ fn verify_accumulator_exists(
             .expect("read cannot fail")
             .expect("accumulator should exist");
 
-    assert!(accumulator_object
-        .data
-        .try_as_move()
-        .unwrap()
-        .type_()
-        .is_efficient_representation());
+    assert!(
+        accumulator_object
+            .data
+            .try_as_move()
+            .unwrap()
+            .type_()
+            .is_efficient_representation()
+    );
 
     let accumulator_value =
         AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)

@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use async_graphql::{
+    OutputType,
     connection::{Connection, CursorType, Edge},
     registry::MetaField,
-    OutputType,
 };
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;

@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    abstract_size, charge_cache_or_load_gas, get_extension, get_extension_mut,
+    NativesCostTable, abstract_size, charge_cache_or_load_gas, get_extension, get_extension_mut,
     get_nested_struct_field, get_object_id,
     object_runtime::{
-        object_store::{CacheInfo, ObjectResult},
         ObjectRuntime,
+        object_store::{CacheInfo, ObjectResult},
     },
-    NativesCostTable,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -56,7 +55,7 @@ macro_rules! get_or_fetch_object {
                 return Ok(NativeResult::err(
                     $context.gas_used(),
                     E_BCS_SERIALIZATION_FAILURE,
-                ))
+                ));
             }
         };
 
@@ -230,7 +229,7 @@ pub fn add_child_object(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
 
@@ -308,7 +307,7 @@ pub fn borrow_child_object(
     );
     let (cache_info, global_value) = match global_value_result {
         ObjectResult::MismatchedType => {
-            return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH))
+            return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH));
         }
         ObjectResult::Loaded(gv) => gv,
     };
@@ -392,7 +391,7 @@ pub fn remove_child_object(
     );
     let (cache_info, global_value) = match global_value_result {
         ObjectResult::MismatchedType => {
-            return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH))
+            return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH));
         }
         ObjectResult::Loaded(gv) => gv,
     };
@@ -518,7 +517,7 @@ pub fn has_child_object_with_ty(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
 

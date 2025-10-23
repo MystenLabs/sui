@@ -2,24 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(not(tidehunter))]
-use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
+use crate::db_tool::{DbToolCommand, execute_db_tool_command, print_db_all_tables};
 use crate::{
+    ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
     check_completed_snapshot, download_db_snapshot, download_formal_snapshot,
     get_latest_available_epoch, get_object, get_transaction_block, make_clients,
-    restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode,
-    VerboseObjectOutput,
+    restore_from_db_checkpoint,
 };
 use anyhow::Result;
-use consensus_core::storage::{rocksdb_store::RocksDBStore, Store};
+use consensus_core::storage::{Store, rocksdb_store::RocksDBStore};
 use consensus_core::{BlockAPI, CommitAPI, CommitRange};
-use futures::{future::join_all, StreamExt};
+use futures::{StreamExt, future::join_all};
 use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
-use sui_replay::{execute_replay_command, ReplayToolCommand};
-use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
+use sui_replay::{ReplayToolCommand, execute_replay_command};
+use sui_sdk::{SuiClient, SuiClientBuilder, rpc_types::SuiTransactionBlockResponseOptions};
 use sui_types::messages_consensus::ConsensusTransaction;
 use telemetry_subscribers::TracingHandle;
 
@@ -29,8 +29,8 @@ use sui_types::{
 
 use clap::*;
 use fastcrypto::encoding::Encoding;
-use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::Config;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
@@ -950,8 +950,8 @@ impl ToolCommand {
                                 }
                             } else {
                                 panic!(
-                                "--snapshot-path must be specified for --snapshot-bucket-type=file"
-                            );
+                                    "--snapshot-path must be specified for --snapshot-bucket-type=file"
+                                );
                             }
                         }
                     }

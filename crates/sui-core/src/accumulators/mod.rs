@@ -7,9 +7,8 @@ use move_core_types::u256::U256;
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
-    build_event_merkle_root, AccumulatorObjId, EventCommitment,
-    ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC, ACCUMULATOR_ROOT_SETTLE_U128_FUNC,
-    ACCUMULATOR_SETTLEMENT_MODULE,
+    ACCUMULATOR_ROOT_SETTLE_U128_FUNC, ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC,
+    ACCUMULATOR_SETTLEMENT_MODULE, AccumulatorObjId, EventCommitment, build_event_merkle_root,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::base_types::SequenceNumber;
@@ -24,7 +23,7 @@ use sui_types::transaction::{
     Argument, CallArg, ObjectArg, SharedObjectMutability, TransactionKind,
 };
 use sui_types::{
-    TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
 };
 
 use crate::execution_cache::TransactionCacheRead;

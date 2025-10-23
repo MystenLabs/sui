@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_ADDRESS,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_event::AccumulatorEvent,
     balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::{Digest, TransactionDigest},
     dynamic_field::{
-        serialize_dynamic_field, DynamicFieldKey, DynamicFieldObject, Field,
-        UnboundedDynamicFieldID, DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
+        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME, DynamicFieldKey,
+        DynamicFieldObject, Field, UnboundedDynamicFieldID, serialize_dynamic_field,
     },
     error::{SuiError, SuiErrorKind, SuiResult},
     object::{MoveObject, Object, Owner},
     storage::{ChildObjectResolver, ObjectStore},
-    MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_ADDRESS,
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use move_core_types::{
     ident_str,
@@ -22,7 +22,7 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     u256::U256,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
 pub const ACCUMULATOR_SETTLEMENT_MODULE: &IdentStr = ident_str!("accumulator_settlement");
@@ -232,13 +232,12 @@ impl AccumulatorValue {
 
 /// Extract stream id from an accumulator event if it targets sui::accumulator_settlement::EventStreamHead
 pub fn stream_id_from_accumulator_event(ev: &AccumulatorEvent) -> Option<SuiAddress> {
-    if let TypeTag::Struct(tag) = &ev.write.address.ty {
-        if tag.address == SUI_FRAMEWORK_ADDRESS
-            && tag.module.as_ident_str() == ACCUMULATOR_SETTLEMENT_MODULE
-            && tag.name.as_ident_str() == ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD
-        {
-            return Some(ev.write.address.address);
-        }
+    if let TypeTag::Struct(tag) = &ev.write.address.ty
+        && tag.address == SUI_FRAMEWORK_ADDRESS
+        && tag.module.as_ident_str() == ACCUMULATOR_SETTLEMENT_MODULE
+        && tag.name.as_ident_str() == ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD
+    {
+        return Some(ev.write.address.address);
     }
     None
 }
@@ -332,14 +331,13 @@ pub(crate) fn extract_balance_type_from_field(s: &StructTag) -> Option<TypeTag> 
         return None;
     }
 
-    if let TypeTag::Struct(key_struct) = &s.type_params[0] {
-        if key_struct.type_params.len() == 1 {
-            if let TypeTag::Struct(balance_struct) = &key_struct.type_params[0] {
-                if Balance::is_balance(balance_struct) && balance_struct.type_params.len() == 1 {
-                    return Some(balance_struct.type_params[0].clone());
-                }
-            }
-        }
+    if let TypeTag::Struct(key_struct) = &s.type_params[0]
+        && key_struct.type_params.len() == 1
+        && let TypeTag::Struct(balance_struct) = &key_struct.type_params[0]
+        && Balance::is_balance(balance_struct)
+        && balance_struct.type_params.len() == 1
+    {
+        return Some(balance_struct.type_params[0].clone());
     }
     None
 }

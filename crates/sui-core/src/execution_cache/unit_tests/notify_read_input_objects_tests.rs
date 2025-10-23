@@ -10,10 +10,10 @@ use std::time::Duration;
 use sui_framework::BuiltInFramework;
 use sui_move_build::BuildConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::InputKey;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use tempfile::tempdir;
 use tokio::time::timeout;
 

@@ -5,8 +5,8 @@ use std::{convert::Infallible, str::FromStr, sync::Arc};
 
 use anyhow::anyhow;
 use tonic::{
-    metadata::{MetadataMap, MetadataValue},
     Status,
+    metadata::{MetadataMap, MetadataValue},
 };
 
 use crate::db;

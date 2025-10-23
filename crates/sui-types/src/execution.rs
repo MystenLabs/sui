@@ -172,20 +172,19 @@ impl ExecutionResultsV2 {
                 }
 
                 // Update initial_shared_version for reshared objects
-                if reshare_at_initial_version {
-                    if let Some(Owner::Shared {
+                if reshare_at_initial_version
+                    && let Some(Owner::Shared {
                         initial_shared_version: previous_initial_shared_version,
                     }) = input_objects.get(id).map(|obj| &obj.owner)
-                    {
-                        debug_assert!(!self.created_object_ids.contains(id));
-                        debug_assert!(!self.deleted_object_ids.contains(id));
-                        debug_assert!(
-                            *initial_shared_version == SequenceNumber::new()
-                                || *initial_shared_version == *previous_initial_shared_version
-                        );
+                {
+                    debug_assert!(!self.created_object_ids.contains(id));
+                    debug_assert!(!self.deleted_object_ids.contains(id));
+                    debug_assert!(
+                        *initial_shared_version == SequenceNumber::new()
+                            || *initial_shared_version == *previous_initial_shared_version
+                    );
 
-                        *initial_shared_version = *previous_initial_shared_version;
-                    }
+                    *initial_shared_version = *previous_initial_shared_version;
                 }
             }
 

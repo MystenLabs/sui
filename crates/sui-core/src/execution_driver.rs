@@ -8,8 +8,8 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_macros::fail_point_async;
 use sui_types::execution::ExecutionOutput;
-use tokio::sync::{mpsc::UnboundedReceiver, oneshot, Semaphore};
-use tracing::{error_span, info, trace, warn, Instrument};
+use tokio::sync::{Semaphore, mpsc::UnboundedReceiver, oneshot};
+use tracing::{Instrument, error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
 use crate::execution_scheduler::PendingCertificate;

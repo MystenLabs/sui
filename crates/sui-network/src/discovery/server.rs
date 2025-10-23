@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Discovery, SignedNodeInfo, State, MAX_PEERS_TO_SEND};
+use super::{Discovery, MAX_PEERS_TO_SEND, SignedNodeInfo, State};
 use anemo::{Request, Response};
 use rand::seq::IteratorRandom;
 use serde::{Deserialize, Serialize};

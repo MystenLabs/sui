@@ -7,13 +7,13 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 use move_core_types::{ident_str, language_storage::StructTag};
 use sui_move_build::BuildConfig;
 use sui_types::{
+    Identifier, SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     base_types::{ObjectID, ObjectRef, SuiAddress},
     effects::TransactionEffects,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
         CallArg, Command, ObjectArg, SharedObjectMutability, Transaction, TransactionData,
     },
-    Identifier, TypeTag, SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 use crate::FullCluster;

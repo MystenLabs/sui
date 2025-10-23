@@ -11,8 +11,8 @@ use tracing::{error, info};
 
 use crate::config::RetentionConfig;
 use crate::errors::IndexerError;
-use crate::store::pg_partition_manager::PgPartitionManager;
 use crate::store::PgIndexerStore;
+use crate::store::pg_partition_manager::PgPartitionManager;
 use crate::{metrics::IndexerMetrics, store::IndexerStore, types::IndexerResult};
 
 pub struct Pruner {

@@ -12,13 +12,13 @@ use sui_sdk::{
     verify_personal_message_signature::verify_personal_message_signature,
     wallet_context::WalletContext,
 };
-use sui_types::base_types::{random_object_ref, SuiAddress};
+use sui_types::base_types::{SuiAddress, random_object_ref};
 use sui_types::crypto::{Ed25519SuiSignature, SuiKeyPair, SuiSignature};
 use sui_types::crypto::{SignatureScheme, SuiSignatureInner};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey};
 use sui_types::transaction::{ProgrammableTransaction, TransactionData, TransactionKind};
 use sui_types::{
-    crypto::{get_key_pair, Signature},
+    crypto::{Signature, get_key_pair},
     signature::GenericSignature,
     utils::sign_zklogin_personal_msg,
 };

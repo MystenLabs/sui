@@ -4,7 +4,7 @@
 use clap::*;
 use move_analyzer::analyzer;
 use move_compiler::editions::Flavor;
-use sui_move_build::{implicit_deps, SuiPackageHooks};
+use sui_move_build::{SuiPackageHooks, implicit_deps};
 use sui_package_management::system_package_versions::latest_system_packages;
 
 #[cfg(target_os = "linux")]

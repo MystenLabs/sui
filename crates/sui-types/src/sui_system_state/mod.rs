@@ -6,7 +6,7 @@ use self::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary}
 use crate::base_types::ObjectID;
 use crate::committee::CommitteeWithNetworkMetadata;
 use crate::dynamic_field::{
-    get_dynamic_field_from_store, get_dynamic_field_object_from_store, Field,
+    Field, get_dynamic_field_from_store, get_dynamic_field_object_from_store,
 };
 use crate::error::{SuiError, SuiErrorKind};
 use crate::gas::GasCostSummary;
@@ -15,7 +15,7 @@ use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use crate::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
 use crate::versioned::Versioned;
-use crate::{id::UID, MoveTypeTagTrait, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
+use crate::{MoveTypeTagTrait, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID, id::UID};
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};

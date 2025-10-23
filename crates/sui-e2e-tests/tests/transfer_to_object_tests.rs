@@ -219,11 +219,7 @@ impl TestEnvironment {
                 .iter()
                 .find_map(
                     |(oref, _)| {
-                        if oref.0 == child.0 {
-                            Some(*oref)
-                        } else {
-                            None
-                        }
+                        if oref.0 == child.0 { Some(*oref) } else { None }
                     },
                 )
                 .unwrap();

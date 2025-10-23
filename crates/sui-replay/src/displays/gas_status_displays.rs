@@ -7,7 +7,7 @@ use sui_types::gas::SuiGasStatus;
 use sui_types::gas_model::gas_v2::SuiGasStatus as GasStatusV2;
 use tabled::{
     builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Style as TableStyle},
+    settings::{Style as TableStyle, style::HorizontalLine},
 };
 
 impl Display for Pretty<'_, SuiGasStatus> {

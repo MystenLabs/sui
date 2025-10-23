@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::ReplayEngineError;
 use crate::types::EPOCH_CHANGE_STRUCT_TAG;
+use crate::types::ReplayEngineError;
 use async_trait::async_trait;
 use futures::future::join_all;
 use lru::LruCache;
@@ -684,10 +684,10 @@ impl From<NodeStateDump> for NodeStateDumpFetcher {
                 );
 
                 // Only most recent
-                if let Some(last_seen_obj) = latest_object_version_pool.get(&current_obj.id) {
-                    if current_obj.version <= last_seen_obj.version() {
-                        return;
-                    }
+                if let Some(last_seen_obj) = latest_object_version_pool.get(&current_obj.id)
+                    && current_obj.version <= last_seen_obj.version()
+                {
+                    return;
                 };
                 latest_object_version_pool.insert(current_obj.id, current_obj.object.clone());
             });

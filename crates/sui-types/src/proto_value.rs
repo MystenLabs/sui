@@ -3,7 +3,7 @@
 
 use crate::{
     balance::Balance,
-    base_types::{move_ascii_str_layout, move_utf8_str_layout, url_layout, RESOLVED_STD_OPTION},
+    base_types::{RESOLVED_STD_OPTION, move_ascii_str_layout, move_utf8_str_layout, url_layout},
     id::{ID, UID},
     object::option_visitor as OV,
 };
@@ -11,9 +11,9 @@ use move_core_types::{
     account_address::AccountAddress, annotated_value as A, annotated_visitor as AV,
     language_storage::TypeTag, u256::U256,
 };
-use prost_types::value::Kind;
 use prost_types::Struct;
 use prost_types::Value;
+use prost_types::value::Kind;
 
 /// This is the maximum depth of a proto message
 /// The maximum depth of a proto message is 100. Given this value may be nested itself somewhere
@@ -192,7 +192,7 @@ impl<'b, 'l> AV::Visitor<'b, 'l> for ProtoVisitor<'_> {
     fn visit_vector(&mut self, driver: &mut AV::VecDriver<'_, 'b, 'l>) -> Result<Value, Error> {
         let value = if driver.element_layout().is_type(&TypeTag::U8) {
             // Base64 encode arbitrary bytes
-            use base64::{engine::general_purpose::STANDARD, Engine};
+            use base64::{Engine, engine::general_purpose::STANDARD};
 
             if let Some(bytes) = driver
                 .bytes()

@@ -4,8 +4,8 @@
 
 use super::*;
 use crate::authority::authority_tests::{
-    call_move, call_move_, execute_programmable_transaction, init_state_with_ids,
-    send_and_confirm_transaction, TestCallArg,
+    TestCallArg, call_move, call_move_, execute_programmable_transaction, init_state_with_ids,
+    send_and_confirm_transaction,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -15,18 +15,18 @@ use move_core_types::{
 };
 
 use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     error::ExecutionErrorKind,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
-    SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 use move_core_types::language_storage::TypeTag;
 
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_types::{
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{AccountKeyPair, get_key_pair},
     error::SuiError,
 };
 
@@ -79,7 +79,7 @@ async fn test_object_wrapping_unwrapping() {
     assert_eq!(child_object_ref.1, create_child_version);
 
     let wrapped_version =
-        SequenceNumber::lamport_increment([child_object_ref.1, effects.gas_object().0 .1]);
+        SequenceNumber::lamport_increment([child_object_ref.1, effects.gas_object().0.1]);
 
     // Create a Parent object, by wrapping the child object.
     let effects = call_move(
@@ -124,7 +124,7 @@ async fn test_object_wrapping_unwrapping() {
     assert_eq!(parent_object_ref.1, wrapped_version);
 
     let unwrapped_version =
-        SequenceNumber::lamport_increment([parent_object_ref.1, effects.gas_object().0 .1]);
+        SequenceNumber::lamport_increment([parent_object_ref.1, effects.gas_object().0.1]);
 
     // Extract the child out of the parent.
     let effects = call_move(
@@ -156,14 +156,14 @@ async fn test_object_wrapping_unwrapping() {
         (2, 0, 1)
     );
     // Make sure that version increments again when unwrapped.
-    assert_eq!(effects.unwrapped()[0].0 .1, unwrapped_version);
+    assert_eq!(effects.unwrapped()[0].0.1, unwrapped_version);
     check_latest_object_ref(&authority, &effects.unwrapped()[0].0, false).await;
     let child_object_ref = effects.unwrapped()[0].0;
 
     let rewrap_version = SequenceNumber::lamport_increment([
         parent_object_ref.1,
         child_object_ref.1,
-        effects.gas_object().0 .1,
+        effects.gas_object().0.1,
     ]);
 
     // Wrap the child to the parent again.
@@ -202,7 +202,7 @@ async fn test_object_wrapping_unwrapping() {
     let parent_object_ref = effects.mutated_excluding_gas().first().unwrap().0;
 
     let deleted_version =
-        SequenceNumber::lamport_increment([parent_object_ref.1, effects.gas_object().0 .1]);
+        SequenceNumber::lamport_increment([parent_object_ref.1, effects.gas_object().0.1]);
 
     // Now delete the parent object, which will in turn delete the child object.
     let effects = call_move(
@@ -231,9 +231,11 @@ async fn test_object_wrapping_unwrapping() {
         deleted_version,
         ObjectDigest::OBJECT_DIGEST_DELETED,
     );
-    assert!(effects
-        .unwrapped_then_deleted()
-        .contains(&expected_child_object_ref));
+    assert!(
+        effects
+            .unwrapped_then_deleted()
+            .contains(&expected_child_object_ref)
+    );
     check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
     let expected_parent_object_ref = (
         parent_object_ref.0,

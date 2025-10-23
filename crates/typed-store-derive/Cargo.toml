@@ -5,7 +5,7 @@ license = "Apache-2.0"
 authors = ["Ade A. <ade@mystenlabs.com>"]
 description = "macros for the typed-store crate"
 repository = "https://github.com/mystenlabs/mysten-infra"
-edition = "2021"
+edition = "2024"
 publish = false
 
 [lib]

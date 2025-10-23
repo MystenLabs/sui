@@ -5,7 +5,7 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::validator_client_monitor::stats::ClientObservedStats;
 use crate::validator_client_monitor::{
-    metrics::ValidatorClientMetrics, OperationFeedback, OperationType,
+    OperationFeedback, OperationType, metrics::ValidatorClientMetrics,
 };
 use arc_swap::ArcSwap;
 use parking_lot::RwLock;

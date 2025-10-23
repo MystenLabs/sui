@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING},
     WorkloadBuilderInfo, WorkloadParams,
+    workload::{MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder},
 };
+use crate::ProgrammableTransactionBuilder;
 use crate::drivers::Interval;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
 use crate::workloads::benchmark_move_base_dir;
 use crate::workloads::payload::Payload;
-use crate::workloads::{workload::ExpectedFailureType, Gas, GasCoinConfig};
-use crate::ProgrammableTransactionBuilder;
+use crate::workloads::{Gas, GasCoinConfig, workload::ExpectedFailureType};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use move_core_types::identifier::Identifier;
@@ -259,7 +259,7 @@ impl Workload<dyn Payload> for PartyWorkload {
             .iter()
             .find(|o| matches!(o.1, Owner::Immutable))
             .unwrap();
-        self.package_id = package_obj.0 .0;
+        self.package_id = package_obj.0.0;
         info!("Party package id {:?}", self.package_id);
     }
 

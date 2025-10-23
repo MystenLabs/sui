@@ -12,7 +12,7 @@ use crate::{
     replay_txn::replay_transaction,
     summary_metrics::TotalMetrics,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use clap::{Parser, ValueEnum};
 use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
@@ -26,7 +26,7 @@ use sui_config::sui_config_dir;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain};
 // Disambiguate external tracing crate from local `crate::tracing` module using absolute path.
-use ::tracing::{debug, error, info, info_span, warn, Instrument};
+use ::tracing::{Instrument, debug, error, info, info_span, warn};
 
 pub mod artifacts;
 #[path = "data-stores/mod.rs"]
@@ -393,12 +393,13 @@ pub async fn handle_replay_config(
     let ReplayConfigStableInternal {
         digest,
         digests_path,
-        mut terminate_early,
+        terminate_early,
         trace,
         output_dir,
         show_effects: _, // used in the caller
         overwrite: overwrite_existing,
     } = &stable_config;
+    let mut terminate_early = *terminate_early;
 
     let ReplayConfigExperimental {
         node,

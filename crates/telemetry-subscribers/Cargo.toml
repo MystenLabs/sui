@@ -5,7 +5,7 @@ license = "Apache-2.0"
 authors = ["Evan Chan <echan@mystenlabs.com>"]
 description = "Library for common telemetry and observability functionality"
 repository = "https://github.com/mystenlabs/mysten-infra"
-edition = "2021"
+edition = "2024"
 publish = false
 
 [dependencies]

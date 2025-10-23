@@ -19,11 +19,11 @@ use crate::{
         SuiToEthBridgeAction,
     },
 };
-use ethers::abi::{long_signature, ParamType};
+use ethers::abi::{ParamType, long_signature};
 use ethers::types::Address as EthAddress;
 use ethers::types::{
-    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, ValueOrArray,
-    U64,
+    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, U64,
+    ValueOrArray,
 };
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
@@ -44,8 +44,8 @@ use sui_types::bridge::{BridgeChainId, BridgeCommitteeSummary, TOKEN_ID_USDC};
 use sui_types::crypto::ToFromBytes;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
-use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
+use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 use tokio::task::JoinHandle;
 
 pub const DUMMY_MUTALBE_BRIDGE_OBJECT_ARG: ObjectArg = ObjectArg::SharedObject {

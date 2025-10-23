@@ -5,20 +5,20 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use backoff::backoff::Constant;
 use backoff::Error as BE;
 use backoff::ExponentialBackoff;
-use sui_rpc_api::client::AuthInterceptor;
+use backoff::backoff::Constant;
 use sui_rpc_api::Client;
+use sui_rpc_api::client::AuthInterceptor;
 use sui_storage::blob::Blob;
 use tokio_util::bytes::Bytes;
 use tracing::{debug, warn};
 use url::Url;
 
-use crate::ingestion::local_client::LocalIngestionClient;
-use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::Result as IngestionResult;
+use crate::ingestion::local_client::LocalIngestionClient;
+use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::task::with_slow_future_monitor;
@@ -277,22 +277,22 @@ mod tests {
     impl IngestionClientTrait for MockIngestionClient {
         async fn fetch(&self, checkpoint: u64) -> FetchResult {
             // Check for not found failures
-            if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint) {
-                if *remaining > 0 {
-                    *remaining -= 1;
-                    return Err(FetchError::NotFound);
-                }
+            if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint)
+                && *remaining > 0
+            {
+                *remaining -= 1;
+                return Err(FetchError::NotFound);
             }
 
             // Check for transient failures
-            if let Some(mut remaining) = self.transient_failures.get_mut(&checkpoint) {
-                if *remaining > 0 {
-                    *remaining -= 1;
-                    return Err(FetchError::Transient {
-                        reason: "mock_transient_error",
-                        error: anyhow::anyhow!("Mock transient error"),
-                    });
-                }
+            if let Some(mut remaining) = self.transient_failures.get_mut(&checkpoint)
+                && *remaining > 0
+            {
+                *remaining -= 1;
+                return Err(FetchError::Transient {
+                    reason: "mock_transient_error",
+                    error: anyhow::anyhow!("Mock transient error"),
+                });
             }
 
             // Return the checkpoint data if it exists

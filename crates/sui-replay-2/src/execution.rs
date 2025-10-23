@@ -15,7 +15,7 @@ use crate::{
     replay_interface::{EpochStore, ObjectKey, ObjectStore, VersionQuery},
     replay_txn::ReplayTransaction,
 };
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_trace_format::format::MoveTraceBuilder;
 use std::{
@@ -30,7 +30,7 @@ use sui_types::{
     digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiErrorKind, SuiResult},
-    execution_params::{get_early_execution_error, BalanceWithdrawStatus, ExecutionOrEarlyError},
+    execution_params::{BalanceWithdrawStatus, ExecutionOrEarlyError, get_early_execution_error},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
@@ -307,7 +307,8 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
     // at the checkpoint (mimic latest runtime behavior)
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         trace!("get_object({})", object_id);
-        let object = match self.object_cache.borrow().get(object_id) {
+
+        match self.object_cache.borrow().get(object_id) {
             Some(versions) => versions.last_key_value().map(|(_version, obj)| obj.clone()),
             None => {
                 let fetched_object = self
@@ -331,8 +332,7 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
 
                 Some(fetched_object)
             }
-        };
-        object
+        }
     }
 
     // Get an object by its ID and version
@@ -353,9 +353,7 @@ impl ChildObjectResolver for ReplayStore<'_> {
     ) -> SuiResult<Option<Object>> {
         trace!(
             "read_child_object({}, {}, {})",
-            _parent,
-            child,
-            child_version_upper_bound,
+            _parent, child, child_version_upper_bound,
         );
         let object_key = ObjectKey {
             object_id: *child,
@@ -394,10 +392,7 @@ impl ChildObjectResolver for ReplayStore<'_> {
     ) -> SuiResult<Option<Object>> {
         trace!(
             "get_object_received_at_version({}, {}, {}, {})",
-            owner,
-            receiving_object_id,
-            receive_object_at_version,
-            epoch_id
+            owner, receiving_object_id, receive_object_at_version, epoch_id
         );
         Ok(self.get_object_at_version(receiving_object_id, receive_object_at_version))
     }

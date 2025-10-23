@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
+use anyhow::anyhow;
 use std::fmt::Debug;
 use std::fs::OpenOptions;
 use std::process::ExitStatus;
@@ -255,11 +255,11 @@ impl Drop for PostgresProcess {
         }
 
         // Dump the contents of stdout/stderr if TRACE is enabled
-        if event_enabled!(tracing::Level::TRACE) {
-            if let Ok((stdout, stderr)) = self.dump_stdout_stderr() {
-                trace!("stdout: {stdout}");
-                trace!("stderr: {stderr}");
-            }
+        if event_enabled!(tracing::Level::TRACE)
+            && let Ok((stdout, stderr)) = self.dump_stdout_stderr()
+        {
+            trace!("stdout: {stdout}");
+            trace!("stderr: {stderr}");
         }
     }
 }

@@ -12,18 +12,18 @@
 
 use crate::{
     artifacts::{Artifact, ArtifactManager, MoveCallInfo, ReplayCacheSummary},
-    execution::{execute_transaction_to_effects, ReplayExecutor},
+    execution::{ReplayExecutor, execute_transaction_to_effects},
     replay_interface::{
         EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
     },
     summary_metrics::tx_metrics_reset,
     tracing::save_trace_output,
 };
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{Context, Error, Result, anyhow, bail};
 use move_trace_format::format::MoveTraceBuilder;
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 use std::time::Instant;
-use sui_types::{base_types::SequenceNumber, TypeTag};
+use sui_types::{TypeTag, base_types::SequenceNumber};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,

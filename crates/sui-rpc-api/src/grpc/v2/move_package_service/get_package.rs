@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    ErrorReason, Result, RpcService,
     grpc::v2::move_package_service::{
         conversions::{convert_error, convert_module},
         load_package,
     },
-    ErrorReason, Result, RpcService,
 };
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::{GetPackageRequest, GetPackageResponse, Package};

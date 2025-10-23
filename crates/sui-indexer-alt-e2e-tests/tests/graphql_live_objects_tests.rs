@@ -3,21 +3,21 @@
 
 use std::{collections::BTreeMap, mem, str::FromStr};
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use move_core_types::{ident_str, language_storage::StructTag, u256::U256};
 use serde::Deserialize;
 use serde_json::json;
-use sui_indexer_alt_e2e_tests::{find, FullCluster};
+use sui_indexer_alt_e2e_tests::{FullCluster, find};
 use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     base_types::{ObjectDigest, ObjectID, ObjectRef, SuiAddress},
-    crypto::{get_account_key_pair, Signature, Signer},
+    crypto::{Signature, Signer, get_account_key_pair},
     effects::{TransactionEffects, TransactionEffectsAPI},
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
         Argument, Command, GasData, ObjectArg, Transaction, TransactionData, TransactionKind,
     },
-    TypeTag, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 /// 5 SUI gas budget
@@ -1217,13 +1217,15 @@ fn create_shared_table(cluster: &mut FullCluster, ty: TypeTag, size: u64) -> Obj
         SUI_FRAMEWORK_PACKAGE_ID,
         ident_str!("transfer").to_owned(),
         ident_str!("public_share_object").to_owned(),
-        vec![StructTag {
-            address: SUI_FRAMEWORK_PACKAGE_ID.into(),
-            module: ident_str!("table").to_owned(),
-            name: ident_str!("Table").to_owned(),
-            type_params: vec![ty.clone(), ty],
-        }
-        .into()],
+        vec![
+            StructTag {
+                address: SUI_FRAMEWORK_PACKAGE_ID.into(),
+                module: ident_str!("table").to_owned(),
+                name: ident_str!("Table").to_owned(),
+                type_params: vec![ty.clone(), ty],
+            }
+            .into(),
+        ],
         vec![table],
     );
 
@@ -1295,13 +1297,15 @@ fn create_immutable_table(cluster: &mut FullCluster, ty: TypeTag, size: u64) -> 
         SUI_FRAMEWORK_PACKAGE_ID,
         ident_str!("transfer").to_owned(),
         ident_str!("public_freeze_object").to_owned(),
-        vec![StructTag {
-            address: SUI_FRAMEWORK_PACKAGE_ID.into(),
-            module: ident_str!("table").to_owned(),
-            name: ident_str!("Table").to_owned(),
-            type_params: vec![ty.clone(), ty],
-        }
-        .into()],
+        vec![
+            StructTag {
+                address: SUI_FRAMEWORK_PACKAGE_ID.into(),
+                module: ident_str!("table").to_owned(),
+                name: ident_str!("Table").to_owned(),
+                type_params: vec![ty.clone(), ty],
+            }
+            .into(),
+        ],
         vec![table],
     );
 

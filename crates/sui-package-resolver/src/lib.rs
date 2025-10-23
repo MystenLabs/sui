@@ -22,11 +22,11 @@ use sui_types::type_input::{StructInput, TypeInput};
 use crate::error::Error;
 use move_binary_format::errors::Location;
 use move_binary_format::{
+    CompiledModule,
     file_format::{
         DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, StructFieldInformation,
         TableIndex,
     },
-    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -35,7 +35,7 @@ use move_core_types::{
 };
 use sui_types::move_package::{MovePackage, TypeOrigin};
 use sui_types::object::Object;
-use sui_types::{base_types::SequenceNumber, Identifier};
+use sui_types::{Identifier, base_types::SequenceNumber};
 
 pub mod error;
 

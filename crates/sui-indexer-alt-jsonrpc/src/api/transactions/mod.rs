@@ -12,7 +12,7 @@ use self::{error::Error, filter::SuiTransactionBlockResponseQuery};
 
 use crate::{
     context::Context,
-    error::{rpc_bail, InternalContext, RpcError},
+    error::{InternalContext, RpcError, rpc_bail},
 };
 
 use super::rpc_module::RpcModule;

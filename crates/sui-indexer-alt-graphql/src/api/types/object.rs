@@ -3,13 +3,13 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context as _};
+use anyhow::{Context as _, anyhow};
 use async_graphql::{
+    Context, InputObject, Interface, Object,
     connection::{Connection, CursorType, Edge},
     dataloader::DataLoader,
-    Context, InputObject, Interface, Object,
 };
-use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, sql_types::Bool};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::future::try_join_all;
 use move_core_types::language_storage::StructTag;
@@ -45,7 +45,7 @@ use crate::{
         type_filter::{TypeFilter, TypeInput},
         uint53::UInt53,
     },
-    error::{bad_user_input, feature_unavailable, upcast, RpcError},
+    error::{RpcError, bad_user_input, feature_unavailable, upcast},
     intersect,
     pagination::{Page, PageLimits, PaginationConfig},
     scope::Scope,
@@ -60,7 +60,7 @@ use super::{
     move_package::MovePackage,
     object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{CTransaction, Transaction, filter::TransactionFilter},
 };
 
 /// Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
@@ -195,7 +195,9 @@ pub(crate) enum Error {
     #[error("Cursors are pinned to different checkpoints: {0} vs {1}")]
     CursorInconsistency(u64, u64),
 
-    #[error("At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object")]
+    #[error(
+        "At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object"
+    )]
     OneBound,
 
     #[error("Request is outside consistent range")]
@@ -204,7 +206,9 @@ pub(crate) enum Error {
     #[error("Checkpoint {0} in the future")]
     Future(u64),
 
-    #[error("Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.")]
+    #[error(
+        "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects."
+    )]
     RootVersionOwnership,
 }
 
@@ -1016,7 +1020,7 @@ impl Object {
             _ => {
                 return Err(
                     anyhow!("Invalid ObjectFilter not caught by validation: {filter:?}").into(),
-                )
+                );
             }
         }
         .map_err(|e| match e {

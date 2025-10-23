@@ -198,7 +198,7 @@ async fn direct_commit_late_call() {
     assert_eq!(sequence.len(), num_waves - 1_usize);
     for (i, leader_block) in sequence.iter().enumerate() {
         let leader_round = committer.committers[0].leader_round(i as u32 + 1);
-        if let DecidedLeader::Commit(ref block, direct) = leader_block {
+        if let DecidedLeader::Commit(block, direct) = leader_block {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), committer.get_leaders(leader_round)[0]);
             assert!(direct);
@@ -336,7 +336,7 @@ async fn indirect_commit() {
     // - The validators not part of the f+1 above will not certify the leader
     // of wave 1.
     // - Fully connected blocks to decide the leader of wave 2.
-    let dag_str = "DAG { 
+    let dag_str = "DAG {
         Round 0 : { 4 },
         Round 1 : { * },
         Round 2 : { * },
@@ -391,7 +391,7 @@ async fn indirect_commit() {
     for (idx, decided_leader) in sequence.iter().enumerate() {
         let leader_round = committer.committers[0].leader_round(idx as u32 + 1);
         let expected_leader = committer.get_leaders(leader_round)[0];
-        if let DecidedLeader::Commit(ref block, _direct) = decided_leader {
+        if let DecidedLeader::Commit(block, _direct) = decided_leader {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), expected_leader);
         } else {

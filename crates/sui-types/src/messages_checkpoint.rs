@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{
-    random_object_ref, ExecutionData, ExecutionDigests, FullObjectRef, VerifiedExecutionData,
+    ExecutionData, ExecutionDigests, FullObjectRef, VerifiedExecutionData, random_object_ref,
 };
 use crate::base_types::{ObjectID, SequenceNumber};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
-    default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
-    AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
+    AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo, AuthoritySignInfoTrait,
+    AuthorityStrongQuorumSignInfo, RandomnessRound, default_hash, get_key_pair,
 };
 use crate::digests::{CheckpointArtifactsDigest, Digest, ObjectDigest};
 use crate::effects::{TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
@@ -929,8 +929,8 @@ mod tests {
     use crate::messages_consensus::ConsensusDeterminedVersionAssignments;
     use crate::transaction::VerifiedTransaction;
     use fastcrypto::traits::KeyPair;
-    use rand::prelude::StdRng;
     use rand::SeedableRng;
+    use rand::prelude::StdRng;
 
     use super::*;
     use crate::utils::make_committee_key;
@@ -1022,9 +1022,11 @@ mod tests {
             CertifiedCheckpointSummary::new(summary, sign_infos, &committee).expect("Cert is OK");
 
         // Signature is correct on proposal, and with same transactions
-        assert!(checkpoint_cert
-            .verify_with_contents(&committee, Some(&set))
-            .is_ok());
+        assert!(
+            checkpoint_cert
+                .verify_with_contents(&committee, Some(&set))
+                .is_ok()
+        );
 
         // Make a bad proposal
         let signed_checkpoints: Vec<_> = keys

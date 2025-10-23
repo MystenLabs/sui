@@ -5,8 +5,8 @@ use anyhow::Result;
 use clap::Parser;
 use tracing::info;
 
-use sui_indexer_alt_restorer::restore;
 use sui_indexer_alt_restorer::Args;
+use sui_indexer_alt_restorer::restore;
 
 #[tokio::main]
 async fn main() -> Result<()> {

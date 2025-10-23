@@ -4,8 +4,8 @@
 use std::{sync::Arc, time::Duration};
 
 use diesel::{
-    sql_types::{BigInt, Bytea},
     QueryableByName,
+    sql_types::{BigInt, Bytea},
 };
 use move_core_types::account_address::AccountAddress;
 use sui_sql_macro::query;

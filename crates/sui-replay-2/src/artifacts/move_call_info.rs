@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use move_binary_format::{
     binary_config::BinaryConfig,
     file_format::{CompiledModule, SignatureToken},

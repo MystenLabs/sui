@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::{
-    implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands, USER_AGENT,
+    SuiClientCommands, USER_AGENT, implicit_deps_for_protocol_version, pkg_tree_shake,
 };
-use crate::fire_drill::{run_fire_drill, FireDrill};
-use crate::genesis_ceremony::{run, Ceremony};
+use crate::fire_drill::{FireDrill, run_fire_drill};
+use crate::genesis_ceremony::{Ceremony, run};
 use crate::keytool::KeyToolCommand;
 use crate::trace_analysis_commands::AnalyzeTraceCommand;
 use crate::validator_commands::SuiValidatorCommand;
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{Context, anyhow, bail, ensure};
 use clap::*;
 use colored::Colorize;
 use fastcrypto::traits::KeyPair;
@@ -22,7 +22,7 @@ use mysten_common::tempdir;
 use prometheus::Registry;
 use rand::rngs::OsRng;
 use std::collections::BTreeMap;
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 use std::net::{AddrParseError, IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::ops::Deref;
@@ -37,17 +37,17 @@ use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
 use sui_config::p2p::SeedPeer;
 use sui_config::{
-    genesis_blob_exists, sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH,
-    SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
+    Config, FULL_NODE_DB_PATH, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
+    SUI_NETWORK_CONFIG, genesis_blob_exists, sui_config_dir,
 };
 use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
-use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, LocalFaucet};
+use sui_faucet::{AppState, FaucetConfig, LocalFaucet, create_wallet_context, start_faucet};
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move::summary::PackageSummaryMetadata;
-use sui_sdk::apis::ReadApi;
 use sui_sdk::SuiClient;
+use sui_sdk::apis::ReadApi;
 use sui_types::move_package::MovePackage;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
@@ -59,9 +59,9 @@ use sui_indexer_alt_consistent_store::{
     args::RpcArgs as ConsistentArgs, config::ServiceConfig as ConsistentConfig,
     start_service as start_consistent_store,
 };
-use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
+use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
 use sui_indexer_alt_graphql::{
-    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
+    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
@@ -73,12 +73,12 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::manage_package::resolve_lock_file_path;
 use sui_move::{self, execute_move_command};
 use sui_move_build::{
-    check_conflicting_addresses, check_invalid_dependencies, check_unpublished_dependencies,
-    implicit_deps, BuildConfig as SuiBuildConfig, SuiPackageHooks,
+    BuildConfig as SuiBuildConfig, SuiPackageHooks, check_conflicting_addresses,
+    check_invalid_dependencies, check_unpublished_dependencies, implicit_deps,
 };
 use sui_package_management::system_package_versions::latest_system_packages;
-use sui_pg_db::temp::{get_available_port, LocalDatabase};
 use sui_pg_db::DbArgs;
+use sui_pg_db::temp::{LocalDatabase, get_available_port};
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -494,10 +494,10 @@ impl SuiCommand {
                     if let Some(env_override) = config.env {
                         context = context.with_env_override(env_override);
                     }
-                    if let Ok(client) = context.get_client().await {
-                        if let Err(e) = client.check_api_version() {
-                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                        }
+                    if let Ok(client) = context.get_client().await
+                        && let Err(e) = client.check_api_version()
+                    {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -518,10 +518,10 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path)?;
                 if let Some(cmd) = cmd {
-                    if let Ok(client) = context.get_client().await {
-                        if let Err(e) = client.check_api_version() {
-                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                        }
+                    if let Ok(client) = context.get_client().await
+                        && let Err(e) = client.check_api_version()
+                    {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -546,7 +546,9 @@ impl SuiCommand {
                         )
                         .await?;
                         let Some(client) = client else {
-                            bail!("`sui move summary --package-id <object_id>` requires a configured network");
+                            bail!(
+                                "`sui move summary --package-id <object_id>` requires a configured network"
+                            );
                         };
 
                         let read_api = client.read_api();
@@ -714,10 +716,10 @@ impl SuiCommand {
                 let config_path =
                     client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 let mut context = WalletContext::new(&config_path)?;
-                if let Ok(client) = context.get_client().await {
-                    if let Err(e) = client.check_api_version() {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                    }
+                if let Ok(client) = context.get_client().await
+                    && let Err(e) = client.check_api_version()
+                {
+                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
                 }
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.get_active_env()?.rpc;
@@ -1323,7 +1325,10 @@ async fn genesis(
                 })?;
             }
         } else if files.len() != 2 || !client_path.exists() || !keystore_path.exists() {
-            bail!("Cannot run genesis with non-empty Sui config directory {}, please use the --force/-f option to remove the existing configuration", sui_config_dir.to_str().unwrap());
+            bail!(
+                "Cannot run genesis with non-empty Sui config directory {}, please use the --force/-f option to remove the existing configuration",
+                sui_config_dir.to_str().unwrap()
+            );
         }
     }
 
@@ -1530,7 +1535,10 @@ async fn prompt_if_no_config(
             }),
             None => {
                 if accept_defaults {
-                    print!("Creating config file [{:?}] with default (devnet) Full node server and ed25519 key scheme.", wallet_conf_path);
+                    print!(
+                        "Creating config file [{:?}] with default (devnet) Full node server and ed25519 key scheme.",
+                        wallet_conf_path
+                    );
                 } else {
                     print!(
                         "Config file [{:?}] doesn't exist, do you want to connect to a Sui Full node server [y/N]?",
@@ -1596,7 +1604,9 @@ async fn prompt_if_no_config(
             let key_scheme = if accept_defaults {
                 SignatureScheme::ED25519
             } else {
-                println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1):");
+                println!(
+                    "Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1):"
+                );
                 match SignatureScheme::from_flag(read_line()?.trim()) {
                     Ok(s) => s,
                     Err(e) => return Err(anyhow!("{e}")),
@@ -1789,7 +1799,9 @@ pub async fn get_replay_node(context: &WalletContext) -> Result<SR2::Node, anyho
         .read_api()
         .get_chain_identifier()
         .await?;
-    let err_msg = format!("'{chain_id}' chain identifier is not supported for replay -- only testnet and mainnet are supported currently");
+    let err_msg = format!(
+        "'{chain_id}' chain identifier is not supported for replay -- only testnet and mainnet are supported currently"
+    );
     let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
         .ok_or_else(|| anyhow::anyhow!(err_msg.clone()))?;
     Ok(match chain_id.chain() {

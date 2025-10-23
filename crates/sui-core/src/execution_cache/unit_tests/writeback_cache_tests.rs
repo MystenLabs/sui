@@ -2,23 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::default_registry;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::{
     collections::{BTreeMap, BTreeSet},
     future::Future,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
     time::{Duration, Instant},
 };
 use sui_framework::BuiltInFramework;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
-    base_types::{random_object_ref, FullObjectRef, SuiAddress},
-    crypto::{deterministic_random_account_key, get_key_pair_from_rng, AccountKeyPair},
-    object::{MoveObject, Owner, OBJECT_START_VERSION},
+    base_types::{FullObjectRef, SuiAddress, random_object_ref},
+    crypto::{AccountKeyPair, deterministic_random_account_key, get_key_pair_from_rng},
+    object::{MoveObject, OBJECT_START_VERSION, Owner},
     storage::ChildObjectResolver,
 };
 use sui_types::{
@@ -29,7 +29,7 @@ use tokio::sync::RwLock;
 
 use super::*;
 use crate::{
-    authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState, AuthorityStore},
+    authority::{AuthorityState, AuthorityStore, test_authority_builder::TestAuthorityBuilder},
     execution_cache::ExecutionCacheAPI,
 };
 
@@ -103,11 +103,11 @@ impl Scenario {
 
     fn count_action(&mut self) {
         let prev = self.action_count.fetch_add(1, Ordering::Relaxed);
-        if let Some((count, _)) = &self.do_after {
-            if prev == *count {
-                let (_, f) = self.do_after.take().unwrap();
-                f(self);
-            }
+        if let Some((count, _)) = &self.do_after
+            && prev == *count
+        {
+            let (_, f) = self.do_after.take().unwrap();
+            f(self);
         }
     }
 
@@ -778,10 +778,11 @@ async fn test_lt_or_eq_caching() {
         assert!(!s.cache.object_by_id_cache.contains_key(&s.obj_id(1)));
 
         // version <= 0 does not exist
-        assert!(s
-            .cache()
-            .find_object_lt_or_eq_version(s.obj_id(1), 0.into())
-            .is_none());
+        assert!(
+            s.cache()
+                .find_object_lt_or_eq_version(s.obj_id(1), 0.into())
+                .is_none()
+        );
 
         // query above populates cache
         assert_eq!(
@@ -922,11 +923,12 @@ async fn test_invalidate_package_cache_on_clear() {
 
         s.clear_state_end_of_epoch();
 
-        assert!(s
-            .cache()
-            .get_package_object(&s.obj_id(2))
-            .unwrap()
-            .is_none());
+        assert!(
+            s.cache()
+                .get_package_object(&s.obj_id(2))
+                .unwrap()
+                .is_none()
+        );
     })
     .await;
 }

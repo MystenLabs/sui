@@ -8,7 +8,7 @@
 
 use crate::abi::EthBridgeEvent;
 use crate::action_executor::{
-    submit_to_executor, BridgeActionExecutionWrapper, BridgeActionExecutorTrait,
+    BridgeActionExecutionWrapper, BridgeActionExecutorTrait, submit_to_executor,
 };
 use crate::error::BridgeError;
 use crate::events::SuiBridgeEvent;

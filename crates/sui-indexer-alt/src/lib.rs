@@ -17,14 +17,14 @@ use handlers::{
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
+    Indexer, IndexerArgs,
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::{
+        CommitterConfig,
         concurrent::{ConcurrentConfig, PrunerConfig},
         sequential::SequentialConfig,
-        CommitterConfig,
     },
     postgres::{Db, DbArgs},
-    Indexer, IndexerArgs,
 };
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_indexer_alt_schema::MIGRATIONS;

@@ -5,14 +5,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sui_indexer_alt_framework::{
-    pipeline::{sequential, Processor},
+    pipeline::{Processor, sequential},
     types::{base_types::VersionDigest, full_checkpoint_content::CheckpointData, object::Object},
 };
 
 use crate::store::{Connection, Store};
 use crate::{
     restore::Restore,
-    schema::{object_by_owner::Key, Schema},
+    schema::{Schema, object_by_owner::Key},
 };
 
 use super::{checkpoint_input_objects, checkpoint_output_objects};
@@ -55,10 +55,9 @@ impl Processor for ObjectByOwner {
             if let Some(key_in) = input_objects
                 .get(&id)
                 .and_then(|(input, _)| Key::from_object(input))
+                && key_in != key_out
             {
-                if key_in != key_out {
-                    values.push(Value::Del(key_in));
-                }
+                values.push(Value::Del(key_in));
             }
 
             // The object is always put at its output location.

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    metrics::Metrics, server::Server, Discovery, DiscoveryEventLoop, DiscoveryServer, State,
+    Discovery, DiscoveryEventLoop, DiscoveryServer, State, metrics::Metrics, server::Server,
 };
 use crate::discovery::TrustedPeerChangeEvent;
 use anemo::codegen::InboundRequestLayer;

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::error::{SuiErrorKind, SuiResult};
-use typed_store::rocks::{default_db_options, DBMap, DBOptions, MetricConf};
+use typed_store::rocks::{DBMap, DBOptions, MetricConf, default_db_options};
 use typed_store::rocksdb::Options;
 
 use typed_store::DBMapUtils;

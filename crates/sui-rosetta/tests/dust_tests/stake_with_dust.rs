@@ -10,13 +10,13 @@ use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
-use sui_rosetta::{operations::Operations, CoinMetadataCache};
+use sui_rosetta::{CoinMetadataCache, operations::Operations};
 use sui_types::{quorum_driver_types::ExecuteTransactionRequestType, transaction::Transaction};
 use test_cluster::TestClusterBuilder;
 
 use crate::{
     rosetta_client::start_rosetta_test_server,
-    split_coin::{make_change, DEFAULT_GAS_BUDGET},
+    split_coin::{DEFAULT_GAS_BUDGET, make_change},
 };
 
 #[tokio::test]

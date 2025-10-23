@@ -47,8 +47,8 @@
 //! channel will always be made in order. StateSync will also send out a notification to its peers
 //! of the newly synchronized checkpoint so that it can help other peers synchronize.
 
-use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
-use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
+use anemo::{PeerId, Request, Response, Result, types::PeerEvent};
+use futures::{FutureExt, StreamExt, stream::FuturesOrdered};
 use rand::Rng;
 use std::{
     collections::{HashMap, VecDeque},
@@ -93,7 +93,7 @@ pub use generated::{
 pub use server::GetCheckpointAvailabilityResponse;
 pub use server::GetCheckpointSummaryRequest;
 use sui_config::node::ArchiveReaderConfig;
-use sui_data_ingestion_core::{setup_single_workflow_with_options, ReaderOptions};
+use sui_data_ingestion_core::{ReaderOptions, setup_single_workflow_with_options};
 use sui_storage::verify_checkpoint;
 
 /// A handle to the StateSync subsystem.
@@ -527,7 +527,12 @@ where
             .unwrap_or_else(|| panic!("Got checkpoint {} from consensus but cannot find checkpoint {} in certified_checkpoints", checkpoint.sequence_number(), checkpoint.sequence_number() - 1))
             .digest();
         if checkpoint.previous_digest != Some(prev_digest) {
-            panic!("Checkpoint {} from consensus has mismatched previous_digest, expected: {:?}, actual: {:?}", checkpoint.sequence_number(), Some(prev_digest), checkpoint.previous_digest);
+            panic!(
+                "Checkpoint {} from consensus has mismatched previous_digest, expected: {:?}, actual: {:?}",
+                checkpoint.sequence_number(),
+                Some(prev_digest),
+                checkpoint.previous_digest
+            );
         }
 
         let latest_checkpoint = self
@@ -1024,8 +1029,8 @@ where
                         if let Ok(pinned_digest_index) = pinned_checkpoints.binary_search_by_key(
                             checkpoint.sequence_number(),
                             |(seq_num, _digest)| *seq_num
-                        ) {
-                            if pinned_checkpoints[pinned_digest_index].1 != *checkpoint_digest {
+                        )
+                            && pinned_checkpoints[pinned_digest_index].1 != *checkpoint_digest {
                                 tracing::debug!(
                                     "peer returned checkpoint with digest that does not match pinned digest: expected {:?}, got {:?}",
                                     pinned_checkpoints[pinned_digest_index].1,
@@ -1033,7 +1038,6 @@ where
                                 );
                                 continue;
                             }
-                        }
 
                         // Insert in our store in the event that things fail and we need to retry
                         peer_heights
@@ -1167,18 +1171,21 @@ async fn sync_checkpoint_contents_from_archive_iteration<S>(
     } else {
         false
     };
-    debug!("Syncing checkpoint contents from archive: {sync_from_archive},  highest_synced: {highest_synced},  lowest_checkpoint_on_peers: {}", lowest_checkpoint_on_peers.map_or_else(|| "None".to_string(), |l| l.to_string()));
+    debug!(
+        "Syncing checkpoint contents from archive: {sync_from_archive},  highest_synced: {highest_synced},  lowest_checkpoint_on_peers: {}",
+        lowest_checkpoint_on_peers.map_or_else(|| "None".to_string(), |l| l.to_string())
+    );
     if sync_from_archive {
         let start = highest_synced
             .checked_add(1)
             .expect("Checkpoint seq num overflow");
         let end = lowest_checkpoint_on_peers.unwrap();
 
-        let Some(ref archive_config) = archive_config else {
+        let Some(archive_config) = archive_config else {
             warn!("Failed to find an archive reader to complete the state sync request");
             return;
         };
-        let Some(ref ingestion_url) = archive_config.ingestion_url else {
+        let Some(ingestion_url) = &archive_config.ingestion_url else {
             warn!("Archival ingestion url for state sync is not configured");
             return;
         };
@@ -1415,14 +1422,13 @@ where
             .ok()
             .and_then(Response::into_inner)
             .tap_none(|| trace!("peer unable to help sync"))
+            && contents.verify_digests(digest).is_ok()
         {
-            if contents.verify_digests(digest).is_ok() {
-                let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());
-                store
-                    .insert_checkpoint_contents(checkpoint, verified_contents)
-                    .expect("store operation should not fail");
-                return Some(contents);
-            }
+            let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());
+            store
+                .insert_checkpoint_contents(checkpoint, verified_contents)
+                .expect("store operation should not fail");
+            return Some(contents);
         }
     }
     debug!("no peers had checkpoint contents");

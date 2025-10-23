@@ -5,14 +5,14 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
-use futures::{future, TryFutureExt};
+use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
+    Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
     register_gauge_with_registry, register_histogram_vec_with_registry,
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec,
-    Registry,
+    register_int_counter_with_registry,
 };
 use std::{
     cmp::Ordering,
@@ -71,26 +71,26 @@ use tap::TapFallible;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
-use tracing::{debug, error, error_span, info, instrument, Instrument};
+use tracing::{Instrument, debug, error, error_span, info, instrument};
 
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
+    authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    traffic_controller::{TrafficController, parse_ip, policies::TrafficTally},
+};
+use crate::{
     authority::{
-        authority_per_epoch_store::AuthorityPerEpochStore,
+        ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
         consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
-        shared_object_version_manager::Schedulable, ExecutionEnv,
+        shared_object_version_manager::Schedulable,
     },
     checkpoints::CheckpointStore,
     execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
     transaction_outputs::TransactionOutputs,
 };
-use crate::{
-    authority::{consensus_tx_status_cache::ConsensusTxStatus, AuthorityState},
-    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
-    traffic_controller::{parse_ip, policies::TrafficTally, TrafficController},
-};
-use nonempty::{nonempty, NonEmpty};
+use nonempty::{NonEmpty, nonempty};
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
 use sui_types::messages_grpc::PingType;
 use tonic::transport::server::TcpConnectInfo;
@@ -2028,10 +2028,7 @@ impl ValidatorService {
                                     "x-forwarded-for header value of {:?} contains {} values, but {} hops were specified. \
                                     Expected at least {} values. Please correctly set the `x-forwarded-for` value under \
                                     `client-id-source` in the node config.",
-                                    header_contents,
-                                    contents_len,
-                                    num_hops,
-                                    contents_len,
+                                    header_contents, contents_len, num_hops, contents_len,
                                 );
                                 self.metrics.client_id_source_config_mismatch.inc();
                                 return None;
@@ -2041,10 +2038,7 @@ impl ValidatorService {
                                 error!(
                                     "x-forwarded-for header value of {:?} contains {} values, but {} hops were specified. \
                                     Expected at least {} values. Skipping traffic controller request handling.",
-                                    header_contents,
-                                    contents_len,
-                                    num_hops,
-                                    contents_len,
+                                    header_contents, contents_len, num_hops, contents_len,
                                 );
                                 return None;
                             };
@@ -2069,7 +2063,9 @@ impl ValidatorService {
                     do_header_parse(op)
                 } else {
                     self.metrics.forwarded_header_not_included.inc();
-                    error!("x-forwarded-for header not present for request despite node configuring x-forwarded-for tracking type");
+                    error!(
+                        "x-forwarded-for header not present for request despite node configuring x-forwarded-for tracking type"
+                    );
                     None
                 }
             }

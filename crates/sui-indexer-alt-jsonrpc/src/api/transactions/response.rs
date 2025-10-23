@@ -17,6 +17,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_types::{
+    TypeTag,
     base_types::{ObjectID, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     effects::{IDOperation, ObjectChange, TransactionEffects, TransactionEffectsAPI},
@@ -24,13 +25,12 @@ use sui_types::{
     object::Object,
     signature::GenericSignature,
     transaction::{TransactionData, TransactionDataAPI},
-    TypeTag,
 };
 use tokio::join;
 
 use crate::{
     context::Context,
-    error::{invalid_params, rpc_bail, RpcError},
+    error::{RpcError, invalid_params, rpc_bail},
 };
 
 use super::error::Error;

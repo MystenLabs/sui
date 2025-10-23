@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use miette::{miette, LabeledSpan, Severity};
+use miette::{LabeledSpan, Severity, miette};
 use std::fmt;
 use thiserror::Error;
 

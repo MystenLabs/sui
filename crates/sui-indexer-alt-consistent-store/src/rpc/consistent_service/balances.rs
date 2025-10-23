@@ -7,11 +7,11 @@ use std::str::FromStr;
 use anyhow::Context;
 use bincode::serde::Compat;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as grpc;
-use sui_indexer_alt_framework::types::{base_types::SuiAddress, TypeTag};
+use sui_indexer_alt_framework::types::{TypeTag, base_types::SuiAddress};
 
 use crate::{
     rpc::{
-        error::{db_error, RpcError, StatusCode},
+        error::{RpcError, StatusCode, db_error},
         pagination::Page,
     },
     schema::balances::Key,

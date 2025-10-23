@@ -3,7 +3,7 @@
 
 use anyhow::Context;
 use bincode::{Decode, Encode};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::End;
 
@@ -12,7 +12,7 @@ use crate::db::{
     map::DbMap,
 };
 
-use super::error::{db_error, RpcError};
+use super::error::{RpcError, db_error};
 
 #[DefaultConfig]
 pub struct PaginationConfig {
@@ -241,7 +241,7 @@ mod tests {
     use sui_indexer_alt_framework::store::CommitterWatermark;
     use tempfile::TempDir;
 
-    use crate::db::{key, Db, Watermark};
+    use crate::db::{Db, Watermark, key};
 
     use super::*;
 

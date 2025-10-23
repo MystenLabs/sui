@@ -3,11 +3,11 @@
 
 use std::sync::Arc;
 
-use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use mysten_metrics::monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::watch;
 use tracing::debug;
 
-use crate::{block::CertifiedBlocksOutput, CommitIndex, CommittedSubDag};
+use crate::{CommitIndex, CommittedSubDag, block::CertifiedBlocksOutput};
 
 /// Arguments from commit consumer to this consensus instance.
 /// This includes both parameters and components for communications.

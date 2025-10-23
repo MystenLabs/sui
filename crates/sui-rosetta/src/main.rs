@@ -13,8 +13,8 @@ use anyhow::anyhow;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::EncodeDecodeBase64;
-use serde_json::{json, Value};
-use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME};
+use serde_json::{Value, json};
+use sui_config::{Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME, sui_config_dir};
 use sui_node::SuiNode;
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
@@ -189,7 +189,9 @@ async fn wait_for_sui_client(rpc_address: String) -> SuiClient {
         match SuiClientBuilder::default().build(&rpc_address).await {
             Ok(client) => return client,
             Err(e) => {
-                warn!("Error connecting to Sui RPC server [{rpc_address}]: {e}, retrying in 5 seconds.");
+                warn!(
+                    "Error connecting to Sui RPC server [{rpc_address}]: {e}, retrying in 5 seconds."
+                );
                 tokio::time::sleep(Duration::from_millis(5000)).await;
             }
         }

@@ -5,12 +5,12 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use mysten_common::fatal;
 
+use crate::TypeTag;
 use crate::accumulator_root::AccumulatorObjId;
 use crate::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
 };
 use crate::gas_coin::GasCoin;
-use crate::TypeTag;
 
 pub const ACCUMULATOR_MODULE_NAME: &IdentStr = ident_str!("accumulator");
 

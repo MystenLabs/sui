@@ -4,9 +4,9 @@
 use std::{borrow::Borrow, marker::PhantomData, ops::RangeBounds, sync::Arc};
 
 use bincode::{Decode, Encode};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
-use super::{error::Error, iter, key, Db};
+use super::{Db, error::Error, iter, key};
 
 /// A structured representation of a single RocksDB column family, providing snapshot-based reads
 /// and a transactional write API.
@@ -166,7 +166,7 @@ where
 mod tests {
     use super::*;
 
-    use crate::db::{tests::wm, Db};
+    use crate::db::{Db, tests::wm};
 
     #[test]
     fn test_no_such_column_family() {

@@ -12,8 +12,8 @@ use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::SchedulingSource;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
-use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::traffic_controller::TrafficController;
+use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
 use arc_swap::{ArcSwap, Guard};
@@ -23,18 +23,18 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::hash::MultisetHash;
 use itertools::Itertools;
-use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
+use move_binary_format::binary_config::BinaryConfig;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
 use mysten_common::fatal;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
+    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -58,21 +58,21 @@ use std::{
     sync::Arc,
     vec,
 };
-use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
+use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
-use sui_types::execution_params::get_early_execution_error;
 use sui_types::execution_params::BalanceWithdrawStatus;
 use sui_types::execution_params::ExecutionOrEarlyError;
+use sui_types::execution_params::get_early_execution_error;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
-use sui_types::layout_resolver::into_struct_layout;
 use sui_types::layout_resolver::LayoutResolver;
+use sui_types::layout_resolver::into_struct_layout;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ChildObjectResolver;
@@ -84,8 +84,8 @@ use sui_types::traffic_control::{
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
 use tap::TapFallible;
-use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::RwLock;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -114,7 +114,7 @@ use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValue
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
-use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
+use sui_types::crypto::{AuthoritySignInfo, Signer, default_hash};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
@@ -141,24 +141,24 @@ use sui_types::messages_grpc::{
     ObjectInfoResponse, TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
-use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
+use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
 use sui_types::storage::{
     BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
 };
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
 use sui_types::supported_protocol_versions::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::{
+    SUI_SYSTEM_ADDRESS,
     base_types::*,
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     object::{Object, ObjectRead},
     transaction::*,
-    SUI_SYSTEM_ADDRESS,
 };
-use sui_types::{is_system_package, TypeTag};
+use sui_types::{TypeTag, is_system_package};
 use typed_store::TypedStoreError;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
@@ -180,14 +180,14 @@ use crate::global_state_hasher::{GlobalStateHashStore, GlobalStateHasher, Wrappe
 use crate::metrics::LatencyObserver;
 use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::overload_monitor::{overload_monitor_accept_tx, AuthorityOverloadInfo};
+use crate::overload_monitor::{AuthorityOverloadInfo, overload_monitor_accept_tx};
 use crate::stake_aggregator::StakeAggregator;
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 
 #[cfg(msim)]
 pub use crate::checkpoints::checkpoint_executor::utils::{
-    init_checkpoint_timeout_config, CheckpointTimeoutConfig,
+    CheckpointTimeoutConfig, init_checkpoint_timeout_config,
 };
 
 use crate::authority::authority_store_tables::AuthorityPrunerTables;
@@ -1168,16 +1168,16 @@ impl AuthorityState {
         let signed = self.handle_transaction_impl(transaction, /* sign */ true, epoch_store);
         match signed {
             Ok(Some(s)) => {
-                if self.is_validator(epoch_store) {
-                    if let Some(validator_tx_finalizer) = &self.validator_tx_finalizer {
-                        let tx = s.clone();
-                        let validator_tx_finalizer = validator_tx_finalizer.clone();
-                        let cache_reader = self.get_transaction_cache_reader().clone();
-                        let epoch_store = epoch_store.clone();
-                        spawn_monitored_task!(epoch_store.within_alive_epoch(
-                            validator_tx_finalizer.track_signed_tx(cache_reader, &epoch_store, tx)
-                        ));
-                    }
+                if self.is_validator(epoch_store)
+                    && let Some(validator_tx_finalizer) = &self.validator_tx_finalizer
+                {
+                    let tx = s.clone();
+                    let validator_tx_finalizer = validator_tx_finalizer.clone();
+                    let cache_reader = self.get_transaction_cache_reader().clone();
+                    let epoch_store = epoch_store.clone();
+                    spawn_monitored_task!(epoch_store.within_alive_epoch(
+                        validator_tx_finalizer.track_signed_tx(cache_reader, &epoch_store, tx)
+                    ));
                 }
                 Ok(HandleTransactionResponse {
                     status: TransactionStatus::Signed(s.into_inner().into_sig()),
@@ -1503,16 +1503,16 @@ impl AuthorityState {
 
         let tx_digest = certificate.digest();
 
-        if let Some(fork_recovery) = &self.fork_recovery_state {
-            if let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest) {
-                warn!(
-                    ?tx_digest,
-                    original_digest = ?execution_env.expected_effects_digest,
-                    override_digest = ?override_digest,
-                    "Applying fork recovery override for transaction effects digest"
-                );
-                execution_env.expected_effects_digest = Some(override_digest);
-            }
+        if let Some(fork_recovery) = &self.fork_recovery_state
+            && let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest)
+        {
+            warn!(
+                ?tx_digest,
+                original_digest = ?execution_env.expected_effects_digest,
+                override_digest = ?override_digest,
+                "Applying fork recovery override for transaction effects digest"
+            );
+            execution_env.expected_effects_digest = Some(override_digest);
         }
 
         // prevent concurrent executions of the same tx.
@@ -2008,61 +2008,61 @@ impl AuthorityState {
                 &mut None,
             );
 
-        if let Some(expected_effects_digest) = expected_effects_digest {
-            if effects.digest() != expected_effects_digest {
-                // We dont want to mask the original error, so we log it and continue.
-                match self.debug_dump_transaction_state(
-                    &tx_digest,
-                    &effects,
-                    expected_effects_digest,
-                    &inner_temp_store,
-                    certificate,
-                    &self.config.state_debug_dump_config,
-                ) {
-                    Ok(out_path) => {
-                        info!(
-                            "Dumped node state for transaction {} to {}",
-                            tx_digest,
-                            out_path.as_path().display().to_string()
-                        );
-                    }
-                    Err(e) => {
-                        error!("Error dumping state for transaction {}: {e}", tx_digest);
-                    }
+        if let Some(expected_effects_digest) = expected_effects_digest
+            && effects.digest() != expected_effects_digest
+        {
+            // We dont want to mask the original error, so we log it and continue.
+            match self.debug_dump_transaction_state(
+                &tx_digest,
+                &effects,
+                expected_effects_digest,
+                &inner_temp_store,
+                certificate,
+                &self.config.state_debug_dump_config,
+            ) {
+                Ok(out_path) => {
+                    info!(
+                        "Dumped node state for transaction {} to {}",
+                        tx_digest,
+                        out_path.as_path().display().to_string()
+                    );
                 }
-                error!(
-                    ?tx_digest,
-                    ?expected_effects_digest,
-                    actual_effects = ?effects,
-                    "fork detected!"
-                );
-                if let Err(e) = self.checkpoint_store.record_transaction_fork_detected(
-                    tx_digest,
-                    expected_effects_digest,
-                    effects.digest(),
-                ) {
-                    error!("Failed to record transaction fork: {e}");
+                Err(e) => {
+                    error!("Error dumping state for transaction {}: {e}", tx_digest);
                 }
-
-                fail_point_if!("kill_transaction_fork_node", || {
-                    #[cfg(msim)]
-                    {
-                        tracing::error!(
-                            fatal = true,
-                            "Fork recovery test: killing node due to transaction effects fork for digest: {}",
-                            tx_digest
-                        );
-                        sui_simulator::task::shutdown_current_node();
-                    }
-                });
-
-                fatal!(
-                    "Transaction {} is expected to have effects digest {}, but got {}!",
-                    tx_digest,
-                    expected_effects_digest,
-                    effects.digest()
-                );
             }
+            error!(
+                ?tx_digest,
+                ?expected_effects_digest,
+                actual_effects = ?effects,
+                "fork detected!"
+            );
+            if let Err(e) = self.checkpoint_store.record_transaction_fork_detected(
+                tx_digest,
+                expected_effects_digest,
+                effects.digest(),
+            ) {
+                error!("Failed to record transaction fork: {e}");
+            }
+
+            fail_point_if!("kill_transaction_fork_node", || {
+                #[cfg(msim)]
+                {
+                    tracing::error!(
+                        fatal = true,
+                        "Fork recovery test: killing node due to transaction effects fork for digest: {}",
+                        tx_digest
+                    );
+                    sui_simulator::task::shutdown_current_node();
+                }
+            });
+
+            fatal!(
+                "Transaction {} is expected to have effects digest {}, but got {}!",
+                tx_digest,
+                expected_effects_digest,
+                effects.digest()
+            );
         }
 
         fail_point_arg!("simulate_fork_during_execution", |(
@@ -2981,13 +2981,19 @@ impl AuthorityState {
             // For mutated objects, retrieve old owner and delete old index if there is a owner change.
             if let WriteKind::Mutate = kind {
                 let Some(old_version) = modified_at_version.get(id) else {
-                    panic!("tx_digest={:?}, error processing object owner index, cannot find modified at version for mutated object [{id}].", tx_digest);
+                    panic!(
+                        "tx_digest={:?}, error processing object owner index, cannot find modified at version for mutated object [{id}].",
+                        tx_digest
+                    );
                 };
                 // When we process the index, the latest object hasn't been written yet so
                 // the old object must be present.
                 let Some(old_object) = self.get_object_store().get_object_by_key(id, *old_version)
                 else {
-                    panic!("tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}", tx_digest, id, old_version);
+                    panic!(
+                        "tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}",
+                        tx_digest, id, old_version
+                    );
                 };
                 if old_object.owner != owner {
                     match old_object.owner {
@@ -3009,7 +3015,15 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
+                    assert_eq!(
+                        new_object.version(),
+                        oref.1,
+                        "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}",
+                        tx_digest,
+                        id,
+                        new_object.version(),
+                        oref.1
+                    );
 
                     let type_ = new_object
                         .type_()
@@ -3032,7 +3046,15 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
+                    assert_eq!(
+                        new_object.version(),
+                        oref.1,
+                        "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}",
+                        tx_digest,
+                        id,
+                        new_object.version(),
+                        oref.1
+                    );
 
                     let Some(df_info) = self
                         .try_create_dynamic_field_info(new_object, written, layout_resolver.as_mut())
@@ -3761,24 +3783,18 @@ impl AuthorityState {
         );
         self.get_reconfig_api()
             .set_epoch_start_configuration(&epoch_start_configuration);
-        if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
-            if self
+        if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path
+            && self
                 .db_checkpoint_config
                 .perform_db_checkpoints_at_epoch_end
-            {
-                let checkpoint_indexes = self
-                    .db_checkpoint_config
-                    .perform_index_db_checkpoints_at_epoch_end
-                    .unwrap_or(false);
-                let current_epoch = cur_epoch_store.epoch();
-                let epoch_checkpoint_path =
-                    checkpoint_path.join(format!("epoch_{}", current_epoch));
-                self.checkpoint_all_dbs(
-                    &epoch_checkpoint_path,
-                    cur_epoch_store,
-                    checkpoint_indexes,
-                )?;
-            }
+        {
+            let checkpoint_indexes = self
+                .db_checkpoint_config
+                .perform_index_db_checkpoints_at_epoch_end
+                .unwrap_or(false);
+            let current_epoch = cur_epoch_store.epoch();
+            let epoch_checkpoint_path = checkpoint_path.join(format!("epoch_{}", current_epoch));
+            self.checkpoint_all_dbs(&epoch_checkpoint_path, cur_epoch_store, checkpoint_indexes)?;
         }
 
         self.get_reconfig_api()
@@ -3885,11 +3901,11 @@ impl AuthorityState {
             self.expensive_check_is_consistent_state(state_hasher, cur_epoch_store);
         }
 
-        if expensive_safety_check_config.enable_secondary_index_checks() {
-            if let Some(indexes) = self.indexes.clone() {
-                verify_indexes(self.get_global_state_hash_store().as_ref(), indexes)
-                    .expect("secondary indexes are inconsistent");
-            }
+        if expensive_safety_check_config.enable_secondary_index_checks()
+            && let Some(indexes) = self.indexes.clone()
+        {
+            verify_indexes(self.get_global_state_hash_store().as_ref(), indexes)
+                .expect("secondary indexes are inconsistent");
         }
     }
 
@@ -3970,10 +3986,8 @@ impl AuthorityState {
         self.committee_store
             .checkpoint_db(&checkpoint_path_tmp.join("epochs"))?;
 
-        if checkpoint_indexes {
-            if let Some(indexes) = self.indexes.as_ref() {
-                indexes.checkpoint_db(&checkpoint_path_tmp.join("indexes"))?;
-            }
+        if checkpoint_indexes && let Some(indexes) = self.indexes.as_ref() {
+            indexes.checkpoint_db(&checkpoint_path_tmp.join("indexes"))?;
         }
 
         fs::rename(checkpoint_path_tmp, checkpoint_path)
@@ -4669,7 +4683,7 @@ impl AuthorityState {
                         "'Any' queries are not supported by the fullnode.".to_string(),
                     ),
                 }
-                .into())
+                .into());
             }
         };
 
@@ -4917,15 +4931,12 @@ impl AuthorityState {
             if inner_temporary_store
                 .loaded_runtime_objects
                 .contains_key(&object_id)
-            {
-                if let Some(object) = self
+                && let Some(object) = self
                     .get_object_store()
                     .get_object_by_key(&object_id, version)
-                {
-                    if object.is_coin() {
-                        input_coin_objects.insert(object_id, object);
-                    }
-                }
+                && object.is_coin()
+            {
+                input_coin_objects.insert(object_id, object);
             }
         }
 
@@ -6064,9 +6075,13 @@ impl RandomnessRoundReceiver {
                 Err(_) => {
                     if cfg!(debug_assertions) {
                         // Crash on randomness update execution timeout in debug builds.
-                        panic!("randomness state update transaction execution timed out at epoch {epoch}, round {round}");
+                        panic!(
+                            "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
+                        );
                     }
-                    warn!("randomness state update transaction execution timed out at epoch {epoch}, round {round}");
+                    warn!(
+                        "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
+                    );
                     // Continue waiting as long as necessary in non-debug builds.
                     authority_state
                         .get_transaction_cache_reader()
@@ -6080,9 +6095,13 @@ impl RandomnessRoundReceiver {
 
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
-                fatal!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
+                fatal!(
+                    "failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}"
+                );
             }
-            debug!("successfully executed randomness state update transaction at epoch {epoch}, round {round}");
+            debug!(
+                "successfully executed randomness state update transaction at epoch {epoch}, round {round}"
+            );
         });
     }
 }

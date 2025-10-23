@@ -17,8 +17,8 @@ use url::Url;
 
 use crate::postgres::{Db, DbArgs};
 use crate::{
-    ingestion::{ClientArgs, IngestionConfig},
     Indexer, IndexerArgs, IndexerMetrics, Result,
+    ingestion::{ClientArgs, IngestionConfig},
 };
 
 /// Bundle of arguments for setting up an indexer cluster (an Indexer and its associated Metrics
@@ -248,15 +248,15 @@ mod tests {
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
+    use crate::FieldCount;
     use crate::ingestion::ClientArgs;
-    use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
+    use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::postgres::{
-        temp::{get_available_port, TempDb},
         Connection, Db, DbArgs,
+        temp::{TempDb, get_available_port},
     };
     use crate::types::full_checkpoint_content::CheckpointData;
-    use crate::FieldCount;
 
     use super::*;
 

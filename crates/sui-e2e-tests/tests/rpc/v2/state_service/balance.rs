@@ -9,7 +9,7 @@ use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, ListBalancesRequest};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
-use sui_types::{base_types::SuiAddress, Identifier};
+use sui_types::{Identifier, base_types::SuiAddress};
 use test_cluster::TestClusterBuilder;
 const SUI_COIN_TYPE: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";

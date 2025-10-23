@@ -4,10 +4,10 @@
 use std::sync::Arc;
 
 use prometheus::{
+    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, Registry,
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
-    Registry,
+    register_int_gauge_with_registry,
 };
 
 /// Histogram buckets for the distribution of object file fetching latencies.

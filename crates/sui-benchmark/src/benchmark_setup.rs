@@ -5,7 +5,7 @@ use crate::bank::BenchmarkBank;
 use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
 use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use prometheus::Registry;
 use rand::seq::SliceRandom;
 use std::path::PathBuf;
@@ -14,7 +14,7 @@ use std::thread::JoinHandle;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Owner;
 use tokio::runtime::Builder;
-use tokio::sync::{oneshot, Barrier};
+use tokio::sync::{Barrier, oneshot};
 use tracing::info;
 
 pub struct BenchmarkSetup {
@@ -134,10 +134,10 @@ impl BenchmarkSetup {
 
             for obj in genesis.objects().iter() {
                 let owner = &obj.owner;
-                if let Owner::AddressOwner(addr) = owner {
-                    if *addr == primary_gas_owner_addr.into() {
-                        genesis_gas_objects.push(obj.clone());
-                    }
+                if let Owner::AddressOwner(addr) = owner
+                    && *addr == primary_gas_owner_addr.into()
+                {
+                    genesis_gas_objects.push(obj.clone());
                 }
             }
 

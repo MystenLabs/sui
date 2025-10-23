@@ -8,9 +8,9 @@ use tokio::sync::watch;
 use tracing::{debug, instrument};
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
+    BalanceSettlement, ScheduleResult, ScheduleStatus,
     balance_read::AccountBalanceRead,
     scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
-    BalanceSettlement, ScheduleResult, ScheduleStatus,
 };
 
 /// A naive implementation of the balance withdraw scheduler that does not attempt to optimize the scheduling.
@@ -79,7 +79,8 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                         debug!(
                             ?account_id,
                             "Accumulator account object is already at version {:?}, but the withdraws are at version {:?}",
-                            cur_version, withdraws.accumulator_version
+                            cur_version,
+                            withdraws.accumulator_version
                         );
                         withdraws.notify_skip_schedule();
                         return;

@@ -4,7 +4,7 @@
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
-    object::{bounded_visitor::BoundedVisitor, Data},
+    object::{Data, bounded_visitor::BoundedVisitor},
 };
 
 use sui_package_resolver::Resolver;

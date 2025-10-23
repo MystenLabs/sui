@@ -30,7 +30,7 @@ use sui_types::traffic_control::{
     PolicyConfig, PolicyType, RemoteFirewallConfig, TrafficControlReconfigParams, Weight,
 };
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc};
 use tracing::{debug, error, info, trace, warn};
 
 pub const METRICS_INTERVAL_SECS: u64 = 2;
@@ -207,16 +207,16 @@ impl TrafficController {
             dry_run: None,
         };
 
-        if let Some(error_policy) = self.error_policy.as_ref() {
-            if let TrafficControlPolicy::FreqThreshold(ref policy) = *error_policy.lock().await {
-                result.error_threshold = Some(policy.client_threshold);
-            }
+        if let Some(error_policy) = self.error_policy.as_ref()
+            && let TrafficControlPolicy::FreqThreshold(ref policy) = *error_policy.lock().await
+        {
+            result.error_threshold = Some(policy.client_threshold);
         }
 
-        if let Some(spam_policy) = self.spam_policy.as_ref() {
-            if let TrafficControlPolicy::FreqThreshold(ref policy) = *spam_policy.lock().await {
-                result.spam_threshold = Some(policy.client_threshold);
-            }
+        if let Some(spam_policy) = self.spam_policy.as_ref()
+            && let TrafficControlPolicy::FreqThreshold(ref policy) = *spam_policy.lock().await
+        {
+            result.spam_threshold = Some(policy.client_threshold);
         }
 
         result.dry_run = Some(self.policy_config.read().await.dry_run);
@@ -594,8 +594,7 @@ async fn handle_error_tally(
     }
     trace!(
         "Handling error_type {:?} from client {:?}",
-        error_type,
-        tally.direct,
+        error_type, tally.direct,
     );
     metrics
         .tally_error_types
@@ -603,20 +602,21 @@ async fn handle_error_tally(
         .inc();
     let resp = policy.lock().await.handle_tally(tally);
     metrics.error_tally_handled.inc();
-    if let Some(fw_config) = fw_config {
-        if fw_config.delegate_error_blocking && !mem_drainfile_present {
-            let client = nodefw_client
-                .as_ref()
-                .expect("Expected NodeFWClient for blocklist delegation");
-            return delegate_policy_response(
-                resp,
-                policy_config,
-                client,
-                fw_config.destination_port,
-                metrics.clone(),
-            )
-            .await;
-        }
+    if let Some(fw_config) = fw_config
+        && fw_config.delegate_error_blocking
+        && !mem_drainfile_present
+    {
+        let client = nodefw_client
+            .as_ref()
+            .expect("Expected NodeFWClient for blocklist delegation");
+        return delegate_policy_response(
+            resp,
+            policy_config,
+            client,
+            fw_config.destination_port,
+            metrics.clone(),
+        )
+        .await;
     }
     handle_policy_response(resp, policy_config, blocklists, metrics).await;
     Ok(())
@@ -637,20 +637,21 @@ async fn handle_spam_tally(
     }
     let resp = policy.lock().await.handle_tally(tally.clone());
     metrics.tally_handled.inc();
-    if let Some(fw_config) = fw_config {
-        if fw_config.delegate_spam_blocking && !mem_drainfile_present {
-            let client = nodefw_client
-                .as_ref()
-                .expect("Expected NodeFWClient for blocklist delegation");
-            return delegate_policy_response(
-                resp,
-                policy_config,
-                client,
-                fw_config.destination_port,
-                metrics.clone(),
-            )
-            .await;
-        }
+    if let Some(fw_config) = fw_config
+        && fw_config.delegate_spam_blocking
+        && !mem_drainfile_present
+    {
+        let client = nodefw_client
+            .as_ref()
+            .expect("Expected NodeFWClient for blocklist delegation");
+        return delegate_policy_response(
+            resp,
+            policy_config,
+            client,
+            fw_config.destination_port,
+            metrics.clone(),
+        )
+        .await;
     }
     handle_policy_response(resp, policy_config, blocklists, metrics).await;
     Ok(())
@@ -671,33 +672,31 @@ async fn handle_policy_response(
         proxy_blocklist_ttl_sec,
         ..
     } = policy_config;
-    if let Some(client) = block_client {
-        if blocklists
+    if let Some(client) = block_client
+        && blocklists
             .clients
             .insert(
                 client,
                 SystemTime::now() + Duration::from_secs(*connection_blocklist_ttl_sec),
             )
             .is_none()
-        {
-            // Only increment the metric if the client was not already blocked
-            debug!("Adding client {:?} to blocklist", client);
-            metrics.connection_ip_blocklist_len.inc();
-        }
+    {
+        // Only increment the metric if the client was not already blocked
+        debug!("Adding client {:?} to blocklist", client);
+        metrics.connection_ip_blocklist_len.inc();
     }
-    if let Some(client) = block_proxied_client {
-        if blocklists
+    if let Some(client) = block_proxied_client
+        && blocklists
             .proxied_clients
             .insert(
                 client,
                 SystemTime::now() + Duration::from_secs(*proxy_blocklist_ttl_sec),
             )
             .is_none()
-        {
-            // Only increment the metric if the client was not already blocked
-            debug!("Adding proxied client {:?} to blocklist", client);
-            metrics.proxy_ip_blocklist_len.inc();
-        }
+    {
+        // Only increment the metric if the client was not already blocked
+        debug!("Adding proxied client {:?} to blocklist", client);
+        metrics.proxy_ip_blocklist_len.inc();
     }
 }
 

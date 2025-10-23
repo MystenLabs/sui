@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use diesel::prelude::*;
-use diesel::sql_types::BigInt;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
+use diesel::prelude::*;
+use diesel::sql_types::BigInt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework_store_traits as store;

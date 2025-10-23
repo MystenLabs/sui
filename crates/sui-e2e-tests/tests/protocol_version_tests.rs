@@ -62,8 +62,8 @@ mod sim_only_tests {
     use mysten_common::register_debug_fatal_handler;
     use std::path::PathBuf;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
@@ -78,30 +78,30 @@ mod sim_only_tests {
     use sui_types::id::ID;
     use sui_types::object::Owner;
     use sui_types::sui_system_state::{
+        SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2, SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2,
+        SUI_SYSTEM_STATE_SIM_TEST_V1, SuiSystemState, SuiSystemStateTrait,
         epoch_start_sui_system_state::EpochStartSystemStateTrait, get_validator_from_table,
-        SuiSystemState, SuiSystemStateTrait, SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2,
-        SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2, SUI_SYSTEM_STATE_SIM_TEST_V1,
     };
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::transaction::{
         CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
-        TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC, TransactionData,
     };
     use sui_types::{
+        MOVE_STDLIB_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         base_types::{SequenceNumber, SuiAddress},
         digests::TransactionDigest,
         object::Object,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         transaction::TransactionKind,
-        MOVE_STDLIB_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
-        SUI_SYSTEM_PACKAGE_ID,
     };
     use sui_types::{
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
         SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     };
     use test_cluster::TestCluster;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tracing::info;
 
     const START: u64 = ProtocolVersion::MAX.as_u64();

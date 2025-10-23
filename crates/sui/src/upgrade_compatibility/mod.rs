@@ -6,9 +6,9 @@ mod formatting;
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
-use formatting::{format_list, format_param, singular_or_plural, FormattedField};
+use formatting::{FormattedField, format_list, format_param, singular_or_plural};
 
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -20,19 +20,21 @@ use move_binary_format::file_format::{
     StructDefinitionIndex, TableIndex,
 };
 use move_binary_format::{
+    CompiledModule,
     compatibility::{Compatibility, InclusionCheck},
     compatibility_mode::CompatibilityMode,
     file_format::Visibility,
     inclusion_mode::InclusionCheckMode,
-    normalized, CompiledModule,
+    normalized,
 };
 use move_bytecode_source_map::source_map::SourceName;
 use move_command_line_common::files::FileHash;
 use move_compiler::diagnostics::codes::DiagnosticInfo;
 use move_compiler::{
     diagnostics::{
-        codes::{custom, Severity},
-        report_diagnostics_to_buffer, Diagnostic, Diagnostics,
+        Diagnostic, Diagnostics,
+        codes::{Severity, custom},
+        report_diagnostics_to_buffer,
     },
     shared::files::FileName,
 };
@@ -768,11 +770,11 @@ fn compare_packages(
             Some(new_module) => {
                 let new_module_address_idx = new_module.self_handle().address;
                 let addrs = &mut new_module.address_identifiers;
-                if let Some(address_mut) = addrs.get_mut(new_module_address_idx.0 as usize) {
-                    if *address_mut == AccountAddress::ZERO {
-                        // if the new module address is zero, set it to the on-chain address
-                        *address_mut = package_id;
-                    }
+                if let Some(address_mut) = addrs.get_mut(new_module_address_idx.0 as usize)
+                    && *address_mut == AccountAddress::ZERO
+                {
+                    // if the new module address is zero, set it to the on-chain address
+                    *address_mut = package_id;
                 }
 
                 let compiled_unit_with_source = new_package
@@ -810,7 +812,8 @@ fn compare_packages(
                 &new_package.package.file_map,
                 diags,
                 use_colors()
-            )).context("Unable to convert buffer to string")?,
+            ))
+            .context("Unable to convert buffer to string")?,
             match policy {
                 UpgradePolicy::Compatible => "compatible",
                 UpgradePolicy::Additive => "additive",
@@ -1975,7 +1978,7 @@ fn enum_variant_mismatch_diag(
                 .get(i)
                 .context("Unable to get variant location")?
                 .0
-                 .1;
+                .1;
 
             let messages = enum_variant_field_message(old_variant, new_variant)?;
 
@@ -2044,7 +2047,7 @@ fn enum_new_variant_diag(
                 .get(i)
                 .context("Unable to get variant location")?
                 .0
-                 .1;
+                .1;
 
             diags.add(Diagnostic::new(
                 Enums::VariantMismatch,
@@ -2576,7 +2579,7 @@ fn use_colors() -> bool {
 
     #[cfg(not(test))]
     {
-        use std::io::{stdout, IsTerminal};
+        use std::io::{IsTerminal, stdout};
         stdout().is_terminal()
     }
 }

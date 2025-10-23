@@ -5,10 +5,10 @@ use std::collections::BTreeMap;
 
 use crate::{errors::IndexerError, indexer_reader::IndexerReader};
 use async_trait::async_trait;
-use jsonrpsee::{core::RpcResult, RpcModule};
+use jsonrpsee::{RpcModule, core::RpcResult};
 
-use cached::{proc_macro::cached, SizedCache};
-use sui_json_rpc::{governance_api::ValidatorExchangeRates, SuiRpcModule};
+use cached::{SizedCache, proc_macro::cached};
+use sui_json_rpc::{SuiRpcModule, governance_api::ValidatorExchangeRates};
 use sui_json_rpc_api::GovernanceReadApiServer;
 use sui_json_rpc_types::{
     DelegatedStake, EpochInfo, StakeStatus, SuiCommittee, SuiObjectDataFilter, ValidatorApys,
@@ -19,7 +19,7 @@ use sui_types::{
     committee::EpochId,
     governance::StakedSui,
     sui_serde::BigInt,
-    sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, PoolTokenExchangeRate},
+    sui_system_state::{PoolTokenExchangeRate, sui_system_state_summary::SuiSystemStateSummary},
 };
 
 #[derive(Clone)]

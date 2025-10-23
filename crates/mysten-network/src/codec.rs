@@ -4,8 +4,8 @@
 use bytes::{Buf, BufMut};
 use std::{io::Read, marker::PhantomData};
 use tonic::{
-    codec::{Codec, DecodeBuf, Decoder, EncodeBuf, Encoder},
     Status,
+    codec::{Codec, DecodeBuf, Decoder, EncodeBuf, Encoder},
 };
 
 #[derive(Debug)]

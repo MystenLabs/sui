@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use anyhow::Context as _;
 use anyhow::Result;
+use anyhow::anyhow;
 use diesel::{
-    dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
-    OptionalExtension, QueryDsl, SelectableHelper, TextExpressionMethods,
+    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, OptionalExtension, QueryDsl,
+    SelectableHelper, TextExpressionMethods, dsl::sql, sql_types::Bool,
 };
 use itertools::Itertools;
 use std::sync::Arc;
@@ -34,7 +34,7 @@ use sui_types::{
     digests::TransactionDigest,
     dynamic_field::DynamicFieldInfo,
     object::{Object, ObjectRead},
-    sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
+    sui_system_state::{SuiSystemStateTrait, sui_system_state_summary::SuiSystemStateSummary},
 };
 use sui_types::{coin::CoinMetadata, event::EventID};
 
@@ -42,7 +42,7 @@ use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
 use crate::models::objects::StoredHistoryObject;
 use crate::models::objects::StoredObjectSnapshot;
-use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
+use crate::models::transactions::{StoredTransactionEvents, stored_events_to_events};
 use crate::schema::objects_history;
 use crate::schema::objects_snapshot;
 use crate::schema::pruner_cp_watermark;
@@ -54,7 +54,7 @@ use crate::{
         epoch::StoredEpochInfo,
         events::StoredEvent,
         objects::{CoinBalance, StoredObject},
-        transactions::{tx_events_to_sui_tx_events, StoredTransaction},
+        transactions::{StoredTransaction, tx_events_to_sui_tx_events},
         tx_indices::TxSequenceNumber,
     },
     schema::{checkpoints, epochs, events, objects, transactions},
@@ -782,11 +782,7 @@ impl IndexerReader {
 
         let query = format!(
             "SELECT {TX_SEQUENCE_NUMBER_STR} FROM {} WHERE {} {} ORDER BY {TX_SEQUENCE_NUMBER_STR} {} LIMIT {}",
-            table_name,
-            main_where_clause,
-            cursor_clause,
-            order_str,
-            limit,
+            table_name, main_where_clause, cursor_clause, order_str, limit,
         );
 
         debug!("query transaction blocks: {}", query);
@@ -985,9 +981,15 @@ impl IndexerReader {
         let query = if let EventFilter::Sender(sender) = &filter {
             // Need to remove ambiguities for tx_sequence_number column
             let cursor_clause = if descending_order {
-                format!("(e.{TX_SEQUENCE_NUMBER_STR} < {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
+                format!(
+                    "(e.{TX_SEQUENCE_NUMBER_STR} < {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} < {}))",
+                    tx_seq, tx_seq, event_seq
+                )
             } else {
-                format!("(e.{TX_SEQUENCE_NUMBER_STR} > {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} > {}))", tx_seq, tx_seq, event_seq)
+                format!(
+                    "(e.{TX_SEQUENCE_NUMBER_STR} > {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} > {}))",
+                    tx_seq, tx_seq, event_seq
+                )
             };
             let order_clause = if descending_order {
                 format!("e.{TX_SEQUENCE_NUMBER_STR} DESC, e.{EVENT_SEQUENCE_NUMBER_STR} DESC")
@@ -1052,9 +1054,15 @@ impl IndexerReader {
             };
 
             let cursor_clause = if descending_order {
-                format!("AND ({TX_SEQUENCE_NUMBER_STR} < {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
+                format!(
+                    "AND ({TX_SEQUENCE_NUMBER_STR} < {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} < {}))",
+                    tx_seq, tx_seq, event_seq
+                )
             } else {
-                format!("AND ({TX_SEQUENCE_NUMBER_STR} > {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} > {}))", tx_seq, tx_seq, event_seq)
+                format!(
+                    "AND ({TX_SEQUENCE_NUMBER_STR} > {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} > {}))",
+                    tx_seq, tx_seq, event_seq
+                )
             };
             let order_clause = if descending_order {
                 format!("{TX_SEQUENCE_NUMBER_STR} DESC, {EVENT_SEQUENCE_NUMBER_STR} DESC")

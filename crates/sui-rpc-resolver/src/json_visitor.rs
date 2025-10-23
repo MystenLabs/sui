@@ -17,10 +17,10 @@ use move_core_types::{
     u256::U256,
 };
 use serde_json::{Map, Value};
-use sui_package_resolver::{error::Error as ResolverError, PackageStore, Resolver};
+use sui_package_resolver::{PackageStore, Resolver, error::Error as ResolverError};
 use sui_types::{
     balance::Balance,
-    base_types::{move_ascii_str_layout, move_utf8_str_layout, url_layout, RESOLVED_STD_OPTION},
+    base_types::{RESOLVED_STD_OPTION, move_ascii_str_layout, move_utf8_str_layout, url_layout},
     event::Event,
     id::{ID, UID},
     object::option_visitor as OV,
@@ -200,7 +200,7 @@ impl<'b, 'l> AV::Visitor<'b, 'l> for JsonVisitor {
     ) -> Result<Self::Value, Self::Error> {
         // If this is a vector of u8 (bytes), encode it using Base64
         if driver.element_layout().is_type(&TypeTag::U8) {
-            use base64::{engine::general_purpose::STANDARD, Engine};
+            use base64::{Engine, engine::general_purpose::STANDARD};
 
             if let Some(bytes) = driver
                 .bytes()

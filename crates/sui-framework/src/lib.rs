@@ -3,7 +3,7 @@
 
 use move_binary_format::normalized;
 use move_binary_format::{
-    binary_config::BinaryConfig, compatibility::Compatibility, CompiledModule,
+    CompiledModule, binary_config::BinaryConfig, compatibility::Compatibility,
 };
 use move_core_types::gas_algebra::InternalGas;
 use serde::{Deserialize, Serialize};
@@ -11,14 +11,14 @@ use std::fmt::Formatter;
 use std::sync::LazyLock;
 use sui_types::base_types::ObjectRef;
 use sui_types::storage::ObjectStore;
+use sui_types::{BRIDGE_PACKAGE_ID, DEEPBOOK_PACKAGE_ID};
 use sui_types::{
+    MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
     base_types::ObjectID,
     digests::TransactionDigest,
     move_package::MovePackage,
-    object::{Object, OBJECT_START_VERSION},
-    MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+    object::{OBJECT_START_VERSION, Object},
 };
-use sui_types::{BRIDGE_PACKAGE_ID, DEEPBOOK_PACKAGE_ID};
 use tracing::error;
 
 /// Encapsulates a system package in the framework

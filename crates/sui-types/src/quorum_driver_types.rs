@@ -37,31 +37,39 @@ pub enum QuorumDriverError {
     #[error("Invalid user signature: {0}.")]
     InvalidUserSignature(SuiError),
     #[error(
-        "Failed to sign transaction by a quorum of validators because of locked objects: {conflicting_txes:?}",
+        "Failed to sign transaction by a quorum of validators because of locked objects: {conflicting_txes:?}"
     )]
     ObjectsDoubleUsed {
         conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
     },
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,
-    #[error("Transaction timed out before reaching finality. Last recorded retriable error: {last_error}")]
+    #[error(
+        "Transaction timed out before reaching finality. Last recorded retriable error: {last_error}"
+    )]
     TimeoutBeforeFinalityWithErrors {
         last_error: String,
         attempts: u32,
         timeout: Duration,
     },
-    #[error("Transaction failed to reach finality with transient error after {total_attempts} attempts.")]
+    #[error(
+        "Transaction failed to reach finality with transient error after {total_attempts} attempts."
+    )]
     FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u32 },
     #[error("{NON_RECOVERABLE_ERROR_MSG}: {errors:?}.")]
     NonRecoverableTransactionError { errors: GroupedErrors },
-    #[error("Transaction is not processed because {overloaded_stake} of validators by stake are overloaded with certificates pending execution.")]
+    #[error(
+        "Transaction is not processed because {overloaded_stake} of validators by stake are overloaded with certificates pending execution."
+    )]
     SystemOverload {
         overloaded_stake: StakeUnit,
         errors: GroupedErrors,
     },
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSignatures,
-    #[error("Transaction is not processed because {overload_stake} of validators are overloaded and asked client to retry after {retry_after_secs}.")]
+    #[error(
+        "Transaction is not processed because {overload_stake} of validators are overloaded and asked client to retry after {retry_after_secs}."
+    )]
     SystemOverloadRetryAfter {
         overload_stake: StakeUnit,
         errors: GroupedErrors,
@@ -75,7 +83,9 @@ pub enum QuorumDriverError {
         details: String,
     },
 
-    #[error("Transaction is already being processed in transaction orchestrator (most likely by quorum driver), wait for results")]
+    #[error(
+        "Transaction is already being processed in transaction orchestrator (most likely by quorum driver), wait for results"
+    )]
     PendingExecutionInTransactionOrchestrator,
 }
 

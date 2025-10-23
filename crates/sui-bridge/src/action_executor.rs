@@ -12,8 +12,8 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
-use sui_types::transaction::ObjectArg;
 use sui_types::TypeTag;
+use sui_types::transaction::ObjectArg;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{Signature, SuiKeyPair},
@@ -40,7 +40,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio::time::Duration;
-use tracing::{error, info, instrument, warn, Instrument};
+use tracing::{Instrument, error, info, instrument, warn};
 
 pub const CHANNEL_SIZE: usize = 1000;
 pub const SIGNING_CONCURRENCY: usize = 10;
@@ -379,7 +379,10 @@ where
                 // TODO: spawn a task for this
                 if attempt_times >= MAX_SIGNING_ATTEMPTS {
                     metrics.err_signature_aggregation_too_many_failures.inc();
-                    error!("Manual intervention is required. Failed to collect sigs for bridge action after {MAX_SIGNING_ATTEMPTS} attempts: {:?}", e);
+                    error!(
+                        "Manual intervention is required. Failed to collect sigs for bridge action after {MAX_SIGNING_ATTEMPTS} attempts: {:?}",
+                        e
+                    );
                     return;
                 }
                 delay(attempt_times).await;
@@ -637,7 +640,10 @@ where
                 // After human examination, the node should be restarted and fetch them from WAL.
 
                 metrics.err_sui_transaction_execution.inc();
-                error!(?tx_digest, "Manual intervention is needed. Sui transaction executed and failed with error: {error:?}");
+                error!(
+                    ?tx_digest,
+                    "Manual intervention is needed. Sui transaction executed and failed with error: {error:?}"
+                );
             }
         }
     }
@@ -686,9 +692,9 @@ mod tests {
     use sui_json_rpc_types::SuiTransactionBlockEffects;
     use sui_json_rpc_types::SuiTransactionBlockEvents;
     use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockResponse};
+    use sui_types::TypeTag;
     use sui_types::crypto::get_key_pair;
     use sui_types::gas_coin::GasCoin;
-    use sui_types::TypeTag;
     use sui_types::{base_types::random_object_ref, transaction::TransactionData};
 
     use crate::{
@@ -887,9 +893,11 @@ mod tests {
         assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
 
         // The retry is still going on, action still in WAL
-        assert!(store
-            .get_all_pending_actions()
-            .contains_key(&action.digest()));
+        assert!(
+            store
+                .get_all_pending_actions()
+                .contains_key(&action.digest())
+        );
 
         // Now let it succeed
         let mut event = SuiEvent::random_for_testing();
@@ -906,9 +914,11 @@ mod tests {
         // Give it 1 second to retry and succeed
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         // The action is successful and should be removed from WAL now
-        assert!(!store
-            .get_all_pending_actions()
-            .contains_key(&action.digest()));
+        assert!(
+            !store
+                .get_all_pending_actions()
+                .contains_key(&action.digest())
+        );
     }
 
     #[tokio::test]
@@ -1031,9 +1041,11 @@ mod tests {
         // Expect to see the transaction to be requested and succeed
         assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
         // The action is removed from WAL
-        assert!(!store
-            .get_all_pending_actions()
-            .contains_key(&action.digest()));
+        assert!(
+            !store
+                .get_all_pending_actions()
+                .contains_key(&action.digest())
+        );
     }
 
     #[tokio::test]

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_macros::nondeterministic;
-use sui_types::base_types::{random_object_ref, FullObjectRef, ObjectID};
+use sui_types::base_types::{FullObjectRef, ObjectID, random_object_ref};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{AccountKeyPair, AuthorityPublicKeyBytes, Signer};
 use sui_types::effects::{SignedTransactionEffects, TestEffectsBuilder};
@@ -17,7 +17,7 @@ use sui_types::error::SuiError;
 use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::{
-    CallArg, SignedTransaction, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    CallArg, SignedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
 };
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;

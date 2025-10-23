@@ -6,10 +6,10 @@ use std::pin::Pin;
 use crate::RpcService;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::merge::Merge;
-use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
+use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
 
 #[tonic::async_trait]
 impl SubscriptionService for RpcService {

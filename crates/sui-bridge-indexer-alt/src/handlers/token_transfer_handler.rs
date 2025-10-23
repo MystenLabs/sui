@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::handlers::{
-    is_bridge_txn, BRIDGE, TOKEN_DEPOSITED_EVENT, TOKEN_TRANSFER_APPROVED, TOKEN_TRANSFER_CLAIMED,
+    BRIDGE, TOKEN_DEPOSITED_EVENT, TOKEN_TRANSFER_APPROVED, TOKEN_TRANSFER_CLAIMED, is_bridge_txn,
 };
 use crate::metrics::BridgeIndexerMetrics;
 use crate::struct_tag;
@@ -14,13 +14,13 @@ use sui_bridge::events::{
 };
 use sui_bridge_schema::models::{BridgeDataSource, TokenTransfer, TokenTransferStatus};
 use sui_bridge_schema::schema::token_transfer;
-use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::store::Store;
+use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
-use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
 use tracing::info;
 
 pub struct TokenTransferHandler {

@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::reader::StateReader;
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use crate::reader::StateReader;
 use itertools::Itertools;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMaskTree;
@@ -84,7 +84,7 @@ pub fn simulate_transaction(
             return Err(FieldViolation::new("transaction")
                 .with_description(format!("invalid transaction: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
-                .into())
+                .into());
         }
 
         // We weren't able to parse out a fully-formed transaction so we'll attempt to perform
@@ -130,8 +130,10 @@ pub fn simulate_transaction(
             if gas_balance < estimate {
                 return Err(RpcError::new(
                     tonic::Code::InvalidArgument,
-                    format!("Insufficient gas balance to cover estimated transaction cost. \
-                        Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"),
+                    format!(
+                        "Insufficient gas balance to cover estimated transaction cost. \
+                        Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"
+                    ),
                 ));
             }
             transaction.gas_data_mut().budget = estimate;

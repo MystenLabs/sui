@@ -8,12 +8,12 @@ use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_tbls::{dkg_v1, dkg_v1::Output, nodes, nodes::PartyId};
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use mysten_common::debug_fatal;
 use parking_lot::Mutex;
-use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
+use rand::rngs::{OsRng, StdRng};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Weak};
@@ -34,7 +34,7 @@ use tracing::{debug, error, info, warn};
 use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::{
-    consensus_quarantine::ConsensusCommitOutput, AuthorityPerEpochStore,
+    AuthorityPerEpochStore, consensus_quarantine::ConsensusCommitOutput,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::consensus_adapter::SubmitToConsensus;
@@ -186,7 +186,9 @@ impl RandomnessManager {
         let tables = match epoch_store.tables() {
             Ok(tables) => tables,
             Err(_) => {
-                error!("could not construct RandomnessManager: AuthorityPerEpochStore tables already gone");
+                error!(
+                    "could not construct RandomnessManager: AuthorityPerEpochStore tables already gone"
+                );
                 return None;
             }
         };
@@ -199,7 +201,9 @@ impl RandomnessManager {
             // Log first few entries in DKG info for debugging.
             for (id, name, pk, stake) in info.iter().filter(|(id, _, _, _)| *id < 3) {
                 let pk_bytes = pk.as_element().to_byte_array();
-                debug!("random beacon: DKG info: id={id}, stake={stake}, name={name}, pk={pk_bytes:x?}");
+                debug!(
+                    "random beacon: DKG info: id={id}, stake={stake}, name={name}, pk={pk_bytes:x?}"
+                );
             }
         }
         let authority_ids: HashMap<_, _> =
@@ -523,7 +527,9 @@ impl RandomnessManager {
                     let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
                     let epoch_elapsed = epoch_store.epoch_open_time.elapsed().as_millis();
                     let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
-                    info!("random beacon: DKG complete in {epoch_elapsed}ms since epoch start, {elapsed:?}ms since DKG start, with {num_shares} shares for this node");
+                    info!(
+                        "random beacon: DKG complete in {epoch_elapsed}ms since epoch start, {elapsed:?}ms since DKG start, with {num_shares} shares for this node"
+                    );
                     epoch_store
                         .metrics
                         .epoch_random_beacon_dkg_num_shares
@@ -564,7 +570,9 @@ impl RandomnessManager {
                     .random_beacon_dkg_timeout_round()
                     .into()
         {
-            error!("random beacon: DKG timed out. Randomness disabled for this epoch. All randomness-using transactions will fail.");
+            error!(
+                "random beacon: DKG timed out. Randomness disabled for this epoch. All randomness-using transactions will fail."
+            );
             epoch_store.metrics.epoch_random_beacon_dkg_failed.set(1);
             self.dkg_output
                 .set(None)
@@ -599,7 +607,9 @@ impl RandomnessManager {
             return Ok(());
         };
         if *party_id != msg.sender() {
-            warn!("ignoring equivocating DKG Message from authority {authority:?} pretending to be PartyId {party_id:?}");
+            warn!(
+                "ignoring equivocating DKG Message from authority {authority:?} pretending to be PartyId {party_id:?}"
+            );
             return Ok(());
         }
         if self.enqueued_messages.contains_key(&msg.sender())
@@ -654,7 +664,9 @@ impl RandomnessManager {
             return Ok(());
         };
         if *party_id != conf.sender() {
-            warn!("ignoring equivocating DKG Confirmation from authority {authority:?} pretending to be PartyId {party_id:?}");
+            warn!(
+                "ignoring equivocating DKG Confirmation from authority {authority:?} pretending to be PartyId {party_id:?}"
+            );
             return Ok(());
         }
         self.confirmations.insert(conf.sender(), conf.clone());
@@ -677,14 +689,13 @@ impl RandomnessManager {
             .get_randomness_last_round_timestamp()
             .expect("read should not fail");
 
-        if let Some(last_round_timestamp) = last_round_timestamp {
-            if commit_timestamp - last_round_timestamp
+        if let Some(last_round_timestamp) = last_round_timestamp
+            && commit_timestamp - last_round_timestamp
                 < epoch_store
                     .protocol_config()
                     .random_beacon_min_round_interval_ms()
-            {
-                return Ok(None);
-            }
+        {
+            return Ok(None);
         }
 
         let randomness_round = self.next_randomness_round;

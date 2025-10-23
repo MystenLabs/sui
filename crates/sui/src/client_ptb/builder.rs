@@ -4,17 +4,17 @@
 use crate::{
     client_commands::{compile_package, upgrade_package},
     client_ptb::{
-        ast::{Argument as PTBArg, ASSIGN, GAS_BUDGET},
+        ast::{ASSIGN, Argument as PTBArg, GAS_BUDGET},
         error::{PTBError, PTBResult, Span, Spanned},
     },
     err, error, sp,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use miette::Severity;
 use move_binary_format::{
-    binary_config::BinaryConfig, file_format::SignatureToken, CompiledModule,
+    CompiledModule, binary_config::BinaryConfig, file_format::SignatureToken,
 };
 use move_core_types::{
     account_address::AccountAddress, annotated_value::MoveTypeLayout, ident_str,
@@ -34,13 +34,13 @@ use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
 use sui_move::manage_package::resolve_lock_file_path;
 use sui_sdk::apis::ReadApi;
 use sui_types::{
-    base_types::{is_primitive_type_tag, ObjectID, TxContext, TxContextKind},
+    Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
+    base_types::{ObjectID, TxContext, TxContextKind, is_primitive_type_tag},
     move_package::MovePackage,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     resolve_address,
     transaction::{self as Tx, ObjectArg},
-    Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 use super::{
@@ -393,10 +393,10 @@ impl<'a> PTBBuilder<'a> {
                 // externally-bound address (i.e., one coming in through the initial environment).
                 // This will also handle direct aliasing of addresses throughout the ptb.
                 // Note that we don't do this recursively so no need to worry about loops/cycles.
-                if let Some(addr) = self.addresses.get(i) {
-                    if let Some(a) = addr.address() {
-                        self.addresses.insert(ident, AddressData::AccountAddress(a));
-                    }
+                if let Some(addr) = self.addresses.get(i)
+                    && let Some(a) = addr.address()
+                {
+                    self.addresses.insert(ident, AddressData::AccountAddress(a));
                 }
             }
             // If we encounter a dotted string e.g., "foo.0" or "sui.io" or something like that

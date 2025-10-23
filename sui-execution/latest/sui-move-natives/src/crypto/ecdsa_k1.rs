@@ -9,7 +9,7 @@ use fastcrypto::{
     error::FastCryptoError,
     hash::{Keccak256, Sha256},
     secp256k1::{
-        recoverable::Secp256k1RecoverableSignature, Secp256k1PublicKey, Secp256k1Signature,
+        Secp256k1PublicKey, Secp256k1Signature, recoverable::Secp256k1RecoverableSignature,
     },
     traits::{RecoverableSignature, ToFromBytes},
 };
@@ -22,8 +22,8 @@ use move_vm_types::{
     pop_arg,
     values::{self, Value, VectorRef},
 };
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::crypto::KeypairTraits;

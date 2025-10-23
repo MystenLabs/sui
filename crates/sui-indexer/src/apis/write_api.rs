@@ -3,9 +3,9 @@
 
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
+use jsonrpsee::RpcModule;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
-use jsonrpsee::RpcModule;
 
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_api::{WriteApiClient, WriteApiServer};

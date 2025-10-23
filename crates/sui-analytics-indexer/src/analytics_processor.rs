@@ -9,10 +9,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use anyhow::Result;
-use object_store::path::Path;
 use object_store::DynObjectStore;
+use object_store::path::Path;
 use serde::Serialize;
-use tokio::sync::{mpsc, oneshot, Mutex as TokioMutex};
+use tokio::sync::{Mutex as TokioMutex, mpsc, oneshot};
 use tracing::{error, info};
 
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
@@ -25,7 +25,7 @@ use crate::analytics_metrics::AnalyticsMetrics;
 use crate::handlers::AnalyticsHandler;
 use crate::writers::AnalyticsWriter;
 use crate::{
-    join_paths, FileMetadata, MaxCheckpointReader, ParquetSchema, TaskContext, EPOCH_DIR_PREFIX,
+    EPOCH_DIR_PREFIX, FileMetadata, MaxCheckpointReader, ParquetSchema, TaskContext, join_paths,
 };
 
 struct State<S: Serialize + ParquetSchema + Send + Sync> {
@@ -214,15 +214,15 @@ impl<S: Serialize + ParquetSchema + Send + Sync + 'static> AnalyticsProcessor<S>
             self.task_context.checkpoint_dir_path().to_path_buf(),
             &object_path,
         )?;
-        if file_path.exists() {
-            if let Ok(metadata) = fs::metadata(&file_path) {
-                let file_size = metadata.len();
-                self.task_context
-                    .metrics
-                    .file_size_bytes
-                    .with_label_values(&[self.name()])
-                    .observe(file_size as f64);
-            }
+        if file_path.exists()
+            && let Ok(metadata) = fs::metadata(&file_path)
+        {
+            let file_size = metadata.len();
+            self.task_context
+                .metrics
+                .file_size_bytes
+                .with_label_values(&[self.name()])
+                .observe(file_size as f64);
         };
         Ok(())
     }

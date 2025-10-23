@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use async_graphql::{connection::Connection, indexmap::IndexMap, Context, Object};
+use async_graphql::{Context, Object, connection::Connection, indexmap::IndexMap};
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
     collection_types::{Entry, VecMap, VecSet},

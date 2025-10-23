@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use std::collections::HashMap;
 use std::sync::Arc;
-use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore};
+use sui_package_resolver::{Package, PackageStore, error::Error as PackageResolverError};
 use tokio::sync::Mutex;
 use tracing::{error, info};
 

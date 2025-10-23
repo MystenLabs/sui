@@ -3,7 +3,7 @@
 
 use crate::{
     get_extension, get_extension_mut, get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
-    object_runtime::{object_store::ChildObjectEffects, ObjectRuntime, RuntimeResults},
+    object_runtime::{ObjectRuntime, RuntimeResults, object_store::ChildObjectEffects},
 };
 use better_any::{Tid, TidAble};
 use indexmap::{IndexMap, IndexSet};
@@ -30,6 +30,7 @@ use std::{
     thread::LocalKey,
 };
 use sui_types::{
+    TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     config,
     digests::{ObjectDigest, TransactionDigest},
@@ -39,7 +40,6 @@ use sui_types::{
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
     storage::ChildObjectResolver,
-    TypeTag,
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -338,13 +338,12 @@ pub fn end_transaction(
             .taken_immutable_values
             .get(&ty)
             .and_then(|values| values.get(&id))
+            && !value.equals(prev_value)?
         {
-            if !value.equals(prev_value)? {
-                return Ok(NativeResult::err(
-                    legacy_test_cost(),
-                    E_INVALID_SHARED_OR_IMMUTABLE_USAGE,
-                ));
-            }
+            return Ok(NativeResult::err(
+                legacy_test_cost(),
+                E_INVALID_SHARED_OR_IMMUTABLE_USAGE,
+            ));
         }
         object_runtime_ref
             .test_inventories
@@ -824,7 +823,7 @@ fn pop_id(args: &mut VecDeque<Value>) -> PartialVMResult<ObjectID> {
         None => {
             return Err(PartialVMError::new(
                 StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ))
+            ));
         }
         Some(v) => v,
     };
@@ -846,13 +845,15 @@ fn pack_ids(items: impl IntoIterator<Item = impl Into<AccountAddress>>) -> Value
 }
 
 fn pack_vec_map(items: impl IntoIterator<Item = (Value, Value)>) -> Value {
-    Value::struct_(values::Struct::pack(vec![Vector::pack(
-        VectorSpecialization::Container,
-        items
-            .into_iter()
-            .map(|(k, v)| Value::struct_(values::Struct::pack(vec![k, v]))),
-    )
-    .unwrap()]))
+    Value::struct_(values::Struct::pack(vec![
+        Vector::pack(
+            VectorSpecialization::Container,
+            items
+                .into_iter()
+                .map(|(k, v)| Value::struct_(values::Struct::pack(vec![k, v]))),
+        )
+        .unwrap(),
+    ]))
 }
 
 fn transaction_effects(
@@ -914,11 +915,9 @@ fn pack_option(specialization: VectorSpecialization, opt: Option<Value>) -> Valu
         Some(v) => vec![v],
         None => vec![],
     };
-    Value::struct_(values::Struct::pack(vec![Vector::pack(
-        specialization,
-        item,
-    )
-    .unwrap()]))
+    Value::struct_(values::Struct::pack(vec![
+        Vector::pack(specialization, item).unwrap(),
+    ]))
 }
 
 fn find_all_wrapped_objects<'a, 'i>(

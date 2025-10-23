@@ -9,7 +9,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    CallArg, ObjectArg, SharedObjectMutability, Transaction, DEFAULT_VALIDATOR_GAS_PRICE,
+    CallArg, DEFAULT_VALIDATOR_GAS_PRICE, ObjectArg, SharedObjectMutability, Transaction,
 };
 
 pub struct MoveTxGenerator {

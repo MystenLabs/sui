@@ -327,7 +327,7 @@ impl Operations {
             let addr = match recipient {
                 SuiArgument::Input(i) => inputs.get(i as usize)?.pure()?.to_sui_address().ok()?,
                 SuiArgument::GasCoin | SuiArgument::Result(_) | SuiArgument::NestedResult(_, _) => {
-                    return None
+                    return None;
                 }
             };
             for obj in objs {
@@ -356,10 +356,13 @@ impl Operations {
             let (amount, validator) = match &arguments[..] {
                 [_, coin, validator] => {
                     let amount = match coin {
-                        SuiArgument::Result(i) =>{
-                            let KnownValue::GasCoin(value) = resolve_result(known_results, *i, 0).ok_or_else(||anyhow!("Cannot resolve Gas coin value at Result({i})"))?;
+                        SuiArgument::Result(i) => {
+                            let KnownValue::GasCoin(value) = resolve_result(known_results, *i, 0)
+                                .ok_or_else(|| {
+                                anyhow!("Cannot resolve Gas coin value at Result({i})")
+                            })?;
                             value
-                        },
+                        }
                         _ => return Ok(None),
                     };
                     let (some_amount, validator) = match validator {
@@ -367,12 +370,22 @@ impl Operations {
                         // We use the position of the validator arg as a indicator of if the rosetta stake
                         // transaction is staking the whole wallet or not, if staking whole wallet,
                         // we have to omit the amount value in the final operation output.
-                        SuiArgument::Input(i) => (*i==1, inputs.get(*i as usize).and_then(|input| input.pure()).map(|v|v.to_sui_address()).transpose()),
-                        _=> return Ok(None),
+                        SuiArgument::Input(i) => (
+                            *i == 1,
+                            inputs
+                                .get(*i as usize)
+                                .and_then(|input| input.pure())
+                                .map(|v| v.to_sui_address())
+                                .transpose(),
+                        ),
+                        _ => return Ok(None),
                     };
                     (some_amount.then_some(*amount), validator)
-                },
-                _ => Err(anyhow!("Error encountered when extracting arguments from move call, expecting 3 elements, got {}", arguments.len()))?,
+                }
+                _ => Err(anyhow!(
+                    "Error encountered when extracting arguments from move call, expecting 3 elements, got {}",
+                    arguments.len()
+                ))?,
             };
             Ok(validator.map(|v| v.map(|v| (amount, v)))?)
         }
@@ -386,16 +399,22 @@ impl Operations {
                 [_, stake_id] => {
                     match stake_id {
                         SuiArgument::Input(i) => {
-                            let id = inputs.get(*i as usize).and_then(|input| input.object()).ok_or_else(|| anyhow!("Cannot find stake id from input args."))?;
+                            let id = inputs
+                                .get(*i as usize)
+                                .and_then(|input| input.object())
+                                .ok_or_else(|| anyhow!("Cannot find stake id from input args."))?;
                             // [WORKAROUND] - this is a hack to work out if the withdraw stake ops is for a selected stake or None (all stakes).
                             // this hack is similar to the one in stake_call.
                             let some_id = i % 2 == 1;
                             some_id.then_some(id)
-                        },
-                        _=> return Ok(None),
+                        }
+                        _ => return Ok(None),
                     }
-                },
-                _ => Err(anyhow!("Error encountered when extracting arguments from move call, expecting 3 elements, got {}", arguments.len()))?,
+                }
+                _ => Err(anyhow!(
+                    "Error encountered when extracting arguments from move call, expecting 3 elements, got {}",
+                    arguments.len()
+                ))?,
             };
             Ok(id.cloned())
         }
@@ -587,12 +606,12 @@ impl Operations {
     /// An entry is required for gas owner because the balance would be adjusted.
     fn add_missing_gas_owner(operations: &mut Vec<Operation>, gas_owner: SuiAddress) {
         if !operations.iter().any(|operation| {
-            if let Some(amount) = &operation.amount {
-                if let Some(account) = &operation.account {
-                    if account.address == gas_owner && amount.currency == *SUI {
-                        return true;
-                    }
-                }
+            if let Some(amount) = &operation.amount
+                && let Some(account) = &operation.account
+                && account.address == gas_owner
+                && amount.currency == *SUI
+            {
+                return true;
             }
             false
         }) {
@@ -704,7 +723,7 @@ impl Operations {
                         return Err(anyhow!(
                             "Discarding unsupported operation type {:?}",
                             operation.type_
-                        ))
+                        ));
                     }
                 }
             }
@@ -808,10 +827,10 @@ impl Operations {
             .balance_changes
             .ok_or_else(|| anyhow!("Response balance changes should not be empty."))?
         {
-            if let Ok(currency) = cache.get_currency(&balance_change.coin_type).await {
-                if !currency.symbol.is_empty() {
-                    balance_changes.push((balance_change.clone(), currency));
-                }
+            if let Ok(currency) = cache.get_currency(&balance_change.coin_type).await
+                && !currency.symbol.is_empty()
+            {
+                balance_changes.push((balance_change.clone(), currency));
             }
         }
 
@@ -853,12 +872,11 @@ impl Operations {
                 |mut balances: HashMap<(SuiAddress, Currency), i128>, op| {
                     if let (Some(acc), Some(amount), Some(OperationStatus::Success)) =
                         (&op.account, &op.amount, &op.status)
+                        && op.type_ != OperationType::Gas
                     {
-                        if op.type_ != OperationType::Gas {
-                            *balances
-                                .entry((acc.address, amount.clone().currency))
-                                .or_default() += amount.value;
-                        }
+                        *balances
+                            .entry((acc.address, amount.clone().currency))
+                            .or_default() += amount.value;
                     }
                     balances
                 },

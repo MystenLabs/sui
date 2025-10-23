@@ -17,8 +17,8 @@ use sui_types::{
     inner_temporary_store::InnerTemporaryStore,
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
     sui_system_state::{
-        epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
         SuiSystemState, SuiSystemStateTrait,
+        epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
     },
     transaction::{TransactionDataAPI, VerifiedTransaction},
 };

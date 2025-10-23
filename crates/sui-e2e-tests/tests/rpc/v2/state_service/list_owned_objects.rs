@@ -12,9 +12,9 @@ use sui_rpc::proto::sui::rpc::v2::{
     GetCoinInfoRequest, GetCoinInfoResponse, ListOwnedObjectsRequest,
 };
 use sui_sdk_types::TypeTag;
+use sui_types::Identifier;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TransactionKind};
-use sui_types::Identifier;
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]
@@ -178,18 +178,20 @@ async fn test_indexing_with_tto() {
     );
 
     // 0x0 starts with 0 coins
-    assert!(client
-        .state_client()
-        .list_owned_objects({
-            let mut message = ListOwnedObjectsRequest::default();
-            message.owner = Some("0x0".to_owned());
-            message
-        })
-        .await
-        .unwrap()
-        .into_inner()
-        .objects
-        .is_empty());
+    assert!(
+        client
+            .state_client()
+            .list_owned_objects({
+                let mut message = ListOwnedObjectsRequest::default();
+                message.owner = Some("0x0".to_owned());
+                message
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .objects
+            .is_empty()
+    );
 
     //
     // Run the `receive` function to receive the coin from TTO and send it to 0x0
@@ -237,18 +239,20 @@ async fn test_indexing_with_tto() {
     super::super::execute_transaction(&mut client, &txn).await;
 
     // Parent ends with 0 coins
-    assert!(client
-        .state_client()
-        .list_owned_objects({
-            let mut message = ListOwnedObjectsRequest::default();
-            message.owner = Some(parent.0.clone());
-            message
-        })
-        .await
-        .unwrap()
-        .into_inner()
-        .objects
-        .is_empty());
+    assert!(
+        client
+            .state_client()
+            .list_owned_objects({
+                let mut message = ListOwnedObjectsRequest::default();
+                message.owner = Some(parent.0.clone());
+                message
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .objects
+            .is_empty()
+    );
 
     // 0x0 ends with 1 coin
     assert_eq!(

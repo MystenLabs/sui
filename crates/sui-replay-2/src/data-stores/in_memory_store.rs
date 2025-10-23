@@ -24,19 +24,19 @@
 //! ```
 
 use crate::{
+    Node,
     replay_interface::{
         EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter,
         SetupStore, StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter,
         VersionQuery,
     },
-    Node,
 };
 use anyhow::{Error, Result};
 use std::{
     collections::BTreeMap,
     sync::{
-        atomic::{AtomicU64, Ordering},
         RwLock,
+        atomic::{AtomicU64, Ordering},
     },
 };
 use sui_types::{

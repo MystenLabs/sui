@@ -29,7 +29,7 @@ use crate::{
     config::NodeConfig,
     context::Context,
     data::load_live,
-    error::{client_error_to_error_object, invalid_params, InternalContext, RpcError},
+    error::{InternalContext, RpcError, client_error_to_error_object, invalid_params},
     paginate::{BcsCursor, Cursor as _, Page},
 };
 

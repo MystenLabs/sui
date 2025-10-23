@@ -6,21 +6,21 @@ use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_framework::{
-    pipeline::{sequential, Processor},
+    pipeline::{Processor, sequential},
     types::{
+        TypeTag,
         base_types::SuiAddress,
         coin::Coin,
         full_checkpoint_content::CheckpointData,
         object::{Object, Owner},
-        TypeTag,
     },
 };
 
 use crate::{
+    Schema,
     restore::Restore,
     schema::balances::Key,
     store::{Connection, Store},
-    Schema,
 };
 
 use super::{checkpoint_input_objects, checkpoint_output_objects};

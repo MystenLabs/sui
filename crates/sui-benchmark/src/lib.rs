@@ -13,12 +13,12 @@ use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
     quorum_driver::{
-        reconfig_observer::ReconfigObserver, QuorumDriver, QuorumDriverHandler,
-        QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+        QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+        reconfig_observer::ReconfigObserver,
     },
     transaction_driver::{
-        choose_transaction_driver_percentage, SubmitTransactionOptions, TransactionDriver,
-        TransactionDriverMetrics,
+        SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
+        choose_transaction_driver_percentage,
     },
     validator_client_monitor::ValidatorClientMetrics,
 };

@@ -6,13 +6,13 @@
 //! The RPC calls are implemented in `gql_queries.rs`.
 
 use crate::{
+    Node,
     data_stores::gql_queries,
     replay_interface::{
         EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore, StoreSummary, TransactionInfo,
         TransactionStore, VersionQuery,
     },
     summary_metrics::*,
-    Node,
 };
 use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
@@ -21,8 +21,8 @@ use std::time::Instant;
 use std::{
     collections::BTreeMap,
     sync::{
-        atomic::{AtomicU64, Ordering},
         RwLock,
+        atomic::{AtomicU64, Ordering},
     },
 };
 use sui_types::{

@@ -13,6 +13,7 @@ use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::{
+    CommitConsumerArgs,
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_verifier::SignedBlockVerifier,
@@ -28,8 +29,8 @@ use crate::{
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
     network::{
-        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
-        NetworkManager,
+        NetworkClient as _, NetworkManager, anemo_network::AnemoManager,
+        tonic_network::TonicManager,
     },
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
@@ -39,7 +40,6 @@ use crate::{
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     transaction_certifier::TransactionCertifier,
-    CommitConsumerArgs,
 };
 
 /// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
@@ -473,9 +473,9 @@ mod tests {
         time::Duration,
     };
 
-    use consensus_config::{local_committee_and_keys, Parameters};
-    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
+    use consensus_config::{Parameters, local_committee_and_keys};
     use mysten_metrics::RegistryService;
+    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
@@ -485,9 +485,9 @@ mod tests {
 
     use super::*;
     use crate::{
+        CommittedSubDag,
         block::{BlockAPI as _, CertifiedBlocksOutput, GENESIS_ROUND},
         transaction::NoopTransactionVerifier,
-        CommittedSubDag,
     };
 
     #[rstest]
@@ -771,7 +771,10 @@ mod tests {
                 protocol_config.clone(),
             )
             .await;
-            assert!(authority.sync_last_known_own_block_enabled(), "Expected syncing of last known own block to be enabled as all authorities are of empty db and boot for first time.");
+            assert!(
+                authority.sync_last_known_own_block_enabled(),
+                "Expected syncing of last known own block to be enabled as all authorities are of empty db and boot for first time."
+            );
             boot_counters[index] += 1;
             commit_receivers.push(commit_receiver);
             block_receivers.push(block_receiver);

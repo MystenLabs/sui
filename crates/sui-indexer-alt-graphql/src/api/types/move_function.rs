@@ -12,7 +12,7 @@ use crate::error::RpcError;
 
 use super::{
     move_module::{MoveModule, MoveVisibility},
-    move_type::{abilities, MoveAbility},
+    move_type::{MoveAbility, abilities},
     open_move_type::OpenMoveType,
 };
 

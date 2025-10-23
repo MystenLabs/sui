@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::MoveTypeTagTrait;
-use crate::{base_types::ObjectID, SUI_FRAMEWORK_ADDRESS};
+use crate::{SUI_FRAMEWORK_ADDRESS, base_types::ObjectID};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::{

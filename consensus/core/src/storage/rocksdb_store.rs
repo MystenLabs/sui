@@ -12,9 +12,9 @@ use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
 use sui_macros::fail_point;
 use typed_store::{
-    metrics::SamplingInterval,
-    rocks::{default_db_options, DBMap, DBMapTableConfigMap, MetricConf},
     DBMapUtils, Map as _,
+    metrics::SamplingInterval,
+    rocks::{DBMap, DBMapTableConfigMap, MetricConf, default_db_options},
 };
 
 use super::{CommitInfo, Store, WriteBatch};
@@ -91,7 +91,7 @@ impl RocksDBStore {
     pub fn new(path: &str) -> Self {
         tracing::warn!("Consensus store using tidehunter");
         use typed_store::tidehunter_util::{
-            default_mutex_count, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_mutex_count,
         };
         let mutexes = default_mutex_count();
         let index_digest_key = KeyIndexing::key_reduction(36, 0..12);

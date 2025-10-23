@@ -150,9 +150,9 @@ impl RateTracker {
 mod tests {
     use super::*;
 
-    use rand::rngs::StdRng;
     use rand::Rng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
     use tokio::time::advance;
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

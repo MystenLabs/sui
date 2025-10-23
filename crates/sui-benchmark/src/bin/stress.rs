@@ -1,21 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::*;
 
 use prometheus::Registry;
-use rand::seq::SliceRandom;
 use rand::Rng;
+use rand::seq::SliceRandom;
 use sui_protocol_config::Chain;
 use tokio::time::sleep;
 
 use std::sync::Arc;
 use std::time::Duration;
-use sui_benchmark::drivers::bench_driver::BenchDriver;
-use sui_benchmark::drivers::driver::Driver;
 use sui_benchmark::drivers::BenchmarkCmp;
 use sui_benchmark::drivers::BenchmarkStats;
+use sui_benchmark::drivers::bench_driver::BenchDriver;
+use sui_benchmark::drivers::driver::Driver;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 use sui_benchmark::benchmark_setup::BenchmarkSetup;

@@ -3,8 +3,8 @@
 
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::{cmp::Ordering, hash::DefaultHasher};
 
 use moka::sync::SegmentedCache as MokaCache;
@@ -221,8 +221,8 @@ where
     /// at insert time, they either are inserting the most recent value, or a concurrent
     /// writer will shortly overwrite their value.
     pub fn get_ticket_for_read(&self, key: &K) -> Ticket {
-        let gen = self.generation(key);
-        Ticket::Read(gen.load(std::sync::atomic::Ordering::Acquire))
+        let r#gen = self.generation(key);
+        Ticket::Read(r#gen.load(std::sync::atomic::Ordering::Acquire))
     }
 
     // Update the cache with guaranteed monotonicity. That is, if there are N
@@ -231,19 +231,19 @@ where
     //
     // Caller should log the insert with trace! and increment the appropriate metric.
     pub fn insert(&self, key: &K, value: V, ticket: Ticket) -> Result<(), ()> {
-        let gen = self.generation(key);
+        let r#gen = self.generation(key);
 
         // invalidate other readers as early as possible. If a reader acquires a
         // new ticket after this point, then it will read the new value from
         // the dirty set (or db).
         if matches!(ticket, Ticket::Write) {
-            gen.fetch_add(1, std::sync::atomic::Ordering::Release);
+            r#gen.fetch_add(1, std::sync::atomic::Ordering::Release);
         }
 
         let check_ticket = || -> Result<(), ()> {
             match ticket {
                 Ticket::Read(ticket) => {
-                    if ticket != gen.load(std::sync::atomic::Ordering::Acquire) {
+                    if ticket != r#gen.load(std::sync::atomic::Ordering::Acquire) {
                         return Err(());
                     }
                     Ok(())

@@ -21,10 +21,10 @@ use simulacrum::SimulatorStore;
 use simulator_persisted_store::PersistedStore;
 use std::path::Path;
 use std::sync::Arc;
+use sui_core::authority::AuthorityState;
 use sui_core::authority::authority_per_epoch_store::CertLockGuard;
 use sui_core::authority::authority_test_utils::send_and_confirm_transaction_with_execution_error;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
-use sui_core::authority::AuthorityState;
 use sui_json_rpc::authority_state::StateRead;
 use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::{DevInspectResults, DryRunTransactionBlockResponse};
@@ -46,12 +46,12 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction::{InputObjects, TransactionData};
-use test_adapter::{SuiTestAdapter, PRE_COMPILED};
+use test_adapter::{PRE_COMPILED, SuiTestAdapter};
 
 use crate::test_adapter::ENABLE_PTB_V2;
 

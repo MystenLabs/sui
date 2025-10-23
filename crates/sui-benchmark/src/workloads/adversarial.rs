@@ -2,23 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING},
     WorkloadBuilderInfo, WorkloadParams,
+    workload::{MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder},
 };
+use crate::ProgrammableTransactionBuilder;
 use crate::drivers::Interval;
-use crate::in_memory_wallet::move_call_pt_impl;
 use crate::in_memory_wallet::InMemoryWallet;
+use crate::in_memory_wallet::move_call_pt_impl;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
 use crate::workloads::benchmark_move_base_dir;
 use crate::workloads::payload::Payload;
-use crate::workloads::{workload::ExpectedFailureType, Gas, GasCoinConfig};
-use crate::ProgrammableTransactionBuilder;
-use crate::{convert_move_call_args, BenchMoveCallArg, ExecutionEffects, ValidatorProxy};
+use crate::workloads::{Gas, GasCoinConfig, workload::ExpectedFailureType};
+use crate::{BenchMoveCallArg, ExecutionEffects, ValidatorProxy, convert_move_call_args};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use move_core_types::identifier::Identifier;
-use rand::distributions::{Distribution, Standard};
 use rand::Rng;
+use rand::distributions::{Distribution, Standard};
 use regex::Regex;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{random_object_ref, ObjectRef};
+use sui_types::base_types::{ObjectRef, random_object_ref};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
@@ -487,21 +487,21 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             .unwrap();
 
         for o in &created {
-            let obj = proxy.get_object(o.0 .0).await.unwrap();
-            if let Some(tag) = obj.data.struct_tag() {
-                if tag.to_string().contains("::adversarial::Obj") {
-                    self.df_parent_obj_ref = o.0;
-                }
+            let obj = proxy.get_object(o.0.0).await.unwrap();
+            if let Some(tag) = obj.data.struct_tag()
+                && tag.to_string().contains("::adversarial::Obj")
+            {
+                self.df_parent_obj_ref = o.0;
             }
         }
         assert!(
             self.df_parent_obj_ref.0 != ObjectID::ZERO,
             "Dynamic field parent must be created"
         );
-        self.package_id = package_obj.0 .0;
+        self.package_id = package_obj.0.0;
 
         let gas_ref = proxy
-            .get_object(gas.0 .0)
+            .get_object(gas.0.0)
             .await
             .unwrap()
             .compute_object_reference();
@@ -511,7 +511,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let transaction = move_call_pt_impl(
             gas.1,
             &gas.2,
-            package_obj.0 .0,
+            package_obj.0.0,
             "adversarial",
             "create_min_size_shared_objects",
             vec![],
@@ -530,7 +530,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         // We've seen that the shared objects are indeed created,we store them so we can read them in MaxReads workload
         self.shared_objs = created
             .iter()
-            .map(|o| BenchMoveCallArg::Shared((o.0 .0, o.0 .1, false)))
+            .map(|o| BenchMoveCallArg::Shared((o.0.0, o.0.1, false)))
             .collect();
     }
 

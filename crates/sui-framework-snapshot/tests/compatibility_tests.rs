@@ -7,7 +7,7 @@ mod compatibility_tests {
     };
     use std::collections::BTreeMap;
     use std::path::Path;
-    use sui_framework::{compare_system_package, BuiltInFramework};
+    use sui_framework::{BuiltInFramework, compare_system_package};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
     use sui_move_build::published_at_property;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -74,10 +74,9 @@ mod compatibility_tests {
             .map(|p| (&p.id, p))
             .collect();
         assert_eq!(
-                latest_snapshot_ref,
-                current_framework,
-                "The current framework differs the latest bytecode snapshot. Did you forget to upgrade protocol version?"
-            );
+            latest_snapshot_ref, current_framework,
+            "The current framework differs the latest bytecode snapshot. Did you forget to upgrade protocol version?"
+        );
     }
 
     /// This test checks that the `SinglePackage` entries in `manifest.json` match the metadata

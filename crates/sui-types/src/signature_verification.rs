@@ -57,20 +57,20 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
 
     pub fn cache_digest(&self, digest: D) {
         let mut inner = self.inner.write();
-        if let Some(old) = inner.push(digest, ()) {
-            if old.0 != digest {
-                self.cache_evictions_counter.inc();
-            }
+        if let Some(old) = inner.push(digest, ())
+            && old.0 != digest
+        {
+            self.cache_evictions_counter.inc();
         }
     }
 
     pub fn cache_digests(&self, digests: Vec<D>) {
         let mut inner = self.inner.write();
         digests.into_iter().for_each(|d| {
-            if let Some(old) = inner.push(d, ()) {
-                if old.0 != d {
-                    self.cache_evictions_counter.inc();
-                }
+            if let Some(old) = inner.push(d, ())
+                && old.0 != d
+            {
+                self.cache_evictions_counter.inc();
             }
         });
     }

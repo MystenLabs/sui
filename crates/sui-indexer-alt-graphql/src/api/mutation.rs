@@ -11,7 +11,7 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 
 use crate::api::scalars::base64::Base64;
-use crate::error::{bad_user_input, upcast, RpcError};
+use crate::error::{RpcError, bad_user_input, upcast};
 
 /// Error type for user input validation in transaction operations
 #[allow(clippy::enum_variant_names)]

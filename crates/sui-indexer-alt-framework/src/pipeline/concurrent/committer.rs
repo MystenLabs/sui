@@ -217,8 +217,8 @@ pub(super) fn committer<H: Handler + 'static>(
 #[cfg(test)]
 mod tests {
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
     };
 
     use anyhow::ensure;
@@ -228,14 +228,14 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::{
+        FieldCount,
         metrics::IndexerMetrics,
         mocks::store::*,
         pipeline::{
-            concurrent::{BatchedRows, Handler},
             Processor, WatermarkPart,
+            concurrent::{BatchedRows, Handler},
         },
         store::CommitterWatermark,
-        FieldCount,
     };
 
     use super::*;

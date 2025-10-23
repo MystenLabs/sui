@@ -8,8 +8,8 @@ use crate::message_envelope::Message as _;
 use fastcrypto::traits::ToFromBytes;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::merge::Merge;
-use sui_rpc::proto::sui::rpc::v2::*;
 use sui_rpc::proto::TryFromProtoError;
+use sui_rpc::proto::sui::rpc::v2::*;
 
 //
 // CheckpointSummary
@@ -1608,13 +1608,13 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
         }
 
         let scheme = match source {
-            crate::signature::GenericSignature::MultiSig(ref multi_sig) => {
+            crate::signature::GenericSignature::MultiSig(multi_sig) => {
                 if mask.contains(Self::MULTISIG_FIELD) {
                     self.signature = Some(Signature::Multisig(multi_sig.into()));
                 }
                 SignatureScheme::Multisig
             }
-            crate::signature::GenericSignature::MultiSigLegacy(ref multi_sig_legacy) => {
+            crate::signature::GenericSignature::MultiSigLegacy(multi_sig_legacy) => {
                 if mask.contains(Self::MULTISIG_FIELD) {
                     self.signature = Some(Signature::Multisig(multi_sig_legacy.into()));
                 }
@@ -2009,7 +2009,7 @@ impl TryFrom<&TransactionExpiration> for crate::transaction::TransactionExpirati
             TransactionExpirationKind::None => Self::None,
             TransactionExpirationKind::Epoch => Self::Epoch(value.epoch()),
             TransactionExpirationKind::Unknown | _ => {
-                return Err("unknown TransactionExpirationKind")
+                return Err("unknown TransactionExpirationKind");
             }
         })
     }
@@ -2786,7 +2786,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
             }
 
             if mask.contains(Self::GAS_OBJECT_FIELD.name) {
-                let gas_object_id = value.gas_object().0 .0.to_canonical_string(true);
+                let gas_object_id = value.gas_object().0.0.to_canonical_string(true);
                 self.gas_object = changed_objects
                     .iter()
                     .find(|object| object.object_id() == gas_object_id)

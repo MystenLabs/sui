@@ -556,7 +556,7 @@ impl<'s> Parser<'s> {
                 (_, Match::Found(_)) => break,
                 (Match::Found(_), _) => continue,
                 (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                    return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                 }
             }
         }
@@ -656,7 +656,7 @@ impl<'s> Parser<'s> {
                     (_, Match::Found(_)) => break,
                     (Match::Found(_), _) => continue,
                     (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                        return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                        return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                     }
                 }
             }
@@ -692,7 +692,7 @@ impl<'s> Parser<'s> {
                     (_, Match::Found(_)) => break,
                     (Match::Found(_), _) => continue,
                     (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                        return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                        return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                     }
                 }
             }
@@ -817,7 +817,7 @@ impl<'s> Parser<'s> {
                 (_, Match::Found(_)) => break,
                 (Match::Found(_), _) => continue,
                 (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                    return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                 }
             }
         }

@@ -6,8 +6,8 @@ use tonic::metadata::MetadataMap;
 
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::TryFromProtoError;
+use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;

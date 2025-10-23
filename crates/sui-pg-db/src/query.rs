@@ -4,11 +4,11 @@
 use std::{marker::PhantomData, ops};
 
 use diesel::{
+    QueryResult,
     pg::Pg,
     query_builder::{AstPass, QueryFragment, QueryId},
     serialize::ToSql,
     sql_types::{HasSqlType, Untyped},
-    QueryResult,
 };
 
 /// A full SQL query constructed from snippets of raw SQL and bindings.

@@ -5,10 +5,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cached::proc_macro::cached;
 use cached::SizedCache;
-use jsonrpsee::core::RpcResult;
+use cached::proc_macro::cached;
 use jsonrpsee::RpcModule;
+use jsonrpsee::core::RpcResult;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_core::jsonrpc_index::TotalBalance;
 use tap::TapFallible;
@@ -16,7 +16,7 @@ use tracing::{debug, instrument};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
-use sui_json_rpc_api::{cap_page_limit, CoinReadApiOpenRpc, CoinReadApiServer, JsonRpcMetrics};
+use sui_json_rpc_api::{CoinReadApiOpenRpc, CoinReadApiServer, JsonRpcMetrics, cap_page_limit};
 use sui_json_rpc_types::Balance;
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
@@ -36,7 +36,7 @@ use mockall::automock;
 
 use crate::authority_state::StateRead;
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
-use crate::{with_tracing, SuiRpcModule};
+use crate::{SuiRpcModule, with_tracing};
 
 pub fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, SuiRpcInputError> {
     parse_sui_struct_tag(coin_type)
@@ -98,8 +98,8 @@ impl CoinCursor {
     }
 
     fn encode(&self) -> String {
-        use base64::prelude::BASE64_STANDARD;
         use base64::Engine;
+        use base64::prelude::BASE64_STANDARD;
 
         let json = serde_json::to_string(self).unwrap();
 
@@ -107,8 +107,8 @@ impl CoinCursor {
     }
 
     fn decode(cursor: &str) -> Option<Self> {
-        use base64::prelude::BASE64_STANDARD;
         use base64::Engine;
+        use base64::prelude::BASE64_STANDARD;
 
         let bytes = BASE64_STANDARD.decode(cursor).ok()?;
         serde_json::from_slice(&bytes).ok()
@@ -343,12 +343,11 @@ async fn find_package_object_id(
         let effect = kv_store.get_fx_by_tx_digest(publish_txn_digest).await?;
 
         for ((id, _, _), _) in effect.created() {
-            if let Ok(object_read) = state.get_object_read(&id) {
-                if let Ok(object) = object_read.into_object() {
-                    if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
-                        return Ok(id);
-                    }
-                }
+            if let Ok(object_read) = state.get_object_read(&id)
+                && let Ok(object) = object_read.into_object()
+                && matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag))
+            {
+                return Ok(id);
             }
         }
         Err(SuiRpcInputError::GenericNotFound(format!(
@@ -548,7 +547,7 @@ mod tests {
     use sui_types::object::Object;
     use sui_types::object::Owner;
     use sui_types::utils::create_fake_transaction;
-    use sui_types::{parse_sui_struct_tag, TypeTag};
+    use sui_types::{TypeTag, parse_sui_struct_tag};
 
     mock! {
         pub KeyValueStore {}
@@ -969,7 +968,9 @@ mod tests {
             let error_object = response.unwrap_err();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            let expected = expect![
+                "Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"
+            ];
             expected.assert_eq(error_object.message());
         }
 
@@ -1271,7 +1272,9 @@ mod tests {
             let error_object = response.unwrap_err();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            let expected = expect![
+                "Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"
+            ];
             expected.assert_eq(error_object.message());
         }
 
@@ -1759,7 +1762,9 @@ mod tests {
                 error_object.code(),
                 jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
             );
-            let expected = expect!["Failure deserializing object in the requested format: Unable to deserialize TreasuryCap object: remaining input"];
+            let expected = expect![
+                "Failure deserializing object in the requested format: Unable to deserialize TreasuryCap object: remaining input"
+            ];
             expected.assert_eq(error_object.message());
         }
 

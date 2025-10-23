@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{dataloader::DataLoader, Context, Enum, Object, SimpleObject, Union};
+use async_graphql::{Context, Enum, Object, SimpleObject, Union, dataloader::DataLoader};
 use std::sync::Arc;
 use sui_indexer_alt_reader::{epochs::EpochStartKey, pg_reader::PgReader};
 use sui_types::{

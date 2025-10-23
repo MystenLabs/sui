@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
-    time::{interval, MissedTickBehavior},
+    time::{MissedTickBehavior, interval},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
@@ -204,10 +204,10 @@ mod tests {
     use tokio::sync::mpsc;
 
     use crate::{
-        metrics::tests::test_metrics,
-        pipeline::{concurrent::max_chunk_rows, Processor},
-        types::full_checkpoint_content::CheckpointData,
         FieldCount,
+        metrics::tests::test_metrics,
+        pipeline::{Processor, concurrent::max_chunk_rows},
+        types::full_checkpoint_content::CheckpointData,
     };
 
     use super::*;

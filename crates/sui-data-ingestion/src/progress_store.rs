@@ -4,10 +4,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use aws_config::timeout::TimeoutConfig;
+use aws_sdk_dynamodb::Client;
 use aws_sdk_dynamodb::config::{Credentials, Region};
 use aws_sdk_dynamodb::error::SdkError;
 use aws_sdk_dynamodb::types::AttributeValue;
-use aws_sdk_dynamodb::Client;
 use std::str::FromStr;
 use std::time::Duration;
 use sui_data_ingestion_core::ProgressStore;
@@ -68,10 +68,10 @@ impl ProgressStore for DynamoDBProgressStore {
             .key("task_name", AttributeValue::S(task_name))
             .send()
             .await?;
-        if let Some(output) = item.item() {
-            if let AttributeValue::N(checkpoint_number) = &output["nstate"] {
-                return Ok(CheckpointSequenceNumber::from_str(checkpoint_number)?);
-            }
+        if let Some(output) = item.item()
+            && let AttributeValue::N(checkpoint_number) = &output["nstate"]
+        {
+            return Ok(CheckpointSequenceNumber::from_str(checkpoint_number)?);
         }
         Ok(0)
     }
@@ -83,12 +83,12 @@ impl ProgressStore for DynamoDBProgressStore {
         if self.is_backfill && !checkpoint_number.is_multiple_of(1000) {
             return Ok(());
         }
-        if task_name == "bigtable" {
-            if let Some(ref mut bigtable_store) = self.bigtable_store {
-                bigtable_store
-                    .save(task_name.clone(), checkpoint_number)
-                    .await?;
-            }
+        if task_name == "bigtable"
+            && let Some(ref mut bigtable_store) = self.bigtable_store
+        {
+            bigtable_store
+                .save(task_name.clone(), checkpoint_number)
+                .await?;
         }
         let backoff = backoff::ExponentialBackoff::default();
         backoff::future::retry(backoff, || async {

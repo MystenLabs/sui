@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rocksdb::{compaction_filter::Decision, BlockBasedOptions, Cache, MergeOperands, ReadOptions};
+use rocksdb::{BlockBasedOptions, Cache, MergeOperands, ReadOptions, compaction_filter::Decision};
 use std::collections::BTreeMap;
 use std::env;
 use tap::TapFallible;

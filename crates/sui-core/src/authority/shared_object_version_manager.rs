@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
 use crate::authority::AuthorityPerEpochStore;
+use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
 use crate::execution_cache::ObjectCacheRead;
 use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
@@ -15,12 +16,11 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::storage::{
-    transaction_non_shared_input_object_keys, transaction_receiving_object_keys, ObjectKey,
+    ObjectKey, transaction_non_shared_input_object_keys, transaction_receiving_object_keys,
 };
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
-use sui_types::{base_types::SequenceNumber, error::SuiResult, SUI_RANDOMNESS_STATE_OBJECT_ID};
+use sui_types::{SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber, error::SuiResult};
 use tracing::trace;
 
 use super::epoch_start_configuration::EpochStartConfigTrait;
@@ -485,18 +485,18 @@ fn get_or_init_versions<'a>(
 mod tests {
     use super::*;
 
+    use crate::authority::AuthorityState;
     use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
     use crate::authority::shared_object_version_manager::{
         ConsensusSharedObjVerAssignment, SharedObjVerManager,
     };
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use crate::authority::AuthorityState;
     use std::collections::{BTreeMap, HashMap};
     use std::sync::Arc;
     use sui_protocol_config::ProtocolConfig;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-    use sui_types::crypto::{get_account_key_pair, RandomnessRound};
+    use sui_types::crypto::{RandomnessRound, get_account_key_pair};
     use sui_types::digests::ObjectDigest;
     use sui_types::effects::TestEffectsBuilder;
     use sui_types::executable_transaction::{

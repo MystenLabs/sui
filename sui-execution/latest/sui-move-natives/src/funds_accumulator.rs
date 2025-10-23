@@ -15,8 +15,8 @@ use smallvec::smallvec;
 use sui_types::base_types::ObjectID;
 
 use crate::{
-    object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
     NativesCostTable,
+    object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
 };
 
 const E_OVERFLOW: u64 = 0;

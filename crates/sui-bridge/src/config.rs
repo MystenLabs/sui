@@ -5,11 +5,11 @@ use crate::abi::EthBridgeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::error::BridgeError;
 use crate::eth_client::EthClient;
-use crate::metered_eth_provider::new_metered_eth_provider;
 use crate::metered_eth_provider::MeteredEthHttpProvier;
+use crate::metered_eth_provider::new_metered_eth_provider;
 use crate::metrics::BridgeMetrics;
 use crate::sui_client::SuiClient;
-use crate::types::{is_route_valid, BridgeAction};
+use crate::types::{BridgeAction, is_route_valid};
 use crate::utils::get_eth_contract_addresses;
 use anyhow::anyhow;
 use ethers::providers::Middleware;
@@ -31,7 +31,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::bridge::BridgeChainId;
 use sui_types::crypto::KeypairTraits;
-use sui_types::crypto::{get_key_pair_from_rng, NetworkKeyPair, SuiKeyPair};
+use sui_types::crypto::{NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 use sui_types::digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier};
 use sui_types::event::EventID;
 use sui_types::object::Owner;
@@ -394,7 +394,12 @@ impl BridgeNodeConfig {
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await;
         if owner != Owner::AddressOwner(client_sui_address) {
-            return Err(anyhow!("Gas object {:?} is not owned by bridge client key's associated sui address {:?}, but {:?}", gas_object_id, client_sui_address, owner));
+            return Err(anyhow!(
+                "Gas object {:?} is not owned by bridge client key's associated sui address {:?}, but {:?}",
+                gas_object_id,
+                client_sui_address,
+                owner
+            ));
         }
         let balance = gas_coin.value();
         info!("Gas object balance: {}", balance);

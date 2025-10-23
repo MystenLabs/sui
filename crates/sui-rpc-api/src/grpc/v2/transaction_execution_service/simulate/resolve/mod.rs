@@ -5,12 +5,12 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::error::ObjectNotFoundError;
-use crate::reader::StateReader;
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use crate::error::ObjectNotFoundError;
+use crate::reader::StateReader;
 use bytes::Bytes;
 use move_binary_format::normalized;
 use sui_protocol_config::ProtocolConfig;
@@ -258,7 +258,7 @@ fn resolve_object_reference_with_object(
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 format!("object {object_id} is not Immutable or AddressOwned"),
-            ))
+            ));
         }
     }
 
@@ -433,7 +433,7 @@ fn resolve_arg(
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 "invalid unresolved input argument",
-            ))
+            ));
         }
     }
     .pipe(Ok)
@@ -523,13 +523,12 @@ fn is_input_argument_receiving(
         if let (Command::MoveCall(move_call), Some(idx)) = (command, idx) {
             let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
 
-            if let normalized::Type::Datatype(dt) = &*arg_type {
-                if receiving_package == &dt.module.address
-                    && receiving_module == dt.module.name.as_ref()
-                    && receiving_struct == dt.name.as_ref()
-                {
-                    receiving = true;
-                }
+            if let normalized::Type::Datatype(dt) = &*arg_type
+                && receiving_package == &dt.module.address
+                && receiving_module == dt.module.name.as_ref()
+                && receiving_struct == dt.name.as_ref()
+            {
+                receiving = true;
             }
         }
 

@@ -161,15 +161,15 @@ impl EventIndex {
     pub fn random() -> Self {
         let mut rng = rand::thread_rng();
         EventIndex {
-            tx_sequence_number: rng.gen(),
-            event_sequence_number: rng.gen(),
+            tx_sequence_number: rng.r#gen(),
+            event_sequence_number: rng.r#gen(),
             sender: SuiAddress::random_for_testing_only(),
             emit_package: ObjectID::random(),
-            emit_module: rng.gen::<u64>().to_string(),
+            emit_module: rng.r#gen::<u64>().to_string(),
             type_package: ObjectID::random(),
-            type_module: rng.gen::<u64>().to_string(),
-            type_name: rng.gen::<u64>().to_string(),
-            type_instantiation: rng.gen::<u64>().to_string(),
+            type_module: rng.r#gen::<u64>().to_string(),
+            type_name: rng.r#gen::<u64>().to_string(),
+            type_instantiation: rng.r#gen::<u64>().to_string(),
         }
     }
 }
@@ -223,7 +223,7 @@ impl TryFrom<i16> for ObjectStatus {
             value => {
                 return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
                     "{value} as ObjectStatus"
-                )))
+                )));
             }
         })
     }
@@ -241,7 +241,7 @@ impl TryFrom<i16> for OwnerType {
             value => {
                 return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
                     "{value} as OwnerType"
-                )))
+                )));
             }
         })
     }
@@ -276,7 +276,7 @@ impl IndexedObject {
         let mut rng = rand::thread_rng();
         let random_address = SuiAddress::random_for_testing_only();
         IndexedObject {
-            checkpoint_sequence_number: rng.gen(),
+            checkpoint_sequence_number: rng.r#gen(),
             object: Object::with_owner_for_testing(random_address),
             df_kind: {
                 let random_value = rng.gen_range(0..3);
@@ -316,8 +316,8 @@ impl IndexedDeletedObject {
         let mut rng = rand::thread_rng();
         IndexedDeletedObject {
             object_id: ObjectID::random(),
-            object_version: rng.gen(),
-            checkpoint_sequence_number: rng.gen(),
+            object_version: rng.r#gen(),
+            checkpoint_sequence_number: rng.r#gen(),
         }
     }
 }
@@ -369,14 +369,14 @@ impl TxIndex {
     pub fn random() -> Self {
         let mut rng = rand::thread_rng();
         TxIndex {
-            tx_sequence_number: rng.gen(),
+            tx_sequence_number: rng.r#gen(),
             tx_kind: if rng.gen_bool(0.5) {
                 TransactionKind::SystemTransaction
             } else {
                 TransactionKind::ProgrammableTransaction
             },
             transaction_digest: TransactionDigest::random(),
-            checkpoint_sequence_number: rng.gen(),
+            checkpoint_sequence_number: rng.r#gen(),
             input_objects: (0..1000).map(|_| ObjectID::random()).collect(),
             changed_objects: (0..1000).map(|_| ObjectID::random()).collect(),
             affected_objects: (0..1000).map(|_| ObjectID::random()).collect(),
@@ -391,8 +391,8 @@ impl TxIndex {
                 .map(|_| {
                     (
                         ObjectID::random(),
-                        rng.gen::<u64>().to_string(),
-                        rng.gen::<u64>().to_string(),
+                        rng.r#gen::<u64>().to_string(),
+                        rng.r#gen::<u64>().to_string(),
                     )
                 })
                 .collect(),

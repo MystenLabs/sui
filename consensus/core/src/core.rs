@@ -9,9 +9,9 @@ use std::{
     vec,
 };
 
-#[cfg(test)]
-use consensus_config::{local_committee_and_keys, Stake};
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
+#[cfg(test)]
+use consensus_config::{Stake, local_committee_and_keys};
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
 use itertools::Itertools as _;
 #[cfg(test)]
@@ -25,11 +25,16 @@ use tokio::{
 };
 use tracing::{debug, info, trace, warn};
 
+#[cfg(test)]
+use crate::{
+    CommitConsumerArgs, TransactionClient, block::CertifiedBlocksOutput,
+    block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
+};
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
     block::{
-        Block, BlockAPI, BlockV1, BlockV2, ExtendedBlock, SignedBlock, Slot, VerifiedBlock,
-        GENESIS_ROUND,
+        Block, BlockAPI, BlockV1, BlockV2, ExtendedBlock, GENESIS_ROUND, SignedBlock, Slot,
+        VerifiedBlock,
     },
     block_manager::BlockManager,
     commit::{
@@ -45,13 +50,8 @@ use crate::{
     transaction::TransactionConsumer,
     transaction_certifier::TransactionCertifier,
     universal_committer::{
-        universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
+        UniversalCommitter, universal_committer_builder::UniversalCommitterBuilder,
     },
-};
-#[cfg(test)]
-use crate::{
-    block::CertifiedBlocksOutput, block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
-    CommitConsumerArgs, TransactionClient,
 };
 
 // Maximum number of commit votes to include in a block.
@@ -223,7 +223,10 @@ impl Core {
             let last_proposed_block = self.dag_state.read().get_last_proposed_block();
 
             if self.should_propose() {
-                assert!(last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher than genesis should have been produced during recovery");
+                assert!(
+                    last_proposed_block.round() > GENESIS_ROUND,
+                    "At minimum a block of round higher than genesis should have been produced during recovery"
+                );
             }
 
             // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
@@ -443,13 +446,13 @@ impl Core {
             .collect::<Vec<_>>();
 
         // Make sure that the first commit we find is the next one in line and there is no gap.
-        if let Some(commit) = commits.first() {
-            if commit.index() != last_commit_index + 1 {
-                return Err(ConsensusError::UnexpectedCertifiedCommitIndex {
-                    expected_commit_index: last_commit_index + 1,
-                    commit_index: commit.index(),
-                });
-            }
+        if let Some(commit) = commits.first()
+            && commit.index() != last_commit_index + 1
+        {
+            return Err(ConsensusError::UnexpectedCertifiedCommitIndex {
+                expected_commit_index: last_commit_index + 1,
+                commit_index: commit.index(),
+            });
         }
 
         Ok(commits)
@@ -936,7 +939,9 @@ impl Core {
     /// if attempt to do multiple times.
     pub(crate) fn set_last_known_proposed_round(&mut self, round: Round) {
         if self.last_known_proposed_round.is_some() {
-            panic!("Should not attempt to set the last known proposed round if that has been already set");
+            panic!(
+                "Should not attempt to set the last known proposed round if that has been already set"
+            );
         }
         self.last_known_proposed_round = Some(round);
         info!("Last known proposed round set to {round}");
@@ -975,14 +980,18 @@ impl Core {
         }
 
         let Some(last_known_proposed_round) = self.last_known_proposed_round else {
-            debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
+            debug!(
+                "Skip proposing for round {clock_round}, last known proposed round has not been synced yet."
+            );
             core_skipped_proposals
                 .with_label_values(&["no_last_known_proposed_round"])
                 .inc();
             return false;
         };
         if clock_round <= last_known_proposed_round {
-            debug!("Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}");
+            debug!(
+                "Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}"
+            );
             core_skipped_proposals
                 .with_label_values(&["higher_last_known_proposed_round"])
                 .inc();
@@ -1022,7 +1031,7 @@ impl Core {
             to_commit.iter().map(|c| c.leader().to_string()).join(",")
         );
 
-        let sequenced_leaders = to_commit
+        to_commit
             .into_iter()
             .map(|commit| {
                 let leader = commit.blocks().last().expect("Certified commit should have at least one block");
@@ -1032,9 +1041,7 @@ impl Core {
                 UniversalCommitter::update_metrics(&self.context, &leader, Decision::Certified);
                 (leader, commit)
             })
-            .collect::<Vec<_>>();
-
-        sequenced_leaders
+            .collect::<Vec<_>>()
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
@@ -1090,11 +1097,9 @@ impl Core {
                         }
                         if let Some(last_block_ref) =
                             self.last_included_ancestors[ancestor.author()]
-                        {
-                            if last_block_ref.round >= ancestor.round() {
+                            && last_block_ref.round >= ancestor.round() {
                                 return None;
                             }
-                        }
 
                         // We will never include equivocating ancestors so add them immediately
                         excluded_and_equivocating_ancestors.extend(equivocating_ancestors);
@@ -1128,7 +1133,10 @@ impl Core {
 
         if smart_select && !parent_round_quorum.reached_threshold(&self.context.committee) {
             node_metrics.smart_selection_wait.inc();
-            debug!("Only found {} stake of good ancestors to include for round {clock_round}, will wait for more.", parent_round_quorum.stake());
+            debug!(
+                "Only found {} stake of good ancestors to include for round {clock_round}, will wait for more.",
+                parent_round_quorum.stake()
+            );
             return (vec![], BTreeSet::new());
         }
 
@@ -1143,7 +1151,9 @@ impl Core {
             if !parent_round_quorum.reached_threshold(&self.context.committee)
                 && ancestor.round() == quorum_round
             {
-                debug!("Including temporarily excluded parent round ancestor {ancestor} with score {score} to propose for round {clock_round}");
+                debug!(
+                    "Including temporarily excluded parent round ancestor {ancestor} with score {score} to propose for round {clock_round}"
+                );
                 parent_round_quorum.add(ancestor.author(), &self.context.committee);
                 ancestors_to_propose.push(ancestor);
                 node_metrics
@@ -1180,7 +1190,10 @@ impl Core {
 
             if last_included_round >= accepted_low_quorum_round {
                 excluded_and_equivocating_ancestors.insert(ancestor.reference());
-                trace!("Excluded low score ancestor {} with score {score} to propose for round {clock_round}: last included round {last_included_round} >= accepted low quorum round {accepted_low_quorum_round}", ancestor.reference());
+                trace!(
+                    "Excluded low score ancestor {} with score {score} to propose for round {clock_round}: last included round {last_included_round} >= accepted low quorum round {accepted_low_quorum_round}",
+                    ancestor.reference()
+                );
                 node_metrics
                     .excluded_proposal_ancestors_count_by_authority
                     .with_label_values(&[block_hostname])
@@ -1194,7 +1207,11 @@ impl Core {
             } else {
                 // Exclude this ancestor since it hasn't been accepted by a strong quorum
                 excluded_and_equivocating_ancestors.insert(ancestor.reference());
-                trace!("Excluded low score ancestor {} with score {score} to propose for round {clock_round}: ancestor round {} > accepted low quorum round {accepted_low_quorum_round} ", ancestor.reference(), ancestor.round());
+                trace!(
+                    "Excluded low score ancestor {} with score {score} to propose for round {clock_round}: ancestor round {} > accepted low quorum round {accepted_low_quorum_round} ",
+                    ancestor.reference(),
+                    ancestor.round()
+                );
                 node_metrics
                     .excluded_proposal_ancestors_count_by_authority
                     .with_label_values(&[block_hostname])
@@ -1222,14 +1239,20 @@ impl Core {
             };
             self.last_included_ancestors[excluded_author] = Some(ancestor.reference());
             ancestors_to_propose.push(ancestor.clone());
-            trace!("Included low scoring ancestor {} with score {score} seen at accepted low quorum round {accepted_low_quorum_round} to propose for round {clock_round}", ancestor.reference());
+            trace!(
+                "Included low scoring ancestor {} with score {score} seen at accepted low quorum round {accepted_low_quorum_round} to propose for round {clock_round}",
+                ancestor.reference()
+            );
             node_metrics
                 .included_excluded_proposal_ancestors_count_by_authority
                 .with_label_values(&[block_hostname, "quorum"])
                 .inc();
         }
 
-        assert!(parent_round_quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {clock_round}. Possible mismatch between DagState and Core.");
+        assert!(
+            parent_round_quorum.reached_threshold(&self.context.committee),
+            "Fatal error, quorum not reached for parent round when proposing for round {clock_round}. Possible mismatch between DagState and Core."
+        );
 
         debug!(
             "Included {} ancestors & excluded {} low performing or equivocating ancestors for proposal in round {clock_round}",
@@ -1486,22 +1509,22 @@ mod test {
 
     use consensus_config::{AuthorityIndex, Parameters};
     use consensus_types::block::TransactionIndex;
-    use futures::{stream::FuturesUnordered, StreamExt};
+    use futures::{StreamExt, stream::FuturesUnordered};
     use mysten_metrics::monitored_mpsc;
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::sleep;
 
     use super::*;
     use crate::{
-        block::{genesis_blocks, TestBlock},
+        CommitConsumerArgs, CommitIndex,
+        block::{TestBlock, genesis_blocks},
         block_verifier::NoopBlockVerifier,
         commit::CommitAPI,
         leader_scoring::ReputationScores,
-        storage::{mem_store::MemStore, Store, WriteBatch},
+        storage::{Store, WriteBatch, mem_store::MemStore},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
         transaction::{BlockStatus, TransactionClient},
-        CommitConsumerArgs, CommitIndex,
     };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
@@ -3408,7 +3431,9 @@ mod test {
         assert_eq!(certified_commits.len(), 1);
         assert_eq!(certified_commits.first().unwrap().reference().index, 5);
 
-        println!("Case 3. Provide certified commits where the first certified commit index is not the last_commited_index + 1.");
+        println!(
+            "Case 3. Provide certified commits where the first certified commit index is not the last_commited_index + 1."
+        );
 
         // Highest certified commit should be for leader of round 4.
         let certified_commits = sub_dags_and_commits
@@ -3484,7 +3509,9 @@ mod test {
             .expect("Last commit should be set");
         assert_eq!(last_commit.reference().index, 4);
 
-        println!("Case 2. Provide certified commits that before and after the last committed round and also there are additional blocks so can run the direct decide rule as well.");
+        println!(
+            "Case 2. Provide certified commits that before and after the last committed round and also there are additional blocks so can run the direct decide rule as well."
+        );
 
         // The commits of leader rounds 5-8 should be committed via the certified commits.
         let certified_commits = sub_dags_and_commits

@@ -7,9 +7,9 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     error::FastCryptoError,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
-use crate::error::{invalid_params, RpcError};
+use crate::error::{RpcError, invalid_params};
 
 pub(crate) trait Cursor: Sized {
     /// Interpret the string as a cursor, Base64-decode it, and then deserialize it from JSON. A

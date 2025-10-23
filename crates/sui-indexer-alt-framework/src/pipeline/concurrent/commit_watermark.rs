@@ -3,21 +3,21 @@
 
 use std::{
     cmp::Ordering,
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{BTreeMap, btree_map::Entry},
     sync::Arc,
 };
 
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
-    time::{interval, MissedTickBehavior},
+    time::{MissedTickBehavior, interval},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
+    pipeline::{CommitterConfig, WARN_PENDING_WATERMARKS, WatermarkPart, logging::WatermarkLogger},
     store::{Connection, Store},
 };
 
@@ -335,11 +335,11 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::{
+        FieldCount,
         metrics::IndexerMetrics,
         mocks::store::*,
         pipeline::{CommitterConfig, Processor, WatermarkPart},
         store::CommitterWatermark,
-        FieldCount,
     };
 
     use super::*;

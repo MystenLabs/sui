@@ -5,16 +5,16 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use prometheus::Registry;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    consistent_service_client::ConsistentServiceClient, owner::OwnerKind, AvailableRangeRequest,
-    AvailableRangeResponse, Balance, BatchGetBalancesRequest, End, ListObjectsByTypeRequest,
-    ListOwnedObjectsRequest, Object, Owner, CHECKPOINT_METADATA,
+    AvailableRangeRequest, AvailableRangeResponse, Balance, BatchGetBalancesRequest,
+    CHECKPOINT_METADATA, End, ListObjectsByTypeRequest, ListOwnedObjectsRequest, Object, Owner,
+    consistent_service_client::ConsistentServiceClient, owner::OwnerKind,
 };
 use sui_types::{
-    base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber},
     TypeTag,
+    base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber},
 };
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;

@@ -4,10 +4,10 @@
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
-use sui_rpc::proto::sui::rpc::v2::coin_treasury::SupplyState as RpcSupplyState;
 use sui_rpc::proto::sui::rpc::v2::CoinTreasury;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoResponse;
+use sui_rpc::proto::sui::rpc::v2::coin_treasury::SupplyState as RpcSupplyState;
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
 use sui_types::coin::RegulatedCoinMetadata;

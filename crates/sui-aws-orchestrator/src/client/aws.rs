@@ -219,12 +219,11 @@ impl AwsClient {
         let response = request.send().await?;
 
         // Return true if the response contains references to NVMe drives.
-        if let Some(info) = response.instance_types().first() {
-            if let Some(info) = info.instance_storage_info() {
-                if info.nvme_support() == Some(&EphemeralNvmeSupport::Required) {
-                    return Ok(true);
-                }
-            }
+        if let Some(info) = response.instance_types().first()
+            && let Some(info) = info.instance_storage_info()
+            && info.nvme_support() == Some(&EphemeralNvmeSupport::Required)
+        {
+            return Ok(true);
         }
         Ok(false)
     }

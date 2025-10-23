@@ -3,7 +3,7 @@
 
 mod utils;
 use shared_crypto::intent::Intent;
-use sui_config::{sui_config_dir, SUI_KEYSTORE_FILENAME};
+use sui_config::{SUI_KEYSTORE_FILENAME, sui_config_dir};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_sdk::{
     rpc_types::SuiTransactionBlockResponseOptions,

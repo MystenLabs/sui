@@ -19,7 +19,7 @@ use fastcrypto::{
 use once_cell::sync::OnceCell;
 use roaring::RoaringBitmap;
 use schemars::JsonSchema;
-use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeSeq};
 use serde_with::serde_as;
 use shared_crypto::intent::IntentMessage;
 use std::{

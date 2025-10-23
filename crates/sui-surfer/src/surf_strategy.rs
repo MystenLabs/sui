@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use move_binary_format::normalized;
 use move_core_types::language_storage::StructTag;
-use rand::{seq::SliceRandom, Rng};
+use rand::{Rng, seq::SliceRandom};
 use sui_types::{
     base_types::ObjectRef,
     transaction::{CallArg, ObjectArg, SharedObjectMutability},
@@ -68,12 +68,12 @@ impl SurfStrategy {
         let mut failed = false;
         for param in params {
             let arg = match param {
-                Type::Bool => CallArg::Pure(bcs::to_bytes(&state.rng.gen::<bool>()).unwrap()),
-                Type::U8 => CallArg::Pure(bcs::to_bytes(&state.rng.gen::<u8>()).unwrap()),
-                Type::U16 => CallArg::Pure(bcs::to_bytes(&state.rng.gen::<u16>()).unwrap()),
-                Type::U32 => CallArg::Pure(bcs::to_bytes(&state.rng.gen::<u32>()).unwrap()),
-                Type::U64 => CallArg::Pure(bcs::to_bytes(&state.rng.gen::<u64>()).unwrap()),
-                Type::U128 => CallArg::Pure(bcs::to_bytes(&state.rng.gen::<u128>()).unwrap()),
+                Type::Bool => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<bool>()).unwrap()),
+                Type::U8 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<u8>()).unwrap()),
+                Type::U16 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<u16>()).unwrap()),
+                Type::U32 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<u32>()).unwrap()),
+                Type::U64 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<u64>()).unwrap()),
+                Type::U128 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<u128>()).unwrap()),
                 Type::Address => CallArg::Pure(
                     bcs::to_bytes(&state.cluster.get_addresses().choose(&mut state.rng)).unwrap(),
                 ),

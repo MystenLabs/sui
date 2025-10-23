@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
 use gcp_auth::{Token, TokenProvider};
 use http::{HeaderValue, Request, Response};
@@ -25,23 +25,23 @@ use sui_types::{
     storage::{EpochInfo, ObjectKey},
 };
 use tonic::{
+    Streaming,
     body::Body,
     codegen::Service,
     transport::{Certificate, Channel, ClientTlsConfig},
-    Streaming,
 };
 use tracing::error;
 
 use super::proto::bigtable::v2::{
-    row_filter::{Chain, Filter},
     RowFilter,
+    row_filter::{Chain, Filter},
 };
 use crate::bigtable::metrics::KvMetrics;
 use crate::bigtable::proto::bigtable::v2::{
-    bigtable_client::BigtableClient as BigtableInternalClient, mutate_rows_request::Entry,
+    MutateRowsRequest, MutateRowsResponse, Mutation, ReadRowsRequest, RequestStats, RowRange,
+    RowSet, bigtable_client::BigtableClient as BigtableInternalClient, mutate_rows_request::Entry,
     mutation, mutation::SetCell, read_rows_response::cell_chunk::RowStatus,
-    request_stats::StatsView, row_range::EndKey, MutateRowsRequest, MutateRowsResponse, Mutation,
-    ReadRowsRequest, RequestStats, RowRange, RowSet,
+    request_stats::StatsView, row_range::EndKey,
 };
 use crate::{
     Checkpoint, KeyValueStoreReader, KeyValueStoreWriter, TransactionData, TransactionEventsData,
@@ -285,12 +285,12 @@ impl KeyValueStoreReader for BigTableClient {
         let mut response = self
             .multi_get(CHECKPOINTS_BY_DIGEST_TABLE, vec![key], None)
             .await?;
-        if let Some((_, row)) = response.pop() {
-            if let Some((_, value)) = row.into_iter().next() {
-                let sequence_number = u64::from_be_bytes(value.as_slice().try_into()?);
-                if let Some(chk) = self.get_checkpoints(&[sequence_number]).await?.pop() {
-                    return Ok(Some(chk));
-                }
+        if let Some((_, row)) = response.pop()
+            && let Some((_, value)) = row.into_iter().next()
+        {
+            let sequence_number = u64::from_be_bytes(value.as_slice().try_into()?);
+            if let Some(chk) = self.get_checkpoints(&[sequence_number]).await?.pop() {
+                return Ok(Some(chk));
             }
         }
         Ok(None)
@@ -344,10 +344,10 @@ impl KeyValueStoreReader for BigTableClient {
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
         let upper_limit = Self::raw_object_key(&ObjectKey::max_for_id(object_id))?;
-        if let Some((_, row)) = self.reversed_scan(OBJECTS_TABLE, upper_limit).await?.pop() {
-            if let Some((_, value)) = row.into_iter().next() {
-                return Ok(Some(bcs::from_bytes(&value)?));
-            }
+        if let Some((_, row)) = self.reversed_scan(OBJECTS_TABLE, upper_limit).await?.pop()
+            && let Some((_, value)) = row.into_iter().next()
+        {
+            return Ok(Some(bcs::from_bytes(&value)?));
         }
         Ok(None)
     }
@@ -650,14 +650,14 @@ impl BigTableClient {
         let mut response = self.mutate_rows(request).await?;
         while let Some(part) = response.message().await? {
             for entry in part.entries {
-                if let Some(status) = entry.status {
-                    if status.code != 0 {
-                        return Err(anyhow!(
-                            "bigtable write failed {} {}",
-                            status.code,
-                            status.message
-                        ));
-                    }
+                if let Some(status) = entry.status
+                    && status.code != 0
+                {
+                    return Err(anyhow!(
+                        "bigtable write failed {} {}",
+                        status.code,
+                        status.message
+                    ));
                 }
             }
         }
@@ -832,10 +832,10 @@ impl Service<Request<Body>> for AuthChannel {
         let mut auth_token = None;
         if token_provider.is_some() {
             let guard = self.token.read().expect("failed to acquire a read lock");
-            if let Some(token) = &*guard {
-                if !token.has_expired() {
-                    auth_token = Some(token.clone());
-                }
+            if let Some(token) = &*guard
+                && !token.has_expired()
+            {
+                auth_token = Some(token.clone());
             }
         }
 

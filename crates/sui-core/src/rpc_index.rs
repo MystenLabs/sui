@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::checkpoints::CheckpointStore;
 use crate::par_index_live_object_set::LiveObjectIndexer;
 use crate::par_index_live_object_set::ParMakeLiveObjectIndexer;
@@ -34,19 +34,19 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Data;
 use sui_types::object::Object;
 use sui_types::object::Owner;
-use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
 use sui_types::storage::TransactionInfo;
+use sui_types::storage::error::Error as StorageError;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use tracing::{debug, info, warn};
-use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
-use typed_store::rocksdb::{compaction_filter::Decision, MergeOperands, WriteOptions};
-use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
+use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
+use typed_store::rocksdb::{MergeOperands, WriteOptions, compaction_filter::Decision};
+use typed_store::traits::Map;
 
 const CURRENT_DB_VERSION: u64 = 3;
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
@@ -702,16 +702,15 @@ impl IndexStoreTables {
         for acc in acc_events {
             if let Some(stream_id) =
                 sui_types::accumulator_root::stream_id_from_accumulator_event(&acc)
+                && let AccumulatorValue::EventDigest(idx, _d) = acc.write.value
             {
-                if let AccumulatorValue::EventDigest(idx, _d) = acc.write.value {
-                    let key = EventIndexKey {
-                        stream_id,
-                        checkpoint_seq,
-                        transaction_idx: tx_idx,
-                        event_index: idx as u32,
-                    };
-                    entries.push((key, ()));
-                }
+                let key = EventIndexKey {
+                    stream_id,
+                    checkpoint_seq,
+                    transaction_idx: tx_idx,
+                    event_index: idx as u32,
+                };
+                entries.push((key, ()));
             }
         }
 
@@ -1250,12 +1249,16 @@ impl RpcIndexStore {
                             let buffer_count = (cf_memory_budget / buffer_size)
                                 .clamp(2, target_buffer_count)
                                 as i32;
-                            debug!("Calculated buffer_size: {} bytes, buffer_count: {} (based on {} CPUs)",
-                                buffer_size, buffer_count, target_buffer_count);
+                            debug!(
+                                "Calculated buffer_size: {} bytes, buffer_count: {} (based on {} CPUs)",
+                                buffer_size, buffer_count, target_buffer_count
+                            );
                             (buffer_size, buffer_count)
                         }
                         _ => {
-                            panic!("indexing-cf-write-buffer-size and indexing-cf-max-write-buffer-number must both be specified or both be omitted");
+                            panic!(
+                                "indexing-cf-write-buffer-size and indexing-cf-max-write-buffer-number must both be specified or both be omitted"
+                            );
                         }
                     };
 
@@ -1275,8 +1278,10 @@ impl RpcIndexStore {
                         let half_buffer = buffer_size / 2;
                         let default_limit = 1 << 27; // 128MB
                         let limit = half_buffer.min(default_limit);
-                        debug!("Calculated batch_size_limit: {} bytes (min of half_buffer={} and default_limit={})",
-                            limit, half_buffer, default_limit);
+                        debug!(
+                            "Calculated batch_size_limit: {} bytes (min of half_buffer={} and default_limit={})",
+                            limit, half_buffer, default_limit
+                        );
                         limit
                     };
 

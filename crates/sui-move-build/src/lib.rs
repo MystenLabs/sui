@@ -13,13 +13,13 @@ use std::{
 use anyhow::bail;
 use fastcrypto::encoding::Base64;
 use move_binary_format::{
-    normalized::{self, Type},
     CompiledModule,
+    normalized::{self, Type},
 };
-use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule, Modules};
+use move_bytecode_utils::{Modules, layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
-    diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics},
+    diagnostics::{Diagnostics, report_diagnostics_to_buffer, report_warnings},
     editions::Edition,
     linters::LINT_WARNING_PREFIX,
     shared::files::MappedFiles,
@@ -29,6 +29,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag, TypeTag},
 };
 use move_package::{
+    BuildConfig as MoveBuildConfig,
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
     },
@@ -37,7 +38,6 @@ use move_package::{
     source_package::parsed_manifest::{
         Dependencies, Dependency, DependencyKind, GitInfo, InternalDependency, PackageName,
     },
-    BuildConfig as MoveBuildConfig,
 };
 use move_package::{
     source_package::parsed_manifest::OnChainInfo, source_package::parsed_manifest::SourceManifest,
@@ -45,18 +45,17 @@ use move_package::{
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
 use sui_package_management::{
-    resolve_published_id,
-    system_package_versions::{SystemPackagesVersion, SYSTEM_GIT_REPO},
-    PublishedAtError,
+    PublishedAtError, resolve_published_id,
+    system_package_versions::{SYSTEM_GIT_REPO, SystemPackagesVersion},
 };
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
+    BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
     base_types::ObjectID,
     error::{SuiError, SuiErrorKind, SuiResult},
     is_system_package,
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
-    BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
-    SUI_SYSTEM_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
@@ -250,7 +249,9 @@ pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>
         eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
     }
     if filtered_diags_num > 0 {
-        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})");
+        eprintln!(
+            "Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})"
+        );
     }
 }
 

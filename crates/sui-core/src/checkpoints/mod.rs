@@ -7,9 +7,9 @@ mod checkpoint_output;
 mod metrics;
 
 use crate::accumulators::AccumulatorSettlementTxBuilder;
-use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityState;
-use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
+use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
+use crate::authority_client::{AuthorityAPI, make_network_authority_clients_with_network_config};
 use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
 pub use crate::checkpoints::checkpoint_output::{
@@ -25,23 +25,23 @@ use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::random::get_rng;
-use mysten_common::sync::notify_read::{NotifyRead, CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME};
+use mysten_common::sync::notify_read::{CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME, NotifyRead};
 use mysten_common::{assert_reachable, debug_fatal, fatal};
-use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
+use mysten_metrics::{MonitoredFutureExt, monitored_scope, spawn_monitored_task};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use sui_macros::fail_point_arg;
 use sui_network::default_mysten_network_config;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use tokio::sync::{mpsc, watch};
-use typed_store::rocks::{default_db_options, DBOptions, ReadWriteOptions};
+use typed_store::rocks::{DBOptions, ReadWriteOptions, default_db_options};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_pruner::PrunerWatermarks;
@@ -84,8 +84,8 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::{
-    rocks::{DBMap, MetricConf},
     TypedStoreError,
+    rocks::{DBMap, MetricConf},
 };
 
 const TRANSACTION_FORK_DETECTED_KEY: u8 = 0;
@@ -190,8 +190,8 @@ impl CheckpointStoreTables {
         tracing::warn!("Checkpoint DB using tidehunter");
         use crate::authority::authority_store_pruner::apply_relocation_filter;
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, default_mutex_count, default_value_cache_size, Decision,
-            KeySpaceConfig, KeyType, ThConfig,
+            Decision, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,
+            default_mutex_count, default_value_cache_size,
         };
         let mutexes = default_mutex_count() * 4;
         let u64_sequence_key = KeyType::prefix_uniform(6, 0);
@@ -712,11 +712,11 @@ impl CheckpointStore {
                             );
                         }
                         tracing::error!(
-                        fatal = true,
-                        "Fork recovery test: killing node due to checkpoint fork for sequence number: {}, using verified digest: {}",
-                        local_checkpoint.sequence_number(),
-                        verified_checkpoint.digest()
-                    );
+                            fatal = true,
+                            "Fork recovery test: killing node due to checkpoint fork for sequence number: {}, using verified digest: {}",
+                            local_checkpoint.sequence_number(),
+                            verified_checkpoint.digest()
+                        );
                         sui_simulator::task::shutdown_current_node();
                     }
                 }
@@ -1570,8 +1570,7 @@ impl CheckpointBuilder {
 
             trace!(
                 "roots for pending checkpoint {:?}: {:?}",
-                pending.details.checkpoint_height,
-                pending.roots,
+                pending.details.checkpoint_height, pending.roots,
             );
 
             let settlement_root = if self.epoch_store.accumulators_enabled() {
@@ -1753,15 +1752,14 @@ impl CheckpointBuilder {
                 .tables
                 .locally_computed_checkpoints
                 .get(&summary.sequence_number)?
+                && previously_computed_summary.digest() != summary.digest()
             {
-                if previously_computed_summary.digest() != summary.digest() {
-                    fatal!(
-                        "Checkpoint {} was previously built with a different result: previously_computed_summary {:?} vs current_summary {:?}",
-                        summary.sequence_number,
-                        previously_computed_summary.digest(),
-                        summary.digest()
-                    );
-                }
+                fatal!(
+                    "Checkpoint {} was previously built with a different result: previously_computed_summary {:?} vs current_summary {:?}",
+                    summary.sequence_number,
+                    previously_computed_summary.digest(),
+                    summary.digest()
+                );
             }
 
             all_tx_digests.extend(contents.iter().map(|digests| digests.transaction));
@@ -1838,7 +1836,10 @@ impl CheckpointBuilder {
             {
                 if chunk.is_empty() {
                     // Always allow at least one tx in a checkpoint.
-                    warn!("Size of single transaction ({size}) exceeds max checkpoint size ({}); allowing excessively large checkpoint to go through.", self.max_checkpoint_size_bytes);
+                    warn!(
+                        "Size of single transaction ({size}) exceeds max checkpoint size ({}); allowing excessively large checkpoint to go through.",
+                        self.max_checkpoint_size_bytes
+                    );
                 } else {
                     chunks.push(chunk);
                     chunk = Vec::new();
@@ -1876,7 +1877,9 @@ impl CheckpointBuilder {
                 let last_verified = store.get_epoch_last_checkpoint(previous_epoch)?;
                 last_checkpoint = last_verified.map(VerifiedCheckpoint::into_summary_and_sequence);
                 if let Some((ref seq, _)) = last_checkpoint {
-                    debug!("No checkpoints in builder DB, taking checkpoint from previous epoch with sequence {seq}");
+                    debug!(
+                        "No checkpoints in builder DB, taking checkpoint from previous epoch with sequence {seq}"
+                    );
                 } else {
                     // This is some serious bug with when CheckpointBuilder started so surfacing it via panic
                     panic!("Can not find last checkpoint for previous epoch {previous_epoch}");
@@ -2037,20 +2040,20 @@ impl CheckpointBuilder {
                 .map(|(_, c)| c.sequence_number + 1)
                 .unwrap_or_default();
             let mut timestamp_ms = details.timestamp_ms;
-            if let Some((_, last_checkpoint)) = &last_checkpoint {
-                if last_checkpoint.timestamp_ms > timestamp_ms {
-                    // First consensus commit of an epoch can have zero timestamp.
-                    debug!(
-                        "Decrease of checkpoint timestamp, possibly due to epoch change. Sequence: {}, previous: {}, current: {}",
-                        sequence_number,  last_checkpoint.timestamp_ms, timestamp_ms,
-                    );
-                    if self
-                        .epoch_store
-                        .protocol_config()
-                        .enforce_checkpoint_timestamp_monotonicity()
-                    {
-                        timestamp_ms = last_checkpoint.timestamp_ms;
-                    }
+            if let Some((_, last_checkpoint)) = &last_checkpoint
+                && last_checkpoint.timestamp_ms > timestamp_ms
+            {
+                // First consensus commit of an epoch can have zero timestamp.
+                debug!(
+                    "Decrease of checkpoint timestamp, possibly due to epoch change. Sequence: {}, previous: {}, current: {}",
+                    sequence_number, last_checkpoint.timestamp_ms, timestamp_ms,
+                );
+                if self
+                    .epoch_store
+                    .protocol_config()
+                    .enforce_checkpoint_timestamp_monotonicity()
+                {
+                    timestamp_ms = last_checkpoint.timestamp_ms;
                 }
             }
 
@@ -2389,11 +2392,13 @@ impl CheckpointBuilder {
             }
         } else {
             // If there is one consensus commit prologue, it must be the first one in the checkpoint.
-            assert!(txs[0]
-                .as_ref()
-                .unwrap()
-                .transaction_data()
-                .is_consensus_commit_prologue());
+            assert!(
+                txs[0]
+                    .as_ref()
+                    .unwrap()
+                    .transaction_data()
+                    .is_consensus_commit_prologue()
+            );
 
             assert_eq!(ccps[0].digest(), txs[0].as_ref().unwrap().digest());
 
@@ -2685,11 +2690,11 @@ impl CheckpointSignatureAggregator {
                         overrides.insert(self.summary.sequence_number, correct_digest.clone());
 
                         tracing::error!(
-                                fatal = true,
-                                "Fork recovery test: detected split-brain for sequence number: {}, using digest: {}",
-                                self.summary.sequence_number,
-                                correct_digest
-                            );
+                            fatal = true,
+                            "Fork recovery test: detected split-brain for sequence number: {}, using digest: {}",
+                            self.summary.sequence_number,
+                            correct_digest
+                        );
                     }
                 }
             });
@@ -3070,7 +3075,10 @@ impl CheckpointService {
                     last_committed_seq, e
                 );
             } else {
-                info!("Cleared state hashes after checkpoint {} to ensure consistent ECMH computation", last_committed_seq);
+                info!(
+                    "Cleared state hashes after checkpoint {} to ensure consistent ECMH computation",
+                    last_committed_seq
+                );
             }
         }
 
@@ -3171,18 +3179,16 @@ impl CheckpointServiceNotify for CheckpointService {
             .tables
             .get_highest_verified_checkpoint()?
             .map(|x| *x.sequence_number())
+            && sequence <= highest_verified_checkpoint
         {
-            if sequence <= highest_verified_checkpoint {
-                trace!(
-                    checkpoint_seq = sequence,
-                    "Ignore checkpoint signature from {} - already certified",
-                    signer,
-                );
-                self.metrics
-                    .last_ignored_checkpoint_signature_received
-                    .set(sequence as i64);
-                return Ok(());
-            }
+            trace!(
+                checkpoint_seq = sequence,
+                "Ignore checkpoint signature from {} - already certified", signer,
+            );
+            self.metrics
+                .last_ignored_checkpoint_signature_received
+                .set(sequence as i64);
+            return Ok(());
         }
         trace!(
             checkpoint_seq = sequence,
@@ -3279,9 +3285,9 @@ mod tests {
     use super::*;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::transaction_outputs::TransactionOutputs;
-    use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
-    use futures::future::BoxFuture;
+    use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
     use futures::FutureExt as _;
+    use futures::future::BoxFuture;
     use std::collections::HashMap;
     use std::ops::Deref;
     use sui_macros::sim_test;
@@ -3332,34 +3338,42 @@ mod tests {
             .expect("clear should succeed");
 
         // Explicit boundary checks: 75 must remain, 76 must be deleted
-        assert!(store
-            .tables
-            .locally_computed_checkpoints
-            .get(&75)
-            .unwrap()
-            .is_some());
-        assert!(store
-            .tables
-            .locally_computed_checkpoints
-            .get(&76)
-            .unwrap()
-            .is_none());
+        assert!(
+            store
+                .tables
+                .locally_computed_checkpoints
+                .get(&75)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            store
+                .tables
+                .locally_computed_checkpoints
+                .get(&76)
+                .unwrap()
+                .is_none()
+        );
 
         for seq in 70u64..76u64 {
-            assert!(store
-                .tables
-                .locally_computed_checkpoints
-                .get(&seq)
-                .unwrap()
-                .is_some());
+            assert!(
+                store
+                    .tables
+                    .locally_computed_checkpoints
+                    .get(&seq)
+                    .unwrap()
+                    .is_some()
+            );
         }
         for seq in 76u64..=80u64 {
-            assert!(store
-                .tables
-                .locally_computed_checkpoints
-                .get(&seq)
-                .unwrap()
-                .is_none());
+            assert!(
+                store
+                    .tables
+                    .locally_computed_checkpoints
+                    .get(&seq)
+                    .unwrap()
+                    .is_none()
+            );
         }
     }
 

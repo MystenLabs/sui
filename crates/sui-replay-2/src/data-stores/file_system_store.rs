@@ -56,21 +56,21 @@
 //! it learns the concrete versions.
 
 use crate::{
+    Node,
     replay_interface::{
         EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter,
         SetupStore, StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter,
         VersionQuery,
     },
-    Node,
 };
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{Context, Error, Result, anyhow};
 use std::{
     collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicU64, Ordering},
         RwLock,
+        atomic::{AtomicU64, Ordering},
     },
 };
 use sui_types::{
@@ -450,10 +450,10 @@ impl FileSystemStore {
     ) -> Result<Option<(Object, u64)>, Error> {
         self.load_root_mapping(object_id)?;
         let maps = self.root_versions_map.read().unwrap();
-        if let Some(map) = maps.get(object_id) {
-            if let Some(&actual_version) = map.get(&max_version) {
-                return self.get_object_by_version(object_id, actual_version);
-            }
+        if let Some(map) = maps.get(object_id)
+            && let Some(&actual_version) = map.get(&max_version)
+        {
+            return self.get_object_by_version(object_id, actual_version);
         }
         Ok(None)
     }
@@ -465,10 +465,10 @@ impl FileSystemStore {
     ) -> Result<Option<(Object, u64)>, Error> {
         self.load_checkpoint_mapping(object_id)?;
         let maps = self.checkpoint_versions_map.read().unwrap();
-        if let Some(map) = maps.get(object_id) {
-            if let Some(&actual_version) = map.get(&checkpoint) {
-                return self.get_object_by_version(object_id, actual_version);
-            }
+        if let Some(map) = maps.get(object_id)
+            && let Some(&actual_version) = map.get(&checkpoint)
+        {
+            return self.get_object_by_version(object_id, actual_version);
         }
         Ok(None)
     }

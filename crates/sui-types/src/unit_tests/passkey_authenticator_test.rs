@@ -8,13 +8,13 @@ use crate::crypto::DefaultHash;
 use crate::error::SuiErrorKind;
 use crate::passkey_authenticator::{PasskeyAuthenticator, RawPasskeyAuthenticator};
 use crate::{
-    base_types::{dbg_addr, ObjectID, SuiAddress},
+    base_types::{ObjectID, SuiAddress, dbg_addr},
     crypto::{PublicKey, Signature, SignatureScheme},
     error::SuiError,
     object::Object,
     signature::GenericSignature,
     signature_verification::VerifiedDigestCache,
-    transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
+    transaction::{TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData},
 };
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
@@ -25,6 +25,7 @@ use p256::pkcs8::DecodePublicKey;
 use passkey_authenticator::{Authenticator, UserCheck, UserValidationMethod};
 use passkey_client::Client;
 use passkey_types::{
+    Bytes, Passkey,
     ctap2::{Aaguid, Ctap2Error},
     rand::random_vec,
     webauthn::{
@@ -33,7 +34,6 @@ use passkey_types::{
         PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
         PublicKeyCredentialUserEntity, UserVerificationRequirement,
     },
-    Bytes, Passkey,
 };
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::str::FromStr;

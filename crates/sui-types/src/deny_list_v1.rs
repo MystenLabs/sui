@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::SUI_DENY_LIST_OBJECT_ID;
 use crate::base_types::{SequenceNumber, SuiAddress};
 use crate::collection_types::{Bag, Table, VecSet};
 use crate::dynamic_field::get_dynamic_field_from_store;
@@ -9,7 +10,6 @@ use crate::id::{ID, UID};
 use crate::object::{Object, Owner};
 use crate::storage::ObjectStore;
 use crate::transaction::{CheckedInputObjects, ReceivingObjects};
-use crate::SUI_DENY_LIST_OBJECT_ID;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use serde::{Deserialize, Serialize};

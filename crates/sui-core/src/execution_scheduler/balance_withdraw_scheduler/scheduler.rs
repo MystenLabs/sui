@@ -7,12 +7,12 @@ use std::{
 };
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
+    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
     balance_read::AccountBalanceRead, eager_scheduler::EagerBalanceWithdrawScheduler,
-    naive_scheduler::NaiveBalanceWithdrawScheduler, BalanceSettlement, ScheduleResult,
-    ScheduleStatus, TxBalanceWithdraw,
+    naive_scheduler::NaiveBalanceWithdrawScheduler,
 };
 use futures::stream::FuturesUnordered;
-use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use mysten_metrics::monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
 use tokio::sync::oneshot;
 use tracing::debug;

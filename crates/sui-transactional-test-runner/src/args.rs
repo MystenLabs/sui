@@ -10,7 +10,7 @@ use clap::{Args, Parser};
 use move_compiler::editions::Flavor;
 use move_core_types::parsing::{
     parser::Parser as MoveCLParser,
-    parser::{parse_u256, parse_u64},
+    parser::{parse_u64, parse_u256},
     values::ValueToken,
     values::{ParsableValue, ParsedValue},
 };
@@ -696,9 +696,11 @@ fn parse_fake_id(s: &str) -> anyhow::Result<FakeID> {
 
 fn parse_policy(x: &str) -> anyhow::Result<u8> {
     Ok(match x {
-            "compatible" => UpgradePolicy::COMPATIBLE,
-            "additive" => UpgradePolicy::ADDITIVE,
-            "dep_only" => UpgradePolicy::DEP_ONLY,
-        _ => bail!("Invalid upgrade policy {x}. Policy must be one of 'compatible', 'additive', or 'dep_only'")
+        "compatible" => UpgradePolicy::COMPATIBLE,
+        "additive" => UpgradePolicy::ADDITIVE,
+        "dep_only" => UpgradePolicy::DEP_ONLY,
+        _ => bail!(
+            "Invalid upgrade policy {x}. Policy must be one of 'compatible', 'additive', or 'dep_only'"
+        ),
     })
 }

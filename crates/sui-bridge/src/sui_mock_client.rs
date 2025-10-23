@@ -11,6 +11,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
+use sui_types::Identifier;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::bridge::{
@@ -22,7 +23,6 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
-use sui_types::Identifier;
 
 use crate::sui_client::SuiClientInner;
 use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused};

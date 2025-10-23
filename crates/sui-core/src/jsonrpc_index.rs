@@ -7,20 +7,20 @@
 use std::cmp::{max, min};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use bincode::Options;
 use itertools::Itertools;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use parking_lot::ArcMutexGuard;
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
-    IntCounterVec, Registry,
+    IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use typed_store::rocksdb::compaction_filter::Decision;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use typed_store::TypedStoreError;
+use typed_store::rocksdb::compaction_filter::Decision;
 
 use sui_json_rpc_types::{SuiObjectDataFilter, TransactionFilter};
 use sui_storage::mutex_table::MutexTable;
@@ -38,12 +38,12 @@ use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 use sui_types::storage::error::Error as StorageError;
 use tracing::{debug, info, instrument, trace};
+use typed_store::DBMapUtils;
 use typed_store::rocks::{
-    default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
-    MetricConf,
+    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
+    read_size_from_env,
 };
 use typed_store::traits::Map;
-use typed_store::DBMapUtils;
 
 type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
 
@@ -1456,7 +1456,7 @@ impl IndexStore {
             .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
-            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0 .0 == object))
+            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0.0 == object))
             .map_ok(|((_, c), object_info)| (c, object_info)))
     }
 
@@ -1671,10 +1671,10 @@ impl IndexStore {
         }
         // cache miss, lookup in all balance cache
         let all_balance = self.caches.all_balances.get(&owner.clone());
-        if let Some(Ok(all_balance)) = all_balance {
-            if let Some(balance) = all_balance.get(&coin_type) {
-                return Ok(*balance);
-            }
+        if let Some(Ok(all_balance)) = all_balance
+            && let Some(balance) = all_balance.get(&coin_type)
+        {
+            return Ok(*balance);
         }
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();

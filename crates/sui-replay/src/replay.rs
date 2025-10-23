@@ -4,11 +4,11 @@
 use crate::chain_from_chain_id;
 use crate::{
     data_fetcher::{
-        extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
+        DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher, extract_epoch_and_version,
     },
     displays::{
-        transaction_displays::{transform_command_results_to_annotated, FullPTB},
         Pretty,
+        transaction_displays::{FullPTB, transform_command_results_to_annotated},
     },
     types::*,
 };
@@ -34,17 +34,18 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::error::SuiErrorKind;
 use sui_types::execution_params::{
-    get_early_execution_error, BalanceWithdrawStatus, ExecutionOrEarlyError,
+    BalanceWithdrawStatus, ExecutionOrEarlyError, get_early_execution_error,
 };
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
-use sui_types::storage::{get_module, PackageObject};
+use sui_types::storage::{PackageObject, get_module};
 use sui_types::transaction::GasData;
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
-use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::{
+    DEEPBOOK_PACKAGE_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
     digests::{ObjectDigest, TransactionDigest},
@@ -60,7 +61,6 @@ use sui_types::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         SenderSignedData, Transaction, TransactionDataAPI, TransactionKind, VerifiedTransaction,
     },
-    DEEPBOOK_PACKAGE_ID,
 };
 use tracing::{error, info, trace, warn};
 
@@ -574,7 +574,7 @@ impl LocalExec {
     ) -> Result<Option<Object>, ReplayEngineError> {
         let resp = block_on({
             //info!("Downloading latest object {object_id}");
-            self.multi_download_latest(&[*object_id])
+            self.multi_download_latest(std::slice::from_ref(object_id))
         })
         .map(|mut q| {
             q.pop()
@@ -584,7 +584,9 @@ impl LocalExec {
         match resp {
             Ok(v) => Ok(Some(v)),
             Err(ReplayEngineError::ObjectNotExist { id }) => {
-                error!("Could not find object {id} on RPC server. It might have been pruned, deleted, or never existed.");
+                error!(
+                    "Could not find object {id} on RPC server. It might have been pruned, deleted, or never existed."
+                );
                 Ok(None)
             }
             Err(ReplayEngineError::ObjectDeleted {
@@ -637,7 +639,9 @@ impl LocalExec {
                 Ok(Some(object))
             }
             Err(ReplayEngineError::ObjectNotExist { id }) => {
-                error!("Could not find child object {id} on RPC server. It might have been pruned, deleted, or never existed.");
+                error!(
+                    "Could not find child object {id} on RPC server. It might have been pruned, deleted, or never existed."
+                );
                 Ok(None)
             }
             Err(ReplayEngineError::ObjectDeleted {
@@ -651,7 +655,9 @@ impl LocalExec {
             // This is a child object which was not found in the store (e.g., due to exists
             // check before creating the dynamic field).
             Err(ReplayEngineError::ObjectVersionNotFound { id, version }) => {
-                info!("Object {id} {version} not found on RPC server -- this may have been pruned or never existed.");
+                info!(
+                    "Object {id} {version} not found on RPC server -- this may have been pruned or never existed."
+                );
                 Ok(None)
             }
             Err(err) => Err(ReplayEngineError::SuiRpcError {
@@ -907,10 +913,10 @@ impl LocalExec {
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         if self.is_remote_replay() {
             assert!(
-            !self.protocol_version_system_package_table.is_empty()
-                || !self.protocol_version_epoch_table.is_empty(),
-            "Required tables not populated. Must call `init_for_execution` before executing transactions"
-        );
+                !self.protocol_version_system_package_table.is_empty()
+                    || !self.protocol_version_epoch_table.is_empty(),
+                "Required tables not populated. Must call `init_for_execution` before executing transactions"
+            );
         }
 
         let tx_info = if self.is_remote_replay() {
@@ -1362,14 +1368,20 @@ impl LocalExec {
                     // This happens when the RPC server prunes older object
                     // Replays in the current protocol version will work but old ones might not
                     // as we cannot fetch the package
-                    warn!("Object {} does not exist on RPC server. This might be due to pruning. Historical replays might not work", id);
+                    warn!(
+                        "Object {} does not exist on RPC server. This might be due to pruning. Historical replays might not work",
+                        id
+                    );
                     break;
                 }
                 Err(ReplayEngineError::ObjectVersionNotFound { id, version }) => {
                     // This happens when the RPC server prunes older object
                     // Replays in the current protocol version will work but old ones might not
                     // as we cannot fetch the package
-                    warn!("Object {} at version {} does not exist on RPC server. This might be due to pruning. Historical replays might not work", id, version);
+                    warn!(
+                        "Object {} at version {} does not exist on RPC server. This might be due to pruning. Historical replays might not work",
+                        id, version
+                    );
                     break;
                 }
                 Err(ReplayEngineError::ObjectVersionTooHigh {
@@ -1377,7 +1389,10 @@ impl LocalExec {
                     asked_version,
                     latest_version,
                 }) => {
-                    warn!("Object {} at version {} does not exist on RPC server. Latest version is {}. This might be due to pruning. Historical replays might not work", id, asked_version,latest_version );
+                    warn!(
+                        "Object {} at version {} does not exist on RPC server. Latest version is {}. This might be due to pruning. Historical replays might not work",
+                        id, asked_version, latest_version
+                    );
                     break;
                 }
                 Err(ReplayEngineError::ObjectDeleted {
@@ -1388,7 +1403,10 @@ impl LocalExec {
                     // This happens when the RPC server prunes older object
                     // Replays in the current protocol version will work but old ones might not
                     // as we cannot fetch the package
-                    warn!("Object {} at version {} digest {} deleted from RPC server. This might be due to pruning. Historical replays might not work", id, version, digest);
+                    warn!(
+                        "Object {} at version {} digest {} deleted from RPC server. This might be due to pruning. Historical replays might not work",
+                        id, version, digest
+                    );
                     break;
                 }
                 Err(e) => return Err(e),
@@ -1496,7 +1514,9 @@ impl LocalExec {
         match parse_effect_error_for_denied_coins(status) {
             Some(coin_type) => {
                 let Some(mut config_id_and_version) = self.config_and_versions.clone() else {
-                    panic!("Need to specify the config object ID and version for '{coin_type}' in order to replay this transaction");
+                    panic!(
+                        "Need to specify the config object ID and version for '{coin_type}' in order to replay this transaction"
+                    );
                 };
                 // NB: the version of the deny list object doesn't matter
                 if !config_id_and_version
@@ -2197,7 +2217,7 @@ mod tests {
     fn test_regex_regulated_coin_errors() {
         let test_bank = vec![
             "CoinTypeGlobalPause { coin_type: \"39a572c071784c280ee8ee8c683477e059d1381abc4366f9a58ffac3f350a254::rcoin::RCOIN\" }",
-            "AddressDeniedForCoin { address: B, coin_type: \"39a572c071784c280ee8ee8c683477e059d1381abc4366f9a58ffac3f350a254::rcoin::RCOIN\" }"
+            "AddressDeniedForCoin { address: B, coin_type: \"39a572c071784c280ee8ee8c683477e059d1381abc4366f9a58ffac3f350a254::rcoin::RCOIN\" }",
         ];
         let expected_string =
             "39a572c071784c280ee8ee8c683477e059d1381abc4366f9a58ffac3f350a254::rcoin::RCOIN";

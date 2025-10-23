@@ -3,14 +3,14 @@
 
 use crate::execution_scheduler::balance_withdraw_scheduler::ScheduleResult;
 use crate::execution_scheduler::balance_withdraw_scheduler::{
-    balance_read::MockBalanceRead, scheduler::BalanceWithdrawScheduler, BalanceSettlement,
-    ScheduleStatus, TxBalanceWithdraw,
+    BalanceSettlement, ScheduleStatus, TxBalanceWithdraw, balance_read::MockBalanceRead,
+    scheduler::BalanceWithdrawScheduler,
 };
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use mysten_metrics::monitored_mpsc::unbounded_channel;
 use parking_lot::Mutex;
-use rand::{seq::SliceRandom, Rng};
+use rand::{Rng, seq::SliceRandom};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_macros::sim_test;
 use sui_types::{
@@ -104,12 +104,14 @@ async fn test_schedule_wait_for_settlement() {
     };
 
     let receivers = test.schedule_withdraws(init_version.next(), vec![withdraw.clone()]);
-    assert!(wait_for_results(
-        receivers,
-        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
-    )
-    .await
-    .is_err());
+    assert!(
+        wait_for_results(
+            receivers,
+            BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+        )
+        .await
+        .is_err()
+    );
 }
 
 #[tokio::test]
@@ -365,12 +367,14 @@ async fn test_settle_just_updated_account_object() {
         balance_changes: BTreeMap::new(),
     });
     scheduler.wait_for_accumulator_version(v1).await;
-    assert!(wait_for_results(
-        receivers1,
-        BTreeMap::from([(withdraw1.tx_digest, ScheduleStatus::InsufficientBalance)]),
-    )
-    .await
-    .is_err());
+    assert!(
+        wait_for_results(
+            receivers1,
+            BTreeMap::from([(withdraw1.tx_digest, ScheduleStatus::InsufficientBalance)]),
+        )
+        .await
+        .is_err()
+    );
 
     // This will trigger the scheduler to process the pending withdraw.
     scheduler.settle_balance_changes(v2, BTreeMap::new());

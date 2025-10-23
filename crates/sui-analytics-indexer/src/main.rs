@@ -5,9 +5,9 @@ use anyhow::Result;
 use prometheus::Registry;
 use std::{collections::HashMap, env};
 use sui_analytics_indexer::{
-    analytics_metrics::AnalyticsMetrics,
-    package_store::package_cache_worker::{PackageCacheWorker, PACKAGE_CACHE_WORKER_NAME},
     JobConfig,
+    analytics_metrics::AnalyticsMetrics,
+    package_store::package_cache_worker::{PACKAGE_CACHE_WORKER_NAME, PackageCacheWorker},
 };
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,

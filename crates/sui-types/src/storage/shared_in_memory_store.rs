@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::error::Result;
 use super::ObjectStore;
+use super::error::Result;
 use crate::base_types::{EpochId, ExecutionData, TransactionDigest};
 use crate::committee::Committee;
 use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
@@ -375,10 +375,10 @@ impl InMemoryStore {
         if !self.checkpoints.contains_key(checkpoint.digest()) {
             panic!("store should already contain checkpoint");
         }
-        if let Some(highest_synced_checkpoint) = self.highest_synced_checkpoint {
-            if highest_synced_checkpoint.0 >= checkpoint.sequence_number {
-                return;
-            }
+        if let Some(highest_synced_checkpoint) = self.highest_synced_checkpoint
+            && highest_synced_checkpoint.0 >= checkpoint.sequence_number
+        {
+            return;
         }
         self.highest_synced_checkpoint =
             Some((*checkpoint.sequence_number(), *checkpoint.digest()));
@@ -388,10 +388,10 @@ impl InMemoryStore {
         if !self.checkpoints.contains_key(checkpoint.digest()) {
             panic!("store should already contain checkpoint");
         }
-        if let Some(highest_verified_checkpoint) = self.highest_verified_checkpoint {
-            if highest_verified_checkpoint.0 >= checkpoint.sequence_number {
-                return;
-            }
+        if let Some(highest_verified_checkpoint) = self.highest_verified_checkpoint
+            && highest_verified_checkpoint.0 >= checkpoint.sequence_number
+        {
+            return;
         }
         self.highest_verified_checkpoint =
             Some((*checkpoint.sequence_number(), *checkpoint.digest()));
@@ -456,7 +456,7 @@ impl SingleCheckpointSharedInMemoryStore {
         contents: VerifiedCheckpointContents,
         committee: Committee,
     ) {
-        let mut locked = self.0 .0.write().unwrap();
+        let mut locked = self.0.0.write().unwrap();
         locked.insert_genesis_state(checkpoint, contents, committee);
     }
 }
@@ -555,7 +555,7 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
 impl WriteStore for SingleCheckpointSharedInMemoryStore {
     fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<()> {
         {
-            let mut locked = self.0 .0.write().unwrap();
+            let mut locked = self.0.0.write().unwrap();
             locked.checkpoints.clear();
             locked.sequence_number_to_digest.clear();
         }
@@ -579,7 +579,7 @@ impl WriteStore for SingleCheckpointSharedInMemoryStore {
         contents: VerifiedCheckpointContents,
     ) -> Result<()> {
         {
-            let mut locked = self.0 .0.write().unwrap();
+            let mut locked = self.0.0.write().unwrap();
             locked.transactions.clear();
             locked.effects.clear();
             locked.contents_digest_to_sequence_number.clear();

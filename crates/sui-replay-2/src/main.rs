@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::*;
 use core::panic;
 use std::str::FromStr;
 use sui_replay_2::{
-    handle_replay_config, load_config_file, merge_configs,
+    Command, Config, handle_replay_config, load_config_file, merge_configs,
     package_tools::{extract_package, overwrite_package, rebuild_package},
-    print_effects_or_fork, Command, Config,
+    print_effects_or_fork,
 };
 use sui_types::base_types::ObjectID;
 

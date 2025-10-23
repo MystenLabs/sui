@@ -10,11 +10,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
-    metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::CheckpointData,
-    FieldCount,
+    FieldCount, metrics::IndexerMetrics, store::Store,
+    types::full_checkpoint_content::CheckpointData,
 };
 
-use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
+use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
 
 use self::{
     collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
@@ -294,6 +294,7 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::{
+        FieldCount,
         metrics::IndexerMetrics,
         mocks::store::{MockConnection, MockStore},
         pipeline::Processor,
@@ -301,7 +302,6 @@ mod tests {
             full_checkpoint_content::CheckpointData,
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        FieldCount,
     };
 
     use super::*;

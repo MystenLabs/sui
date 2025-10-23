@@ -3,17 +3,17 @@
 
 use crate::{
     authority::{
+        AuthorityMetrics, ExecutionEnv,
         authority_per_epoch_store::AuthorityPerEpochStore,
         shared_object_version_manager::{Schedulable, WithdrawType},
-        AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
-        balance_withdraw_scheduler::{
-            scheduler::BalanceWithdrawScheduler, BalanceSettlement, ScheduleStatus,
-            TxBalanceWithdraw,
-        },
         ExecutingGuard, PendingCertificateStats,
+        balance_withdraw_scheduler::{
+            BalanceSettlement, ScheduleStatus, TxBalanceWithdraw,
+            scheduler::BalanceWithdrawScheduler,
+        },
     },
 };
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -26,18 +26,18 @@ use std::{
 };
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     base_types::{FullObjectID, SequenceNumber},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::{InputKey, ObjectStore},
     transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{debug, error};
 
-use super::{overload_tracker::OverloadTracker, PendingCertificate};
+use super::{PendingCertificate, overload_tracker::OverloadTracker};
 
 #[derive(Clone)]
 pub struct ExecutionScheduler {
@@ -563,9 +563,9 @@ impl ExecutionScheduler {
 #[cfg(test)]
 mod test {
     use super::{ExecutionScheduler, PendingCertificate};
-    use crate::authority::shared_object_version_manager::AssignedVersions;
     use crate::authority::ExecutionEnv;
-    use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
+    use crate::authority::shared_object_version_manager::AssignedVersions;
+    use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
     use crate::execution_scheduler::SchedulingSource;
     use std::{time::Duration, vec};
     use sui_test_transaction_builder::TestTransactionBuilder;
@@ -573,15 +573,15 @@ mod test {
     use sui_types::object::Owner;
     use sui_types::transaction::{SharedObjectMutability, VerifiedTransaction};
     use sui_types::{
+        SUI_FRAMEWORK_PACKAGE_ID,
         base_types::{ObjectID, SequenceNumber},
         crypto::deterministic_random_account_key,
         object::Object,
         transaction::{CallArg, ObjectArg},
-        SUI_FRAMEWORK_PACKAGE_ID,
     };
     use tokio::time::Instant;
     use tokio::{
-        sync::mpsc::{error::TryRecvError, unbounded_channel, UnboundedReceiver},
+        sync::mpsc::{UnboundedReceiver, error::TryRecvError, unbounded_channel},
         time::sleep,
     };
 
@@ -635,18 +635,22 @@ mod test {
         // execution_scheduler output from rx_ready_certificates.
         let (execution_scheduler, mut rx_ready_certificates) = make_execution_scheduler(&state);
         // scheduler should output no transaction.
-        assert!(rx_ready_certificates
-            .try_recv()
-            .is_err_and(|err| err == TryRecvError::Empty));
+        assert!(
+            rx_ready_certificates
+                .try_recv()
+                .is_err_and(|err| err == TryRecvError::Empty)
+        );
         // scheduler should be empty at the beginning.
         assert_eq!(execution_scheduler.num_pending_certificates(), 0);
 
         // Enqueue empty vec should not crash.
         execution_scheduler.enqueue_transactions(vec![], &state.epoch_store_for_testing());
         // scheduler should output no transaction.
-        assert!(rx_ready_certificates
-            .try_recv()
-            .is_err_and(|err| err == TryRecvError::Empty));
+        assert!(
+            rx_ready_certificates
+                .try_recv()
+                .is_err_and(|err| err == TryRecvError::Empty)
+        );
 
         // Enqueue a transaction with existing gas object, empty input.
         let transaction = make_transaction(gas_objects[0].clone(), vec![]);
@@ -692,9 +696,11 @@ mod test {
         );
         // scheduler should output no transaction yet.
         sleep(Duration::from_secs(1)).await;
-        assert!(rx_ready_certificates
-            .try_recv()
-            .is_err_and(|err| err == TryRecvError::Empty));
+        assert!(
+            rx_ready_certificates
+                .try_recv()
+                .is_err_and(|err| err == TryRecvError::Empty)
+        );
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
@@ -707,9 +713,11 @@ mod test {
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
-        assert!(rx_ready_certificates
-            .try_recv()
-            .is_err_and(|err| err == TryRecvError::Empty));
+        assert!(
+            rx_ready_certificates
+                .try_recv()
+                .is_err_and(|err| err == TryRecvError::Empty)
+        );
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 2);
 

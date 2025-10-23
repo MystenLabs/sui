@@ -23,12 +23,12 @@ use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_simulator::fastcrypto::encoding::{Base64, Encoding};
 use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
-use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::balance::Supply;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME};
+use sui_types::coin::{COIN_MODULE_NAME, TreasuryCap};
 use sui_types::crypto::Signature;
 use sui_types::digests::ObjectDigest;
 use sui_types::gas_coin::GAS;
@@ -36,7 +36,7 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
 use sui_types::utils::load_test_vectors;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
-use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_ADDRESS};
+use sui_types::{SUI_FRAMEWORK_ADDRESS, parse_sui_struct_tag};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
 
@@ -83,13 +83,15 @@ async fn test_get_package_with_display_should_not_fail() -> Result<(), anyhow::E
         .await;
     assert!(response.is_ok());
     let response: SuiObjectResponse = response?;
-    assert!(response
-        .into_object()
-        .unwrap()
-        .display
-        .unwrap()
-        .data
-        .is_none());
+    assert!(
+        response
+            .into_object()
+            .unwrap()
+            .display
+            .unwrap()
+            .data
+            .is_none()
+    );
     Ok(())
 }
 

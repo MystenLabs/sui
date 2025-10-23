@@ -504,11 +504,11 @@ pub trait Datasource<T: Send>: Sync + Send {
                 ));
             }
             // If we have reached the target checkpoint, exit proactively
-            if let Some(cp) = last_saved_checkpoint {
-                if cp >= target_checkpoint {
-                    // Task is done
-                    break;
-                }
+            if let Some(cp) = last_saved_checkpoint
+                && cp >= target_checkpoint
+            {
+                // Task is done
+                break;
             }
         }
         if is_live_task {

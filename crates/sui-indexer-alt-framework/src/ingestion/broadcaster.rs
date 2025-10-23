@@ -11,7 +11,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use super::{client::IngestionClient, IngestionConfig};
+use super::{IngestionConfig, client::IngestionClient};
 use crate::{
     ingestion::error::Error, task::TrySpawnStreamExt,
     types::full_checkpoint_content::CheckpointData,
@@ -226,7 +226,7 @@ mod tests {
 
     use super::*;
     use crate::ingestion::client::FetchData;
-    use crate::ingestion::{test_utils::test_checkpoint_data, IngestionConfig};
+    use crate::ingestion::{IngestionConfig, test_utils::test_checkpoint_data};
     use crate::metrics::IndexerMetrics;
 
     /// Create a mock IngestionClient for tests
