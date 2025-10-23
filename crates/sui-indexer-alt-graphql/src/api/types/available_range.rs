@@ -332,9 +332,9 @@ mod field_piplines_tests {
     use super::*;
     use crate::schema;
     use async_graphql::{
+        Response,
         extensions::{Extension, ExtensionContext, ExtensionFactory, NextRequest},
         registry::{MetaType, MetaTypeName, Registry},
-        Response,
     };
     use std::{collections::BTreeSet, sync::Arc};
 
@@ -419,14 +419,14 @@ mod field_piplines_tests {
                     };
 
                     assert_eq!(
-                            delegate_type, interface_name,
-                            "Type '{}' field '{}' should delegate to interface '{}' but delegates to '{}'",
-                            type_name, interface_field_name, interface_name, delegate_type
+                        delegate_type, interface_name,
+                        "Type '{}' field '{}' should delegate to interface '{}' but delegates to '{}'",
+                        type_name, interface_field_name, interface_name, delegate_type
                     );
                     assert_eq!(
-                            delegate_field, interface_field_name,
-                            "Type '{}' field '{}' should delegate to interface field '{}' but delegates to '{}'",
-                            type_name, interface_field_name, interface_field_name, delegate_field
+                        delegate_field, interface_field_name,
+                        "Type '{}' field '{}' should delegate to interface field '{}' but delegates to '{}'",
+                        type_name, interface_field_name, interface_field_name, delegate_field
                     );
                 }
             }
