@@ -853,6 +853,7 @@ mod tests {
             ("is_normal", "is_normal"),
             ("0x1234", "_0x1234"),
             ("UNO!", "UNO_"),
+            ("!", "__"),
         ];
 
         for (name, expected) in names {
