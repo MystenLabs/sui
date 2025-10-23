@@ -1410,7 +1410,7 @@ impl AuthorityPerEpochStore {
         self.committee.epoch
     }
 
-    pub fn tx_validity_check_context(&self) -> TxValidityCheckContext {
+    pub fn tx_validity_check_context(&self) -> TxValidityCheckContext<'_> {
         TxValidityCheckContext {
             config: &self.protocol_config,
             epoch: self.epoch(),
@@ -3049,11 +3049,13 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    pub fn get_reconfig_state_read_lock_guard(&self) -> RwLockReadGuard<ReconfigState> {
+    pub fn get_reconfig_state_read_lock_guard(&self) -> RwLockReadGuard<'_, ReconfigState> {
         self.reconfig_state_mem.read()
     }
 
-    pub(crate) fn get_reconfig_state_write_lock_guard(&self) -> RwLockWriteGuard<ReconfigState> {
+    pub(crate) fn get_reconfig_state_write_lock_guard(
+        &self,
+    ) -> RwLockWriteGuard<'_, ReconfigState> {
         self.reconfig_state_mem.write()
     }
 
@@ -4197,7 +4199,7 @@ impl AuthorityPerEpochStore {
         output: &mut ConsensusCommitOutput,
         transactions: &[VerifiedSequencedConsensusTransaction],
     ) -> SuiResult<(
-        Option<RwLockWriteGuard<ReconfigState>>,
+        Option<RwLockWriteGuard<'_, ReconfigState>>,
         bool, // true if final round
     )> {
         let commit_has_deferred_txns = output.has_deferred_transactions();

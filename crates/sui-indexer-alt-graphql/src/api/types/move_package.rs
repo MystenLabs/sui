@@ -460,7 +460,7 @@ impl MovePackage {
     }
 
     /// The transitive dependencies of this package.
-    async fn linkage(&self, ctx: &Context<'_>) -> Result<Option<Vec<Linkage>>, RpcError> {
+    async fn linkage(&self, ctx: &Context<'_>) -> Result<Option<Vec<Linkage<'_>>>, RpcError> {
         let Some(native) = self.native(ctx).await?.as_ref() else {
             return Ok(None);
         };
