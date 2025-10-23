@@ -351,7 +351,7 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
-    pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter {
+    pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter<'_> {
         DiagnosticReporter::new(
             &self.flags,
             &self.known_filter_names,
@@ -361,7 +361,7 @@ impl CompilationEnv {
         )
     }
 
-    pub fn dummy_diagnostic_reporter(&self) -> DiagnosticReporter {
+    pub fn dummy_diagnostic_reporter(&self) -> DiagnosticReporter<'_> {
         DiagnosticReporter::dummy_reporter(
             &self.flags,
             &self.known_filter_names,
