@@ -51,7 +51,10 @@ impl Committee {
         let fault_tolerance = (total_stake - 1) / 3;
         let quorum_threshold = total_stake - fault_tolerance;
         let validity_threshold = fault_tolerance + 1;
-        assert!(2 * quorum_threshold - fault_tolerance > total_stake, "Quorum must intersect under maxim equivocations! Quorum: {quorum_threshold}, Fault tolerance: {fault_tolerance}, Total: {total_stake}");
+        assert!(
+            2 * quorum_threshold - fault_tolerance > total_stake,
+            "Quorum must intersect under maxim equivocations! Quorum: {quorum_threshold}, Fault tolerance: {fault_tolerance}, Total: {total_stake}"
+        );
 
         Self {
             epoch,
