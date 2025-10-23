@@ -4,7 +4,7 @@
 use std::sync::{Arc, LazyLock};
 
 use anyhow::Context;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use object_store::path::Path as ObjectPath;
 use object_store::{Error as ObjectStoreError, PutMode, PutPayload};
 use prost::Message;
@@ -19,7 +19,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 pub struct CheckpointBlob {
     pub sequence_number: u64,
-    pub proto_bytes: Vec<u8>,
+    pub proto_bytes: Bytes,
 }
 
 pub struct CheckpointBlobPipeline {
@@ -69,7 +69,7 @@ impl Processor for CheckpointBlobPipeline {
 
         let sequence_number = checkpoint.summary.sequence_number;
         let proto_checkpoint = rpc::v2::Checkpoint::merge_from(checkpoint.as_ref(), &MASK);
-        let proto_bytes = proto_checkpoint.encode_to_vec();
+        let proto_bytes = Bytes::from(proto_checkpoint.encode_to_vec());
 
         Ok(vec![CheckpointBlob {
             sequence_number,
@@ -93,11 +93,18 @@ impl Handler for CheckpointBlobPipeline {
         };
 
         let mut path = format!("{}.binpb", blob.sequence_number);
-        let data: Vec<u8> = if let Some(level) = self.compression_level {
+        let data: Bytes = if let Some(level) = self.compression_level {
             path = format!("{}.zst", path);
             tokio::task::spawn_blocking({
                 let bytes = blob.proto_bytes.clone();
-                move || zstd::encode_all(&bytes[..], level)
+                move || {
+                    let compressed = BytesMut::new();
+                    let mut writer = compressed.writer();
+                    let mut encoder = zstd::Encoder::new(&mut writer, level)?;
+                    std::io::copy(&mut &bytes[..], &mut encoder)?;
+                    encoder.finish()?;
+                    Ok::<Bytes, std::io::Error>(writer.into_inner().freeze())
+                }
             })
             .await??
         } else {
@@ -105,7 +112,7 @@ impl Handler for CheckpointBlobPipeline {
         };
 
         conn.object_store()
-            .put(&ObjectPath::from(path), Bytes::from(data).into())
+            .put(&ObjectPath::from(path), data.into())
             .await?;
         Ok(1)
     }
@@ -206,7 +213,7 @@ mod tests {
 
         let blob = CheckpointBlob {
             sequence_number: 100,
-            proto_bytes: vec![1, 2, 3, 4, 5],
+            proto_bytes: Bytes::from(vec![1, 2, 3, 4, 5]),
         };
         let batch = Some(blob);
 
@@ -216,7 +223,7 @@ mod tests {
         let count = pipeline.commit(&batch, &mut conn).await.unwrap();
         assert_eq!(count, 1);
 
-        let path = ObjectPath::from("100.pb");
+        let path = ObjectPath::from("100.binpb");
         let result = conn.object_store().get(&path).await.unwrap();
         let bytes = result.bytes().await.unwrap();
         assert_eq!(bytes.as_ref(), &[1, 2, 3, 4, 5]);
@@ -230,7 +237,7 @@ mod tests {
         let test_data = vec![0u8; 1000];
         let blob = CheckpointBlob {
             sequence_number: 200,
-            proto_bytes: test_data.clone(),
+            proto_bytes: Bytes::from(test_data.clone()),
         };
         let batch = Some(blob);
 
@@ -240,7 +247,7 @@ mod tests {
         let count = pipeline.commit(&batch, &mut conn).await.unwrap();
         assert_eq!(count, 1);
 
-        let path = ObjectPath::from("200.pb.zst");
+        let path = ObjectPath::from("200.binpb.zst");
         let result = conn.object_store().get(&path).await.unwrap();
         let compressed_bytes = result.bytes().await.unwrap();
 
