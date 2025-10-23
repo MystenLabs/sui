@@ -171,10 +171,7 @@ collect_pipelines! {
     Address.[defaultSuinsName] => IAddressable.defaultSuinsName;
     Address.[dynamicField, dynamicFields, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] => IMoveObject.*;
 
-    Checkpoint.[transactions] |pipelines, _filters| {
-        pipelines.insert("cp_sequence_numbers".to_string());
-        pipelines.insert("tx_digests".to_string());
-    };
+    Checkpoint.[transactions] => Query.transactions(.., "atCheckpoint");
 
     CoinMetadata.[address] => IAddressable.*;
     CoinMetadata.[balance, balances, multiGetBalances, objects] => IAddressable.*;

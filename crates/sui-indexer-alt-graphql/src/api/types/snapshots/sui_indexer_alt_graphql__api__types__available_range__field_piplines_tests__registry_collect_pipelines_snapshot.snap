@@ -255,19 +255,19 @@ Checkpoint.transactions (filter: beforeCheckpoint)
   => {"cp_sequence_numbers", "tx_digests"}
 
 Checkpoint.transactions (filter: function)
-  => {"cp_sequence_numbers", "tx_digests"}
+  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
 
 Checkpoint.transactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_digests"}
+  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
 
 Checkpoint.transactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_digests"}
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 Checkpoint.transactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_digests"}
+  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
 
 Checkpoint.transactions (filter: sentAddress)
-  => {"cp_sequence_numbers", "tx_digests"}
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 CoinDenyListStateCreateTransaction._
   => {}
