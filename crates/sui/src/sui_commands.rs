@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::{SuiClientCommands, USER_AGENT};
+use crate::client_commands::{
+    SuiClientCommands, USER_AGENT, check_for_unpublished_deps, load_root_pkg_for_publish_upgrade,
+    pkg_tree_shake,
+};
 use crate::fire_drill::{FireDrill, run_fire_drill};
 use crate::genesis_ceremony::{Ceremony, run};
 use crate::keytool::KeyToolCommand;
@@ -44,6 +47,7 @@ use sui_config::{
 use sui_faucet::{AppState, FaucetConfig, LocalFaucet, create_wallet_context, start_faucet};
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move::summary::PackageSummaryMetadata;
+use sui_move_build::BuildConfig as SuiBuildConfig;
 use sui_sdk::SuiClient;
 use sui_sdk::apis::ReadApi;
 use sui_types::move_package::MovePackage;
@@ -64,6 +68,7 @@ use sui_indexer_alt_reader::{
     fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
 };
 
+use serde_json::json;
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -153,6 +158,12 @@ pub struct SuiEnvConfig {
     /// The Sui environment to use. This must be present in the current config file.
     #[clap(long = "client.env")]
     env: Option<String>,
+}
+
+impl SuiEnvConfig {
+    pub fn new(config: Option<PathBuf>, env: Option<String>) -> Self {
+        Self { config, env }
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -577,89 +588,71 @@ impl SuiCommand {
                         .await?;
                         return Ok(());
                     }
-                    sui_move::Command::Build(build) if build.dump_bytecode_as_base64 => {
-                        // TODO: pkg-alt fix this
-                        // `sui move build` does not ordinarily require a network connection.
-                        // The exception is when --dump-bytecode-as-base64 is specified: In this
-                        // case, we should resolve the correct addresses for the respective chain
-                        // (e.g., testnet, mainnet) from the Move.lock under automated address management.
-                        // In addition, tree shaking also requires a network as it needs to fetch
-                        // on-chain linkage table of package dependencies.
-                        // let (chain_id, client) = if build.ignore_chain {
-                        //     // for tests it's useful to ignore the chain id!
-                        //     (None, None)
-                        // } else {
-                        //     get_chain_id_and_client(
-                        //         client_config,
-                        //         "sui move build --dump-bytecode-as-base64",
-                        //     )
-                        //     .await?
-                        // };
+                    sui_move::Command::Build(ref build) if build.dump_bytecode_as_base64 => {
+                        // `sui move build` does not ordinarily require a network connection, but
+                        // for --dump-bytecode-as-base64 it might need one.
+                        let context = get_wallet_context(&client_config).await?;
 
-                        // let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
-                        // let mut build_config =
-                        //     resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+                        let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
+                        // if an environment is specified, then we should read the manifests'
+                        // environments to get the chain id
+                        //
+                        // if an environment is not specified, and the current active env does not
+                        // have the chain id cached, we error out
+                        let (env, chain_id) = if let Some(env_name) = &build_config.environment {
+                            let envs =
+                                move_package_alt::package::RootPackage::<SuiFlavor>::environments(
+                                    &rerooted_path,
+                                )?;
+                            let id = envs.get(env_name).ok_or_else(|| {
+                                anyhow!("Environment '{}' not found in Move.toml", env_name)
+                            })?;
+                            (env_name.to_string(), id.to_string())
+                        } else {
+                            let active_env = context.get_active_env()?;
+                            let chain_id = context
+                                .try_load_chain_id_from_cache(Some(active_env.alias.clone()))
+                                .await?;
+                            (active_env.alias.clone(), chain_id)
+                        };
+                        let with_unpublished_deps = build.with_unpublished_dependencies;
+                        let mut root_pkg = load_root_pkg_for_publish_upgrade(
+                            &chain_id,
+                            env.to_string(),
+                            &build_config,
+                            &rerooted_path,
+                        )
+                        .await?;
 
-                        // let previous_id = if let Some(ref chain_id) = chain_id {
-                        //     sui_package_management::set_package_id(
-                        //         &rerooted_path,
-                        //         build_config.install_dir.clone(),
-                        //         chain_id,
-                        //         AccountAddress::ZERO,
-                        //     )?
-                        // } else {
-                        //     None
-                        // };
+                        if !with_unpublished_deps {
+                            let _ = check_for_unpublished_deps(&root_pkg, with_unpublished_deps)?;
+                        }
 
-                        // if let Some(client) = &client {
-                        //     let protocol_config =
-                        //         client.read_api().get_protocol_config(None).await?;
-                        //     // build_config.implicit_dependencies =
-                        //     //     implicit_deps_for_protocol_version(
-                        //     //         protocol_config.protocol_version,
-                        //     //     )?;
-                        // } else {
-                        //     // build_config.implicit_dependencies =
-                        //     //     implicit_deps(latest_system_packages());
-                        // }
+                        // explicitly tell the compiler to set unpublished dependencies' addresses
+                        // to 0x0
+                        let mut config = build_config.clone();
+                        config.set_unpublished_deps_to_zero = with_unpublished_deps;
 
-                        // let mut pkg = SuiBuildConfig {
-                        //     config: build_config.clone(),
-                        //     run_bytecode_verifier: true,
-                        //     print_diags_to_stderr: true,
-                        //     chain_id: chain_id.clone(),
-                        // }
-                        // .build(&rerooted_path)?;
+                        let mut pkg = SuiBuildConfig {
+                            config,
+                            run_bytecode_verifier: true,
+                            print_diags_to_stderr: true,
+                            chain_id: Some(chain_id.clone()),
+                        }
+                        .build_async_from_root_pkg(&mut root_pkg)
+                        .await?;
 
-                        // Restore original ID, then check result.
-                        // if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
-                        //     let _ = sui_package_management::set_package_id(
-                        //         &rerooted_path,
-                        //         build_config.install_dir.clone(),
-                        //         &chain_id,
-                        //         previous_id,
-                        //     )?;
-                        // }
+                        let client = context.get_client().await?;
+                        pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg).await?;
 
-                        // check_conflicting_addresses(&pkg.dependency_ids.conflicting, true)?;
-                        // check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
-                        // if !with_unpublished_deps {
-                        //     check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
-                        // }
-
-                        // if let Some(client) = client {
-                        //     pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg)
-                        //         .await?;
-                        // }
-
-                        // println!(
-                        //     "{}",
-                        //     json!({
-                        //         "modules": pkg.get_package_base64(),
-                        //         "dependencies": pkg.get_dependency_storage_package_ids(),
-                        //         "digest": pkg.get_package_digest(),
-                        //     })
-                        // );
+                        println!(
+                            "{}",
+                            json!({
+                                "modules": pkg.get_package_base64(with_unpublished_deps),
+                                "dependencies": pkg.get_dependency_storage_package_ids(),
+                                "digest": pkg.get_package_digest(with_unpublished_deps),
+                            })
+                        );
                         return Ok(());
                     }
                     _ => (),
@@ -1638,21 +1631,28 @@ fn read_line() -> Result<String, anyhow::Error> {
     Ok(s.trim_end().to_string())
 }
 
-/// Get the currently configured client, and the chain ID for that client.
-async fn get_chain_id_and_client(
-    client_config: SuiEnvConfig,
-    command_err_string: &str,
-) -> anyhow::Result<(Option<String>, Option<SuiClient>)> {
+/// Get the currently configured wallet context.
+async fn get_wallet_context(client_config: &SuiEnvConfig) -> Result<WalletContext, anyhow::Error> {
     let config = client_config
         .config
+        .clone()
         .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
     prompt_if_no_config(&config, false).await?;
     let mut context = WalletContext::new(&config)?;
 
-    if let Some(env_override) = client_config.env {
-        context = context.with_env_override(env_override);
+    if let Some(env_override) = &client_config.env {
+        context = context.with_env_override(env_override.clone());
     }
 
+    Ok(context)
+}
+
+/// Get the currently configured client.
+async fn get_client(
+    client_config: SuiEnvConfig,
+    command_err_string: &str,
+) -> Result<SuiClient, anyhow::Error> {
+    let context = get_wallet_context(&client_config).await?;
     let Ok(client) = context.get_client().await else {
         bail!(
             "`{command_err_string}` requires a connection to the network. \
@@ -1660,6 +1660,16 @@ async fn get_chain_id_and_client(
             context.config.active_env.as_ref().unwrap()
         );
     };
+
+    Ok(client)
+}
+
+/// Get the currently configured client, and the chain ID for that client.
+async fn get_chain_id_and_client(
+    client_config: SuiEnvConfig,
+    command_err_string: &str,
+) -> anyhow::Result<(Option<String>, Option<SuiClient>)> {
+    let client = get_client(client_config, command_err_string).await?;
 
     if let Err(e) = client.check_api_version() {
         eprintln!("{}", format!("[warning] {e}").yellow().bold());

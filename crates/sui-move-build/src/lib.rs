@@ -194,6 +194,13 @@ impl BuildConfig {
         self.internal_build(&mut root_pkg)
     }
 
+    pub async fn build_async_from_root_pkg(
+        self,
+        root_pkg: &mut RootPackage<SuiFlavor>,
+    ) -> anyhow::Result<CompiledPackage> {
+        self.internal_build(root_pkg)
+    }
+
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: &Path) -> anyhow::Result<CompiledPackage> {
@@ -329,8 +336,8 @@ impl CompiledPackage {
         let modules = all_modules.compute_topological_order().unwrap();
 
         if with_unpublished_deps {
-            // For each transitive dependent module, if they are not to be published, they must have
-            // a non-zero address (meaning they are already published on-chain).
+            // For each transitive dependent module, include if it has a zero address or if it is
+            // in the set of unpublished dependencies
             modules
                 .filter(|module| module.address() == &AccountAddress::ZERO)
                 .cloned()
@@ -390,19 +397,6 @@ impl CompiledPackage {
             .map(|b| Base64::from_bytes(b))
             .collect()
     }
-
-    // /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order
-    // pub fn get_package_bytes(&self, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
-    //     self.package.get_package_bytes(with_unpublished_deps)
-    // }
-    //
-    // /// Return the base64-encoded representation of the bytecode modules in this package, topologically sorted in dependency order
-    // pub fn get_package_base64(&self, with_unpublished_deps: bool) -> Vec<Base64> {
-    //     self.get_package_bytes(with_unpublished_deps)
-    //         .iter()
-    //         .map(|b| Base64::from_bytes(b))
-    //         .collect()
-    // }
 
     /// Get bytecode modules from DeepBook that are used by this package
     pub fn get_deepbook_modules(&self) -> impl Iterator<Item = &CompiledModule> {
@@ -598,8 +592,8 @@ pub enum PublishedAtError {
 pub struct PackageDependencies {
     /// Set of published dependencies (name and address).
     pub published: BTreeMap<Symbol, ObjectID>,
-    /// Set of unpublished dependencies (name).
-    pub unpublished: BTreeSet<Symbol>,
+    /// Set of unpublished dependencies (name and address).
+    pub unpublished: BTreeMap<Symbol, ObjectID>,
     /// Set of dependencies with invalid `published-at` addresses.
     pub invalid: BTreeMap<Symbol, String>,
     /// Set of dependencies that have conflicting `published-at` addresses. The key refers to
@@ -610,7 +604,7 @@ pub struct PackageDependencies {
 impl PackageDependencies {
     pub fn new<F: MoveFlavor>(root_pkg: &RootPackage<F>) -> anyhow::Result<Self> {
         let mut published = BTreeMap::new();
-        let mut unpublished = BTreeSet::new();
+        let mut unpublished = BTreeMap::new();
 
         let packages = root_pkg.packages();
 
@@ -624,7 +618,10 @@ impl PackageDependencies {
                     ObjectID::from_address(addresses.published_at.0),
                 );
             } else {
-                unpublished.insert(p.display_name().into());
+                unpublished.insert(
+                    p.display_name().into(),
+                    ObjectID::from_address(p.original_id().0),
+                );
             }
         }
 

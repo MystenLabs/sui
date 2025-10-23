@@ -2113,7 +2113,7 @@ pub(crate) async fn compile_package(
 
 /// Check for unpublished dependencies and error if any are found when the
 /// `--with-unpublished-dependencies` is not set.
-fn check_for_unpublished_deps(
+pub(crate) fn check_for_unpublished_deps(
     root_pkg: &RootPackage<SuiFlavor>,
     with_unpublished_deps: bool,
 ) -> anyhow::Result<PackageDependencies> {
@@ -2126,7 +2126,7 @@ fn check_for_unpublished_deps(
         ",
             package_dependencies
                 .unpublished
-                .into_iter()
+                .into_keys()
                 .map(|n| n.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -2202,163 +2202,6 @@ async fn compatibility_checks(
 
     Ok(())
 }
-
-// pub(crate) async fn compile_package_old(
-//     _read_api: &ReadApi,
-//     _build_config: MoveBuildConfig,
-//     _package_path: &Path,
-//     _with_unpublished_dependencies: bool,
-//     _skip_dependency_verification: bool,
-// ) -> Result<CompiledPackage, anyhow::Error> {
-//     // let protocol_config = read_api.get_protocol_config(None).await?;
-//
-//     // build_config.implicit_dependencies =
-//     //     implicit_deps_for_protocol_version(protocol_config.protocol_version)?;
-//     // let config = resolve_lock_file_path(build_config, Some(package_path))?;
-//     // let run_bytecode_verifier = true;
-//     // let print_diags_to_stderr = true;
-//     // let chain_id = read_api.get_chain_identifier().await.ok();
-//     // let config = BuildConfig {
-//     //     config,
-//     //     run_bytecode_verifier,
-//     //     print_diags_to_stderr,
-//     //     chain_id: chain_id.clone(),
-//     // };
-//     // let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
-//     // let (_, dependencies) = gather_published_ids(&resolution_graph, chain_id.clone());
-//
-//     // check_conflicting_addresses(&dependencies.conflicting, false)?;
-//     // check_invalid_dependencies(&dependencies.invalid)?;
-//     // if !with_unpublished_dependencies {
-//     //     check_unpublished_dependencies(&dependencies.unpublished)?;
-//     // };
-//     // let mut compiled_package = build_from_resolution_graph(
-//     //     resolution_graph,
-//     //     run_bytecode_verifier,
-//     //     print_diags_to_stderr,
-//     //     chain_id,
-//     // )?;
-//     //
-//     // pkg_tree_shake(
-//     //     read_api,
-//     //     with_unpublished_dependencies,
-//     //     &mut compiled_package,
-//     // )
-//     // .await?;
-//     //
-//     // let protocol_config = read_api.get_protocol_config(None).await?;
-//     //
-//     // // Check that the package's Move version is compatible with the chain's
-//     // if let Some(Some(SuiProtocolConfigValue::U32(min_version))) = protocol_config
-//     //     .attributes
-//     //     .get("min_move_binary_format_version")
-//     // {
-//     //     for module in compiled_package.get_modules_and_deps() {
-//     //         if module.version() < *min_version {
-//     //             return Err(SuiError::ModulePublishFailure {
-//     //                 error: format!(
-//     //                     "Module {} has a version {} that is \
-//     //                      lower than the minimum version {min_version} supported by the chain.",
-//     //                     module.self_id(),
-//     //                     module.version(),
-//     //                 ),
-//     //             }
-//     //             .into());
-//     //         }
-//     //     }
-//     // }
-//     //
-//     // // Check that the package's Move version is compatible with the chain's
-//     // if let Some(Some(SuiProtocolConfigValue::U32(max_version))) =
-//     //     protocol_config.attributes.get("move_binary_format_version")
-//     // {
-//     //     for module in compiled_package.get_modules_and_deps() {
-//     //         if module.version() > *max_version {
-//     //             let help_msg = if module.version() == 7 {
-//     //                 "This is because you used enums in your Move package but tried to publish it to \
-//     //                 a chain that does not yet support enums in Move."
-//     //             } else {
-//     //                 ""
-//     //             };
-//     //             return Err(SuiError::ModulePublishFailure {
-//     //                 error: format!(
-//     //                     "Module {} has a version {} that is \
-//     //                      higher than the maximum version {max_version} supported by the chain.{help_msg}",
-//     //                     module.self_id(),
-//     //                     module.version(),
-//     //                 ),
-//     //             }
-//     //             .into());
-//     //         }
-//     //     }
-//     // }
-//     //
-//     // if !compiled_package.is_system_package() {
-//     //     if let Some(already_published) = compiled_package.published_root_module() {
-//     //         return Err(SuiError::ModulePublishFailure {
-//     //             error: format!(
-//     //                 "Modules must all have 0x0 as their addresses. \
-//     //                  Violated by module {:?}",
-//     //                 already_published.self_id(),
-//     //             ),
-//     //         }
-//     //         .into());
-//     //     }
-//     // }
-//     // if with_unpublished_dependencies {
-//     //     compiled_package.verify_unpublished_dependencies(&dependencies.unpublished)?;
-//     // }
-//     // if !skip_dependency_verification {
-//     //     let verifier = BytecodeSourceVerifier::new(read_api);
-//     //     if let Err(e) = verifier
-//     //         .verify(&compiled_package, ValidationMode::deps())
-//     //         .await
-//     //     {
-//     //         return Err(SuiError::ModulePublishFailure {
-//     //             error: format!(
-//     //                 "[warning] {e}\n\
-//     //                  \n\
-//     //                  This may indicate that the on-chain version(s) of your package's dependencies \
-//     //                  may behave differently than the source version(s) your package was built \
-//     //                  against.\n\
-//     //                  \n\
-//     //                  Fix this by rebuilding your packages with source versions matching on-chain \
-//     //                  versions of dependencies, or ignore this warning by re-running with the \
-//     //                  --skip-dependency-verification flag."
-//     //             ),
-//     //         }
-//     //         .into());
-//     //     } else {
-//     //         eprintln!(
-//     //             "{}",
-//     //             "Successfully verified dependencies on-chain against source."
-//     //                 .bold()
-//     //                 .green(),
-//     //         );
-//     //     }
-//     // } else {
-//     //     eprintln!("{}", "Skipping dependency verification".bold().yellow());
-//     // }
-//     //
-//     // if compiled_package.get_package_bytes().is_empty() {
-//     //     return Err(SuiError::ModulePublishFailure {
-//     //         error: "No modules found in the package".to_string(),
-//     //     }
-//     //     .into());
-//     // }
-//     //
-//     // compiled_package
-//     //     .package
-//     //     .compiled_package_info
-//     //     .build_flags
-//     //     .update_lock_file_toolchain_version(package_path, env!("CARGO_PKG_VERSION").into())
-//     //     .map_err(|e| SuiError::ModuleBuildFailure {
-//     //         error: format!("Failed to update Move.lock toolchain version: {e}"),
-//     //     })?;
-//     //
-//     // Ok(compiled_package)
-//     todo!()
-// }
 
 impl Display for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
