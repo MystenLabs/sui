@@ -136,13 +136,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     pub fn environments(
         path: impl AsRef<Path>,
     ) -> PackageResult<IndexMap<EnvironmentName, EnvironmentID>> {
-        let path = path.as_ref().to_path_buf();
-        block_on!(Self::async_environments(path))
-    }
-
-    async fn async_environments(
-        path: impl AsRef<Path>,
-    ) -> PackageResult<IndexMap<EnvironmentName, EnvironmentID>> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let mtx = package_path.lock()?;
         let mut environments = F::default_environments();
