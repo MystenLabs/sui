@@ -70,6 +70,7 @@ pub use transaction::{
 };
 
 // Exported API for benchmarking
+pub use block_verifier::{BlockVerifier, NoopBlockVerifier};
 pub use commit_finalizer::CommitFinalizer;
 pub use context::Context;
 pub use dag_state::DagState;

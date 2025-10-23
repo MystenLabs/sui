@@ -262,13 +262,9 @@ where
 
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
+            block_verifier.clone(),
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
-        );
-        // TODO(fastpath): recover incrementally by chunk inside CommitObserver::new()
-        transaction_certifier.recover(
-            block_verifier.as_ref(),
-            commit_consumer.replay_after_commit_index,
         );
 
         let mut proposed_block_handler = ProposedBlockHandler::new(

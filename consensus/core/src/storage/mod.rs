@@ -62,11 +62,11 @@ pub trait Store: Send + Sync {
     /// Reads the last finalized commit.
     fn read_last_finalized_commit(&self) -> ConsensusResult<Option<CommitRef>>;
 
-    // Scans finalized commits with their rejected transactions.
-    fn scan_finalized_commits(
+    // Reads rejected transactions by block for a given commit.
+    fn read_rejected_transactions(
         &self,
-        range: CommitRange,
-    ) -> ConsensusResult<Vec<(CommitRef, BTreeMap<BlockRef, Vec<TransactionIndex>>)>>;
+        commit_ref: CommitRef,
+    ) -> ConsensusResult<Option<BTreeMap<BlockRef, Vec<TransactionIndex>>>>;
 }
 
 /// Represents data to be written to the store together atomically.
