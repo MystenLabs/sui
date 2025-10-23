@@ -76,7 +76,7 @@ impl Handler for KvProtocolConfigs {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::types::test_checkpoint_data_builder::{
-        AdvanceEpochConfig, TestCheckpointDataBuilder,
+        AdvanceEpochConfig, TestCheckpointBuilder,
     };
     use sui_protocol_config::ProtocolVersion;
 
@@ -84,8 +84,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_protocol_version_processing() {
-        let mut builder = TestCheckpointDataBuilder::new(0);
-        let genesis: Arc<Checkpoint> = Arc::new(builder.build_checkpoint().into());
+        let mut builder = TestCheckpointBuilder::new(0);
+        let genesis: Arc<Checkpoint> = Arc::new(builder.build_checkpoint());
         let checkpoint: Arc<Checkpoint> = Arc::new(
             builder
                 .advance_epoch(AdvanceEpochConfig {
@@ -118,8 +118,8 @@ mod tests {
     /// but not panic.
     #[tokio::test]
     async fn test_protocol_version_too_high() {
-        let mut builder = TestCheckpointDataBuilder::new(0);
-        let genesis: Arc<Checkpoint> = Arc::new(builder.build_checkpoint().into());
+        let mut builder = TestCheckpointBuilder::new(0);
+        let genesis: Arc<Checkpoint> = Arc::new(builder.build_checkpoint());
         let checkpoint: Arc<Checkpoint> = Arc::new(
             builder
                 .advance_epoch(AdvanceEpochConfig {

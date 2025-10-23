@@ -88,7 +88,7 @@ pub(crate) fn checkpoint_input_objects(
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::types::{
-        object::Owner, test_checkpoint_data_builder::TestCheckpointDataBuilder,
+        object::Owner, test_checkpoint_data_builder::TestCheckpointBuilder,
     };
 
     use super::*;
@@ -104,7 +104,7 @@ mod tests {
         const SHARED_MODIFIED: u64 = 6;
         const SHARED_READ: u64 = 7;
 
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
 
         // Set-up state in an initial checkpoint.
         builder = builder
@@ -143,7 +143,7 @@ mod tests {
             .read_shared_object(SHARED_READ)
             .finish_transaction();
 
-        let checkpoint: Checkpoint = builder.build_checkpoint().into();
+        let checkpoint: Checkpoint = builder.build_checkpoint();
 
         eprintln!("Checkpoint: {checkpoint:#?}");
 
@@ -160,14 +160,14 @@ mod tests {
 
         let setup_version = |idx: u64| -> Option<u64> {
             setup_versions
-                .get(&TestCheckpointDataBuilder::derive_object_id(idx))
+                .get(&TestCheckpointBuilder::derive_object_id(idx))
                 .copied()
         };
 
         let inputs = checkpoint_input_objects(&checkpoint).unwrap();
         let input_version = |idx: u64| -> Option<u64> {
             inputs
-                .get(&TestCheckpointDataBuilder::derive_object_id(idx))
+                .get(&TestCheckpointBuilder::derive_object_id(idx))
                 .map(|obj| obj.version().value())
         };
 
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_checkpoint_input_repeated_modification() {
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
 
         // Set-up state in an initial checkpoint.
         builder = builder
@@ -214,10 +214,10 @@ mod tests {
             .mutate_owned_object(0)
             .finish_transaction();
 
-        let checkpoint: Checkpoint = builder.build_checkpoint().into();
+        let checkpoint = builder.build_checkpoint();
 
-        let id = TestCheckpointDataBuilder::derive_object_id(0);
-        let setup_version = setup.transactions[0].output_objects[0].version();
+        let id = TestCheckpointBuilder::derive_object_id(0);
+        let setup_version = setup.object_set.iter().next().unwrap().version();
 
         let inputs = checkpoint_input_objects(&checkpoint).unwrap();
         let input_version = inputs.get(&id).map(|obj| obj.version());
@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     fn test_checkpoint_input_objects_wrap_unwrap() {
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
 
         // Set-up state in an initial checkpoint.
         builder = builder
@@ -251,10 +251,10 @@ mod tests {
             .unwrap_object(0)
             .finish_transaction();
 
-        let checkpoint: Checkpoint = builder.build_checkpoint().into();
+        let checkpoint = builder.build_checkpoint();
 
-        let id = TestCheckpointDataBuilder::derive_object_id(0);
-        let setup_version = setup.transactions[0].output_objects[0].version();
+        let id = TestCheckpointBuilder::derive_object_id(0);
+        let setup_version = setup.object_set.iter().next().unwrap().version();
 
         let inputs = checkpoint_input_objects(&checkpoint).unwrap();
         let input_version = inputs.get(&id).map(|obj| obj.version());

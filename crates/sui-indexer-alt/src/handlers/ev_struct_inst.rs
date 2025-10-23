@@ -93,7 +93,7 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
+        types::{event::Event, test_checkpoint_data_builder::TestCheckpointBuilder},
         Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
@@ -135,7 +135,7 @@ mod tests {
         let mut conn = indexer.store().connect().await.unwrap();
 
         let checkpoint: Arc<Checkpoint> = Arc::new(
-            TestCheckpointDataBuilder::new(0)
+            TestCheckpointBuilder::new(0)
                 .start_transaction(0)
                 .finish_transaction()
                 .build_checkpoint()
@@ -154,7 +154,7 @@ mod tests {
         let mut conn = indexer.store().connect().await.unwrap();
 
         let checkpoint: Arc<Checkpoint> = Arc::new(
-            TestCheckpointDataBuilder::new(0)
+            TestCheckpointBuilder::new(0)
                 .start_transaction(0)
                 .with_events(vec![Event::random_for_testing()])
                 .finish_transaction()
@@ -176,9 +176,9 @@ mod tests {
         let mut conn = indexer.store().connect().await.unwrap();
 
         // 0th checkpoint has no events
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint().into());
+        let checkpoint = Arc::new(builder.build_checkpoint());
         let values = EvStructInst.process(&checkpoint).await.unwrap();
 
         EvStructInst::commit(&values, &mut conn).await.unwrap();
@@ -190,7 +190,7 @@ mod tests {
             .start_transaction(0)
             .with_events(vec![Event::random_for_testing()])
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint().into());
+        let checkpoint = Arc::new(builder.build_checkpoint());
         let values = EvStructInst.process(&checkpoint).await.unwrap();
 
         EvStructInst::commit(&values, &mut conn).await.unwrap();
@@ -205,7 +205,7 @@ mod tests {
                 Event::random_for_testing(),
             ])
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint().into());
+        let checkpoint = Arc::new(builder.build_checkpoint());
         let values = EvStructInst.process(&checkpoint).await.unwrap();
 
         EvStructInst::commit(&values, &mut conn).await.unwrap();
