@@ -1,4 +1,5 @@
-[environments]
-localnet="e0dfde79"
-[environments]
-localnet="4821f05b"
+[package]
+name = "test_pkg"
+edition = "2024"
+system-dependencies = []
+
