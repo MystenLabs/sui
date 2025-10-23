@@ -25,7 +25,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_6:
         reg_3 : &0x42::exp::Exp = Move(lcl_3)
-        reg_4 : &u64 = UnpackVariant<Push>(reg_3 : &0x42::exp::Exp)
+        reg_4 : &u64 = UnpackVariantImmRef<Push>(reg_3 : &0x42::exp::Exp)
         Drop(reg_4 : &u64)
         reg_5 : 0x42::exp::Exp = Move(lcl_4)
         reg_6 : u64 = UnpackVariant<Push>(reg_5 : 0x42::exp::Exp)
@@ -37,7 +37,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_16:
         reg_9 : &0x42::exp::Exp = Move(lcl_3)
-        reg_10 : &u64, reg_11 : &u64 = UnpackVariant<PushTwo>(reg_9 : &0x42::exp::Exp)
+        reg_10 : &u64, reg_11 : &u64 = UnpackVariantImmRef<PushTwo>(reg_9 : &0x42::exp::Exp)
         Drop(reg_11 : &u64)
         Drop(reg_10 : &u64)
         reg_12 : 0x42::exp::Exp = Move(lcl_4)
@@ -56,7 +56,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_33:
         reg_20 : &0x42::exp::Exp = Move(lcl_3)
-        UnpackVariant<Add>(reg_20 : &0x42::exp::Exp)
+        UnpackVariantImmRef<Add>(reg_20 : &0x42::exp::Exp)
         reg_21 : 0x42::exp::Exp = Move(lcl_4)
         UnpackVariant<Add>(reg_21 : 0x42::exp::Exp)
         reg_22 : &mut vector<u64> = Copy(lcl_0)
@@ -74,7 +74,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_49:
         reg_30 : &0x42::exp::Exp = Move(lcl_3)
-        UnpackVariant<Sub>(reg_30 : &0x42::exp::Exp)
+        UnpackVariantImmRef<Sub>(reg_30 : &0x42::exp::Exp)
         reg_31 : 0x42::exp::Exp = Move(lcl_4)
         UnpackVariant<Sub>(reg_31 : 0x42::exp::Exp)
         reg_32 : &mut vector<u64> = Copy(lcl_0)
@@ -92,7 +92,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_65:
         reg_40 : &0x42::exp::Exp = Move(lcl_3)
-        UnpackVariant<Mul>(reg_40 : &0x42::exp::Exp)
+        UnpackVariantImmRef<Mul>(reg_40 : &0x42::exp::Exp)
         reg_41 : 0x42::exp::Exp = Move(lcl_4)
         UnpackVariant<Mul>(reg_41 : 0x42::exp::Exp)
         reg_42 : &mut vector<u64> = Copy(lcl_0)

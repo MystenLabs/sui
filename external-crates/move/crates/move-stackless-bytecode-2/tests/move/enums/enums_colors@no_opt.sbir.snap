@@ -27,7 +27,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_16:
         reg_7 : &0x42::colors::Color = Move(lcl_2)
-        UnpackVariant<Blue>(reg_7 : &0x42::colors::Color)
+        UnpackVariantImmRef<Blue>(reg_7 : &0x42::colors::Color)
         reg_8 : 0x42::colors::Color = Move(lcl_3)
         UnpackVariant<Blue>(reg_8 : 0x42::colors::Color)
         reg_9 : bool = Immediate(true)
@@ -56,7 +56,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_11:
         reg_5 : &0x42::colors::Color = Move(lcl_2)
-        UnpackVariant<Green>(reg_5 : &0x42::colors::Color)
+        UnpackVariantImmRef<Green>(reg_5 : &0x42::colors::Color)
         reg_6 : 0x42::colors::Color = Move(lcl_3)
         UnpackVariant<Green>(reg_6 : 0x42::colors::Color)
         reg_7 : bool = Immediate(true)
@@ -85,7 +85,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_6:
         reg_3 : &0x42::colors::Color = Move(lcl_2)
-        UnpackVariant<Red>(reg_3 : &0x42::colors::Color)
+        UnpackVariantImmRef<Red>(reg_3 : &0x42::colors::Color)
         reg_4 : 0x42::colors::Color = Move(lcl_3)
         UnpackVariant<Red>(reg_4 : 0x42::colors::Color)
         reg_5 : bool = Immediate(true)

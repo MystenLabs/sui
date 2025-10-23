@@ -25,7 +25,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_16:
         reg_7 : &0x42::directions::Direction = Move(lcl_2)
-        UnpackVariant<Left>(reg_7 : &0x42::directions::Direction)
+        UnpackVariantImmRef<Left>(reg_7 : &0x42::directions::Direction)
         reg_8 : 0x42::directions::Direction = Move(lcl_3)
         UnpackVariant<Left>(reg_8 : 0x42::directions::Direction)
         lcl_1 = Immediate(true)
@@ -33,7 +33,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_23:
         reg_10 : &0x42::directions::Direction = Move(lcl_2)
-        UnpackVariant<Right>(reg_10 : &0x42::directions::Direction)
+        UnpackVariantImmRef<Right>(reg_10 : &0x42::directions::Direction)
         reg_11 : 0x42::directions::Direction = Move(lcl_3)
         UnpackVariant<Right>(reg_11 : 0x42::directions::Direction)
         lcl_1 = Immediate(true)
@@ -54,7 +54,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_6:
         reg_3 : &0x42::directions::Direction = Move(lcl_2)
-        UnpackVariant<Up>(reg_3 : &0x42::directions::Direction)
+        UnpackVariantImmRef<Up>(reg_3 : &0x42::directions::Direction)
         reg_4 : 0x42::directions::Direction = Move(lcl_3)
         UnpackVariant<Up>(reg_4 : 0x42::directions::Direction)
         lcl_1 = Immediate(true)
@@ -93,7 +93,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_6:
         reg_3 : &0x42::directions::Direction = Move(lcl_2)
-        UnpackVariant<Up>(reg_3 : &0x42::directions::Direction)
+        UnpackVariantImmRef<Up>(reg_3 : &0x42::directions::Direction)
         reg_4 : 0x42::directions::Direction = Move(lcl_3)
         UnpackVariant<Up>(reg_4 : 0x42::directions::Direction)
         lcl_1 = Immediate(true)
@@ -101,7 +101,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_13:
         reg_6 : &0x42::directions::Direction = Move(lcl_2)
-        UnpackVariant<Down>(reg_6 : &0x42::directions::Direction)
+        UnpackVariantImmRef<Down>(reg_6 : &0x42::directions::Direction)
         reg_7 : 0x42::directions::Direction = Move(lcl_3)
         UnpackVariant<Down>(reg_7 : 0x42::directions::Direction)
         lcl_1 = Immediate(true)

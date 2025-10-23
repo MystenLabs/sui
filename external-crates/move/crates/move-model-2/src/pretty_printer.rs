@@ -365,6 +365,8 @@ impl ToDoc for ModuleId {
             if stripped.is_empty() {
                 "0x0".to_string()
             } else {
+                // remove all leading zeros
+                let stripped = stripped.trim_start_matches('0');
                 format!("0x{stripped}")
             }
         } else {

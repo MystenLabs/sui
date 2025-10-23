@@ -20,7 +20,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_6:
         reg_3 : &0x42::temperature::Temperature = Move(lcl_1)
-        reg_4 : &u64 = UnpackVariant<Fahrenheit>(reg_3 : &0x42::temperature::Temperature)
+        reg_4 : &u64 = UnpackVariantImmRef<Fahrenheit>(reg_3 : &0x42::temperature::Temperature)
         Drop(reg_4 : &u64)
         reg_5 : 0x42::temperature::Temperature = Move(lcl_2)
         reg_6 : u64 = UnpackVariant<Fahrenheit>(reg_5 : 0x42::temperature::Temperature)
@@ -29,7 +29,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_13:
         reg_7 : &0x42::temperature::Temperature = Move(lcl_1)
-        reg_8 : &u32 = UnpackVariant<Celcius>(reg_7 : &0x42::temperature::Temperature)
+        reg_8 : &u32 = UnpackVariantImmRef<Celcius>(reg_7 : &0x42::temperature::Temperature)
         Drop(reg_8 : &u32)
         reg_9 : 0x42::temperature::Temperature = Move(lcl_2)
         reg_10 : u32 = UnpackVariant<Celcius>(reg_9 : 0x42::temperature::Temperature)
@@ -55,7 +55,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_4:
         reg_2 : &0x42::temperature::Temperature = Move(lcl_2)
-        reg_3 : &u64 = UnpackVariant<Fahrenheit>(reg_2 : &0x42::temperature::Temperature)
+        reg_3 : &u64 = UnpackVariantImmRef<Fahrenheit>(reg_2 : &0x42::temperature::Temperature)
         Drop(reg_3 : &u64)
         reg_4 : bool = Immediate(true)
         lcl_1 = reg_4 : bool
