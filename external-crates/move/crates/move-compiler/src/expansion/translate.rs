@@ -381,10 +381,18 @@ impl<'env> Context<'env> {
     pub fn set_module_extensions(&mut self, exts: Vec<(OptAddr, PkgDef)>) {
         for (addr, module) in exts {
             let Some(addr) = addr else {
-                self.add_diag(diag!(
+                let mut diag = diag!(
                     Declarations::InvalidAddress,
-                    (module.def.name.loc(), "Module extension address is invalid")
-                ));
+                    (
+                        module.def.name.loc(),
+                        "Could not determine the address for this module extension"
+                    )
+                );
+                diag.add_note(
+                    "Module extensions must be defined for a previously-defined \
+                    address and module, as '<address>::<module>'",
+                );
+                self.add_diag(diag);
                 continue;
             };
             let P::PackageDefinition {
@@ -417,12 +425,41 @@ impl<'env> Context<'env> {
                 .module_extensions
                 .entry(addr.value)
                 .or_default();
-            if let Some(entry) = addr.insert(name, def) {
-                self.add_diag(diag!(
+
+            if let Some(entry) = addr.get(&name) {
+                let overlapping_modes = entry.modes().intersect(&def.modes());
+                let entry_loc = entry.loc;
+                ice_assert!(
+                    self.reporter(),
+                    !overlapping_modes.is_empty(),
+                    loc,
+                    "Module extension being added has no modes in common with existing extension"
+                );
+                let modes = if overlapping_modes.len() > 1 {
+                    "modes"
+                } else {
+                    "mode"
+                };
+                let overlap_modes_str = overlapping_modes
+                    .iter()
+                    .map(|(_, m)| format!("'{}'", m))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let msg = format!(
+                    "Duplicate module extension declaration with overlapping {modes} {overlap_modes_str}"
+                );
+                let mut diag = diag!(
                     Declarations::DuplicateItem,
-                    (loc, "Duplicate module extension declaration"),
-                    (entry.loc, "Previous declaration here")
-                ));
+                    (loc, msg),
+                    (entry_loc, "Previous module extension is here")
+                );
+                diag.add_note(
+                    "Module extensions must be unique per address, module name, and mode",
+                );
+                diag.add_note("Consider combining these module extensions");
+                self.add_diag(diag);
+            } else {
+                addr.insert(name, def);
             };
         }
     }
@@ -748,16 +785,23 @@ pub fn program(
     let (warning_filters_table, module_extensions) = ctxt.finish();
 
     for (addr, pkg) in module_extensions {
+        if matches!(addr, Address::NamedUnassigned(_)) {
+            // If the address is not known (NamedUnassigned), an error was already reported
+            // during address resolution or module definition. No need to report again here.
+            continue;
+        }
         for (name, ext) in pkg {
+            let mut diag = diag!(
+                Declarations::InvalidModule,
+                (
+                    ext.loc,
+                    format!("Cannot extend unknown module '{addr}::{name}'")
+                )
+            );
+            diag.add_note("Module extensions must correspond to a previously defined module");
             compilation_env
                 .diagnostic_reporter_at_top_level()
-                .add_diag(diag!(
-                    Declarations::InvalidModule,
-                    (
-                        ext.loc,
-                        format!("Cannot extend unknown module '{addr}::{name}'")
-                    )
-                ));
+                .add_diag(diag);
         }
     }
 
@@ -1170,7 +1214,7 @@ fn module_(
         is_spec_module: _,
         is_extension,
         name,
-        mut members,
+        members,
         definition_mode: _,
     } = mdef;
     if is_extension {
@@ -1212,10 +1256,12 @@ fn module_(
 
     let cur_addr = *context.cur_address();
 
+    let mut members = members.into_iter().map(|m| (false, m)).collect::<Vec<_>>();
+
     if let Some(extension) =
         context.get_module_extension_opt(&cur_addr, &current_module.value.module)
     {
-        members.extend(extension.members);
+        members.extend(extension.members.into_iter().map(|m| (true, m)));
         extension_attributes(context, extension.attributes);
     }
 
@@ -1224,12 +1270,13 @@ fn module_(
     module_self_aliases(&mut new_scope, &current_module);
     let members = members
         .into_iter()
-        .filter_map(|member| {
+        .filter_map(|(from_extension, member)| {
             aliases_from_member(
                 context,
                 &mut new_scope,
                 &mut use_funs_builder,
                 &current_module,
+                from_extension,
                 member,
             )
         })
@@ -1420,10 +1467,20 @@ fn extension_attributes(context: &mut Context<'_>, attributes: Vec<Spanned<P::At
                 attr.value,
                 P::Attribute_::Mode { .. } | P::Attribute_::External { .. }
             ) {
-                context.add_diag(diag!(
+                let mut diag = diag!(
                     Attributes::ValueWarning,
-                    (attr.loc, "Non-'mode' attributes on module extensions are not supported and will be ignored")
-                ));
+                    (
+                        attr.loc,
+                        format!(
+                            "Ignoring non-'mode' attribute '{}' on module extension",
+                            attr.value.attribute_name()
+                        )
+                    )
+                );
+                diag.add_note(
+                    "Only '#[mode(...)]' and '#[test_only]' are supported on module extensions",
+                );
+                context.add_diag(diag);
             }
         }
     }
@@ -1731,6 +1788,7 @@ fn aliases_from_member(
     acc: &mut AliasMapBuilder,
     use_funs: &mut UseFunsBuilder,
     current_module: &ModuleIdent,
+    from_extension: bool,
     member: P::ModuleMember,
 ) -> Option<P::ModuleMember> {
     macro_rules! check_name_and_add_implicit_alias {
@@ -1742,7 +1800,11 @@ fn aliases_from_member(
                     n.clone(),
                     $kind,
                 ) {
-                    duplicate_module_member(context, loc, n)
+                    if from_extension {
+                        extension_duplicate_module_member(context, loc, n)
+                    } else {
+                        duplicate_module_member(context, loc, n)
+                    }
                 }
             }
         }};
@@ -1750,7 +1812,7 @@ fn aliases_from_member(
 
     match member {
         P::ModuleMember::Use(u) => {
-            use_(context, acc, use_funs, u);
+            use_(context, acc, use_funs, from_extension, u);
             None
         }
         f @ P::ModuleMember::Friend(_) => {
@@ -1785,7 +1847,15 @@ fn uses(context: &mut Context, uses: Vec<P::UseDecl>) -> (AliasMapBuilder, UseFu
     let mut new_scope = context.new_alias_map_builder();
     let mut use_funs = UseFunsBuilder::new();
     for u in uses {
-        use_(context, &mut new_scope, &mut use_funs, u);
+        // This function is only called when handling expressions, so we elide extension
+        // information for the purposes of error messages.
+        use_(
+            context,
+            &mut new_scope,
+            &mut use_funs,
+            /* from_extension */ false,
+            u,
+        );
     }
     (new_scope, use_funs)
 }
@@ -1794,6 +1864,7 @@ fn use_(
     context: &mut Context,
     acc: &mut AliasMapBuilder,
     use_funs: &mut UseFunsBuilder,
+    from_extension: bool,
     u: P::UseDecl,
 ) {
     let P::UseDecl {
@@ -1807,11 +1878,27 @@ fn use_(
         P::Use::NestedModuleUses(address, use_decls) => {
             for (module, use_) in use_decls {
                 let mident = sp(module.loc(), P::ModuleIdent_ { address, module });
-                module_use(context, acc, use_funs, mident, &attributes, use_);
+                module_use(
+                    context,
+                    acc,
+                    use_funs,
+                    mident,
+                    from_extension,
+                    &attributes,
+                    use_,
+                );
             }
         }
         P::Use::ModuleUse(mident, use_) => {
-            module_use(context, acc, use_funs, mident, &attributes, use_);
+            module_use(
+                context,
+                acc,
+                use_funs,
+                mident,
+                from_extension,
+                &attributes,
+                use_,
+            );
         }
         P::Use::Fun {
             visibility,
@@ -1859,6 +1946,7 @@ fn module_use(
     acc: &mut AliasMapBuilder,
     use_funs: &mut UseFunsBuilder,
     in_mident: P::ModuleIdent,
+    from_extension: bool,
     attributes: &E::Attributes,
     muse: P::ModuleUse,
 ) {
@@ -1880,7 +1968,11 @@ fn module_use(
             }
 
             if let Err(old_loc) = acc.add_module_alias($alias.clone(), $ident) {
-                duplicate_module_alias(context, old_loc, $alias)
+                if from_extension {
+                    extension_duplicate_module_alias(context, old_loc, $alias)
+                } else {
+                    duplicate_module_alias(context, old_loc, $alias)
+                }
             }
         }};
     }
@@ -1958,7 +2050,11 @@ fn module_use(
                         Some(alias) => alias,
                     };
                 if let Err(old_loc) = acc.add_member_alias(alias, mident, member, member_kind) {
-                    duplicate_module_member(context, old_loc, alias)
+                    if from_extension {
+                        extension_duplicate_module_member(context, old_loc, alias)
+                    } else {
+                        duplicate_module_member(context, old_loc, alias)
+                    }
                 }
                 if matches!(member_kind, ModuleMemberKind::Function) {
                     // remove any previously declared alias to keep in sync with the member alias
@@ -2057,26 +2153,54 @@ fn explicit_use_fun(
 
 fn duplicate_module_alias(context: &mut Context, old_loc: Loc, alias: Name) {
     let msg = format!(
-        "Duplicate module alias '{}'. Module aliases must be unique within a given namespace",
+        "Duplicate alias '{}'. Module aliases must be unique within a given namespace",
         alias
     );
     context.add_diag(diag!(
         Declarations::DuplicateItem,
         (alias.loc, msg),
-        (old_loc, "Alias previously defined here"),
+        (old_loc, "Module member or alias previously defined here"),
     ));
 }
 
 fn duplicate_module_member(context: &mut Context, old_loc: Loc, alias: Name) {
     let msg = format!(
-        "Duplicate module member or alias '{}'. Top level names in a namespace must be unique",
+        "Duplicate module member '{}'. Top level names in a namespace must be unique",
         alias
     );
     context.add_diag(diag!(
         Declarations::DuplicateItem,
         (alias.loc, msg),
-        (old_loc, "Alias previously defined here"),
+        (old_loc, "Module member or alias previously defined here"),
     ));
+}
+
+fn extension_duplicate_module_alias(context: &mut Context, old_loc: Loc, alias: Name) {
+    let msg = format!(
+        "Module extension defines alias '{}', which shadows previous definition",
+        alias
+    );
+    let mut diag = diag!(
+        Declarations::DuplicateItem,
+        (alias.loc, msg),
+        (old_loc, "Module member or alias previously defined here"),
+    );
+    diag.add_note("Top level names in a namespace must be unique");
+    context.add_diag(diag);
+}
+
+fn extension_duplicate_module_member(context: &mut Context, old_loc: Loc, alias: Name) {
+    let msg = format!(
+        "Module extension defines member '{}', which shadows previous definition",
+        alias
+    );
+    let mut diag = diag!(
+        Declarations::DuplicateItem,
+        (alias.loc, msg),
+        (old_loc, "Module member or alias previously defined here"),
+    );
+    diag.add_note("Top level names in a namespace must be unique");
+    context.add_diag(diag);
 }
 
 fn unused_alias(context: &mut Context, _kind: &str, alias: Name) {
