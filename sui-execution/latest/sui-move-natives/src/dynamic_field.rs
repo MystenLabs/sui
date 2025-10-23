@@ -408,9 +408,7 @@ pub fn remove_child_object(
 
     let protocol_config = get_extension!(context, ObjectRuntime)?.protocol_config;
     let child_size = match cache_info {
-        CacheInfo::CachedValue if !protocol_config.abstract_size_in_object_runtime() => {
-            child.legacy_size()
-        }
+        _ if !protocol_config.abstract_size_in_object_runtime() => child.legacy_size(),
         CacheInfo::CachedValue => {
             // The value already existed
             PRE_EXISTING_ABSTRACT_SIZE.into()
