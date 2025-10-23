@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::base_types::{ExecutionData, ObjectRef};
+use crate::base_types::{ExecutionData, ObjectID, ObjectRef};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
@@ -235,6 +235,49 @@ impl ObjectSet {
 
     pub fn iter(&self) -> impl Iterator<Item = &Object> {
         self.0.values()
+    }
+}
+
+impl Checkpoint {
+    pub fn latest_live_output_objects(&self) -> BTreeMap<ObjectID, Object> {
+        let mut latest_live_output_objects = BTreeMap::new();
+        for tx in self.transactions.iter() {
+            for obj in tx.output_objects(&self.object_set) {
+                latest_live_output_objects.insert(obj.id(), obj.clone());
+            }
+            for obj_ref in tx
+                .effects
+                .deleted()
+                .into_iter()
+                .chain(tx.effects.wrapped().into_iter())
+                .chain(tx.effects.unwrapped_then_deleted().into_iter())
+            {
+                latest_live_output_objects.remove(&obj_ref.0);
+            }
+        }
+        latest_live_output_objects
+    }
+}
+
+impl ExecutedTransaction {
+    pub fn input_objects<'a>(
+        &self,
+        object_set: &'a ObjectSet,
+    ) -> impl Iterator<Item = &'a Object> + 'a {
+        self.effects
+            .modified_at_versions()
+            .into_iter()
+            .filter_map(move |(object_id, version)| object_set.get(&ObjectKey(object_id, version)))
+    }
+
+    pub fn output_objects<'a>(
+        &self,
+        object_set: &'a ObjectSet,
+    ) -> impl Iterator<Item = &'a Object> + 'a {
+        self.effects
+            .all_changed_objects()
+            .into_iter()
+            .filter_map(move |(object_ref, _, _)| object_set.get(&object_ref.into()))
     }
 }
 

@@ -10,7 +10,7 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
     postgres::{Connection, Db},
-    types::full_checkpoint_content::CheckpointData,
+    types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
 
@@ -25,15 +25,15 @@ impl Processor for EvEmitMod {
 
     type Value = StoredEvEmitMod;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
         let mut values = BTreeSet::new();
-        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
+        let first_tx = summary.network_total_transactions as usize - transactions.len();
 
         for (i, tx) in transactions.iter().enumerate() {
             values.extend(
@@ -91,7 +91,7 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
+        types::{event::Event, test_checkpoint_data_builder::TestCheckpointBuilder},
         Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
@@ -132,11 +132,12 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let checkpoint = Arc::new(
-            TestCheckpointDataBuilder::new(0)
+        let checkpoint: Arc<Checkpoint> = Arc::new(
+            TestCheckpointBuilder::new(0)
                 .start_transaction(0)
                 .finish_transaction()
-                .build_checkpoint(),
+                .build_checkpoint()
+                .into(),
         );
 
         let values = EvEmitMod.process(&checkpoint).await.unwrap();
@@ -150,12 +151,13 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let checkpoint = Arc::new(
-            TestCheckpointDataBuilder::new(0)
+        let checkpoint: Arc<Checkpoint> = Arc::new(
+            TestCheckpointBuilder::new(0)
                 .start_transaction(0)
                 .with_events(vec![Event::random_for_testing()])
                 .finish_transaction()
-                .build_checkpoint(),
+                .build_checkpoint()
+                .into(),
         );
 
         // Process checkpoint with one event
@@ -172,10 +174,11 @@ mod tests {
         let mut conn = indexer.store().connect().await.unwrap();
 
         // 0th checkpoint has no events
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = EvEmitMod.process(&checkpoint).await.unwrap();
+
         EvEmitMod::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
@@ -187,6 +190,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = EvEmitMod.process(&checkpoint).await.unwrap();
+
         EvEmitMod::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
@@ -201,6 +205,7 @@ mod tests {
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = EvEmitMod.process(&checkpoint).await.unwrap();
+
         EvEmitMod::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();

@@ -206,7 +206,7 @@ mod tests {
     use crate::{
         metrics::tests::test_metrics,
         pipeline::{concurrent::max_chunk_rows, Processor},
-        types::full_checkpoint_content::CheckpointData,
+        types::full_checkpoint_content::Checkpoint,
         FieldCount,
     };
 
@@ -228,10 +228,7 @@ mod tests {
         const NAME: &'static str = "test_handler";
         const FANOUT: usize = 1;
 
-        async fn process(
-            &self,
-            _checkpoint: &Arc<CheckpointData>,
-        ) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }
