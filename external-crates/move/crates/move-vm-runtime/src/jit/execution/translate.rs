@@ -110,15 +110,29 @@ impl PackageContext<'_> {
     fn try_resolve_direct_function_call(
         &self,
         vtable_entry: &VirtualTableKey,
-    ) -> Option<VMPointer<Function>> {
+    ) -> PartialVMResult<Option<VMPointer<Function>>> {
         // We are calling into a different package so we cannot resolve this to a direct call.
         if vtable_entry.package_key != self.original_id {
-            return None;
+            return Ok(None);
         }
         // TODO(vm-rewrite): Have this return an error if the function was not found.
-        self.vtable_funs
-            .get(&vtable_entry.inner_pkg_key)
-            .map(|f| f.ptr_clone())
+        match self.vtable_funs.get(&vtable_entry.inner_pkg_key) {
+            Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
+            None => Err(
+                PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(
+                    match self
+                        .interner
+                        .resolve_ident(&vtable_entry.inner_pkg_key.member_name, "function name")
+                    {
+                        Ok(fn_name) => format!(
+                            "Function {}::{} not found in vtable",
+                            self.version_id, fn_name,
+                        ),
+                        Err(_) => "Function with unknown name not found in vtable".to_string(),
+                    },
+                ),
+            ),
+        }
     }
 
     fn arena_vec<T>(
@@ -1304,7 +1318,7 @@ fn call(
     };
     dbg_println!(flag: function_resolution, "Resolving function: {:?}", vtable_key);
     Ok(
-        match context.try_resolve_direct_function_call(&vtable_key) {
+        match context.try_resolve_direct_function_call(&vtable_key)? {
             Some(func) => CallType::Direct(func),
             None => CallType::Virtual(vtable_key),
         },
