@@ -227,7 +227,7 @@ async fn test_submit_transaction_already_executed() {
             &verified_transaction,
             // Fastpath execution will only put outputs in a temporary cache,
             // and the object changes in this transaction are not yet committed.
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            ExecutionEnv::new(SchedulingSource::MysticetiFastPath),
             &epoch_store,
         )
         .await
@@ -255,7 +255,7 @@ async fn test_submit_transaction_already_executed() {
         .state
         .try_execute_immediately(
             &verified_transaction,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            ExecutionEnv::new(SchedulingSource::Testing),
             &epoch_store,
         )
         .await
@@ -425,7 +425,7 @@ async fn test_submit_batched_transactions_with_already_executed() {
         .state
         .try_execute_immediately(
             &verified_tx1,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            ExecutionEnv::new(SchedulingSource::Testing),
             &epoch_store,
         )
         .await
@@ -542,7 +542,7 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
         .state
         .try_execute_immediately(
             &verified_tx1,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            ExecutionEnv::new(SchedulingSource::Testing),
             &epoch_store,
         )
         .await

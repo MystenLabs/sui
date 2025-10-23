@@ -3632,7 +3632,7 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
     let add_cert = init_certified_transaction(add_txn, &authority_state);
 
     let add_effects = authority_state
-        .try_execute_for_test(&add_cert, ExecutionEnv::new())
+        .try_execute_for_test(&add_cert, ExecutionEnv::new(SchedulingSource::Testing))
         .await
         .0
         .into_message();
@@ -4948,7 +4948,7 @@ async fn test_shared_object_transaction_no_shared_version_assignments() {
 
     // Executing the certificate now panics since it has never been assigned shared versions.
     let _ = authority
-        .try_execute_for_test(&certificate, ExecutionEnv::new())
+        .try_execute_for_test(&certificate, ExecutionEnv::new(SchedulingSource::Testing))
         .await;
 }
 
@@ -4979,7 +4979,7 @@ async fn test_shared_object_transaction_ok() {
     authority
         .try_execute_for_test(
             &certificate,
-            ExecutionEnv::new().with_assigned_versions(assigned_versions),
+            ExecutionEnv::new(SchedulingSource::Testing).with_assigned_versions(assigned_versions),
         )
         .await;
 
@@ -5175,7 +5175,8 @@ async fn test_consensus_message_processed() {
         let (effects1, _execution_error_opt) = authority1
             .try_execute_for_test(
                 &certificate,
-                ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                ExecutionEnv::new(SchedulingSource::Testing)
+                    .with_assigned_versions(assigned_versions),
             )
             .await;
 
@@ -5192,7 +5193,8 @@ async fn test_consensus_message_processed() {
             authority2
                 .try_execute_for_test(
                     &certificate,
-                    ExecutionEnv::new().with_assigned_versions(assigned_versions2.unwrap()),
+                    ExecutionEnv::new(SchedulingSource::Testing)
+                        .with_assigned_versions(assigned_versions2.unwrap()),
                 )
                 .await
                 .0
@@ -5209,7 +5211,8 @@ async fn test_consensus_message_processed() {
             authority2
                 .try_execute_for_test(
                     &certificate,
-                    ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                    ExecutionEnv::new(SchedulingSource::Testing)
+                        .with_assigned_versions(assigned_versions),
                 )
                 .await;
             authority2
@@ -6729,8 +6732,7 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
     let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
 
     // Create an execution environment with insufficient balance status
-    let mut execution_env =
-        ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath);
+    let mut execution_env = ExecutionEnv::new(SchedulingSource::MysticetiFastPath);
     execution_env.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
 
     // Test that the transaction fails with InsufficientBalanceForWithdraw error

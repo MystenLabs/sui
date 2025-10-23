@@ -10,6 +10,7 @@ use crate::authority::ExecutionEnv;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
+use crate::execution_scheduler::SchedulingSource;
 
 use crate::mock_consensus::with_block_status;
 use consensus_core::BlockStatus;
@@ -278,7 +279,8 @@ pub fn make_consensus_adapter_for_test(
                         .unwrap_or_default();
                     (
                         tx,
-                        ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                        ExecutionEnv::new(SchedulingSource::Testing)
+                            .with_assigned_versions(assigned_versions),
                     )
                 })
                 .collect();

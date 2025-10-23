@@ -418,7 +418,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                     genesis.epoch(),
                     genesis.checkpoint().sequence_number,
                 ),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new(SchedulingSource::Testing),
                 &state.epoch_store_for_testing(),
             )
             .await

@@ -6,6 +6,7 @@ use crate::authority::auth_unit_test_utils::{
 };
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
+use crate::execution_scheduler::SchedulingSource;
 use crate::test_utils::make_transfer_sui_transaction;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::traits::KeyPair;
@@ -477,7 +478,9 @@ async fn test_certificate_deny() {
         CertifiedTransaction::new(tx.into_message(), vec![signature], epoch_store.committee())
             .unwrap(),
     );
-    let (effects, _) = state.try_execute_for_test(&cert, ExecutionEnv::new()).await;
+    let (effects, _) = state
+        .try_execute_for_test(&cert, ExecutionEnv::new(SchedulingSource::Testing))
+        .await;
     assert!(matches!(
         effects.status(),
         &ExecutionStatus::Failure {

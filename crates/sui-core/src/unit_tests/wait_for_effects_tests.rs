@@ -116,7 +116,7 @@ async fn test_wait_for_effects_position_mismatch() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+                ExecutionEnv::new(SchedulingSource::MysticetiFastPath),
                 &epoch_store,
             )
             .await
@@ -312,7 +312,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+                ExecutionEnv::new(SchedulingSource::MysticetiFastPath),
                 &epoch_store,
             )
             .await
@@ -421,7 +421,7 @@ async fn test_wait_for_effects_fastpath_certified_then_executed() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new(SchedulingSource::Testing),
                 &epoch_store,
             )
             .await
@@ -476,7 +476,7 @@ async fn test_wait_for_effects_finalized() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new(SchedulingSource::Testing),
                 &epoch_store,
             )
             .await
@@ -587,7 +587,7 @@ async fn test_wait_for_effects_expired() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new(SchedulingSource::Testing),
                 &epoch_store,
             )
             .await

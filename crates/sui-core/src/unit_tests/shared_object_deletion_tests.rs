@@ -23,6 +23,7 @@ use crate::authority::{
     authority_test_utils::execute_sequenced_certificate_to_effects,
     shared_object_version_manager::AssignedVersions, ExecutionEnv,
 };
+use crate::execution_scheduler::SchedulingSource;
 use crate::{
     authority::{
         authority_tests::{
@@ -1047,7 +1048,7 @@ async fn test_shifting_mutate_and_deletes_multiple_objects() {
             .unwrap();
         certs.push((
             cert,
-            ExecutionEnv::new().with_assigned_versions(assigned_versions),
+            ExecutionEnv::new(SchedulingSource::Testing).with_assigned_versions(assigned_versions),
         ));
     }
 
@@ -1178,7 +1179,8 @@ async fn test_mutate_after_delete_enqueued() {
         .map(|(cert, assigned_versions)| {
             (
                 cert,
-                ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                ExecutionEnv::new(SchedulingSource::Testing)
+                    .with_assigned_versions(assigned_versions),
             )
         })
         .collect();
@@ -1256,7 +1258,8 @@ async fn test_delete_after_delete_enqueued() {
         .map(|(cert, assigned_versions)| {
             (
                 cert,
-                ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                ExecutionEnv::new(SchedulingSource::Testing)
+                    .with_assigned_versions(assigned_versions),
             )
         })
         .collect();
@@ -1358,7 +1361,7 @@ async fn test_mutate_interleaved_read_only_enqueued_after_delete() {
     .map(|(cert, assigned_versions)| {
         (
             cert,
-            ExecutionEnv::new().with_assigned_versions(assigned_versions),
+            ExecutionEnv::new(SchedulingSource::Testing).with_assigned_versions(assigned_versions),
         )
     })
     .collect();
@@ -1519,7 +1522,7 @@ async fn test_delete_with_shared_after_mutate_enqueued() {
     .map(|(cert, assigned_versions)| {
         (
             cert,
-            ExecutionEnv::new().with_assigned_versions(assigned_versions),
+            ExecutionEnv::new(SchedulingSource::Testing).with_assigned_versions(assigned_versions),
         )
     })
     .collect();

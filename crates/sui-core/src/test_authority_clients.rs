@@ -9,6 +9,7 @@ use std::{
 };
 
 use crate::authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv};
+use crate::execution_scheduler::SchedulingSource;
 use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
@@ -314,7 +315,7 @@ impl LocalAuthorityClient {
                     vec![(
                         VerifiedExecutableTransaction::new_from_certificate(certificate.clone())
                             .into(),
-                        ExecutionEnv::new(),
+                        ExecutionEnv::new(SchedulingSource::Testing),
                     )],
                     &epoch_store,
                 );

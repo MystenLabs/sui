@@ -1181,8 +1181,7 @@ impl ValidatorService {
                                 VerifiedExecutableTransaction::new_from_certificate(
                                     VerifiedCertificate::new_unchecked(*(certificate.clone())),
                                 ),
-                                ExecutionEnv::new()
-                                    .with_scheduling_source(SchedulingSource::NonFastPath),
+                                ExecutionEnv::new(SchedulingSource::OldFastPath),
                             ))
                     } else {
                         None
