@@ -4,11 +4,11 @@ description: Access network-based time for your transactions. Sui provides a Clo
 keywords: [ network-based time, on-chain time, on-chain time, sui::clock::Clock, clock module, sui::clock::timestamp_ms, epoch timestamps, timestamps, use time in transactions, sui::tx_context ] 
 ---
 
-You have options when needing to access network-based time for your transactions. If you need a near real-time measurement (within a few seconds), use the immutable reference of time provided by the `Clock` module in Move. The reference value from this module updates with every network checkpoint. If you don't need as current a time slice, use the `epoch_timestamp_ms` function to capture the precise moment the current epoch started.
+You have several options for accessing network-based time for your transactions. If you need a near real-time measurement (within a few seconds), use the immutable reference of time provided by the `Clock` module in Move. The reference value from this module updates with every network checkpoint. If you don't need as current a time slice, use the `epoch_timestamp_ms` function to capture the precise moment the current epoch started.
 
 ## The `sui::clock::Clock` module
 
-To access a prompt timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. An instance of `Clock` is provided at address `0x6`, no new instances can be created.
+To access a current timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. Sui provides an instance of `Clock` at address `0x6`. You cannot create new instances.
 
 Use the `timestamp_ms` function from the `sui::clock` module to extract a unix timestamp in milliseconds.
 
@@ -18,7 +18,7 @@ The example below demonstrates an entry function that emits an event containing 
 
 <ImportContent source="examples/move/basics/sources/clock.move" mode="code" noComments />
 
-A call to the previous entry function takes the following form, passing `0x6` as the address for the `Clock` parameter:
+Call the previous entry function with the following format, passing `0x6` as the address for the `Clock` parameter:
 
 <ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
@@ -28,7 +28,7 @@ $ sui client call --package <EXAMPLE> --module 'clock' --function 'access' --arg
 
 Expect the `Clock` timestamp to change at the rate the network generates checkpoints, which is about **every 1/4 second** with Mysticeti consensus. Find the current network checkpoint rate on this [public dashboard](https://metrics.sui.io/public-dashboards/4ceb11cc210d4025b122294586961169).
 
-Successive calls to `sui::clock::timestamp_ms` in the same transaction always produce the same result (transactions are considered to take effect instantly), but timestamps from `Clock` are otherwise monotonic across transactions that touch the same shared objects: Successive transactions seeing a greater or equal timestamp to their predecessors.
+Successive calls to `sui::clock::timestamp_ms` in the same transaction always produce the same result (transactions take effect instantly), but timestamps from `Clock` are otherwise monotonic across transactions that touch the same shared objects. Successive transactions see a greater or equal timestamp to their predecessors.
 
 Any transaction that requires access to a `Clock` must go through consensus because the only available instance is a shared object. As a result, this technique is not suitable for transactions that must use the single-owner fastpath (see Epoch timestamps for a single-owner-compatible source of timestamps).
 
@@ -48,7 +48,7 @@ Use the following function from the `sui::tx_context` module to access the times
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/tx_context.move" mode="code" fun="epoch_timestamp_ms" noComments />
 
-The preceding function returns the point in time when the current epoch started, as a millisecond granularity unix timestamp in a `u64`. This value changes roughly **once every 24 hours**, when the epoch changes.
+This function returns the point in time when the current epoch started, as a millisecond granularity unix timestamp in a `u64`. This value changes roughly **once every 24 hours**, when the epoch changes.
 
 Tests based on `sui::test_scenario` can use `later_epoch` (following code), to exercise time-sensitive code that uses `epoch_timestamp_ms` (previous code):
 

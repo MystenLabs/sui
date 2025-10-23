@@ -15,7 +15,7 @@ The Coin Registry system provides enhanced regulatory features through the `sui:
 Advantages of these regulatory features include:
 
 - **Centralized tracking:** Regulatory status is stored in the registry for easy discovery.
-- **Global pause support:** Enhanced pause/unpause functionality for emergency situations.
+- **Global pause support:** Enhanced pause or unpause functionality for emergency situations.
 - **Compliance tooling:** Better integration with wallets, exchanges, and compliance systems.
 - **Migration support:** Seamless migration from legacy regulated coins.
 
@@ -49,7 +49,7 @@ You publish the smart contract to a network the same way as any other package. S
 
 The example includes a `publish.sh` file that you can run to automate the publishing. The script assumes you are publishing to Testnet, so be sure to update it before running if you plan to run on a local network or Devnet.
 
-The publish script also creates the necessary `.env` files in each of the frontend folders. If you don't use the script, you must create the `.env` file manually and provide the values for the variables the frontend expects to find. Even if you use the script, you must provide the `ADMIN_SECRET_KEY` and it's value.
+The publish script also creates the necessary `.env` files in each of the frontend folders. If you don't use the script, you must create the `.env` file manually and provide the values for the variables the frontend expects to find. Even if you use the script, you must provide the `ADMIN_SECRET_KEY` and its value.
 
 :::warning
 
@@ -66,7 +66,7 @@ Take care not to expose the secret key for your address to the public.
 | `TREASURY_CAP_ID` | The treasury cap object ID that allows the bearer to mint new coins. This data is part of the response that Sui provides on publish. |
 | `MODULE_NAME` | The name of the module you publish. |
 | `COIN_NAME` | The name of your regulated coin.  |
-| `SUI_FULLNODE_URL` | The URL to the full node network that will process transactions. For Testnet this value is `https://fullnode.testnet.sui.io:443`. |
+| `SUI_FULLNODE_URL` | The URL to the full node network that processes transactions. For Testnet this value is `https://fullnode.testnet.sui.io:443`. |
 
 ## Smart contract
 
@@ -88,7 +88,7 @@ The example uses a single file to create the smart contract for the project (`re
 
 The Sui Currency Standard provides a `new_currency_with_otw` function to create currency using a One-Time Witness. To make the currency regulated, the module provides a `make_regulated` function that initializes the regulated currency and returns a `DenyCapV2`. The `DenyCapV2` bearer can add and remove addresses from a list that controls, or regulates, access to the coin. This ability is a requirement for assets like stablecoins.
 
-The TypeScript and Rust clients handle the call to the `coin` package's `mint` function. The `coin` package also includes a `mint_and_transfer` function you could use to perform the same task, but the composability of minting the coin in one command and transferring with another is preferable. Using two explicit commands allows you to implement future logic between the minting of the coin and the transfer. The structure of programmable transaction blocks means you're still making and paying for a single transaction on the network.
+The TypeScript and Rust clients handle the call to the `coin` package's `mint` function. The `coin` package also includes a `mint_and_transfer` function you could use to perform the same task, but the composability of minting the coin in 1 command and transferring with another is preferable. Using 2 explicit commands allows you to implement future logic between the minting of the coin and the transfer. The structure of programmable transaction blocks means you're still making and paying for a single transaction on the network.
 
 <Tabs groupId="code-language">
 
