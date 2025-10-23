@@ -357,7 +357,7 @@ mod tests {
     use super::*;
 
     /// Tokenize the input up to and including the first terminal token.
-    fn lex(input: Vec<&str>) -> Vec<Spanned<Lexeme>> {
+    fn lex(input: Vec<&str>) -> Vec<Spanned<Lexeme<'_>>> {
         let mut lexer = Lexer::new(input.into_iter()).unwrap();
         let mut lexemes: Vec<_> = (&mut lexer)
             .take_while(|sp!(_, lex)| !lex.is_terminal())

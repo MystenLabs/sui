@@ -168,7 +168,7 @@ impl<C> Page<C> {
     }
 
     /// Direction for sorting SQL queries.
-    pub(crate) fn order_by_direction(&self) -> Query {
+    pub(crate) fn order_by_direction(&self) -> Query<'_> {
         if self.is_from_front() {
             query!("ASC")
         } else {

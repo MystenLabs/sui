@@ -34,17 +34,17 @@ pub enum NamedAddress {
 
 impl<F: MoveFlavor> PackageGraph<F> {
     /// Return the `PackageInfo` for the root package
-    pub fn root_package_info(&self) -> PackageInfo<F> {
+    pub fn root_package_info(&self) -> PackageInfo<'_, F> {
         self.package_info(self.root_index)
     }
 
     /// Return a `PackageInfo` for `node`
-    pub(crate) fn package_info(&self, node: NodeIndex) -> PackageInfo<F> {
+    pub(crate) fn package_info(&self, node: NodeIndex) -> PackageInfo<'_, F> {
         PackageInfo { graph: self, node }
     }
 
     /// Return the `PackageInfo` for id `id`, if one exists
-    pub fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<F>> {
+    pub fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<'_, F>> {
         self.package_ids
             .get_by_left(id)
             .map(|node| self.package_info(*node))
@@ -268,7 +268,7 @@ mod tests {
     /// Return the packages in the graph, grouped by their name
     fn packages_by_name(
         graph: &PackageGraph<Vanilla>,
-    ) -> BTreeMap<PackageName, PackageInfo<Vanilla>> {
+    ) -> BTreeMap<PackageName, PackageInfo<'_, Vanilla>> {
         graph
             .packages()
             .expect("failed to get packages from graph")
