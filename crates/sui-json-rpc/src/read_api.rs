@@ -195,10 +195,9 @@ impl ReadApi {
             .into_iter()
             .flatten()
             .map(|check| {
-                (
-                    check.clone().into_summary_and_sequence().1,
-                    check.get_validator_signature(),
-                )
+                let signature = check.auth_sig().signature.clone();
+                let (_, summary) = check.into_summary_and_sequence();
+                (summary, signature)
             })
             .collect();
 
@@ -207,7 +206,8 @@ impl ReadApi {
             .await?;
         let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
 
-        let mut checkpoints: Vec<Checkpoint> = vec![];
+        let mut checkpoints: Vec<Checkpoint> =
+            Vec::with_capacity(checkpoint_summaries_and_signatures.len());
 
         for (summary_and_sig, content) in checkpoint_summaries_and_signatures
             .into_iter()
@@ -256,10 +256,12 @@ impl ReadApi {
 
         if opts.require_input() {
             trace!("getting input");
-            let digests_clone = digests.clone();
-            let transactions =
-                self.transaction_kv_store.multi_get_tx(&digests_clone).await.tap_err(
-                    |err| debug!(digests=?digests_clone, "Failed to multi get transactions: {:?}", err),
+            let transactions = self
+                .transaction_kv_store
+                .multi_get_tx(&digests)
+                .await
+                .tap_err(
+                    |err| debug!(digests=?digests, "Failed to multi get transactions: {:?}", err),
                 )?;
 
             for ((_digest, cache_entry), txn) in
@@ -272,12 +274,11 @@ impl ReadApi {
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.require_effects() {
             trace!("getting effects");
-            let digests_clone = digests.clone();
             let effects_list = self.transaction_kv_store
-                .multi_get_fx_by_tx_digest(&digests_clone)
+                .multi_get_fx_by_tx_digest(&digests)
                 .await
                 .tap_err(
-                    |err| debug!(digests=?digests_clone, "Failed to multi get effects for transactions: {:?}", err),
+                    |err| debug!(digests=?digests, "Failed to multi get effects for transactions: {:?}", err),
                 )?;
             for ((_digest, cache_entry), e) in
                 temp_response.iter_mut().zip(effects_list.into_iter())
@@ -321,10 +322,10 @@ impl ReadApi {
             .map(|c| c.map(|checkpoint| checkpoint.timestamp_ms));
 
         // construct a hashmap of checkpoint -> timestamp for fast lookup
-        let checkpoint_to_timestamp = unique_checkpoint_numbers
-            .into_iter()
-            .zip(timestamps)
-            .collect::<HashMap<_, _>>();
+        let mut checkpoint_to_timestamp = HashMap::with_capacity(unique_checkpoint_numbers.len());
+        for (seq, timestamp) in unique_checkpoint_numbers.into_iter().zip(timestamps) {
+            checkpoint_to_timestamp.insert(seq, timestamp);
+        }
 
         // fill cache with the timestamp
         for (_, cache_entry) in temp_response.iter_mut() {
@@ -339,7 +340,7 @@ impl ReadApi {
 
         if opts.show_events {
             trace!("getting events");
-            let mut non_empty_digests = vec![];
+            let mut non_empty_digests = Vec::with_capacity(temp_response.len());
             for cache_entry in temp_response.values() {
                 if let Some(effects) = &cache_entry.effects {
                     if effects.events_digest().is_some() {
