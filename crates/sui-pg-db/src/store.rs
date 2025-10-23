@@ -24,7 +24,7 @@ pub use sui_indexer_alt_framework_store_traits::Store;
 impl store::Connection for Connection<'_> {
     async fn committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline: &str,
     ) -> anyhow::Result<Option<store::CommitterWatermark>> {
         let watermark: Option<(i64, i64, i64, i64)> = watermarks::table
             .select((
@@ -106,7 +106,7 @@ impl store::Connection for Connection<'_> {
 
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline: &str,
         watermark: store::CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Create a StoredWatermark directly from CommitterWatermark

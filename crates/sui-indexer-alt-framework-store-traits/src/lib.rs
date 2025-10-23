@@ -10,11 +10,11 @@ use std::time::Duration;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// Given a pipeline, return the committer watermark from the `Store`. This is used by the
-    /// indexer on startup to determine which checkpoint to resume processing from.
+    /// Given a pipeline, return the committer watermark from the `Store`. The indexer fetches this
+    /// value for each pipeline added to determine which checkpoint to resume processing from.
     async fn committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
     /// Given a pipeline, return the reader watermark from the database. This is used by the indexer
@@ -40,7 +40,7 @@ pub trait Connection: Send {
     /// a boolean indicating whether the watermark was actually updated or not.
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline: &str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool>;
 
@@ -63,7 +63,7 @@ pub trait Connection: Send {
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
 
-    /// Update the pruner watermark, returns true if the watermark was actually updated
+    /// Update the pruner watermark, returns true if the watermark was actually updated.
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
