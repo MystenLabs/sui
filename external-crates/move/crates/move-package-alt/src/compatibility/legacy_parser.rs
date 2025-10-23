@@ -342,20 +342,14 @@ fn normalize_legacy_name_to_identifier(name: &str) -> Identifier {
     let mut result = String::new();
 
     for c in name.chars() {
-        let c = if matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9') {
-            c
-        } else {
-            '_'
-        };
-
-        result.push(c);
+        result.push(if c.is_ascii_alphanumeric() { c } else { '_' });
     }
 
-    if result == "" || result == "_" {
+    if result.is_empty() || result == "_" {
         return Identifier::new("__").expect("__ is a valid identifier");
     }
 
-    if matches!(result.chars().next().unwrap(), '0'..='9') {
+    if result.chars().next().unwrap().is_numeric() {
         result.insert(0, '_');
     }
 
