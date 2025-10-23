@@ -59,7 +59,7 @@ use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::test_infra::cluster::{RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiExecutionStatus,
+    DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation, SuiExecutionStatus,
     SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
 };
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -74,7 +74,9 @@ use sui_types::crypto::{
     get_authority_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound,
 };
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest};
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{
+    AccumulatorOperation, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+};
 use sui_types::execution_status::ExecutionFailureStatus;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
@@ -218,7 +220,7 @@ struct TxnSummary {
     wrapped: Vec<ObjectID>,
     unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
-    accumulators_written: Vec<ObjectID>,
+    accumulators_written: Vec<(ObjectID, SuiAddress, TypeTag, AccumulatorOperation)>,
     gas_summary: GasCostSummary,
 }
 
@@ -1784,10 +1786,17 @@ impl SuiTestAdapter {
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
 
-        let mut accumulators_written: Vec<_> = effects
-            .accumulator_events()
+        let accumulator_events = effects.accumulator_events();
+        let mut accumulators_written: Vec<_> = accumulator_events
             .iter()
-            .map(|event| *event.accumulator_obj.inner())
+            .map(|event| {
+                (
+                    *event.accumulator_obj.inner(),
+                    event.write.address.address,
+                    event.write.address.ty.clone(),
+                    event.write.operation.clone(),
+                )
+            })
             .collect();
 
         let gas_summary = effects.gas_cost_summary();
@@ -1796,12 +1805,21 @@ impl SuiTestAdapter {
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
             .chain(unwrapped_ids.iter())
-            .chain(accumulators_written.iter())
             .copied()
             .collect();
 
         // Use a stable sort before assigning fake ids, so test output remains stable.
         might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+
+        accumulators_written.sort_by_key(|(_, address, ty, _)| {
+            (
+                self.stabilize_str(format!("{}", address)),
+                self.stabilize_str(format!("{}", ty)),
+            )
+        });
+
+        might_need_fake_id.extend(accumulators_written.iter().map(|(id, _, _, _)| *id));
+
         for id in might_need_fake_id {
             self.enumerate_fake(id);
         }
@@ -1823,7 +1841,7 @@ impl SuiTestAdapter {
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unchanged_shared_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
-        accumulators_written.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|(id, _, _, _)| self.real_to_fake_object_id(id));
 
         match effects.status() {
             ExecutionStatus::Success => {
@@ -1922,23 +1940,47 @@ impl SuiTestAdapter {
             .map(|o| o.object_id)
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|o| o.object_id).collect();
-        let mut accumulators_written: Vec<_> = effects
-            .accumulator_events()
+        let accumulator_events = effects.accumulator_events();
+        let mut accumulators_written: Vec<_> = accumulator_events
             .iter()
-            .map(|event| event.accumulator_obj)
+            .map(|event| {
+                let operation = match event.operation {
+                    SuiAccumulatorOperation::Merge => AccumulatorOperation::Merge,
+                    SuiAccumulatorOperation::Split => AccumulatorOperation::Split,
+                };
+                (
+                    event.accumulator_obj,
+                    event.address,
+                    event
+                        .ty
+                        .clone()
+                        .try_into()
+                        .expect("Failed to parse accumulator type tag"),
+                    operation,
+                )
+            })
             .collect();
+
         let gas_summary = effects.gas_cost_summary();
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
             .chain(unwrapped_ids.iter())
-            .chain(accumulators_written.iter())
             .copied()
             .collect();
 
         // Use a stable sort before assigning fake ids, so test output remains stable.
         might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+        accumulators_written.sort_by_key(|(_, address, ty, _)| {
+            (
+                self.stabilize_str(format!("{}", address)),
+                self.stabilize_str(format!("{}", ty)),
+            )
+        });
+
+        might_need_fake_id.extend(accumulators_written.iter().map(|(obj_id, _, _, _)| *obj_id));
+
         for id in might_need_fake_id {
             self.enumerate_fake(id);
         }
@@ -1953,7 +1995,7 @@ impl SuiTestAdapter {
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
-        accumulators_written.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|(id, _, _, _)| self.real_to_fake_object_id(id));
 
         let events = events
             .data
@@ -2126,32 +2168,47 @@ impl SuiTestAdapter {
             .join(", ")
     }
 
+    fn format_fake_id(&self, obj_id: &ObjectID) -> String {
+        match self.real_to_fake_object_id(obj_id) {
+            None => "object(_)".to_string(),
+            Some(FakeID::Known(id)) => {
+                let id: AccountAddress = id.into();
+                format!("0x{id:x}")
+            }
+            Some(fake) => format!("object({})", fake),
+        }
+    }
+
     fn list_objs(&self, objs: &[ObjectID], summarize: bool) -> String {
         if summarize {
             return format!("{}", objs.len());
         }
         objs.iter()
-            .map(
-                |id| /*id.to_string(), */match self.real_to_fake_object_id(id) {
-                                         None => "object(_)".to_string(),
-                                         Some(FakeID::Known(id)) => {
-                                             let id: AccountAddress = id.into();
-                                             format!("0x{id:x}")
-                                         }
-                                         Some(fake) => format!("object({})", fake),
-                                     },
-            )
+            .map(|id| self.format_fake_id(id))
             .collect::<Vec<_>>()
             .join(", ")
     }
 
-    fn list_accumulator_events(&self, accumulator_ids: &[ObjectID], summarize: bool) -> String {
+    fn list_accumulator_events(
+        &self,
+        accumulators: &[(ObjectID, SuiAddress, TypeTag, AccumulatorOperation)],
+        summarize: bool,
+    ) -> String {
         if summarize {
-            return format!("{}", accumulator_ids.len());
+            return format!("{}", accumulators.len());
         }
-        accumulator_ids
+        accumulators
             .iter()
-            .map(|id| self.stabilize_str(format!("{:?}", id)))
+            .map(|(obj_id, address, ty, operation)| {
+                let fake_id_str = self.format_fake_id(obj_id);
+                let address_str = self.stabilize_str(format!("{}", address));
+                let ty_str = self.stabilize_str(format!("{}", ty));
+                let op_str = match operation {
+                    AccumulatorOperation::Merge => "Merge",
+                    AccumulatorOperation::Split => "Split",
+                };
+                format!("({}, {}, {}, {})", fake_id_str, address_str, ty_str, op_str)
+            })
             .collect::<Vec<_>>()
             .join(", ")
     }
