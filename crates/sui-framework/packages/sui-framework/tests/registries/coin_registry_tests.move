@@ -335,6 +335,7 @@ fun perfect_migration_regulated() {
     destroy(registry);
     destroy(currency);
     destroy(deny_cap);
+    destroy(metadata);
     destroy(t_cap);
 }
 
