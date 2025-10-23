@@ -6,7 +6,10 @@ use async_graphql::{CustomValidator, Enum, InputObject, InputValueError};
 use crate::{
     api::{
         scalars::{fq_name_filter::FqNameFilter, sui_address::SuiAddress, uint53::UInt53},
-        types::lookups::CheckpointBounds,
+        types::{
+            available_range::{AvailableRangeKey, Pipelines, ToPipelines},
+            lookups::CheckpointBounds,
+        },
     },
     intersect,
 };
@@ -111,5 +114,43 @@ impl CheckpointBounds for TransactionFilter {
 
     fn before_checkpoint(&self) -> Option<UInt53> {
         self.before_checkpoint
+    }
+}
+
+impl ToPipelines for TransactionFilter {
+    fn to_pipelines(&self, type_: impl Into<String>, field: impl Into<String>) -> Pipelines {
+        let mut filters = Vec::new();
+
+        if self.affected_address.is_some() {
+            filters.push("affectedAddress".to_string());
+        }
+        if self.sent_address.is_some() {
+            filters.push("sentAddress".to_string());
+        }
+        if self.kind.is_some() {
+            filters.push("kind".to_string());
+        }
+        if self.function.is_some() {
+            filters.push("function".to_string());
+        }
+        if self.affected_object.is_some() {
+            filters.push("affectedObjects".to_string());
+        }
+        if self.at_checkpoint.is_some() {
+            filters.push("atCheckpoint".to_string());
+        }
+        if self.after_checkpoint.is_some() {
+            filters.push("afterCheckpoint".to_string());
+        }
+        if self.before_checkpoint.is_some() {
+            filters.push("beforeCheckpoint".to_string());
+        }
+
+        let key = AvailableRangeKey {
+            type_: type_.into(),
+            field: Some(field.into()),
+            filters: Some(filters),
+        };
+        Pipelines::from_available_range_key(key)
     }
 }

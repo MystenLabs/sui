@@ -28,6 +28,7 @@ use crate::{
             sui_address::SuiAddress,
         },
         types::{
+            available_range::ToPipelines,
             lookups::{CheckpointBounds, TxBoundsCursor},
             transaction::filter::TransactionKindInput,
         },
@@ -211,8 +212,8 @@ impl Transaction {
         filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-
-        let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
+        let pipelines = filter.to_pipelines("Query", "transactions");
+        let reader_lo = pipelines.reader_lo(watermarks)?;
 
         let Some(query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
             return Ok(Connection::new(false, false));

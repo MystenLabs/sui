@@ -29,6 +29,11 @@ pub(crate) struct AvailableRange {
     pub(crate) first: u64,
 }
 
+/// Collected pipelines for computing available range
+pub(crate) struct Pipelines {
+    pub(crate) pipelines: BTreeSet<String>,
+}
+
 /// Checkpoint range for which data is available.
 #[Object]
 impl AvailableRange {
@@ -54,30 +59,44 @@ impl AvailableRange {
     pub(crate) fn new(
         ctx: &Context<'_>,
         scope: &Scope,
-        retention_key: AvailableRangeKey,
+        available_range_key: AvailableRangeKey,
     ) -> Result<Self, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let filters = BTreeSet::from_iter(retention_key.filters.unwrap_or_default());
-        let mut pipelines = BTreeSet::new();
-
-        collect_pipelines(
-            &retention_key.type_,
-            retention_key.field.as_deref(),
-            filters,
-            &mut pipelines,
-        );
-
-        let first = pipelines.iter().try_fold(0, |acc, pipeline| {
-            watermarks
-                .pipeline_lo_watermark(pipeline)
-                .map(|wm| acc.max(wm.checkpoint()))
-        })?;
+        let pipelines = Pipelines::from_available_range_key(available_range_key);
+        let first = pipelines.reader_lo(watermarks)?;
 
         Ok(Self {
             scope: scope.clone(),
             first,
         })
     }
+}
+
+impl Pipelines {
+    /// The checkpoint reader_lo across across all pipelines
+    pub(crate) fn reader_lo(&self, watermarks: &Watermarks) -> Result<u64, RpcError> {
+        self.pipelines.iter().try_fold(0, |acc, pipeline| {
+            watermarks
+                .pipeline_lo_watermark(pipeline)
+                .map(|wm| acc.max(wm.checkpoint()))
+        })
+    }
+
+    pub fn from_available_range_key(available_range_key: AvailableRangeKey) -> Self {
+        let mut pipelines = BTreeSet::new();
+        collect_pipelines(
+            &available_range_key.type_,
+            available_range_key.field.as_deref(),
+            BTreeSet::from_iter(available_range_key.filters.unwrap_or_default()),
+            &mut pipelines,
+        );
+        Self { pipelines }
+    }
+}
+
+/// Trait to convert filter types to Pipelines. Filter types contain information about the type, field, and filters to convert to Pipelines.
+pub(crate) trait ToPipelines {
+    fn to_pipelines(&self, type_: impl Into<String>, field: impl Into<String>) -> Pipelines;
 }
 
 /// Expands a series of type/field/filter patterns to generate the collect_pipelines function and collects macro invocation data into
