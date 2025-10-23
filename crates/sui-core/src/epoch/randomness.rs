@@ -8,6 +8,7 @@ use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_tbls::{dkg_v1, dkg_v1::Output, nodes, nodes::PartyId};
+use fastcrypto_tbls::polynomial::Poly;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_common::debug_fatal;
@@ -21,7 +22,7 @@ use std::time::Instant;
 use sui_macros::fail_point_if;
 use sui_network::randomness;
 use sui_types::base_types::AuthorityName;
-use sui_types::committee::{Committee, EpochId, StakeUnit};
+use sui_types::committee::{Committee, CommitteeTrait, EpochId, StakeUnit};
 use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::{
@@ -154,7 +155,8 @@ pub struct RandomnessManager {
 
     // State for DKG.
     dkg_start_time: OnceCell<Instant>,
-    party: Arc<dkg_v1::Party<PkG, EncG>>,
+    party: Option<Arc<dkg_v1::Party<PkG, EncG>>>,  // None for observers
+    is_observer: bool,  // True if this node is an observer (not in committee)
     enqueued_messages: BTreeMap<PartyId, JoinHandle<Option<VersionedProcessedMessage>>>,
     processed_messages: BTreeMap<PartyId, VersionedProcessedMessage>,
     used_messages: OnceCell<VersionedUsedProcessedMessages>,
@@ -174,11 +176,14 @@ impl RandomnessManager {
         network_handle: randomness::Handle,
         authority_key_pair: &AuthorityKeyPair,
     ) -> Option<Self> {
+        let name: AuthorityName = authority_key_pair.public().into();
+        info!("random beacon: try_new called for authority={name}");
+
         let epoch_store = match epoch_store_weak.upgrade() {
             Some(epoch_store) => epoch_store,
             None => {
                 error!(
-                    "could not construct RandomnessManager: AuthorityPerEpochStore already gone"
+                    "random beacon: could not construct RandomnessManager for {name}: AuthorityPerEpochStore already gone"
                 );
                 return None;
             }
@@ -186,15 +191,68 @@ impl RandomnessManager {
         let tables = match epoch_store.tables() {
             Ok(tables) => tables,
             Err(_) => {
-                error!("could not construct RandomnessManager: AuthorityPerEpochStore tables already gone");
+                error!("random beacon: could not construct RandomnessManager for {name}: AuthorityPerEpochStore tables already gone");
                 return None;
             }
         };
         let protocol_config = epoch_store.protocol_config();
 
-        let name: AuthorityName = authority_key_pair.public().into();
         let committee = epoch_store.committee();
         let info = RandomnessManager::randomness_dkg_info_from_committee(committee);
+
+        // Check if this node is an observer (not in committee)
+        let is_observer = !committee.authority_exists(&name);
+        info!("random beacon: authority={name}, is_observer={is_observer}, committee_size={}", committee.num_members());
+
+        // Observers don't create a Party since they can't participate in DKG
+        // They track confirmations from validators instead
+        if is_observer {
+            info!("random beacon: observer node - will track DKG confirmations from validators");
+            let highest_completed_round = tables
+                .randomness_highest_completed_round
+                .get(&SINGLETON_KEY)
+                .expect("typed_store should not fail");
+            let next_randomness_round = tables
+                .randomness_next_round
+                .get(&SINGLETON_KEY)
+                .expect("typed_store should not fail")
+                .unwrap_or(RandomnessRound(0));
+
+            let authority_ids: HashMap<_, _> =
+                info.iter().map(|(id, name, _, _)| (*name, *id)).collect();
+            let authority_peer_ids = epoch_store
+                .epoch_start_config()
+                .epoch_start_state()
+                .get_authority_names_to_peer_ids();
+            let authority_info = authority_ids
+                .into_iter()
+                .filter_map(|(name, id)| {
+                    authority_peer_ids.get(&name).map(|peer_id| (name, (*peer_id, id)))
+                })
+                .collect();
+
+            let rm = RandomnessManager {
+                epoch_store: epoch_store_weak,
+                epoch: committee.epoch(),
+                consensus_adapter,
+                network_handle: network_handle.clone(),
+                authority_info,
+                dkg_start_time: OnceCell::new(),
+                party: None,  // Observer has no Party
+                is_observer: true,
+                enqueued_messages: BTreeMap::new(),
+                processed_messages: BTreeMap::new(),
+                used_messages: OnceCell::new(),
+                confirmations: BTreeMap::new(),
+                dkg_output: OnceCell::new(),
+                next_randomness_round,
+                highest_completed_round: Arc::new(Mutex::new(highest_completed_round)),
+            };
+
+            info!("random beacon: observer RandomnessManager created, will track {} validators", committee.num_members());
+            return Some(rm);
+        }
+
         if tracing::enabled!(tracing::Level::DEBUG) {
             // Log first few entries in DKG info for debugging.
             for (id, name, pk, stake) in info.iter().filter(|(id, _, _, _)| *id < 3) {
@@ -210,11 +268,8 @@ impl RandomnessManager {
             .get_authority_names_to_peer_ids();
         let authority_info = authority_ids
             .into_iter()
-            .map(|(name, id)| {
-                let peer_id = *authority_peer_ids
-                    .get(&name)
-                    .expect("authority name should be in peer_ids");
-                (name, (peer_id, id))
+            .filter_map(|(name, id)| {
+                authority_peer_ids.get(&name).map(|peer_id| (name, (*peer_id, id)))
             })
             .collect();
         let nodes = info
@@ -237,9 +292,12 @@ impl RandomnessManager {
                 .try_into()
                 .expect("should fit u16"),
         ) {
-            Ok((nodes, t)) => (nodes, t),
+            Ok((nodes, t)) => {
+                info!("random beacon: authority={name}, Nodes created successfully with t={t}");
+                (nodes, t)
+            }
             Err(err) => {
-                error!("random beacon: error while initializing Nodes: {err:?}");
+                error!("random beacon: authority={name}, error while initializing Nodes: {err:?}");
                 return None;
             }
         };
@@ -259,6 +317,7 @@ impl RandomnessManager {
                 .expect("key length should match"),
         )
         .expect("should work to convert BLS key to Scalar");
+        info!("random beacon: authority={name}, attempting to create Party");
         let party = match dkg_v1::Party::<PkG, EncG>::new(
             fastcrypto_tbls::ecies_v1::PrivateKey::<bls12381::G2Element>::from(
                 randomness_private_key,
@@ -268,9 +327,12 @@ impl RandomnessManager {
             fastcrypto_tbls::random_oracle::RandomOracle::new(prefix_str.as_str()),
             &mut rand::thread_rng(),
         ) {
-            Ok(party) => party,
+            Ok(party) => {
+                info!("random beacon: authority={name}, Party created successfully with id={}", party.id);
+                party
+            }
             Err(err) => {
-                error!("random beacon: error while initializing Party: {err:?}");
+                error!("random beacon: authority={name}, error while initializing Party: {err:?}");
                 return None;
             }
         };
@@ -290,7 +352,8 @@ impl RandomnessManager {
             network_handle: network_handle.clone(),
             authority_info,
             dkg_start_time: OnceCell::new(),
-            party: Arc::new(party),
+            party: Some(Arc::new(party)),
+            is_observer: false,
             enqueued_messages: BTreeMap::new(),
             processed_messages: BTreeMap::new(),
             used_messages: OnceCell::new(),
@@ -319,7 +382,7 @@ impl RandomnessManager {
                 committee.epoch(),
                 rm.authority_info.clone(),
                 dkg_output,
-                rm.party.t(),
+                rm.party.as_ref().unwrap().t(),
                 highest_completed_round,
             );
         } else {
@@ -388,6 +451,12 @@ impl RandomnessManager {
 
     /// Sends the initial dkg::Message to begin the randomness DKG protocol.
     pub async fn start_dkg(&mut self) -> SuiResult {
+        // Observers don't participate in DKG
+        if self.is_observer {
+            info!("random beacon: observer node - skipping DKG message creation");
+            return Ok(());
+        }
+
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // DKG already started (or completed or failed).
             return Ok(());
@@ -399,12 +468,13 @@ impl RandomnessManager {
         let dkg_version = epoch_store.protocol_config().dkg_version();
         info!("random beacon: starting DKG, version {dkg_version}");
 
-        let msg = match VersionedDkgMessage::create(dkg_version, self.party.clone()) {
+        let party = self.party.as_ref().expect("validators must have a party");
+        let msg = match VersionedDkgMessage::create(dkg_version, party.clone()) {
             Ok(msg) => msg,
             Err(FastCryptoError::IgnoredMessage) => {
                 info!(
                     "random beacon: no DKG Message for party id={} (zero weight)",
-                    self.party.id
+                    party.id
                 );
                 return Ok(());
             }
@@ -450,6 +520,61 @@ impl RandomnessManager {
     ) -> SuiResult {
         let epoch_store = self.epoch_store()?;
 
+        // Observers don't participate in DKG, only track confirmations
+        if self.is_observer {
+            // Check if we have enough confirmations (2f+1) to mark DKG as complete
+            if !self.dkg_output.initialized() && !self.confirmations.is_empty() {
+                let committee = epoch_store.committee();
+                let validity_threshold = committee.validity_threshold();
+                let confirmations_weight: u64 = self.confirmations
+                    .iter()
+                    .filter_map(|(_, conf)| {
+                        // Find the authority name for this party_id
+                        self.authority_info.iter()
+                            .find(|(_, (_, id))| id == &conf.sender())
+                            .map(|(name, _)| committee.weight(name))
+                    })
+                    .sum();
+
+                if confirmations_weight >= validity_threshold {
+                    info!("random beacon: observer node received {} stake in confirmations (threshold: {}), marking DKG tracking complete",
+                        confirmations_weight, validity_threshold);
+
+                    // Create a minimal DKG output for observer
+                    // Observers need DkgStatus::Successful to create randomness placeholders,
+                    // but they don't have shares since they don't generate randomness
+                    let info = RandomnessManager::randomness_dkg_info_from_committee(&committee);
+                    let nodes_vec: Vec<nodes::Node<EncG>> = info
+                        .iter()
+                        .map(|(id, _, pk, stake)| nodes::Node::<EncG> {
+                            id: *id,
+                            pk: pk.clone(),
+                            weight: (*stake).try_into().expect("stake should fit in u16"),
+                        })
+                        .collect();
+                    let protocol_config = epoch_store.protocol_config();
+                    let (nodes, _t) = nodes::Nodes::new_reduced(
+                        nodes_vec,
+                        validity_threshold.try_into().expect("validity threshold should fit in u16"),
+                        protocol_config.random_beacon_reduction_allowed_delta(),
+                        protocol_config.random_beacon_reduction_lower_bound().try_into().expect("should fit u16"),
+                    ).expect("observer should be able to create nodes from committee");
+
+                    let observer_output = Output {
+                        nodes,
+                        vss_pk: Poly::zero(),
+                        shares: None, // Observer has no shares
+                    };
+
+                    self.dkg_output
+                        .set(Some(observer_output))
+                        .expect("dkg_output should not be initialized yet");
+                    epoch_store.metrics.epoch_random_beacon_dkg_failed.set(0);
+                }
+            }
+            return Ok(());
+        }
+
         // Once we have enough Messages, send a Confirmation.
         if !self.dkg_output.initialized() && !self.used_messages.initialized() {
             // Process all enqueued messages.
@@ -466,7 +591,7 @@ impl RandomnessManager {
 
             // Attempt to generate the Confirmation.
             match VersionedProcessedMessage::merge(
-                self.party.clone(),
+                self.party.as_ref().expect("validators must have a party").clone(),
                 self.processed_messages
                     .values()
                     .cloned()
@@ -517,7 +642,7 @@ impl RandomnessManager {
                 .used_messages
                 .get()
                 .expect("checked above that `used_messages` is initialized")
-                .complete_dkg(self.party.clone(), self.confirmations.values())
+                .complete_dkg(self.party.as_ref().expect("validators must have a party").clone(), self.confirmations.values())
             {
                 Ok(output) => {
                     let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
@@ -546,7 +671,7 @@ impl RandomnessManager {
                         epoch_store.committee().epoch(),
                         self.authority_info.clone(),
                         output.clone(),
-                        self.party.t(),
+                        self.party.as_ref().expect("validators must have a party").t(),
                         None,
                     );
                     consensus_output.set_dkg_output(output);
@@ -580,6 +705,11 @@ impl RandomnessManager {
         authority: &AuthorityName,
         msg: VersionedDkgMessage,
     ) -> SuiResult {
+        // Observers don't process DKG messages, only confirmations
+        if self.is_observer {
+            return Ok(());
+        }
+
         // message was received from other validators, so we need to ensure it uses a supported
         // version before we call other functions that assume the version is correct
         let dkg_version = self.epoch_store()?.protocol_config().dkg_version();
@@ -609,7 +739,7 @@ impl RandomnessManager {
             return Ok(());
         }
 
-        let party = self.party.clone();
+        let party = self.party.as_ref().expect("validators must have a party").clone();
         // TODO: Could save some CPU by not processing messages if we already have enough to merge.
         self.enqueued_messages.insert(
             msg.sender(),
