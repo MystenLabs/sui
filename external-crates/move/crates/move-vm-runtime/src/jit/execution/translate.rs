@@ -115,7 +115,6 @@ impl PackageContext<'_> {
         if vtable_entry.package_key != self.original_id {
             return Ok(None);
         }
-        // TODO(vm-rewrite): Have this return an error if the function was not found.
         match self.vtable_funs.get(&vtable_entry.inner_pkg_key) {
             Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
             None => Err(
