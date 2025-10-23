@@ -6,7 +6,7 @@ use std::path::PathBuf;
 fn main() {
     let crate_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
     let proto_dir = crate_dir.join("proto");
-    let out_dir = crate_dir.join("src/bigtable/proto");
+    let out_dir = crate_dir.join("src").join("bigtable").join("proto");
 
     println!("cargo:rerun-if-changed={}", proto_dir.display());
 
@@ -14,7 +14,11 @@ fn main() {
         .unwrap()
         .include_source_info(false)
         .include_imports(true)
-        .open_files(&[proto_dir.join("google/bigtable/v2/bigtable.proto")])
+        .open_files(&[proto_dir
+            .join("google")
+            .join("bigtable")
+            .join("v2")
+            .join("bigtable.proto")])
         .unwrap()
         .file_descriptor_set();
 
