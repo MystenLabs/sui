@@ -577,10 +577,7 @@ impl AuthorityStorePruner {
         checkpoint_store: &Arc<CheckpointStore>,
         config: &AuthorityStorePruningConfig,
     ) -> anyhow::Result<()> {
-        let mut num_epochs_to_retain = 1;
-        if config.num_epochs_to_retain > 0 {
-            num_epochs_to_retain = config.num_epochs_to_retain
-        }
+        let num_epochs_to_retain = max(config.num_epochs_to_retain, 1);
 
         let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
@@ -610,6 +607,36 @@ impl AuthorityStorePruner {
             &end_key,
         )?;
         batch.write()?;
+        Ok(())
+    }
+
+    #[cfg(tidehunter)]
+    fn prune_executed_tx_digests_th(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
+        num_epochs_to_retain: u64,
+    ) -> anyhow::Result<()> {
+        let num_epochs_to_retain = max(num_epochs_to_retain, 1);
+        let current_epoch = checkpoint_store
+            .get_highest_executed_checkpoint()?
+            .map(|c| c.epoch)
+            .unwrap_or_default();
+
+        if current_epoch < num_epochs_to_retain {
+            return Ok(());
+        }
+
+        let target_epoch = current_epoch - num_epochs_to_retain;
+        let from_key = (0u64, TransactionDigest::ZERO);
+        // to_key is inclusive, so we reduce target_epoch by 1
+        let to_key = (target_epoch - 1, TransactionDigest::ZERO);
+        info!(
+            "Pruning executed_transaction_digests for epochs < {} (current epoch: {})",
+            target_epoch, current_epoch
+        );
+        perpetual_db
+            .executed_transaction_digests
+            .drop_cells_in_range(&from_key, &to_key)?;
         Ok(())
     }
 
@@ -669,7 +696,7 @@ impl AuthorityStorePruner {
         }
         perpetual_db.objects.db.start_relocation()?;
         checkpoint_store.tables.watermarks.db.start_relocation()?;
-        // TODO (johnm): use range deletes to prune perpetual_db.executed_transaction_digests
+        Self::prune_executed_tx_digests_th(perpetual_db, checkpoint_store, num_epochs_to_retain)?;
         Ok(())
     }
 
