@@ -104,12 +104,6 @@ Address.objects (filter: type)
 Address.transactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
-Address.transactions (filter: SENT)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Address.transactions (filter: AFFECTED)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
 Address.transactions (filter: afterCheckpoint)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
@@ -2112,12 +2106,6 @@ Query.verifyZkLoginSignature (filter: bytes)
   => {}
 
 Query.verifyZkLoginSignature (filter: signature)
-  => {}
-
-Query.verifyZkLoginSignature (filter: TRANSACTION_DATA)
-  => {}
-
-Query.verifyZkLoginSignature (filter: PERSONAL_MESSAGE)
   => {}
 
 Query.verifyZkLoginSignature (filter: author)
