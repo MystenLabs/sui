@@ -141,6 +141,11 @@ pub struct AuthorityPerpetualTables {
     /// previous epochs other than the current epoch may be pruned safely.
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
     pub(crate) object_per_epoch_marker_table_v2: DBMap<(EpochId, FullObjectKey), MarkerValue>,
+
+    /// Tracks executed transaction digests across epochs.
+    /// Used to support address balance gas payments feature.
+    /// This table uses epoch-prefixed keys to support efficient pruning via range delete.
+    pub(crate) executed_transaction_digests: DBMap<(EpochId, TransactionDigest), ()>,
 }
 
 #[derive(DBMapUtils)]
@@ -404,6 +409,20 @@ impl AuthorityPerpetualTables {
                     ),
                 ),
             ),
+            (
+                "executed_transaction_digests".to_string(),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
+                    mutexes,
+                    epoch_prefix_key,
+                    apply_relocation_filter(
+                        bloom_config.clone(),
+                        pruner_watermark.clone(),
+                        |(epoch_id, _): (EpochId, TransactionDigest)| epoch_id,
+                        true,
+                    ),
+                ),
+            ),
         ];
         Self::open_tables_read_write(
             Self::path(parent_path),
@@ -585,6 +604,18 @@ impl AuthorityPerpetualTables {
             return Ok(None);
         };
         Ok(Some(transaction))
+    }
+
+    /// Insert an executed transaction digest into the executed_transaction_digests table.
+    /// Used by formal snapshot restore to backfill transaction digests from the previous epoch.
+    pub fn insert_executed_transaction_digest(
+        &self,
+        epoch: EpochId,
+        digest: &TransactionDigest,
+    ) -> SuiResult {
+        self.executed_transaction_digests
+            .insert(&(epoch, *digest), &())?;
+        Ok(())
     }
 
     pub fn get_effects(&self, digest: &TransactionDigest) -> SuiResult<Option<TransactionEffects>> {
