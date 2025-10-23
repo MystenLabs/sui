@@ -4,7 +4,7 @@ description: Avoid unintentionally locking objects with your smart contract logi
 keywords: [ equivocation, how to avoid equivocation, unintentionally locking objects, accidentally locking objects ]
 ---
 
-On Sui, object versioning ensures that each object is referenced by a unique (`ObjectId`, `SequenceNumber`) pair, where `SequenceNumber` refers to the object's version. Only a single transaction can modify an object at a specific version. After a transaction modifies an object, the version is incremented. Only the latest version can be used in a future transaction.
+On Sui, object versioning ensures that each object is referenced by a unique (`ObjectId`, `SequenceNumber`) pair, where `SequenceNumber` refers to the object's version. Only a single transaction can modify an object at a specific version. After a transaction modifies an object, the version is incremented. Only the latest version can be used in subsequent transactions.
 
 Object versioning tracks the state of objects across transactions and epochs. 
 
@@ -14,7 +14,7 @@ Object versioning tracks the state of objects across transactions and epochs.
 
 Equivocation can occur when:
 
-- A user or smart contract submits two transactions using the same (`ObjectId`, `SequenceNumber`) before the first is finalized.
+- A user or smart contract submits 2 transactions using the same (`ObjectId`, `SequenceNumber`) before the first is finalized.
 - Inadvertent logic traps in smart contract code, for example, when handling [sponsored transactions](/guides/developer/sui-101/sponsor-txn#client-equivocation-risk).
 
 Even though both transactions aren't finalized, submitting equivocated transactions still causes other problems for both developers and users. For example, when equivocation is detected, the involved objects are locked until the end of the current epoch. Neither transaction can proceed, and the objects cannot be used in any other transaction. Bad actors could intentionally submit equivocated transactions to lock up important objects and intentionally disrupt dApps.
@@ -33,13 +33,13 @@ The Sui network has safeguards to punish validators who engage in equivocation. 
 
 ## Common pitfalls to avoid
 
-1. For most smart contracts, equivocation is not an intended behavior. A common source of unintentional equivocation comes from multiple transactions performed by the same address. If you don't take care to handle the gas fees properly, you could lock up your smart contract by trying to use the same coin (and version) for more than one transaction.
+1. For most smart contracts, equivocation is not an intended behavior. A common source of unintentional equivocation comes from multiple transactions performed by the same address. If you don't take care to handle the gas fees properly, you could lock up your smart contract by trying to use the same coin (and version) for more than 1 transaction.
 
-    **Recommendation**: If using a single thread, serialize transactions that use the same owned object. PTBs allow your transactions to use multiple operations against the same owned object. A PTB is essentially a single, serialized transaction, which can prevent `SequenceNumber` errors.
+    **Recommendation**: If you use a single thread, serialize transactions that use the same owned object. PTBs allow your transactions to use multiple operations against the same owned object. A PTB is essentially a single, serialized transaction, which can prevent `SequenceNumber` errors.
 
-    **Recommendation**: You should always take advantage of the inherent batching that PTBs provide. For example, consider an airdrop scenario where you want to mint and transfer an object to many users. Because PTBs allow up to 1,024 operations in a single PTB, you can mint and transfer the airdrop object to 512 users in a single transaction. This approach is much more cost efficient than looping over 512 individual transactions that mint and transfer to a single user each time. Batching transactions might remove the need for parallel execution, but you must consider the atomic nature of PTBs; if one instruction fails, the whole PTB fails. Consequently, parallel transactions might be preferred for some use cases.
+    **Recommendation**: Always take advantage of the inherent batching that PTBs provide. For example, consider an airdrop scenario where you want to mint and transfer an object to many users. Because PTBs allow up to 1,024 operations in a single PTB, you can mint and transfer the airdrop object to 512 users in a single transaction. This approach is much more cost efficient than looping over 512 individual transactions that mint and transfer to a single user each time. Batching transactions might remove the need for parallel execution, but you must consider the atomic nature of PTBs; if 1 instruction fails, the whole PTB fails. Consequently, parallel transactions might be preferred for some use cases.
 
-2. Parallel transactions from multiple threads can cause unintentional equivocation errors if not managed properly. One way to avoid owned object equivocation is to create a separate owned object for each transaction thread. This ensures that each thread uses the correct version of its object input.
+2. Parallel transactions from multiple threads can cause unintentional equivocation errors if not managed properly. A way to avoid owned object equivocation is to create a separate owned object for each transaction thread. This ensures that each thread uses the correct version of its object input.
 
     **Recommendation**: In cases where creating multiple owned objects is not practical or desired, you can create a wrapper around an object used across threads. The wrapper is a shared object that authorizes access to its object through an allowlist. Any time a transaction needs to access the wrapped object, it gets permission from the wrapper in the same PTB. When authorization needs transferring, the allowlist for the wrapper gets updated accordingly. This approach can create a latency bottleneck as the object wrapper creates sequentialized transactions that rely on its object for input. The Sui TypeScript SDK provides an executor class, `ParallelTransactionExecutor`, to process parallel transactions efficiently.
 
@@ -49,7 +49,7 @@ The Sui SDK offers transaction executors to help process multiple transactions f
 
 ### `SerialTransactionExecutor`
 
-Use the `SerialTransactionExecutor` when processing transactions one after another. The executor grabs all the coins from the sender and combines them into a single coin that is used for all transactions.
+Use the `SerialTransactionExecutor` when you process transactions one after another. The executor grabs all the coins from the sender and combines them into a single coin that is used for all transactions.
 
 Using the `SerialTransactionExecutor` prevents `SequenceNumber` errors by handling the versioning of object inputs across a PTB.
 
@@ -68,9 +68,11 @@ You can install the `sui-tool` (https://github.com/MystenLabs/sui/tree/main/crat
 ```sh
 $ cargo run --bin sui-tool
 ```
+
 ```sh
 $ sui-tool locked-object --address 0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 --fullnode-rpc-url <https://rpc.mainnet.sui.io:443>
 ```
+
 ```sh
 $ sui-tool locked-object --id 0xd4c3ecf5eaa211da58c36495613899e70349f6048baaeca99596f1682e89c837 --fullnode-rpc-url <https://rpc.mainnet.sui.io:443>
 ```
