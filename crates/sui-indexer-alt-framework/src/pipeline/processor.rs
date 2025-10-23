@@ -185,7 +185,7 @@ mod tests {
         },
         time::Duration,
     };
-    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use tokio::{sync::mpsc, time::timeout};
     use tokio_util::sync::CancellationToken;
 
@@ -219,20 +219,18 @@ mod tests {
     async fn test_processor_process_checkpoints() {
         // Build two checkpoints using the test builder
         let checkpoint1: Arc<Checkpoint> = Arc::new(
-            TestCheckpointDataBuilder::new(1)
+            TestCheckpointBuilder::new(1)
                 .with_epoch(2)
                 .with_network_total_transactions(5)
                 .with_timestamp_ms(1000000001)
-                .build_checkpoint()
-                .into(),
+                .build_checkpoint(),
         );
         let checkpoint2: Arc<Checkpoint> = Arc::new(
-            TestCheckpointDataBuilder::new(2)
+            TestCheckpointBuilder::new(2)
                 .with_epoch(2)
                 .with_network_total_transactions(10)
                 .with_timestamp_ms(1000000002)
-                .build_checkpoint()
-                .into(),
+                .build_checkpoint(),
         );
 
         // Set up the processor, channels, and metrics
@@ -290,9 +288,9 @@ mod tests {
     async fn test_processor_does_not_process_checkpoint_after_cancellation() {
         // Build two checkpoints using the test builder
         let checkpoint1: Arc<Checkpoint> =
-            Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint().into());
+            Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
         let checkpoint2: Arc<Checkpoint> =
-            Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint().into());
+            Arc::new(TestCheckpointBuilder::new(2).build_checkpoint());
 
         // Set up the processor, channels, and metrics
         let processor = Arc::new(DataPipeline);
@@ -357,9 +355,9 @@ mod tests {
 
         // Set up test data
         let checkpoint1: Arc<Checkpoint> =
-            Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint().into());
+            Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
         let checkpoint2: Arc<Checkpoint> =
-            Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint().into());
+            Arc::new(TestCheckpointBuilder::new(2).build_checkpoint());
 
         let attempt_count = Arc::new(AtomicU32::new(0));
         let processor = Arc::new(RetryTestPipeline {
@@ -427,7 +425,7 @@ mod tests {
 
         // Set up test data
         let checkpoints: Vec<Arc<Checkpoint>> = (0..5)
-            .map(|i| Arc::new(TestCheckpointDataBuilder::new(i).build_checkpoint().into()))
+            .map(|i| Arc::new(TestCheckpointBuilder::new(i).build_checkpoint()))
             .collect();
 
         // Set up channels and metrics

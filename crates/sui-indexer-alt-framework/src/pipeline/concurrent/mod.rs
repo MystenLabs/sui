@@ -298,7 +298,7 @@ mod tests {
         pipeline::Processor,
         types::{
             full_checkpoint_content::Checkpoint,
-            test_checkpoint_data_builder::TestCheckpointDataBuilder,
+            test_checkpoint_data_builder::TestCheckpointBuilder,
         },
         FieldCount,
     };
@@ -409,12 +409,11 @@ mod tests {
 
         async fn send_checkpoint(&self, checkpoint: u64) -> anyhow::Result<()> {
             let checkpoint = Arc::new(
-                TestCheckpointDataBuilder::new(checkpoint)
+                TestCheckpointBuilder::new(checkpoint)
                     .with_epoch(1)
                     .with_network_total_transactions(checkpoint * 2)
                     .with_timestamp_ms(1000000000 + checkpoint * 1000)
-                    .build_checkpoint()
-                    .into(),
+                    .build_checkpoint(),
             );
             self.checkpoint_tx.send(checkpoint).await?;
             Ok(())

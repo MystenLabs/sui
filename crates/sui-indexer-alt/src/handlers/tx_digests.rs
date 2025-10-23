@@ -82,7 +82,7 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
+        types::test_checkpoint_data_builder::TestCheckpointBuilder, Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
@@ -116,9 +116,9 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint().into());
+        let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxDigests.process(&checkpoint).await.unwrap();
         TxDigests::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
@@ -126,7 +126,7 @@ mod tests {
 
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint().into());
+        let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxDigests.process(&checkpoint).await.unwrap();
         TxDigests::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
@@ -136,7 +136,7 @@ mod tests {
         builder = builder.start_transaction(1).finish_transaction();
         builder = builder.start_transaction(2).finish_transaction();
         builder = builder.start_transaction(3).finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint().into());
+        let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxDigests.process(&checkpoint).await.unwrap();
         TxDigests::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();

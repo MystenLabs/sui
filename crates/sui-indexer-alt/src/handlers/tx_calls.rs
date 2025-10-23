@@ -95,7 +95,7 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        types::{base_types::ObjectID, test_checkpoint_data_builder::TestCheckpointDataBuilder},
+        types::{base_types::ObjectID, test_checkpoint_data_builder::TestCheckpointBuilder},
         Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
@@ -136,12 +136,12 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .add_move_call(ObjectID::random(), "module", "function")
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint().into());
+        let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxCalls.process(&checkpoint).await.unwrap();
         TxCalls::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
@@ -152,7 +152,7 @@ mod tests {
             .add_move_call(ObjectID::random(), "module", "function")
             .add_move_call(ObjectID::random(), "module", "function")
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint().into());
+        let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxCalls.process(&checkpoint).await.unwrap();
         TxCalls::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
@@ -166,7 +166,7 @@ mod tests {
             .add_move_call(reuse_package_id, "donut", "prune3")
             .add_move_call(reuse_package_id, "donut", "prune4")
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint().into());
+        let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxCalls.process(&checkpoint).await.unwrap();
         TxCalls::commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
