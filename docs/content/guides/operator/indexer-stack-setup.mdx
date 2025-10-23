@@ -195,29 +195,6 @@ $ sui-indexer-alt indexer \
 - **CPU:** 8 cores
 - **Memory:** 16GB
 
-### Storage requirements
-
-**Total:** TBD
-
-| Pipeline                | Table                   | Approximate size (recommended config) |
-|-------------------------|-------------------------|---------------------------------------|
-| `cp_sequence_numbers`   | `cp_sequence_numbers`   | TBD                                   |
-| `ev_emit_mod`           | `ev_emit_mod`           | TBD                                   |
-| `ev_struct_inst`        | `ev_struct_inst`        | TBD                                   |
-| `obj_versions`          | `obj_versions`          | TBD                                   |
-| `kv_epoch_ends`         | `kv_epoch_ends`         | TBD                                   |
-| `kv_epoch_starts`       | `kv_epoch_starts`       | TBD                                   |
-| `kv_feature_flags`      | `kv_feature_flags`      | TBD                                   |
-| `kv_packages`           | `kv_packages`           | TBD                                   |
-| `kv_protocol_configs`   | `kv_protocol_configs`   | TBD                                   |
-| `sum_displays`          | `sum_displays`          | TBD                                   |
-| `tx_affected_addresses` | `tx_affected_addresses` | TBD                                   |
-| `tx_affected_objects`   | `tx_affected_objects`   | TBD                                   |
-| `tx_balance_changes`    | `tx_balance_changes`    | TBD                                   |
-| `tx_digests`            | `tx_digests`            | TBD                                   |
-| `tx_calls`              | `tx_calls`              | TBD                                   |
-| `tx_kinds`              | `tx_kinds`              | TBD                                   |
-
 ## Consistent store setup
 
 All consistent store pipelines run in the same instance based on a single configuration file. Like the indexer, the pipelines run in parallel and throughput is limited by the slowest pipeline.
@@ -317,82 +294,6 @@ $ sui-indexer-alt-consistent-store run \
     <ImportContent source="examples/prod-config/consistent_store.toml" mode="code" />
 </details>
 
-
-### Hardware requirements
-
-- **CPU:** 8 cores
-- **Memory:** 32GB
-
-### Storage requirements
-
-**total:** TBD
-
-| Pipeline        | Table           | Approximate size (recommended config) |
-|-----------------|-----------------|---------------------------------------|
-| balances        | balances        | TBD                                   |
-| object-by-owner | object-by-owner | TBD                                   |
-| object-by-type  | object-by-type  | TBD                                   |
-
-## GraphQL setup
-
-GraphQL instances read data from the indexer and the consistent store. The number of instances is determined by the required read throughput.
-
-### Run command
-
-Each GraphQL instance is run using the same command:
-
-```sh
-$ sui-indexer-alt-graphql rpc \
-    --config CONFIG_FILE \
-    --indexer-config INDEXER_CONFIG_FILE \
-    --bigtable-instance BIGTABLE_INSTANCE \
-    --consistent-store-url CONSISTENT_STORE_URL \
-    --database-url DATABASE_URL \
-    --fullnode-rpc-url FULLNODE_RPC_URL
-```
-
-| CLI param              | Description                                                                          |
-|------------------------|--------------------------------------------------------------------------------------|
-| `CONFIG_FILE`          | Path to GraphQL configuration file.                                                  |
-| `INDEXER_CONFIG_FILE`  | Path to indexer configuration file.<br/>Can be set multiple times; once per indexer. |
-| `BIGTABLE_INSTANCE`    | GCP Bigtable instance.                                                               |
-| `CONSISTENT_STORE_URL` | URL to [consistent store](#consistent-store-setup) API.                              |
-| `DATABASE_URL`         | Postgres database connection string.                                                 |
-| `FULLNODE_RPC_URL`     | URL to fullnode RPC API.                                                             |
-
-
-Example:
-
-```sh
-$ sui-indexer-alt-graphql rpc \
-    --config graphql.toml \
-    --indexer-config events.toml \
-    --indexer-config misc.toml \
-    --indexer-config obj_versions.toml \
-    --indexer-config tx_affected_addresses.toml \
-    --indexer-config tx_affected_objects.toml \
-    --indexer-config tx_calls.toml \
-    --indexer-config tx_kinds.toml \
-    --bigtable-instance kv-store-mainnet \
-    --consistent-store-url https://localhost:7001 \
-    --database-url postgres://username:password@localhost:5432/database \
-    --fullnode-rpc-url https://localhost:9000
-```
-
-### Run config recommendations
-
-| Config TOML    | Description                        |
-|----------------|------------------------------------|
-| `graphql.toml` | Default GraphQL API configuration. |
-
-<details>
-<summary>
-`graphql.toml`
-</summary>
-    <ImportContent source="examples/prod-config/graphql.toml" mode="code" />
-</details>
-
-[Indexer Config](#indexer-run-config)
 
 ### Hardware requirements
 
