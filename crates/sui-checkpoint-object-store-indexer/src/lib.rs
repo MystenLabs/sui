@@ -92,7 +92,7 @@ impl Handler for CheckpointBlobPipeline {
             return Ok(0);
         };
 
-        let mut path = format!("{}.pb", blob.sequence_number);
+        let mut path = format!("{}.binpb", blob.sequence_number);
         let data: Vec<u8> = if let Some(level) = self.compression_level {
             path = format!("{}.zst", path);
             tokio::task::spawn_blocking({
