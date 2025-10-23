@@ -8,9 +8,9 @@ use crate::{error::RpcError, scope::Scope, task::watermark::Watermarks};
 
 use super::checkpoint::Checkpoint;
 
-/// Key for querying checkpoint range availability by GraphQL type, field, and filters.
+/// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint).
 ///
-/// Falls back to type-level availability when field or filters are omitted.
+/// Provides retention information for the type and optional field and filters. If field or filters are not provided we fall back to the available range for the type.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct AvailableRangeKey {
     /// GraphQL type name
