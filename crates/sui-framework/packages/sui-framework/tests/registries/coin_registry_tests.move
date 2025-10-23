@@ -331,13 +331,11 @@ fun perfect_migration_regulated() {
     assert!(currency.is_metadata_cap_claimed());
     assert!(currency.metadata_cap_id().is_some_and!(|id| id == object::id(&metadata_cap)));
 
-    // Delete the migrated legacy metadata.
-    currency.delete_migrated_legacy_metadata(metadata);
-
     destroy(metadata_cap);
     destroy(registry);
     destroy(currency);
     destroy(deny_cap);
+    destroy(metadata);
     destroy(t_cap);
 }
 
@@ -417,25 +415,6 @@ fun update_legacy_fail() {
 
     let _metadata_cap = currency.claim_metadata_cap(&t_cap, ctx);
     currency.update_from_legacy_metadata(&metadata);
-
-    abort
-}
-
-#[test, expected_failure(abort_code = coin_registry::EMetadataCapNotClaimed)]
-fun delete_legacy_fail() {
-    let ctx = &mut tx_context::dummy();
-    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
-    let (_t_cap, _deny_cap, metadata) = new_builder().build_legacy_regulated(
-        COIN_REGISTRY_TESTS {},
-        ctx,
-    );
-    let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
-        &mut registry,
-        &metadata,
-        ctx,
-    );
-
-    currency.delete_migrated_legacy_metadata(metadata);
 
     abort
 }

@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 100;
+const MAX_PROTOCOL_VERSION: u64 = 101;
 
 // Record history of protocol version allocations here:
 //
@@ -273,6 +273,7 @@ const MAX_PROTOCOL_VERSION: u64 = 100;
 //             Add better error messages to the loader.
 // Version 99: Enable new commit handler.
 // Version 100: Framework update
+// Version 101: Framework update
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4170,7 +4171,8 @@ impl ProtocolConfig {
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
                 }
-                100 => {
+                100 => {}
+                101 => {
                     cfg.feature_flags.create_root_accumulator_object = true;
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_poseidon = true;
