@@ -13,11 +13,13 @@ use super::checkpoint::Checkpoint;
 /// Provides retention information for the type and optional field and filters. If field or filters are not provided we fall back to the available range for the type.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct AvailableRangeKey {
-    /// GraphQL type name
+    /// The GraphQL type to check retention for
     pub(crate) type_: String,
-    /// Specific field within the type
+
+    /// The specific field within the type to check retention for
     pub(crate) field: Option<String>,
-    /// Filter names for filtered queries
+
+    /// Optional filter to check retention for filtered queries
     pub(crate) filters: Option<Vec<String>>,
 }
 
