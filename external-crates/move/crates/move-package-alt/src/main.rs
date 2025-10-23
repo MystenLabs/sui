@@ -24,18 +24,19 @@ pub enum Commands {
 
 impl Commands {
     pub async fn execute(&self) -> anyhow::Result<()> {
-        Ok(match self {
+        match self {
             Commands::Build(b) => b.execute().await?,
             Commands::New(n) => n.execute()?,
             Commands::Test => todo!(),
             Commands::UpdateDeps(u) => u.execute().await?,
-        })
+        };
+        Ok(())
     }
 }
 
 impl Cli {
     pub async fn execute(&self) -> anyhow::Result<()> {
-        Ok(self.command.execute().await?)
+        self.command.execute().await
     }
 }
 
