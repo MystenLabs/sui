@@ -23,6 +23,54 @@ use crate::{
 
 use super::Handler;
 
+use crate::store::CommitterWatermark;
+
+/// Gathers the next contiguous watermark from pending checkpoints.
+/// Returns the highest contiguous watermark that can be committed, or None if no complete
+/// contiguous watermarks are available from `next_checkpoint` forward.
+fn gather_next_watermark(
+    precommitted: &mut BTreeMap<u64, WatermarkPart>,
+    next_checkpoint: &mut u64,
+    metrics: Option<(&Arc<IndexerMetrics>, &'static str)>,
+) -> Option<CommitterWatermark> {
+    let mut watermark = None;
+
+    while let Some(pending) = precommitted.first_entry() {
+        let part = pending.get();
+
+        if !part.is_complete() {
+            break;
+        }
+
+        match (*next_checkpoint).cmp(&part.watermark.checkpoint_hi_inclusive) {
+            // Next pending checkpoint is from the future.
+            Ordering::Less => break,
+
+            // This is the next checkpoint -- include it.
+            Ordering::Equal => {
+                watermark = Some(pending.remove().watermark);
+                *next_checkpoint += 1;
+            }
+
+            // Next pending checkpoint is in the past. Out of order watermarks can
+            // be encountered when a pipeline is starting up, because ingestion
+            // must start at the lowest checkpoint across all pipelines, or because
+            // of a backfill, where the initial checkpoint has been overridden.
+            Ordering::Greater => {
+                if let Some((metrics, pipeline_name)) = metrics {
+                    metrics
+                        .total_watermarks_out_of_order
+                        .with_label_values(&[pipeline_name])
+                        .inc();
+                }
+                pending.remove();
+            }
+        }
+    }
+
+    watermark
+}
+
 /// The watermark task is responsible for keeping track of a pipeline's out-of-order commits and
 /// updating its row in the `watermarks` table when a continuous run of checkpoints have landed
 /// since the last watermark update.
@@ -91,10 +139,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                 }
 
                 _ = poll.tick() => {
-                    // The presence of a watermark means that we can update the watermark in db.
-                    // However, concurrent pipelines do not need every watermark update to succeed.
-                    let mut watermark = None;
-
                     if precommitted.len() > WARN_PENDING_WATERMARKS {
                         warn!(
                             pipeline = H::NAME,
@@ -114,40 +158,13 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    while let Some(pending) = precommitted.first_entry() {
-                        let part = pending.get();
-
-                        // Some rows from the next watermark have not landed yet.
-                        if !part.is_complete() {
-                            break;
-                        }
-
-                        match next_checkpoint.cmp(&part.watermark.checkpoint_hi_inclusive) {
-                            // Next pending checkpoint is from the future.
-                            Ordering::Less => break,
-
-                            // This is the next checkpoint -- include it.
-                            Ordering::Equal => {
-                                watermark = Some(pending.remove().watermark);
-                                next_checkpoint += 1;
-                            }
-
-                            // Next pending checkpoint is in the past. Out of order watermarks can
-                            // be encountered when a pipeline is starting up, because ingestion
-                            // must start at the lowest checkpoint across all pipelines, or because
-                            // of a backfill, where the initial checkpoint has been overridden.
-                            Ordering::Greater => {
-                                // Track how many we see to make sure it doesn't grow without
-                                // bound.
-                                metrics
-                                    .total_watermarks_out_of_order
-                                    .with_label_values(&[H::NAME])
-                                    .inc();
-
-                                pending.remove();
-                            }
-                        }
-                    }
+                    // The presence of a watermark means that we can update the watermark in db.
+                    // However, concurrent pipelines do not need every watermark update to succeed.
+                    let watermark = gather_next_watermark(
+                        &mut precommitted,
+                        &mut next_checkpoint,
+                        Some((&metrics, H::NAME)),
+                    );
 
                     let elapsed = guard.stop_and_record();
 
@@ -252,6 +269,55 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         }
                     }
                 }
+            }
+        }
+
+        info!(
+            pipeline = H::NAME,
+            "Attempting final watermark sync before shutdown"
+        );
+
+        match store.connect().await {
+            Ok(mut conn) => {
+                let watermark = gather_next_watermark(
+                    &mut precommitted,
+                    &mut next_checkpoint,
+                    Some((&metrics, H::NAME)),
+                );
+
+                if let Some(watermark) = watermark {
+                    match conn.set_committer_watermark(H::NAME, watermark).await {
+                        Ok(true) => {
+                            info!(
+                                pipeline = H::NAME,
+                                checkpoint = watermark.checkpoint_hi_inclusive,
+                                "Successfully wrote final watermark on shutdown"
+                            );
+                        }
+                        Ok(false) => {
+                            info!(
+                                pipeline = H::NAME,
+                                checkpoint = watermark.checkpoint_hi_inclusive,
+                                "Final watermark did not advance on shutdown"
+                            );
+                        }
+                        Err(e) => {
+                            warn!(
+                                pipeline = H::NAME,
+                                ?watermark,
+                                "Failed to write final watermark on shutdown: {e}"
+                            );
+                        }
+                    }
+                } else {
+                    info!(pipeline = H::NAME, "No watermark to write on shutdown");
+                }
+            }
+            Err(_) => {
+                warn!(
+                    pipeline = H::NAME,
+                    "Failed to get connection for final watermark sync"
+                );
             }
         }
 
@@ -614,5 +680,33 @@ mod tests {
         // Clean up
         setup.cancel.cancel();
         let _ = setup.commit_watermark_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_final_watermark_sync_on_shutdown() {
+        let config = CommitterConfig {
+            // Set to u64::MAX to ensure watermark isn't updated until shutdown.
+            watermark_interval_ms: u64::MAX,
+            ..Default::default()
+        };
+        let setup = setup_test::<DataPipeline>(config, 10, MockStore::default());
+
+        setup
+            .watermark_tx
+            .send(vec![create_watermark_part_for_checkpoint(10)])
+            .await
+            .unwrap();
+        setup
+            .watermark_tx
+            .send(vec![create_watermark_part_for_checkpoint(11)])
+            .await
+            .unwrap();
+
+        drop(setup.watermark_tx);
+
+        let _ = setup.commit_watermark_handle.await;
+
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 11);
     }
 }
