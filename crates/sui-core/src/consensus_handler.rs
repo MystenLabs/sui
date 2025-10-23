@@ -1011,7 +1011,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         state: &mut CommitHandlerState,
         end_of_publish_transactions: Vec<AuthorityName>,
-    ) -> (bool, Option<RwLockWriteGuard<ReconfigState>>, bool) {
+    ) -> (bool, Option<RwLockWriteGuard<'_, ReconfigState>>, bool) {
         let collected_eop =
             self.process_end_of_publish_transactions(state, end_of_publish_transactions);
         if collected_eop {
@@ -1840,7 +1840,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         state: &mut CommitHandlerState,
     ) -> (
-        RwLockWriteGuard<ReconfigState>,
+        RwLockWriteGuard<'_, ReconfigState>,
         bool, // true if final round
     ) {
         let mut reconfig_state = self.epoch_store.get_reconfig_state_write_lock_guard();

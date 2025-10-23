@@ -3683,7 +3683,7 @@ impl AuthorityState {
     pub fn execution_lock_for_executable_transaction(
         &self,
         transaction: &VerifiedExecutableTransaction,
-    ) -> Option<ExecutionLockReadGuard> {
+    ) -> Option<ExecutionLockReadGuard<'_>> {
         let lock = self.execution_lock.try_read().ok()?;
         if *lock == transaction.auth_sig().epoch() {
             Some(lock)
@@ -3697,13 +3697,13 @@ impl AuthorityState {
     /// This prevents reconfiguration from starting until we are finished handling the signing request.
     /// Otherwise, in-memory lock state could be cleared (by `ObjectLocks::clear_cached_locks`)
     /// while we are attempting to acquire locks for the transaction.
-    pub fn execution_lock_for_signing(&self) -> SuiResult<ExecutionLockReadGuard> {
+    pub fn execution_lock_for_signing(&self) -> SuiResult<ExecutionLockReadGuard<'_>> {
         self.execution_lock
             .try_read()
             .map_err(|_| SuiErrorKind::ValidatorHaltedAtEpochEnd.into())
     }
 
-    pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
+    pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard<'_> {
         self.execution_lock.write().await
     }
 
