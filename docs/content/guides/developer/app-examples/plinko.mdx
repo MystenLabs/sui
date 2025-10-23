@@ -1,10 +1,10 @@
 ---
 title: Plinko
 description: Learn Sui through an example implementation of the popular casino game, Plinko.
-keywords: [ example dApp, example app, verifiable randomness functions, vrf, randomness, bls signatures, nfts, non-fungible tokens, example game, game dApp ]
+keywords: [ example dApp, example app, on-chain randomness, enoki sponsorship, sponsored transactions, codegen, typescript codegen, example game, game dApp ]
 ---
 
-Plinko is an example implementation of the popular casino game. The Plinko game on Sui incorporates advanced cryptographic techniques to ensure fairness and transparency. Players drop Plinko balls onto a pegged board, where they randomly fall into slots representing different multipliers. This document details the game's mechanics, cryptographic features, and the methodology for calculating trace paths and verifying signatures.
+Plinko is an example implementation of the popular casino game. The Plinko game on Sui leverages on-chain randomness to ensure fairness and transparency. Players drop Plinko balls onto a pegged board, where they randomly fall into slots representing different multipliers. This document details the game's mechanics, on-chain randomness implementation, sponsored transactions through Enoki, and TypeScript integration using codegen.
 
 Building an on-chain Plinko game shares a lot of similarities with the [Coin Flip](./coin-flip.mdx) game and [Blackjack](./blackjack.mdx) game. For that reason, this example covers only the smart contracts (Move modules) and frontend logic.
 
@@ -20,35 +20,58 @@ A version of the game is also deployed at [Mysten Plinko](https://plinko-poc.ver
 
 ## Gameplay
 
-The Plinko game, implemented through smart contracts on the Sui blockchain, incorporates cryptographic techniques to ensure fairness and transparency. Utilizing a blend of BLS signatures, hash functions, and verifiable random function (VRF) inputs, the game calculates the trace path for each ball, determining the game's outcome based on the number of Plink balls a player chooses to drop.
+The Plinko game, implemented through smart contracts on the Sui blockchain, leverages Sui's native on-chain randomness to ensure fairness and transparency. The game calculates the trace path for each ball using secure random values generated directly on-chain, determining the game's outcome based on the number of Plinko balls a player chooses to drop.
 
-The game mechanics involve a player starting a game by specifying the number of balls and staking a certain amount. The backend generates a BLS signature for the game's randomness source, which is verified on-chain to ensure it's untampered. The game uses a Counter NFT for each round to generate a unique VRF input, ensuring each game's randomness is distinct and cannot be predicted or repeated. The number of Plinko balls, chosen by the player, directly influences the game's complexity and potential payout, as each ball's final position is determined by traversing a cryptographic trace path generated from the hashed BLS signature extended to accommodate the total number of balls.
+The game mechanics involve a player starting a game by specifying the number of balls and staking a certain amount. The on-chain randomness is provided through Sui's Move randomness framework, which ensures each game's randomness is cryptographically secure and cannot be predicted or manipulated. The number of Plinko balls, chosen by the player, directly influences the game's complexity and potential payout, as each ball's final position is determined by the on-chain random values that dictate the ball's path through the pegged board.
 
 ## Sequence diagram
 
 ```mermaid
 sequenceDiagram
     participant Player as Player
-    participant UI as Next.js Application
-    participant API as Backend API
+    participant FE as Frontend
+    participant BE as Backend
+    participant Enoki as Enoki
     participant Blockchain as Sui Blockchain
 
     Note over Player, Blockchain: Plinko Game Interaction Flow
 
-    Player->>+UI: Places bet, selects number of balls, presses play
-    UI->>Player: Displays game as pending, awaiting outcome
-    UI->>+Blockchain: Sends bet and number of balls
-    UI->>+Blockchain: Calls counter_nft::mint to produce vrf_input, calls plinko::start_game
-    Note over Blockchain: Checks stakes, balances, creates and increments the counter, emits 'NewGame' event
-    Blockchain-->>-UI: Returns gameId, vrfInput
-    UI->>+API: POST /game/plinko/end with { gameId, vrfInput, numberOfBalls }
-    Note over UI: Reads from the 'NewGame' event gameId, vrfInput
-    Note over API: Signs vrfInput with house's private key
-    API->>+Blockchain: Calls plinko::finish_game with signed vrfInput
-    Note over Blockchain: Verifies signature, calculates outcome (payments, balls' trace paths), emits Outcome event
-    Blockchain-->>-API: Returns game outcome event (trace paths, winnings)
-    API-->>-UI: Sends game outcome (trace paths, winnings)
-    UI-->>-Player: Displays game result, balls' descend, and winnings
+    Player->>+FE: Places bet, selects number of balls, presses play
+
+    Note over FE: Start Game Transaction
+    FE->>FE: Construct PTB with plinko::start_game
+    FE->>FE: Build unsigned TransactionKind bytes
+    FE->>+Enoki: POST /sponsor - Send unsigned tx bytes
+    Note over Enoki: createSponsoredTransaction()
+    Enoki-->>-FE: Returns sponsored unsigned bytes + digest
+    FE->>Player: Request signature for sponsored transaction
+    Player->>FE: Signs sponsored transaction bytes
+    FE->>+Enoki: POST /execute - Send digest + signature
+    Note over Enoki: executeSponsoredTransaction()
+    Enoki->>+Blockchain: Submit sponsored + signed transaction
+    Note over Blockchain: Executes plinko::start_game,<br/>creates Game object with player's stake
+    Blockchain-->>-Enoki: Transaction result with game_id
+    Enoki-->>-FE: Returns execution digest
+    FE->>FE: Extract game_id from events
+
+    Note over FE,BE: Finish Game Transaction
+    FE->>+BE: POST /game/plinko/end - Send game_id, numberofBalls
+    BE->>BE: Construct PTB with plinko::finish_game
+    BE->>BE: Build unsigned TransactionKind bytes
+    BE->>+Enoki: POST /sponsor - Send unsigned tx bytes
+    Note over Enoki: createSponsoredTransaction()
+    Enoki-->>-BE: Returns sponsored unsigned bytes + digest
+    BE->>BE: Backend signer signs transaction
+    BE->>+Enoki: POST /execute - Send digest + signature
+    Note over Enoki: executeSponsoredTransaction()
+    Enoki->>+Blockchain: Submit sponsored + signed transaction
+    Note over Blockchain: Executes plinko::finish_game,<br/>uses on-chain randomness to calculate outcome<br/>(ball trace paths, payments), emits GameFinished event
+    Blockchain-->>-Enoki: Transaction result with trace
+    Enoki-->>-BE: Returns execution digest
+    BE->>BE: Extract trace from events
+    BE-->>-FE: Returns trace + transactionDigest
+    FE->>FE: Process trace into ball paths
+    FE-->>-Player: Display game result, ball animations, winnings
 ```
 
 ## Move modules
@@ -57,7 +80,7 @@ Follow the comments in each module's code to understand the logic each creates.
 
 ### `plinko::plinko`
 
-The `plinko::plinko` module combines various Sui blockchain features, such as coin handling, event emissions, and dynamic object fields, to create on-chain Plinko games.
+The `plinko::plinko` module combines various Sui blockchain features, such as coin handling, event emissions, on-chain randomness, and game logic, to create fair and transparent on-chain Plinko games.
 
 <details>
 <summary>
@@ -65,28 +88,21 @@ The `plinko::plinko` module combines various Sui blockchain features, such as co
 </summary>
 
 ```move title="plinko.move"
-module plinko::plinko {
-// === Imports ===
-use sui::coin::{Self, Coin};
+module plinko::plinko;
+use plinko::house_data::{Self as hd, HouseData};
 use sui::balance::Balance;
-use sui::sui::SUI;
-use sui::bls12381::bls12381_min_pk_verify;
+use sui::coin::{Self, Coin};
+use sui::dynamic_object_field as dof;
 use sui::event::emit;
-use sui::hash::{blake2b256};
-use sui::dynamic_object_field::{Self as dof};
-
-// Import Counter NFT module
-use plinko::counter_nft::Counter;
-
-// Import HouseData module
-use plinko::house_data::HouseData;
+use sui::random::Random;
+use sui::sui::SUI;
 
 // === Errors ===
 const EStakeTooLow: u64 = 0;
 const EStakeTooHigh: u64 = 1;
-const EInvalidBlsSig: u64 = 2;
 const EInsufficientHouseBalance: u64 = 5;
 const EGameDoesNotExist: u64 = 6;
+const ENumberOfBallsNotAllowed: u64 = 7;
 
 // === Structs ===
 
@@ -96,47 +112,53 @@ public struct Game has key, store {
     game_start_epoch: u64,
     stake: Balance<SUI>,
     player: address,
-    // The VRF input used to generate the extended beacon
-    vrf_input: vector<u8>,
-    fee_bp: u16
+    fee_bp: u16,
 }
 
 // === Events ===
 
 /// Emitted when a new game has started.
-public struct NewGame has copy, drop {
+public struct NewGameStarted has copy, drop {
     game_id: ID,
     player: address,
-    vrf_input: vector<u8>,
     user_stake: u64,
-    fee_bp: u16
+    fee_bp: u16,
 }
 
 /// Emitted when a game has finished.
-public struct Outcome has copy, drop {
+public struct GameFinished has copy, drop {
     game_id: ID,
     result: u64,
     player: address,
-    // The trace path of the extended beacon
-    trace: vector<u8>
+    // The trace path representing each ball's journey
+    trace: vector<u8>,
 }
 
 // === Public Functions ===
 
-/// Function used to create a new game. The player must provide a Counter NFT and the number of balls.
-public fun start_game(counter: &mut Counter, num_balls: u64, coin: Coin<SUI>, house_data: &mut HouseData, ctx: &mut TxContext): ID {
+/// Function used to create a new game.
+public fun start_game(coin: Coin<SUI>, house_data: &mut HouseData, ctx: &mut TxContext): ID {
     let fee_bp = house_data.base_fee_in_bp();
-    let (id, new_game) = internal_start_game(counter, num_balls, coin, house_data, fee_bp, ctx);
+    let (id, new_game) = internal_start_game(coin, house_data, fee_bp, ctx);
     dof::add(house_data.borrow_mut(), id, new_game);
     id
 }
 
-/// finish_game Completes the game by calculating the outcome and transferring the funds to the player.
-/// The player must provide a BLS signature of the VRF input and the number of balls to calculate the outcome.
-/// It emits an Outcome event with the game result and the trace path of the extended beacon.
-public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseData, num_balls: u64, ctx: &mut TxContext): (u64, address, vector<u8>) {
+/// finish_game Completes the game by calculating the outcome using on-chain randomness
+/// and transferring the funds to the player.
+/// It emits a GameFinished event with the game result and the trace path.
+entry fun finish_game(
+    game_id: ID,
+    random: &Random,
+    house_data: &mut HouseData,
+    num_balls: u64,
+    ctx: &mut TxContext,
+): (u64, address, vector<u8>) {
     // Ensure that the game exists.
     assert!(game_exists(house_data, game_id), EGameDoesNotExist);
+
+    // Ensure that the player selected at least one ball and no more than 100 balls.
+    assert!(num_balls > 0 && num_balls <= 100, ENumberOfBallsNotAllowed);
 
     // Retrieves and removes the game from HouseData, preparing for outcome calculation.
     let Game {
@@ -144,50 +166,28 @@ public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseD
         game_start_epoch: _,
         stake,
         player,
-        vrf_input,
-        fee_bp: _
+        fee_bp: _,
     } = dof::remove<ID, Game>(house_data.borrow_mut(), game_id);
 
-    object::delete(id);
+    id.delete();
 
-    // Validates the BLS signature against the VRF input.
-    let is_sig_valid = bls12381_min_pk_verify(&bls_sig, &house_data.public_key(), &vrf_input);
-    assert!(is_sig_valid, EInvalidBlsSig);
-
-    // Initialize the extended beacon vector and a counter for hashing.
-    let mut extended_beacon = vector[];
-    let mut counter: u8 = 0;
-
-    // Extends the beacon until it has enough data for all ball outcomes.
-    while (extended_beacon.length() < (num_balls * 12)) {
-        // Create a new vector combining the original BLS signature with the current counter value.
-        let mut hash_input = vector[];
-        hash_input.append(bls_sig);
-        hash_input.push_back(counter);
-        // Generate a new hash block from the unique hash input.
-        let block = blake2b256(&hash_input);
-        // Append the generated hash block to the extended beacon.
-        extended_beacon.append(block);
-        // Increment the counter for the next iteration to ensure a new unique hash input.
-        counter = counter + 1;
-    };
-
-    // Initializes variables for calculating game outcome.
+    // Initialize random generator and variables
+    let mut random_generator = random.new_generator(ctx);
     let mut trace = vector[];
+
     // Calculate the stake amount per ball
     let stake_per_ball = stake.value<SUI>() / num_balls;
     let mut total_funds_amount: u64 = 0;
 
-    // Calculates outcome for each ball based on the extended beacon.
+    // Calculate outcome for each ball using native randomness
     let mut ball_index = 0;
     while (ball_index < num_balls) {
         let mut state: u64 = 0;
+
+        // Generate 12 random bytes for this ball and process them directly
         let mut i = 0;
         while (i < 12) {
-            // Calculate the byte index for the current ball and iteration.
-            let byte_index = (ball_index * 12) + i;
-            // Retrieve the byte from the extended beacon.
-            let byte = extended_beacon[byte_index];
+            let byte = random_generator.generate_u8_in_range(0, 255);
             // Add the byte to the trace vector
             trace.push_back<u8>(byte);
             // Count the number of even bytes
@@ -198,37 +198,41 @@ public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseD
             i = i + 1;
         };
 
-    // Calculate multiplier index based on state
-    let multiplier_index = state % house_data.multiplier().length();
-    // Retrieve the multiplier from the house data
-    let result = house_data.multiplier()[multiplier_index];
+        // Calculate multiplier index based on state
+        let multiplier_index = state % house_data.multiplier().length();
+        // Retrieve the multiplier from the house data
+        let result = house_data.multiplier()[multiplier_index];
 
-    // Calculate funds amount for this particular ball
-    // Divide by 100 to adjust for multiplier scale and SUI units
-    let funds_amount_per_ball = (result * stake_per_ball)/100;
-    // Add the funds amount to the total funds amount
-    total_funds_amount = total_funds_amount + funds_amount_per_ball;
-    ball_index = ball_index + 1;
-};
+        // Calculate funds amount for this particular ball
+        // Divide by 100 to adjust for multiplier scale and SUI units
+        let funds_amount_per_ball = (result * stake_per_ball) / 100;
+        // Add the funds amount to the total funds amount
+        total_funds_amount = total_funds_amount + funds_amount_per_ball;
+        ball_index = ball_index + 1;
+    };
 
-// Processes the payout to the player and returns the game outcome.
-let payout_balance_mut = house_data.borrow_balance_mut();
-let payout_coin: Coin<SUI> = coin::take(payout_balance_mut, total_funds_amount, ctx);
+    // Processes the payout to the player and returns the game outcome.
+    // Read available balance and fail early if insufficient.
+    let available: u64 = hd::balance(house_data);
+    assert!(available >= total_funds_amount, EInsufficientHouseBalance);
+    let payout_balance_mut = house_data.borrow_balance_mut();
+    let payout_coin: Coin<SUI> = coin::take(payout_balance_mut, total_funds_amount, ctx);
 
-payout_balance_mut.join(stake);
+    payout_balance_mut.join(stake);
 
-// transfer the payout coins to the player
-transfer::public_transfer(payout_coin, player);
-// Emit the Outcome event
-emit(Outcome {
-    game_id,
-    result: total_funds_amount,
-    player,
-    trace
-});
+    // transfer the payout coins to the player
+    transfer::public_transfer(payout_coin, player);
+    // Emit the GameFinished event
+    emit(GameFinished {
+        game_id,
+        result: total_funds_amount,
+        player,
+        trace,
+    });
 
-// return the total amount to be sent to the player, (and the player address)
-(total_funds_amount, player, trace)
+    // return the total amount to be sent to the player, (and the player address)
+    (total_funds_amount, player, trace)
+}
 
 
 // === Public-View Functions ===
@@ -246,11 +250,6 @@ public fun stake(game: &Game): u64 {
 /// Returns the player's address.
 public fun player(game: &Game): address {
     game.player
-}
-
-/// Returns the player's vrf_input bytes.
-public fun vrf_input(game: &Game): vector<u8> {
-    game.vrf_input
 }
 
 /// Returns the fee of the game.
@@ -275,43 +274,44 @@ public fun borrow_game(game_id: ID, house_data: &HouseData): &Game {
 // === Private Functions ===
 
 /// Internal helper function used to create a new game.
-/// The player must provide a guess and a Counter NFT.
 /// Stake is taken from the player's coin and added to the game's stake.
-fun internal_start_game(counter: &mut Counter, num_balls: u64, coin: Coin<SUI>, house_data: &HouseData, fee_bp: u16, ctx: &mut TxContext): (ID, Game) {
+fun internal_start_game(
+    coin: Coin<SUI>,
+    house_data: &HouseData,
+    fee_bp: u16,
+    ctx: &mut TxContext,
+): (ID, Game) {
     let user_stake = coin.value();
     // Ensure that the stake is not higher than the max stake.
     assert!(user_stake <= house_data.max_stake(), EStakeTooHigh);
     // Ensure that the stake is not lower than the min stake.
     assert!(user_stake >= house_data.min_stake(), EStakeTooLow);
     // Ensure that the house has enough balance to play for this game.
-    assert!(house_data.balance() >= (user_stake*(house_data.multiplier()[0]))/100, EInsufficientHouseBalance);
-
-    // Get the VRF input and increment the counter
-    let vrf_input = counter.get_vrf_input_and_increment(num_balls);
+    assert!(
+        house_data.balance() >= (user_stake * (house_data.multiplier()[0])) / 100,
+        EInsufficientHouseBalance,
+    );
 
     let id = object::new(ctx);
     let game_id = object::uid_to_inner(&id);
 
-    // Create a new game object and emit a NewGame event.
+    // Create a new game object and emit a NewGameStarted event.
     let new_game = Game {
         id,
         game_start_epoch: ctx.epoch(),
         stake: coin.into_balance<SUI>(),
         player: ctx.sender(),
-        vrf_input,
-        fee_bp
+        fee_bp,
     };
-    // Emit a NewGame event
-    emit(NewGame {
+    // Emit a NewGameStarted event
+    emit(NewGameStarted {
         game_id,
         player: ctx.sender(),
-        vrf_input,
         user_stake,
-        fee_bp
+        fee_bp,
     });
 
     (game_id, new_game)
-}
 }
 ```
 
@@ -323,39 +323,35 @@ Error handling is integral to the module, with specific codes indicating various
 
 - `EStakeTooLow`: Indicates that the stake provided is below the minimum threshold.
 - `EStakeTooHigh`: Indicates that the stake exceeds the maximum allowed limit.
-- `EInvalidBlsSig`: Denotes an invalid BLS signature.
 - `EInsufficientHouseBalance`: Indicates the house does not have enough balance to cover the game's outcome.
 - `EGameDoesNotExist`: Used when a referenced game cannot be found.
+- `ENumberOfBallsNotAllowed`: Indicates the player selected an invalid number of balls (must be between 1 and 100).
 
 #### Events
 
-- `NewGame`: Emitted when a new game starts, capturing essential details like game ID, player address, VRF input, stake, and fee basis points.
-- `Outcome`: Emitted upon the conclusion of a game, detailing the outcome, including the game ID, result, player address, and a trace of the game's execution.
+- `NewGameStarted`: Emitted when a new game starts, capturing essential details like game ID, player address, stake, and fee basis points.
+- `GameFinished`: Emitted upon the conclusion of a game, detailing the outcome, including the game ID, result, player address, and a trace of each ball's path through the Plinko board.
 
 #### Structures
 
-- `Game`: Represents an individual game session, holding information such as the game ID, epoch of game start, stake amount, player address, VRF input, and the fee basis points.
+- `Game`: Represents an individual game session, holding information such as the game ID, epoch of game start, stake amount, player address, and the fee basis points.
 
-#### Entry functions
+#### Key functions
 
-- `start_game`: Initiates a new Plinko game session, accepting parameters like a counter NFT, the number of balls selected by the player, stake, house data, and transaction context.
-- `finish_game`: Calculates and finalizes the game outcome, traces the path the balls travel, and distributes the total funds to the player based on outcomes.
+- `start_game`: Initiates a new Plinko game session, accepting the player's stake coin, house data, and transaction context. Returns the game ID.
+- `finish_game`: Completes the game using on-chain randomness to calculate outcomes, traces the path each ball travels, and distributes the total winnings to the player. This is an entry function that takes the Random object from Sui's randomness framework.
 
 #### Accessors
 
-Provide read-only access to the game's properties, such as:
+Provide read-only access to the game's properties:
 
-- `game_start_epoch`
-- `stake`
-- `player`
-- `vrf_input`
-- `fee_in_bp`
+- `game_start_epoch`: Returns the epoch when the game started
+- `stake`: Returns the total stake amount
+- `player`: Returns the player's address
+- `fee_in_bp`: Returns the fee in basis points
 
 #### Public helper functions
 
-Include utilities like:
-
-- `fee_amount`: Calculates the fee amount based on the stake and fee basis points.
 - `game_exists`: Checks if a game exists within the house data.
 - `borrow_game`: Retrieves a reference to a game object for further processing.
 
@@ -365,7 +361,7 @@ Include utilities like:
 
 ### `plinko::house_data`
 
-The `plinko::house_data` module in the Plinko game is designed to manage the game's treasury and configurations. It's responsible for storing the house funds, setting the game parameters (like maximum and minimum stakes), and handling game fees. It also stores the house public key for verifying game outcomes. The module provides functions to adjust game settings, manage the house funds, and ensure the integrity and fairness of the game through cryptographic verification.
+The `plinko::house_data` module manages the game's treasury and configurations. It stores the house funds, sets game parameters (like maximum and minimum stakes), handles game fees, and manages the multiplier vector used to calculate winnings. The module provides functions to adjust game settings and manages the house funds.
 
 <details>
 <summary>
@@ -373,17 +369,15 @@ The `plinko::house_data` module in the Plinko game is designed to manage the gam
 </summary>
 
 ```move title="house_data.move"
-module plinko::house_data {
-// === Imports ===
+module plinko::house_data;
 use sui::balance::{Self, Balance};
-use sui::sui::SUI;
 use sui::coin::{Self, Coin};
-use sui::package::{Self};
+use sui::package;
+use sui::sui::SUI;
 
 // === Errors ===
 const ECallerNotHouse: u64 = 0;
 const EInsufficientBalance: u64 = 1;
-
 
 // === Structs ===
 
@@ -394,8 +388,6 @@ public struct HouseData has key {
     balance: Balance<SUI>,
     // Address of the house or the game operator.
     house: address,
-    // Public key used to verify the beacon produced by the back-end.
-    public_key: vector<u8>,
     // Maximum stake amount a player can bet in a single game.
     max_stake: u64,
     // Minimum stake amount required to play the game.
@@ -405,13 +397,13 @@ public struct HouseData has key {
     // The default fee in basis points. 1 basis point = 0.01%.
     base_fee_in_bp: u16,
     // Multipliers used to calculate winnings based on the game outcome.
-    multiplier: vector<u64>
+    multiplier: vector<u64>,
 }
 
 /// A one-time use capability to initialize the house data;
 /// created and sent to sender in the initializer.
 public struct HouseCap has key {
-    id: UID
+    id: UID,
 }
 
 /// Used as a one time witness to generate the publisher.
@@ -423,43 +415,51 @@ fun init(otw: HOUSE_DATA, ctx: &mut TxContext) {
 
     // Creating and sending the HouseCap object to the sender.
     let house_cap = HouseCap {
-        id: object::new(ctx)
+        id: object::new(ctx),
     };
 
     transfer::transfer(house_cap, ctx.sender());
 }
 
 /// Initializer function that should only be called once and by the creator of the contract.
-/// Initializes the house data object with the house's public key and an initial balance.
+/// Initializes the house data object with an initial balance.
 /// It also sets the max and min stake values, that can later on be updated.
 /// Stores the house address and the base fee in basis points.
 /// This object is involved in all games created by the same instance of this package.
-public fun initialize_house_data(house_cap: HouseCap, coin: Coin<SUI>, public_key: vector<u8>, multiplier: vector<u64>, ctx: &mut TxContext) {
+public fun initialize_house_data(
+    house_cap: HouseCap,
+    coin: Coin<SUI>,
+    multiplier: vector<u64>,
+    ctx: &mut TxContext,
+) {
     assert!(coin.value() > 0, EInsufficientBalance);
 
     let mut house_data = HouseData {
         id: object::new(ctx),
         balance: coin.into_balance(),
         house: ctx.sender(),
-        public_key,
         max_stake: 10_000_000_000, // 10 SUI = 10^9.
-        min_stake: 1_000_000_000, // 1 SUI.
+        min_stake: 100_000_000, // 0.1 SUI.
         fees: balance::zero(),
         base_fee_in_bp: 100, // 1% in basis points.
-        multiplier: vector[]
+        multiplier: vector[],
     };
 
     house_data.set_multiplier_vector(multiplier);
 
     let HouseCap { id } = house_cap;
-    object::delete(id);
+    id.delete();
 
     transfer::share_object(house_data);
 }
 
 // === Public-Mutative Functions ===
 
-public fun update_multiplier_vector(house_data: &mut HouseData, v: vector<u64>, ctx: &mut TxContext) {
+public fun update_multiplier_vector(
+    house_data: &mut HouseData,
+    v: vector<u64>,
+    ctx: &mut TxContext,
+) {
     assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
     house_data.multiplier = vector[];
     house_data.set_multiplier_vector(v);
@@ -520,11 +520,6 @@ public fun house(house_data: &HouseData): address {
     house_data.house
 }
 
-/// Returns the public key of the house.
-public fun public_key(house_data: &HouseData): vector<u8> {
-    house_data.public_key
-}
-
 /// Returns the max stake of the house.
 public fun max_stake(house_data: &HouseData): u64 {
     house_data.max_stake
@@ -557,7 +552,7 @@ public(package) fun borrow(house_data: &HouseData): &UID {
     &house_data.id
 }
 
-    /// Returns a mutable reference to the balance of the house.
+/// Returns a mutable reference to the balance of the house.
 public(package) fun borrow_balance_mut(house_data: &mut HouseData): &mut Balance<SUI> {
     &mut house_data.balance
 }
@@ -584,7 +579,6 @@ fun set_multiplier_vector(house_data: &mut HouseData, v: vector<u64>) {
 public fun init_for_testing(ctx: &mut TxContext) {
     init(HOUSE_DATA {}, ctx);
 }
-}
 ```
 </details>
 
@@ -597,7 +591,7 @@ The module defines specific error codes to handle exceptional scenarios:
 
 #### Structures
 
-- `HouseData`: A key configuration object storing the house's operational parameters, including its balance, public key, stake limits, accumulated fees, base fee rate, and multiplier settings for game outcomes.
+- `HouseData`: A key configuration object storing the house's operational parameters, including its balance, stake limits, accumulated fees, base fee rate, and multiplier settings for game outcomes.
 - `HouseCap`: A unique capability indicating the authority to initialize the house data.
 - `HOUSE_DATA`: A one time witness for initializing house data, used once during the setup phase.
 
@@ -607,7 +601,7 @@ The module defines specific error codes to handle exceptional scenarios:
 
 #### Public functions
 
-- `initialize_house_data`: Sets up the initial configuration for the house, including balance, public key, stake limits, and multipliers.
+- `initialize_house_data`: Sets up the initial configuration for the house, including balance, stake limits, and multipliers.
 - `top_up`: Allows adding funds to the house's balance to support game operations.
 - `withdraw`: Enables the house to withdraw its balance, a critical function with implications for the house's operational capacity.
 - `claim_fees`: Permits the house to collect accumulated fees from game activities.
@@ -625,8 +619,7 @@ Provide read-only and mutable access to house data properties, enabling operatio
 
 - `balance`: Returns the house's current balance.
 - `house`: Retrieves the house's address.
-- `public_key`: Fetches the public key associated with the house.
-- `max_stake`, min_stake: Access the current stake limits.
+- `max_stake`, `min_stake`: Access the current stake limits.
 - `fees`: Shows the accumulated fees from game operations.
 - `base_fee_in_bp`: Provides the base fee rate in basis points.
 - `multiplier`: Returns the multiplier vector used in game outcome calculations.
@@ -635,113 +628,160 @@ Provide read-only and mutable access to house data properties, enabling operatio
 
 - `init_for_testing`: A utility function facilitating module testing by initializing house data within a test environment.
 
-### `plinko::counter_nft`
+## Enoki sponsorship
 
-The `plinko::counter_nft` module introduces a unique, non-transferable Counter NFT. This Counter object is pivotal for generating a distinct VRF input for each round of the game, thereby ensuring the randomness and fairness of game outcomes. It includes functionalities to create, increment, and destroy these Counter objects. Each Counter is tied to a unique game round and increments its count with each use, providing a fresh input for the game's randomness mechanism.
+The Plinko game demonstrates a frictionless user experience by leveraging [Enoki](https://docs.enoki.mystenlabs.com/) for transaction sponsorship. This allows players to interact with the game without needing to hold SUI tokens for gas fees, significantly reducing barriers to entry.
 
-Unlike traditional NFTs, the Counter NFT is non-transferable, ensuring it remains tied to its original owner and serves its purpose without the risk of duplication or unauthorized transfer.
+### How sponsorship works
 
-<details>
-<summary>
-`counter_nft.move`
-</summary>
+The sponsorship flow is split into two backend API endpoints that work with the Enoki client:
 
-```move title="counter_nft.move"
-module plinko::counter_nft {
-// === Imports ===
-use sui::bcs::{Self};
+1. **`/sponsor` endpoint**: Receives unsigned transaction bytes from the frontend and calls `enokiClient.createSponsoredTransaction()` to sponsor them. Returns the sponsored (but still unsigned) transaction bytes and digest.
 
-// === Structs ===
+2. **`/execute` endpoint**: Receives the transaction digest and user signature, then calls `enokiClient.executeSponsoredTransaction()` to submit the sponsored and signed transaction to the blockchain.
 
-/// A Counter object serves as a unique, NFT
-/// that increments with each use. It's designed to provide a unique
-/// Verifiable Random Function (VRF) input for each round of the game,
-/// ensuring the randomness and fairness of game outcomes.
-public struct Counter has key {
-    id: UID,
-    // A numerical value that increments with each use of the Counter.
-    // This incrementing behavior is critical for ensuring that each game round
-    // receives a fresh, unique input for randomness generation.
-    count: u64,
-}
+The complete flow works as follows:
 
-/// Deletes a counter object.
-entry fun burn(self: Counter) {
-    let Counter { id, count: _ } = self;
-    object::delete(id);
-}
+1. **Frontend constructs transaction**: The UI builds a programmable transaction block (PTB) with the necessary Move calls (such as, `plinko::start_game`) and serializes it to `TransactionKind` bytes.
 
-/// Creates a new counter object. Used in combination with the transfer_to_sender method to provide the same
-/// UX when creating a Counter NFT for the first time.
-public fun mint(ctx: &mut TxContext): Counter {
-    Counter {
-        id: object::new(ctx),
-        count: 0
-    }
-}
+2. **Request sponsorship**: The unsigned transaction bytes are sent to `/sponsor`, which returns sponsored unsigned bytes.
 
-/// Transfers a counter object to the sender.
-public fun transfer_to_sender(counter: Counter, ctx: &mut TxContext) {
-    transfer::transfer(counter, ctx.sender());
-}
+3. **User signs**: The player signs the sponsored transaction bytes through their wallet.
 
-/// Generates a unique VRF input by concatenating the Counter's ID, its current count, and the number of balls
-/// selected by the player. This composite input ensures each game round has a distinct random seed.
-/// The count is incremented after use to maintain uniqueness for subsequent rounds.
-public fun get_vrf_input_and_increment(self: &mut Counter, num_balls: u64): vector<u8> {
-    let mut vrf_input = object::id_bytes(self);
-    let count_to_bytes = bcs::to_bytes(&self.count());
-    let num_balls_to_bytes = bcs::to_bytes(&num_balls);
-    vrf_input.append(count_to_bytes);
-    vrf_input.append(num_balls_to_bytes);
-    self.increment();
-    vrf_input
-}
+4. **Execute transaction**: The signed transaction is sent to `/execute`, which submits it to the blockchain.
 
-/// Returns the current count of the counter object.
-public fun count(self: &Counter): u64 {
-    self.count
-}
+This two-step process ensures that:
+- Players only need to sign transactions (proving ownership)
+- The game operator covers all gas fees through Enoki
+- The user experience is seamless and Web2-like
+- **Important:** Set `useGasCoin: false` when creating coins for sponsored transactions
 
-/// Internal function to increment the counter by 1.
-fun increment(self: &mut Counter) {
-    self.count = self.count + 1;
-}
+### Implementation Example
 
-// === Test Functions ===
+#### Backend: `/sponsor` endpoint
 
-#[test_only]
-public fun burn_for_testing(self: Counter) {
-    self.burn();
-}
+```typescript
+import { enokiClient } from "../EnokiClient";
 
-#[test_only]
-public fun get_vrf_input_for_testing(self: &mut Counter): vector<u8> {
-    let vrf_input: vector<u8> = self.get_vrf_input_and_increment(1);
-    vrf_input
-}
-}
+export const POST = async (req: NextRequest) => {
+  try {
+    const { transactionKindBytes, sender } = await req.json();
+    const sponsored = await enokiClient.createSponsoredTransaction({
+      network: process.env.NEXT_PUBLIC_SUI_NETWORK_NAME as
+        | "mainnet"
+        | "testnet"
+        | "devnet",
+      transactionKindBytes,
+      sender,
+      allowedAddresses: [sender],
+    });
+
+    return NextResponse.json(
+      { bytes: sponsored.bytes, digest: sponsored.digest },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("Sponsorship failed:", error);
+    return NextResponse.json({ error: "Sponsorship failed" }, { status: 500 });
+  }
+};
 ```
-</details>
 
-#### Structures
+#### Backend: `/execute` endpoint
 
-- `Counter`: The core structure representing the Counter NFT, which includes a unique identifier (ID) and a `count` attribute. The count is instrumental in generating a unique VRF input for each game round, incrementing with each use to maintain uniqueness.
+```typescript
+import { enokiClient } from "../EnokiClient";
 
-#### Key functions
+export const POST = async (req: NextRequest) => {
+  try {
+    const { digest, signature } = await req.json();
+    const executionResult = await enokiClient.executeSponsoredTransaction({
+      digest,
+      signature,
+    });
+    return NextResponse.json(
+      { digest: executionResult.digest },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("Execution failed:", error);
+    return NextResponse.json({ error: "Execution failed" }, { status: 500 });
+  }
+};
+```
 
-- `mint`: Creates a new Counter NFT with an initial `count` of zero. This function is crucial for players initiating their first game, enabling the generation of a fresh VRF input.
-- `transfer_to_sender`: Facilitates the transfer of a newly minted Counter NFT to the player's account, ensuring the player has control over their unique game input.
-- `get_vrf_input_and_increment`: Generates the VRF input by combining the Counter NFT's ID and current count into a byte vector, then increments the count to prepare for the next game round. This function is central to the game's randomness mechanism, providing a dynamic and unpredictable input for each round.
-- `burn`: Allows for the deletion of a Counter NFT. Use this function to remove a Counter NFT from the game ecosystem, ensuring that its unique contribution to game randomness is conclusively retired.
+#### Frontend: Complete sponsorship flow
 
-#### Internal functions
+```typescript
+// 1) Create the tx and get TransactionKind bytes
+const tx = new Transaction();
+tx.setSender(sender);
+const betCoin = coinWithBalance({
+  type: "0x2::sui::SUI",
+  balance: betInMist,
+  useGasCoin: false, // important for sponsorship
+})(tx);
+tx.add(
+  plinko.startGame({
+    package: process.env.NEXT_PUBLIC_PACKAGE_ADDRESS,
+    arguments: [betCoin, `${process.env.NEXT_PUBLIC_HOUSE_DATA_ID}`],
+  })
+);
 
-- `increment`: A helper function that increments the count of a Counter NFT by one. This internal mechanism ensures that each Counter NFT's count is always moving forward, reinforcing the uniqueness of each VRF input generated.
+const txBytes = await tx.build({
+  client,
+  onlyTransactionKind: true,
+});
 
-#### Testing utilities
+// 2) Sponsor the unsigned TxBytes
+const sponsorResp = await fetch("/api/sponsor", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    transactionKindBytes: toBase64(txBytes),
+    sender,
+  }),
+});
 
-- `burn_for_testing`: A test-only function that facilitates the burning of a Counter NFT within test environments. This utility supports the testing framework by allowing the simulation of Counter NFT lifecycle events without affecting the production environment.
+if (!sponsorResp.ok) {
+  console.error("Failed to sponsor transaction:", sponsorResp.status);
+  showError("Failed to sponsor transaction. Please try again.");
+  return;
+}
+
+const { bytes: sponsoredBytes, digest: sponsoredDigest } =
+  (await sponsorResp.json()) as { bytes: string; digest: string };
+
+// 3) Sign the sponsored TxBytes
+const { signature } = await signTransaction({
+  transaction: sponsoredBytes,
+});
+
+// 4) Execute the sponsored + signed TxBytes
+const execResp = await fetch("/api/execute", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ digest: sponsoredDigest, signature }),
+});
+```
+
+## TypeScript Integration with Codegen
+
+The Plinko frontend uses [Mysten's codegen tool](https://www.npmjs.com/package/@mysten/codegen?activeTab=readme) to automatically generate TypeScript bindings from the Move smart contracts. This provides several advantages:
+
+### Usage example
+
+Instead of manually building transaction blocks, you can use generated functions:
+
+```typescript
+import { plinko } from './generated/plinko';
+
+// Type-safe function call with autocomplete
+const tx = plinko.startGame({
+  coin: coinObject,
+  houseData: houseDataId,
+});
+```
 
 ## Deployment
 
@@ -750,13 +790,15 @@ Navigate to the [setup folder](https://github.com/MystenLabs/plinko-poc/tree/mai
 
 ## Frontend
 
-The `Plinko` component, a central element of the Plinko game's frontend module, is structured to create an interactive and responsive gaming experience. Written in React, it integrates several features and functions to handle the game's logic and user interactions effectively.
+The Plinko frontend is built with React and integrates with the Sui blockchain using sponsored transactions through Enoki. The application provides an interactive and responsive gaming experience while abstracting away blockchain complexity from end users.
 
-## State management and setup
+### State management and setup
 
-- State hooks: The module uses React's `useState` to manage various game states, including `finalPaths`, `isPlaying`, `totalWon`, and more. These states are vital for tracking the current game status and updating the UI accordingly.
+- **State hooks:** The application uses React's `useState` to manage game states, including `finalPaths`, `isPlaying`, `totalWon`, and more. These states track the current game status and update the UI in real-time.
 
-- Modal for game initialization: A modal is implemented to facilitate the creation of a new game. It captures the randomness and uses `handlePlayClick` to initiate the game with the backend.
+- **Sponsored transactions:** The frontend leverages Enoki's `/sponsor` and `/execute` APIs to create a gasless experience. Players can interact with the game without needing SUI tokens, as the backend sponsors all transaction fees.
+
+- **TypeScript integration:** Generated TypeScript bindings from codegen provide type-safe contract interactions, reducing errors, and improving developer experience.
 
 ## UI components and styling
 
@@ -764,10 +806,9 @@ The `MatterSim` and `PlinkoSettings` components are the foundation for the Plink
 
 ### Simulation component
 
-The [`MatterSim` component](https://github.com/MystenLabs/plinko-poc/blob/main/app/src/components/MatterSim.tsx) plays a pivotal role in the Plinko game by rendering the game board with a realistic physical representation of the dropping Plinko balls. It leverages the robust capabilities of [Matter.js](https://brm.io/matter-js/), a renowned physics engine, to simulate the intricate dynamics of the Plinko game's environment. 
+The [`MatterSim` component](https://github.com/MystenLabs/plinko-poc/blob/main/app/src/components/MatterSim.tsx) renders the game board with realistic physics for the dropping Plinko balls. It uses [Matter.js](https://brm.io/matter-js/), a 2D physics engine, to simulate the game dynamics.
 
 ```ts
-...
 import Matter, {
   Engine,
   Render,
@@ -779,10 +820,9 @@ import Matter, {
   Body,
   Common,
 } from "matter-js";
-...
 ```
 
-The randomness integral to the game's fairness and unpredictability, as detailed in the [`counter_nft` module](https://github.com/MystenLabs/plinko-poc/blob/main/plinko/sources/counter_nft.move), dictates the path of each ball dropped by the player. To align the Plinko balls' movement with the predetermined paths derived from on-chain data, `MatterSim` applies physics principles, such as gravity, to ensure natural ball descent. Additionally, to accurately guide the balls along these specific trajectories, `MatterSim` introduces subtle, custom forces. These adjustments are calibrated to not only ensure compliance with the paths determined by the game's underlying blockchain mechanics but also to maintain a visually coherent and physically plausible ball movement, to better simulate realism.
+The component receives ball paths (trace data) generated from on-chain randomness, emitted in the `GameFinished` event. Each path consists of 12 bytes per ball, where each byte determines whether the ball moves left (odd) or right (even) at each peg. `MatterSim` applies physics principles like gravity for natural ball descent while using custom forces to guide balls along their predetermined paths. The physics simulation provides smooth, realistic movement that matches the on-chain outcomes, creating an engaging visual experience where fairness is guaranteed by blockchain randomness.
 
 ## Plinko settings component
 
