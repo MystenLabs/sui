@@ -988,10 +988,11 @@ impl ModuleIdKey {
         &self.address
     }
 
-    pub fn name(&self, interner: &IdentifierInterner) -> PartialVMResult<Identifier> {
+    pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
         interner
             .resolve_ident(&self.name, "module name")
             .expect("Uninterned key")
+    }
 }
 
 impl DatatypeDescriptor {
